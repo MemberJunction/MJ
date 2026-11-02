@@ -170,43 +170,9 @@ export class PredictiveStudioPipelineBuilder {
    * Never throws — returns a typed result with `success`/`errorMessage`.
    */
   public async Build(input: BuildPredictionInput): Promise<BuildPredictionResult> {
-    const { spec, provider, user, autoPublish = true, sidecarVersion = 'predictive-studio-agent' } = input;
-    const collectedWarnings: FeatureStepWarning[] = [];
-    const seenWarningKeys = new Set<string>();
-
-    const recordWarnings = (warnings: FeatureStepWarning[]) => {
-      for (const w of warnings) {
-        const key = `${w.FeatureName}:${w.Kind}`;
-        if (!seenWarningKeys.has(key)) {
-          seenWarningKeys.add(key);
-          collectedWarnings.push(w);
-        }
-      }
-    };
-
+    const warnings: FeatureStepWarning[] = [];
     try {
-      const config = ModelingPlanToPipelineConfig(spec);
-      recordWarnings(config.warnings);
-      const entity = this.preparePipelineConfig(config, provider);
-      const approved = PredictiveStudioPipelineBuilder.ApprovedExperiments(spec);
-      const algorithms = await this.resolveAlgorithms([config.algorithmName, ...approved.map((e) => e.AlgorithmName)], provider, user);
-      const candidates = PredictiveStudioPipelineBuilder.BuildCandidateSpecs(approved, algorithms);
-      if (approved.some((e) => (e.FeatureSet || []).length > 0)) {
-        LogStatus('PredictiveStudioPipelineBuilder: per-experiment feature sets are not candidates of one search; every candidate uses the pipeline feature schema.');
-      }
-      const pipeline = await this.savePipeline(config, entity, PredictiveStudioPipelineBuilder.algorithmOf(algorithms, config.algorithmName).ID, provider, user);
-      await PredictiveStudioPipelineBuilder.bindUnit(pipeline, provider, user);
-      const training = await this.trainSearch(pipeline, candidates, sidecarVersion, provider, user);
-      const model = training.Train.model;
-      if (model === null) return PredictiveStudioPipelineBuilder.heldWithoutModel(pipeline, training, collectedWarnings);
-      const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: training.Train.run.ValidationResults, Lineage: model.Lineage });
-      const leakageFlagged = WasTrainingLeakageFlagged(training.Train);
-      const { published, heldReason } = await this.maybePublish(model, trust, leakageFlagged, autoPublish);
-      return {
-        success: true, pipelineId: pipeline.ID, modelId: model.ID, model, pipeline, trust, published, leakageFlagged, heldReason,
-        errorMessage: null, leaderboard: training.Leaderboard,
-        warnings: collectedWarnings.length > 0 ? collectedWarnings : undefined,
-      };
+      return await this.runBuild(input, warnings);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       LogError(`PredictiveStudioPipelineBuilder.build failed: ${errorMessage}`);
@@ -216,9 +182,62 @@ export class PredictiveStudioPipelineBuilder {
         leakageFlagged: false,
         heldReason: null,
         errorMessage,
-        warnings: collectedWarnings.length > 0 ? collectedWarnings : undefined,
+        warnings: warnings.length > 0 ? warnings : undefined,
       };
     }
+  }
+
+  /**
+   * The build's steps — resolve the plan, save and bind the pipeline, train one search, publish when the verdict
+   * clears the bar. Throws on any failure; the plan's feature-step warnings go into `warnings` first, so the failure
+   * result {@link Build} returns still carries them.
+   */
+  protected async runBuild(input: BuildPredictionInput, warnings: FeatureStepWarning[]): Promise<BuildPredictionResult> {
+    const { spec, provider, user, autoPublish = true, sidecarVersion = 'predictive-studio-agent' } = input;
+    const config = ModelingPlanToPipelineConfig(spec);
+    warnings.push(...PredictiveStudioPipelineBuilder.DistinctWarnings(config.warnings));
+    const { Pipeline: pipeline, Candidates: candidates } = await this.createBoundPipeline(spec, config, provider, user);
+    const training = await this.trainSearch(pipeline, candidates, sidecarVersion, provider, user);
+    const model = training.Train.model;
+    if (model === null) return PredictiveStudioPipelineBuilder.heldWithoutModel(pipeline, training, warnings);
+    const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: training.Train.run.ValidationResults, Lineage: model.Lineage });
+    const leakageFlagged = WasTrainingLeakageFlagged(training.Train);
+    const { published, heldReason } = await this.maybePublish(model, trust, leakageFlagged, autoPublish);
+    return {
+      success: true, pipelineId: pipeline.ID, modelId: model.ID, model, pipeline, trust, published, leakageFlagged, heldReason,
+      errorMessage: null, leaderboard: training.Leaderboard,
+      warnings: warnings.length > 0 ? warnings : undefined,
+    };
+  }
+
+  /** The warnings with one entry per feature and kind, first occurrence kept. */
+  public static DistinctWarnings(warnings: readonly FeatureStepWarning[]): FeatureStepWarning[] {
+    const seen = new Set<string>();
+    return warnings.filter((w) => {
+      const key = `${w.FeatureName}:${w.Kind}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  /**
+   * Checks every approved experiment's name and algorithm, then saves the pipeline and binds its Prediction Unit; no
+   * row is written before the checks pass. Returns the saved pipeline and the search's candidates.
+   */
+  protected async createBoundPipeline(
+    spec: ModelingPlanSpec, config: PipelineConfig, provider: IMetadataProvider, user: UserInfo,
+  ): Promise<{ readonly Pipeline: MJMLTrainingPipelineEntity; readonly Candidates: readonly CandidateSpec[] }> {
+    const entity = this.preparePipelineConfig(config, provider);
+    const approved = PredictiveStudioPipelineBuilder.ApprovedExperiments(spec);
+    const algorithms = await this.resolveAlgorithms([config.algorithmName, ...approved.map((e) => e.AlgorithmName)], provider, user);
+    const candidates = PredictiveStudioPipelineBuilder.BuildCandidateSpecs(approved, algorithms);
+    if (approved.some((e) => (e.FeatureSet || []).length > 0)) {
+      LogStatus('PredictiveStudioPipelineBuilder: per-experiment feature sets are not candidates of one search; every candidate uses the pipeline feature schema.');
+    }
+    const pipeline = await this.savePipeline(config, entity, PredictiveStudioPipelineBuilder.algorithmOf(algorithms, config.algorithmName).ID, provider, user);
+    await PredictiveStudioPipelineBuilder.bindUnit(pipeline, provider, user);
+    return { Pipeline: pipeline, Candidates: candidates };
   }
 
   /**

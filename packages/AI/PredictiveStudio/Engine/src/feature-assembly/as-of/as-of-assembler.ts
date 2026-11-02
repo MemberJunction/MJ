@@ -78,13 +78,13 @@ import { WindowedAggregates, type ChildRow, type ChildRowIndex } from './windowe
 import { SeriesFeatures, type SeriesHistory } from './series-features';
 
 /** One unit row to assemble: its id, its entity key, the day it is decided on and (for period units) its period. */
-export interface AssemblyRowRef { readonly RowId: string; readonly EntityKey: string; readonly DecisionDate: Date; readonly Period: Date | null }
+export interface AssemblyRowRef { readonly RowID: string; readonly EntityKey: string; readonly DecisionDate: Date; readonly Period: Date | null }
 /** One raw matrix value; preprocessing (imputation, one-hot) is fitted by the sidecar, never here. */
 export type MatrixCell = string | number | null;
 /** One matrix column: a feature can produce several (date parts). `Encoding` is `numeric` or `categorical`. */
 export interface AssembledColumn { readonly Name: string; readonly Encoding: ColumnEncodingKind; readonly SourceColumn: string; readonly FeatureName: string }
 /** One assembled row: its values in column order and the provenance of each feature's value. */
-export interface AssembledRow { readonly RowId: string; readonly Values: readonly MatrixCell[]; readonly Provenance: readonly ValueProvenance[] }
+export interface AssembledRow { readonly RowID: string; readonly Values: readonly MatrixCell[]; readonly Provenance: readonly ValueProvenance[] }
 
 export interface AsOfAssemblyInput {
   readonly Context: 'train' | 'score';
@@ -113,7 +113,7 @@ export type AsOfAssemblyResult =
       readonly Status: 'assembled';
       readonly Columns: readonly AssembledColumn[];
       readonly Rows: readonly AssembledRow[];
-      readonly ExcludedRowIds: ReadonlySet<string>;
+      readonly ExcludedRowIDs: ReadonlySet<string>;
       readonly UncoveredRowsExcluded: readonly UncoveredRowsCount[];
       readonly Coverage: readonly ChangeHistoryCoverage[];
       readonly Preprocessing: readonly PreprocessingOp[];
@@ -194,7 +194,7 @@ export class AsOfFeatureAssembler {
       matrix: {
         columns: labels === null ? names : [...names, labelColumn],
         // `??`: a label of 0 is a real label (count tasks); only a missing one becomes null.
-        rows: assembled.Rows.map((r) => (labels === null ? [...r.Values] : [...r.Values, labels.get(r.RowId) ?? null])),
+        rows: assembled.Rows.map((r) => (labels === null ? [...r.Values] : [...r.Values, labels.get(r.RowID) ?? null])),
       },
       featureSchema: assembled.Columns.map((c) => ({ Name: c.Name, Kind: c.Encoding === 'categorical' ? 'categorical' : 'numeric' })),
       preprocessing: [...assembled.Preprocessing],
@@ -225,7 +225,7 @@ export class AsOfFeatureAssembler {
       Status: 'assembled',
       Columns: columns,
       Rows: folded.Rows,
-      ExcludedRowIds: assembled.Excluded,
+      ExcludedRowIDs: assembled.Excluded,
       UncoveredRowsExcluded: assembled.Uncovered.map((u) => ({ entity: u.Entity, field: u.Field, rows: u.Rows })),
       Coverage: [...state.Coverage.values()],
       Preprocessing: AsOfFeatureAssembler.BuildPreprocessingOps(columns, input.Features, input.ExplicitOps || []),
@@ -340,10 +340,10 @@ export class AsOfFeatureAssembler {
         provenance.push(raw.Provenance);
       }
       if (uncovered.length === 0) {
-        out.Rows.push({ RowId: row.RowId, Values: values, Provenance: provenance });
+        out.Rows.push({ RowID: row.RowID, Values: values, Provenance: provenance });
         continue;
       }
-      out.Excluded.add(row.RowId);
+      out.Excluded.add(row.RowID);
       for (const u of uncovered) AsOfFeatureAssembler.tally(tallies, out.Uncovered, u);
     }
     return out;
@@ -448,7 +448,7 @@ export class AsOfFeatureAssembler {
   private async fieldReader(spec: FeatureColumnSpec, source: FieldSource, input: AsOfAssemblyInput, state: AssemblyState): Promise<FeatureReader> {
     const entity = source.entity === input.RowEntity.Name ? input.RowEntity : input.Metadata.Entity(source.entity);
     if (!entity) throw new AssemblyRefused({ kind: 'unresolved-column', entity: source.entity, field: source.field });
-    const join = await this.keyResolver(source.keyField, input, (row) => row.RowId, state);
+    const join = await this.keyResolver(source.keyField, input, (row) => row.RowID, state);
     const keyOf = join.KeyOf;
     if (source.kind === 'immutable-field') return AsOfFeatureAssembler.throughJoin(spec, join, await this.currentValueReader(spec, source, entity, keyOf, input, state), input);
     const today = input.Rows.filter((r) => AsOfFeatureAssembler.onAssemblyDayOrLater(r, input));
@@ -525,7 +525,7 @@ export class AsOfFeatureAssembler {
       }
       return {
         Value: hv.Value,
-        Provenance: { column: spec.name, source: 'record-changes', sourceRef: AsOfFeatureAssembler.fieldRef(entity, key, source.field), sourceVersion: hv.ChangeId, computedAt: hv.ChangedAt.toISOString() },
+        Provenance: { column: spec.name, source: 'record-changes', sourceRef: AsOfFeatureAssembler.fieldRef(entity, key, source.field), sourceVersion: hv.ChangeID, computedAt: hv.ChangedAt.toISOString() },
       };
     };
   }
@@ -556,7 +556,7 @@ export class AsOfFeatureAssembler {
     const outcomes = AsOfFeatureAssembler.outcomesByRow(reads, stable);
     return (row) => {
       const key = keyOf(row);
-      if (outcomes.get(row.RowId) === 'excluded') return { Uncovered: true, Entity: entity.Name, Field: source.field, HistoryStart: stable.HistoryStart };
+      if (outcomes.get(row.RowID) === 'excluded') return { Uncovered: true, Entity: entity.Name, Field: source.field, HistoryStart: stable.HistoryStart };
       const rec = key === null ? undefined : current.Rows.get(key.toLowerCase());
       const created = key === null ? null : AsOfFeatureAssembler.creationInstant(stable.History, key, storedCreatedAt(key));
       const createdAfter = !AsOfFeatureAssembler.existedBefore(created, AsOfFeatureAssembler.asOfInstant(row.DecisionDate));
@@ -671,7 +671,7 @@ export class AsOfFeatureAssembler {
       for (const row of r.Rows) {
         const at = AsOfFeatureAssembler.asOfInstant(row.DecisionDate);
         if (!byInstant.has(at.getTime())) byInstant.set(at.getTime(), judge(r.Key, at) === outcome);
-        if (byInstant.get(at.getTime())) ids.add(row.RowId);
+        if (byInstant.get(at.getTime())) ids.add(row.RowID);
       }
     });
     return ids.size;
@@ -703,7 +703,7 @@ export class AsOfFeatureAssembler {
   /** The number of distinct unit rows the reads stand for. */
   private static distinctRows(reads: readonly StableRead[]): number {
     const ids = new Set<string>();
-    for (const rows of new Set(reads.map((r) => r.Rows))) for (const row of rows) ids.add(row.RowId);
+    for (const rows of new Set(reads.map((r) => r.Rows))) for (const row of rows) ids.add(row.RowID);
     return ids.size;
   }
 
@@ -711,7 +711,7 @@ export class AsOfFeatureAssembler {
   private static distinctPastRows(reads: readonly StableRead[], input: AsOfAssemblyInput): number {
     const ids = new Set<string>();
     for (const rows of new Set(reads.map((r) => r.Rows))) {
-      for (const row of rows) if (!AsOfFeatureAssembler.onAssemblyDayOrLater(row, input)) ids.add(row.RowId);
+      for (const row of rows) if (!AsOfFeatureAssembler.onAssemblyDayOrLater(row, input)) ids.add(row.RowID);
     }
     return ids.size;
   }
@@ -733,7 +733,7 @@ export class AsOfFeatureAssembler {
 
   /** The verdict of each unit row's own read (reads built by `rowReads`), by row id. */
   private static outcomesByRow(reads: readonly StableRead[], stable: StableValues): Map<string, StableOutcome> {
-    return new Map(reads.map((r, i) => [r.Rows[0].RowId, stable.Outcomes[i]]));
+    return new Map(reads.map((r, i) => [r.Rows[0].RowID, stable.Outcomes[i]]));
   }
 
   /** The keys with case-insensitive duplicates removed (first spelling kept), as a keyed read deduplicates them. */
@@ -773,7 +773,7 @@ export class AsOfFeatureAssembler {
     return AsOfFeatureAssembler.throughJoin(spec, join, (row) => {
       if (excluded) return excluded;
       const v = values.get(row);
-      if (!v) throw new Error(`Windowed aggregate ${spec.name}: row ${row.RowId} was not computed`);
+      if (!v) throw new Error(`Windowed aggregate ${spec.name}: row ${row.RowID} was not computed`);
       return v;
     }, input);
   }
@@ -838,7 +838,7 @@ export class AsOfFeatureAssembler {
       const s = SeriesFeatures.ComputeSeriesFeature(history, row.EntityKey, row.Period || row.DecisionDate, t, source.feature);
       return {
         Value: s.Value,
-        Provenance: { column: spec.name, source: 'series', sourceRef: `${input.RowEntity.Name}/label/${s.SourceRowIds.join('+')}`, sourceVersion: `labelVersion:${input.Unit.label.labelVersion}`, computedAt: input.AssembledAt.toISOString() },
+        Provenance: { column: spec.name, source: 'series', sourceRef: `${input.RowEntity.Name}/label/${s.SourceRowIDs.join('+')}`, sourceVersion: `labelVersion:${input.Unit.label.labelVersion}`, computedAt: input.AssembledAt.toISOString() },
       };
     };
   }
@@ -854,7 +854,7 @@ export class AsOfFeatureAssembler {
     const version = AsOfFeatureAssembler.pinVersion(pin);
     return (row) => {
       const asOf = AsOfFeatureAssembler.asOfInstant(row.DecisionDate).getTime();
-      const candidates = (byRecord.get(row.RowId.toLowerCase()) || []).filter((v) => AsOfFeatureAssembler.effectiveAt(v) < asOf);
+      const candidates = (byRecord.get(row.RowID.toLowerCase()) || []).filter((v) => AsOfFeatureAssembler.effectiveAt(v) < asOf);
       const v = candidates[candidates.length - 1];
       return {
         // `??`: 0, '' and false are real feature values; only an absent typed column falls through to the next.
@@ -900,7 +900,7 @@ export class AsOfFeatureAssembler {
   private static featureValuesByRecord(rows: readonly SourceRow[]): Map<string, SourceRow[]> {
     const byRecord = new Map<string, SourceRow[]>();
     for (const v of rows) {
-      const k = RecordHistory.KeyOfRecordId(String(v.RecordID));
+      const k = RecordHistory.KeyOfRecordID(String(v.RecordID));
       const list = byRecord.get(k) || [];
       list.push(v);
       byRecord.set(k, list);
@@ -919,7 +919,7 @@ export class AsOfFeatureAssembler {
    */
   private async keyResolver(keyField: string | null, input: AsOfAssemblyInput, fallback: KeyOf, state: AssemblyState): Promise<JoinKeys> {
     if (keyField === null) return { KeyOf: fallback, CreatedAfter: () => false, UncoveredFor: () => null };
-    const reads = AsOfFeatureAssembler.rowReads(input.Rows, (row) => row.RowId);
+    const reads = AsOfFeatureAssembler.rowReads(input.Rows, (row) => row.RowID);
     const hasCreatedAt = AsOfFeatureAssembler.hasField(input.RowEntity, '__mj_CreatedAt');
     // Read first, as a current value is: a unit row with no record is a short read, whatever its history.
     const rowsById = await KeyedReader.ReadByKeys(input.DataAccess, input.RowEntity.Name, input.RowEntity.PrimaryKey, reads.map((r) => r.Key), hasCreatedAt ? [keyField, '__mj_CreatedAt'] : [keyField]);
@@ -928,17 +928,17 @@ export class AsOfFeatureAssembler {
     const stable = await this.assertStableCurrentValue(input.RowEntity, keyField, reads, storedCreatedAt, input, state);
     const outcomes = AsOfFeatureAssembler.outcomesByRow(reads, stable);
     const createdAfter = (row: AssemblyRowRef): boolean => {
-      const created = AsOfFeatureAssembler.creationInstant(stable.History, row.RowId, storedCreatedAt(row.RowId));
+      const created = AsOfFeatureAssembler.creationInstant(stable.History, row.RowID, storedCreatedAt(row.RowID));
       return !AsOfFeatureAssembler.existedBefore(created, AsOfFeatureAssembler.asOfInstant(row.DecisionDate));
     };
     const uncoveredFor = (row: AssemblyRowRef): Uncovered | null =>
-      (outcomes.get(row.RowId) === 'excluded' ? { Uncovered: true, Entity: input.RowEntity.Name, Field: keyField, HistoryStart: stable.HistoryStart } : null);
+      (outcomes.get(row.RowID) === 'excluded' ? { Uncovered: true, Entity: input.RowEntity.Name, Field: keyField, HistoryStart: stable.HistoryStart } : null);
     return {
       CreatedAfter: createdAfter,
       UncoveredFor: uncoveredFor,
       KeyOf: (row) => {
         if (createdAfter(row) || uncoveredFor(row) !== null) return null;
-        const v = rowsById.Rows.get(row.RowId.toLowerCase())?.[keyField];
+        const v = rowsById.Rows.get(row.RowID.toLowerCase())?.[keyField];
         return v === null || v === undefined ? null : String(v);
       },
     };

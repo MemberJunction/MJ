@@ -55,18 +55,18 @@ describe('SummarizeBuildResult', () => {
   it('projects a published result', () => {
     expect(SummarizeBuildResult(published)).toMatchObject({
       success: true, pipelineId: 'p1', modelId: 'm1', published: true, heldReason: null, errorMessage: null,
-      TrustTitle: 'Ships — the model beats the flat guess', Headline: 'Beats the flat guess by 0.0200 [0.0100, 0.0300] (log-loss).',
+      trustTitle: 'Ships — the model beats the flat guess', headline: 'Beats the flat guess by 0.0200 [0.0100, 0.0300] (log-loss).',
     });
   });
   it('projects a HELD result, carrying the stored reason (the safety gate)', () => {
     const o = SummarizeBuildResult(held);
     expect(o.published).toBe(false);
-    expect([o.TrustTitle, o.Headline]).toEqual(['No signal — not usable', 'No signal: nothing beats the flat guess.']);
+    expect([o.trustTitle, o.headline]).toEqual(['No signal — not usable', 'No signal: nothing beats the flat guess.']);
     expect(o.heldReason).toBe('Nothing beats the flat guess, so nothing ships.');
   });
   it('projects no title or headline when the build trained no model', () => {
     const o = SummarizeBuildResult({ ...held, trust: undefined });
-    expect([o.TrustTitle, o.Headline]).toEqual([undefined, undefined]);
+    expect([o.trustTitle, o.headline]).toEqual([undefined, undefined]);
   });
   it('projects a failed build', () => {
     expect(SummarizeBuildResult(failed)).toMatchObject({ success: false, published: false, errorMessage: 'Algorithm not found' });

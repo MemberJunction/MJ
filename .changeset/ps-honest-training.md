@@ -7,6 +7,15 @@
 "@memberjunction/predictive-studio-truth-suite": minor
 "@memberjunction/ng-dashboards": minor
 "@memberjunction/integration-test-suite": minor
+"@memberjunction/core-entities-server": minor
+"@memberjunction/storage": minor
+"@memberjunction/ng-artifacts": minor
+"@memberjunction/ng-bootstrap": minor
+"@memberjunction/ng-bootstrap-lite": minor
+"@memberjunction/ng-core-entity-forms": minor
+"@memberjunction/server": minor
+"@memberjunction/server-bootstrap": minor
+"@memberjunction/server-bootstrap-lite": minor
 ---
 
 Predictive Studio decides what a training run ships with a three-outcome gate (the model, a simple baseline, or no
@@ -21,8 +30,9 @@ signal), stores that decision with its reason on the run, and renders the trust 
   `deriveTrustVerdict`, `TrustEvidenceLine`, `trustEvidenceLine`, `TrustDots`, `trustDots` are removed.
 - `@memberjunction/predictive-studio`: a unit training run refuses a sidecar gate that differs from the TypeScript
   decision (`sidecar-gate-mismatch`), creates the model row from the shipped artifact only (none under `no-signal`),
-  and `TrainModelResult.model` is nullable. `IRecordLoader.ResolveAlgorithmIdForDriver` is a new required member.
-  `PredictiveStudioBuildOutcome.trustGrade` / `trustOneLiner` are renamed `TrustTitle` / `Headline`;
+  and `TrainModelResult.model` is nullable. `IRecordLoader.resolveAlgorithmIDForDriver` and
+  `IArtifactStore.delete` are new required members. `PredictiveStudioBuildOutcome.trustGrade` / `trustOneLiner` are
+  renamed `trustTitle` / `headline`;
   `GenerateMarkdownReport` takes `trustTitle` / `headline`; `SingleModelLeaderboard` takes a `TrustComparison | null`.
 - `@memberjunction/ng-dashboards`: the business catalog opens only predictions the gate shipped;
   `toBusinessPredictionCard` / `buildBusinessCatalog` (and the PascalCase free functions) → `BusinessPredictions.*`;

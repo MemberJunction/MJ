@@ -34,6 +34,7 @@ import type { SourceRow } from '../feature-assembly/data-access';
 import type { IEntityFactory } from '../training/types';
 import type { UnitRowsRead } from '../training/training-engine';
 import { SnapshotHash } from './snapshot-hash';
+import { HoldoutCarvers } from './holdout-carver';
 import { CodeVersionInfo } from './code-version';
 import { SnapshotFiles, type SnapshotContent, type SnapshotFileBytes } from './snapshot-serialization';
 import type { ISnapshotFileStore, StoredSnapshotFile } from './snapshot-file-store';
@@ -130,14 +131,14 @@ export class TrainingSnapshotBuilder {
    * matrix, manifest, provenance, slice and incumbent cells and the class balance all read the kept rows only.
    */
   public static KeptRows(input: SnapshotBuildInput): SnapshotBuildInput {
-    const rows = input.Assembled.Rows.filter((a) => input.Roles.has(a.RowId));
+    const rows = input.Assembled.Rows.filter((a) => input.Roles.has(a.RowID));
     return rows.length === input.Assembled.Rows.length ? input : { ...input, Assembled: { ...input.Assembled, Rows: rows } };
   }
 
   /** The snapshot content: header, matrix rows (+ incumbent/slice cells), manifest in matrix order, provenance. */
   protected BuildContent(input: SnapshotBuildInput): SnapshotContent {
-    const unitRows = new Map(input.UnitRead.Rows.map((r) => [r.RowId, r]));
-    const labels = new Map(input.UnitRead.Rows.map((r) => [r.RowId, r.Label]));
+    const unitRows = new Map(input.UnitRead.Rows.map((r) => [r.RowID, r]));
+    const labels = new Map(input.UnitRead.Rows.map((r) => [r.RowID, r.Label]));
     const shaped = AsOfFeatureAssembler.ToFeatureAssemblyResult(input.Assembled, labels, LABEL_COLUMN);
     const extra = this.extraColumns(input, unitRows);
     const header: SnapshotMatrixHeader = {
@@ -155,8 +156,8 @@ export class TrainingSnapshotBuilder {
     return {
       Header: header,
       Rows: shaped.matrix.rows.map((r, i) => [...r, ...extra.Cells(i)]),
-      Manifest: input.Assembled.Rows.map((a) => this.manifestLine(input, unitRows, a.RowId)),
-      Provenance: input.Assembled.Rows.map((a) => ({ rowId: a.RowId, values: a.Provenance })),
+      Manifest: input.Assembled.Rows.map((a) => this.manifestLine(input, unitRows, a.RowID)),
+      Provenance: input.Assembled.Rows.map((a) => ({ rowId: a.RowID, values: a.Provenance })),
     };
   }
 
@@ -254,10 +255,9 @@ export class TrainingSnapshotBuilder {
 
   /** One manifest line: the unit row's keys and dates, and the role the carver assigned. */
   private manifestLine(input: SnapshotBuildInput, unitRows: ReadonlyMap<string, UnitRow>, rowId: string): SnapshotRowKey {
-    const u = unitRows.get(rowId);
-    if (!u) throw new Error(`Snapshot: assembled row ${rowId} is not a unit row`);
+    const u = HoldoutCarvers.UnitRowOf(unitRows, rowId);
     return {
-      rowId: u.RowId, entityKey: TrainingSnapshotBuilder.ManifestEntityKey(input.Unit, u), decisionDate: UtcDay.UtcDayIso(u.DecisionDate), groupKey: u.GroupKey,
+      rowId: u.RowID, entityKey: TrainingSnapshotBuilder.ManifestEntityKey(input.Unit, u), decisionDate: UtcDay.UtcDayIso(u.DecisionDate), groupKey: u.GroupKey,
       period: u.Period ? UtcDay.UtcDayIso(u.Period) : null, role: TrainingSnapshotBuilder.roleOf(input, rowId),
     };
   }
@@ -315,13 +315,13 @@ export class TrainingSnapshotBuilder {
    */
   private sliceColumn(input: SnapshotBuildInput, position: ReadonlyMap<string, number>, unitRows: ReadonlyMap<string, UnitRow>, field: string): ExtraColumn {
     const k = position.get(field);
-    const rows = input.Assembled.Rows.map((a) => unitRows.get(a.RowId)?.Source || {});
+    const rows = input.Assembled.Rows.map((a) => unitRows.get(a.RowID)?.Source || {});
     if (!TrainingSnapshotBuilder.SliceFieldResolves(field, new Set(position.keys()), rows)) TrainingSnapshotBuilder.refuseColumn(input, field);
     return {
       Name: `${SLICE_COLUMN_PREFIX}${field}`,
       Cell: (i) => {
         const row = input.Assembled.Rows[i];
-        const raw = k !== undefined ? row?.Values[k] : row ? unitRows.get(row.RowId)?.Source[field] : undefined;
+        const raw = k !== undefined ? row?.Values[k] : row ? unitRows.get(row.RowID)?.Source[field] : undefined;
         if (raw === null || raw === undefined || raw === '') return MISSING_SLICE_VALUE;
         return raw instanceof Date ? UtcDay.UtcDayIso(raw) : String(raw);
       },
@@ -370,7 +370,7 @@ export class TrainingSnapshotBuilder {
 
   /** Rows per label over the written manifest's rows, in ordinal label order, so the row describes the stored manifest. */
   private static classBalance(input: SnapshotBuildInput, manifest: readonly SnapshotRowKey[]): ClassBalanceEntry[] {
-    const labels = new Map(input.UnitRead.Rows.map((r) => [r.RowId, String(r.Label)]));
+    const labels = new Map(input.UnitRead.Rows.map((r) => [r.RowID, String(r.Label)]));
     const m = new Map<string, number>();
     for (const line of manifest) {
       const label = labels.get(line.rowId);

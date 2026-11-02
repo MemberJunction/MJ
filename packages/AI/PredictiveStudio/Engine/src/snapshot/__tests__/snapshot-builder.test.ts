@@ -42,7 +42,7 @@ const features: FeatureColumnSpec[] = [{
 
 const day = (iso: string): Date => new Date(`${iso}T00:00:00Z`);
 const unitRow = (id: string, decided: string, label: string, visits: number): UnitRow => ({
-  RowId: id, EntityKey: `Y-${id}`, DecisionDate: day(decided), WindowEnd: day(decided), GroupKey: `y-${id}`, Period: null,
+  RowID: id, EntityKey: `Y-${id}`, DecisionDate: day(decided), WindowEnd: day(decided), GroupKey: `y-${id}`, Period: null,
   Label: label, Source: { ID: `Y-${id}`, PriorVisits: visits, Region: 'North' },
 });
 
@@ -58,11 +58,11 @@ const assembled: AsOfAssembledMatrix = {
   Status: 'assembled',
   Columns: [{ Name: 'PriorVisits', Encoding: 'numeric', SourceColumn: 'Years.PriorVisits', FeatureName: 'PriorVisits' }],
   Rows: unitRead.Rows.map((r, i) => ({
-    RowId: r.RowId,
+    RowID: r.RowID,
     Values: [i + 1],
     Provenance: [{ column: 'PriorVisits', source: 'immutable-field', sourceRef: `Years:${r.EntityKey}`, sourceVersion: 'immutable-after-create', computedAt: '2026-10-27T00:00:00.000Z' }],
   })),
-  ExcludedRowIds: new Set<string>(),
+  ExcludedRowIDs: new Set<string>(),
   UncoveredRowsExcluded: [],
   Coverage: [],
   Preprocessing: [{ op: 'impute', col: 'PriorVisits', strategy: 'median', indicator: true }],
@@ -70,7 +70,7 @@ const assembled: AsOfAssembledMatrix = {
   CategoryLevels: new Map<string, readonly string[]>(),
 };
 
-const rowsById: ReadonlyMap<string, UnitRow> = new Map(unitRead.Rows.map((r) => [r.RowId, r]));
+const rowsById: ReadonlyMap<string, UnitRow> = new Map(unitRead.Rows.map((r) => [r.RowID, r]));
 
 // ---------------------------------------------------------------------------
 // Entity fakes: every snapshot column as a public field, Save() that can be told to fail once.
@@ -193,14 +193,14 @@ describe('TrainingSnapshotBuilder', () => {
     const savedManifest = files.Saved.get(s.RowManifestFileID);
     const savedProvenance = files.Saved.get(s.ProvenanceFileID);
     expect(savedMatrix).toBeDefined();
-    expect(s.MatrixSha256).toBe(SnapshotHash.Sha256Hex(savedMatrix?.Bytes ?? new Uint8Array()));
-    expect(s.ProvenanceSha256).toBe(SnapshotHash.Sha256Hex(savedProvenance?.Bytes ?? new Uint8Array()));
+    expect(s.MatrixSha256).toBe(SnapshotHash.Sha256Hex(savedMatrix?.Bytes || new Uint8Array()));
+    expect(s.ProvenanceSha256).toBe(SnapshotHash.Sha256Hex(savedProvenance?.Bytes || new Uint8Array()));
     expect(s.ContentHash).toBe(SnapshotFiles.ComputeSnapshotContentHash({ MatrixSha256: s.MatrixSha256, RowManifestSha256: s.RowManifestSha256, FeatureSchemaHash: s.FeatureSchemaHash, PredictionUnitID: unit.id, LabelVersion: 1, FeatureSpecVersion: 3, EvaluationProtocolID: null, DataCutoff: unitRead.Counts.dataCutoff }));
     expect(built.Content.Manifest.map((m) => m.role)).toEqual(['development', 'development', 'locked-holdout']);
     expect(built.Content.Header.featureColumns.map((c) => c.encoding.kind)).toEqual(['numeric']);
     expect(built.Content.Header.incumbentScoreColumn).toBeNull();
     // The written files read back as the built content (the header passes its store schema).
-    const parsed = SnapshotFiles.ParseSnapshotFiles(savedMatrix?.Bytes ?? new Uint8Array(), savedManifest?.Bytes ?? new Uint8Array(), savedProvenance?.Bytes ?? new Uint8Array());
+    const parsed = SnapshotFiles.ParseSnapshotFiles(savedMatrix?.Bytes || new Uint8Array(), savedManifest?.Bytes || new Uint8Array(), savedProvenance?.Bytes || new Uint8Array());
     expect(parsed.Header).toEqual(built.Content.Header);
     expect(s.DataCutoff.toISOString()).toBe('2026-01-01T00:00:00.000Z');
     expect(s.ClassBalance).toBe(JSON.stringify([{ label: '0', rows: 1 }, { label: '1', rows: 2 }]));
@@ -256,15 +256,15 @@ describe('TrainingSnapshotBuilder manifest roles', () => {
     expect(built.Content.Provenance.map((p) => p.rowId)).toEqual(['r1', 'r2']);
     expect([s.ManifestRowCount, s.HoldoutRowCount, s.RowsRead, s.CensoredRowsExcluded]).toEqual([2, 1, 5, 2]);
     expect(s.ClassBalance).toBe(JSON.stringify([{ label: '0', rows: 1 }, { label: '1', rows: 1 }]));
-    const stored = SnapshotFiles.ParseManifestLines(files.Saved.get(s.RowManifestFileID)?.Bytes ?? new Uint8Array());
+    const stored = SnapshotFiles.ParseManifestLines(files.Saved.get(s.RowManifestFileID)?.Bytes || new Uint8Array());
     expect(stored.map((m) => m.rowId)).toEqual(['r1', 'r2']);
   });
 
   it('stores the class balance of the manifest it wrote', async () => {
     const built = await new TrainingSnapshotBuilder().Build(input(new InMemorySnapshotFileStore('p')));
-    const labelOf = new Map(unitRead.Rows.map((r) => [r.RowId, String(r.Label)]));
+    const labelOf = new Map(unitRead.Rows.map((r) => [r.RowID, String(r.Label)]));
     const counts = new Map<string, number>();
-    for (const m of built.Content.Manifest) counts.set(labelOf.get(m.rowId) ?? '', (counts.get(labelOf.get(m.rowId) ?? '') ?? 0) + 1);
+    for (const m of built.Content.Manifest) counts.set(labelOf.get(m.rowId) || '', (counts.get(labelOf.get(m.rowId) || '') || 0) + 1);
     expect(built.Entity.ClassBalance).toBe(JSON.stringify([...counts].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([label, rows]) => ({ label, rows }))));
   });
 });
@@ -322,8 +322,8 @@ describe('Snapshot provenance object', () => {
 /** A metadata provider whose RunView answers `MJ: Files` reads from the factory's saved rows, honouring the filter. */
 const filesMetadata = (factory: FakeEntityFactory): IMetadataProvider => ({
   RunView: async (params: { ExtraFilter?: string; OrderBy?: string }) => {
-    const wanted = [...(params.ExtraFilter ?? '').matchAll(/(\w+)='([^']*)'/g)].map((m) => [m[1], m[2]] as const);
-    const field = (f: FakeFileEntity, name: string): string => (name === 'ID' ? f.ID : name === 'ProviderID' ? f.ProviderID : name === 'ProviderKey' ? f.ProviderKey ?? '' : `unknown:${name}`);
+    const wanted = [...(params.ExtraFilter || '').matchAll(/(\w+)='([^']*)'/g)].map((m) => [m[1], m[2]] as const);
+    const field = (f: FakeFileEntity, name: string): string => (name === 'ID' ? f.ID : name === 'ProviderID' ? f.ProviderID : name === 'ProviderKey' ? f.ProviderKey || '' : `unknown:${name}`);
     const rows = factory.Files.filter((f) => f.ID !== '' && wanted.every(([name, value]) => field(f, name).toLowerCase() === value.toLowerCase()));
     const ordered = params.OrderBy ? [...rows].sort((a, b) => a.CreatedAt.getTime() - b.CreatedAt.getTime() || (a.ID < b.ID ? -1 : 1)) : rows;
     return { Success: true, Results: ordered.map((f) => ({ ID: f.ID, ProviderID: f.ProviderID, ProviderKey: f.ProviderKey })) };

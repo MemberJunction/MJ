@@ -9,7 +9,7 @@ import {
 
 type DateCarved = Extract<HoldoutSplit, { readonly kind: 'date-carved' }>;
 type RollingOrigin = Extract<HoldoutSplit, { readonly kind: 'rolling-origin' }>;
-const row = (id: string, entity: string, date: string, label: string | null = 'Renewed'): CarveRow => ({ RowId: id, EntityKey: entity, CarveDate: date, Label: label });
+const row = (id: string, entity: string, date: string, label: string | null = 'Renewed'): CarveRow => ({ RowID: id, EntityKey: entity, CarveDate: date, Label: label });
 const holdout = (cutoff: string, end: string | null = null, newEntityFraction: number | null = null): DateCarved => ({
   kind: 'date-carved', dateColumn: 'DecisionDate', cutoff, holdoutEnd: end,
   newEntityReport: newEntityFraction === null ? null : { groupKey: 'PersonID', holdoutFraction: newEntityFraction },
@@ -18,8 +18,8 @@ const rolling = (origins: number, horizonPeriods: number, gapPeriods: number, mi
   kind: 'rolling-origin', origins, horizonPeriods, gapPeriods, minTrainPeriods, window: 'expanding',
 });
 /** `count` consecutive monthly periods from January 2020, as rows `t0`, `t1`, … */
-const monthlyRows = (count: number): { readonly RowId: string; readonly Period: string }[] =>
-  Array.from({ length: count }, (_, i) => ({ RowId: `t${i}`, Period: `${2020 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}-01` }));
+const monthlyRows = (count: number): { readonly RowID: string; readonly Period: string }[] =>
+  Array.from({ length: count }, (_, i) => ({ RowID: `t${i}`, Period: `${2020 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}-01` }));
 
 /** Four members, one row per membership year 2019–2025 (person × year). */
 function personYears(): CarveRow[] {
@@ -32,16 +32,16 @@ describe('HoldoutCarve.CarveLockedHoldout', () => {
   it('holds out every row from the cutoff up to the holdout end and trains on rows before the cutoff only', () => {
     const r = HoldoutCarve.CarveLockedHoldout(personYears(), holdout('2024-01-01', '2025-01-01'));
     if (!r.Ok) throw new Error('expected a carve');
-    expect([...r.Deployment.HoldoutRowIds].sort()).toEqual(['P1:2024', 'P2:2024', 'P3:2024', 'P4:2024']);
-    const developmentIds = r.Deployment.Rows.filter((x) => x.Role === 'development').map((x) => x.RowId);
+    expect([...r.Deployment.HoldoutRowIDs].sort()).toEqual(['P1:2024', 'P2:2024', 'P3:2024', 'P4:2024']);
+    const developmentIds = r.Deployment.Rows.filter((x) => x.Role === 'development').map((x) => x.RowID);
     expect(developmentIds).toHaveLength(20);
     expect(developmentIds.every((id) => Number(id.split(':')[1]) < 2024)).toBe(true);
     expect(r.Deployment.ExcludedAfterHoldoutEnd).toBe(4);
-    expect(r.Deployment.Rows.some((x) => x.RowId.endsWith(':2025'))).toBe(false);
+    expect(r.Deployment.Rows.some((x) => x.RowID.endsWith(':2025'))).toBe(false);
   });
   it('sends a row dated exactly at the cutoff to the holdout', () => {
     const r = HoldoutCarve.CarveLockedHoldout([row('a', 'P1', '2023-12-31'), row('b', 'P1', '2024-01-01')], holdout('2024-01-01'));
-    expect(r.Ok && r.Deployment.HoldoutRowIds).toEqual(['b']);
+    expect(r.Ok && r.Deployment.HoldoutRowIDs).toEqual(['b']);
   });
   it('excludes and counts a row dated exactly at the holdout end, and keeps the day before it in the holdout', () => {
     const r = HoldoutCarve.CarveLockedHoldout(
@@ -49,8 +49,8 @@ describe('HoldoutCarve.CarveLockedHoldout', () => {
       holdout('2024-01-01', '2025-01-01'),
     );
     if (!r.Ok) throw new Error('expected a carve');
-    expect(r.Deployment.HoldoutRowIds).toEqual(['b']);
-    expect(r.Deployment.Rows.map((x) => x.RowId)).toEqual(['a', 'b']);
+    expect(r.Deployment.HoldoutRowIDs).toEqual(['b']);
+    expect(r.Deployment.Rows.map((x) => x.RowID)).toEqual(['a', 'b']);
     expect([r.Deployment.DevelopmentRowCount, r.Deployment.HoldoutRowCount, r.Deployment.ExcludedAfterHoldoutEnd]).toEqual([1, 1, 2]);
   });
   it('does not depend on the order rows were read in (no trailing slice of a key-ordered scan)', () => {
@@ -74,7 +74,7 @@ describe('HoldoutCarve.CarveLockedHoldout', () => {
       holdout('2024-01-01'),
     );
     if (!r.Ok) throw new Error('expected a carve');
-    expect(r.Deployment.Rows).toEqual([{ RowId: 'a', Role: 'development' }, { RowId: 'b', Role: 'development' }, { RowId: 'c', Role: 'locked-holdout' }]);
+    expect(r.Deployment.Rows).toEqual([{ RowID: 'a', Role: 'development' }, { RowID: 'b', Role: 'development' }, { RowID: 'c', Role: 'locked-holdout' }]);
   });
   it('refuses a carve date that names no calendar day', () => {
     expect(HoldoutCarve.CarveLockedHoldout([row('x', 'P1', '2024-02-30')], holdout('2024-01-01')))
@@ -95,28 +95,28 @@ describe('the new-entity report', () => {
     if (!r.Ok || r.NewEntity === null) throw new Error('expected a new-entity carve');
     expect([...r.NewEntity.HoldoutEntityKeys].sort()).toEqual(['E7', 'E8', 'E9']);
     // The shared keys are read from the carved rows themselves, not from the report's own count.
-    const entityOf = new Map(rows.map((x) => [x.RowId, x.EntityKey]));
-    const trainingEntities = new Set(r.NewEntity.TrainingRowIds.map((id) => entityOf.get(id)));
-    const holdoutEntities = new Set(r.NewEntity.HoldoutRowIds.map((id) => entityOf.get(id)));
+    const entityOf = new Map(rows.map((x) => [x.RowID, x.EntityKey]));
+    const trainingEntities = new Set(r.NewEntity.TrainingRowIDs.map((id) => entityOf.get(id)));
+    const holdoutEntities = new Set(r.NewEntity.HoldoutRowIDs.map((id) => entityOf.get(id)));
     expect([...holdoutEntities].sort()).toEqual(['E7', 'E8', 'E9']);
     expect([...holdoutEntities].filter((k) => trainingEntities.has(k))).toEqual([]);
     expect(trainingEntities.size).toBe(7);
     expect(r.NewEntity.SharedEntityKeys).toBe(0);
     // Training rows are dated before the cutoff, holdout rows on or after it; every row is in one of the three counts.
-    expect(r.NewEntity.TrainingRowIds.every((id) => Number(id.split(':')[1]) < 2024)).toBe(true);
-    expect(r.NewEntity.HoldoutRowIds.every((id) => Number(id.split(':')[1]) >= 2024)).toBe(true);
-    expect(r.NewEntity.TrainingRowIds.length + r.NewEntity.HoldoutRowIds.length + r.NewEntity.ExcludedRowCount).toBe(rows.length);
+    expect(r.NewEntity.TrainingRowIDs.every((id) => Number(id.split(':')[1]) < 2024)).toBe(true);
+    expect(r.NewEntity.HoldoutRowIDs.every((id) => Number(id.split(':')[1]) >= 2024)).toBe(true);
+    expect(r.NewEntity.TrainingRowIDs.length + r.NewEntity.HoldoutRowIDs.length + r.NewEntity.ExcludedRowCount).toBe(rows.length);
   });
   it('excludes and counts the held-out groups\' rows on or after the holdout end', () => {
     const rows: CarveRow[] = [];
     for (let e = 0; e < 10; e++) for (let year = 2015 + e; year <= 2025; year++) rows.push(row(`E${e}:${year}`, `E${e}`, `${year}-06-01`));
     const r = HoldoutCarve.CarveLockedHoldout(rows, holdout('2024-01-01', '2025-01-01', 0.3));
     if (!r.Ok || r.NewEntity === null) throw new Error('expected a new-entity carve');
-    expect([...r.NewEntity.HoldoutRowIds].sort()).toEqual(['E7:2024', 'E8:2024', 'E9:2024']);
+    expect([...r.NewEntity.HoldoutRowIDs].sort()).toEqual(['E7:2024', 'E8:2024', 'E9:2024']);
     // 65 rows: 42 training rows (E0–E6 before 2024) + 3 holdout rows + 20 excluded (E0–E6 from 2024, E7–E9 before 2024 and in 2025).
-    expect([r.NewEntity.TrainingRowIds.length, r.NewEntity.ExcludedRowCount]).toEqual([42, 20]);
-    const used = new Set([...r.NewEntity.TrainingRowIds, ...r.NewEntity.HoldoutRowIds]);
-    expect(rows.filter((x) => x.RowId.endsWith(':2025') && used.has(x.RowId))).toEqual([]);
+    expect([r.NewEntity.TrainingRowIDs.length, r.NewEntity.ExcludedRowCount]).toEqual([42, 20]);
+    const used = new Set([...r.NewEntity.TrainingRowIDs, ...r.NewEntity.HoldoutRowIDs]);
+    expect(rows.filter((x) => x.RowID.endsWith(':2025') && used.has(x.RowID))).toEqual([]);
   });
   it('is null when the protocol declares no new-entity report', () => {
     const r = HoldoutCarve.CarveLockedHoldout(personYears(), holdout('2024-01-01'));
@@ -133,25 +133,25 @@ describe('HoldoutCarve.SeededRandomCarve', () => {
   it('assigns the same rows whatever the read order, at about the declared fraction', () => {
     const a = HoldoutCarve.SeededRandomCarve(ids, 0.25, 42);
     const b = HoldoutCarve.SeededRandomCarve([...ids].reverse(), 0.25, 42);
-    expect([...a.HoldoutRowIds].sort()).toEqual([...b.HoldoutRowIds].sort());
-    expect(a.HoldoutRowIds.length).toBeGreaterThan(900);
-    expect(a.HoldoutRowIds.length).toBeLessThan(1100);
-    expect(a.HoldoutRowIds.length + a.DevelopmentRowIds.length).toBe(4000);
+    expect([...a.HoldoutRowIDs].sort()).toEqual([...b.HoldoutRowIDs].sort());
+    expect(a.HoldoutRowIDs.length).toBeGreaterThan(900);
+    expect(a.HoldoutRowIDs.length).toBeLessThan(1100);
+    expect(a.HoldoutRowIDs.length + a.DevelopmentRowIDs.length).toBe(4000);
   });
   it('stays near the declared fraction on short sequential ids for every seed', () => {
     for (const seed of [0, 1, 7, 42, 123]) {
-      const n = HoldoutCarve.SeededRandomCarve(ids, 0.25, seed).HoldoutRowIds.length;
+      const n = HoldoutCarve.SeededRandomCarve(ids, 0.25, seed).HoldoutRowIDs.length;
       expect(n, `seed ${seed}`).toBeGreaterThan(900);
       expect(n, `seed ${seed}`).toBeLessThan(1100);
     }
   });
   it('keeps the assignment of a seed fixed across releases (a stored holdout is never silently re-carved)', () => {
-    expect(HoldoutCarve.SeededRandomCarve(ids, 0.25, 42).HoldoutRowIds.length).toBe(SEED_42_HOLDOUT);
-    expect(HoldoutCarve.SeededRandomCarve(['r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7'], 0.5, 7).HoldoutRowIds).toEqual(SEED_7_EIGHT_ROWS);
+    expect(HoldoutCarve.SeededRandomCarve(ids, 0.25, 42).HoldoutRowIDs.length).toBe(SEED_42_HOLDOUT);
+    expect(HoldoutCarve.SeededRandomCarve(['r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7'], 0.5, 7).HoldoutRowIDs).toEqual(SEED_7_EIGHT_ROWS);
   });
   it('draws a different holdout under a different seed', () => {
-    const a = new Set(HoldoutCarve.SeededRandomCarve(ids, 0.25, 1).HoldoutRowIds);
-    const b = HoldoutCarve.SeededRandomCarve(ids, 0.25, 2).HoldoutRowIds;
+    const a = new Set(HoldoutCarve.SeededRandomCarve(ids, 0.25, 1).HoldoutRowIDs);
+    const b = HoldoutCarve.SeededRandomCarve(ids, 0.25, 2).HoldoutRowIDs;
     expect(b.filter((id) => a.has(id)).length).toBeLessThan(b.length / 2);
   });
 });
@@ -160,11 +160,11 @@ describe('HoldoutCarve.RollingOriginCarve', () => {
   it('holds out the last origins × horizon periods and refuses too short a series', () => {
     const r = HoldoutCarve.RollingOriginCarve(monthlyRows(60), rolling(5, 3, 0, 24));
     const unsorted = HoldoutCarve.RollingOriginCarve([...monthlyRows(60)].reverse(), rolling(5, 3, 0, 24));
-    expect(unsorted.Ok && [...unsorted.HoldoutRowIds].sort()).toEqual(Array.from({ length: 15 }, (_, i) => `t${45 + i}`).sort());
+    expect(unsorted.Ok && [...unsorted.HoldoutRowIDs].sort()).toEqual(Array.from({ length: 15 }, (_, i) => `t${45 + i}`).sort());
     expect(unsorted.Ok && unsorted.HoldoutPeriods[0]).toBe('2023-10-01');
     if (!r.Ok) throw new Error('expected a carve');
-    expect(r.HoldoutRowIds).toHaveLength(15);
-    expect(r.HoldoutRowIds[0]).toBe('t45');
+    expect(r.HoldoutRowIDs).toHaveLength(15);
+    expect(r.HoldoutRowIDs[0]).toBe('t45');
     expect(HoldoutCarve.RollingOriginCarve(monthlyRows(30), rolling(5, 3, 0, 24)))
       .toEqual({ Ok: false, Refusal: { kind: 'too-few-periods', periods: 30, origins: 5, horizonPeriods: 3, gapPeriods: 0, minTrainPeriods: 24 } });
   });
@@ -172,7 +172,7 @@ describe('HoldoutCarve.RollingOriginCarve', () => {
     // 30 periods − 2 origins × 3 − gap 4 leaves exactly the 20 training periods the protocol asks for.
     const fits = HoldoutCarve.RollingOriginCarve(monthlyRows(30), rolling(2, 3, 4, 20));
     if (!fits.Ok) throw new Error('expected a carve');
-    expect(fits.HoldoutRowIds).toEqual(['t24', 't25', 't26', 't27', 't28', 't29']);
+    expect(fits.HoldoutRowIDs).toEqual(['t24', 't25', 't26', 't27', 't28', 't29']);
     expect(fits.HoldoutPeriods[0]).toBe('2022-01-01');
     expect(HoldoutCarve.RollingOriginCarve(monthlyRows(30), rolling(2, 3, 5, 20)))
       .toEqual({ Ok: false, Refusal: { kind: 'too-few-periods', periods: 30, origins: 2, horizonPeriods: 3, gapPeriods: 5, minTrainPeriods: 20 } });
@@ -196,7 +196,7 @@ describe('HoldoutCarve.DescribeCarveRefusal', () => {
   });
 });
 
-describe('HoldoutCarve.YearCutoff, HoldoutPeriods, TrainingRowIds', () => {
+describe('HoldoutCarve.YearCutoff, HoldoutPeriods, TrainingRowIDs', () => {
   const dates = ['2021-03-01', '2022-03-01', '2022-07-01', '2023-03-01', '2023-05-01', '2024-02-01', '2024-03-01', '2024-04-01'];
   it('picks the earliest 1 January whose trailing block holds at most the share', () => {
     expect(HoldoutCarve.YearCutoff(dates, 0.25)).toBe('2024-01-01');
@@ -230,6 +230,6 @@ describe('HoldoutCarve.YearCutoff, HoldoutPeriods, TrainingRowIds', () => {
       { rowId: 'a', entityKey: 'E1', decisionDate: '2023-01-01', groupKey: 'e1', period: null, role: 'development' },
       { rowId: 'b', entityKey: 'E1', decisionDate: '2024-02-01', groupKey: 'e1', period: null, role: 'locked-holdout' },
     ];
-    expect([...HoldoutCarve.TrainingRowIds(manifest)]).toEqual(['a']);
+    expect([...HoldoutCarve.TrainingRowIDs(manifest)]).toEqual(['a']);
   });
 });

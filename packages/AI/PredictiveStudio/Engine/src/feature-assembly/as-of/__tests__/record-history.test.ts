@@ -21,8 +21,8 @@ describe('BuildEntityHistory', () => {
   const h = RecordHistory.BuildEntityHistory('People', changes, current, ['Status'], { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' }, now);
 
   it('replays the value in force before the as-of instant', () => {
-    expect(h.ValueAt('P1', 'Status', new Date('2022-12-01T00:00:00Z'))).toMatchObject({ Status: 'value', Value: 'Active', ChangeId: 'c1' });
-    expect(h.ValueAt('P1', 'Status', new Date('2023-06-01T00:00:00Z'))).toMatchObject({ Status: 'value', Value: 'Lapsed', ChangeId: 'c2' });
+    expect(h.ValueAt('P1', 'Status', new Date('2022-12-01T00:00:00Z'))).toMatchObject({ Status: 'value', Value: 'Active', ChangeID: 'c1' });
+    expect(h.ValueAt('P1', 'Status', new Date('2023-06-01T00:00:00Z'))).toMatchObject({ Status: 'value', Value: 'Lapsed', ChangeID: 'c2' });
   });
   it('refuses to fill a decision date before the record\'s history start with today\'s value', () => {
     expect(h.ValueAt('P1', 'Status', new Date('2020-12-01T00:00:00Z'))).toEqual({ Status: 'uncovered', Reason: 'before-history-start' });

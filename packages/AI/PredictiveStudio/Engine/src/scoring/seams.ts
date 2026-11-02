@@ -69,12 +69,12 @@ export class RunViewPipelineUnitLookup implements IPipelineUnitLookup {
 
 /**
  * {@link ITrainingRowsLookup} over the model's Training Snapshot: the development row ids of its verified row manifest
- * ({@link TrainingKeys.LoadTrainingRowIds}). A failed read throws naming the model.
+ * ({@link TrainingKeys.LoadTrainingRowIDs}). A failed read throws naming the model.
  */
 export class RunViewTrainingRowsLookup implements ITrainingRowsLookup {
   /** @inheritdoc */
-  public async TrainingRowIdsOf(modelId: string, contextUser: UserInfo | undefined, provider: IMetadataProvider): Promise<ReadonlySet<string>> {
-    return TrainingKeys.LoadTrainingRowIds(modelId, provider, contextUser);
+  public async TrainingRowIDsOf(modelId: string, contextUser: UserInfo | undefined, provider: IMetadataProvider): Promise<ReadonlySet<string>> {
+    return TrainingKeys.LoadTrainingRowIDs(modelId, provider, contextUser);
   }
 }
 

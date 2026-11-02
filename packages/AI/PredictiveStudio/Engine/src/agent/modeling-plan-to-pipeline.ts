@@ -65,77 +65,79 @@ function chooseExperiment(spec: ModelingPlanSpec): ModelingPlanSpec['ProposedExp
   return [...experiments].sort((a, b) => (a.Priority ?? 0) - (b.Priority ?? 0))[0];
 }
 
+/** One candidate feature of a modeling plan. */
+type CandidateFeature = ModelingPlanSpec['CandidateFeatures'][number];
+
+/** The selected features sorted by how they become steps: raw columns, persisted values per Feature Pipeline, and the dropped ones. */
+interface ClassifiedFeatures {
+  readonly RawColumns: string[];
+  readonly PersistedFeaturesByPipeline: Map<string, string[]>;
+  readonly Warnings: FeatureStepWarning[];
+}
+
 /** Build the FeatureStep DAG from the selected candidate features (select raw cols; one-hot categoricals) and collect structured warnings for unmapped features. */
 function buildFeatureSteps(spec: ModelingPlanSpec, featureSet: string[]): { steps: FeatureStepGraph; warnings: FeatureStepWarning[] } {
   const all = spec.CandidateFeatures ?? [];
   // Honor the chosen experiment's FeatureSet when present; otherwise use every candidate feature.
   const selected = featureSet.length > 0 ? all.filter((f) => featureSet.includes(f.Name)) : all;
+  const classified = classifyFeatures(spec, selected);
+  return { steps: emitFeatureSteps(selected, classified), warnings: classified.Warnings };
+}
 
-  const warnings: FeatureStepWarning[] = [];
-  const rawColumns: string[] = [];
-  const persistedFeaturesByPipeline = new Map<string, string[]>();
-
+/** Sorts each selected feature into a raw column, a persisted value of its Feature Pipeline, or a dropped feature with a warning. */
+function classifyFeatures(spec: ModelingPlanSpec, selected: readonly CandidateFeature[]): ClassifiedFeatures {
+  const out: ClassifiedFeatures = { RawColumns: [], PersistedFeaturesByPipeline: new Map<string, string[]>(), Warnings: [] };
   for (const f of selected) {
     switch (f.Kind) {
       case 'numeric':
       case 'categorical':
-        rawColumns.push(f.Name);
+        out.RawColumns.push(f.Name);
         break;
       case 'llm-derived':
       case 'decision-derived': {
-        const pipelineSource = spec.CandidateSources?.find(
-          (s) => s.Ref === f.SourceRef && s.Kind === 'FeaturePipeline'
-        );
+        const pipelineSource = spec.CandidateSources?.find((s) => s.Ref === f.SourceRef && s.Kind === 'FeaturePipeline');
         if (pipelineSource) {
-          const list = persistedFeaturesByPipeline.get(pipelineSource.Ref) ?? [];
+          const list = out.PersistedFeaturesByPipeline.get(pipelineSource.Ref) || [];
           list.push(f.Name);
-          persistedFeaturesByPipeline.set(pipelineSource.Ref, list);
+          out.PersistedFeaturesByPipeline.set(pipelineSource.Ref, list);
         } else {
-          warnings.push({
-            FeatureName: f.Name,
-            Kind: f.Kind,
-            Reason: `Candidate feature "${f.Name}" (${f.Kind}) was dropped from training pipeline steps. Persisted-value features (llm-derived, decision-derived) require an upstream Feature Pipeline to persist values before training.`,
-          });
+          out.Warnings.push(droppedFeature(f, `Candidate feature "${f.Name}" (${f.Kind}) was dropped from training pipeline steps. Persisted-value features (llm-derived, decision-derived) require an upstream Feature Pipeline to persist values before training.`));
         }
         break;
       }
       case 'embedding':
-        warnings.push({
-          FeatureName: f.Name,
-          Kind: f.Kind,
-          Reason: `Candidate feature "${f.Name}" (embedding) was dropped from training pipeline steps. Embedding features require a dedicated vector embedding step.`,
-        });
+        out.Warnings.push(droppedFeature(f, `Candidate feature "${f.Name}" (embedding) was dropped from training pipeline steps. Embedding features require a dedicated vector embedding step.`));
         break;
       default: {
         const _exhaustive: never = f.Kind;
         void _exhaustive;
-        warnings.push({
-          FeatureName: f.Name,
-          Kind: f.Kind,
-          Reason: `Candidate feature "${f.Name}" with kind "${String(f.Kind)}" cannot be automatically mapped to a pipeline step.`,
-        });
+        out.Warnings.push(droppedFeature(f, `Candidate feature "${f.Name}" with kind "${String(f.Kind)}" cannot be automatically mapped to a pipeline step.`));
         break;
       }
     }
   }
+  return out;
+}
 
+/** The warning for a feature that has no pipeline step. */
+function droppedFeature(f: CandidateFeature, reason: string): FeatureStepWarning {
+  return { FeatureName: f.Name, Kind: f.Kind, Reason: reason };
+}
+
+/** The steps: one select of the raw columns, one llm-derived step per Feature Pipeline, one one-hot per categorical feature. */
+function emitFeatureSteps(selected: readonly CandidateFeature[], classified: ClassifiedFeatures): FeatureStepGraph {
   const steps: FeatureStep[] = [];
-  if (rawColumns.length > 0) {
-    steps.push({ Id: 'select-raw', Kind: 'select', Columns: rawColumns });
+  if (classified.RawColumns.length > 0) {
+    steps.push({ Id: 'select-raw', Kind: 'select', Columns: classified.RawColumns });
   }
-  for (const [pipelineRef, cols] of persistedFeaturesByPipeline.entries()) {
-    steps.push({
-      Id: `llm-derived-${pipelineRef}`,
-      Kind: 'llm-derived',
-      FeaturePipelineRef: pipelineRef,
-      Columns: cols,
-    });
+  for (const [pipelineRef, cols] of classified.PersistedFeaturesByPipeline.entries()) {
+    steps.push({ Id: `llm-derived-${pipelineRef}`, Kind: 'llm-derived', FeaturePipelineRef: pipelineRef, Columns: cols });
   }
   // One-hot each categorical feature so the sidecar fits the vocabulary once and applies it everywhere.
   for (const f of selected.filter((f) => f.Kind === 'categorical')) {
     steps.push({ Id: `onehot-${f.Name}`, Kind: 'onehot', Column: f.Name });
   }
-  return { steps: { Steps: steps }, warnings };
+  return { Steps: steps };
 }
 
 /** Source bindings from the plan's candidate sources (drop the agent's `Why` rationale). */

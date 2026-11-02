@@ -12,7 +12,7 @@ import { MS_PER_DAY, type DatedSource, type TemporalSpec } from '@memberjunction
 export type SeriesFeatureRef = Extract<DatedSource, { kind: 'series' }>['feature'];
 
 /** One observed period of one entity's series. */
-export interface SeriesPoint { readonly EntityKey: string; readonly Period: Date; readonly Value: number; readonly RowId: string }
+export interface SeriesPoint { readonly EntityKey: string; readonly Period: Date; readonly Value: number; readonly RowID: string }
 /** Series points keyed by lower-cased entity key, then by calendar period index. */
 export type SeriesHistory = { readonly Spec: TemporalSpec; readonly ByEntity: ReadonlyMap<string, ReadonlyMap<number, SeriesPoint>> };
 
@@ -47,28 +47,28 @@ export class SeriesFeatures {
   /** One lag or rolling-window value for an entity at `period`; null when any period it reads is missing. */
   public static ComputeSeriesFeature(
     history: SeriesHistory, entityKey: string, period: Date, spec: TemporalSpec, feature: SeriesFeatureRef,
-  ): { readonly Value: number | null; readonly SourceRowIds: readonly string[] } {
+  ): { readonly Value: number | null; readonly SourceRowIDs: readonly string[] } {
     const declared = feature.kind === 'lag' ? spec.lags.length : spec.rollingWindows.length;
     if (!Number.isInteger(feature.index) || feature.index < 0 || feature.index >= declared) throw SeriesFeatures.indexError(feature, declared);
     const series = history.ByEntity.get(entityKey.toLowerCase());
     const t = SeriesFeatures.PeriodIndex(period, spec.period);
-    if (!series) return { Value: null, SourceRowIds: [] };
+    if (!series) return { Value: null, SourceRowIDs: [] };
     if (feature.kind === 'lag') {
       const p = series.get(t - spec.lags[feature.index]);
-      return p ? { Value: p.Value, SourceRowIds: [p.RowId] } : { Value: null, SourceRowIds: [] };
+      return p ? { Value: p.Value, SourceRowIDs: [p.RowID] } : { Value: null, SourceRowIDs: [] };
     }
     const w = spec.rollingWindows[feature.index];
     const pts: SeriesPoint[] = [];
     for (let i = t - w.endLag - w.periods + 1; i <= t - w.endLag; i++) {
       const p = series.get(i);
-      if (!p) return { Value: null, SourceRowIds: [] };
+      if (!p) return { Value: null, SourceRowIDs: [] };
       pts.push(p);
     }
     const values = pts.map((p) => p.Value);
     const value = w.aggregate === 'mean' ? values.reduce((s, v) => s + v, 0) / values.length
       : w.aggregate === 'sum' ? values.reduce((s, v) => s + v, 0)
       : w.aggregate === 'min' ? Math.min(...values) : Math.max(...values);
-    return { Value: value, SourceRowIds: pts.map((p) => p.RowId) };
+    return { Value: value, SourceRowIDs: pts.map((p) => p.RowID) };
   }
 
   /** Feature resolution refuses an out-of-range index; this guards the computation against a caller that skipped it. */

@@ -152,7 +152,7 @@ describe('snapshot files', () => {
   });
   it('refuses a NaN or infinite cell, naming the row id and column, rather than writing null', () => {
     for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
-      const err = thrownBy(() => SnapshotFiles.SerializeSnapshotFiles({ ...content, Rows: [content.Rows[0] ?? [], [bad, 'R7', '0', null, 'R7']] }));
+      const err = thrownBy(() => SnapshotFiles.SerializeSnapshotFiles({ ...content, Rows: [content.Rows[0] || [], [bad, 'R7', '0', null, 'R7']] }));
       expect(err).toBeInstanceOf(SnapshotNonFiniteCellError);
       expect(err instanceof SnapshotNonFiniteCellError && { RowID: err.RowID, Column: err.Column }).toEqual({ RowID: 'y2', Column: 'EventsAttended' });
     }
@@ -185,7 +185,7 @@ describe('snapshot files', () => {
   });
   it('refuses a manifest line of the wrong shape, naming the file and line', () => {
     const files = SnapshotFiles.SerializeSnapshotFiles(content);
-    const corrupt = replaceLine(files.Manifest, 1, (fileLines(files.Manifest)[1] ?? '').replace('"locked-holdout"', '"holdout"'));
+    const corrupt = replaceLine(files.Manifest, 1, (fileLines(files.Manifest)[1] || '').replace('"locked-holdout"', '"holdout"'));
     expect(refusalOf({ ...files, Manifest: corrupt })).toEqual({ File: 'manifest', Line: 2 });
   });
   it('refuses a header whose encoding is not a ColumnEncoding', () => {

@@ -11,7 +11,7 @@ import type { IMLModelLoader, ISidecarPredictor } from '../../scoring/types';
 /** The models in these tests are legacy models: their pipelines point at no Prediction Unit. */
 const NO_PIPELINE_UNITS = { PredictionUnitIDOf: async (): Promise<string | null> => null };
 /** A model trained without a Training Snapshot: no record was a training row. */
-const NO_TRAINING_ROWS = { TrainingRowIdsOf: async (): Promise<ReadonlySet<string>> => new Set<string>() };
+const NO_TRAINING_ROWS = { TrainingRowIDsOf: async (): Promise<ReadonlySet<string>> => new Set<string>() };
 
 
 /**

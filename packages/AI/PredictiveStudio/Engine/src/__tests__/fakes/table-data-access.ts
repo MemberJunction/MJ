@@ -22,7 +22,7 @@ export class TableDataAccess implements ICountingDataAccess {
       const field = /\[(\w+)\]/.exec(p.OrderBy)?.[1] || '';
       rows.sort((x, y) => OrdinalCompare(String(y[field]), String(x[field])));   // ordinal, like the database
     }
-    const page = rows.slice(0, p.MaxRows ?? rows.length);
+    const page = rows.slice(0, p.MaxRows || rows.length);   // MaxRows 0 or absent = no limit, as the database provider reads it
     const fields = p.Fields;
     return { Success: true, Rows: fields ? page.map((r) => TableDataAccess.project(r, fields)) : page, TotalRowCount: rows.length };
   }

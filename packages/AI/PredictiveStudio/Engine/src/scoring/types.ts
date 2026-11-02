@@ -114,7 +114,7 @@ export interface IPipelineUnitLookup {
  */
 export interface ITrainingRowsLookup {
   /** The row ids of the model's snapshot manifest whose role is `development`; empty for a model without a snapshot. */
-  TrainingRowIdsOf(modelId: string, contextUser: UserInfo | undefined, provider: IMetadataProvider): Promise<ReadonlySet<string>>;
+  TrainingRowIDsOf(modelId: string, contextUser: UserInfo | undefined, provider: IMetadataProvider): Promise<ReadonlySet<string>>;
 }
 
 /**

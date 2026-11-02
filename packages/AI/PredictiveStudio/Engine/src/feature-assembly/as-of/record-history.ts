@@ -30,7 +30,7 @@ export interface RecordChangeRow {
 }
 
 export type HistoryValue =
-  | { readonly Status: 'value'; readonly Value: CellValue; readonly ChangeId: string; readonly ChangedAt: Date }
+  | { readonly Status: 'value'; readonly Value: CellValue; readonly ChangeID: string; readonly ChangedAt: Date }
   | { readonly Status: 'uncovered'; readonly Reason: 'no-history' | 'before-history-start' | 'continuity-mismatch' | 'deleted' | 'external-ineligible' };
 
 export interface EntityHistory {
@@ -65,7 +65,7 @@ export class RecordHistory {
    * The primary-key value of a RecordID, lower-cased for in-memory matching. Parsed by MJ's own `CompositeKey` (the
    * `Field|Value` URL-segment form Record Changes store); PS units have one key column, so the first pair is the key.
    */
-  public static KeyOfRecordId(recordId: string): string {
+  public static KeyOfRecordID(recordId: string): string {
     const pair = CompositeKey.FromURLSegment(null, recordId).KeyValuePairs[0];
     return (pair ? String(pair.Value) : recordId).toLowerCase();
   }
@@ -140,7 +140,7 @@ export class RecordHistory {
       IgnoreMaxRows: true,
     }, user);
     if (!r.Success) throw new Error(`Reading Record Changes of ${entity.Name} failed: ${r.ErrorMessage}`);
-    return new Set(r.Results.map((c) => RecordHistory.KeyOfRecordId(c.RecordID)));
+    return new Set(r.Results.map((c) => RecordHistory.KeyOfRecordID(c.RecordID)));
   }
 
   /** Every record of the entity, every field, as plain rows (nothing read here is mutated). */
@@ -191,7 +191,7 @@ export class RecordHistory {
   private static indexByKey(changes: readonly RecordChangeRow[]): Map<string, RecordChangeRow[]> {
     const byKey = new Map<string, RecordChangeRow[]>();
     for (const c of [...changes].sort((a, b) => a.ChangedAt.getTime() - b.ChangedAt.getTime() || OrdinalCompare(a.ID, b.ID))) {
-      const k = RecordHistory.KeyOfRecordId(c.RecordID);
+      const k = RecordHistory.KeyOfRecordID(c.RecordID);
       const list = byKey.get(k) || [];
       list.push(c);
       byKey.set(k, list);
@@ -255,7 +255,7 @@ export class RecordHistory {
     if (policy.externalSourceRows === 'ineligible' && inForce.some((c) => c.Source === 'External' && (c.Type !== 'Update' || RecordHistory.changedFields(c.ChangesJSON).has(field)))) {
       return { Status: 'uncovered', Reason: 'external-ineligible' };
     }
-    return { Status: 'value', Value: RecordHistory.fieldOf(last.FullRecordJSON, field), ChangeId: last.ID, ChangedAt: last.ChangedAt };
+    return { Status: 'value', Value: RecordHistory.fieldOf(last.FullRecordJSON, field), ChangeID: last.ID, ChangedAt: last.ChangedAt };
   }
 
   /** A field of a FullRecordJSON snapshot; a malformed snapshot or a non-scalar value reads as null. */

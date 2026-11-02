@@ -17,7 +17,7 @@ import type { AssemblyRowRef } from '../feature-assembly/as-of/as-of-assembler';
 export type CanonicalLabelValue = string | number;
 
 export interface UnitRow {
-  readonly RowId: string;
+  readonly RowID: string;
   readonly EntityKey: string;
   readonly DecisionDate: Date;
   readonly WindowEnd: Date;
@@ -185,7 +185,7 @@ export class PredictionUnitRowReader {
         Source: row,
       });
     }
-    resolved.sort((a, b) => a.DecisionDate.getTime() - b.DecisionDate.getTime() || OrdinalCompare(a.RowId, b.RowId));
+    resolved.sort((a, b) => a.DecisionDate.getTime() - b.DecisionDate.getTime() || OrdinalCompare(a.RowID, b.RowID));
     return { Rows: resolved, Censored: censored, LabelKnown: labelKnown, EmptyLabel: emptyLabel };
   }
 
@@ -216,7 +216,7 @@ export class PredictionUnitRowReader {
     const rowId = PredictionUnitRowReader.requireKey(row[rowEntity.PrimaryKey], `${rowEntity.Name}.${rowEntity.PrimaryKey}`);
     const entityKey = unit.rows.kind === 'grain' ? rowId : PredictionUnitRowReader.requireKey(row[unit.rows.foreignKey], `${rowEntity.Name}.${unit.rows.foreignKey} of ${rowId}`);
     const period = unit.rows.kind === 'grain-x-periods' ? UtcDay.ToUtcDay(row[unit.rows.periodDate]) : unit.temporal ? UtcDay.ToUtcDay(row[unit.temporal.timeColumn]) : null;
-    return { RowId: rowId, EntityKey: entityKey, DecisionDate: decision, Period: period };
+    return { RowID: rowId, EntityKey: entityKey, DecisionDate: decision, Period: period };
   }
 
   /**

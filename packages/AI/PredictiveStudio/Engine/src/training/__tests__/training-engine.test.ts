@@ -119,6 +119,7 @@ async function storedContent(files: InMemorySnapshotFileStore, s: FakeTrainingSn
 
 /** Every row of the stored snapshot, as column → value (the matrix the trainer is sent the downloads of). */
 function snapshotRows(content: SnapshotContent): Array<Record<string, string | number | boolean | null>> {
+  // `??`, not `||`: 0, false and '' cells are real values; only a missing cell is null.
   return content.Rows.map((r) => Object.fromEntries(content.Header.columns.map((c, i) => [c, r[i] ?? null])));
 }
 
@@ -164,9 +165,9 @@ class FailingArtifactStore extends InMemoryArtifactStore {
     if (name.includes(this.failingName)) throw new Error(`disk full writing ${name}`);
     return super.save(bytes, name);
   }
-  public override async Delete(fileId: string): Promise<void> {
+  public override async delete(fileId: string): Promise<void> {
     this.DeletedIDs.push(fileId);
-    await super.Delete(fileId);
+    await super.delete(fileId);
   }
 }
 
@@ -239,7 +240,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     expect(assembly.Unit.id).toBe('U-1');
     expect(assembly.Features.map((f) => f.name)).toEqual(['EventsAttended', 'Status']);
     expect(assembly.UnitRead.Rows).toHaveLength(8);
-    const byId = new Map(assembly.Assembled.Rows.map((r) => [r.RowId, r.Values]));
+    const byId = new Map(assembly.Assembled.Rows.map((r) => [r.RowID, r.Values]));
     expect(byId.get('y2024-2')).toEqual([UnitYearsWorld.EventsAttended(2, 2024), 'Active']);
     expect(byId.get('y2025-2')).toEqual([UnitYearsWorld.EventsAttended(2, 2025), 'Lapsed']);
   });
@@ -260,7 +261,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
       artifactLoader: artifacts,
       sidecar: { predict: async () => ({ predictions: [], classOrder: null }) },
       pipelineUnits: { PredictionUnitIDOf: async (id: string) => (id === pipeline.ID ? UnitYearsWorld.UnitID : null) },
-      trainingRows: { TrainingRowIdsOf: async () => new Set<string>() },
+      trainingRows: { TrainingRowIDsOf: async () => new Set<string>() },
       predictionUnits: deps.predictionUnits,
       assemblyMetadata: deps.assemblyMetadata,
       dataAccess: deps.dataAccess,
@@ -270,7 +271,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     const training = await engine.AssembleForTraining(pipeline.ID, deps);
     expect(scored.Status).toBe('assembled');
     if (scored.Status !== 'assembled' || training.Assembled.Status !== 'assembled') return;
-    const byId = new Map(training.Assembled.Rows.map((r) => [r.RowId, r.Values]));
+    const byId = new Map(training.Assembled.Rows.map((r) => [r.RowID, r.Values]));
     expect(scored.Rows.map((r) => r.Values)).toEqual([byId.get('y2024-2'), byId.get('y2025-2')]);
     expect(scored.Rows[0].Values[1]).toBe('Active');
   });

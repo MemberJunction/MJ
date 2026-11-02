@@ -28,7 +28,7 @@ export interface ScoredRowBinding {
   /** The unit row entity's name. */
   readonly Entity: string;
   /** The row's key (the row entity's primary key value). */
-  readonly RowId: string;
+  readonly RowID: string;
   /** The row's decision date, computed by the unit's rule from the row's stored fields. */
   readonly DecisionDate: Date;
   /** The row's stored fields the features join through (key fields and aggregate owner key fields). */
@@ -182,7 +182,7 @@ export class ProvenanceResolver {
       ExtraFilter: `[EntityID]='${EscapeSQLString(entity.ID)}' AND [Status]='Complete' AND [RecordID] IN (${recordIds})`,
     });
     for (const r of rows) {
-      const key = RecordHistory.KeyOfRecordId(String(r.RecordID));
+      const key = RecordHistory.KeyOfRecordID(String(r.RecordID));
       const at = ProvenanceResolver.instantOf(r.ChangedAt);
       if (!wanted.has(key) || r.Status !== 'Complete' || !UUIDsEqual(String(r.EntityID), entity.ID) || at === null) continue;
       const list = out.get(key) || [];
@@ -298,7 +298,7 @@ export class ProvenanceResolver {
    * value of the key field (null when that is empty).
    */
   private static expectedKey(source: FieldSource, row: ScoredRowBinding): string | null {
-    if (source.keyField === null) return row.RowId;
+    if (source.keyField === null) return row.RowID;
     const v = row.Fields[source.keyField];
     return v === null || v === undefined || String(v) === '' ? null : String(v);
   }
@@ -322,9 +322,9 @@ export class ProvenanceResolver {
     const before = ProvenanceResolver.dayAfterDecision(row);
     if (!entity || before === null) return false;
     const hasCreatedAt = ProvenanceResolver.hasField(entity, '__mj_CreatedAt');
-    const record = await ProvenanceResolver.readByKey(sources, entity, row.RowId, hasCreatedAt ? ['__mj_CreatedAt'] : []);
+    const record = await ProvenanceResolver.readByKey(sources, entity, row.RowID, hasCreatedAt ? ['__mj_CreatedAt'] : []);
     if (record === null) return false;
-    const created = await ProvenanceResolver.creationInstant(sources, entity, row.RowId, hasCreatedAt ? record.__mj_CreatedAt : null);
+    const created = await ProvenanceResolver.creationInstant(sources, entity, row.RowID, hasCreatedAt ? record.__mj_CreatedAt : null);
     return created !== null && created.getTime() >= before.getTime();
   }
 

@@ -28,9 +28,9 @@ export interface PredictiveStudioBuildOutcome {
   pipelineId?: string;
   modelId?: string;
   /** The trust verdict's title (`TrustVerdicts.OutcomeTitle`); absent when the build trained no model. */
-  TrustTitle?: OutcomeTitleText;
+  trustTitle?: OutcomeTitleText;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
   /** The trust verdict's headline ("Beats the flat guess by X [lo, hi] …"); absent when the build trained no model. */
-  Headline?: string;
+  headline?: string;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
   published: boolean;
   /** When not published, the plain reason (the stored gate decision's reason / leakage); else null. */
   heldReason: string | null;
@@ -88,8 +88,8 @@ export function SummarizeBuildResult(result: BuildPredictionResult): PredictiveS
     success: result.success,
     pipelineId: result.pipelineId,
     modelId: result.modelId,
-    TrustTitle: result.trust === undefined ? undefined : TrustVerdicts.OutcomeTitle(result.trust),
-    Headline: result.trust?.Headline,
+    trustTitle: result.trust === undefined ? undefined : TrustVerdicts.OutcomeTitle(result.trust),
+    headline: result.trust?.Headline,
     published: result.published,
     heldReason: result.heldReason,
     errorMessage: result.errorMessage,
@@ -104,7 +104,7 @@ export function BuildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
     : '';
   if (!o.success) return `I couldn't build the prediction: ${o.errorMessage ?? 'unknown error'}.${warningText}`;
   // a published build always carries its verdict's title (only a verdict that lets a user act on it publishes)
-  if (o.published) return `Done — I built and published your prediction (${o.TrustTitle}). It's now in your Predictions.${warningText}`;
+  if (o.published) return `Done — I built and published your prediction (${o.trustTitle}). It's now in your Predictions.${warningText}`;
   const heldMessage = o.heldReason
     ? (o.heldReason.trim().endsWith('.') ? o.heldReason.trim() : `${o.heldReason.trim()}.`)
     : 'it needs review before it can be published.';
@@ -306,66 +306,53 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     }
 
     const outcome = SummarizeBuildResult(result);
-    let newPayloadObj: PredictiveStudioBuilderPayload = { ...payload, BuildResult: outcome };
-    let directive: ArtifactDirective | undefined;
+    const newPayload: PredictiveStudioBuilderPayload = result.success
+      ? PredictiveStudioPipelineBuilderAgent.ReportPayload(payload, result, outcome)
+      : { ...payload, BuildResult: outcome };
+    const directive: ArtifactDirective | undefined = result.success
+      ? { behavior: 'create-new', name: `ML Experiment Results - ${newPayload.Name}`, description: `Experiment results and performance evaluation for ${newPayload.Name}` }
+      : undefined;
+    return this.codeStep<P>('Success', newPayload as unknown as P, BuildOutcomeMessage(outcome), directive);
+  }
 
-    if (result.success) {
-      const targetVar = payload.TargetDefinition?.TargetVariable ?? 'Target';
-      const name = payload.Name || `${targetVar} Prediction`;
-      const isReg = payload.TargetDefinition?.ProblemType === 'regression';
-      const targetMetric = payload.TargetDefinition?.SuccessMetric ?? (isReg ? 'R²' : 'AUC');
-      // The report's number is the stored comparison the verdict quotes; no stored comparison means no number.
-      const comparison = result.trust?.Comparison || null;
-      const scoreVal = comparison === null ? null : comparison.Value;
-      const reportMetric = comparison === null ? targetMetric : `${comparison.Metric} gain over the flat guess`;
-
-      const rawFeatures = ParseFeatureImportance(result.model?.FeatureImportance).sort((a, b) => b.importance - a.importance);
-      const showable = ImportanceDisplay.GlobalDriversShowable(result.model?.Lineage);
-      const featureBars = showable ? rawFeatures : [];
-      const importanceHidden = rawFeatures.length > 0 && !showable;
-
-      const leaderboard: MLLeaderboardEntryPayload[] = result.leaderboard ?? [];
-
-      const summaryText = result.trust?.Headline || BuildOutcomeMessage(outcome);
-      const reportMarkdown = GenerateMarkdownReport(
-        name,
-        payload.Goal || `Predict ${targetVar}`,
-        targetVar,
-        reportMetric,
-        scoreVal,
-        result.trust === undefined ? 'No model shipped' : TrustVerdicts.OutcomeTitle(result.trust),
-        summaryText,
-        result.published,
-        featureBars,
-        leaderboard,
-        importanceHidden,
-        HiddenImportanceNote(result.model?.Lineage),
-      );
-
-      newPayloadObj = {
-        ...newPayloadObj,
-        Name: name,
-        Goal: payload.Goal || `Predict ${targetVar}`,
-        TargetMetric: targetMetric,
-        Leaderboard: leaderboard,
-        FeatureImportance: featureBars,
-        // A build whose training run shipped no model names no best model; the summary carries the stored reason.
-        BestModel: result.model ? { ID: result.model.ID, Name: `${name} (v${result.model.Version})`, Version: result.model.Version } : undefined,
-        BestModelID: result.model ? result.model.ID : undefined,
-        Summary: summaryText,
-        Markdown: reportMarkdown,
-      };
-
-      directive = {
-        behavior: 'create-new',
-        name: `ML Experiment Results - ${name}`,
-        description: `Experiment results and performance evaluation for ${name}`,
-      };
-    }
-
-    const newPayload = newPayloadObj as unknown as P;
-    const message = BuildOutcomeMessage(outcome);
-    return this.codeStep<P>('Success', newPayload, message, directive);
+  /**
+   * The payload of a build that ran: the outcome plus the experiment report (name, goal, target metric, leaderboard,
+   * the feature importance the lineage lets us show, the best model when one shipped, the summary and its markdown).
+   */
+  public static ReportPayload(payload: PredictiveStudioBuilderPayload, result: BuildPredictionResult, outcome: PredictiveStudioBuildOutcome): PredictiveStudioBuilderPayload {
+    const targetVar = payload.TargetDefinition?.TargetVariable || 'Target';
+    const name = payload.Name || `${targetVar} Prediction`;
+    const goal = payload.Goal || `Predict ${targetVar}`;
+    const isReg = payload.TargetDefinition?.ProblemType === 'regression';
+    const targetMetric = payload.TargetDefinition?.SuccessMetric || (isReg ? 'R²' : 'AUC');
+    // The report's number is the stored comparison the verdict quotes; no stored comparison means no number.
+    const comparison = result.trust?.Comparison || null;
+    const reportMetric = comparison === null ? targetMetric : `${comparison.Metric} gain over the flat guess`;
+    const rawFeatures = ParseFeatureImportance(result.model?.FeatureImportance).sort((a, b) => b.importance - a.importance);
+    const showable = ImportanceDisplay.GlobalDriversShowable(result.model?.Lineage);
+    const featureBars = showable ? rawFeatures : [];
+    const leaderboard: MLLeaderboardEntryPayload[] = result.leaderboard || [];
+    const summaryText = result.trust?.Headline || BuildOutcomeMessage(outcome);
+    const reportMarkdown = GenerateMarkdownReport(
+      name, goal, targetVar, reportMetric, comparison === null ? null : comparison.Value,
+      result.trust === undefined ? 'No model shipped' : TrustVerdicts.OutcomeTitle(result.trust),
+      summaryText, result.published, featureBars, leaderboard,
+      rawFeatures.length > 0 && !showable, HiddenImportanceNote(result.model?.Lineage),
+    );
+    return {
+      ...payload,
+      BuildResult: outcome,
+      Name: name,
+      Goal: goal,
+      TargetMetric: targetMetric,
+      Leaderboard: leaderboard,
+      FeatureImportance: featureBars,
+      // A build whose training run shipped no model names no best model; the summary carries the stored reason.
+      BestModel: result.model ? { ID: result.model.ID, Name: `${name} (v${result.model.Version})`, Version: result.model.Version } : undefined,
+      BestModelID: result.model ? result.model.ID : undefined,
+      Summary: summaryText,
+      Markdown: reportMarkdown,
+    };
   }
 
   /** Builder seam — overridden in unit tests to inject a stub (no DB / sidecar). */

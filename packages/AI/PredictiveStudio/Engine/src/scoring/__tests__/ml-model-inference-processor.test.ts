@@ -158,7 +158,7 @@ function buildDeps(model: FakeMLModel | null = new FakeMLModel(), trainingRowIds
   // The members pipeline has no Prediction Unit: these models are legacy models.
   const noUnits = { PredictionUnitIDOf: async () => null };
   // The model's training rows (the development rows of its snapshot manifest); none by default.
-  const trainingRows = { TrainingRowIdsOf: async (modelId: string) => (modelId === 'model-1' ? trainingRowIds : new Set<string>()) };
+  const trainingRows = { TrainingRowIDsOf: async (modelId: string) => (modelId === 'model-1' ? trainingRowIds : new Set<string>()) };
   return { deps: { modelLoader: loader, artifactLoader: artifacts, sidecar, pipelineUnits: noUnits, trainingRows }, loader, sidecar, artifacts };
 }
 
@@ -428,8 +428,8 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     const unused = async (): Promise<never> => { throw new Error('not used by assembly'); };
     return {
       entityFactory: { getEntityObject: unused },
-      recordLoader: { loadPipeline: async () => pipeline, nextModelVersion: async () => 1, ResolveAlgorithmIdForDriver: async () => null },
-      artifactStore: { save: unused, Delete: unused },
+      recordLoader: { loadPipeline: async () => pipeline, nextModelVersion: async () => 1, resolveAlgorithmIDForDriver: async () => null },
+      artifactStore: { save: unused, delete: unused },
       contextUser: user,
       provider,
       predictionUnits: new FakePredictionUnitStore(UnitYearsWorld.UnitColumns()),
@@ -479,9 +479,9 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     const scored = await new MLModelInferenceProcessor({ modelId: 'model-1', deps }).AssembleForScoring([{ ID: 'y2024-2' }, { ID: 'y2025-2' }, { ID: 'y2025-0' }], ctx(), 'unit-rule');
     expect(scored.Status).toBe('assembled');
     if (scored.Status !== 'assembled') return;
-    const trained = new Map(training.Assembled.Rows.map((r) => [r.RowId, r.Values]));
-    expect(scored.Rows.map((r) => r.RowId)).toEqual(['y2024-2', 'y2025-2', 'y2025-0']);
-    for (const r of scored.Rows) expect(r.Values).toEqual(trained.get(r.RowId));
+    const trained = new Map(training.Assembled.Rows.map((r) => [r.RowID, r.Values]));
+    expect(scored.Rows.map((r) => r.RowID)).toEqual(['y2024-2', 'y2025-2', 'y2025-0']);
+    for (const r of scored.Rows) expect(r.Values).toEqual(trained.get(r.RowID));
     expect(scored.Rows[0].Values[1]).toBe('Active');   // the stored value is Lapsed; on this decision date it was Active
   });
 
@@ -529,7 +529,7 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     // The Lineage's unit marker decides alone; the pipeline's (cleared) binding is not consulted.
     expect(cleared.calls).toEqual([]);
     expect(scored.Status === 'assembled' && training.Assembled.Status === 'assembled' && scored.Rows[0].Values).toEqual(
-      training.Assembled.Status === 'assembled' ? training.Assembled.Rows.find((r) => r.RowId === 'y2024-2')?.Values : null,
+      training.Assembled.Status === 'assembled' ? training.Assembled.Rows.find((r) => r.RowID === 'y2024-2')?.Values : null,
     );
   });
 
@@ -583,7 +583,7 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
 
   it('fails the run when the training rows cannot be read, naming the cause', async () => {
     const { deps } = await unitModel();
-    const failing: MLInferenceDeps = { ...deps, trainingRows: { TrainingRowIdsOf: async () => { throw new Error('Loading the training run of model model-1 failed: timeout'); } } };
+    const failing: MLInferenceDeps = { ...deps, trainingRows: { TrainingRowIDsOf: async () => { throw new Error('Loading the training run of model model-1 failed: timeout'); } } };
     await expect(new MLModelInferenceProcessor({ modelId: 'model-1', deps: failing }).Preflight(ctx(UnitYearsWorld.YearsEntity.ID))).rejects.toThrow('Loading the training run of model model-1 failed: timeout');
   });
 });

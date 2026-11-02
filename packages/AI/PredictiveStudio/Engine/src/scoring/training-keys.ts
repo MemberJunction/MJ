@@ -24,7 +24,7 @@ export class TrainingKeys {
    * @throws Error naming the model when a read fails or the snapshot row is missing
    * @throws SnapshotIntegrityError when the stored manifest no longer matches its SHA-256
    */
-  public static async LoadTrainingRowIds(
+  public static async LoadTrainingRowIDs(
     modelId: string,
     provider: IMetadataProvider,
     user: UserInfo | undefined,
@@ -33,7 +33,7 @@ export class TrainingKeys {
     const snapshotId = await TrainingKeys.snapshotIdOf(modelId, provider, user);
     if (snapshotId === null) return new Set<string>();
     const snapshot = await TrainingKeys.manifestRefOf(snapshotId, modelId, provider, user);
-    return HoldoutCarve.TrainingRowIds(await SnapshotManifest.ReadSnapshotManifest(snapshot, files));
+    return HoldoutCarve.TrainingRowIDs(await SnapshotManifest.ReadSnapshotManifest(snapshot, files));
   }
 
   /** The Training Snapshot of the run that produced the model; null when that run has none. */

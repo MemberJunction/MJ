@@ -70,7 +70,7 @@ export class DateCarvedCarver implements IHoldoutCarver {
 
   /** @throws TrainingRefusedError (`carve` stage) for a row without a readable carve date, or a carve that leaves no development or no holdout row */
   public AssignRoles(rows: readonly AssembledRow[], unitRows: ReadonlyMap<string, UnitRow>): HoldoutCarveOutcome {
-    const carve = HoldoutCarve.CarveLockedHoldout(rows.map((a) => this.carveRow(HoldoutCarvers.UnitRowOf(unitRows, a.RowId))), this.holdout);
+    const carve = HoldoutCarve.CarveLockedHoldout(rows.map((a) => this.carveRow(HoldoutCarvers.UnitRowOf(unitRows, a.RowID))), this.holdout);
     if (carve.Ok === false) throw new TrainingRefusedError({ stage: 'carve', reason: carve.Refusal });
     const d = carve.Deployment;
     const ne = carve.NewEntity;
@@ -79,13 +79,13 @@ export class DateCarvedCarver implements IHoldoutCarver {
       holdoutRowCount: d.HoldoutRowCount, excludedAfterHoldoutEnd: d.ExcludedAfterHoldoutEnd, holdoutClassCounts: d.HoldoutClassCounts,
       holdoutPeriods: HoldoutCarve.HoldoutPeriods(d.HoldoutCarveDates, this.period),
       newEntity: ne === null ? null : {
-        holdoutEntityKeys: ne.HoldoutEntityKeys.length, trainingRowCount: ne.TrainingRowIds.length, holdoutRowCount: ne.HoldoutRowIds.length,
+        holdoutEntityKeys: ne.HoldoutEntityKeys.length, trainingRowCount: ne.TrainingRowIDs.length, holdoutRowCount: ne.HoldoutRowIDs.length,
         excludedRowCount: ne.ExcludedRowCount, sharedEntityKeys: ne.SharedEntityKeys,
         heldGroupKeysSha256: DateCarvedCarver.GroupKeysSha256(ne.HoldoutEntityKeys),
-        trainingGroupKeysSha256: DateCarvedCarver.GroupKeysSha256(ne.TrainingRowIds.map((id) => HoldoutCarvers.UnitRowOf(unitRows, id).GroupKey)),
+        trainingGroupKeysSha256: DateCarvedCarver.GroupKeysSha256(ne.TrainingRowIDs.map((id) => HoldoutCarvers.UnitRowOf(unitRows, id).GroupKey)),
       },
     };
-    return { Roles: new Map(d.Rows.map((r): [string, SnapshotRowRole] => [r.RowId, r.Role])), Summary: summary };
+    return { Roles: new Map(d.Rows.map((r): [string, SnapshotRowRole] => [r.RowID, r.Role])), Summary: summary };
   }
 
   /**
@@ -100,8 +100,8 @@ export class DateCarvedCarver implements IHoldoutCarver {
   private carveRow(u: UnitRow): CarveRow {
     const column = this.holdout.dateColumn;
     const day = column === DECISION_DATE_COLUMN ? u.DecisionDate : UtcDay.ToUtcDay(u.Source[column]);
-    if (day === null) throw new TrainingRefusedError({ stage: 'carve', reason: { kind: 'missing-carve-date', rowId: u.RowId, column } });
-    return { RowId: u.RowId, EntityKey: u.GroupKey, CarveDate: UtcDay.UtcDayIso(day), Label: typeof u.Label === 'string' ? u.Label : null };
+    if (day === null) throw new TrainingRefusedError({ stage: 'carve', reason: { kind: 'missing-carve-date', rowId: u.RowID, column } });
+    return { RowID: u.RowID, EntityKey: u.GroupKey, CarveDate: UtcDay.UtcDayIso(day), Label: typeof u.Label === 'string' ? u.Label : null };
   }
 }
 
@@ -119,15 +119,15 @@ export class SeededRandomCarver implements IHoldoutCarver {
 
   /** @throws TrainingRefusedError (`carve` stage, `seeded-random-side-empty`) when the carve leaves no holdout or no development row */
   public AssignRoles(rows: readonly AssembledRow[], unitRows: ReadonlyMap<string, UnitRow>): HoldoutCarveOutcome {
-    const carve = HoldoutCarve.SeededRandomCarve(rows.map((r) => r.RowId), this.fraction, this.seed);
-    this.refuseEmptySide(carve.HoldoutRowIds.length, carve.DevelopmentRowIds.length);
+    const carve = HoldoutCarve.SeededRandomCarve(rows.map((r) => r.RowID), this.fraction, this.seed);
+    this.refuseEmptySide(carve.HoldoutRowIDs.length, carve.DevelopmentRowIDs.length);
     const summary: HoldoutCarveSummary = {
-      kind: 'seeded-random', cutoff: null, holdoutEnd: null, developmentRowCount: carve.DevelopmentRowIds.length, holdoutRowCount: carve.HoldoutRowIds.length,
-      excludedAfterHoldoutEnd: 0, holdoutClassCounts: SeededRandomCarver.classCounts(carve.HoldoutRowIds, unitRows), holdoutPeriods: [], newEntity: null,
+      kind: 'seeded-random', cutoff: null, holdoutEnd: null, developmentRowCount: carve.DevelopmentRowIDs.length, holdoutRowCount: carve.HoldoutRowIDs.length,
+      excludedAfterHoldoutEnd: 0, holdoutClassCounts: SeededRandomCarver.classCounts(carve.HoldoutRowIDs, unitRows), holdoutPeriods: [], newEntity: null,
     };
     const roles = new Map<string, SnapshotRowRole>([
-      ...carve.DevelopmentRowIds.map((id): [string, SnapshotRowRole] => [id, 'development']),
-      ...carve.HoldoutRowIds.map((id): [string, SnapshotRowRole] => [id, 'locked-holdout']),
+      ...carve.DevelopmentRowIDs.map((id): [string, SnapshotRowRole] => [id, 'development']),
+      ...carve.HoldoutRowIDs.map((id): [string, SnapshotRowRole] => [id, 'locked-holdout']),
     ]);
     return { Roles: roles, Summary: summary };
   }
@@ -162,19 +162,19 @@ export class RollingOriginCarver implements IHoldoutCarver {
   /** @throws TrainingRefusedError (`carve` stage) for a row without a period, or a series too short for the design */
   public AssignRoles(rows: readonly AssembledRow[], unitRows: ReadonlyMap<string, UnitRow>): HoldoutCarveOutcome {
     const periodRows = rows.map((r) => {
-      const period = HoldoutCarvers.UnitRowOf(unitRows, r.RowId).Period;
-      if (period === null) throw new TrainingRefusedError({ stage: 'carve', reason: { kind: 'missing-carve-date', rowId: r.RowId, column: 'Period' } });
-      return { RowId: r.RowId, Period: UtcDay.UtcDayIso(period) };
+      const period = HoldoutCarvers.UnitRowOf(unitRows, r.RowID).Period;
+      if (period === null) throw new TrainingRefusedError({ stage: 'carve', reason: { kind: 'missing-carve-date', rowId: r.RowID, column: 'Period' } });
+      return { RowID: r.RowID, Period: UtcDay.UtcDayIso(period) };
     });
     const carved = HoldoutCarve.RollingOriginCarve(periodRows, this.holdout);
     if (carved.Ok === false) throw new TrainingRefusedError({ stage: 'carve', reason: carved.Refusal });
-    const held = new Set(carved.HoldoutRowIds);
+    const held = new Set(carved.HoldoutRowIDs);
     const summary: HoldoutCarveSummary = {
       // The first test period is where the holdout starts; a rolling-origin holdout has no end and keeps every row.
       kind: 'rolling-origin', cutoff: carved.HoldoutPeriods[0] || null, holdoutEnd: null, developmentRowCount: rows.length - held.size,
       holdoutRowCount: held.size, excludedAfterHoldoutEnd: 0, holdoutClassCounts: null, holdoutPeriods: carved.HoldoutPeriods, newEntity: null,
     };
-    return { Roles: new Map(rows.map((r): [string, SnapshotRowRole] => [r.RowId, held.has(r.RowId) ? 'locked-holdout' : 'development'])), Summary: summary };
+    return { Roles: new Map(rows.map((r): [string, SnapshotRowRole] => [r.RowID, held.has(r.RowID) ? 'locked-holdout' : 'development'])), Summary: summary };
   }
 }
 

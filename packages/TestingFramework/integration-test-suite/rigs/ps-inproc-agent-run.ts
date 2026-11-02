@@ -105,16 +105,16 @@ async function main(): Promise<void> {
     });
     console.log(`  Ran in ${Date.now() - t0}ms — agentRun=${result.agentRun?.ID} success=${result.success}`);
     const br = result.payload?.BuildResult;
-    console.log(`  BuildResult: ${br ? JSON.stringify({ success: br.success, trust: br.TrustTitle, headline: br.Headline, published: br.published, held: br.heldReason }) : '(missing)'}`);
+    console.log(`  BuildResult: ${br ? JSON.stringify({ success: br.success, trust: br.trustTitle, headline: br.headline, published: br.published, held: br.heldReason }) : '(missing)'}`);
 
     check(!!result.agentRun?.ID, 'AgentRunner created an AI Agent Run (the framework ran the sub-agent)');
     check(!!br, 'the sub-agent wrote BuildResult back to the payload');
     check(br?.success === true, 'the build succeeded (pipeline created + model trained) through the agent');
     check(!!br?.pipelineId && !!br?.modelId, 'BuildResult carries the created pipeline + model ids');
-    check(typeof br?.TrustTitle === 'string' && typeof br?.Headline === 'string', 'a trust verdict (outcome title + headline) was produced');
+    check(typeof br?.trustTitle === 'string' && typeof br?.headline === 'string', 'a trust verdict (outcome title + headline) was produced');
     // Only a stored decision that ships can publish; this unit-less plan stores none, so it is not evaluated and held.
-    check(br?.published !== true || (br?.TrustTitle || '').startsWith('Ships'), 'nothing is published without a shipping verdict');
-    check(br?.TrustTitle === 'Not evaluated yet' && br?.published === false && !!br?.heldReason, 'the unit-less build is held as not evaluated, with its reason');
+    check(br?.published !== true || (br?.trustTitle || '').startsWith('Ships'), 'nothing is published without a shipping verdict');
+    check(br?.trustTitle === 'Not evaluated yet' && br?.published === false && !!br?.heldReason, 'the unit-less build is held as not evaluated, with its reason');
 
     // Confirm a real pipeline actually landed in the DB.
     const pipes = await new RunView().RunView<{ ID: string }>(

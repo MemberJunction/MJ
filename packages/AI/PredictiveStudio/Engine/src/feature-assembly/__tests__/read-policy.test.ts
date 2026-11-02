@@ -13,7 +13,8 @@ class FakeCountingDataAccess implements ICountingDataAccess {
     let rows = [...this.rows].sort((a, b) => OrdinalCompare(String(a.ID), String(b.ID)));
     const after = /\[ID\] > '([^']+)'/.exec(params.ExtraFilter || '')?.[1];
     if (after) rows = rows.filter((r) => String(r.ID) > after);
-    const limit = Math.min(params.MaxRows ?? Number.POSITIVE_INFINITY, this.cap ?? Number.POSITIVE_INFINITY);
+    // MaxRows 0 or absent = no limit, as the database provider reads it; a cap of 0 is a real cap (`??`).
+    const limit = Math.min(params.MaxRows || Number.POSITIVE_INFINITY, this.cap ?? Number.POSITIVE_INFINITY);
     const served = rows.slice(0, limit);
     return { Success: true, Rows: served, TotalRowCount: served.length };
   }

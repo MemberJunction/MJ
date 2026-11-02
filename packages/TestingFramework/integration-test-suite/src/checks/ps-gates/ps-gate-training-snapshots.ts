@@ -130,7 +130,7 @@ export class TrainingSnapshotGates {
     for (const row of r.Results) {
       const decision = PredictionUnitRowReader.UnitDecisionDate(training.Unit, row);
       const id = String(row[rowEntity.PrimaryKey]);
-      if (decision !== null) out.Set(id, { Entity: rowEntity.Name, RowId: id, DecisionDate: decision, Fields: row });
+      if (decision !== null) out.Set(id, { Entity: rowEntity.Name, RowID: id, DecisionDate: decision, Fields: row });
     }
     return out;
   }
@@ -138,8 +138,8 @@ export class TrainingSnapshotGates {
   /** Whether the scored rows are exactly the sampled rows: as many, each one sampled, none twice. */
   private static rowsAligned(ids: readonly string[], rows: readonly AssembledRow[]): boolean {
     const sampled = new UUIDSet(ids);
-    const scored = new UUIDSet(rows.map((r) => r.RowId));
-    return rows.length === ids.length && scored.Size === rows.length && rows.every((r) => sampled.Has(r.RowId));
+    const scored = new UUIDSet(rows.map((r) => r.RowID));
+    return rows.length === ids.length && scored.Size === rows.length && rows.every((r) => sampled.Has(r.RowID));
   }
 
   /**
@@ -198,7 +198,7 @@ export class TrainingSnapshotGates {
     let valuesResolved = 0;
     let columnsUncovered = 0;
     for (const row of scored.Rows) {
-      const r = await TrainingSnapshotGates.resolveRow(h, scored, row, expected, folds, bindings.Get(row.RowId));
+      const r = await TrainingSnapshotGates.resolveRow(h, scored, row, expected, folds, bindings.Get(row.RowID));
       valuesSeen += r.Seen;
       valuesResolved += r.Resolved;
       columnsUncovered += r.Uncovered;

@@ -73,6 +73,7 @@ describe('MJSidecarTrainer.RunTrainer (bounded retries, then failed at stage tim
   it('ends failed at stage timeout after maxRetries + 1 attempts, naming the last error and the wall seconds spent', async () => {
     const s = new StubSidecar([new Error('timed out'), new SidecarError(500, 'boom'), new Error('timed out again')]);
     const ticks = [1_000, 3_500];   // the seam's clock (milliseconds) when the first attempt starts and after the last ends
+    // `??`, not `||`: a 0 ms tick is a real clock reading; only an exhausted list falls back.
     const r = await new MJSidecarTrainer(s, () => ticks.shift() ?? 3_500).RunTrainer(REQ);
     expect(s.Calls).toBe(3);
     expect(r).toEqual({

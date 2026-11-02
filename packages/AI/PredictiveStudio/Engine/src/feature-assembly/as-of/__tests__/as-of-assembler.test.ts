@@ -9,8 +9,8 @@ import type { AssemblyEntityInfo, AssemblyFieldInfo, IAssemblyMetadata } from '.
 import { TableDataAccess } from '../../../__tests__/fakes/table-data-access';
 
 const rows: AssemblyRowRef[] = [
-  { RowId: 'y1', EntityKey: 'y1', DecisionDate: new Date('2022-12-01T00:00:00Z'), Period: null },
-  { RowId: 'y2', EntityKey: 'y2', DecisionDate: new Date('2023-12-01T00:00:00Z'), Period: null },
+  { RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2022-12-01T00:00:00Z'), Period: null },
+  { RowID: 'y2', EntityKey: 'y2', DecisionDate: new Date('2023-12-01T00:00:00Z'), Period: null },
 ];
 
 const tables: Record<string, SourceRow[]> = {
@@ -80,7 +80,7 @@ const historyOver = (data: Record<string, SourceRow[]>, rowChanges: Record<strin
     const current = new Map((data[entity.Name] || [])
       .filter((r) => wanted.has(String(r[entity.PrimaryKey]).toLowerCase()))
       .map((r) => [String(r[entity.PrimaryKey]).toLowerCase(), r] as const));
-    return RecordHistory.BuildEntityHistory(entity.Name, rowChanges[entity.Name] ?? [], current, fields, policy, now);
+    return RecordHistory.BuildEntityHistory(entity.Name, rowChanges[entity.Name] || [], current, fields, policy, now);
   },
 });
 
@@ -157,7 +157,7 @@ describe('AsOfFeatureAssembler', () => {
       ],
     };
     const features: FeatureColumnSpec[] = [{ name: 'Engagement', source: { kind: 'feature-value', featureName: 'Engagement', pin: { featurePipelineRecordProcessId: 'RP-1', pipelineVersion: 2, promptVersionHash: null, aiModelId: null, parametersHash: null } }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } }];
-    const at = async (decision: string) => new AsOfFeatureAssembler().Assemble(input(features, { Tables: data, Rows: [{ RowId: 'y1', EntityKey: 'y1', DecisionDate: new Date(decision), Period: null }] }));
+    const at = async (decision: string) => new AsOfFeatureAssembler().Assemble(input(features, { Tables: data, Rows: [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date(decision), Period: null }] }));
 
     const march = await at('2024-03-01T00:00:00Z');
     const july = await at('2024-07-01T00:00:00Z');
@@ -193,8 +193,8 @@ describe('AsOfFeatureAssembler', () => {
   it('reads a windowed aggregate and a series lag as of each decision date, versioned by the rows they read', async () => {
     const temporal: PredictionUnitSpec['temporal'] = { timeColumn: 'DecisionDate', horizonPeriods: 1, lags: [1], rollingWindows: [], period: 'year', seasonality: null };
     const series = SeriesFeatures.BuildSeriesHistory([
-      { EntityKey: 'P1', Period: new Date('2021-01-01T00:00:00Z'), Value: 5, RowId: 'y0' },
-      { EntityKey: 'P1', Period: new Date('2022-01-01T00:00:00Z'), Value: 7, RowId: 'y1' },
+      { EntityKey: 'P1', Period: new Date('2021-01-01T00:00:00Z'), Value: 5, RowID: 'y0' },
+      { EntityKey: 'P1', Period: new Date('2022-01-01T00:00:00Z'), Value: 7, RowID: 'y1' },
     ], temporal);
     const personRows: AssemblyRowRef[] = rows.map((r) => ({ ...r, EntityKey: 'P1' }));
     const features: FeatureColumnSpec[] = [
@@ -260,7 +260,7 @@ describe('AsOfFeatureAssembler current-value reads', () => {
   it('folds the least frequent levels beyond the cardinality cap into __other and records the fold', async () => {
     const regions = ['EU', 'R7', 'EU', 'US'];
     const data: Record<string, SourceRow[]> = { ...tables, Years: regions.map((Region, i) => ({ ID: `y${i + 1}`, PersonID: 'P1', Region })) };
-    const fourRows: AssemblyRowRef[] = regions.map((_, i) => ({ RowId: `y${i + 1}`, EntityKey: `y${i + 1}`, DecisionDate: new Date('2023-12-01T00:00:00Z'), Period: null }));
+    const fourRows: AssemblyRowRef[] = regions.map((_, i) => ({ RowID: `y${i + 1}`, EntityKey: `y${i + 1}`, DecisionDate: new Date('2023-12-01T00:00:00Z'), Period: null }));
     const out = await new AsOfFeatureAssembler().Assemble(input([categorical('Region', 'Years', null, 2)], { Tables: data, Rows: fourRows }));
     expect(out.Status).toBe('assembled');
     if (out.Status !== 'assembled') return;
@@ -271,7 +271,7 @@ describe('AsOfFeatureAssembler current-value reads', () => {
   it('folds with the levels training kept when they are given, without recounting', async () => {
     const regions = ['EU', 'R7', 'EU', 'US'];
     const data: Record<string, SourceRow[]> = { ...tables, Years: regions.map((Region, i) => ({ ID: `y${i + 1}`, PersonID: 'P1', Region })) };
-    const fourRows: AssemblyRowRef[] = regions.map((_, i) => ({ RowId: `y${i + 1}`, EntityKey: `y${i + 1}`, DecisionDate: new Date('2023-12-01T00:00:00Z'), Period: null }));
+    const fourRows: AssemblyRowRef[] = regions.map((_, i) => ({ RowID: `y${i + 1}`, EntityKey: `y${i + 1}`, DecisionDate: new Date('2023-12-01T00:00:00Z'), Period: null }));
     const trained = new Map<string, readonly string[]>([['Region', ['R7', 'US']]]);
     const out = await new AsOfFeatureAssembler().Assemble(input([categorical('Region', 'Years', null, 2)], { Tables: data, Rows: fourRows, CategoryLevels: trained }));
     expect(out.Status).toBe('assembled');
@@ -306,7 +306,7 @@ describe('AsOfFeatureAssembler current-value reads', () => {
     const out = await new AsOfFeatureAssembler().Assemble(input([replayed('PersonStatusNow'), replayed('Region')], { Unit: { ...unit, history: { onUncoveredRow: 'exclude-and-count', externalSourceRows: 'ineligible' } } }));
     expect(out.Status).toBe('assembled');
     if (out.Status !== 'assembled') return;
-    expect([...out.ExcludedRowIds]).toEqual(['y1', 'y2']);
+    expect([...out.ExcludedRowIDs]).toEqual(['y1', 'y2']);
     expect(out.UncoveredRowsExcluded).toEqual([{ entity: 'Years', field: 'PersonStatusNow', rows: 2 }, { entity: 'Years', field: 'Region', rows: 2 }]);
     expect(out.Coverage.map((c) => [c.entity, c.field])).toEqual([['Years', 'PersonStatusNow'], ['Years', 'Region']]);
   });
@@ -385,7 +385,7 @@ describe('AsOfFeatureAssembler record creation, uncovered reasons, counts and co
     if (out.Status !== 'assembled') return;
     expect(out.Rows.map((r) => r.Values[0])).toEqual(['Active', null]);
     expect(out.Rows[1].Provenance[0]).toMatchObject({ source: 'record-changes', sourceRef: 'none', sourceVersion: 'created-after-decision' });
-    expect(out.ExcludedRowIds.size).toBe(0);
+    expect(out.ExcludedRowIDs.size).toBe(0);
   });
   it('reads a record whose Create row is dated after the decision day as missing, for a current read and a replay', async () => {
     const late: Record<string, RecordChangeRow[]> = { People: [rc('rc-late-create', 'P1', 'Create', '2023-06-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })] };
@@ -403,7 +403,7 @@ describe('AsOfFeatureAssembler record creation, uncovered reasons, counts and co
     const out = await new AsOfFeatureAssembler().Assemble(input([statusOf('immutable-field')], { Changes: mismatched, Unit: excludeAndCount }));
     expect(out.Status).toBe('assembled');
     if (out.Status !== 'assembled') return;
-    expect([...out.ExcludedRowIds]).toEqual(['y1', 'y2']);
+    expect([...out.ExcludedRowIDs]).toEqual(['y1', 'y2']);
     expect(out.UncoveredRowsExcluded).toEqual([{ entity: 'People', field: 'Status', rows: 2 }]);
     expect(out.Coverage.filter((c) => c.entity === 'People').map((c) => [c.entity, c.field, c.continuity.recordsMismatched])).toEqual([['People', 'Status', 1]]);
   });
@@ -448,7 +448,7 @@ describe('AsOfFeatureAssembler record creation, uncovered reasons, counts and co
       const out = await new AsOfFeatureAssembler().Assemble(input([through('PersonID'), through('SponsorID')], { Tables: sponsored, RowEntity: years, Unit: excludeAndCount }));
       expect(out.Status).toBe('assembled');
       if (out.Status !== 'assembled') return;
-      expect([...out.ExcludedRowIds]).toEqual(['y2']);
+      expect([...out.ExcludedRowIDs]).toEqual(['y2']);
       expect(out.Coverage.filter((c) => c.entity === 'People')).toEqual([expect.objectContaining({ entity: 'People', field: 'Status', historyStart: null, continuity: expect.objectContaining({ recordsReplayed: 2 }) })]);
     });
   });
@@ -592,7 +592,7 @@ describe('AsOfFeatureAssembler creation from the stored column, and the late-ent
     const out = await new AsOfFeatureAssembler().Assemble(input([count], { Tables: data, Changes: giftHistory('P0'), Unit: excludeAndCount }));
     expect(out.Status).toBe('assembled');
     if (out.Status !== 'assembled') return;
-    expect([...out.ExcludedRowIds]).toEqual(['y1', 'y2']);
+    expect([...out.ExcludedRowIDs]).toEqual(['y1', 'y2']);
     expect(out.ColumnProvenance[0].lateEnteredDropped).toBeUndefined();
   });
 });
@@ -621,7 +621,7 @@ describe('AsOfFeatureAssembler — a decision day on or after the assembly day r
   const tier = (kind: 'immutable-field' | 'record-changes'): FeatureColumnSpec =>
     ({ name: `Tier-${kind}`, source: { kind, entity: 'Accounts', field: 'Tier', keyField: null }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } });
   const accounts = { ...tables, Accounts: [{ ID: 'a1', Tier: 'Gold' }] };
-  const accountRow = (decision: Date): AssemblyRowRef[] => [{ RowId: 'a1', EntityKey: 'a1', DecisionDate: decision, Period: null }];
+  const accountRow = (decision: Date): AssemblyRowRef[] => [{ RowID: 'a1', EntityKey: 'a1', DecisionDate: decision, Period: null }];
 
   it("reads an untracked entity's updatable field as covered for a row decided today, directly and replayed", async () => {
     const out = await new AsOfFeatureAssembler().Assemble(input([tier('record-changes'), tier('immutable-field')], { Tables: accounts, RowEntity: entities.Accounts, Rows: accountRow(today) }));
@@ -639,15 +639,15 @@ describe('AsOfFeatureAssembler — a decision day on or after the assembly day r
 
   it('keeps the rule for a tracked entity changed after a past decision day, and reads the stored value for a row decided today', async () => {
     const status: FeatureColumnSpec = { name: 'Status', source: { kind: 'immutable-field', entity: 'People', field: 'Status', keyField: 'PersonID' }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } };
-    const past: AssemblyRowRef[] = [{ RowId: 'y1', EntityKey: 'y1', DecisionDate: new Date('2022-12-01T00:00:00Z'), Period: null }];
+    const past: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2022-12-01T00:00:00Z'), Period: null }];
     expect(await new AsOfFeatureAssembler().Assemble(input([status], { Rows: past }))).toEqual({ Status: 'refused', Refusal: { kind: 'select-changes-after-decision-date', entity: 'People', field: 'Status', changesAfter: 1 } });
-    const now: AssemblyRowRef[] = [{ RowId: 'y1', EntityKey: 'y1', DecisionDate: today, Period: null }];
+    const now: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: today, Period: null }];
     const out = await new AsOfFeatureAssembler().Assemble(input([status], { Rows: now }));
     expect(out.Status === 'assembled' ? out.Rows.map((r) => r.Values[0]) : out).toEqual(['Lapsed']);
     // A tracked entity with no change history: a past day is refused, today reads the stored value.
     const tierOf: FeatureColumnSpec = { name: 'Tier', source: { kind: 'immutable-field', entity: 'Tiers', field: 'Tier', keyField: null }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } };
     const tiers = { ...tables, Tiers: [{ ID: 't1', Tier: 'Gold', __mj_CreatedAt: '2025-01-01T00:00:00Z' }] };
-    const tierRow = (decision: Date): AssemblyRowRef[] => [{ RowId: 't1', EntityKey: 't1', DecisionDate: decision, Period: null }];
+    const tierRow = (decision: Date): AssemblyRowRef[] => [{ RowID: 't1', EntityKey: 't1', DecisionDate: decision, Period: null }];
     expect((await new AsOfFeatureAssembler().Assemble(input([tierOf], { Tables: tiers, RowEntity: entities.Tiers, Rows: tierRow(yesterday) }))).Status).toBe('refused');
     const fresh = await new AsOfFeatureAssembler().Assemble(input([tierOf], { Tables: tiers, RowEntity: entities.Tiers, Rows: tierRow(today) }));
     expect(fresh.Status === 'assembled' ? fresh.Rows.map((r) => r.Values[0]) : fresh).toEqual(['Gold']);
@@ -657,7 +657,7 @@ describe('AsOfFeatureAssembler — a decision day on or after the assembly day r
     const status: FeatureColumnSpec = { name: 'Status', source: { kind: 'record-changes', entity: 'People', field: 'Status', keyField: 'PersonID' }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } };
     // The lapse is dated after the decision day, which is after the assembly day: the history says Active on that day.
     const dated = { People: [rc('rc-create', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }), rc('rc-lapse', 'P1', 'Update', '2027-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }, ['Status'])] };
-    const later: AssemblyRowRef[] = [{ RowId: 'y1', EntityKey: 'y1', DecisionDate: new Date('2026-12-01T00:00:00Z'), Period: null }];
+    const later: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2026-12-01T00:00:00Z'), Period: null }];
     const out = await new AsOfFeatureAssembler().Assemble(input([status], { Rows: later, Changes: dated }));
     if (out.Status !== 'assembled') throw new Error(JSON.stringify(out));
     expect([out.Rows[0].Values[0], out.Rows[0].Provenance[0].sourceVersion]).toEqual(['Active', 'rc-create']);
@@ -667,7 +667,7 @@ describe('AsOfFeatureAssembler — a decision day on or after the assembly day r
     const status: FeatureColumnSpec = { name: 'Status', source: { kind: 'immutable-field', entity: 'People', field: 'Status', keyField: 'PersonID' }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } };
     // The history covers 2026-12-01 (created 2021) and lapses 2027-01-01, after that decision day: the stored Lapsed is not the value then.
     const dated = { People: [rc('rc-create', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }), rc('rc-lapse', 'P1', 'Update', '2027-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }, ['Status'])] };
-    const later: AssemblyRowRef[] = [{ RowId: 'y1', EntityKey: 'y1', DecisionDate: new Date('2026-12-01T00:00:00Z'), Period: null }];
+    const later: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2026-12-01T00:00:00Z'), Period: null }];
     expect(await new AsOfFeatureAssembler().Assemble(input([status], { Rows: later, Changes: dated })))
       .toEqual({ Status: 'refused', Refusal: { kind: 'select-changes-after-decision-date', entity: 'People', field: 'Status', changesAfter: 1 } });
     // No history at all for the record: uncovered, so a row decided after the assembly day reads the stored value.
@@ -675,7 +675,7 @@ describe('AsOfFeatureAssembler — a decision day on or after the assembly day r
     expect(out.Status === 'assembled' ? out.Rows.map((r) => r.Values[0]) : out).toEqual(['Lapsed']);
   });
 
-  const later: AssemblyRowRef[] = [{ RowId: 'y1', EntityKey: 'y1', DecisionDate: new Date('2026-12-01T00:00:00Z'), Period: null }];
+  const later: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2026-12-01T00:00:00Z'), Period: null }];
   const replayedStatus: FeatureColumnSpec = { name: 'Status', source: { kind: 'record-changes', entity: 'People', field: 'Status', keyField: 'PersonID' }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } };
   const excludeAndCountUnit: PredictionUnitSpec = { ...unit, history: { onUncoveredRow: 'exclude-and-count', externalSourceRows: 'ineligible' } };
 
@@ -715,7 +715,7 @@ describe('AsOfFeatureAssembler — a decision day on or after the assembly day r
   it("covers an untracked child's updatable field in an aggregate for owners decided today", async () => {
     const pledges = { ...tables, Pledges: [{ ID: 'pl1', PersonID: 'P1', PledgedOn: '2022-06-01', Amount: 5 }, { ID: 'pl2', PersonID: 'P1', PledgedOn: '2026-10-01', Amount: 7 }] };
     const sum: FeatureColumnSpec = { name: 'Pledged', source: { kind: 'windowed-aggregate', childEntity: 'Pledges', foreignKey: 'PersonID', ownerKeyField: 'PersonID', dateField: 'PledgedOn', endDateField: null, voidedAtField: null, aggregate: 'sum', valueField: 'Amount', windowDays: null, filter: [] }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } };
-    const now: AssemblyRowRef[] = [{ RowId: 'y1', EntityKey: 'y1', DecisionDate: today, Period: null }];
+    const now: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: today, Period: null }];
     const out = await new AsOfFeatureAssembler().Assemble(input([sum], { Tables: pledges, Rows: now }));
     expect(out.Status === 'assembled' ? out.Rows.map((r) => r.Values[0]) : out).toEqual([12]);
   });

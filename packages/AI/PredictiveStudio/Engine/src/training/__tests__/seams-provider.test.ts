@@ -71,7 +71,7 @@ describe('MetadataExperimentEntityFactory — honors injected provider (H7)', ()
   });
 });
 
-describe('RunViewRecordLoader.ResolveAlgorithmIdForDriver', () => {
+describe('RunViewRecordLoader.resolveAlgorithmIDForDriver', () => {
   /** A provider serving the given `MJ: ML Algorithms` rows to RunView and recording each request. */
   class AlgorithmRowsProvider {
     public Requests: RunViewParams[] = [];
@@ -83,7 +83,7 @@ describe('RunViewRecordLoader.ResolveAlgorithmIdForDriver', () => {
     }
   }
   const user = { ID: 'U-1' } as UserInfo;
-  const resolve = (p: AlgorithmRowsProvider, key: string) => new RunViewRecordLoader().ResolveAlgorithmIdForDriver(key, user, p as unknown as IMetadataProvider);
+  const resolve = (p: AlgorithmRowsProvider, key: string) => new RunViewRecordLoader().resolveAlgorithmIDForDriver(key, user, p as unknown as IMetadataProvider);
 
   it('reads one catalog row by DriverClass (at most two rows) and returns its ID', async () => {
     const provider = new AlgorithmRowsProvider([{ ID: 'B4B84DB7-C255-4118-BE36-7A0489A5AFCE', Name: 'Logistic Regression' }]);

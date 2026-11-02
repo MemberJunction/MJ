@@ -55,11 +55,11 @@ export class AsOfAssemblyGates {
   private static countAsOfEqual(assembly: UnitTrainingAssembly, matrix: AsOfAssembledMatrix, timeline: StatusTimeline): { readonly Equal: number; readonly ExpectLapsed: number } {
     const statusCol = matrix.Columns.findIndex((c) => c.FeatureName === 'Status');
     const byRow = new UUIDMap<UnitTrainingAssembly['UnitRead']['Rows'][number]>();
-    for (const r of assembly.UnitRead.Rows) byRow.Set(r.RowId, r);
+    for (const r of assembly.UnitRead.Rows) byRow.Set(r.RowID, r);
     let equal = 0;
     let expectLapsed = 0;
     for (const row of matrix.Rows) {
-      const unitRow = byRow.Get(row.RowId);
+      const unitRow = byRow.Get(row.RowID);
       const expected = unitRow ? W4StatusHistory.ExpectedStatusAt(timeline, String(unitRow.Source.PersonID), unitRow.DecisionDate) : null;
       if (expected === 'Lapsed') expectLapsed++;
       if (unitRow && statusCol >= 0 && row.Values[statusCol] === expected) equal++;
@@ -182,9 +182,9 @@ export class AsOfAssemblyGates {
   /** The sampled rows whose scoring-path vector is missing or differs from the training-path vector. */
   private static countMismatches(sample: readonly AssembledRow[], scored: AsOfAssembledMatrix): number {
     const byId = new UUIDMap<AssembledRow>();
-    for (const r of scored.Rows) byId.Set(r.RowId, r);
+    for (const r of scored.Rows) byId.Set(r.RowID, r);
     return sample.filter((r) => {
-      const s = byId.Get(r.RowId);
+      const s = byId.Get(r.RowID);
       return !s || JSON.stringify(s.Values) !== JSON.stringify(r.Values);
     }).length;
   }
@@ -203,7 +203,7 @@ export class AsOfAssemblyGates {
     const sample = AsOfAssemblyGates.paritySample(training.Assembled.Rows);
     if (sample.length < PARITY_SAMPLE) return { Passed: false, Measured: { compared: sample.length }, Detail: `only ${sample.length} assembled rows to compare; the gate needs ${PARITY_SAMPLE}` };
     const keyField = training.UnitRead.RowEntity.PrimaryKey;
-    const records: SourceRow[] = sample.map((r) => ({ [keyField]: r.RowId }));
+    const records: SourceRow[] = sample.map((r) => ({ [keyField]: r.RowID }));
     const scoring = new MLModelInferenceProcessor({ modelId: run.ResultingModelID, deps: BuildProductionMLInferenceDeps() });
     const scored = await scoring.AssembleForScoring(records, { ContextUser: h.User, Provider: h.Provider }, 'unit-rule');
     if (scored.Status !== 'assembled') return { Passed: false, Measured: { compared: sample.length }, Detail: `scoring assembly refused: ${JSON.stringify(scored.Refusal)}` };

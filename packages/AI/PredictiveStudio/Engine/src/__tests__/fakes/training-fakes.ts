@@ -230,7 +230,7 @@ export class FakeRecordLoader implements IRecordLoader {
     private readonly catalog: Readonly<Record<string, string>> = FakeRecordLoader.DefaultCatalog,
   ) {}
 
-  async ResolveAlgorithmIdForDriver(driverKey: string, _u?: UserInfo, _p?: IMetadataProvider): Promise<string | null> {
+  async resolveAlgorithmIDForDriver(driverKey: string, _u?: UserInfo, _p?: IMetadataProvider): Promise<string | null> {
     this.DriverLookups.push(driverKey);
     return Object.prototype.hasOwnProperty.call(this.catalog, driverKey) ? this.catalog[driverKey] : null;
   }

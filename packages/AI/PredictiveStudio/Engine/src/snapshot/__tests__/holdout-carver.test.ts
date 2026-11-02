@@ -16,17 +16,17 @@ const day = (iso: string): Date => new Date(`${iso}T00:00:00Z`);
 const sha256 = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
 /** A unit row decided on `decision`, whose own `StartDate` field is `start`, in group `group`. */
 const unitRow = (id: string, decision: string, start: string | null, group = `p-${id}`, label = '1', period: Date | null = null): UnitRow => ({
-  RowId: id, EntityKey: id, DecisionDate: day(decision), WindowEnd: day(decision), GroupKey: group, Period: period, Label: label, Source: { ID: id, StartDate: start },
+  RowID: id, EntityKey: id, DecisionDate: day(decision), WindowEnd: day(decision), GroupKey: group, Period: period, Label: label, Source: { ID: id, StartDate: start },
 });
-const assembled = (id: string): AssembledRow => ({ RowId: id, Values: [1], Provenance: [] });
-const byId = (rows: readonly UnitRow[]): ReadonlyMap<string, UnitRow> => new Map(rows.map((r) => [r.RowId, r]));
+const assembled = (id: string): AssembledRow => ({ RowID: id, Values: [1], Provenance: [] });
+const byId = (rows: readonly UnitRow[]): ReadonlyMap<string, UnitRow> => new Map(rows.map((r) => [r.RowID, r]));
 const dateCarved = (o: Partial<DateCarved>): DateCarved => ({ kind: 'date-carved', dateColumn: 'StartDate', cutoff: '2024-01-01', holdoutEnd: null, newEntityReport: null, ...o });
 
 describe('DateCarvedCarver', () => {
   it('carves on the declared date column of the unit row, leaves out rows on or after the holdout end, and summarises the carve', () => {
     const rows = [unitRow('a', '2023-12-01', '2023-01-01'), unitRow('b', '2024-12-01', '2024-01-01', 'p-b', '0'), unitRow('c', '2025-12-01', '2025-01-01')];
     const carver = new DateCarvedCarver(dateCarved({ holdoutEnd: '2025-01-01' }), 'year');
-    const carve = carver.AssignRoles([...rows].reverse().map((r) => assembled(r.RowId)), byId(rows));
+    const carve = carver.AssignRoles([...rows].reverse().map((r) => assembled(r.RowID)), byId(rows));
     expect([...carve.Roles.entries()]).toEqual([['a', 'development'], ['b', 'locked-holdout']]);
     expect(carve.Summary).toEqual({
       kind: 'date-carved', cutoff: '2024-01-01', holdoutEnd: '2025-01-01', developmentRowCount: 1, holdoutRowCount: 1, excludedAfterHoldoutEnd: 1,
@@ -37,7 +37,7 @@ describe('DateCarvedCarver', () => {
   it('carves on the unit row decision date when the protocol names DecisionDate', () => {
     // StartDate would put both rows in development; the decision dates straddle the cutoff.
     const rows = [unitRow('a', '2023-12-01', '2020-01-01'), unitRow('b', '2024-02-01', '2020-01-01')];
-    const { Roles: roles } = new DateCarvedCarver(dateCarved({ dateColumn: 'DecisionDate' }), 'month').AssignRoles(rows.map((r) => assembled(r.RowId)), byId(rows));
+    const { Roles: roles } = new DateCarvedCarver(dateCarved({ dateColumn: 'DecisionDate' }), 'month').AssignRoles(rows.map((r) => assembled(r.RowID)), byId(rows));
     expect([...roles.entries()]).toEqual([['a', 'development'], ['b', 'locked-holdout']]);
   });
 
@@ -45,8 +45,8 @@ describe('DateCarvedCarver', () => {
     const carver = new DateCarvedCarver(dateCarved({}), 'year');
     for (const start of [null, 'soon', '2024-02-30']) {
       const rows = [unitRow('a', '2023-12-01', start), unitRow('b', '2024-12-01', '2024-06-01')];
-      expect(() => carver.AssignRoles(rows.map((r) => assembled(r.RowId)), byId(rows))).toThrow(TrainingRefusedError);
-      expect(() => carver.AssignRoles(rows.map((r) => assembled(r.RowId)), byId(rows))).toThrow(expect.objectContaining({
+      expect(() => carver.AssignRoles(rows.map((r) => assembled(r.RowID)), byId(rows))).toThrow(TrainingRefusedError);
+      expect(() => carver.AssignRoles(rows.map((r) => assembled(r.RowID)), byId(rows))).toThrow(expect.objectContaining({
         Refusal: { stage: 'carve', reason: { kind: 'missing-carve-date', rowId: 'a', column: 'StartDate' } },
       }));
     }
@@ -58,11 +58,11 @@ describe('DateCarvedCarver', () => {
     const rows: UnitRow[] = [];
     for (let e = 0; e < 10; e++) for (let year = 2015 + e; year <= 2025; year++) rows.push(unitRow(`E${e}:${year}`, `${year}-06-01`, `${year}-06-01`, `e${e}`));
     const carver = new DateCarvedCarver(dateCarved({ newEntityReport: { groupKey: 'PersonID', holdoutFraction: 0.3 } }), 'year');
-    const { Summary: summary } = carver.AssignRoles(rows.map((r) => assembled(r.RowId)), byId(rows));
-    const expected = HoldoutCarve.CarveLockedHoldout(rows.map((r) => ({ RowId: r.RowId, EntityKey: r.GroupKey, CarveDate: r.Source.StartDate as string, Label: '1' })), dateCarved({ newEntityReport: { groupKey: 'PersonID', holdoutFraction: 0.3 } }));
+    const { Summary: summary } = carver.AssignRoles(rows.map((r) => assembled(r.RowID)), byId(rows));
+    const expected = HoldoutCarve.CarveLockedHoldout(rows.map((r) => ({ RowID: r.RowID, EntityKey: r.GroupKey, CarveDate: r.Source.StartDate as string, Label: '1' })), dateCarved({ newEntityReport: { groupKey: 'PersonID', holdoutFraction: 0.3 } }));
     if (expected.Ok === false || expected.NewEntity === null) throw new Error('expected a new-entity carve');
     expect(summary.newEntity).toEqual({
-      holdoutEntityKeys: 3, trainingRowCount: expected.NewEntity.TrainingRowIds.length, holdoutRowCount: 6, excludedRowCount: expected.NewEntity.ExcludedRowCount, sharedEntityKeys: 0,
+      holdoutEntityKeys: 3, trainingRowCount: expected.NewEntity.TrainingRowIDs.length, holdoutRowCount: 6, excludedRowCount: expected.NewEntity.ExcludedRowCount, sharedEntityKeys: 0,
       // The stored membership: the held members and the trained-on members, each sorted and joined with '\n'.
       heldGroupKeysSha256: sha256('e7\ne8\ne9'), trainingGroupKeysSha256: sha256(['e0', 'e1', 'e2', 'e3', 'e4', 'e5', 'e6'].join('\n')),
     });
@@ -81,12 +81,12 @@ describe('SeededRandomCarver', () => {
     const rows = Array.from({ length: 400 }, (_, i) => unitRow(`r${i}`, '2024-01-01', null, `p-r${i}`, i % 4 === 0 ? '0' : '1'));
     const a = new SeededRandomCarver(0.25, 7);
     const b = new SeededRandomCarver(0.25, 7);
-    const { Roles: rolesA, Summary: summary } = a.AssignRoles(rows.map((r) => assembled(r.RowId)), byId(rows));
-    const { Roles: rolesB } = b.AssignRoles([...rows].reverse().map((r) => assembled(r.RowId)), byId(rows));
+    const { Roles: rolesA, Summary: summary } = a.AssignRoles(rows.map((r) => assembled(r.RowID)), byId(rows));
+    const { Roles: rolesB } = b.AssignRoles([...rows].reverse().map((r) => assembled(r.RowID)), byId(rows));
     expect([...rolesA].sort()).toEqual([...rolesB].sort());
     expect(rolesA.size).toBe(400);
     const held = [...rolesA].filter(([, role]) => role === 'locked-holdout').map(([id]) => id);
-    expect(held).toEqual(HoldoutCarve.SeededRandomCarve(rows.map((r) => r.RowId), 0.25, 7).HoldoutRowIds);
+    expect(held).toEqual(HoldoutCarve.SeededRandomCarve(rows.map((r) => r.RowID), 0.25, 7).HoldoutRowIDs);
     expect(summary).toMatchObject({ kind: 'seeded-random', cutoff: null, holdoutEnd: null, holdoutRowCount: held.length, developmentRowCount: 400 - held.length, excludedAfterHoldoutEnd: 0, holdoutPeriods: [], newEntity: null });
     const classes = summary.holdoutClassCounts || {};
     expect((classes['0'] || 0) + (classes['1'] || 0)).toBe(held.length);
@@ -94,11 +94,11 @@ describe('SeededRandomCarver', () => {
 
   it('refuses a carve that leaves no holdout row, and one that leaves no development row, at the carve stage', () => {
     const three = ['r0', 'r1', 'r2'].map((id) => unitRow(id, '2024-01-01', null));
-    expect(() => new SeededRandomCarver(0.01, 7).AssignRoles(three.map((r) => assembled(r.RowId)), byId(three))).toThrow(expect.objectContaining({
+    expect(() => new SeededRandomCarver(0.01, 7).AssignRoles(three.map((r) => assembled(r.RowID)), byId(three))).toThrow(expect.objectContaining({
       Refusal: { stage: 'carve', reason: { kind: 'seeded-random-side-empty', side: 'locked-holdout', fraction: 0.01, rows: 3 } },
     }));
     const two = ['r0', 'r1'].map((id) => unitRow(id, '2024-01-01', null));
-    expect(() => new SeededRandomCarver(0.99, 7).AssignRoles(two.map((r) => assembled(r.RowId)), byId(two))).toThrow(expect.objectContaining({
+    expect(() => new SeededRandomCarver(0.99, 7).AssignRoles(two.map((r) => assembled(r.RowID)), byId(two))).toThrow(expect.objectContaining({
       Refusal: { stage: 'carve', reason: { kind: 'seeded-random-side-empty', side: 'development', fraction: 0.99, rows: 2 } },
     }));
   });
@@ -107,7 +107,7 @@ describe('SeededRandomCarver', () => {
 /** Monthly unit rows t0…t(n−1) from January 2020, each with its period. */
 function monthly(n: number): { readonly Rows: AssembledRow[]; readonly UnitRows: Map<string, UnitRow> } {
   const units = Array.from({ length: n }, (_, k) => unitRow(`t${k}`, '2020-01-01', null, 'series', '1', new Date(Date.UTC(2020, k, 1))));
-  return { Rows: units.map((u) => assembled(u.RowId)), UnitRows: new Map(units.map((u) => [u.RowId, u])) };
+  return { Rows: units.map((u) => assembled(u.RowID)), UnitRows: new Map(units.map((u) => [u.RowID, u])) };
 }
 
 const design: RollingOrigin = { kind: 'rolling-origin', origins: 5, horizonPeriods: 1, gapPeriods: 0, minTrainPeriods: 24, window: 'expanding' };
@@ -147,7 +147,7 @@ describe('HoldoutCarvers', () => {
     const seeded = HoldoutCarvers.CarverForProtocol(protocol({ kind: 'seeded-random', fraction: 0.25 }), unit);
     expect(seeded).toBeInstanceOf(SeededRandomCarver);
     const rows = Array.from({ length: 40 }, (_, i) => unitRow(`r${i}`, '2024-01-01', null));
-    expect(seeded.AssignRoles(rows.map((r) => assembled(r.RowId)), byId(rows)).Summary.holdoutRowCount).toBe(HoldoutCarve.SeededRandomCarve(rows.map((r) => r.RowId), 0.25, 7).HoldoutRowIds.length);
+    expect(seeded.AssignRoles(rows.map((r) => assembled(r.RowID)), byId(rows)).Summary.holdoutRowCount).toBe(HoldoutCarve.SeededRandomCarve(rows.map((r) => r.RowID), 0.25, 7).HoldoutRowIDs.length);
   });
 
   it('refuses an assembled row that is not a unit row', () => {

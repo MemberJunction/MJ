@@ -76,7 +76,7 @@ export class InMemoryArtifactStore implements IArtifactStore {
   }
 
   /** @inheritdoc */
-  public async Delete(fileId: string): Promise<void> {
+  public async delete(fileId: string): Promise<void> {
     if (!this.Saved.delete(fileId)) throw new Error(`InMemoryArtifactStore: no artifact ${fileId}`);
   }
 }
@@ -161,7 +161,7 @@ export class MJFilesArtifactStore implements IArtifactStore {
   }
 
   /** @inheritdoc Deletes the `MJ: Files` row, then the bytes this store wrote for it. */
-  public async Delete(fileId: string, contextUser?: UserInfo): Promise<void> {
+  public async delete(fileId: string, contextUser?: UserInfo): Promise<void> {
     const file = await this.entityFactory.getEntityObject<MJFileEntity>('MJ: Files', contextUser);
     if (!(await file.Load(fileId))) throw new Error(`MJFilesArtifactStore: artifact file ${fileId} not found`);
     if (!(await file.Delete())) {

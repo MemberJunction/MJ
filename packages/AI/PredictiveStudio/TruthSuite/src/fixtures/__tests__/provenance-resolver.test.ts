@@ -39,7 +39,7 @@ const change = (id: string, entityId: string, recordKey: string, type: string, a
   ({ ID: id, EntityID: entityId, RecordID: `ID|${recordKey}`, Type: type, Status: 'Complete', ChangedAt: new Date(at), FullRecordJSON: JSON.stringify(record) });
 const sources = (entities: readonly AssemblyEntityInfo[], rows: Record<string, readonly SourceRow[]>): ProvenanceSources =>
   ({ DataAccess: new InMemoryDataAccess(new Map(Object.entries(rows))), Metadata: new InMemoryMetadata(entities) });
-const yearRow = (decision: string, personId = 'p1'): ScoredRowBinding => ({ Entity: YEAR, RowId: 'y1', DecisionDate: new Date(decision), Fields: { ID: 'y1', PersonID: personId } });
+const yearRow = (decision: string, personId = 'p1'): ScoredRowBinding => ({ Entity: YEAR, RowID: 'y1', DecisionDate: new Date(decision), Fields: { ID: 'y1', PersonID: personId } });
 const missing = { impute: 'mode', indicator: true, constant: null } as const;
 
 describe('ProvenanceResolver — record-changes', () => {
@@ -153,7 +153,7 @@ describe('ProvenanceResolver — windowed aggregate over a tracked child', () =>
       [YEAR]: [{ ID: 'y1', PersonID: 'p1', __mj_CreatedAt: '2025-07-01T00:00:00.000Z' }, { ID: 'y2', PersonID: 'p1', __mj_CreatedAt: '2025-01-01T00:00:00.000Z' }],
     });
     const createdAfter: ValueProvenance = { column: 'points_y', source: 'windowed-aggregate', sourceRef: 'none', sourceVersion: 'created-after-decision', computedAt: '2025-06-02T00:00:00.000Z' };
-    const rowOf = (id: string): ScoredRowBinding => ({ ...yearRow('2025-06-01T00:00:00.000Z'), RowId: id, Fields: { ID: id, PersonID: 'p1' } });
+    const rowOf = (id: string): ScoredRowBinding => ({ ...yearRow('2025-06-01T00:00:00.000Z'), RowID: id, Fields: { ID: id, PersonID: 'p1' } });
 
     it('resolves a missing value when the row was created after its decision day', async () => {
       expect(await ProvenanceResolver.ResolveValueProvenance(withYears, { Provenance: createdAfter, Cells: [null], Spec: spec, Folded: [], Row: rowOf('y1') })).toBe(true);

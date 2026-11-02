@@ -4,7 +4,7 @@ import type { ModelingPlanSpec, LeaderboardEntry, TrainerCompleted, TrainerReque
 import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 
 import { ExperimentOrchestrator } from '../experiment-orchestrator';
-import { ExtractNormalizedScore, TrainingEngineExperimentTrainer } from '../seams';
+import { ExperimentScores, TrainingEngineExperimentTrainer } from '../seams';
 import { ExperimentBudget, TrainingAttemptFailedError } from '../budget';
 import { RankLeaderboard, SelectPrunedIterationIds } from '../leaderboard';
 import { RunBounded } from '../concurrency';
@@ -309,6 +309,7 @@ class TimeoutSpendingTrainer implements IExperimentTrainer {
     this.MaxConcurrent = Math.max(this.MaxConcurrent, this.inFlight);
     for (let i = 0; i < 5; i++) await Promise.resolve();
     this.inFlight--;
+    // `??`, not `||`: a fixed or requested 0 seconds is a real duration and must not fall through.
     const seconds = this.fixedSeconds ?? input.timeoutSeconds ?? 0;
     this.SpentSeconds += seconds;
     const run = new FakeRun();
@@ -950,27 +951,27 @@ describe('runBounded', () => {
   });
 });
 
-describe('ExtractNormalizedScore', () => {
+describe('ExperimentScores.ExtractNormalizedScore', () => {
   it('reads the holdout metrics and passes a higher-is-better metric through', () => {
-    expect(ExtractNormalizedScore(JSON.stringify({ auc: 0.81 }), 'AUC')).toBe(0.81);
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ auc: 0.81 }), 'AUC')).toBe(0.81);
   });
 
   it('never falls back to the training metrics: no holdout metric is no score', () => {
-    expect(ExtractNormalizedScore(null, 'F1')).toBeNull();
-    expect(ExtractNormalizedScore('', 'F1')).toBeNull();
+    expect(ExperimentScores.ExtractNormalizedScore(null, 'F1')).toBeNull();
+    expect(ExperimentScores.ExtractNormalizedScore('', 'F1')).toBeNull();
   });
 
   it('negates a lower-is-better metric and scores a closer-to-one metric by its distance from one, so higher is always better', () => {
-    expect(ExtractNormalizedScore(JSON.stringify({ rmse: 2.5 }), 'RMSE')).toBe(-2.5);
-    expect(ExtractNormalizedScore(JSON.stringify({ 'calibration-slope': 0.8 }), 'calibration-slope')).toBeCloseTo(-0.2, 12);
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ rmse: 2.5 }), 'RMSE')).toBe(-2.5);
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ 'calibration-slope': 0.8 }), 'calibration-slope')).toBeCloseTo(-0.2, 12);
   });
 
   it('returns null, never 0, when the metric is missing, not a number, or of no known direction', () => {
-    expect(ExtractNormalizedScore(JSON.stringify({ auc: 0.8 }), 'F1')).toBeNull();
-    expect(ExtractNormalizedScore(JSON.stringify({ f1: '0.7' }), 'F1')).toBeNull();
-    expect(ExtractNormalizedScore(JSON.stringify({ lift: 1.4 }), 'lift')).toBeNull();
-    expect(ExtractNormalizedScore('not json', 'AUC')).toBeNull();
-    expect(ExtractNormalizedScore('[0.8]', 'AUC')).toBeNull();
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ auc: 0.8 }), 'F1')).toBeNull();
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ f1: '0.7' }), 'F1')).toBeNull();
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ lift: 1.4 }), 'lift')).toBeNull();
+    expect(ExperimentScores.ExtractNormalizedScore('not json', 'AUC')).toBeNull();
+    expect(ExperimentScores.ExtractNormalizedScore('[0.8]', 'AUC')).toBeNull();
   });
 });
 

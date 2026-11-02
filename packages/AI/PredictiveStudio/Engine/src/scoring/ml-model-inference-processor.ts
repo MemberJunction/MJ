@@ -363,7 +363,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       leakageGuard: pipeline.leakageGuard,
       outcomeConfig: pipeline.outcomeConfig,
       unit,
-      trainingRowIds: new UUIDSet(await (this.deps.trainingRows || new RunViewTrainingRowsLookup()).TrainingRowIdsOf(model.ID, context.ContextUser, context.Provider)),
+      trainingRowIds: new UUIDSet(await (this.deps.trainingRows || new RunViewTrainingRowsLookup()).TrainingRowIDsOf(model.ID, context.ContextUser, context.Provider)),
     };
   }
 
@@ -527,9 +527,9 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
   private async assembleUnitFeatures(model: LoadedModel, rows: SourceRow[], context: RecordProcessorContext): Promise<FeatureAssemblyResult> {
     const assembled = await this.AssembleForScoring(rows, context, 'unit-rule');
     if (assembled.Status === 'refused') throw new TrainingRefusedError({ stage: 'assembly', reason: assembled.Refusal });
-    if (assembled.ExcludedRowIds.size > 0) {
+    if (assembled.ExcludedRowIDs.size > 0) {
       const named = assembled.UncoveredRowsExcluded.map((u) => `${u.entity}.${u.field} ${u.rows}`).join(', ');
-      throw new Error(`MLModelInferenceProcessor: ${assembled.ExcludedRowIds.size} of ${rows.length} record(s) cannot be read as of their decision date (uncovered history: ${named})`);
+      throw new Error(`MLModelInferenceProcessor: ${assembled.ExcludedRowIDs.size} of ${rows.length} record(s) cannot be read as of their decision date (uncovered history: ${named})`);
     }
     const assembly = AsOfFeatureAssembler.ToFeatureAssemblyResult(assembled, null, LABEL_COLUMN);
     this.assertHasColumns(model, assembly);

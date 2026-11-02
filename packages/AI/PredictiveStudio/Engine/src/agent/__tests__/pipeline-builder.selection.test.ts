@@ -16,6 +16,10 @@ import { ProtocolRowFixture } from '../../training/__tests__/fixtures/protocol-r
 import { UnitYearsWorld } from '../../__tests__/fakes/unit-years-world';
 import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
+// Test-double casts: the provider doubles below implement only the members the builder calls (RunView, entity
+// lookup), so each is cast to `IMetadataProvider` (`as unknown as`) where it is handed to the builder; a field-bag
+// row double is likewise cast to its entity type, and canned view rows to the requested row type. These are the
+// file's only `unknown` uses.
 const source = (file: string): string => readFileSync(fileURLToPath(new URL(`../${file}`, import.meta.url)), 'utf8');
 
 const ALGORITHMS: readonly AlgorithmRow[] = [

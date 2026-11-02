@@ -111,7 +111,7 @@ export interface IRecordLoader {
    * @param provider the provider the read runs on (no global fallback)
    * @throws Error naming both rows when two catalog rows share the driver key
    */
-  ResolveAlgorithmIdForDriver(driverKey: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | null>;
+  resolveAlgorithmIDForDriver(driverKey: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | null>;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
 }
 
 /**
@@ -152,7 +152,7 @@ export interface IArtifactStore {
    * @param contextUser request user — required on the server for isolation/audit
    * @throws Error when the artifact cannot be removed
    */
-  Delete(fileId: string, contextUser?: UserInfo): Promise<void>;
+  delete(fileId: string, contextUser?: UserInfo): Promise<void>;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
 }
 
 /**

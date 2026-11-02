@@ -405,7 +405,7 @@ export class TrainingEngine {
     loaded: LoadedProtocol, deps: TrainingDeps,
   ): Promise<FrozenSnapshot> {
     const protocol = loaded.Protocol;
-    const carve = HoldoutCarvers.CarverForProtocol(protocol, assembly.Unit).AssignRoles(assembled.Rows, new Map(assembly.UnitRead.Rows.map((r) => [r.RowId, r])));
+    const carve = HoldoutCarvers.CarverForProtocol(protocol, assembly.Unit).AssignRoles(assembled.Rows, new Map(assembly.UnitRead.Rows.map((r) => [r.RowID, r])));
     const snapshots = deps.snapshots || new RunViewTrainingSnapshotStore(this.requireProvider(deps), deps.contextUser);
     const snapshot = await new TrainingSnapshotBuilder().Build({
       PipelineID: resolved.pipeline.ID,
@@ -626,7 +626,7 @@ export class TrainingEngine {
     const saved = outcomes.flatMap((o) => (o.status === 'fulfilled' ? [o.value] : []));
     const failure = outcomes.find((o): o is PromiseRejectedResult => o.status === 'rejected');
     if (failure === undefined) return new Map(saved);
-    const rollback = await Promise.allSettled(saved.map(([, fileId]) => deps.artifactStore.Delete(fileId, deps.contextUser)));
+    const rollback = await Promise.allSettled(saved.map(([, fileId]) => deps.artifactStore.delete(fileId, deps.contextUser)));
     rollback.forEach((r, k) => {
       if (r.status === 'rejected') LogError(`TrainingEngine: could not delete artifact file ${saved[k][1]} of failed run ${run.ID}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`);
     });
@@ -697,7 +697,7 @@ export class TrainingEngine {
    */
   private async shippedAlgorithmId(x: TrainerRunInputs, outcome: TrainerOutcome, shipped: ShippedArtifact): Promise<string> {
     if (shipped.Member === null) return outcome.Finalist ? outcome.Finalist.algorithmId : x.Resolved.pipeline.AlgorithmID;
-    const catalogId = await x.Deps.recordLoader.ResolveAlgorithmIdForDriver(TrainingEngine.shippedDriver(x, outcome, shipped), x.Deps.contextUser, x.Deps.provider);
+    const catalogId = await x.Deps.recordLoader.resolveAlgorithmIDForDriver(TrainingEngine.shippedDriver(x, outcome, shipped), x.Deps.contextUser, x.Deps.provider);
     return catalogId || x.Resolved.pipeline.AlgorithmID;
   }
 
@@ -763,7 +763,7 @@ export class TrainingEngine {
       Context: 'train',
       Unit: unit,
       RowEntity: unitRead.RowEntity,
-      Rows: unitRead.Rows.map((r) => ({ RowId: r.RowId, EntityKey: r.EntityKey, DecisionDate: r.DecisionDate, Period: r.Period })),
+      Rows: unitRead.Rows.map((r) => ({ RowID: r.RowID, EntityKey: r.EntityKey, DecisionDate: r.DecisionDate, Period: r.Period })),
       Features: resolution.Columns,
       SeriesHistory: TrainingEngine.SeriesHistoryFor(unit, unitRead.Rows),
       Read: { mode: 'complete' },
@@ -787,9 +787,9 @@ export class TrainingEngine {
 
   /** A unit row as a series point; a forecast row always has a period and a numeric label once the target is validated. */
   private static toPoint(r: UnitRow): SeriesPoint {
-    if (r.Period === null) throw new Error(`TrainingEngine: unit row ${r.RowId} has no period, so it cannot be a series point`);
-    if (typeof r.Label !== 'number') throw new Error(`TrainingEngine: unit row ${r.RowId} has the non-numeric label "${r.Label}", so it cannot be a series point`);
-    return { EntityKey: r.EntityKey, Period: r.Period, Value: r.Label, RowId: r.RowId };
+    if (r.Period === null) throw new Error(`TrainingEngine: unit row ${r.RowID} has no period, so it cannot be a series point`);
+    if (typeof r.Label !== 'number') throw new Error(`TrainingEngine: unit row ${r.RowID} has the non-numeric label "${r.Label}", so it cannot be a series point`);
+    return { EntityKey: r.EntityKey, Period: r.Period, Value: r.Label, RowID: r.RowID };
   }
 
   /** Read the pipeline, its unit and the unit's rows, for an assembly that is not part of a training run. */

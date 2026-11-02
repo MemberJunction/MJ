@@ -39,7 +39,7 @@ export class HoldoutCarveDateError extends RangeError {
 /** One unit row as the date carve reads it. */
 export interface CarveRow {
   /** The unit row's id (the snapshot manifest's `rowId`). */
-  readonly RowId: string;
+  readonly RowID: string;
   /**
    * The row's value of the unit's group key (the Prediction Unit's `groupKey` field, or the row's entity key when the
    * unit declares none). The new-entity report holds out whole groups by this key, so it must be the key the inner
@@ -59,7 +59,7 @@ export interface CarveRow {
 /** A row kept in the snapshot and its role. */
 export interface CarvedRow {
   /** The unit row's id. */
-  readonly RowId: string;
+  readonly RowID: string;
   /** `locked-holdout` for a row inside the holdout window, `development` for a row before the cutoff. */
   readonly Role: 'development' | 'locked-holdout';
 }
@@ -69,7 +69,7 @@ export interface DeploymentCarve {
   /** The rows kept in the snapshot, sorted by row id; rows on or after `holdoutEnd` are not among them. */
   readonly Rows: readonly CarvedRow[];
   /** The ids of the rows inside the holdout window, in `Rows` order. */
-  readonly HoldoutRowIds: readonly string[];
+  readonly HoldoutRowIDs: readonly string[];
   /** Rows before the cutoff. */
   readonly DevelopmentRowCount: number;
   /** Rows on or after the cutoff and before `holdoutEnd` (every row on or after the cutoff when there is no end). */
@@ -78,7 +78,7 @@ export interface DeploymentCarve {
   readonly ExcludedAfterHoldoutEnd: number;
   /** Holdout rows per label; null when no holdout row has a label. */
   readonly HoldoutClassCounts: Readonly<Record<string, number>> | null;
-  /** The carve date of each holdout row, in `HoldoutRowIds` order (the out-of-time slices are read from them). */
+  /** The carve date of each holdout row, in `HoldoutRowIDs` order (the out-of-time slices are read from them). */
   readonly HoldoutCarveDates: readonly string[];
 }
 
@@ -87,9 +87,9 @@ export interface NewEntityCarve {
   /** The group keys held out whole: the newest `holdoutFraction` of groups by first carve date, at least one. */
   readonly HoldoutEntityKeys: readonly string[];
   /** The other groups' rows before the cutoff. */
-  readonly TrainingRowIds: readonly string[];
+  readonly TrainingRowIDs: readonly string[];
   /** The held-out groups' rows inside the holdout window. */
-  readonly HoldoutRowIds: readonly string[];
+  readonly HoldoutRowIDs: readonly string[];
   /** Rows in neither set: a held-out group's rows outside the holdout window, another group's rows on or after the cutoff. */
   readonly ExcludedRowCount: number;
   /** Group keys present in both sets, counted from the rows; zero when the report is sound. */
@@ -120,22 +120,22 @@ export type CarveResult =
 /** The result of a seeded-random carve: every row is in exactly one of the two lists, each sorted by row id. */
 export interface SeededRandomCarveResult {
   /** The rows whose seeded hash falls below the fraction. */
-  readonly HoldoutRowIds: readonly string[];
+  readonly HoldoutRowIDs: readonly string[];
   /** Every other row. */
-  readonly DevelopmentRowIds: readonly string[];
+  readonly DevelopmentRowIDs: readonly string[];
 }
 
 /** One row of a forecast series and the period it belongs to (ISO date of the period start). */
 export interface PeriodRow {
   /** The unit row's id. */
-  readonly RowId: string;
+  readonly RowID: string;
   /** The ISO date of the start of the row's period. */
   readonly Period: string;
 }
 
 /** The result of a rolling-origin carve. */
 export type RollingOriginCarveResult =
-  | { readonly Ok: true; readonly HoldoutRowIds: readonly string[]; readonly HoldoutPeriods: readonly string[] }
+  | { readonly Ok: true; readonly HoldoutRowIDs: readonly string[]; readonly HoldoutPeriods: readonly string[] }
   | { readonly Ok: false; readonly Refusal: CarveRefusal };
 
 /** The new-entity counts of a stored carve. */
@@ -214,7 +214,7 @@ export class HoldoutCarve {
     const hold: string[] = [];
     const dev: string[] = [];
     for (const id of [...rowIds].sort(OrdinalCompare)) (HoldoutCarve.seededRowHash(seed, id) / 4294967296 < fraction ? hold : dev).push(id);
-    return { HoldoutRowIds: hold, DevelopmentRowIds: dev };
+    return { HoldoutRowIDs: hold, DevelopmentRowIDs: dev };
   }
 
   /**
@@ -232,7 +232,7 @@ export class HoldoutCarve {
     }
     const test = periods.slice(periods.length - testCount);
     const testSet = new Set(test);
-    return { Ok: true, HoldoutRowIds: rows.filter((r) => testSet.has(r.Period)).map((r) => r.RowId), HoldoutPeriods: test };
+    return { Ok: true, HoldoutRowIDs: rows.filter((r) => testSet.has(r.Period)).map((r) => r.RowID), HoldoutPeriods: test };
   }
 
   /** One plain sentence per carve refusal (run notes, the operation error, the UI). */
@@ -286,7 +286,7 @@ export class HoldoutCarve {
    * id is in it was a training row). Row ids, not entity keys: the same rule holds for one-row-per-record units and for
    * units with a row per record per period.
    */
-  public static TrainingRowIds(manifest: readonly SnapshotRowKey[]): ReadonlySet<string> {
+  public static TrainingRowIDs(manifest: readonly SnapshotRowKey[]): ReadonlySet<string> {
     return new Set(manifest.filter((r) => r.role === 'development').map((r) => r.rowId));
   }
 
@@ -304,10 +304,10 @@ export class HoldoutCarve {
     const dated: DatedRow[] = [];
     for (const row of rows) {
       const day = UtcDay.ToUtcDay(row.CarveDate);
-      if (day === null) return { Ok: false, Refusal: { kind: 'unparseable-carve-date', rowId: row.RowId, value: row.CarveDate } };
+      if (day === null) return { Ok: false, Refusal: { kind: 'unparseable-carve-date', rowId: row.RowID, value: row.CarveDate } };
       dated.push({ Row: row, Time: day.getTime() });
     }
-    dated.sort((a, b) => OrdinalCompare(a.Row.RowId, b.Row.RowId));
+    dated.sort((a, b) => OrdinalCompare(a.Row.RowID, b.Row.RowID));
     return { Ok: true, Rows: dated };
   }
 
@@ -318,11 +318,11 @@ export class HoldoutCarve {
     for (const d of dated) {
       const place = HoldoutCarve.windowPlace(w, d.Time);
       if (place === 'after-end') excluded++;
-      else if (place === 'in-window') { kept.push({ RowId: d.Row.RowId, Role: 'locked-holdout' }); held.push(d); }
-      else kept.push({ RowId: d.Row.RowId, Role: 'development' });
+      else if (place === 'in-window') { kept.push({ RowID: d.Row.RowID, Role: 'locked-holdout' }); held.push(d); }
+      else kept.push({ RowID: d.Row.RowID, Role: 'development' });
     }
     return {
-      Rows: kept, HoldoutRowIds: held.map((d) => d.Row.RowId), DevelopmentRowCount: kept.length - held.length, HoldoutRowCount: held.length,
+      Rows: kept, HoldoutRowIDs: held.map((d) => d.Row.RowID), DevelopmentRowCount: kept.length - held.length, HoldoutRowCount: held.length,
       ExcludedAfterHoldoutEnd: excluded, HoldoutClassCounts: HoldoutCarve.classCounts(held.map((d) => d.Row.Label)), HoldoutCarveDates: held.map((d) => d.Row.CarveDate),
     };
   }
@@ -349,8 +349,8 @@ export class HoldoutCarve {
     const trainingKeys = new Set(training.map((d) => d.Row.EntityKey));
     return {
       HoldoutEntityKeys: [...held].sort(OrdinalCompare),
-      TrainingRowIds: training.map((d) => d.Row.RowId),
-      HoldoutRowIds: holdout.map((d) => d.Row.RowId),
+      TrainingRowIDs: training.map((d) => d.Row.RowID),
+      HoldoutRowIDs: holdout.map((d) => d.Row.RowID),
       ExcludedRowCount: dated.length - training.length - holdout.length,
       SharedEntityKeys: new Set(holdout.map((d) => d.Row.EntityKey).filter((k) => trainingKeys.has(k))).size,
     };

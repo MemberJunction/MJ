@@ -10,7 +10,7 @@ const years: AssemblyEntityInfo = { ID: 'E-Y', Name: 'Years', PrimaryKey: 'ID', 
   f('EventsAttended', 'number'), f('Region', 'string'), f('AutoRenew', 'boolean'), f('PersonStatusNow', 'string', true),
 ] };
 const people: AssemblyEntityInfo = { ID: 'E-P', Name: 'People', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [f('ID', 'string', false, 'uniqueidentifier'), f('Status', 'string', true)] };
-const metadata: IAssemblyMetadata = { Entity: (n) => ({ Years: years, People: people }[n] ?? null) };
+const metadata: IAssemblyMetadata = { Entity: (n) => ({ Years: years, People: people }[n] || null) };
 const unitSpec: PredictionUnitSpec = {
   id: 'U', lineageRootId: 'U', version: 1, name: 'world renewal',
   rows: { kind: 'grain', grainEntity: 'Years', decisionDate: { kind: 'column-offset', column: 'StartDate', offsetDays: 334 }, filter: [] },
@@ -90,7 +90,7 @@ describe('ResolveFeatureColumns — deny lists and windowed aggregates', () => {
   const orders: AssemblyEntityInfo = { ID: 'E-O', Name: 'Orders', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [
     f('ID', 'string', false, 'uniqueidentifier'), f('PersonID', 'string', false, 'uniqueidentifier', 'People'), f('OrderDate', 'Date'), f('Amount', 'number'),
   ] };
-  const md: IAssemblyMetadata = { Entity: (n) => ({ Years: years, People: people, Orders: orders }[n] ?? null) };
+  const md: IAssemblyMetadata = { Entity: (n) => ({ Years: years, People: people, Orders: orders }[n] || null) };
   const spend: FeatureStepGraph['Steps'][number] = {
     Id: 'w', Kind: 'windowed-aggregate', FeatureName: 'SpendLastYear', ChildEntity: 'Orders', ForeignKey: 'PersonID', OwnerKeyField: 'PersonID',
     DateField: 'OrderDate', Aggregate: 'sum', ValueField: 'Amount', WindowDays: 365,

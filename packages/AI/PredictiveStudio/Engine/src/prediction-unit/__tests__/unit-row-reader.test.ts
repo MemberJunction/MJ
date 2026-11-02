@@ -48,7 +48,7 @@ describe('PredictionUnitRowReader', () => {
     const out = await new PredictionUnitRowReader().Read(unit, { DataAccess: new TableDataAccess(tables), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date('2026-10-12T00:00:00Z') });
     expect(out.Status).toBe('read');
     if (out.Status !== 'read') return;
-    expect(out.Rows.map((r) => [r.RowId, r.Label])).toEqual([
+    expect(out.Rows.map((r) => [r.RowID, r.Label])).toEqual([
       ['a1', '1'], ['b1', '0'], ['c2', '0'], ['a2', '0'], ['b2', '0'],
     ]);
     expect(out.Counts).toEqual({ rowsRead: 7, censoredRowsExcluded: 1, labelKnownRowsExcluded: 1, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 5, dataCutoff: '2026-07-30' });
@@ -122,10 +122,10 @@ describe('PredictionUnitRowReader.UnitRowRef — the one row rule training and s
     const out = await new PredictionUnitRowReader().Read(unit, { DataAccess: new TableDataAccess(dated), Metadata: metadata, Read: { mode: 'complete' }, Now: new Date() });
     expect(out.Status).toBe('read');
     if (out.Status !== 'read') return;
-    const a1 = out.Rows.find((r) => r.RowId === 'a1');
+    const a1 = out.Rows.find((r) => r.RowID === 'a1');
     expect(a1?.EntityKey).toBe('2020-01-01');
     const source = dated.Periods.find((r) => r.ID === 'a1')!;
     const ref = PredictionUnitRowReader.UnitRowRef(unit, entities.Periods, source, a1!.DecisionDate);
-    expect(ref).toEqual({ RowId: a1!.RowId, EntityKey: a1!.EntityKey, DecisionDate: a1!.DecisionDate, Period: a1!.Period });
+    expect(ref).toEqual({ RowID: a1!.RowID, EntityKey: a1!.EntityKey, DecisionDate: a1!.DecisionDate, Period: a1!.Period });
   });
 });

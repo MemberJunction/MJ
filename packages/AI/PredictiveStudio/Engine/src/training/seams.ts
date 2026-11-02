@@ -124,7 +124,7 @@ export class RunViewRecordLoader implements IRecordLoader {
    * @inheritdoc
    * @throws Error when the read fails, or naming both rows when two share the driver key
    */
-  public async ResolveAlgorithmIdForDriver(driverKey: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | null> {
+  public async resolveAlgorithmIDForDriver(driverKey: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | null> {
     const result = await RunView.FromMetadataProvider(provider).RunView<Pick<MJMLAlgorithmEntity, 'ID' | 'Name'>>(
       {
         EntityName: 'MJ: ML Algorithms',
