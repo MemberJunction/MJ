@@ -154,3 +154,28 @@ describe('ResolveFeatureColumns — forecast units', () => {
     expect(r).toEqual({ Status: 'refused', Refusal: { kind: 'unresolved-column', entity: 'T3', field: 'TemporalSpec.lag[5]' } });
   });
 });
+
+describe('ResolveFeatureColumns — fields whose stored value is not the value since creation', () => {
+  /** `Person` is a view-joined name from People; the `__mj_` columns are the system timestamps. All declare AllowUpdateAPI = 0. */
+  const withJoined: AssemblyEntityInfo = { ...years, Fields: [
+    ...years.Fields,
+    { ...f('Person', 'string'), IsVirtual: true },
+    f('__mj_CreatedAt', 'Date', false, 'datetimeoffset'),
+    f('__mj_UpdatedAt', 'Date', false, 'datetimeoffset'),
+  ] };
+  const resolve = (columns: string[]) => FeatureResolver.ResolveFeatureColumns({ Steps: [{ Id: 's', Kind: 'select', Columns: columns }] }, unitSpec, withJoined, metadata, { denyFields: [], denySources: [] });
+
+  it('refuses a virtual field, naming it, instead of reading the joined record\'s value as it stands today', () => {
+    expect(resolve(['EventsAttended', 'Person'])).toEqual({ Status: 'refused', Refusal: { kind: 'virtual-field', entity: 'Years', field: 'Person' } });
+  });
+
+  it('never reads a __mj_ system column as immutable: it is read from the change history', () => {
+    const r = resolve(['__mj_UpdatedAt', '__mj_CreatedAt']);
+    expect(r.Status).toBe('resolved');
+    if (r.Status !== 'resolved') return;
+    expect(r.Columns.map((c) => c.source)).toEqual([
+      { kind: 'record-changes', entity: 'Years', field: '__mj_UpdatedAt', keyField: null },
+      { kind: 'record-changes', entity: 'Years', field: '__mj_CreatedAt', keyField: null },
+    ]);
+  });
+});

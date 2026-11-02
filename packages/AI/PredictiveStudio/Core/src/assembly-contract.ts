@@ -5,7 +5,8 @@
  * policy, every refusal, per-value provenance and the Training Snapshot's row manifest. There is no "today's value"
  * source. A source may read another entity of the same row (`keyField`/`ownerKeyField`); a windowed aggregate may
  * filter its child rows and honour `voidedAtField`/`endDateField`/`active-at`; assembly refuses an unresolved column
- * (`unresolved-column`) and a step kind it cannot assemble (`unsupported-step-kind`).
+ * (`unresolved-column`), a virtual field joined from a related record (`virtual-field`) and a step kind it cannot
+ * assemble (`unsupported-step-kind`).
  */
 import type { RowFilter } from './prediction-unit';
 
@@ -97,6 +98,8 @@ export type AssemblyRefusal =
   | { readonly kind: 'unpinned-feature-version'; readonly featureName: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   | { readonly kind: 'scope-entity-mismatch'; readonly modelEntity: string; readonly scopeEntity: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   | { readonly kind: 'unresolved-column'; readonly entity: string; readonly field: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  /** A virtual field: its value is joined from a related record as it stands today; select it through that entity's key. */
+  | { readonly kind: 'virtual-field'; readonly entity: string; readonly field: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   | { readonly kind: 'unsupported-step-kind'; readonly stepId: string; readonly stepKind: string };  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
 
 /** What every provenance record names: the matrix column and the dated source it was read from. */

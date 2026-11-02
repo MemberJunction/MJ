@@ -298,12 +298,13 @@ flowchart TB
 
 ### 4.3 Point-in-time / "as-of" assembly
 
-For forward prediction, features are read as they were at the decision point rather than as they stand today. The **Prediction Unit** owns the decision date. Its `DecisionDateRule` is a `column` on the unit row, a `column-offset` (that column plus an offset in days), or a `fixed` date, which with `advance: 'each-run'` moves to the run's UTC day before each training run by saving the next unit version (a second run on the same day saves nothing). `AsOfFeatureAssembler` (`feature-assembly/as-of/as-of-assembler.ts`) then reads each feature for each unit row as of that row's date:
+For forward prediction, features are read as they were at the decision point rather than as they stand today. The **Prediction Unit** owns the decision date. Its `DecisionDateRule` is a `column` on the unit row, a `column-offset` (that column plus an offset in days), or a `fixed` date, which with `advance: 'each-run'` moves to the run's UTC day before each training run by saving the next unit version (a second run on the same day saves nothing); scoring dates such a unit's rows at the scoring run's own UTC day. `AsOfFeatureAssembler` (`feature-assembly/as-of/as-of-assembler.ts`) then reads each feature for each unit row as of that row's date:
 
 | Source of a column | Read as of the decision date from |
 |---|---|
 | a field the entity does not allow to be updated through the API (`AllowUpdateAPI = false`) | the stored value (it cannot change) |
-| any other field | the `MJ: Record Changes` history of the record |
+| any other field, and every `__mj_` system column (MJ declares them not updatable, but `__mj_UpdatedAt` changes on every save) | the `MJ: Record Changes` history of the record |
+| a virtual field (a value the entity's view joins from a related record) | nothing: it is refused (`virtual-field`), since its stored value is the related record's value today; select the field from the related entity through its key (a `select` with `Entity` and `KeyField`) |
 
 Every column has a **dated source** (`DatedSource`, `assembly-contract.ts`): a field of the row's entity or of an entity it joins to (`record-changes` or `immutable-field`, from the table above), a child table aggregated over a window that ends on the decision date (`windowed-aggregate`), a pinned Feature Value (`feature-value`), or a declared lag or rolling value of a forecast series (`series`). There is no "today's value" source. Each column is typed from its field (`ColumnEncoding`: numeric, categorical, date parts, boolean, or an identifier that is excluded), and every column gets an imputer with a missing-value indicator (§4.2). The `embedding`, `flow-agent` and `vision-llm` steps have no as-of reading and are refused (`unsupported-step-kind`), an `llm-derived` step without a pinned Feature Pipeline version is refused (`unpinned-feature-version`), and a read that returns fewer rows than it counted is refused (`truncated-read`): there is never a partial matrix.
 
