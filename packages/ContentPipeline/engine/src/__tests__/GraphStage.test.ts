@@ -309,4 +309,85 @@ describe('GraphStage (@memberjunction/content-pipeline)', () => {
         expect(store.SavedConcepts[0].ID).toBe('EXISTING-CONCEPT-ARR');
         expect(summary!.ClusteringResult.UnmatchedChunkIDs).toContain('CHUNK-NEW-TOPIC');
     });
+
+    it('honors AbortSignal cancellation, dry-run IsTest mode, DefaultStore registration, Broader Than edges, and schema-and-queries grounding filter', async () => {
+        const stage = new GraphStage();
+        GraphStage.SetDefaultStore(store);
+        expect(GraphStage.GetDefaultStore()).toBe(store);
+
+        // 1. AbortSignal aborted before Run -> Retry
+        const abortedController = new AbortController();
+        abortedController.abort();
+        const abortedCtx = {
+            ...buildStageContext({
+                GraphOverlay: { EnableGraphOverlay: true, GraphID: 'GRAPH-1' },
+            }),
+            Signal: abortedController.signal,
+        };
+        const retryOutcome = await stage.Run(
+            buildWorkingItemWithChunks([{ text: 'Sample chunk', decorator: 'Parent > Child Topic' }]),
+            abortedCtx,
+        );
+        expect(retryOutcome.Status).toBe('Retry');
+
+        // 2. Fallback to raw record Text when no child chunks exist, in dry-run (IsTest = true) with schema-and-queries mode
+        store.CustomChunks = undefined;
+        store.GroundingTargets = [
+            {
+                EntityName: 'MJ: Queries',
+                RecordID: 'QRY-DUES-REVENUE',
+                Name: 'Annual Dues Revenue Summary',
+                SynonymsOrKeywords: ['Annual Dues Assessment'],
+            },
+            {
+                EntityName: 'MJ: Actions',
+                RecordID: 'ACT-BILL-DUES',
+                Name: 'Generate Annual Dues Invoice',
+                SynonymsOrKeywords: ['Annual Dues Assessment'],
+            },
+        ];
+
+        const standaloneItem = new WorkingRecord(
+            new WorkingRecordIdentity('Content Item', 'https://canon.test/bylaws-text.md'),
+        );
+        standaloneItem.Propose('Title', 'Bylaws Schedule A');
+        standaloneItem.Propose('Decorator', 'Membership Governance > Annual Dues Assessment');
+        standaloneItem.Propose(
+            'Text',
+            'Annual Dues Assessment is calculated on January 1 based on organizational tier.',
+        );
+
+        const dryRunOutcome = await stage.Run(
+            standaloneItem,
+            buildStageContext(
+                {
+                    GraphOverlay: {
+                        EnableGraphOverlay: true,
+                        GraphID: 'GRAPH-DRY-RUN',
+                        TargetGraphType: 'Canon',
+                        GroundingMode: 'schema-and-queries',
+                    },
+                },
+                true, // IsTest = true -> should not persist to store
+            ),
+        );
+
+        expect(dryRunOutcome.Status).toBe('Complete');
+        expect(store.SavedConcepts.length).toBe(0);
+        expect(store.SavedEdges.length).toBe(0);
+
+        const summary = standaloneItem.GetExtension<GraphStageExecutionSummary>(GRAPH_STAGE, 'summary')!;
+        expect(summary).toBeDefined();
+        expect(summary.PersistedConceptCount).toBe(0);
+        expect(summary.SynthesizedResults.length).toBe(1);
+
+        const synth = summary.SynthesizedResults[0];
+        expect(synth.Concept.Name).toBe('Annual Dues Assessment');
+        expect(synth.Concept.ParentConceptName).toBe('Membership Governance');
+
+        const edgeTypes = synth.Edges.map((e) => e.EdgeTypeName);
+        expect(edgeTypes).toContain('Broader Than');
+        expect(edgeTypes).toContain('Measures'); // MJ: Queries included in schema-and-queries mode
+        expect(edgeTypes).not.toContain('Implements'); // MJ: Actions excluded in schema-and-queries mode
+    });
 });

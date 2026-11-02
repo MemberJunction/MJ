@@ -172,4 +172,103 @@ describe('GraphOverlay & ConceptSeedClustering', () => {
         expect(constrainedResult.ProposedNewCount).toBe(0);
         expect(constrainedResult.UnmatchedChunkIDs).toEqual(['chunk-fin-1']);
     });
+
+    it('enforces maxNewConcepts cap, detects currency conflicts, and maps Queries/Skills/Actions grounding edges', () => {
+        const runOverrideConfig = ResolveGraphOverlayConfig(
+            'graph-source-default',
+            {
+                GraphOverlay: {
+                    TargetGraphType: 'Canon',
+                    MaxNewConceptsPerRun: 50,
+                    AuthorityTier: 'DepartmentPractice',
+                },
+            },
+            {
+                GraphOverlay: {
+                    GraphID: 'graph-run-override',
+                    MaxNewConceptsPerRun: 1,
+                    AuthorityTier: 'BoardPolicy',
+                },
+            },
+        );
+        expect(runOverrideConfig.GraphID).toBe('graph-run-override');
+        expect(runOverrideConfig.MaxNewConceptsPerRun).toBe(1);
+        expect(runOverrideConfig.AuthorityTier).toBe('BoardPolicy');
+
+        const groundingTargets: SchemaGroundingTarget[] = [
+            {
+                EntityName: 'MJ: Queries',
+                RecordID: 'qry-ar-aging',
+                Name: 'Open AR Aging Summary',
+                SynonymsOrKeywords: ['Expense Reimbursement Threshold'],
+            },
+            {
+                EntityName: 'MJ: Actions',
+                RecordID: 'act-reimburse',
+                Name: 'Submit Expense Reimbursement',
+                SynonymsOrKeywords: ['Expense Reimbursement Threshold'],
+            },
+            {
+                EntityName: 'MJ: AI Skills',
+                RecordID: 'skill-audit',
+                Name: 'Expense Reimbursement Auditor',
+                SynonymsOrKeywords: ['Expense Reimbursement Threshold'],
+            },
+        ];
+
+        const chunks: ContentChunkSeedInput[] = [
+            {
+                ChunkID: 'c-board-1',
+                ContentItemID: 'item-1',
+                ContentSourceID: 'src-1',
+                ContentItemTitle: 'Board Expense Policy',
+                HeadingPath: 'Finance > Expense Reimbursement Threshold',
+                Text: 'Travel expenses above $500.00 require receipts and VP sign-off.',
+                Tags: ['Expense Reimbursement Threshold'],
+                AuthorityTier: 'BoardPolicy',
+            },
+            {
+                ChunkID: 'c-dept-2',
+                ContentItemID: 'item-2',
+                ContentSourceID: 'src-2',
+                ContentItemTitle: 'Staff Travel FAQ',
+                HeadingPath: 'FAQ > Expense Reimbursement Threshold',
+                Text: 'Travel expenses above $1,000 require receipts and VP sign-off.',
+                Tags: ['Expense Reimbursement Threshold'],
+                AuthorityTier: 'DepartmentPractice',
+            },
+            {
+                ChunkID: 'c-minor-3',
+                ContentItemID: 'item-3',
+                ContentSourceID: 'src-2',
+                ContentItemTitle: 'Office Supplies Note',
+                HeadingPath: 'Misc > Stationary Ordering Term',
+                Text: 'Stationary supplies are ordered monthly.',
+                Tags: ['Stationary Ordering Term'],
+                AuthorityTier: 'Informational',
+            },
+        ];
+
+        const capped = ClusterContentIntoConceptSeeds(chunks, [], {
+            taxonomyMode: 'propose-only',
+            maxNewConcepts: 1,
+            groundingTargets,
+        });
+
+        // Capped to 1 proposed concept; the 2-chunk BoardPolicy cluster wins over the 1-chunk Informational cluster
+        expect(capped.ProposedNewCount).toBe(1);
+        expect(capped.Clusters.length).toBe(1);
+        const topCluster = capped.Clusters[0];
+        expect(topCluster.ConceptName).toBe('Expense Reimbursement Threshold');
+        expect(topCluster.PotentialConflicts.length).toBe(1);
+        expect(topCluster.PotentialConflicts[0].Reason).toContain('$500.00');
+        expect(topCluster.PotentialConflicts[0].Reason).toContain('$1000');
+
+        const edgeTypes = topCluster.GroundingMatches.map((m) => m.SuggestedEdgeType);
+        expect(edgeTypes).toContain('Measures');
+        expect(edgeTypes).toContain('Implements');
+
+        expect(InferConceptTypeFromSignals('Finance & Accounting Committee', ['Oversees budget'])).toBe('Domain');
+        expect(InferConceptTypeFromSignals('Emeritus Member Definition', ['Honorary designation'])).toBe('Term');
+    });
 });

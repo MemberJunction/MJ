@@ -157,7 +157,7 @@ export function ResolveGraphOverlayConfig(
         }
     }
 
-    const graphID = explicitGraphID?.trim() || merged.GraphID || null;
+    const graphID = merged.GraphID || explicitGraphID?.trim() || null;
     const graphType: SemanticGraphType = merged.TargetGraphType ?? 'Knowledge';
     const isCanon = graphType === 'Canon';
 

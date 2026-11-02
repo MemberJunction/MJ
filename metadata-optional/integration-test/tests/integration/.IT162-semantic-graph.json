@@ -1,0 +1,32 @@
+[
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Check",
+      "Name": "IT162 - Semantic Graph, Graph Concepts, and Content Pipeline Graph Overlay",
+      "Description": "Verifies the Semantic Graph substrate (MJ: Graphs, MJ: Graph Concepts, MJ: Graph Edges, MJ: Graph Edge Types, MJ: Graph Edge Providers, ContentSource.GraphID), the Content Pipeline GraphStage overlay, and Executable Canon deterministic TaskGraph DAG similarity & workflow health telemetry.",
+      "Status": "Active",
+      "Configuration": {
+        "tier": "deterministic",
+        "transport": "server",
+        "checks": [
+          {
+            "type": "semantic-graph"
+          }
+        ]
+      },
+      "InputDefinition": {
+        "transport": "server"
+      },
+      "ExpectedOutcomes": {
+        "allChecksPass": true
+      },
+      "Tags": "[\"integration\", \"deterministic\", \"semantic-graph\", \"canon\", \"content-pipeline\", \"task-graph\"]",
+      "Priority": 85,
+      "EstimatedDurationSeconds": 10,
+      "EstimatedCostUSD": 0
+    },
+    "primaryKey": {
+      "ID": "E1761FA3-305B-4DD7-B107-577F5750273B"
+    }
+  }
+]

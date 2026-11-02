@@ -133,6 +133,133 @@ describe('dag-similarity', () => {
         expect(CanonicalizeNodeSignature(actionB, { includeInputPayloadKeys: true })).toBe(
             'Action:send_invoice_reminder[in:amount,invoiceid]',
         );
+
+        const agentWithPreset = TaskNode.Agent(
+            { tempId: 'ag1', name: 'Agent Step', description: '', dependsOn: [] },
+            { agentName: 'Member Concierge', presetName: 'Fast Triage' },
+        );
+        expect(CanonicalizeNodeSignature(agentWithPreset)).toBe('Agent:member_concierge:fast_triage');
+
+        const promptNode = TaskNode.Prompt(
+            { tempId: 'pr1', name: 'Prompt Step', description: '', dependsOn: [] },
+            { promptName: 'Summarize Renewal Notice' },
+        );
+        expect(CanonicalizeNodeSignature(promptNode)).toBe('Prompt:summarize_renewal_notice');
+
+        const forEachAction = TaskNode.ForEach(
+            { tempId: 'fe1', name: 'Loop Invoices', description: '', dependsOn: [] },
+            {
+                collectionPath: 'payload.invoices',
+                action: { name: 'Send Invoice Email', params: {} },
+            },
+        );
+        expect(CanonicalizeNodeSignature(forEachAction)).toBe('ForEach:Action:send_invoice_email');
+
+        const whileSubAgent = TaskNode.While(
+            { tempId: 'wh1', name: 'Poll Sync', description: '', dependsOn: [] },
+            {
+                condition: 'stepResult.wh1.pending === true',
+                maxIterations: 5,
+                subAgent: { name: 'ERP Sync Poller' },
+            },
+        );
+        expect(CanonicalizeNodeSignature(whileSubAgent)).toBe('While:Agent:erp_sync_poller');
+
+        const externalNode = TaskNode.External(
+            { tempId: 'ext1', name: 'Webhook', description: '', dependsOn: [] },
+            { domain: 'Stripe Webhook', timeoutSeconds: 3600 },
+        );
+        expect(CanonicalizeNodeSignature(externalNode)).toBe('External:stripe_webhook');
+    });
+
+    it('handles empty, single-node, and diamond fan-out/fan-in DAG topologies deterministically', () => {
+        const emptyA = ComputeDAGFingerprint({ workflowName: 'Empty A', tasks: [] });
+        const emptyB = ComputeDAGFingerprint({ workflowName: 'Empty B', tasks: [] });
+        const emptySim = CompareDAGFingerprints(emptyA, emptyB);
+        expect(emptySim.Overall).toBe(1);
+        expect(emptySim.IsExactStructuralMatch).toBe(true);
+
+        const singleNodeSpec: TaskGraphSpec = {
+            workflowName: 'Single Step',
+            tasks: [
+                TaskNode.Action(
+                    { tempId: 'only', name: 'Ping', description: '', dependsOn: [] },
+                    { actionName: 'Ping Service' },
+                ),
+            ],
+        };
+        const singleFp = ComputeDAGFingerprint(singleNodeSpec);
+        expect(CompareDAGFingerprints(emptyA, singleFp).Overall).toBe(0);
+        expect(CompareDAGFingerprints(singleFp, emptyA).IsExactStructuralMatch).toBe(false);
+
+        // Diamond DAG: Root -> (BranchLeft, BranchRight) -> Join
+        const buildDiamond = (swapBranches: boolean): TaskGraphSpec => {
+            const root = TaskNode.Action(
+                { tempId: 'r', name: 'Start', description: '', dependsOn: [] },
+                { actionName: 'Load Order' },
+            );
+            const left = TaskNode.Action(
+                { tempId: 'l', name: 'Left', description: '', dependsOn: ['r'] },
+                { actionName: 'Check Inventory' },
+            );
+            const right = TaskNode.Action(
+                { tempId: 'rt', name: 'Right', description: '', dependsOn: ['r'] },
+                { actionName: 'Validate Tax' },
+            );
+            const join = TaskNode.Action(
+                {
+                    tempId: 'j',
+                    name: 'Join',
+                    description: '',
+                    dependsOn: swapBranches ? ['rt', 'l'] : ['l', 'rt'],
+                },
+                { actionName: 'Commit Order' },
+            );
+            return {
+                workflowName: 'Diamond Order Flow',
+                tasks: swapBranches ? [join, right, left, root] : [root, left, right, join],
+            };
+        };
+
+        const d1 = ComputeDAGFingerprint(buildDiamond(false));
+        const d2 = ComputeDAGFingerprint(buildDiamond(true));
+        expect(d1.ExactStructureHash).toBe(d2.ExactStructureHash);
+        expect(CompareDAGFingerprints(d1, d2).Overall).toBe(1);
+    });
+
+    it('enforces complete-linkage clustering boundaries and filters low-success clusters as BelowPromotionThreshold', () => {
+        const makeGraph = (actions: string[]): TaskGraphSpec => ({
+            workflowName: actions.join('->'),
+            tasks: actions.map((act, idx) =>
+                TaskNode.Action(
+                    {
+                        tempId: `s${idx}`,
+                        name: act,
+                        description: '',
+                        dependsOn: idx > 0 ? [`s${idx - 1}`] : [],
+                    },
+                    { actionName: act },
+                ),
+            ),
+        });
+
+        // 3 runs of a failing workflow (only 1 of 3 succeeded -> 33.3% success rate < 80% threshold)
+        const failingRuns: ExecutedTaskGraphRecord[] = [
+            { RunID: 'fail-1', Spec: makeGraph(['Step A', 'Step B', 'Step C']), Succeeded: true },
+            { RunID: 'fail-2', Spec: makeGraph(['Step A', 'Step B', 'Step C']), Succeeded: false },
+            { RunID: 'fail-3', Spec: makeGraph(['Step A', 'Step B', 'Step C']), Succeeded: false },
+            // 1-node run should be filtered out by minNodesPerGraph (default 2)
+            { RunID: 'tiny-1', Spec: makeGraph(['Single Step']), Succeeded: true },
+        ];
+
+        const result = DiscoverWorkflowPromotionCandidates(failingRuns, [], {
+            minClusterSize: 3,
+            minSuccessRate: 0.80,
+        });
+
+        expect(result.Findings.length).toBe(1);
+        expect(result.Findings[0].Disposition).toBe('BelowPromotionThreshold');
+        expect(result.PromotionCandidates.length).toBe(0);
     });
 
     it('produces identical ExactStructureHash and 1.0 similarity for isomorphic DAGs with different tempIds and node order', () => {

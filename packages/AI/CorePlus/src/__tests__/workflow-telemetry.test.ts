@@ -218,4 +218,72 @@ describe('workflow-telemetry', () => {
             'Action:send_chapter_split_notification',
         ]);
     });
+
+    it('detects OutcomeDrift when downstream human approval rate drops and respects grace period for brand-new workflows', () => {
+        // Workflow A: Completed runs in both windows, but recent runs have OutcomeApproved = false
+        const baselineApproved: WorkflowRunTelemetryRecord[] = Array.from({ length: 5 }, (_, i) => ({
+            RunID: `base-ok-${i}`,
+            StartedAt: daysAgo(40 + i * 3),
+            Status: 'Completed',
+            OutcomeApproved: true,
+        }));
+        const recentRejected: WorkflowRunTelemetryRecord[] = [
+            { RunID: 'rec-rej-1', StartedAt: daysAgo(3), Status: 'Completed', OutcomeApproved: false },
+            { RunID: 'rec-rej-2', StartedAt: daysAgo(6), Status: 'Completed', OutcomeApproved: false },
+            { RunID: 'rec-ok-3', StartedAt: daysAgo(9), Status: 'Completed', OutcomeApproved: true },
+        ];
+
+        // Workflow B: Brand-new workflow created 5 days ago with 0 runs -> should NOT be flagged Dormant
+        const brandNewInput: WorkflowTelemetryInput = {
+            WorkflowAgentID: 'wf-new',
+            WorkflowName: 'Newly Promoted Onboarding Flow',
+            Spec: buildRenewalSpec(false),
+            CreatedAt: daysAgo(5),
+            Runs: [],
+        };
+
+        // Workflow C: Dormant workflow that still has an active schedule -> Medium risk level
+        const scheduledDormantInput: WorkflowTelemetryInput = {
+            WorkflowAgentID: 'wf-sched-dormant',
+            WorkflowName: 'Scheduled Monthly Sync',
+            Spec: buildRenewalSpec(false),
+            CreatedAt: daysAgo(120),
+            HasActiveSchedule: true,
+            Runs: [{ RunID: 'old-1', StartedAt: daysAgo(90), Status: 'Completed' }],
+        };
+
+        const reports = EvaluateWorkflowCanonHealth(
+            [
+                {
+                    WorkflowAgentID: 'wf-drift',
+                    WorkflowName: 'Dues Adjustment Approval',
+                    Spec: buildRenewalSpec(false),
+                    Runs: [...baselineApproved, ...recentRejected],
+                },
+                brandNewInput,
+                scheduledDormantInput,
+            ],
+            [],
+            { evaluationTime: EVAL_TIME },
+        );
+
+        const driftReport = reports.find((r) => r.WorkflowAgentID === 'wf-drift')!;
+        expect(driftReport.Signals).toContain('OutcomeDrift');
+        expect(driftReport.RecommendedAction).toBe('HumanReview');
+        expect(driftReport.RiskLevel).toBe('High');
+        expect(driftReport.Metrics.BaselineSuccessRate).toBe(1);
+        expect(driftReport.Metrics.RecentSuccessRate).toBeCloseTo(0.3333, 3);
+
+        const newReport = reports.find((r) => r.WorkflowAgentID === 'wf-new')!;
+        expect(newReport.Signals).toEqual(['Healthy']);
+        expect(newReport.HealthScore).toBe(1);
+
+        const schedDormantReport = reports.find((r) => r.WorkflowAgentID === 'wf-sched-dormant')!;
+        expect(schedDormantReport.Signals).toContain('Dormant');
+        expect(schedDormantReport.RiskLevel).toBe('Medium');
+
+        // Reports are sorted worst HealthScore first
+        expect(reports[0].HealthScore).toBeLessThanOrEqual(reports[1].HealthScore);
+        expect(reports[1].HealthScore).toBeLessThanOrEqual(reports[2].HealthScore);
+    });
 });
