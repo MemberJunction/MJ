@@ -10,8 +10,8 @@
  * NEVER the model's content (§3). Every assertion is a framework observable via verifyAgentRun
  * (terminal run + every AIAgentRunStep terminal with CompletedAt; Sub-Agent steps recurse into their
  * linked child runs; Prompt steps → AIPromptRun, Action/Tool steps → Action Execution Log) plus the
- * conversation/artifact plumbing. A missing or non-Active shipped agent is SKIPPED cleanly (informative,
- * not a failure) — mirrors agent-runner AR1.
+ * conversation/artifact plumbing. A missing or non-Active shipped agent ends the check as SKIPPED
+ * (recorded as a skip, not a pass or a failure).
  *
  * Self-cleaning: live runs are FK-purged and the SA4 conversation removed in Teardown.
  * ON by default (RequiresLiveModel); opt out with RUN_AGENT_TESTS=0.
@@ -20,7 +20,7 @@ import { RunView } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
-import { Assert, AssertEqual, verifyAgentRun } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, verifyAgentRun, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, AgentLiveFixture } from '@memberjunction/testing-integration';
 import {
@@ -36,14 +36,14 @@ function fixture(ctx: IntegrationCheckContext): AgentLiveFixture {
     return ctx.ShippedAgentsLiveFixture;
 }
 
-/** Resolve a shipped agent by name; returns null (skip-clean) when absent or non-Active. */
-async function resolveShipped(name: string, user: UserInfo): Promise<MJAIAgentEntityExtended | null> {
+/** Resolve a shipped agent by name; ends the running check as SKIPPED when absent or non-Active. */
+async function resolveShipped(name: string, user: UserInfo): Promise<MJAIAgentEntityExtended> {
     const r = await new RunView().RunView<MJAIAgentEntityExtended>({
         EntityName: 'MJ: AI Agents', ExtraFilter: `Name='${name}'`, ResultType: 'entity_object', BypassCache: true,
     }, user);
     const agent = r.Success && r.Results.length === 1 ? r.Results[0] : null;
-    if (!agent) { console.log(`      → SKIPPED: shipped agent '${name}' not found in metadata`); return null; }
-    if (agent.Status !== 'Active') { console.log(`      → SKIPPED: '${name}' is ${agent.Status} (not runnable)`); return null; }
+    if (!agent) SkipCheck(`shipped agent '${name}' not found in metadata`);
+    if (agent.Status !== 'Active') SkipCheck(`shipped agent '${name}' is ${agent.Status} (not runnable)`);
     return agent;
 }
 
@@ -74,7 +74,6 @@ export const ShippedAgentsLiveChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const sage = await resolveShipped('Sage', ctx.User);
-            if (!sage) { return; }
             const runId = await runAndVerify(ctx, sage, 'Reply with the single word: pong.');
             const steps = await GetRunSteps(runId, ctx.User, ctx.Provider);
             Assert(steps.length > 0, 'SA1: the run produced steps (the agent graph executed)');
@@ -86,7 +85,6 @@ export const ShippedAgentsLiveChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const qb = await resolveShipped('Query Builder', ctx.User);
-            if (!qb) { return; }
             // verifyAgentRun already recurses Sub-Agent steps into their linked child runs (parent↔child lineage).
             const runId = await runAndVerify(ctx, qb, 'How many users are in the system? Give the number only.');
             const steps = await GetRunSteps(runId, ctx.User, ctx.Provider);
@@ -101,7 +99,6 @@ export const ShippedAgentsLiveChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const research = await resolveShipped('Research Agent', ctx.User);
-            if (!research) { return; }
             // Narrowly bounded so the multi-sub-agent tree terminates deterministically (no live web dependency).
             const runId = await runAndVerify(
                 ctx, research,
@@ -118,7 +115,6 @@ export const ShippedAgentsLiveChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const sage = await resolveShipped('Sage', ctx.User);
-            if (!sage) { return; }
             const fx = fixture(ctx);
             // Fabricate the conversation + user turn, then run linked to it.
             const conversation = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', ctx.User);

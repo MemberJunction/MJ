@@ -1,5 +1,35 @@
 # @memberjunction/remote-browser-cdp
 
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- 9d6f675: A text conversation can open a Remote Browser its agents drive. The server must opt in with `realtime.conversationBrowser.enabled` (default false); `allowAnonymous` (default false), `maxPerUser` (default 2, counted per anonymous guest for guests), `maxAnonymousTotal` (default 4, across all guests), `idleMinutes` (default 15) and `allowedPrivateHosts` (default none) tune it. `<mj-conversation-chat-area>` takes `AllowRemoteBrowser` (default false); when set, a Browser button opens a drawer with a live view and URL bar, and the conversation's agents get the `browser_*` tools (not AchieveGoal), including the new `browser_Inspect` (fields `f1…`, buttons and links `a1…`) and `browser_Fill`. The browser belongs to the conversation: it ends when the drawer closes, the conversation changes, the chat area is destroyed (new `EndRemoteBrowserSession` mutation), it goes unused for `idleMinutes` (used means an agent or the user acts on it, or its open drawer polls for a snapshot), or the server shuts down gracefully, and only its owner can drive or end it. A conversation browser refuses loopback, link-local and private-network hostnames (private IPv4 and IPv6 ranges, `localhost`, names under `.local`, `.localdomain`, `.internal`, `.intranet`, `.lan`, `.corp`, `.home`, `.home.arpa`, `.private` and `.svc`, and the Docker, Kubernetes and cloud-metadata names), including where a main-frame redirect lands and in popups; this is a best-effort hostname check (names that resolve to private addresses, WebSockets, service-worker fetches, iframes that redirect to a private host, redirects of the page's own requests and the redirect request itself get through), so run browsers under network egress rules for real isolation. Every remote browser now opens only http(s) pages, and refuses a click, Enter or Space that would activate a control labelled to submit, pay, place an order, confirm a payment, transfer, delete or sign in. Adapters gain `EvaluateInPage` (default `null`) and `RestrictNavigation`.
+- Updated dependencies [1419ba7]
+- Updated dependencies [29b16ee]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [9d6f675]
+- Updated dependencies [3bace5a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [397ae9a]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/computer-use@6.2.0-edge.7
+  - @memberjunction/remote-browser-base@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes

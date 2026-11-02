@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 
 import { ExportDialogComponent } from './export-dialog.component';
 import { ExportService } from './export.service';
+import { OfficeConnectPanelComponent } from './office-connect-panel.component';
 
 @NgModule({
   declarations: [
@@ -11,10 +12,12 @@ import { ExportService } from './export.service';
   ],
   imports: [
     CommonModule,
-    FormsModule
+    FormsModule,
+    OfficeConnectPanelComponent
   ],
   exports: [
-    ExportDialogComponent
+    ExportDialogComponent,
+    OfficeConnectPanelComponent
   ],
   providers: [
     ExportService

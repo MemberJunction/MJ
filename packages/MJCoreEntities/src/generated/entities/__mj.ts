@@ -1,5 +1,5 @@
 import { BaseEntity, EntitySaveOptions, EntityDeleteOptions, CompositeKey, ValidationResult, ValidationErrorInfo, ValidationErrorType, Metadata, ProviderType, DatabaseProviderBase, RunView } from "@memberjunction/core";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { z } from "zod";
 
      
@@ -1885,6 +1885,23 @@ export const MJAIAgentRelationshipSchema = z.object({
         * * Display Name: Max Messages
         * * SQL Data Type: int
         * * Description: Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.`),
+    ChatHandlingOption: z.union([z.literal('Consult'), z.literal('Failed'), z.literal('Retry'), z.literal('Success')]).nullable().describe(`
+        * * Field Name: ChatHandlingOption
+        * * Display Name: Chat Handling Option
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Consult
+    *   * Failed
+    *   * Retry
+    *   * Success
+        * * Description: How the parent agent handles a Chat step returned by this sub-agent. Same values as AIAgent.ChatHandlingOption. NULL inherits the parent agent's ChatHandlingOption.`),
+    ConfigurationPresetID: z.string().nullable().describe(`
+        * * Field Name: ConfigurationPresetID
+        * * Display Name: Configuration Preset ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Configurations (vwAIAgentConfigurations.ID)
+        * * Description: Default configuration preset (an MJ: AI Agent Configurations row of the sub-agent) the parent uses when it calls this sub-agent. NULL runs the sub-agent under the parent's configuration. A per-call presetName overrides it.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -1893,6 +1910,10 @@ export const MJAIAgentRelationshipSchema = z.object({
         * * Field Name: SubAgent
         * * Display Name: Sub Agent
         * * SQL Data Type: nvarchar(255)`),
+    ConfigurationPreset: z.string().nullable().describe(`
+        * * Field Name: ConfigurationPreset
+        * * Display Name: Configuration Preset
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJAIAgentRelationshipEntityType = z.infer<typeof MJAIAgentRelationshipSchema>;
@@ -2354,7 +2375,7 @@ export const MJAIAgentRunStepSchema = z.object({
         * * Display Name: Step Number
         * * SQL Data Type: int
         * * Description: Sequential number of this step within the agent run, starting from 1`),
-    StepType: z.union([z.literal('Actions'), z.literal('Chat'), z.literal('Compaction'), z.literal('Decision'), z.literal('ForEach'), z.literal('Plan'), z.literal('Prompt'), z.literal('Skill'), z.literal('Sub-Agent'), z.literal('TaskGraph'), z.literal('Tool'), z.literal('Validation'), z.literal('While')]).describe(`
+    StepType: z.union([z.literal('Actions'), z.literal('Chat'), z.literal('Compaction'), z.literal('Decision'), z.literal('ForEach'), z.literal('Handoff'), z.literal('Plan'), z.literal('Prompt'), z.literal('Skill'), z.literal('Sub-Agent'), z.literal('TaskGraph'), z.literal('Tool'), z.literal('Validation'), z.literal('While')]).describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(50)
@@ -2366,6 +2387,7 @@ export const MJAIAgentRunStepSchema = z.object({
     *   * Compaction
     *   * Decision
     *   * ForEach
+    *   * Handoff
     *   * Plan
     *   * Prompt
     *   * Skill
@@ -2374,7 +2396,7 @@ export const MJAIAgentRunStepSchema = z.object({
     *   * Tool
     *   * Validation
     *   * While
-        * * Description: Type of execution step: Prompt, Actions, Sub-Agent, Decision, Chat, Validation, ForEach, While, Tool`),
+        * * Description: Type of execution step: Actions, Chat, Compaction, Decision, ForEach, Handoff, Plan, Prompt, Skill, Sub-Agent, TaskGraph, Tool, Validation, While.`),
     StepName: z.string().describe(`
         * * Field Name: StepName
         * * Display Name: Step Name
@@ -3497,7 +3519,7 @@ export const MJAIAgentSessionSchema = z.object({
         * * Display Name: Closed At
         * * SQL Data Type: datetimeoffset
         * * Description: When the session was closed (terminal). NULL while the session is Active or Idle.`),
-    CloseReason: z.union([z.literal('Error'), z.literal('Explicit'), z.literal('Janitor'), z.literal('Shutdown')]).nullable().describe(`
+    CloseReason: z.union([z.literal('Error'), z.literal('Explicit'), z.literal('Idle'), z.literal('Janitor'), z.literal('Shutdown'), z.literal('TimeLimit')]).nullable().describe(`
         * * Field Name: CloseReason
         * * Display Name: Close Reason
         * * SQL Data Type: nvarchar(20)
@@ -3505,9 +3527,11 @@ export const MJAIAgentSessionSchema = z.object({
     * * Possible Values 
     *   * Error
     *   * Explicit
+    *   * Idle
     *   * Janitor
     *   * Shutdown
-        * * Description: Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan or staleness sweep), Shutdown (graceful server shutdown), Error (session failure). NULL while the session is Active/Idle.`),
+    *   * TimeLimit
+        * * Description: Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan sweep; also every expiry close made before TimeLimit and Idle existed), Shutdown (graceful server shutdown), Error (session failure), TimeLimit (the session's authored deadline passed), Idle (no activity for longer than the idle threshold). NULL while Status is Active or Idle.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -4463,16 +4487,17 @@ if this limit is exceeded.`),
         * * Display Name: Default Effort Level
         * * SQL Data Type: int
         * * Description: Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.`),
-    ChatHandlingOption: z.union([z.literal('Failed'), z.literal('Retry'), z.literal('Success')]).nullable().describe(`
+    ChatHandlingOption: z.union([z.literal('Consult'), z.literal('Failed'), z.literal('Retry'), z.literal('Success')]).nullable().describe(`
         * * Field Name: ChatHandlingOption
         * * Display Name: Chat Handling Option
         * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
+    *   * Consult
     *   * Failed
     *   * Retry
     *   * Success
-        * * Description: Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.`),
+        * * Description: Controls how Chat next steps are handled. NULL (default): Chat propagates to the caller. Success, Failed or Retry: the Chat is remapped to that step. Consult: when a sub-agent of this agent returns Chat, this agent answers it itself (or asks its own caller) instead of ending its run; this agent's own Chat still goes to its caller. AIAgentRelationship.ChatHandlingOption overrides this per sub-agent.`),
     DefaultArtifactTypeID: z.string().nullable().describe(`
         * * Field Name: DefaultArtifactTypeID
         * * Display Name: Default Artifact Type
@@ -4770,6 +4795,11 @@ if this limit is exceeded.`),
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When native tool calling is in effect for a run, whether this agent's Actions are declared as native tools (1, default) or withheld so the agent runs on the envelope path with the prose action catalog (0). Set 0 for coordinator agents whose prompt forbids doing work themselves. Controls supply only: capability and preference on the model and prompt still decide whether declared tools are used.`),
+    MaxSubAgentConsultRounds: z.number().nullable().describe(`
+        * * Field Name: MaxSubAgentConsultRounds
+        * * Display Name: Max Sub Agent Consult Rounds
+        * * SQL Data Type: int
+        * * Description: Maximum number of Consult rounds this agent answers for a sub-agent before that sub-agent's question propagates to this agent's caller. NULL uses the framework default (3).`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -11549,6 +11579,181 @@ export const MJAuthorizationSchema = z.object({
 });
 
 export type MJAuthorizationEntityType = z.infer<typeof MJAuthorizationSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Brand Kit Assets
+ */
+export const MJBrandKitAssetSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    BrandKitID: z.string().describe(`
+        * * Field Name: BrandKitID
+        * * Display Name: Brand Kit ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Brand Kits (vwBrandKits.ID)
+        * * Description: The brand kit this file belongs to.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name of the asset.`),
+    AssetType: z.union([z.literal('Font'), z.literal('Image'), z.literal('Logo'), z.literal('LogoMark'), z.literal('Music'), z.literal('Other'), z.literal('Screenshot'), z.literal('SoundEffect'), z.literal('Video')]).describe(`
+        * * Field Name: AssetType
+        * * Display Name: Asset Type
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Font
+    *   * Image
+    *   * Logo
+    *   * LogoMark
+    *   * Music
+    *   * Other
+    *   * Screenshot
+    *   * SoundEffect
+    *   * Video
+        * * Description: Logo, LogoMark, Font, Image, Screenshot, Video, Music, SoundEffect or Other.`),
+    FileID: z.string().describe(`
+        * * Field Name: FileID
+        * * Display Name: File ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+        * * Description: The stored file (MJ: Files).`),
+    Usage: z.string().nullable().describe(`
+        * * Field Name: Usage
+        * * Display Name: Usage
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: When and how to use the asset.`),
+    IsPrimary: z.boolean().describe(`
+        * * Field Name: IsPrimary
+        * * Display Name: Is Primary
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: The main asset of its type, for example the primary logo.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Order within the kit; lower first.`),
+    LicenseNotes: z.string().nullable().describe(`
+        * * Field Name: LicenseNotes
+        * * Display Name: License Notes
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Who may use the file, and where (fonts, music, stock imagery).`),
+    IsGenerationReference: z.boolean().describe(`
+        * * Field Name: IsGenerationReference
+        * * Display Name: Is Generation Reference
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When set, the file may be sent to image or video generation models as a style or subject reference. Allowed only for Image, Screenshot, Logo, LogoMark and Video assets.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    BrandKit: z.string().describe(`
+        * * Field Name: BrandKit
+        * * Display Name: Brand Kit
+        * * SQL Data Type: nvarchar(255)`),
+    File: z.string().describe(`
+        * * Field Name: File
+        * * Display Name: File
+        * * SQL Data Type: nvarchar(500)`),
+});
+
+export type MJBrandKitAssetEntityType = z.infer<typeof MJBrandKitAssetSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Brand Kits
+ */
+export const MJBrandKitSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name of the brand kit.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What the kit is for and when to use it.`),
+    CompanyID: z.string().nullable().describe(`
+        * * Field Name: CompanyID
+        * * Display Name: Company ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Companies (vwCompanies.ID)
+        * * Description: The company this kit belongs to. NULL means org-wide: available to all companies.`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Is Default
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: The kit used when a caller names none. At most one default per CompanyID scope (NULL is its own scope), enforced on save by the server entity.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Active kits are offered to users and generators; Inactive kits are kept but hidden.`),
+    Style: z.any().nullable().describe(`
+        * * Field Name: Style
+        * * Display Name: Style
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJBrandKitEntity_IBrandStyle
+        * * Description: JSON (IBrandStyle): palette, typography, imagery style, keep and avoid lists, and an optional Motion section.`),
+    Voice: z.any().nullable().describe(`
+        * * Field Name: Voice
+        * * Display Name: Voice
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJBrandKitEntity_IBrandVoice
+        * * Description: JSON (IBrandVoice): text-to-speech provider, voice ID, settings and pronunciation notes.`),
+    GenerationPolicy: z.any().nullable().describe(`
+        * * Field Name: GenerationPolicy
+        * * Display Name: Generation Policy
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJBrandKitEntity_IBrandGenerationPolicy
+        * * Description: JSON (IBrandGenerationPolicy): whether generated images and video may be used, a style prompt, subjects to avoid, whether generated people are allowed (default: not allowed), and an optional per-run generation spend cap. NULL applies the defaults.`),
+    NeverInvent: z.any().nullable().describe(`
+        * * Field Name: NeverInvent
+        * * Display Name: Never Invent
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJBrandKitEntity_BrandNeverInventItem>
+        * * Description: JSON array of strings: facts about the brand a model must never fabricate, for example product screens, logos, metrics or customer names.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Company: z.string().nullable().describe(`
+        * * Field Name: Company
+        * * Display Name: Company
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJBrandKitEntityType = z.infer<typeof MJBrandKitSchema>;
 
 /**
  * zod schema definition for the entity MJ: Calendar Event Links
@@ -19291,6 +19496,12 @@ export const MJEntitySchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, field-level (column-level) security is enforced for this entity and every enforcement point consults EntityFieldPermission rows. When 0 (the default), field-level security is off entirely and any existing permission rows are retained but inactive. Enabling snapshots the entity's current entity-level permissions into per-field rows, so turning it on changes no behavior until an administrator tightens a field; disabling preserves the rows so re-enabling does not lose the configuration.`),
+    AutoUpdateDisplayName: z.boolean().describe(`
+        * * Field Name: AutoUpdateDisplayName
+        * * Display Name: Auto Update Display Name
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1 (the default), CodeGen may auto-update this entity's DisplayName — currently via the optional EntityDisplayNames advanced-generation feature, which asks an LLM to expand opaque table-derived names (ACCT_STAT_CD) into readable ones (Account Status Codes). When 0, the DisplayName is locked and CodeGen will not change it, whatever any generator proposes. Mirrors EntityField.AutoUpdateDisplayName. Note this flag governs only AUTOMATIC updates: a user editing the DisplayName directly is unaffected either way.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -29048,6 +29259,27 @@ export const MJQuerySchema = z.object({
         * * Display Name: Approved Fingerprint
         * * SQL Data Type: nvarchar(100)
         * * Description: SHA-256 fingerprint of the definition that was approved: its SQL, dialect variants and parameter contract. The approval is current only while this matches the fingerprint of the current definition.`),
+    ExtractedSQLHash: z.string().nullable().describe(`
+        * * Field Name: ExtractedSQLHash
+        * * Display Name: Extracted SQL Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: Hash of the platform SQL and dialect the query's child rows (fields, parameters, entities, dependencies) were last extracted from. NULL means the query has never been extracted by the current extraction service. A value that differs from the current SQL's hash means the rows may be stale.`),
+    ExtractionStatus: z.union([z.literal('Error'), z.literal('OK'), z.literal('Skipped'), z.literal('Warning')]).nullable().describe(`
+        * * Field Name: ExtractionStatus
+        * * Display Name: Extraction Status
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Error
+    *   * OK
+    *   * Skipped
+    *   * Warning
+        * * Description: Outcome of the last extraction run. "OK" means all facts were extracted. "Warning" means extraction succeeded with findings (see ExtractionMessage). "Error" means the database server could not describe the query, so existing rows were kept. "Skipped" means the facts could not be checked, for example for queries on an external data source. NULL means never extracted.`),
+    ExtractionMessage: z.string().nullable().describe(`
+        * * Field Name: ExtractionMessage
+        * * Display Name: Extraction Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Diagnostics from the last extraction run: validation findings, authored parameters no longer present in the SQL, describe errors, and output drift on queries with role-based permissions.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category Name
@@ -29263,7 +29495,7 @@ export const MJQueryEntitySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    DetectionMethod: z.union([z.literal('AI'), z.literal('Manual')]).describe(`
+    DetectionMethod: z.union([z.literal('AI'), z.literal('Manual'), z.literal('Parser')]).describe(`
         * * Field Name: DetectionMethod
         * * Display Name: Detection Method
         * * SQL Data Type: nvarchar(50)
@@ -29272,7 +29504,8 @@ export const MJQueryEntitySchema = z.object({
     * * Possible Values 
     *   * AI
     *   * Manual
-        * * Description: Indicates how this entity-query relationship was identified. "AI" means the QueryEntityServer used LLM analysis to parse the SQL/template and identify which MemberJunction entities are referenced (by analyzing table names, joins, and query structure). "Manual" means a user explicitly marked this entity as being used by the query. AI detection helps maintain accurate metadata automatically as queries evolve.`),
+    *   * Parser
+        * * Description: Who wrote this entity link. "Parser" means MJ's structural analysis of the query found a read of the entity's base view, base table or an alternate base view. "Manual" means a user authored the link. "AI" marks links written by the earlier LLM-based extraction.`),
     AutoDetectConfidenceScore: z.number().nullable().describe(`
         * * Field Name: AutoDetectConfidenceScore
         * * Display Name: Auto Detect Confidence Score
@@ -29379,7 +29612,7 @@ export const MJQueryFieldSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    DetectionMethod: z.union([z.literal('AI'), z.literal('Manual')]).describe(`
+    DetectionMethod: z.union([z.literal('AI'), z.literal('Database'), z.literal('Manual'), z.literal('Parser')]).describe(`
         * * Field Name: DetectionMethod
         * * Display Name: Detection Method
         * * SQL Data Type: nvarchar(50)
@@ -29387,13 +29620,31 @@ export const MJQueryFieldSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * AI
+    *   * Database
     *   * Manual
-        * * Description: Indicates how this field was identified in the query output. "AI" means the QueryEntityServer used LLM analysis to parse the SELECT clause and determine field names, types, and their source entities/columns. This includes handling aliased columns, computed expressions, aggregations, and CASE statements. "Manual" means a user explicitly defined this output field. AI detection ensures the field list stays synchronized with query changes.`),
+    *   * Parser
+        * * Description: Who wrote this field row. "Database" means its facts (name, order, types, nullability, source) came from the database server describing the query output. "Parser" means they came from MJ's analysis of the query template and structure. "Manual" means a user authored the row. "AI" means an LLM wrote its description; an LLM never sets types or sources.`),
     AutoDetectConfidenceScore: z.number().nullable().describe(`
         * * Field Name: AutoDetectConfidenceScore
         * * Display Name: Auto Detect Confidence Score
         * * SQL Data Type: decimal(3, 2)
         * * Description: Confidence score (0.00-1.00) indicating how certain the AI was about this field detection. Only populated when DetectionMethod="AI". Factors include: clarity of the SELECT clause, complexity of any expressions or transformations, confidence in type inference, and ability to trace back to source entity/column. Complex computed fields or ambiguous aliases result in lower scores. This helps identify fields that may need manual verification.`),
+    SourceEntityFieldID: z.string().nullable().describe(`
+        * * Field Name: SourceEntityFieldID
+        * * Display Name: Source Entity Field ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Fields (vwEntityFields.ID)
+        * * Description: The MJ Entity Field this output column passes through unchanged, resolved by extraction from the source the database server reports for the column (schema, view, column) mapped through entity metadata. NULL when the column is computed, comes from an object that backs no entity, or the link was cleared because the entity field was deleted.`),
+    IsNullable: z.boolean().nullable().describe(`
+        * * Field Name: IsNullable
+        * * Display Name: Is Nullable
+        * * SQL Data Type: bit
+        * * Description: Whether the database server reports that this output column can be NULL. NULL means unknown, for example on platforms whose describe result does not report nullability.`),
+    SourceObjectName: z.string().nullable().describe(`
+        * * Field Name: SourceObjectName
+        * * Display Name: Source Object Name
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The source of this output column as the database server reported it (schema.object.column), recorded when the source is a table or view that backs no MJ entity. NULL when the column maps to an entity field (see SourceEntityFieldID) or has no direct source.`),
     Query: z.string().describe(`
         * * Field Name: Query
         * * Display Name: Query
@@ -29401,6 +29652,10 @@ export const MJQueryFieldSchema = z.object({
     SourceEntity: z.string().nullable().describe(`
         * * Field Name: SourceEntity
         * * Display Name: Source Entity
+        * * SQL Data Type: nvarchar(255)`),
+    SourceEntityField: z.string().nullable().describe(`
+        * * Field Name: SourceEntityField
+        * * Display Name: Source Entity Field
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -29463,7 +29718,7 @@ export const MJQueryParameterSchema = z.object({
         * * Display Name: Validation Filters
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of Nunjucks filter definitions that validate and transform the parameter value. Each filter is an object with "name" and optional "args" properties. Filters are applied in order and can include: validation (required, email, min, max), transformation (trim, upper, lower), SQL safety (sqlsafe, sqljoin), and type conversion (number, date). Example: [{"name":"required"},{"name":"email"},{"name":"sqlsafe"}]. The filter chain ensures type safety and prevents SQL injection.`),
-    DetectionMethod: z.union([z.literal('AI'), z.literal('Manual')]).describe(`
+    DetectionMethod: z.union([z.literal('AI'), z.literal('Manual'), z.literal('Parser')]).describe(`
         * * Field Name: DetectionMethod
         * * Display Name: Detection Method
         * * SQL Data Type: nvarchar(50)
@@ -29472,7 +29727,8 @@ export const MJQueryParameterSchema = z.object({
     * * Possible Values 
     *   * AI
     *   * Manual
-        * * Description: Indicates how this parameter was identified and added to the system. "AI" means it was automatically detected by LLM analysis of the query template, including extraction of parameter name, type inference from filters, and generation of description. "Manual" means it was explicitly defined by a user. This helps track which parameters might need human review and provides transparency about the source of metadata.`),
+    *   * Parser
+        * * Description: Who wrote this parameter row. "Parser" means MJ's analysis of the query template found the parameter (its name, inferred type, whether it is required and its default). "Manual" means a user authored the row; its type, required flag, default, sample, validation filters and description are never overwritten by extraction, and it is kept (and flagged on the query) when the SQL no longer uses it. "AI" marks rows written by the earlier LLM-based extraction.`),
     AutoDetectConfidenceScore: z.number().nullable().describe(`
         * * Field Name: AutoDetectConfidenceScore
         * * Display Name: Auto Detect Confidence Score
@@ -39298,6 +39554,121 @@ export const MJVersionLabelSchema = z.object({
 export type MJVersionLabelEntityType = z.infer<typeof MJVersionLabelSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Video Archetypes
+ */
+export const MJVideoArchetypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Archetype name, unique within its CompanyID scope.`),
+    Description: z.string().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: What the archetype is for; the Director reads it to pick one.`),
+    CompanyID: z.string().nullable().describe(`
+        * * Field Name: CompanyID
+        * * Display Name: Company ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Companies (vwCompanies.ID)
+        * * Description: The company that owns this archetype. NULL means shipped or org-wide: available to all companies.`),
+    Category: z.union([z.literal('Announcement'), z.literal('Briefing'), z.literal('DataStory'), z.literal('Explainer'), z.literal('Product'), z.literal('Social'), z.literal('Tutorial')]).describe(`
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Announcement
+    *   * Briefing
+    *   * DataStory
+    *   * Explainer
+    *   * Product
+    *   * Social
+    *   * Tutorial
+        * * Description: Explainer, Product, DataStory, Social, Tutorial, Announcement or Briefing.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Active archetypes are offered; Inactive are hidden.`),
+    DefaultDurationSeconds: z.number().describe(`
+        * * Field Name: DefaultDurationSeconds
+        * * Display Name: Default Duration Seconds
+        * * SQL Data Type: int
+        * * Description: Default film length, in seconds.`),
+    MinDurationSeconds: z.number().describe(`
+        * * Field Name: MinDurationSeconds
+        * * Display Name: Min Duration Seconds
+        * * SQL Data Type: int
+        * * Description: Shortest film length, in seconds.`),
+    MaxDurationSeconds: z.number().describe(`
+        * * Field Name: MaxDurationSeconds
+        * * Display Name: Max Duration Seconds
+        * * SQL Data Type: int
+        * * Description: Longest film length, in seconds.`),
+    DefaultFormats: z.string().describe(`
+        * * Field Name: DefaultFormats
+        * * Display Name: Default Formats
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Comma-separated default formats: any of 16:9, 9:16, 1:1.`),
+    BeatTemplate: z.any().describe(`
+        * * Field Name: BeatTemplate
+        * * Display Name: Beat Template
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJVideoArchetypeEntity_VideoBeatTemplate>
+        * * Description: JSON array (VideoBeatTemplate[]): the beat slots a film of this archetype follows, with per-beat duration bounds.`),
+    Pacing: z.any().nullable().describe(`
+        * * Field Name: Pacing
+        * * Display Name: Pacing
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJVideoArchetypeEntity_VideoPacing
+        * * Description: JSON (VideoPacing): cut cadence and hold rules.`),
+    Guidance: z.string().nullable().describe(`
+        * * Field Name: Guidance
+        * * Display Name: Guidance
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Markdown guidance for the Director and Storyboard.`),
+    DefaultInteractionMode: z.union([z.literal('ApproveStoryboard'), z.literal('ApproveStoryboardAndRoughCut'), z.literal('Autonomous')]).describe(`
+        * * Field Name: DefaultInteractionMode
+        * * Display Name: Default Interaction Mode
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: Autonomous
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ApproveStoryboard
+    *   * ApproveStoryboardAndRoughCut
+    *   * Autonomous
+        * * Description: Default approval mode: Autonomous, ApproveStoryboard or ApproveStoryboardAndRoughCut.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Company: z.string().nullable().describe(`
+        * * Field Name: Company
+        * * Display Name: Company
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJVideoArchetypeEntityType = z.infer<typeof MJVideoArchetypeSchema>;
+
+/**
  * zod schema definition for the entity MJ: View Types
  */
 export const MJViewTypeSchema = z.object({
@@ -41470,7 +41841,7 @@ export class MJAIAgentCoAgentEntity extends BaseEntity<MJAIAgentCoAgentEntityTyp
     */
     public ValidateTargetAgentNotEqualToCoAgent(result: ValidationResult) {
     	// If TargetAgentID is specified, it must not be the same as CoAgentID
-    	if (this.TargetAgentID != null && this.CoAgentID === this.TargetAgentID) {
+    	if (this.TargetAgentID != null && UUIDsEqual(this.CoAgentID, this.TargetAgentID)) {
     		result.Errors.push(new ValidationErrorInfo(
     			"TargetAgentID",
     			"The Target Agent cannot be the same as the Co-Agent.",
@@ -41693,6 +42064,41 @@ export class MJAIAgentConfigurationEntity extends BaseEntity<MJAIAgentConfigurat
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: AI Agent Configurations - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof MJAIAgentConfigurationEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
     }
 
     /**
@@ -45306,6 +45712,39 @@ export class MJAIAgentRelationshipEntity extends BaseEntity<MJAIAgentRelationshi
     }
 
     /**
+    * * Field Name: ChatHandlingOption
+    * * Display Name: Chat Handling Option
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Consult
+    *   * Failed
+    *   * Retry
+    *   * Success
+    * * Description: How the parent agent handles a Chat step returned by this sub-agent. Same values as AIAgent.ChatHandlingOption. NULL inherits the parent agent's ChatHandlingOption.
+    */
+    get ChatHandlingOption(): 'Consult' | 'Failed' | 'Retry' | 'Success' | null {
+        return this.Get('ChatHandlingOption');
+    }
+    set ChatHandlingOption(value: 'Consult' | 'Failed' | 'Retry' | 'Success' | null) {
+        this.Set('ChatHandlingOption', value);
+    }
+
+    /**
+    * * Field Name: ConfigurationPresetID
+    * * Display Name: Configuration Preset ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Configurations (vwAIAgentConfigurations.ID)
+    * * Description: Default configuration preset (an MJ: AI Agent Configurations row of the sub-agent) the parent uses when it calls this sub-agent. NULL runs the sub-agent under the parent's configuration. A per-call presetName overrides it.
+    */
+    get ConfigurationPresetID(): string | null {
+        return this.Get('ConfigurationPresetID');
+    }
+    set ConfigurationPresetID(value: string | null) {
+        this.Set('ConfigurationPresetID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -45321,6 +45760,15 @@ export class MJAIAgentRelationshipEntity extends BaseEntity<MJAIAgentRelationshi
     */
     get SubAgent(): string | null {
         return this.Get('SubAgent');
+    }
+
+    /**
+    * * Field Name: ConfigurationPreset
+    * * Display Name: Configuration Preset
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ConfigurationPreset(): string | null {
+        return this.Get('ConfigurationPreset');
     }
 }
 
@@ -46922,6 +47370,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     *   * Compaction
     *   * Decision
     *   * ForEach
+    *   * Handoff
     *   * Plan
     *   * Prompt
     *   * Skill
@@ -46930,12 +47379,12 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     *   * Tool
     *   * Validation
     *   * While
-    * * Description: Type of execution step: Prompt, Actions, Sub-Agent, Decision, Chat, Validation, ForEach, While, Tool
+    * * Description: Type of execution step: Actions, Chat, Compaction, Decision, ForEach, Handoff, Plan, Prompt, Skill, Sub-Agent, TaskGraph, Tool, Validation, While.
     */
-    get StepType(): 'Actions' | 'Chat' | 'Compaction' | 'Decision' | 'ForEach' | 'Plan' | 'Prompt' | 'Skill' | 'Sub-Agent' | 'TaskGraph' | 'Tool' | 'Validation' | 'While' {
+    get StepType(): 'Actions' | 'Chat' | 'Compaction' | 'Decision' | 'ForEach' | 'Handoff' | 'Plan' | 'Prompt' | 'Skill' | 'Sub-Agent' | 'TaskGraph' | 'Tool' | 'Validation' | 'While' {
         return this.Get('StepType');
     }
-    set StepType(value: 'Actions' | 'Chat' | 'Compaction' | 'Decision' | 'ForEach' | 'Plan' | 'Prompt' | 'Skill' | 'Sub-Agent' | 'TaskGraph' | 'Tool' | 'Validation' | 'While') {
+    set StepType(value: 'Actions' | 'Chat' | 'Compaction' | 'Decision' | 'ForEach' | 'Handoff' | 'Plan' | 'Prompt' | 'Skill' | 'Sub-Agent' | 'TaskGraph' | 'Tool' | 'Validation' | 'While') {
         this.Set('StepType', value);
     }
 
@@ -49875,14 +50324,16 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     * * Possible Values 
     *   * Error
     *   * Explicit
+    *   * Idle
     *   * Janitor
     *   * Shutdown
-    * * Description: Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan or staleness sweep), Shutdown (graceful server shutdown), Error (session failure). NULL while the session is Active/Idle.
+    *   * TimeLimit
+    * * Description: Why the session was closed: Explicit (user hang-up / deliberate API close), Janitor (orphan sweep; also every expiry close made before TimeLimit and Idle existed), Shutdown (graceful server shutdown), Error (session failure), TimeLimit (the session's authored deadline passed), Idle (no activity for longer than the idle threshold). NULL while Status is Active or Idle.
     */
-    get CloseReason(): 'Error' | 'Explicit' | 'Janitor' | 'Shutdown' | null {
+    get CloseReason(): 'Error' | 'Explicit' | 'Idle' | 'Janitor' | 'Shutdown' | 'TimeLimit' | null {
         return this.Get('CloseReason');
     }
-    set CloseReason(value: 'Error' | 'Explicit' | 'Janitor' | 'Shutdown' | null) {
+    set CloseReason(value: 'Error' | 'Explicit' | 'Idle' | 'Janitor' | 'Shutdown' | 'TimeLimit' | null) {
         this.Set('CloseReason', value);
     }
 
@@ -50257,7 +50708,7 @@ export class MJAIAgentStepPathEntity extends BaseEntity<MJAIAgentStepPathEntityT
     * @method
     */
     public ValidateOriginStepIDAgainstDestinationStepIDDifferent(result: ValidationResult) {
-    	if (this.OriginStepID === this.DestinationStepID) {
+    	if (UUIDsEqual(this.OriginStepID, this.DestinationStepID)) {
     		result.Errors.push(new ValidationErrorInfo("OriginStepID", "The origin step cannot be the same as the destination step.", this.OriginStepID, ValidationErrorType.Failure));
     	}
     }
@@ -52752,15 +53203,16 @@ if this limit is exceeded.
     * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
+    *   * Consult
     *   * Failed
     *   * Retry
     *   * Success
-    * * Description: Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.
+    * * Description: Controls how Chat next steps are handled. NULL (default): Chat propagates to the caller. Success, Failed or Retry: the Chat is remapped to that step. Consult: when a sub-agent of this agent returns Chat, this agent answers it itself (or asks its own caller) instead of ending its run; this agent's own Chat still goes to its caller. AIAgentRelationship.ChatHandlingOption overrides this per sub-agent.
     */
-    get ChatHandlingOption(): 'Failed' | 'Retry' | 'Success' | null {
+    get ChatHandlingOption(): 'Consult' | 'Failed' | 'Retry' | 'Success' | null {
         return this.Get('ChatHandlingOption');
     }
-    set ChatHandlingOption(value: 'Failed' | 'Retry' | 'Success' | null) {
+    set ChatHandlingOption(value: 'Consult' | 'Failed' | 'Retry' | 'Success' | null) {
         this.Set('ChatHandlingOption', value);
     }
 
@@ -53411,6 +53863,19 @@ if this limit is exceeded.
     }
     set DeclareActionsAsNativeTools(value: boolean) {
         this.Set('DeclareActionsAsNativeTools', value);
+    }
+
+    /**
+    * * Field Name: MaxSubAgentConsultRounds
+    * * Display Name: Max Sub Agent Consult Rounds
+    * * SQL Data Type: int
+    * * Description: Maximum number of Consult rounds this agent answers for a sub-agent before that sub-agent's question propagates to this agent's caller. NULL uses the framework default (3).
+    */
+    get MaxSubAgentConsultRounds(): number | null {
+        return this.Get('MaxSubAgentConsultRounds');
+    }
+    set MaxSubAgentConsultRounds(value: number | null) {
+        this.Set('MaxSubAgentConsultRounds', value);
     }
 
     /**
@@ -56876,7 +57341,7 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
  *
  * 1. **Shared modality sections** (`MJAIModelTypeEntity_LLMConfigurationSettings`, `MJAIModelTypeEntity_RealtimeConfigurationSettings`,
  *    `MJAIModelTypeEntity_VisionConfigurationSettings`, `MJAIModelTypeEntity_AudioConfigurationSettings`, `MJAIModelTypeEntity_DecisionConfigurationSettings`,
- *    `MJAIModelTypeEntity_PrivacyConfigurationSettings`) —
+ *    `MJAIModelTypeEntity_PrivacyConfigurationSettings`, `MJAIModelTypeEntity_EmbeddingConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelTypeEntity_IAIModelConfiguration`, `MJAIModelTypeEntity_IAIPromptConfiguration`,
@@ -57023,11 +57488,22 @@ export type MJAIModelTypeEntity_RealtimeTurnCoverage = 'audioActivityOnly' | 'au
 export interface MJAIModelTypeEntity_RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: MJAIModelTypeEntity_RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored without a mapping.
+     * OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an end-of-turn
+     * silence ladder. Gemini: end-of-speech sensitivity. ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
-    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    /**
+     * Server-VAD activation threshold (0–1); ignored without a mapping. Approximate on Gemini (two levels:
+     * < 0.5 → high start sensitivity, >= 0.5 → low).
+     */
     Threshold?: number;
-    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    /**
+     * Server-VAD trailing-silence duration in ms; ignored without a mapping. Setting it (in any layer,
+     * including the model-vendor catalog) turns the eagerness ladder off for drivers without a native
+     * eagerness knob (xAI).
+     */
     SilenceDurationMs?: number;
     /**
      * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
@@ -57242,6 +57718,21 @@ export interface MJAIModelTypeEntity_PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface MJAIModelTypeEntity_EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -57282,6 +57773,8 @@ export interface MJAIModelTypeEntity_IAIModelConfiguration {
     Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: MJAIModelTypeEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: MJAIModelTypeEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -57304,6 +57797,8 @@ export interface MJAIModelTypeEntity_IAIPromptConfiguration {
     Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIModelTypeEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIModelTypeEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -57323,6 +57818,8 @@ export interface MJAIModelTypeEntity_IAIPromptModelConfiguration {
     Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIModelTypeEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIModelTypeEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -57541,7 +58038,7 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
  *
  * 1. **Shared modality sections** (`MJAIModelVendorEntity_LLMConfigurationSettings`, `MJAIModelVendorEntity_RealtimeConfigurationSettings`,
  *    `MJAIModelVendorEntity_VisionConfigurationSettings`, `MJAIModelVendorEntity_AudioConfigurationSettings`, `MJAIModelVendorEntity_DecisionConfigurationSettings`,
- *    `MJAIModelVendorEntity_PrivacyConfigurationSettings`) —
+ *    `MJAIModelVendorEntity_PrivacyConfigurationSettings`, `MJAIModelVendorEntity_EmbeddingConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelVendorEntity_IAIModelConfiguration`, `MJAIModelVendorEntity_IAIPromptConfiguration`,
@@ -57688,11 +58185,22 @@ export type MJAIModelVendorEntity_RealtimeTurnCoverage = 'audioActivityOnly' | '
 export interface MJAIModelVendorEntity_RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: MJAIModelVendorEntity_RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored without a mapping.
+     * OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an end-of-turn
+     * silence ladder. Gemini: end-of-speech sensitivity. ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
-    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    /**
+     * Server-VAD activation threshold (0–1); ignored without a mapping. Approximate on Gemini (two levels:
+     * < 0.5 → high start sensitivity, >= 0.5 → low).
+     */
     Threshold?: number;
-    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    /**
+     * Server-VAD trailing-silence duration in ms; ignored without a mapping. Setting it (in any layer,
+     * including the model-vendor catalog) turns the eagerness ladder off for drivers without a native
+     * eagerness knob (xAI).
+     */
     SilenceDurationMs?: number;
     /**
      * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
@@ -57907,6 +58415,21 @@ export interface MJAIModelVendorEntity_PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface MJAIModelVendorEntity_EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -57947,6 +58470,8 @@ export interface MJAIModelVendorEntity_IAIModelConfiguration {
     Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: MJAIModelVendorEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: MJAIModelVendorEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -57969,6 +58494,8 @@ export interface MJAIModelVendorEntity_IAIPromptConfiguration {
     Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIModelVendorEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIModelVendorEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -57988,6 +58515,8 @@ export interface MJAIModelVendorEntity_IAIPromptModelConfiguration {
     Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIModelVendorEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIModelVendorEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -58398,7 +58927,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
  *
  * 1. **Shared modality sections** (`MJAIModelEntity_LLMConfigurationSettings`, `MJAIModelEntity_RealtimeConfigurationSettings`,
  *    `MJAIModelEntity_VisionConfigurationSettings`, `MJAIModelEntity_AudioConfigurationSettings`, `MJAIModelEntity_DecisionConfigurationSettings`,
- *    `MJAIModelEntity_PrivacyConfigurationSettings`) —
+ *    `MJAIModelEntity_PrivacyConfigurationSettings`, `MJAIModelEntity_EmbeddingConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelEntity_IAIModelConfiguration`, `MJAIModelEntity_IAIPromptConfiguration`,
@@ -58545,11 +59074,22 @@ export type MJAIModelEntity_RealtimeTurnCoverage = 'audioActivityOnly' | 'audioA
 export interface MJAIModelEntity_RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: MJAIModelEntity_RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored without a mapping.
+     * OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an end-of-turn
+     * silence ladder. Gemini: end-of-speech sensitivity. ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
-    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    /**
+     * Server-VAD activation threshold (0–1); ignored without a mapping. Approximate on Gemini (two levels:
+     * < 0.5 → high start sensitivity, >= 0.5 → low).
+     */
     Threshold?: number;
-    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    /**
+     * Server-VAD trailing-silence duration in ms; ignored without a mapping. Setting it (in any layer,
+     * including the model-vendor catalog) turns the eagerness ladder off for drivers without a native
+     * eagerness knob (xAI).
+     */
     SilenceDurationMs?: number;
     /**
      * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
@@ -58764,6 +59304,21 @@ export interface MJAIModelEntity_PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface MJAIModelEntity_EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -58804,6 +59359,8 @@ export interface MJAIModelEntity_IAIModelConfiguration {
     Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: MJAIModelEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: MJAIModelEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -58826,6 +59383,8 @@ export interface MJAIModelEntity_IAIPromptConfiguration {
     Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIModelEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIModelEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -58845,6 +59404,8 @@ export interface MJAIModelEntity_IAIPromptModelConfiguration {
     Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIModelEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIModelEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -59978,7 +60539,7 @@ export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntit
  *
  * 1. **Shared modality sections** (`MJAIPromptModelEntity_LLMConfigurationSettings`, `MJAIPromptModelEntity_RealtimeConfigurationSettings`,
  *    `MJAIPromptModelEntity_VisionConfigurationSettings`, `MJAIPromptModelEntity_AudioConfigurationSettings`, `MJAIPromptModelEntity_DecisionConfigurationSettings`,
- *    `MJAIPromptModelEntity_PrivacyConfigurationSettings`) —
+ *    `MJAIPromptModelEntity_PrivacyConfigurationSettings`, `MJAIPromptModelEntity_EmbeddingConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIPromptModelEntity_IAIModelConfiguration`, `MJAIPromptModelEntity_IAIPromptConfiguration`,
@@ -60125,11 +60686,22 @@ export type MJAIPromptModelEntity_RealtimeTurnCoverage = 'audioActivityOnly' | '
 export interface MJAIPromptModelEntity_RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: MJAIPromptModelEntity_RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored without a mapping.
+     * OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an end-of-turn
+     * silence ladder. Gemini: end-of-speech sensitivity. ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
-    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    /**
+     * Server-VAD activation threshold (0–1); ignored without a mapping. Approximate on Gemini (two levels:
+     * < 0.5 → high start sensitivity, >= 0.5 → low).
+     */
     Threshold?: number;
-    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    /**
+     * Server-VAD trailing-silence duration in ms; ignored without a mapping. Setting it (in any layer,
+     * including the model-vendor catalog) turns the eagerness ladder off for drivers without a native
+     * eagerness knob (xAI).
+     */
     SilenceDurationMs?: number;
     /**
      * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
@@ -60344,6 +60916,21 @@ export interface MJAIPromptModelEntity_PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface MJAIPromptModelEntity_EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -60384,6 +60971,8 @@ export interface MJAIPromptModelEntity_IAIModelConfiguration {
     Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: MJAIPromptModelEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: MJAIPromptModelEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -60406,6 +60995,8 @@ export interface MJAIPromptModelEntity_IAIPromptConfiguration {
     Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIPromptModelEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIPromptModelEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -60425,6 +61016,8 @@ export interface MJAIPromptModelEntity_IAIPromptModelConfiguration {
     Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIPromptModelEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIPromptModelEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -62781,7 +63374,7 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
  *
  * 1. **Shared modality sections** (`MJAIPromptEntity_LLMConfigurationSettings`, `MJAIPromptEntity_RealtimeConfigurationSettings`,
  *    `MJAIPromptEntity_VisionConfigurationSettings`, `MJAIPromptEntity_AudioConfigurationSettings`, `MJAIPromptEntity_DecisionConfigurationSettings`,
- *    `MJAIPromptEntity_PrivacyConfigurationSettings`) —
+ *    `MJAIPromptEntity_PrivacyConfigurationSettings`, `MJAIPromptEntity_EmbeddingConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIPromptEntity_IAIModelConfiguration`, `MJAIPromptEntity_IAIPromptConfiguration`,
@@ -62928,11 +63521,22 @@ export type MJAIPromptEntity_RealtimeTurnCoverage = 'audioActivityOnly' | 'audio
 export interface MJAIPromptEntity_RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: MJAIPromptEntity_RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored without a mapping.
+     * OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an end-of-turn
+     * silence ladder. Gemini: end-of-speech sensitivity. ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
-    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    /**
+     * Server-VAD activation threshold (0–1); ignored without a mapping. Approximate on Gemini (two levels:
+     * < 0.5 → high start sensitivity, >= 0.5 → low).
+     */
     Threshold?: number;
-    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    /**
+     * Server-VAD trailing-silence duration in ms; ignored without a mapping. Setting it (in any layer,
+     * including the model-vendor catalog) turns the eagerness ladder off for drivers without a native
+     * eagerness knob (xAI).
+     */
     SilenceDurationMs?: number;
     /**
      * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
@@ -63147,6 +63751,21 @@ export interface MJAIPromptEntity_PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface MJAIPromptEntity_EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -63187,6 +63806,8 @@ export interface MJAIPromptEntity_IAIModelConfiguration {
     Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: MJAIPromptEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: MJAIPromptEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -63209,6 +63830,8 @@ export interface MJAIPromptEntity_IAIPromptConfiguration {
     Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIPromptEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIPromptEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -63228,6 +63851,8 @@ export interface MJAIPromptEntity_IAIPromptModelConfiguration {
     Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIPromptEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIPromptEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -63460,7 +64085,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     * @method
     */
     public ValidateResultSelectorPromptIDNotEqualID(result: ValidationResult) {
-    	if (this.ResultSelectorPromptID != null && this.ResultSelectorPromptID === this.ID) {
+    	if (this.ResultSelectorPromptID != null && UUIDsEqual(this.ResultSelectorPromptID, this.ID)) {
     		result.Errors.push(new ValidationErrorInfo("ResultSelectorPromptID", "ResultSelectorPromptID cannot be the same as the ID of this record.", this.ResultSelectorPromptID, ValidationErrorType.Failure));
     	}
     }
@@ -66168,7 +66793,7 @@ export class MJAIVendorTypeEntity extends BaseEntity<MJAIVendorTypeEntityType> {
  *
  * 1. **Shared modality sections** (`MJAIVendorEntity_LLMConfigurationSettings`, `MJAIVendorEntity_RealtimeConfigurationSettings`,
  *    `MJAIVendorEntity_VisionConfigurationSettings`, `MJAIVendorEntity_AudioConfigurationSettings`, `MJAIVendorEntity_DecisionConfigurationSettings`,
- *    `MJAIVendorEntity_PrivacyConfigurationSettings`) —
+ *    `MJAIVendorEntity_PrivacyConfigurationSettings`, `MJAIVendorEntity_EmbeddingConfigurationSettings`) —
  *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIVendorEntity_IAIModelConfiguration`, `MJAIVendorEntity_IAIPromptConfiguration`,
@@ -66315,11 +66940,22 @@ export type MJAIVendorEntity_RealtimeTurnCoverage = 'audioActivityOnly' | 'audio
 export interface MJAIVendorEntity_RealtimeTurnDetectionSettings {
     /** The normalized mode; absent = `'default'`. */
     Mode?: MJAIVendorEntity_RealtimeTurnDetectionMode;
-    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    /**
+     * The cross-driver patient (`low`) / normal (`auto`) / eager (`high`) turn-taking dial; ignored without a mapping.
+     * OpenAI and Eleven Realtime: semantic-VAD `eagerness`, applied only with `Mode: 'semanticVad'`. xAI: an end-of-turn
+     * silence ladder. Gemini: end-of-speech sensitivity. ElevenLabs Agents: turn eagerness.
+     */
     Eagerness?: 'low' | 'auto' | 'high';
-    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    /**
+     * Server-VAD activation threshold (0–1); ignored without a mapping. Approximate on Gemini (two levels:
+     * < 0.5 → high start sensitivity, >= 0.5 → low).
+     */
     Threshold?: number;
-    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    /**
+     * Server-VAD trailing-silence duration in ms; ignored without a mapping. Setting it (in any layer,
+     * including the model-vendor catalog) turns the eagerness ladder off for drivers without a native
+     * eagerness knob (xAI).
+     */
     SilenceDurationMs?: number;
     /**
      * What a turn's input may include. Declaring it keeps Gemini 3.8 Live's every-frame default (billed,
@@ -66534,6 +67170,21 @@ export interface MJAIVendorEntity_PrivacyConfigurationSettings {
 }
 
 /**
+ * Embedding knobs, read at call time by the embedding resolvers (`AIEngine.EmbedText`,
+ * `AIEmbeddingRunner`). Set them on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`).
+ * Asymmetric models such as EmbeddingGemma 2 or Gemini Embedding 2 are trained to read a different
+ * instruction prefix on a search query than on a stored document; the resolvers prepend the one that
+ * matches the call's `inputType`, so drivers and callers never hardcode model-specific strings.
+ * Providers with a native input-type parameter (Cohere) leave these unset.
+ */
+export interface MJAIVendorEntity_EmbeddingConfigurationSettings {
+    /** Prepended to a text embedded as a search query (`inputType: 'query'`), e.g. `'task: search result | query: '`. */
+    QueryPrefix?: string | null;
+    /** Prepended to a text embedded as a stored document (`inputType: 'document'`, the default), e.g. `'title: none | text: '`. */
+    DocumentPrefix?: string | null;
+}
+
+/**
  * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
  * model accepts, so an oversized request can be refused with a clear message before the call,
  * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
@@ -66574,6 +67225,8 @@ export interface MJAIVendorEntity_IAIModelConfiguration {
     Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
     /** Privacy posture of the model deployment. Honored at the catalog layers. */
     Privacy?: MJAIVendorEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Honored at the catalog layers. */
+    Embedding?: MJAIVendorEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -66596,6 +67249,8 @@ export interface MJAIVendorEntity_IAIPromptConfiguration {
     Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIVendorEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIVendorEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -66615,6 +67270,8 @@ export interface MJAIVendorEntity_IAIPromptModelConfiguration {
     Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
     /** Privacy posture. Reserved at this layer. */
     Privacy?: MJAIVendorEntity_PrivacyConfigurationSettings | null;
+    /** Embedding query/document prefixes. Reserved at this layer. */
+    Embedding?: MJAIVendorEntity_EmbeddingConfigurationSettings | null;
 }
 
 /**
@@ -74746,6 +75403,588 @@ export class MJAuthorizationEntity extends BaseEntity<MJAuthorizationEntityType>
     */
     get ParentIDChildCount(): number | null {
         return this.Get('ParentIDChildCount');
+    }
+}
+
+
+/**
+ * MJ: Brand Kit Assets - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: BrandKitAsset
+ * * Base View: vwBrandKitAssets
+ * * @description A file in a brand kit, with usage guidance, license notes, and whether generation models may receive it as a reference.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Brand Kit Assets')
+export class MJBrandKitAssetEntity extends BaseEntity<MJBrandKitAssetEntityType> {
+    /**
+    * Loads the MJ: Brand Kit Assets record from the database
+    * @param ID: string - primary key value to load the MJ: Brand Kit Assets record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJBrandKitAssetEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: BrandKitID
+    * * Display Name: Brand Kit ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Brand Kits (vwBrandKits.ID)
+    * * Description: The brand kit this file belongs to.
+    */
+    get BrandKitID(): string {
+        return this.Get('BrandKitID');
+    }
+    set BrandKitID(value: string) {
+        this.Set('BrandKitID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the asset.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: AssetType
+    * * Display Name: Asset Type
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Font
+    *   * Image
+    *   * Logo
+    *   * LogoMark
+    *   * Music
+    *   * Other
+    *   * Screenshot
+    *   * SoundEffect
+    *   * Video
+    * * Description: Logo, LogoMark, Font, Image, Screenshot, Video, Music, SoundEffect or Other.
+    */
+    get AssetType(): 'Font' | 'Image' | 'Logo' | 'LogoMark' | 'Music' | 'Other' | 'Screenshot' | 'SoundEffect' | 'Video' {
+        return this.Get('AssetType');
+    }
+    set AssetType(value: 'Font' | 'Image' | 'Logo' | 'LogoMark' | 'Music' | 'Other' | 'Screenshot' | 'SoundEffect' | 'Video') {
+        this.Set('AssetType', value);
+    }
+
+    /**
+    * * Field Name: FileID
+    * * Display Name: File ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    * * Description: The stored file (MJ: Files).
+    */
+    get FileID(): string {
+        return this.Get('FileID');
+    }
+    set FileID(value: string) {
+        this.Set('FileID', value);
+    }
+
+    /**
+    * * Field Name: Usage
+    * * Display Name: Usage
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: When and how to use the asset.
+    */
+    get Usage(): string | null {
+        return this.Get('Usage');
+    }
+    set Usage(value: string | null) {
+        this.Set('Usage', value);
+    }
+
+    /**
+    * * Field Name: IsPrimary
+    * * Display Name: Is Primary
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: The main asset of its type, for example the primary logo.
+    */
+    get IsPrimary(): boolean {
+        return this.Get('IsPrimary');
+    }
+    set IsPrimary(value: boolean) {
+        this.Set('IsPrimary', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Order within the kit; lower first.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: LicenseNotes
+    * * Display Name: License Notes
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Who may use the file, and where (fonts, music, stock imagery).
+    */
+    get LicenseNotes(): string | null {
+        return this.Get('LicenseNotes');
+    }
+    set LicenseNotes(value: string | null) {
+        this.Set('LicenseNotes', value);
+    }
+
+    /**
+    * * Field Name: IsGenerationReference
+    * * Display Name: Is Generation Reference
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When set, the file may be sent to image or video generation models as a style or subject reference. Allowed only for Image, Screenshot, Logo, LogoMark and Video assets.
+    */
+    get IsGenerationReference(): boolean {
+        return this.Get('IsGenerationReference');
+    }
+    set IsGenerationReference(value: boolean) {
+        this.Set('IsGenerationReference', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: BrandKit
+    * * Display Name: Brand Kit
+    * * SQL Data Type: nvarchar(255)
+    */
+    get BrandKit(): string {
+        return this.Get('BrandKit');
+    }
+
+    /**
+    * * Field Name: File
+    * * Display Name: File
+    * * SQL Data Type: nvarchar(500)
+    */
+    get File(): string {
+        return this.Get('File');
+    }
+}
+
+
+/**
+ * JSON shapes for the `MJ: Brand Kits` columns that store structured brand tokens,
+ * voice settings, generation policy, and guardrail rules.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Named brand color token in a brand kit palette. */
+export interface MJBrandKitEntity_IBrandColor {
+    /** Token name identifying this color in the palette (for example Primary, Accent, Surface). */
+    Name: string;
+    /** CSS hex color value, for example #0076B6. */
+    Value: string;
+    /** Optional notes describing when and how to apply this color. */
+    Usage?: string;
+}
+
+/** Typography assignment for a text role in a brand kit. */
+export interface MJBrandKitEntity_IBrandTypeface {
+    /** Semantic text role (for example Headline, Body, Caption, Monospace). */
+    Role: string;
+    /** Font family name to apply for this role. */
+    FontFamily: string;
+    /** Optional `MJ: Brand Kit Assets` ID of a Font asset providing the font file. */
+    FontAssetID?: string;
+    /** Optional numeric font weight (for example 400, 600, 700). */
+    Weight?: number;
+    /** Optional typography usage notes or sizing guidance. */
+    Notes?: string;
+}
+
+/** Motion timing rule for a specific class of animated object. */
+export interface MJBrandKitEntity_IBrandMotionRule {
+    /** Free text naming what moves (for example Headline, Panel, Camera). */
+    ObjectClass: string;
+    /** CSS or cubic-bezier easing curve to apply to this object class. */
+    Easing: string;
+    /** Optional standard transition duration in milliseconds. */
+    DurationMs?: number;
+    /** Optional motion guidance notes for this object class. */
+    Notes?: string;
+}
+
+/** Motion rules and guidance used by motion and video generators. */
+export interface MJBrandKitEntity_IBrandMotion {
+    /** Per-object-class motion timing and easing rules. */
+    Rules?: MJBrandKitEntity_IBrandMotionRule[];
+    /** General motion direction and choreography notes. */
+    Notes?: string;
+}
+
+/** BrandKit.Style — visual and motion style tokens for a brand kit. */
+export interface MJBrandKitEntity_IBrandStyle {
+    /** Brand color palette tokens. */
+    Palette: MJBrandKitEntity_IBrandColor[];
+    /** Brand typography role assignments. */
+    Typography: MJBrandKitEntity_IBrandTypeface[];
+    /** Optional guidance describing the brand's imagery and illustration style. */
+    ImageryStyle?: string;
+    /** Optional visual patterns and qualities to preserve on brand. */
+    Keep?: string[];
+    /** Optional visual patterns and clichés to avoid. */
+    Avoid?: string[];
+    /** Optional motion rules used by motion and video generators. */
+    Motion?: MJBrandKitEntity_IBrandMotion;
+}
+
+/** BrandKit.Voice — default text-to-speech voice configuration for a brand kit. */
+export interface MJBrandKitEntity_IBrandVoice {
+    /** Speech synthesis provider name (for example ElevenLabs, OpenAI). */
+    Provider: string;
+    /** Provider-specific voice identifier. */
+    VoiceID: string;
+    /** Optional speech model name override for the provider. */
+    ModelName?: string;
+    /** Optional provider-specific voice settings such as stability or similarity boost. */
+    Settings?: Record<string, string | number | boolean>;
+    /** Optional pronunciation guide for brand terms, acronyms, and proper nouns. */
+    PronunciationNotes?: string;
+}
+
+/**
+ * BrandKit.GenerationPolicy — media generation permissions and guardrails for a brand kit.
+ * NULL on the column means "the defaults", and the defaults live in `BrandKitEngine` (VS-FND-5), not here.
+ */
+export interface MJBrandKitEntity_IBrandGenerationPolicy {
+    /** Whether AI-generated still images are permitted (default true). */
+    AllowGeneratedImages?: boolean;
+    /** Whether AI-generated video clips are permitted (default true). */
+    AllowGeneratedVideo?: boolean;
+    /** Whether synthetic people may be generated; a generated person may never be presented as a real member, customer, employee, speaker or beneficiary, and leaving it unset means not allowed (§3.4, default false). */
+    AllowSyntheticPeople?: boolean;
+    /** Optional brand style prompt prepended or merged into media generation prompts. */
+    StylePrompt?: string;
+    /** Optional subjects or motifs that media generators must never depict. */
+    AvoidSubjects?: string[];
+    /** Optional maximum media generation spend in USD per run, like MJ: AI Agents.MaxCostPerRun. */
+    MaxGenerationCostPerRun?: number;
+}
+
+/** Single guardrail rule in `BrandKit.NeverInvent` naming a fact or claim that must never be fabricated. */
+export type MJBrandKitEntity_BrandNeverInventItem = string;
+
+/**
+ * MJ: Brand Kits - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: BrandKit
+ * * Base View: vwBrandKits
+ * * @description A brand kit: colors, type, voice, generation policy, facts never to invent, and the files (logos, fonts, reference imagery, music) that generators, forms and applications use to stay on brand. CompanyID NULL makes the kit available to all companies.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Brand Kits')
+export class MJBrandKitEntity extends BaseEntity<MJBrandKitEntityType> {
+    /**
+    * Loads the MJ: Brand Kits record from the database
+    * @param ID: string - primary key value to load the MJ: Brand Kits record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJBrandKitEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the brand kit.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What the kit is for and when to use it.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: CompanyID
+    * * Display Name: Company ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Companies (vwCompanies.ID)
+    * * Description: The company this kit belongs to. NULL means org-wide: available to all companies.
+    */
+    get CompanyID(): string | null {
+        return this.Get('CompanyID');
+    }
+    set CompanyID(value: string | null) {
+        this.Set('CompanyID', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: The kit used when a caller names none. At most one default per CompanyID scope (NULL is its own scope), enforced on save by the server entity.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Active kits are offered to users and generators; Inactive kits are kept but hidden.
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Style
+    * * Display Name: Style
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJBrandKitEntity_IBrandStyle
+    * * Description: JSON (IBrandStyle): palette, typography, imagery style, keep and avoid lists, and an optional Motion section.
+    */
+    get Style(): string | null {
+        return this.Get('Style');
+    }
+    set Style(value: string | null) {
+        this.Set('Style', value);
+    }
+
+    /**
+    * Typed accessor for Style — a live view of the parsed JSON as MJBrandKitEntity_IBrandStyle.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Style field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get StyleObject(): MJBrandKitEntity_IBrandStyle | null {
+        return this.GetJSONFieldObject<MJBrandKitEntity_IBrandStyle>('Style');
+    }
+    set StyleObject(value: MJBrandKitEntity_IBrandStyle | null) {
+        this.SetJSONFieldObject<MJBrandKitEntity_IBrandStyle>('Style', value);
+    }
+
+    /**
+    * * Field Name: Voice
+    * * Display Name: Voice
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJBrandKitEntity_IBrandVoice
+    * * Description: JSON (IBrandVoice): text-to-speech provider, voice ID, settings and pronunciation notes.
+    */
+    get Voice(): string | null {
+        return this.Get('Voice');
+    }
+    set Voice(value: string | null) {
+        this.Set('Voice', value);
+    }
+
+    /**
+    * Typed accessor for Voice — a live view of the parsed JSON as MJBrandKitEntity_IBrandVoice.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Voice field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get VoiceObject(): MJBrandKitEntity_IBrandVoice | null {
+        return this.GetJSONFieldObject<MJBrandKitEntity_IBrandVoice>('Voice');
+    }
+    set VoiceObject(value: MJBrandKitEntity_IBrandVoice | null) {
+        this.SetJSONFieldObject<MJBrandKitEntity_IBrandVoice>('Voice', value);
+    }
+
+    /**
+    * * Field Name: GenerationPolicy
+    * * Display Name: Generation Policy
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJBrandKitEntity_IBrandGenerationPolicy
+    * * Description: JSON (IBrandGenerationPolicy): whether generated images and video may be used, a style prompt, subjects to avoid, whether generated people are allowed (default: not allowed), and an optional per-run generation spend cap. NULL applies the defaults.
+    */
+    get GenerationPolicy(): string | null {
+        return this.Get('GenerationPolicy');
+    }
+    set GenerationPolicy(value: string | null) {
+        this.Set('GenerationPolicy', value);
+    }
+
+    /**
+    * Typed accessor for GenerationPolicy — a live view of the parsed JSON as MJBrandKitEntity_IBrandGenerationPolicy.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying GenerationPolicy field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get GenerationPolicyObject(): MJBrandKitEntity_IBrandGenerationPolicy | null {
+        return this.GetJSONFieldObject<MJBrandKitEntity_IBrandGenerationPolicy>('GenerationPolicy');
+    }
+    set GenerationPolicyObject(value: MJBrandKitEntity_IBrandGenerationPolicy | null) {
+        this.SetJSONFieldObject<MJBrandKitEntity_IBrandGenerationPolicy>('GenerationPolicy', value);
+    }
+
+    /**
+    * * Field Name: NeverInvent
+    * * Display Name: Never Invent
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJBrandKitEntity_BrandNeverInventItem>
+    * * Description: JSON array of strings: facts about the brand a model must never fabricate, for example product screens, logos, metrics or customer names.
+    */
+    get NeverInvent(): string | null {
+        return this.Get('NeverInvent');
+    }
+    set NeverInvent(value: string | null) {
+        this.Set('NeverInvent', value);
+    }
+
+    /**
+    * Typed accessor for NeverInvent — a live view of the parsed JSON as Array<MJBrandKitEntity_BrandNeverInventItem>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying NeverInvent field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get NeverInventObject(): Array<MJBrandKitEntity_BrandNeverInventItem> | null {
+        return this.GetJSONFieldObject<Array<MJBrandKitEntity_BrandNeverInventItem>>('NeverInvent');
+    }
+    set NeverInventObject(value: Array<MJBrandKitEntity_BrandNeverInventItem> | null) {
+        this.SetJSONFieldObject<Array<MJBrandKitEntity_BrandNeverInventItem>>('NeverInvent', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Company
+    * * Display Name: Company
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Company(): string | null {
+        return this.Get('Company');
     }
 }
 
@@ -95515,6 +96754,20 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     }
     set EnableFieldLevelSecurity(value: boolean) {
         this.Set('EnableFieldLevelSecurity', value);
+    }
+
+    /**
+    * * Field Name: AutoUpdateDisplayName
+    * * Display Name: Auto Update Display Name
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1 (the default), CodeGen may auto-update this entity's DisplayName — currently via the optional EntityDisplayNames advanced-generation feature, which asks an LLM to expand opaque table-derived names (ACCT_STAT_CD) into readable ones (Account Status Codes). When 0, the DisplayName is locked and CodeGen will not change it, whatever any generator proposes. Mirrors EntityField.AutoUpdateDisplayName. Note this flag governs only AUTOMATIC updates: a user editing the DisplayName directly is unaffected either way.
+    */
+    get AutoUpdateDisplayName(): boolean {
+        return this.Get('AutoUpdateDisplayName');
+    }
+    set AutoUpdateDisplayName(value: boolean) {
+        this.Set('AutoUpdateDisplayName', value);
     }
 
     /**
@@ -121076,6 +122329,51 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     }
 
     /**
+    * * Field Name: ExtractedSQLHash
+    * * Display Name: Extracted SQL Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: Hash of the platform SQL and dialect the query's child rows (fields, parameters, entities, dependencies) were last extracted from. NULL means the query has never been extracted by the current extraction service. A value that differs from the current SQL's hash means the rows may be stale.
+    */
+    get ExtractedSQLHash(): string | null {
+        return this.Get('ExtractedSQLHash');
+    }
+    set ExtractedSQLHash(value: string | null) {
+        this.Set('ExtractedSQLHash', value);
+    }
+
+    /**
+    * * Field Name: ExtractionStatus
+    * * Display Name: Extraction Status
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Error
+    *   * OK
+    *   * Skipped
+    *   * Warning
+    * * Description: Outcome of the last extraction run. "OK" means all facts were extracted. "Warning" means extraction succeeded with findings (see ExtractionMessage). "Error" means the database server could not describe the query, so existing rows were kept. "Skipped" means the facts could not be checked, for example for queries on an external data source. NULL means never extracted.
+    */
+    get ExtractionStatus(): 'Error' | 'OK' | 'Skipped' | 'Warning' | null {
+        return this.Get('ExtractionStatus');
+    }
+    set ExtractionStatus(value: 'Error' | 'OK' | 'Skipped' | 'Warning' | null) {
+        this.Set('ExtractionStatus', value);
+    }
+
+    /**
+    * * Field Name: ExtractionMessage
+    * * Display Name: Extraction Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Diagnostics from the last extraction run: validation findings, authored parameters no longer present in the SQL, describe errors, and output drift on queries with role-based permissions.
+    */
+    get ExtractionMessage(): string | null {
+        return this.Get('ExtractionMessage');
+    }
+    set ExtractionMessage(value: string | null) {
+        this.Set('ExtractionMessage', value);
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category Name
     * * SQL Data Type: nvarchar(50)
@@ -121623,12 +122921,13 @@ export class MJQueryEntityEntity extends BaseEntity<MJQueryEntityEntityType> {
     * * Possible Values 
     *   * AI
     *   * Manual
-    * * Description: Indicates how this entity-query relationship was identified. "AI" means the QueryEntityServer used LLM analysis to parse the SQL/template and identify which MemberJunction entities are referenced (by analyzing table names, joins, and query structure). "Manual" means a user explicitly marked this entity as being used by the query. AI detection helps maintain accurate metadata automatically as queries evolve.
+    *   * Parser
+    * * Description: Who wrote this entity link. "Parser" means MJ's structural analysis of the query found a read of the entity's base view, base table or an alternate base view. "Manual" means a user authored the link. "AI" marks links written by the earlier LLM-based extraction.
     */
-    get DetectionMethod(): 'AI' | 'Manual' {
+    get DetectionMethod(): 'AI' | 'Manual' | 'Parser' {
         return this.Get('DetectionMethod');
     }
-    set DetectionMethod(value: 'AI' | 'Manual') {
+    set DetectionMethod(value: 'AI' | 'Manual' | 'Parser') {
         this.Set('DetectionMethod', value);
     }
 
@@ -121915,13 +123214,15 @@ export class MJQueryFieldEntity extends BaseEntity<MJQueryFieldEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * AI
+    *   * Database
     *   * Manual
-    * * Description: Indicates how this field was identified in the query output. "AI" means the QueryEntityServer used LLM analysis to parse the SELECT clause and determine field names, types, and their source entities/columns. This includes handling aliased columns, computed expressions, aggregations, and CASE statements. "Manual" means a user explicitly defined this output field. AI detection ensures the field list stays synchronized with query changes.
+    *   * Parser
+    * * Description: Who wrote this field row. "Database" means its facts (name, order, types, nullability, source) came from the database server describing the query output. "Parser" means they came from MJ's analysis of the query template and structure. "Manual" means a user authored the row. "AI" means an LLM wrote its description; an LLM never sets types or sources.
     */
-    get DetectionMethod(): 'AI' | 'Manual' {
+    get DetectionMethod(): 'AI' | 'Database' | 'Manual' | 'Parser' {
         return this.Get('DetectionMethod');
     }
-    set DetectionMethod(value: 'AI' | 'Manual') {
+    set DetectionMethod(value: 'AI' | 'Database' | 'Manual' | 'Parser') {
         this.Set('DetectionMethod', value);
     }
 
@@ -121936,6 +123237,46 @@ export class MJQueryFieldEntity extends BaseEntity<MJQueryFieldEntityType> {
     }
     set AutoDetectConfidenceScore(value: number | null) {
         this.Set('AutoDetectConfidenceScore', value);
+    }
+
+    /**
+    * * Field Name: SourceEntityFieldID
+    * * Display Name: Source Entity Field ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Fields (vwEntityFields.ID)
+    * * Description: The MJ Entity Field this output column passes through unchanged, resolved by extraction from the source the database server reports for the column (schema, view, column) mapped through entity metadata. NULL when the column is computed, comes from an object that backs no entity, or the link was cleared because the entity field was deleted.
+    */
+    get SourceEntityFieldID(): string | null {
+        return this.Get('SourceEntityFieldID');
+    }
+    set SourceEntityFieldID(value: string | null) {
+        this.Set('SourceEntityFieldID', value);
+    }
+
+    /**
+    * * Field Name: IsNullable
+    * * Display Name: Is Nullable
+    * * SQL Data Type: bit
+    * * Description: Whether the database server reports that this output column can be NULL. NULL means unknown, for example on platforms whose describe result does not report nullability.
+    */
+    get IsNullable(): boolean | null {
+        return this.Get('IsNullable');
+    }
+    set IsNullable(value: boolean | null) {
+        this.Set('IsNullable', value);
+    }
+
+    /**
+    * * Field Name: SourceObjectName
+    * * Display Name: Source Object Name
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The source of this output column as the database server reported it (schema.object.column), recorded when the source is a table or view that backs no MJ entity. NULL when the column maps to an entity field (see SourceEntityFieldID) or has no direct source.
+    */
+    get SourceObjectName(): string | null {
+        return this.Get('SourceObjectName');
+    }
+    set SourceObjectName(value: string | null) {
+        this.Set('SourceObjectName', value);
     }
 
     /**
@@ -121954,6 +123295,15 @@ export class MJQueryFieldEntity extends BaseEntity<MJQueryFieldEntityType> {
     */
     get SourceEntity(): string | null {
         return this.Get('SourceEntity');
+    }
+
+    /**
+    * * Field Name: SourceEntityField
+    * * Display Name: Source Entity Field
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SourceEntityField(): string | null {
+        return this.Get('SourceEntityField');
     }
 }
 
@@ -122122,12 +123472,13 @@ export class MJQueryParameterEntity extends BaseEntity<MJQueryParameterEntityTyp
     * * Possible Values 
     *   * AI
     *   * Manual
-    * * Description: Indicates how this parameter was identified and added to the system. "AI" means it was automatically detected by LLM analysis of the query template, including extraction of parameter name, type inference from filters, and generation of description. "Manual" means it was explicitly defined by a user. This helps track which parameters might need human review and provides transparency about the source of metadata.
+    *   * Parser
+    * * Description: Who wrote this parameter row. "Parser" means MJ's analysis of the query template found the parameter (its name, inferred type, whether it is required and its default). "Manual" means a user authored the row; its type, required flag, default, sample, validation filters and description are never overwritten by extraction, and it is kept (and flagged on the query) when the SQL no longer uses it. "AI" marks rows written by the earlier LLM-based extraction.
     */
-    get DetectionMethod(): 'AI' | 'Manual' {
+    get DetectionMethod(): 'AI' | 'Manual' | 'Parser' {
         return this.Get('DetectionMethod');
     }
-    set DetectionMethod(value: 'AI' | 'Manual') {
+    set DetectionMethod(value: 'AI' | 'Manual' | 'Parser') {
         this.Set('DetectionMethod', value);
     }
 
@@ -138897,7 +140248,7 @@ export class MJTaskDependencyEntity extends BaseEntity<MJTaskDependencyEntityTyp
     * @method
     */
     public ValidateTaskIDNotEqualDependsOnTaskID(result: ValidationResult) {
-    	if (this.TaskID === this.DependsOnTaskID) {
+    	if (UUIDsEqual(this.TaskID, this.DependsOnTaskID)) {
     		result.Errors.push(new ValidationErrorInfo(
     			"TaskID",
     			"A task cannot be dependent on itself.",
@@ -139429,6 +140780,8 @@ export interface MJTaskEntity_ITaskForEachConfiguration {
     maxConcurrency?: number;
     /** Run this action once per iteration. */
     action?: MJTaskEntity_ITaskLoopActionBody;
+    /** Run an ordered sequence of actions once per iteration. */
+    steps?: MJTaskEntity_ITaskLoopBodyActionStep[];
     /** Run this sub-agent once per iteration. */
     subAgent?: MJTaskEntity_ITaskLoopSubAgentBody;
     /** A prompt run once per loop iteration. */
@@ -139454,6 +140807,8 @@ export interface MJTaskEntity_ITaskWhileConfiguration {
     delayBetweenIterationsMs?: number;
     /** Run this action once per iteration. */
     action?: MJTaskEntity_ITaskLoopActionBody;
+    /** Run an ordered sequence of actions once per iteration. */
+    steps?: MJTaskEntity_ITaskLoopBodyActionStep[];
     /** Run this sub-agent once per iteration. */
     subAgent?: MJTaskEntity_ITaskLoopSubAgentBody;
     /** A prompt run once per loop iteration. */
@@ -139483,6 +140838,20 @@ export interface MJTaskEntity_ITaskLoopActionBody {
     /** Parameters passed to the action. */
     params: Record<string, unknown>;
     /** JSON mapping from the action's outputs back into the payload. */
+    outputMapping?: string;
+}
+
+/** One action step inside a multi-step loop body (`steps[]`). */
+export interface MJTaskEntity_ITaskLoopBodyActionStep {
+    /** Optional handle used by later steps in the same pass via `steps.<id>.<OutputField>`. */
+    id?: string;
+    /** Action name. */
+    name: string;
+    /** Parameters passed to the action. */
+    params: Record<string, unknown>;
+    /** Optional boolean expression deciding whether this step runs on the current pass. */
+    condition?: string;
+    /** Optional JSON mapping from this step's outputs into the running payload. */
     outputMapping?: string;
 }
 
@@ -149585,6 +150954,347 @@ export class MJVersionLabelEntity extends BaseEntity<MJVersionLabelEntityType> {
     */
     get ParentIDChildCount(): number | null {
         return this.Get('ParentIDChildCount');
+    }
+}
+
+
+/**
+ * JSON shapes for the `MJ: Video Archetypes` columns (`BeatTemplate` and `Pacing`).
+ *
+ * These declarations mirror `@memberjunction/video-studio-core`; the Engine package's
+ * `test:types` fails if they drift. This file is the JSONType source:
+ * `EntityField.JSONTypeDefinition` stores it verbatim and CodeGen emits it inline,
+ * so it cannot import another file.
+ */
+
+/**
+ * Reusable beat slot definition within an `MJ: Video Archetypes` beat template (§4.3).
+ */
+export interface MJVideoArchetypeEntity_VideoBeatTemplate {
+    /** Stable identifier for the beat slot (e.g., 'hook', 'problem', 'reveal', 'proof', 'close'). */
+    Key: string;
+    /** Narrative role label displayed in storyboards (e.g., 'Hook', 'Problem', 'Reveal', 'Proof', 'Close'). */
+    Label: string;
+    /** What this beat must accomplish in the narrative arc. */
+    Purpose: string;
+    /** Minimum duration in seconds permitted for this beat. */
+    MinDurationSeconds: number;
+    /** Maximum duration in seconds permitted for this beat. */
+    MaxDurationSeconds: number;
+    /** Suggested default duration in seconds before narration clip timing fit. */
+    DefaultDurationSeconds?: number;
+    /** Direction for the Storyboard and Motion Engineer on visual and audio treatment. */
+    Guidance?: string;
+    /** Whether this beat slot typically requires at least one bound metric or chart. */
+    RequiresDataBinding?: boolean;
+}
+
+/**
+ * Cut cadence and hold rules governing how quickly visual states change in a film (§3.1, §4.3).
+ */
+export interface MJVideoArchetypeEntity_VideoPacing {
+    /** Target average interval in seconds between visual state changes. */
+    AvgSecondsBetweenChanges: number;
+    /** Rules governing minimum hold times on key numbers, headlines, and end cards. */
+    HoldRules: string;
+    /** Optional minimum duration in seconds allowed for any single beat. */
+    MinBeatDurationSeconds?: number;
+    /** Optional maximum duration in seconds allowed for any single beat. */
+    MaxBeatDurationSeconds?: number;
+}
+
+/**
+ * MJ: Video Archetypes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: VideoArchetype
+ * * Base View: vwVideoArchetypes
+ * * @description A Video Studio film template: duration bounds, default formats, a beat template, pacing, and guidance for the Director and Storyboard. CompanyID NULL marks a shipped or org-wide archetype.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Video Archetypes')
+export class MJVideoArchetypeEntity extends BaseEntity<MJVideoArchetypeEntityType> {
+    /**
+    * Loads the MJ: Video Archetypes record from the database
+    * @param ID: string - primary key value to load the MJ: Video Archetypes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJVideoArchetypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Archetype name, unique within its CompanyID scope.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: What the archetype is for; the Director reads it to pick one.
+    */
+    get Description(): string {
+        return this.Get('Description');
+    }
+    set Description(value: string) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: CompanyID
+    * * Display Name: Company ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Companies (vwCompanies.ID)
+    * * Description: The company that owns this archetype. NULL means shipped or org-wide: available to all companies.
+    */
+    get CompanyID(): string | null {
+        return this.Get('CompanyID');
+    }
+    set CompanyID(value: string | null) {
+        this.Set('CompanyID', value);
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Announcement
+    *   * Briefing
+    *   * DataStory
+    *   * Explainer
+    *   * Product
+    *   * Social
+    *   * Tutorial
+    * * Description: Explainer, Product, DataStory, Social, Tutorial, Announcement or Briefing.
+    */
+    get Category(): 'Announcement' | 'Briefing' | 'DataStory' | 'Explainer' | 'Product' | 'Social' | 'Tutorial' {
+        return this.Get('Category');
+    }
+    set Category(value: 'Announcement' | 'Briefing' | 'DataStory' | 'Explainer' | 'Product' | 'Social' | 'Tutorial') {
+        this.Set('Category', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Active archetypes are offered; Inactive are hidden.
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: DefaultDurationSeconds
+    * * Display Name: Default Duration Seconds
+    * * SQL Data Type: int
+    * * Description: Default film length, in seconds.
+    */
+    get DefaultDurationSeconds(): number {
+        return this.Get('DefaultDurationSeconds');
+    }
+    set DefaultDurationSeconds(value: number) {
+        this.Set('DefaultDurationSeconds', value);
+    }
+
+    /**
+    * * Field Name: MinDurationSeconds
+    * * Display Name: Min Duration Seconds
+    * * SQL Data Type: int
+    * * Description: Shortest film length, in seconds.
+    */
+    get MinDurationSeconds(): number {
+        return this.Get('MinDurationSeconds');
+    }
+    set MinDurationSeconds(value: number) {
+        this.Set('MinDurationSeconds', value);
+    }
+
+    /**
+    * * Field Name: MaxDurationSeconds
+    * * Display Name: Max Duration Seconds
+    * * SQL Data Type: int
+    * * Description: Longest film length, in seconds.
+    */
+    get MaxDurationSeconds(): number {
+        return this.Get('MaxDurationSeconds');
+    }
+    set MaxDurationSeconds(value: number) {
+        this.Set('MaxDurationSeconds', value);
+    }
+
+    /**
+    * * Field Name: DefaultFormats
+    * * Display Name: Default Formats
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Comma-separated default formats: any of 16:9, 9:16, 1:1.
+    */
+    get DefaultFormats(): string {
+        return this.Get('DefaultFormats');
+    }
+    set DefaultFormats(value: string) {
+        this.Set('DefaultFormats', value);
+    }
+
+    /**
+    * * Field Name: BeatTemplate
+    * * Display Name: Beat Template
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJVideoArchetypeEntity_VideoBeatTemplate>
+    * * Description: JSON array (VideoBeatTemplate[]): the beat slots a film of this archetype follows, with per-beat duration bounds.
+    */
+    get BeatTemplate(): string {
+        return this.Get('BeatTemplate');
+    }
+    set BeatTemplate(value: string) {
+        this.Set('BeatTemplate', value);
+    }
+
+    /**
+    * Typed accessor for BeatTemplate — a live view of the parsed JSON as Array<MJVideoArchetypeEntity_VideoBeatTemplate>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying BeatTemplate field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get BeatTemplateObject(): Array<MJVideoArchetypeEntity_VideoBeatTemplate> {
+        return this.GetJSONFieldObject<Array<MJVideoArchetypeEntity_VideoBeatTemplate>>('BeatTemplate')!;
+    }
+    set BeatTemplateObject(value: Array<MJVideoArchetypeEntity_VideoBeatTemplate>) {
+        this.SetJSONFieldObject<Array<MJVideoArchetypeEntity_VideoBeatTemplate>>('BeatTemplate', value);
+    }
+
+    /**
+    * * Field Name: Pacing
+    * * Display Name: Pacing
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJVideoArchetypeEntity_VideoPacing
+    * * Description: JSON (VideoPacing): cut cadence and hold rules.
+    */
+    get Pacing(): string | null {
+        return this.Get('Pacing');
+    }
+    set Pacing(value: string | null) {
+        this.Set('Pacing', value);
+    }
+
+    /**
+    * Typed accessor for Pacing — a live view of the parsed JSON as MJVideoArchetypeEntity_VideoPacing.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Pacing field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get PacingObject(): MJVideoArchetypeEntity_VideoPacing | null {
+        return this.GetJSONFieldObject<MJVideoArchetypeEntity_VideoPacing>('Pacing');
+    }
+    set PacingObject(value: MJVideoArchetypeEntity_VideoPacing | null) {
+        this.SetJSONFieldObject<MJVideoArchetypeEntity_VideoPacing>('Pacing', value);
+    }
+
+    /**
+    * * Field Name: Guidance
+    * * Display Name: Guidance
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Markdown guidance for the Director and Storyboard.
+    */
+    get Guidance(): string | null {
+        return this.Get('Guidance');
+    }
+    set Guidance(value: string | null) {
+        this.Set('Guidance', value);
+    }
+
+    /**
+    * * Field Name: DefaultInteractionMode
+    * * Display Name: Default Interaction Mode
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: Autonomous
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ApproveStoryboard
+    *   * ApproveStoryboardAndRoughCut
+    *   * Autonomous
+    * * Description: Default approval mode: Autonomous, ApproveStoryboard or ApproveStoryboardAndRoughCut.
+    */
+    get DefaultInteractionMode(): 'ApproveStoryboard' | 'ApproveStoryboardAndRoughCut' | 'Autonomous' {
+        return this.Get('DefaultInteractionMode');
+    }
+    set DefaultInteractionMode(value: 'ApproveStoryboard' | 'ApproveStoryboardAndRoughCut' | 'Autonomous') {
+        this.Set('DefaultInteractionMode', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Company
+    * * Display Name: Company
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Company(): string | null {
+        return this.Get('Company');
     }
 }
 

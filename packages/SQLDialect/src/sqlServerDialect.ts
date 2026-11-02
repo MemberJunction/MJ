@@ -1,122 +1,31 @@
-import { DataTypeMap, MappedType } from './dataTypeMap.js';
-import {
-    SQLDialect,
-    DatabasePlatform,
-    LimitClauseResult,
-    SchemaIntrospectionSQL,
-    TriggerOptions,
-    IndexOptions,
-    ColumnDDLOptions,
-    AlterColumnOptions,
-    ResolveTypeOptions,
-} from './sqlDialect.js';
+import { SQLDialect, DatabasePlatform } from './sqlDialect.js';
+import { ANSI_GRAMMAR, ANSI_LEXICAL, ANSI_WRITE_STATEMENT_KEYWORDS, AnsiWriter } from './dialects/ansi.js';
+import { SQLServerSchemaDDL } from './dialects/sqlServerSchemaDDL.js';
+import type { DialectLexicalRules, ParameterPlaceholderForm } from './facets/dialectLexicalRules.js';
+import type { ColumnAliasForm, DialectGrammar, RowCapForm } from './facets/dialectGrammar.js';
+import type { DialectWriter, LimitClauseResult } from './facets/dialectWriter.js';
+import type { DialectTypes } from './facets/dialectTypes.js';
+import type { DialectBinding, TypedParameterReference } from './facets/dialectBinding.js';
+import type { DialectSchemaDDL } from './facets/dialectSchemaDDL.js';
 
 /**
- * SQL Server-specific data type mapping.
- * Maps SQL Server types to themselves (identity mapping) since
- * SQL Server is the canonical source type in MemberJunction.
+ * SQL Server lexical rules: `[…]` and `"…"` identifiers, `'…'` and `N'…'` strings with doubled
+ * quotes, `--` line comments and nested block comments, `@name` parameters.
+ *
+ * - Identifiers: https://learn.microsoft.com/en-us/sql/relational-databases/databases/database-identifiers
+ * - Nested block comments: https://learn.microsoft.com/en-us/sql/t-sql/language-elements/slash-star-comment-transact-sql
+ * - `--` comments: https://learn.microsoft.com/en-us/sql/t-sql/language-elements/comment-transact-sql
  */
-class SQLServerDataTypeMap implements DataTypeMap {
-    MapType(sourceType: string, sourceLength?: number, sourcePrecision?: number, sourceScale?: number): MappedType {
-        const normalized = sourceType.toUpperCase().trim();
-
-        switch (normalized) {
-            case 'UNIQUEIDENTIFIER':
-                return { typeName: 'UNIQUEIDENTIFIER', supportsLength: false, supportsPrecisionScale: false };
-            case 'NVARCHAR':
-                return this.buildNVarcharType(sourceLength);
-            case 'VARCHAR':
-                return this.buildVarcharType(sourceLength);
-            case 'NCHAR':
-            case 'CHAR':
-                return { typeName: normalized, supportsLength: true, supportsPrecisionScale: false, defaultLength: sourceLength ?? 1 };
-            case 'INT':
-            case 'INTEGER':
-                return { typeName: 'INT', supportsLength: false, supportsPrecisionScale: false };
-            case 'BIGINT':
-                return { typeName: 'BIGINT', supportsLength: false, supportsPrecisionScale: false };
-            case 'SMALLINT':
-                return { typeName: 'SMALLINT', supportsLength: false, supportsPrecisionScale: false };
-            case 'TINYINT':
-                return { typeName: 'TINYINT', supportsLength: false, supportsPrecisionScale: false };
-            case 'BIT':
-                return { typeName: 'BIT', supportsLength: false, supportsPrecisionScale: false };
-            case 'DECIMAL':
-            case 'NUMERIC':
-                return { typeName: normalized, supportsLength: false, supportsPrecisionScale: true };
-            case 'FLOAT':
-                return { typeName: 'FLOAT', supportsLength: false, supportsPrecisionScale: false };
-            case 'REAL':
-                return { typeName: 'REAL', supportsLength: false, supportsPrecisionScale: false };
-            case 'MONEY':
-                return { typeName: 'MONEY', supportsLength: false, supportsPrecisionScale: false };
-            case 'SMALLMONEY':
-                return { typeName: 'SMALLMONEY', supportsLength: false, supportsPrecisionScale: false };
-            case 'DATE':
-                return { typeName: 'DATE', supportsLength: false, supportsPrecisionScale: false };
-            case 'DATETIME':
-                return { typeName: 'DATETIME', supportsLength: false, supportsPrecisionScale: false };
-            case 'DATETIME2':
-                return { typeName: 'DATETIME2', supportsLength: false, supportsPrecisionScale: false };
-            case 'DATETIMEOFFSET':
-                return { typeName: 'DATETIMEOFFSET', supportsLength: false, supportsPrecisionScale: false };
-            case 'SMALLDATETIME':
-                return { typeName: 'SMALLDATETIME', supportsLength: false, supportsPrecisionScale: false };
-            case 'TIME':
-                return { typeName: 'TIME', supportsLength: false, supportsPrecisionScale: false };
-            case 'TEXT':
-            case 'NTEXT':
-                return { typeName: normalized, supportsLength: false, supportsPrecisionScale: false };
-            case 'IMAGE':
-                return { typeName: 'IMAGE', supportsLength: false, supportsPrecisionScale: false };
-            case 'VARBINARY':
-                return { typeName: 'VARBINARY', supportsLength: true, supportsPrecisionScale: false, defaultLength: sourceLength };
-            case 'BINARY':
-                return { typeName: 'BINARY', supportsLength: true, supportsPrecisionScale: false, defaultLength: sourceLength ?? 1 };
-            case 'XML':
-                return { typeName: 'XML', supportsLength: false, supportsPrecisionScale: false };
-            default:
-                return { typeName: normalized, supportsLength: false, supportsPrecisionScale: false };
-        }
-    }
-
-    MapTypeToString(sourceType: string, sourceLength?: number, sourcePrecision?: number, sourceScale?: number): string {
-        const mapped = this.MapType(sourceType, sourceLength, sourcePrecision, sourceScale);
-        return formatTypeString(mapped, sourceLength, sourcePrecision, sourceScale);
-    }
-
-    private buildNVarcharType(length?: number): MappedType {
-        if (length === -1 || length === undefined) {
-            return { typeName: 'NVARCHAR(MAX)', supportsLength: false, supportsPrecisionScale: false };
-        }
-        return { typeName: 'NVARCHAR', supportsLength: true, supportsPrecisionScale: false, defaultLength: length };
-    }
-
-    private buildVarcharType(length?: number): MappedType {
-        if (length === -1 || length === undefined) {
-            return { typeName: 'VARCHAR(MAX)', supportsLength: false, supportsPrecisionScale: false };
-        }
-        return { typeName: 'VARCHAR', supportsLength: true, supportsPrecisionScale: false, defaultLength: length };
-    }
-}
-
-/**
- * Helper to format a MappedType into a full SQL type string.
- */
-function formatTypeString(mapped: MappedType, length?: number, precision?: number, scale?: number): string {
-    if (mapped.supportsPrecisionScale && precision != null) {
-        return scale != null
-            ? `${mapped.typeName}(${precision},${scale})`
-            : `${mapped.typeName}(${precision})`;
-    }
-    if (mapped.supportsLength) {
-        const len = length ?? mapped.defaultLength;
-        if (len != null) {
-            return len === -1 ? `${mapped.typeName}(MAX)` : `${mapped.typeName}(${len})`;
-        }
-    }
-    return mapped.typeName;
-}
+export const SQL_SERVER_LEXICAL: DialectLexicalRules = Object.freeze({
+    ...ANSI_LEXICAL,
+    IdentifierQuotes: Object.freeze([
+        Object.freeze({ Open: '"', Close: '"', DoubledCloseEscape: true }),
+        Object.freeze({ Open: '[', Close: ']', DoubledCloseEscape: true }),
+    ]),
+    BlockComments: Object.freeze({ Nested: true, ExecutableOpeners: Object.freeze([]) }),
+    ParameterPlaceholders: Object.freeze<ParameterPlaceholderForm[]>(['at-name']),
+    UnquotedIdentifierCase: 'none',
+});
 
 /**
  * SQL Server functions caller-supplied SQL may not call: the rowset functions that reach other
@@ -128,30 +37,69 @@ const SQL_SERVER_CALLER_SQL_FORBIDDEN_FUNCTIONS: readonly string[] = [
     'fn_get_audit_file', 'fn_xe_file_target_read_file', 'fn_trace_gettable'
 ];
 
+/** Keywords that begin a T-SQL statement that writes data, changes the schema or runs code. */
+const SQL_SERVER_WRITE_STATEMENT_KEYWORDS: readonly string[] = Object.freeze([
+    ...ANSI_WRITE_STATEMENT_KEYWORDS.filter(keyword => keyword !== 'CALL'),
+    'EXEC', 'EXECUTE', 'DENY', 'BULK', 'BACKUP', 'RESTORE', 'DBCC', 'RECONFIGURE', 'SHUTDOWN', 'KILL',
+]);
+
 /**
- * SQL Server dialect implementation.
- * Uses [bracket] quoting, TOP for pagination, BIT for booleans, T-SQL functions.
+ * Reserved T-SQL keywords that only ever begin a statement. T-SQL needs no separator between
+ * statements, so one of these as a bare word after a statement's first word starts another
+ * statement in the same batch.
  */
-export class SQLServerDialect extends SQLDialect {
-    get PlatformKey(): DatabasePlatform {
-        return 'sqlserver';
-    }
+const SQL_SERVER_STATEMENT_KEYWORDS: readonly string[] = [
+    'SET', 'DECLARE', 'WAITFOR', 'USE', 'PRINT', 'RAISERROR', 'BEGIN', 'COMMIT', 'ROLLBACK', 'SAVE', 'GOTO', 'RETURN',
+    'IF', 'WHILE', 'BREAK', 'CONTINUE', 'OPEN', 'CLOSE', 'DEALLOCATE', 'CHECKPOINT', 'READTEXT', 'WRITETEXT', 'UPDATETEXT',
+];
 
-    get ParserDialect(): string {
-        return 'TransactSQL';
-    }
+/**
+ * SQL Server grammar facts: `TOP` and `OFFSET … FETCH` row caps, no ORDER BY in a CTE or derived
+ * table without TOP/OFFSET/FOR XML, no nested WITH, plain `WITH` for recursion, the `OPTION (…)`
+ * hint clause, `FOR JSON` / `FOR XML`, `CROSS/OUTER APPLY`.
+ */
+export const SQL_SERVER_GRAMMAR: DialectGrammar = Object.freeze({
+    ...ANSI_GRAMMAR,
+    ParserGrammar: 'TransactSQL',
+    DefaultSchema: 'dbo',
+    RowCapForms: Object.freeze<RowCapForm[]>(['top', 'offset-fetch']),
+    AllowsOrderByInCTE: false,
+    AllowsOrderByInDerivedTable: false,
+    SupportsNestedWith: false,
+    RecursiveKeyword: null,
+    QueryHintKeyword: 'OPTION',
+    DocumentTailClauses: Object.freeze(['FOR JSON', 'FOR XML']),
+    CorrelatedJoin: 'apply',
+    WriteStatementKeywords: SQL_SERVER_WRITE_STATEMENT_KEYWORDS,
+    CallerSQLForbiddenFunctions: SQL_SERVER_CALLER_SQL_FORBIDDEN_FUNCTIONS,
+    UnseparatedStatementKeywords: Object.freeze([...SQL_SERVER_WRITE_STATEMENT_KEYWORDS, ...SQL_SERVER_STATEMENT_KEYWORDS]),
+    DefaultPagingOrderBy: '(SELECT NULL)',
+    SelectListPagingOrderBy: '1',
+    PagingRequiresOrderBy: true,
+    ExtraColumnAliasForms: Object.freeze<ColumnAliasForm[]>(['equals', 'string']),
+});
 
-    get DisplayName(): string {
-        return 'Microsoft SQL Server (T-SQL)';
-    }
+/**
+ * SQL Server's column-type names as they appear in `sys.columns.name` / `EntityField.Type` for
+ * entities backed by a SQL Server schema. `char` and `nchar` right-pad stored values with spaces.
+ */
+export const SQL_SERVER_TYPES: DialectTypes = Object.freeze({
+    BooleanTypeNames: Object.freeze(['bit']),
+    StringTypeNames: Object.freeze(['text', 'ntext', 'varchar', 'nvarchar', 'char', 'nchar']),
+    FixedWidthStringTypeNames: Object.freeze(['char', 'nchar']),
+    DateTypeNames: Object.freeze(['date', 'time', 'datetime', 'datetime2', 'datetimeoffset', 'smalldatetime']),
+    IntegerTypeNames: Object.freeze(['int', 'integer', 'bigint', 'smallint', 'tinyint', 'rowversion', 'timestamp']),
+    FloatTypeNames: Object.freeze(['decimal', 'numeric', 'float', 'real']),
+    UuidTypeNames: Object.freeze(['uniqueidentifier']),
+    BinaryTypeNames: Object.freeze(['binary', 'varbinary', 'image']),
+    JsonTypeNames: Object.freeze(['xml']),
+    CurrencyTypeNames: Object.freeze(['money', 'smallmoney']),
+    IntervalTypeNames: Object.freeze([]),
+    NetworkTypeNames: Object.freeze([]),
+});
 
-    /** `sql-formatter` ships T-SQL under the `tsql` language key. */
-    get FormatterLanguage(): string {
-        return 'tsql';
-    }
-
-    // ─── Identifier Quoting ──────────────────────────────────────────
-
+/** Writes T-SQL: bracket quoting, `TOP`, `BIT` booleans, `ISNULL`, `+` concatenation. */
+export class SQLServerWriter extends AnsiWriter {
     QuoteIdentifier(name: string): string {
         // Double embedded closing brackets so a name containing `]` cannot terminate the
         // quoting early (mirrors the PostgreSQL dialect's doubling of embedded `"`).
@@ -171,13 +119,6 @@ export class SQLServerDialect extends SQLDialect {
         return aliasName;
     }
 
-    /** SQL Server is case-insensitive for identifiers; the schema name is stored as-given. */
-    CanonicalSchemaName(name: string): string {
-        return name;
-    }
-
-    // ─── Pagination ──────────────────────────────────────────────────
-
     LimitClause(limit: number, offset?: number): LimitClauseResult {
         if (offset != null) {
             return { prefix: '', suffix: `OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY` };
@@ -185,22 +126,8 @@ export class SQLServerDialect extends SQLDialect {
         return { prefix: `TOP ${limit}`, suffix: '' };
     }
 
-    // ─── Literals & Expressions ──────────────────────────────────────
-
     BooleanLiteral(value: boolean): string {
         return value ? '1' : '0';
-    }
-
-    BooleanParameterType(): string {
-        return 'bit';
-    }
-
-    ParameterRef(name: string): string {
-        return `@${name}`;
-    }
-
-    ParameterDefault(value: string): string {
-        return ` = ${value}`;
     }
 
     /**
@@ -228,222 +155,8 @@ export class SQLServerDialect extends SQLDialect {
         return 'GETUTCDATE()';
     }
 
-    AffectedRowCountSQL(dmlStatement: string, alias: string): string {
-        return `${dmlStatement};\nSELECT @@ROWCOUNT AS ${this.QuoteColumnAlias(alias)}`;
-    }
-
-    // ─── Type-Name Sets ──────────────────────────────────────────────
-    // SQL Server's column-type names as they appear in `sys.columns.name`
-    // / `EntityField.Type` for entities backed by a SQL Server schema.
-
-    private static readonly _booleanTypeNames = ['bit'] as const;
-    private static readonly _stringTypeNames = ['text', 'ntext', 'varchar', 'nvarchar', 'char', 'nchar'] as const;
-    /** `char` and `nchar` right-pad stored values with spaces up to declared length. */
-    private static readonly _fixedWidthStringTypeNames = ['char', 'nchar'] as const;
-    private static readonly _dateTypeNames = ['date', 'time', 'datetime', 'datetime2', 'datetimeoffset', 'smalldatetime'] as const;
-    private static readonly _integerTypeNames = ['int', 'integer', 'bigint', 'smallint', 'tinyint', 'rowversion', 'timestamp'] as const;
-    private static readonly _floatTypeNames = ['decimal', 'numeric', 'float', 'real'] as const;
-    private static readonly _uuidTypeNames = ['uniqueidentifier'] as const;
-    private static readonly _binaryTypeNames = ['binary', 'varbinary', 'image'] as const;
-    private static readonly _jsonTypeNames = ['xml'] as const;
-    private static readonly _currencyTypeNames = ['money', 'smallmoney'] as const;
-    private static readonly _intervalTypeNames = [] as const;
-    private static readonly _networkTypeNames = [] as const;
-
-    get BooleanTypeNames(): readonly string[]  { return SQLServerDialect._booleanTypeNames; }
-    get StringTypeNames(): readonly string[]   { return SQLServerDialect._stringTypeNames; }
-    get FixedWidthStringTypeNames(): readonly string[] { return SQLServerDialect._fixedWidthStringTypeNames; }
-    /** SQL Server index keys are limited to 900 bytes → 450 NVARCHAR (2-byte) chars. */
-    override get MaxKeyStringLength(): number { return 450; }
-
-    /** SQL Server enforces a hard ~8060-byte in-row row size; only variable-length values go off-row. */
-    override get MaxInRowSizeBytes(): number { return 8060; }
-
-    /** SQL Server's hard per-table column cap. */
-    override get MaxColumnCount(): number { return 1024; }
-
-    /**
-     * Minimum in-row byte footprint of a column. Off-row-capable variable-length / LOB types
-     * (incl. `(N)VARCHAR(MAX)`) contribute only a 24-byte in-row pointer; fixed-length types
-     * contribute their full size. Unknown types are treated as off-row pointers (conservative).
-     */
-    override EstimateInRowBytes(rawSqlType: string): number {
-        const t = (rawSqlType ?? '').toUpperCase().trim();
-        // Off-row-capable variable-length + LOB types → 24-byte in-row pointer floor.
-        if (/^(N?VARCHAR|VARBINARY)\s*\(/.test(t)) return 24; // covers (N)VARCHAR(MAX) too
-        if (/^(TEXT|NTEXT|IMAGE|XML|SQL_VARIANT)\b/.test(t)) return 24;
-        // Fixed-length character/binary types stay fully in-row.
-        const nchar = t.match(/^NCHAR\s*\(\s*(\d+)\s*\)/);
-        if (nchar) return parseInt(nchar[1], 10) * 2;
-        const chr = t.match(/^(?:CHAR|BINARY)\s*\(\s*(\d+)\s*\)/);
-        if (chr) return parseInt(chr[1], 10);
-        if (/^UNIQUEIDENTIFIER\b/.test(t)) return 16;
-        if (/^BIGINT\b/.test(t)) return 8;
-        if (/^SMALLINT\b/.test(t)) return 2;
-        if (/^TINYINT\b/.test(t)) return 1;
-        if (/^INT\b/.test(t)) return 4;
-        if (/^BIT\b/.test(t)) return 1;
-        if (/^(DECIMAL|NUMERIC|MONEY|SMALLMONEY)\b/.test(t)) return 17;
-        if (/^(FLOAT|REAL)\b/.test(t)) return 8;
-        if (/^DATETIMEOFFSET\b/.test(t)) return 10;
-        if (/^(DATETIME2|DATETIME|SMALLDATETIME)\b/.test(t)) return 8;
-        if (/^DATE\b/.test(t)) return 3;
-        if (/^TIME\b/.test(t)) return 5;
-        return 24; // unknown → treat as off-row variable-length pointer (conservative)
-    }
-    get DateTypeNames(): readonly string[]     { return SQLServerDialect._dateTypeNames; }
-    get IntegerTypeNames(): readonly string[]  { return SQLServerDialect._integerTypeNames; }
-    get FloatTypeNames(): readonly string[]    { return SQLServerDialect._floatTypeNames; }
-    get UuidTypeNames(): readonly string[]     { return SQLServerDialect._uuidTypeNames; }
-    get BinaryTypeNames(): readonly string[]   { return SQLServerDialect._binaryTypeNames; }
-    get JsonTypeNames(): readonly string[]     { return SQLServerDialect._jsonTypeNames; }
-    get CurrencyTypeNames(): readonly string[] { return SQLServerDialect._currencyTypeNames; }
-    get IntervalTypeNames(): readonly string[] { return SQLServerDialect._intervalTypeNames; }
-    get NetworkTypeNames(): readonly string[]  { return SQLServerDialect._networkTypeNames; }
-
-    NewUUID(): string {
-        return 'NEWID()';
-    }
-
     CastToText(expr: string): string {
         return `CAST(${expr} AS NVARCHAR(MAX))`;
-    }
-
-    /**
-     * SQL Server-specific Flyway escape. Interleaves a `CAST(N'' AS NVARCHAR(MAX))`
-     * between the split halves so the running T-SQL concat chain inherits
-     * NVARCHAR(MAX) precedence. Without the cast, `N'a' + N'b'` produces
-     * NVARCHAR(a+b) capped at NVARCHAR(4000) and silently truncates anything
-     * past 4,000 characters.
-     */
-    EscapeFlywayStringInterpolation(sql: string): string {
-        return sql.replaceAll(/\$\{/g, "$$'+CAST(N'' AS NVARCHAR(MAX))+N'{");
-    }
-
-    CastToUUID(expr: string): string {
-        return `CAST(${expr} AS UNIQUEIDENTIFIER)`;
-    }
-
-    // ─── INSERT/UPDATE Return Patterns ───────────────────────────────
-
-    ReturnInsertedClause(columns?: string[]): string {
-        if (columns && columns.length > 0) {
-            const cols = columns.map(c => `INSERTED.[${c}]`).join(', ');
-            return `OUTPUT ${cols}`;
-        }
-        return 'OUTPUT INSERTED.*';
-    }
-
-    AutoIncrementPKExpression(): string {
-        return 'IDENTITY(1,1)';
-    }
-
-    UUIDPKDefault(): string {
-        return 'NEWSEQUENTIALID()';
-    }
-
-    ScopeIdentityExpression(): string {
-        return 'SCOPE_IDENTITY()';
-    }
-
-    RowCountExpression(): string {
-        return '@@ROWCOUNT';
-    }
-
-    // ─── Batch & DDL Control ─────────────────────────────────────────
-
-    BatchSeparator(): string {
-        return 'GO';
-    }
-
-    CreateSavepointSQL(name: string): string {
-        return `SAVE TRANSACTION ${name}`;
-    }
-
-    ReleaseSavepointSQL(_name: string): string | null {
-        return null;
-    }
-
-    RollbackToSavepointSQL(name: string): string {
-        return `ROLLBACK TRANSACTION ${name}`;
-    }
-
-    ExistenceCheckSQL(objectType: string, schema: string, name: string): string {
-        const normalizedType = objectType.toUpperCase();
-        switch (normalizedType) {
-            case 'TABLE':
-                return `IF OBJECT_ID('[${schema}].[${name}]', 'U') IS NOT NULL`;
-            case 'VIEW':
-                return `IF OBJECT_ID('[${schema}].[${name}]', 'V') IS NOT NULL`;
-            case 'PROCEDURE':
-                return `IF OBJECT_ID('[${schema}].[${name}]', 'P') IS NOT NULL`;
-            case 'FUNCTION':
-                return `IF OBJECT_ID('[${schema}].[${name}]', 'FN') IS NOT NULL`;
-            case 'TRIGGER':
-                return `IF OBJECT_ID('[${schema}].[${name}]', 'TR') IS NOT NULL`;
-            default:
-                return `IF OBJECT_ID('[${schema}].[${name}]') IS NOT NULL`;
-        }
-    }
-
-    CreateOrReplaceSupported(_objectType: string): boolean {
-        return false; // SQL Server does not support CREATE OR REPLACE
-    }
-
-    // ─── Full-Text Search ────────────────────────────────────────────
-
-    FullTextSearchPredicate(column: string, searchTerm: string): string {
-        return `CONTAINS(${this.QuoteIdentifier(column)}, ${searchTerm})`;
-    }
-
-    FullTextIndexDDL(table: string, columns: string[], catalog?: string): string {
-        const catName = catalog ?? 'MJ_FTS';
-        const cols = columns.map(c => this.QuoteIdentifier(c)).join(', ');
-        const lines: string[] = [];
-        lines.push(`IF NOT EXISTS (SELECT 1 FROM sys.fulltext_catalogs WHERE name = '${catName}')`);
-        lines.push(`    CREATE FULLTEXT CATALOG [${catName}];`);
-        lines.push('');
-        lines.push(`CREATE FULLTEXT INDEX ON ${table}(${cols})`);
-        lines.push(`    KEY INDEX PK_${table.replace(/[\[\].]/g, '')} ON [${catName}];`);
-        return lines.join('\n');
-    }
-
-    // ─── CTE / Recursion ─────────────────────────────────────────────
-
-    RecursiveCTESyntax(): string {
-        return 'WITH';
-    }
-
-    get AllowsOrderByInCTE(): boolean {
-        return false;
-    }
-
-    get DefaultPagingOrderBy(): string {
-        return '(SELECT NULL)';
-    }
-
-    get SelectListPagingOrderBy(): string | null {
-        return '1';
-    }
-
-    get PagingRequiresOrderBy(): boolean {
-        return true;
-    }
-
-    get SupportsEscapeStringLiterals(): boolean {
-        return false;
-    }
-
-    get SupportsDollarQuotedStrings(): boolean {
-        return false;
-    }
-
-    get QueryHintKeyword(): string | null {
-        return 'OPTION';
-    }
-
-    get CallerSQLForbiddenFunctions(): readonly string[] {
-        return SQL_SERVER_CALLER_SQL_FORBIDDEN_FUNCTIONS;
     }
 
     StringLiteralPrefix(text: string): string {
@@ -454,315 +167,37 @@ export class SQLServerDialect extends SQLDialect {
         return text.replace(/\[/g, '[[]').replace(/%/g, '[%]').replace(/_/g, '[_]');
     }
 
-    BooleanParameterValue(value: boolean): boolean | number {
-        return value ? 1 : 0;
-    }
-
-    // ─── Data Types ──────────────────────────────────────────────────
-
-    get TypeMap(): DataTypeMap {
-        return new SQLServerDataTypeMap();
-    }
-
-    // ─── Parameters ──────────────────────────────────────────────────
-
-    ParameterPlaceholder(index: number): string {
-        return `@p${index}`;
-    }
-
     ConcatOperator(): string {
         return '+';
-    }
-
-    // ─── String Functions ────────────────────────────────────────────
-
-    StringSplitFunction(value: string, delimiter: string): string {
-        return `STRING_SPLIT(${value}, ${delimiter})`;
     }
 
     JsonExtract(column: string, path: string): string {
         return `JSON_VALUE(${column}, '${path}')`;
     }
 
-    // ─── Procedure / Function Calls ──────────────────────────────────
-
-    ProcedureCallSyntax(schema: string, name: string, params: string[]): string {
-        const paramList = params.join(', ');
-        return `EXEC [${schema}].[${name}] ${paramList}`;
-    }
-
-    // ─── DDL Generation (Schema/Table) ──────────────────────────────
-
-    CreateSchemaDDL(schemaName: string): string {
-        return `IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = '${schemaName}')\n    EXEC('CREATE SCHEMA [${schemaName}]');\nGO`;
-    }
-
-    /** SQL Server cannot index NVARCHAR(MAX) columns — cap to NVARCHAR(450). */
-    override CapIndexableType(rawSqlType: string): string {
-        return rawSqlType.toUpperCase() === 'NVARCHAR(MAX)' ? 'NVARCHAR(450)' : rawSqlType;
-    }
-
-    // ─── DDL Generation (Conditional/Procedural) ────────────────────
-
     DateAddExpression(unit: 'MINUTE' | 'HOUR' | 'DAY', amount: number, baseExpr: string): string {
         return `DATEADD(${unit}, ${amount}, ${baseExpr})`;
     }
 
-    CreateTableIfNotExistsDDL(schema: string, tableName: string, columnsDDL: string): string {
-        const quotedTable = this.QuoteSchema(schema, tableName);
-        return [
-            `IF NOT EXISTS (SELECT * FROM sys.tables t JOIN sys.schemas s ON t.schema_id = s.schema_id WHERE s.name='${schema}' AND t.name='${tableName}')`,
-            `BEGIN`,
-            `  CREATE TABLE ${quotedTable} (`,
-            columnsDDL,
-            `  );`,
-            `END;`,
-        ].join('\n');
-    }
-
-    ConditionalBlock(condition: string, thenSQL: string, elseSQL?: string): string {
-        const lines = [
-            `IF ${condition}`,
-            `BEGIN`,
-            `  ${thenSQL}`,
-            `END`,
-        ];
-        if (elseSQL) {
-            lines.push(`ELSE`);
-            lines.push(`BEGIN`);
-            lines.push(`  ${elseSQL}`);
-            lines.push(`END`);
-        }
-        return lines.join('\n');
-    }
-
-    RaiseSignalSQL(message: string): string {
-        return `RAISERROR('${message}', 16, 1)`;
-    }
-
-    // ─── DDL Generation (Schema/Table continued) ────────────────────
-
-    AddColumnClause(col: ColumnDDLOptions): string {
-        const nullable = col.nullable ? 'NULL' : 'NOT NULL';
-        const defaultExpr = col.defaultValue != null ? ` DEFAULT ${col.defaultValue}` : '';
-        return `ADD [${col.name}] ${col.sqlType} ${nullable}${defaultExpr}`;
-    }
-
-    AlterColumnDDL(quotedTable: string, options: AlterColumnOptions): string {
-        const nullable = options.newNullable ? 'NULL' : 'NOT NULL';
-        return `ALTER TABLE ${quotedTable}\n    ALTER COLUMN [${options.columnName}] ${options.newType} ${nullable};`;
-    }
-
-    CommentOnColumn(schema: string, table: string, column: string, comment: string): string {
-        const escaped = comment.replace(/'/g, "''");
-        return [
-            `EXEC sp_addextendedproperty`,
-            `    @name = N'MS_Description',`,
-            `    @value = N'${escaped}',`,
-            `    @level0type = N'SCHEMA', @level0name = '${schema}',`,
-            `    @level1type = N'TABLE', @level1name = '${table}',`,
-            `    @level2type = N'COLUMN', @level2name = '${column}';`,
-        ].join('\n');
-    }
-
-    FallbackType(): string {
-        return 'NVARCHAR(MAX)';
-    }
-
-    // ─── DDL Generation (Triggers/Indexes) ──────────────────────────
-
-    TriggerDDL(options: TriggerOptions): string {
-        const events = options.events.join(', ');
-        const lines: string[] = [];
-        lines.push(`CREATE TRIGGER [${options.schema}].[${options.triggerName}]`);
-        lines.push(`ON [${options.schema}].[${options.tableName}]`);
-        lines.push(`${options.timing} ${events}`);
-        lines.push('AS');
-        lines.push('BEGIN');
-        lines.push('    SET NOCOUNT ON;');
-        lines.push(`    ${options.body}`);
-        lines.push('END');
-        return lines.join('\n');
-    }
-
-    IndexDDL(options: IndexOptions): string {
-        const unique = options.unique ? 'UNIQUE ' : '';
-        const cols = options.columns.map(c => `[${c}]`).join(', ');
-        let ddl = `CREATE ${unique}INDEX [${options.indexName}] ON [${options.schema}].[${options.tableName}](${cols})`;
-        if (options.includeColumns && options.includeColumns.length > 0) {
-            const inc = options.includeColumns.map(c => `[${c}]`).join(', ');
-            ddl += ` INCLUDE (${inc})`;
-        }
-        return ddl;
-    }
-
-    // ─── Permissions ─────────────────────────────────────────────────
-
-    GrantPermission(permission: string, _objectType: string, schema: string, object: string, role: string): string {
-        return `GRANT ${permission} ON [${schema}].[${object}] TO [${role}]`;
-    }
-
-    CommentOnObject(objectType: string, schema: string, name: string, comment: string): string {
-        const escapedComment = comment.replace(/'/g, "''");
-        const level1Type = this.objectTypeToLevel1Type(objectType);
-        return [
-            `EXEC sp_addextendedproperty`,
-            `    @name = N'MS_Description',`,
-            `    @value = N'${escapedComment}',`,
-            `    @level0type = N'SCHEMA', @level0name = N'${schema}',`,
-            `    @level1type = N'${level1Type}', @level1name = N'${name}'`,
-        ].join('\n');
-    }
-
-    // ─── Idempotent (single-statement) DDL — see SQLDialect base ─────
-
-    override CreateTableIfAbsent(fullTable: string, columnsBody: string): string {
-        // Single-statement IF guard (no BEGIN/END) so migration chunkers that split on ';\n'
-        // boundaries cannot separate the guard from the CREATE. The only ';' is the terminating ');'.
-        return `IF OBJECT_ID(N'${fullTable}', N'U') IS NULL\nCREATE TABLE ${fullTable} (\n${columnsBody}\n);`;
-    }
-
-    override CommentOnObjectIfAbsent(objectType: string, schema: string, name: string, comment: string): string {
-        const level1Type = this.objectTypeToLevel1Type(objectType);
-        // IF NOT EXISTS governs the single EXEC that follows (sp_addextendedproperty has no internal ';').
-        return [
-            `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'${schema}', N'${level1Type}', N'${name}', NULL, NULL))`,
-            `${this.CommentOnObject(objectType, schema, name, comment)};`,
-        ].join('\n');
-    }
-
-    override CommentOnColumnIfAbsent(schema: string, table: string, column: string, comment: string): string {
-        return [
-            `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'${schema}', N'TABLE', N'${table}', N'COLUMN', N'${column}'))`,
-            this.CommentOnColumn(schema, table, column, comment),
-        ].join('\n');
-    }
-
-    // ─── Schema Introspection ────────────────────────────────────────
-
-    SchemaIntrospectionQueries(): SchemaIntrospectionSQL {
-        return {
-            listTables: `
-                SELECT s.name AS schema_name, t.name AS table_name
-                FROM sys.tables t
-                INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
-                WHERE s.name = @schema
-                ORDER BY t.name`,
-            listColumns: `
-                SELECT c.name AS column_name, ty.name AS data_type,
-                       c.max_length, c.precision, c.scale, c.is_nullable,
-                       c.is_identity, dc.definition AS default_value
-                FROM sys.columns c
-                INNER JOIN sys.types ty ON c.user_type_id = ty.user_type_id
-                LEFT JOIN sys.default_constraints dc ON c.default_object_id = dc.object_id
-                WHERE c.object_id = OBJECT_ID(@table)
-                ORDER BY c.column_id`,
-            listConstraints: `
-                SELECT tc.CONSTRAINT_NAME, tc.CONSTRAINT_TYPE, kcu.COLUMN_NAME
-                FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
-                INNER JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
-                    ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
-                WHERE tc.TABLE_SCHEMA = @schema AND tc.TABLE_NAME = @table
-                ORDER BY tc.CONSTRAINT_TYPE, kcu.ORDINAL_POSITION`,
-            listForeignKeys: `
-                SELECT fk.name AS fk_name,
-                       OBJECT_SCHEMA_NAME(fk.parent_object_id) AS source_schema,
-                       OBJECT_NAME(fk.parent_object_id) AS source_table,
-                       COL_NAME(fkc.parent_object_id, fkc.parent_column_id) AS source_column,
-                       OBJECT_SCHEMA_NAME(fk.referenced_object_id) AS target_schema,
-                       OBJECT_NAME(fk.referenced_object_id) AS target_table,
-                       COL_NAME(fkc.referenced_object_id, fkc.referenced_column_id) AS target_column
-                FROM sys.foreign_keys fk
-                INNER JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
-                WHERE OBJECT_SCHEMA_NAME(fk.parent_object_id) = @schema
-                ORDER BY fk.name`,
-            listIndexes: `
-                SELECT i.name AS index_name, i.is_unique, i.type_desc,
-                       COL_NAME(ic.object_id, ic.column_id) AS column_name,
-                       ic.is_included_column
-                FROM sys.indexes i
-                INNER JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
-                WHERE i.object_id = OBJECT_ID(@table) AND i.name IS NOT NULL
-                ORDER BY i.name, ic.key_ordinal`,
-            objectExists: `SELECT OBJECT_ID(@objectName) AS object_id`,
-        };
-    }
-
-    /**
-     * SQL Server FK-graph query for cascade planning — reads the `sys.foreign_keys` catalog.
-     * Returns one row per FK column with `childNullable` (from `sys.columns.is_nullable`) and
-     * `colCount` (columns in the constraint, for composite exclusion). Both parent + child are
-     * filtered to `schema`. Schema is embedded as a literal (no bind params) so it runs via
-     * `ExecuteSQL(sql)`.
-     */
-    ForeignKeyGraphSQL(schema: string): string {
-        const s = this.QuoteStringLiteral(schema);
-        // Disabled FKs (fk.is_disabled = 1) are intentionally NOT filtered: a disabled FK can't block
-        // the Entity delete, so including it only yields an extra, conservative-safe child clear.
-        // ORDER BY fk.name makes edge order — and therefore statement + dry-run order — deterministic.
-        return (
-            'SELECT rt.name AS parentTable, rc.name AS parentRefCol, pt.name AS childTable, ' +
-            'pc.name AS childCol, pc.is_nullable AS childNullable, fk.name AS fkName, ' +
-            '(SELECT COUNT(*) FROM sys.foreign_key_columns x WHERE x.constraint_object_id = fk.object_id) AS colCount ' +
-            'FROM sys.foreign_keys fk ' +
-            'JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id ' +
-            'JOIN sys.objects rt ON rt.object_id = fk.referenced_object_id ' +
-            'JOIN sys.schemas rs ON rs.schema_id = rt.schema_id ' +
-            'JOIN sys.columns rc ON rc.object_id = fk.referenced_object_id AND rc.column_id = fkc.referenced_column_id ' +
-            'JOIN sys.objects pt ON pt.object_id = fk.parent_object_id ' +
-            'JOIN sys.schemas ps ON ps.schema_id = pt.schema_id ' +
-            'JOIN sys.columns pc ON pc.object_id = fk.parent_object_id AND pc.column_id = fkc.parent_column_id ' +
-            `WHERE rs.name = ${s} AND ps.name = ${s} ` +
-            'ORDER BY fk.name'
-        );
-    }
-
-    AtomicBatchScript(statements: string[]): string {
-        if (!statements || !statements.length) return '';
-        const body = statements.join(';\n');
-        return `SET QUOTED_IDENTIFIER ON;\nSET ANSI_NULLS ON;\nSET XACT_ABORT ON;\nBEGIN TRANSACTION;\n${body};\nCOMMIT TRANSACTION;`;
-    }
-
-    // ─── IIF ─────────────────────────────────────────────────────────
-
     IIF(condition: string, trueVal: string, falseVal: string): string {
         return `IIF(${condition}, ${trueVal}, ${falseVal})`;
     }
+}
 
-    // ─── Abstract Type Resolution ─────────────────────────────────────
-
-    ResolveAbstractType(options: ResolveTypeOptions): string {
-        switch (options.type) {
-            case 'string':
-                return this.resolveStringType(options.maxLength);
-            case 'text':
-                return 'NVARCHAR(MAX)';
-            case 'integer':
-                return 'INT';
-            case 'bigint':
-                return 'BIGINT';
-            case 'decimal':
-                return `DECIMAL(${options.precision ?? 18},${options.scale ?? 2})`;
-            case 'boolean':
-                return 'BIT';
-            case 'datetime':
-                return 'DATETIMEOFFSET';
-            case 'date':
-                return 'DATE';
-            case 'uuid':
-                return 'UNIQUEIDENTIFIER';
-            case 'json':
-                return 'NVARCHAR(MAX)';
-            case 'float':
-                return 'FLOAT';
-            case 'time':
-                return 'TIME';
-            default:
-                return this.FallbackType();
-        }
+/** SQL Server binding through the `mssql` driver: `@p0` placeholders, `1`/`0` booleans. */
+export class SQLServerBinding implements DialectBinding {
+    BooleanParameterValue(value: boolean): boolean | number {
+        return value ? 1 : 0;
     }
 
-    // ─── Error Classification ────────────────────────────────────────
+    ParameterPlaceholder(index: number): string {
+        return `@p${index}`;
+    }
+
+    /** A named `@mj_p<n>` parameter; the driver declares its type, so no cast is written. */
+    TypedParameter(index: number, _sqlType: string): TypedParameterReference {
+        return { Placeholder: `@mj_p${index}`, Name: `mj_p${index}` };
+    }
 
     IsConnectionError(e: unknown): boolean {
         if (!(e instanceof Error)) return false;
@@ -771,26 +206,51 @@ export class SQLServerDialect extends SQLDialect {
         // failures (timeout, refused, reset, TLS handshake, etc.)
         return e.name === 'ConnectionError';
     }
+}
 
-    // ─── Private Helpers ────────────────────────────────────────────
+/**
+ * SQL Server dialect implementation.
+ * Uses [bracket] quoting, TOP for pagination, BIT for booleans, T-SQL functions.
+ */
+export class SQLServerDialect extends SQLDialect {
+    private readonly writer: DialectWriter = Object.freeze(new SQLServerWriter());
+    private readonly binding: DialectBinding = Object.freeze(new SQLServerBinding());
+    private readonly ddl: DialectSchemaDDL = Object.freeze(new SQLServerSchemaDDL(this.writer));
 
-    private resolveStringType(maxLength?: number): string {
-        if (maxLength != null && maxLength > 0) {
-            if (maxLength > 4000) return 'NVARCHAR(MAX)';
-            return `NVARCHAR(${maxLength})`;
-        }
-        return 'NVARCHAR(255)';
+    get PlatformKey(): DatabasePlatform {
+        return 'sqlserver';
     }
 
-    // ─── Private Helpers ─────────────────────────────────────────────
+    get DisplayName(): string {
+        return 'Microsoft SQL Server (T-SQL)';
+    }
 
-    private objectTypeToLevel1Type(objectType: string): string {
-        switch (objectType.toUpperCase()) {
-            case 'TABLE': return 'TABLE';
-            case 'VIEW': return 'VIEW';
-            case 'PROCEDURE': return 'PROCEDURE';
-            case 'FUNCTION': return 'FUNCTION';
-            default: return objectType.toUpperCase();
-        }
+    /** `sql-formatter` ships T-SQL under the `tsql` language key. */
+    get FormatterLanguage(): string {
+        return 'tsql';
+    }
+
+    get Lexical(): DialectLexicalRules {
+        return SQL_SERVER_LEXICAL;
+    }
+
+    get Grammar(): DialectGrammar {
+        return SQL_SERVER_GRAMMAR;
+    }
+
+    get Writer(): DialectWriter {
+        return this.writer;
+    }
+
+    get Types(): DialectTypes {
+        return SQL_SERVER_TYPES;
+    }
+
+    get Binding(): DialectBinding {
+        return this.binding;
+    }
+
+    get DDL(): DialectSchemaDDL {
+        return this.ddl;
     }
 }

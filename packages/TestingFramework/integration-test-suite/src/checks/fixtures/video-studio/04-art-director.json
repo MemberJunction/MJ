@@ -1,0 +1,100 @@
+{
+    "taskComplete": true,
+    "message": "Visual style, typography, pacing, and motion rules defined.",
+    "payloadChangeRequest": {
+        "newElements": {
+            "Style": {
+                "Palette": [
+                    {
+                        "Name": "background.primary",
+                        "Value": "#0B1020",
+                        "Usage": "Primary canvas background across all beats"
+                    },
+                    {
+                        "Name": "text.primary",
+                        "Value": "#F8FAFC",
+                        "Usage": "Headlines, KPI numerals, and primary labels"
+                    },
+                    {
+                        "Name": "accent.primary",
+                        "Value": "#38BDF8",
+                        "Usage": "Primary chart series and focal highlights"
+                    },
+                    {
+                        "Name": "accent.positive",
+                        "Value": "#34D399",
+                        "Usage": "Positive delta badges and expansion metrics"
+                    }
+                ],
+                "Typography": [
+                    {
+                        "Role": "Headline",
+                        "FontFamily": "MJ Sans",
+                        "Weight": 700,
+                        "SizeByFormat": {
+                            "16:9": "64px"
+                        },
+                        "LineHeight": "1.15",
+                        "LetterSpacing": "-0.02em"
+                    },
+                    {
+                        "Role": "Body",
+                        "FontFamily": "MJ Sans",
+                        "Weight": 400,
+                        "SizeByFormat": {
+                            "16:9": "28px"
+                        },
+                        "LineHeight": "1.4"
+                    },
+                    {
+                        "Role": "MetricValue",
+                        "FontFamily": "MJ Mono",
+                        "Weight": 700,
+                        "SizeByFormat": {
+                            "16:9": "76px"
+                        },
+                        "LineHeight": "1.1"
+                    }
+                ],
+                "Composition": "Eye goes first to the primary headline at upper-center, then to the supporting callout below.",
+                "Pacing": {
+                    "AvgSecondsBetweenChanges": 5,
+                    "HoldRules": "Hold settled figures and the final poster frame for at least 1.5s before transitions.",
+                    "MinBeatDurationSeconds": 4,
+                    "MaxBeatDurationSeconds": 8
+                },
+                "MotionRules": [
+                    {
+                        "ObjectClass": "Headline",
+                        "Easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+                        "DurationMs": 450,
+                        "Notes": "Upward 16px reveal with opacity fade-in"
+                    },
+                    {
+                        "ObjectClass": "DataMetric",
+                        "Easing": "cubic-bezier(0.16, 1, 0.3, 1)",
+                        "DurationMs": 1200,
+                        "Notes": "Count-up settles at least 1.5s before beat end"
+                    },
+                    {
+                        "ObjectClass": "Panel",
+                        "Easing": "cubic-bezier(0.22, 1, 0.36, 1)",
+                        "DurationMs": 500,
+                        "Notes": "Staggered card entrance with 80ms offset"
+                    }
+                ],
+                "Texture": "Subtle 1px slate hairline borders (#1E293B) over deep navy surface",
+                "Keep": [
+                    "Generous 8% outer safe margins",
+                    "Monospace tabular numerals for all bound metrics"
+                ],
+                "Avoid": [
+                    "High-frequency strobing backgrounds",
+                    "3D perspective pie charts",
+                    "Text smaller than 20px at 1080p"
+                ],
+                "References": []
+            }
+        }
+    }
+}

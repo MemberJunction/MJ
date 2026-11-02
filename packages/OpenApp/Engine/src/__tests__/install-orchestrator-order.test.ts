@@ -71,20 +71,10 @@ vi.mock('../install/config-manager.js', () => ({
     AddExcludeSchema: vi.fn(() => ({ Success: true })),
     RemoveExcludeSchema: vi.fn(() => ({ Success: true })),
 }));
-vi.mock('../install/history-recorder.js', () => ({
-    RecordAppInstallation: vi.fn(),
-    RecordInstallHistoryEntry: vi.fn(),
-    RecordAppDependencies: vi.fn(),
-    DeleteAppDependencies: vi.fn(),
-    SetAppStatus: vi.fn(),
-    SetAppStep: vi.fn(),
-    FindInstalledApp: vi.fn(),
-    FindDependentApps: vi.fn(),
-    ListInstalledApps: vi.fn(),
-    UpdateAppRecord: vi.fn(),
-    ReplaceAppDependenciesAtomically: vi.fn(),
-    CheckSchemaSharedByOtherApps: vi.fn(),
-}));
+vi.mock('../install/history-recorder.js', async (importOriginal) => {
+    const { MockHistoryRecorder } = await import('./helpers/history-recorder-mock.js');
+    return MockHistoryRecorder(await importOriginal());
+});
 vi.mock('@memberjunction/core', () => ({
     // Only CreateTransactionGroup is used on the install path.
     Metadata: class { async CreateTransactionGroup() { return { Submit: async () => true }; } },
@@ -221,6 +211,44 @@ describe('InstallApp dependency orchestration', () => {
 
         expect(result.Success).toBe(true);
         expect(installSequence).toEqual(['app-c', 'app-b', 'app-a', 'app-root']);
+    });
+
+    it('resolves each dependency version once and installs the version the graph fetched (#3310)', async () => {
+        serveManifests({
+            'https://github.com/test/app-root': manifestJSON('app-root', { 'app-common': dep('app-common') }),
+            'https://github.com/test/app-common': manifestJSON('app-common', {}),
+        });
+        vi.mocked(ListGitHubTags).mockResolvedValue(['1.0.0', '1.3.0', '2.0.0']);
+
+        const result = await InstallApp({ Source: 'https://github.com/test/app-root' }, context);
+
+        expect(result.Success).toBe(true);
+        // Resolved during graph construction only, not again at install time.
+        expect(vi.mocked(ListGitHubTags)).toHaveBeenCalledTimes(1);
+        const commonFetches = vi.mocked(FetchManifestFromGitHub).mock.calls
+            .filter(([repoUrl]) => repoUrl === 'https://github.com/test/app-common')
+            .map(([, version]) => version);
+        // The graph fetch and the dependency install both use the resolved 1.3.0.
+        expect(commonFetches).toEqual(['1.3.0', '1.3.0']);
+    });
+
+    it('fails before installing anything when two dependents need conflicting versions (#3310)', async () => {
+        serveManifests({
+            'https://github.com/test/app-root': manifestJSON('app-root', { 'app-a': dep('app-a'), 'app-b': dep('app-b') }),
+            'https://github.com/test/app-a': manifestJSON('app-a', { 'app-common': dep('app-common') }),
+            'https://github.com/test/app-b': manifestJSON('app-b', {
+                'app-common': { version: '^2.0.0', repository: 'https://github.com/test/app-common' },
+            }),
+            'https://github.com/test/app-common': manifestJSON('app-common', {}),
+        });
+        vi.mocked(ListGitHubTags).mockResolvedValue(['1.0.0', '2.0.0']);
+
+        const result = await InstallApp({ Source: 'https://github.com/test/app-root' }, context);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain("'app-a' requires '^1.0.0'");
+        expect(result.ErrorMessage).toContain("'app-b' requires '^2.0.0'");
+        expect(installSequence).toEqual([]);
     });
 
     it('skips already-installed dependencies but still installs the rest in order', async () => {
