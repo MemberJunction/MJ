@@ -172,6 +172,34 @@ describe('PSPipelinesComponent (DOM)', () => {
       .toBe('Trained Renewal pipeline: no model shipped. See training run run-9.');
   });
 
+  it('states that holdout and folds come from the bound Evaluation Protocol and offers no legacy validation settings', () => {
+    const stages = render([makePipeline({ EvaluationProtocolID: 'ep1', EvaluationProtocol: 'Renewal protocol' })]);
+    const stagesText = query(stages, '[data-testid="ps-pipelines-evaluation-source"]')?.textContent || '';
+    expect(stagesText).toContain('Evaluation Protocol');
+    expect(stagesText).toContain('Renewal protocol');
+    expect(stages.nativeElement.textContent).not.toContain('Locked Holdout');
+    expect(stages.nativeElement.textContent).not.toContain('Honest benchmark score');
+
+    const dag = render([makePipeline({ EvaluationProtocolID: 'ep1', EvaluationProtocol: 'Renewal protocol' })], 'dag');
+    expect(query(dag, '[data-testid="ps-pipelines-inspector-evaluation-source"]')?.textContent).toContain('Renewal protocol');
+    expect(queryAll(dag, 'option[value="kfold"]').length).toBe(0);
+    expect(dag.nativeElement.textContent).not.toContain('Locked holdout fraction');
+  });
+
+  it('says training refuses a pipeline with no Evaluation Protocol bound', () => {
+    const fixture = render([makePipeline({ EvaluationProtocolID: null, EvaluationProtocol: null })]);
+    expect(query(fixture, '[data-testid="ps-pipelines-evaluation-source"]')?.textContent).toContain('No Evaluation Protocol is bound');
+  });
+
+  it('saving leaves the stored ValidationStrategy untouched', async () => {
+    const stored = makePipeline({ ValidationStrategy: null, Save: vi.fn().mockResolvedValue(true) });
+    const fixture = render([stored]);
+    (query(fixture, '[data-testid="ps-pipelines-add-source"]') as HTMLElement).click();
+    fixture.detectChanges();
+    await fixture.componentInstance.save();
+    expect(stored.ValidationStrategy).toBeNull();
+  });
+
   it('Reset to none marks the pipeline dirty without saving', () => {
     const fixture = render([makePipeline({ AsOfStrategy: JSON.stringify({ Mode: 'offset', OffsetDays: 30 }) })], 'dag');
     const save = vi.spyOn(fixture.componentInstance, 'save');

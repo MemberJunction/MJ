@@ -17,7 +17,6 @@ import {
   type FeatureStepKind,
   type AsOfStrategy,
   type LeakageGuard,
-  type ValidationStrategy,
   type ProblemType,
 } from '@memberjunction/predictive-studio-core';
 import { PSPanelKey } from '../predictive-studio.types';
@@ -376,19 +375,8 @@ const PS_PIPELINES_STARTER_PROMPT =
 
                   <div class="pl-grid-4">
                     <div class="pl-metric-box">
-                      <label>Validation Strategy</label>
-                      <div class="val">{{ EditValidation.Strategy }}</div>
-                      <div class="sub">Cross-validation split</div>
-                    </div>
-                    <div class="pl-metric-box">
-                      <label>Locked Holdout</label>
-                      <div class="val">{{ (EditValidation.LockedHoldoutFraction * 100).toFixed(0) }}%</div>
-                      <div class="sub">Honest benchmark score</div>
-                    </div>
-                    <div class="pl-metric-box">
-                      <label>Folds / Split</label>
-                      <div class="val">{{ EditValidation.Strategy === 'kfold' ? (EditValidation.K || 5) + ' Folds' : ((EditValidation.TestSize || 0.2) * 100).toFixed(0) + '% Test' }}</div>
-                      <div class="sub">Training evaluation</div>
+                      <label>Holdout &amp; Folds</label>
+                      <div class="sub" data-testid="ps-pipelines-evaluation-source">{{ EvaluationSourceText }}</div>
                     </div>
                     <div class="pl-metric-box">
                       <label>Anti-Skew Guarantee</label>
@@ -754,14 +742,11 @@ const PS_PIPELINES_STARTER_PROMPT =
                     </div>
                   </div>
 
-                  <!-- Validation (editable) -->
+                  <!-- Holdout & folds (read-only: set by the bound Evaluation Protocol) -->
                   <div class="ps-card">
-                    <div class="ps-card-head"><i class="fa-solid fa-scissors" style="color:var(--mj-brand-primary)"></i><h3>Validation</h3></div>
+                    <div class="ps-card-head"><i class="fa-solid fa-scissors" style="color:var(--mj-brand-primary)"></i><h3>Holdout &amp; folds</h3></div>
                     <div class="ps-card-body">
-                      <div class="ps-field"><label>Strategy</label><select class="mj-input" [value]="EditValidation.Strategy" (change)="SetValStrategy(InputVal($event))"><option value="train_test_split">train_test_split</option><option value="kfold">kfold</option><option value="holdout">holdout</option></select></div>
-                      @if (EditValidation.Strategy === 'train_test_split') { <div class="ps-field"><label>Test size</label><input class="mj-input" type="number" step="0.05" [value]="EditValidation.TestSize || 0.2" (input)="SetTestSize(InputVal($event))" /></div> }
-                      @if (EditValidation.Strategy === 'kfold') { <div class="ps-field"><label>Folds (k)</label><input class="mj-input" type="number" [value]="EditValidation.K || 5" (input)="SetK(InputVal($event))" /></div> }
-                      <div class="ps-field"><label>Locked holdout fraction</label><input class="mj-input" type="number" step="0.05" [value]="EditValidation.LockedHoldoutFraction" (input)="SetHoldout(InputVal($event))" /></div>
+                      <p class="ps-muted" data-testid="ps-pipelines-inspector-evaluation-source">{{ EvaluationSourceText }}</p>
                     </div>
                   </div>
                   </div>
@@ -898,8 +883,6 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
   public EditLeakage: LeakageGuard = { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT };
 
   public EditAsOf: AsOfStrategy = { Mode: 'none' };
-
-  public EditValidation: ValidationStrategy = { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.15 };
 
   public Nodes: DagNode[] = [];
 
@@ -1209,7 +1192,6 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     this.EditHyperparams = p.Hyperparameters ?? '{}';
     this.EditLeakage = this.parse<LeakageGuard>(p.LeakageGuard, { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT });
     this.EditAsOf = this.parse<AsOfStrategy>(p.AsOfStrategy, { Mode: 'none' });
-    this.EditValidation = this.parse<ValidationStrategy>(p.ValidationStrategy, { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.15 });
     this.stepSeq = this.EditSteps.length;
     this.Dirty = false;
     this.rebuild();
@@ -1592,13 +1574,19 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     this.EditAsOf = { Mode: 'none' };
     this.markDirty();
   }
-  public SetValStrategy(v: string): void { this.EditValidation = { ...this.EditValidation, Strategy: v as ValidationStrategy['Strategy'] }; this.Dirty = true; }
 
-  public SetTestSize(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.EditValidation.TestSize = n; this.Dirty = true; } }
-
-  public SetK(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.EditValidation.K = n; this.Dirty = true; } }
-
-  public SetHoldout(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.EditValidation.LockedHoldoutFraction = n; this.Dirty = true; } }
+  /**
+   * Where the selected pipeline's holdout and folds come from. Training grades a pipeline only on the Evaluation
+   * Protocol version it is bound to and refuses one with none, so the workspace names that protocol instead of
+   * offering split settings training does not read.
+   */
+  public get EvaluationSourceText(): string {
+    const p = this.SelectedPipeline;
+    if (!p?.EvaluationProtocolID) {
+      return 'No Evaluation Protocol is bound: training refuses this pipeline until one is. Holdout and folds come from the bound protocol.';
+    }
+    return `Holdout and folds come from the bound Evaluation Protocol: ${p.EvaluationProtocol || p.EvaluationProtocolID}.`;
+  }
 
   // ---- add / delete nodes ----
 
@@ -1670,7 +1658,6 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
       p.Hyperparameters = this.EditHyperparams || null;
       p.LeakageGuard = JSON.stringify(this.EditLeakage);
       p.AsOfStrategy = JSON.stringify(this.EditAsOf);
-      p.ValidationStrategy = JSON.stringify(this.EditValidation);
       const ok = await p.Save();
       if (ok) {
         this.Dirty = false;
