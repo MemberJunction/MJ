@@ -235,6 +235,142 @@ describe('MarkdownComponent (DOM)', () => {
     });
   });
 
+  describe('OpenLinksInNewTab', () => {
+    const SAMPLE_MARKDOWN =
+      'You can access the AQHA invoices site directly at https://invoices.aqha.com/.\n' +
+      'Most of your billing and invoice needs can be managed through your online account via the [myAQHA Member Portal](https://www.aqha.com/myaqha).';
+
+    it('leaves links in the current tab by default (OpenLinksInNewTab=false)', () => {
+      const f = render({ data: SAMPLE_MARKDOWN });
+      const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(2);
+      for (const link of links) {
+        expect(link.hasAttribute('target')).toBe(false);
+      }
+    });
+
+    it('stamps target="_blank" and rel="noopener noreferrer" on both bare autolinks and markdown links when OpenLinksInNewTab=true', () => {
+      const f = render({ data: SAMPLE_MARKDOWN, OpenLinksInNewTab: true });
+      const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(2);
+      expect(links[0].getAttribute('href')).toBe('https://invoices.aqha.com/');
+      expect(links[0].getAttribute('target')).toBe('_blank');
+      expect(links[0].getAttribute('rel')).toBe('noopener noreferrer');
+      expect(links[1].getAttribute('href')).toBe('https://www.aqha.com/myaqha');
+      expect(links[1].textContent).toBe('myAQHA Member Portal');
+      expect(links[1].getAttribute('target')).toBe('_blank');
+      expect(links[1].getAttribute('rel')).toBe('noopener noreferrer');
+    });
+
+    it('leaves in-page fragment links (#section) and mailto:/tel:/sms: links in the current tab even when OpenLinksInNewTab=true', () => {
+      const f = render({
+        data:
+          'Jump to [Overview](#overview), email billing@aqha.com or [Support](mailto:support@aqha.com), ' +
+          'call [AQHA](tel:+18063764811), or visit [AQHA](https://www.aqha.com/myaqha).',
+        OpenLinksInNewTab: true,
+      });
+      const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(5);
+      expect(links[0].getAttribute('href')).toBe('#overview');
+      expect(links[0].hasAttribute('target')).toBe(false);
+      expect(links[1].getAttribute('href')).toBe('mailto:billing@aqha.com');
+      expect(links[1].hasAttribute('target')).toBe(false);
+      expect(links[2].getAttribute('href')).toBe('mailto:support@aqha.com');
+      expect(links[2].hasAttribute('target')).toBe(false);
+      expect(links[3].getAttribute('href')).toBe('tel:+18063764811');
+      expect(links[3].hasAttribute('target')).toBe(false);
+      expect(links[4].getAttribute('href')).toBe('https://www.aqha.com/myaqha');
+      expect(links[4].getAttribute('target')).toBe('_blank');
+      expect(links[4].getAttribute('rel')).toBe('noopener noreferrer');
+    });
+
+    it('preserves an explicit target on raw HTML links and merges noopener noreferrer into existing rel attributes', () => {
+      const f = render({
+        data:
+          '<a href="https://example.com/same" target="_self">Same</a> ' +
+          '<a href="https://example.com/ext" rel="nofollow">Ext</a>',
+        OpenLinksInNewTab: true,
+        enableHtml: true,
+      });
+      const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(2);
+      expect(links[0].getAttribute('target')).toBe('_self');
+      expect(links[1].getAttribute('target')).toBe('_blank');
+      expect(links[1].getAttribute('rel')).toBe('nofollow noopener noreferrer');
+    });
+
+    it('works when enableSvgRenderer is false (Angular sanitizer path)', () => {
+      const f = render({
+        data: SAMPLE_MARKDOWN,
+        OpenLinksInNewTab: true,
+        enableSvgRenderer: false,
+      });
+      const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(2);
+      for (const link of links) {
+        expect(link.getAttribute('target')).toBe('_blank');
+        expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+      }
+    });
+
+    it('updates rendered links when OpenLinksInNewTab changes dynamically', async () => {
+      const f = render({ data: SAMPLE_MARKDOWN, OpenLinksInNewTab: false });
+      expect(container(f).querySelector('a')?.hasAttribute('target')).toBe(false);
+
+      f.componentRef.setInput('OpenLinksInNewTab', true);
+      f.detectChanges();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(container(f).querySelector('a')?.getAttribute('target')).toBe('_blank');
+      expect(container(f).querySelector('a')?.getAttribute('rel')).toBe('noopener noreferrer');
+
+      f.componentRef.setInput('OpenLinksInNewTab', false);
+      f.detectChanges();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(container(f).querySelector('a')?.hasAttribute('target')).toBe(false);
+    });
+
+    it('dispatches click events with target="_blank" and rel="noopener noreferrer" when clicking rendered links', () => {
+      const f = render({ data: SAMPLE_MARKDOWN, OpenLinksInNewTab: true });
+      const root = container(f);
+      const clickedLinks: Array<{ href: string | null; target: string; rel: string; defaultPrevented: boolean }> = [];
+
+      root.addEventListener('click', (event: MouseEvent) => {
+        const anchor = (event.target as HTMLElement | null)?.closest('a');
+        if (anchor) {
+          event.preventDefault();
+          clickedLinks.push({
+            href: anchor.getAttribute('href'),
+            target: anchor.target,
+            rel: anchor.rel,
+            defaultPrevented: event.defaultPrevented,
+          });
+        }
+      });
+
+      const links = Array.from(root.querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(2);
+      links[0].click();
+      links[1].click();
+
+      expect(clickedLinks).toEqual([
+        {
+          href: 'https://invoices.aqha.com/',
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          defaultPrevented: true,
+        },
+        {
+          href: 'https://www.aqha.com/myaqha',
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          defaultPrevented: true,
+        },
+      ]);
+    });
+  });
+
   /**
    * Sanitization, as seen through the component. With `enableHtml` or the default
    * `enableSvgRenderer`, Angular's sanitizer is bypassed and the HTML the service returns

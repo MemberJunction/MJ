@@ -312,6 +312,24 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   }
   private _inFlightCount = 0;
 
+  /**
+   * Whether inline markdown links in messages open in a new browser tab (`target="_blank"`).
+   * In-page fragment links (`#heading`) and `mailto:` / `tel:` / `sms:` links stay in the
+   * current tab. Default `true`.
+   */
+  @Input()
+  public set OpenLinksInNewTab(value: boolean) {
+    if (value === this.OpenLinksInNewTab) {
+      return;
+    }
+    this._openLinksInNewTab = value;
+    this.restampAssistantIdentity();
+  }
+  public get OpenLinksInNewTab(): boolean {
+    return this._openLinksInNewTab ?? true;
+  }
+  private _openLinksInNewTab = true;
+
   // ── Windowed-transcript paging state ────────────────────────────────────────
   // The list renders only the LOADED window, not the whole conversation. These two
   // describe what lies above it. Unused until the Phase 5 sentinel lands; wired now so
@@ -2181,6 +2199,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.ReadOnly = this.ReadOnly;
     instance.AllowStopRun = this.AllowStopRun;
     instance.InFlightCount = this.InFlightCount;
+    instance.OpenLinksInNewTab = this.OpenLinksInNewTab;
     instance.CanFork = this.CanFork;
     instance.assistantDisplayName = this.AssistantDisplayName;
     instance.assistantAvatarUrl = this.AssistantAvatarUrl;

@@ -116,6 +116,7 @@ export class YourModule {}
 | `containerClass` | `string` | `''` | Custom CSS class for container |
 | `mermaidTheme` | `string` | `'default'` | Mermaid theme (default/dark/forest/neutral/base) |
 | `sanitize` | `boolean` | `true` | Sanitize HTML output |
+| `OpenLinksInNewTab` | `boolean` | `false` | Open links (`https://...` autolinks and `[text](url)` links) in a new browser tab (`target="_blank"` with `rel="noopener noreferrer"`). In-page fragment links (`#heading`) and `mailto:` / `tel:` / `sms:` links stay in the current tab. PascalCase only |
 
 ## Outputs
 
