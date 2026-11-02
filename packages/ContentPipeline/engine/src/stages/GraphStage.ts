@@ -36,6 +36,7 @@ import {
     ExistingGraphConceptSeed,
     FatalStageError,
     GraphAuthorityTier,
+    GraphConceptTypeDescriptor,
     Outcome,
     ResolvedGraphOverlayConfig,
     ResolveGraphOverlayConfig,
@@ -76,6 +77,12 @@ export interface IGraphOverlayStore {
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<ExistingGraphConceptSeed[]>;
+
+    /** Optional loader for active `MJ: Graph Concept Types` (`__mj.GraphConceptType`) to resolve `ConceptTypeID` and rank order. */
+    LoadConceptTypes?(
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<GraphConceptTypeDescriptor[]>;
 
     /** Load candidate MJ schema/operational targets for grounding edges (`Describes`, `Defines`, `Measures`, `Implements`). */
     LoadGroundingTargets?(
@@ -211,6 +218,9 @@ export class GraphStage extends BasePipelineStage {
         const existingConcepts = store
             ? await store.LoadExistingConcepts(targetGraphID, context.ContextUser, context.Provider)
             : [];
+        const conceptTypes = store?.LoadConceptTypes
+            ? await store.LoadConceptTypes(context.ContextUser, context.Provider)
+            : [];
         const groundingTargets =
             store?.LoadGroundingTargets && overlayConfig.GroundingMode !== 'none'
                 ? await store.LoadGroundingTargets(
@@ -225,6 +235,7 @@ export class GraphStage extends BasePipelineStage {
             conceptMatchThreshold: overlayConfig.ConceptMatchThreshold,
             maxNewConcepts: overlayConfig.MaxNewConceptsPerRun,
             groundingTargets: groundingTargets,
+            conceptTypes: conceptTypes,
         });
 
         if (clusteringResult.Clusters.length === 0) {

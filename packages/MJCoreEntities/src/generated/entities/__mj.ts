@@ -23850,6 +23850,60 @@ export const MJGeneratedCodeSchema = z.object({
 export type MJGeneratedCodeEntityType = z.infer<typeof MJGeneratedCodeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Graph Concept Types
+ */
+export const MJGraphConceptTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique name of the concept type (e.g., Policy, Metric, Process, Role, Domain, Term).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Plain-language definition and LLM extraction guidance describing what qualifies as a concept of this type.`),
+    Rank: z.number().describe(`
+        * * Field Name: Rank
+        * * Display Name: Rank
+        * * SQL Data Type: int
+        * * Default Value: 100
+        * * Description: Precedence and display rank order of this concept type (lower numbers represent higher-order institutional concepts such as Policy and Metric ahead of granular Terms).`),
+    IconClass: z.string().nullable().describe(`
+        * * Field Name: IconClass
+        * * Display Name: Icon Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Optional Font Awesome CSS icon class used to render concept nodes of this type in graph explorers and cards.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Operational status of the concept type (Active or Inactive).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJGraphConceptTypeEntityType = z.infer<typeof MJGraphConceptTypeSchema>;
+
+/**
  * zod schema definition for the entity MJ: Graph Concepts
  */
 export const MJGraphConceptSchema = z.object({
@@ -23860,12 +23914,12 @@ export const MJGraphConceptSchema = z.object({
         * * Default Value: newsequentialid()`),
     GraphID: z.string().describe(`
         * * Field Name: GraphID
-        * * Display Name: Graph ID
+        * * Display Name: Graph
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent Concept
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Graph Concepts (vwGraphConcepts.ID)`),
     Name: z.string().describe(`
@@ -23873,19 +23927,12 @@ export const MJGraphConceptSchema = z.object({
         * * Display Name: Name
         * * SQL Data Type: nvarchar(255)
         * * Description: Canonical name of the concept, unique within its owning GraphID.`),
-    ConceptType: z.union([z.literal('Domain'), z.literal('Metric'), z.literal('Policy'), z.literal('Process'), z.literal('Term')]).describe(`
-        * * Field Name: ConceptType
+    ConceptTypeID: z.string().describe(`
+        * * Field Name: ConceptTypeID
         * * Display Name: Concept Type
-        * * SQL Data Type: nvarchar(50)
-        * * Default Value: Term
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Domain
-    *   * Metric
-    *   * Policy
-    *   * Process
-    *   * Term
-        * * Description: Structural classification of the concept: Domain, Term, Policy, Metric, or Process.`),
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Concept Types (vwGraphConceptTypes.ID)
+        * * Description: Foreign key to GraphConceptType classifying the structural role and priority rank of this concept.`),
     Description: z.string().describe(`
         * * Field Name: Description
         * * Display Name: Description
@@ -23939,12 +23986,16 @@ export const MJGraphConceptSchema = z.object({
         * * Default Value: getutcdate()`),
     Graph: z.string().describe(`
         * * Field Name: Graph
-        * * Display Name: Graph
+        * * Display Name: Graph Name
         * * SQL Data Type: nvarchar(255)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(255)`),
+    ConceptType: z.string().describe(`
+        * * Field Name: ConceptType
+        * * Display Name: Concept Type Name
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJGraphConceptEntityType = z.infer<typeof MJGraphConceptSchema>;
@@ -23960,7 +24011,7 @@ export const MJGraphEdgeProviderSchema = z.object({
         * * Default Value: newsequentialid()`),
     GraphID: z.string().describe(`
         * * Field Name: GraphID
-        * * Display Name: Graph ID
+        * * Display Name: Graph
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)`),
     Name: z.string().describe(`
@@ -23991,7 +24042,7 @@ export const MJGraphEdgeProviderSchema = z.object({
         * * Description: Execution order of this provider relative to other providers on the same graph.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Is Active
+        * * Display Name: Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When 1, this provider participates in graph expansion queries; when 0, it is skipped.`),
@@ -24074,7 +24125,7 @@ export const MJGraphEdgeTypeSchema = z.object({
         * * Default Value: newsequentialid()`),
     GraphID: z.string().nullable().describe(`
         * * Field Name: GraphID
-        * * Display Name: Graph ID
+        * * Display Name: Graph
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)`),
     Name: z.string().describe(`
@@ -24122,7 +24173,7 @@ export const MJGraphEdgeTypeSchema = z.object({
         * * Default Value: getutcdate()`),
     Graph: z.string().nullable().describe(`
         * * Field Name: Graph
-        * * Display Name: Graph
+        * * Display Name: Graph Details
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -24240,6 +24291,66 @@ export const MJGraphEdgeSchema = z.object({
 export type MJGraphEdgeEntityType = z.infer<typeof MJGraphEdgeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Graph Types
+ */
+export const MJGraphTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique display name of the graph type (e.g., Canon, Knowledge, Network, Custom).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Plain-language description of what graphs of this type represent and how agents should use them.`),
+    IsCanon: z.boolean().describe(`
+        * * Field Name: IsCanon
+        * * Display Name: Is Canon
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, graphs of this type feed governed institutional Canon (authoritative definitions, policies, metrics, and workflows); when 0, the graph is non-canonical (such as exploratory Knowledge or Network graphs).`),
+    Rank: z.number().describe(`
+        * * Field Name: Rank
+        * * Display Name: Rank
+        * * SQL Data Type: int
+        * * Default Value: 100
+        * * Description: Sort and priority rank order of the graph type (lower numbers have higher priority).`),
+    IconClass: z.string().nullable().describe(`
+        * * Field Name: IconClass
+        * * Display Name: Icon Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Optional Font Awesome CSS icon class used to render badges for graphs of this type in the UI.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Operational status of the graph type (Active or Inactive).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJGraphTypeEntityType = z.infer<typeof MJGraphTypeSchema>;
+
+/**
  * zod schema definition for the entity MJ: Graphs
  */
 export const MJGraphSchema = z.object({
@@ -24258,18 +24369,12 @@ export const MJGraphSchema = z.object({
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Plain-language description of the domain, purpose, and governance scope of this graph.`),
-    GraphType: z.union([z.literal('Canon'), z.literal('Custom'), z.literal('Knowledge'), z.literal('Network')]).describe(`
-        * * Field Name: GraphType
+    GraphTypeID: z.string().describe(`
+        * * Field Name: GraphTypeID
         * * Display Name: Graph Type
-        * * SQL Data Type: nvarchar(50)
-        * * Default Value: Custom
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Canon
-    *   * Custom
-    *   * Knowledge
-    *   * Network
-        * * Description: Semantic category of the graph: Canon (governed organizational definitions, policies, metrics, and workflows), Knowledge (document/RAG topic and concept graph), Network (entity relationship network), or Custom.`),
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Types (vwGraphTypes.ID)
+        * * Description: Foreign key to GraphType defining the semantic classification of this graph and whether it feeds institutional Canon.`),
     LoadMode: z.union([z.literal('OnDemand'), z.literal('Preload')]).describe(`
         * * Field Name: LoadMode
         * * Display Name: Load Mode
@@ -24300,6 +24405,10 @@ export const MJGraphSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    GraphType: z.string().describe(`
+        * * Field Name: GraphType
+        * * Display Name: Graph Type Name
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJGraphEntityType = z.infer<typeof MJGraphSchema>;
@@ -108899,11 +109008,147 @@ export class MJGeneratedCodeEntity extends BaseEntity<MJGeneratedCodeEntityType>
 
 
 /**
+ * MJ: Graph Concept Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GraphConceptType
+ * * Base View: vwGraphConceptTypes
+ * * @description Configurable semantic concept classifications (such as Policy, Metric, Process, Role, Domain, or Term) with rank ordering and synthesis guidance, seeded via metadata and extensible per organization.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graph Concept Types')
+export class MJGraphConceptTypeEntity extends BaseEntity<MJGraphConceptTypeEntityType> {
+    /**
+    * Loads the MJ: Graph Concept Types record from the database
+    * @param ID: string - primary key value to load the MJ: Graph Concept Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphConceptTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name of the concept type (e.g., Policy, Metric, Process, Role, Domain, Term).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Plain-language definition and LLM extraction guidance describing what qualifies as a concept of this type.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Rank
+    * * Display Name: Rank
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Precedence and display rank order of this concept type (lower numbers represent higher-order institutional concepts such as Policy and Metric ahead of granular Terms).
+    */
+    get Rank(): number {
+        return this.Get('Rank');
+    }
+    set Rank(value: number) {
+        this.Set('Rank', value);
+    }
+
+    /**
+    * * Field Name: IconClass
+    * * Display Name: Icon Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Optional Font Awesome CSS icon class used to render concept nodes of this type in graph explorers and cards.
+    */
+    get IconClass(): string | null {
+        return this.Get('IconClass');
+    }
+    set IconClass(value: string | null) {
+        this.Set('IconClass', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Operational status of the concept type (Active or Inactive).
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: Graph Concepts - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: GraphConcept
  * * Base View: vwGraphConcepts
- * * @description Higher-level semantic concept nodes scoped to a Graph (such as Domain, Term, Policy, Metric, or Process definitions), serving as organizing hubs for Canon governance and Content Source GraphRAG overlays.
+ * * @description Higher-level semantic concept nodes scoped to a Graph (referencing GraphConceptType such as Policy, Metric, Process, Role, Domain, or Term), serving as organizing hubs for Canon governance and Content Source GraphRAG overlays.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -108943,7 +109188,7 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
 
     /**
     * * Field Name: GraphID
-    * * Display Name: Graph ID
+    * * Display Name: Graph
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
     */
@@ -108956,7 +109201,7 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent Concept
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Graph Concepts (vwGraphConcepts.ID)
     */
@@ -108981,24 +109226,17 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
     }
 
     /**
-    * * Field Name: ConceptType
+    * * Field Name: ConceptTypeID
     * * Display Name: Concept Type
-    * * SQL Data Type: nvarchar(50)
-    * * Default Value: Term
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Domain
-    *   * Metric
-    *   * Policy
-    *   * Process
-    *   * Term
-    * * Description: Structural classification of the concept: Domain, Term, Policy, Metric, or Process.
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Concept Types (vwGraphConceptTypes.ID)
+    * * Description: Foreign key to GraphConceptType classifying the structural role and priority rank of this concept.
     */
-    get ConceptType(): 'Domain' | 'Metric' | 'Policy' | 'Process' | 'Term' {
-        return this.Get('ConceptType');
+    get ConceptTypeID(): string {
+        return this.Get('ConceptTypeID');
     }
-    set ConceptType(value: 'Domain' | 'Metric' | 'Policy' | 'Process' | 'Term') {
-        this.Set('ConceptType', value);
+    set ConceptTypeID(value: string) {
+        this.Set('ConceptTypeID', value);
     }
 
     /**
@@ -109104,7 +109342,7 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
 
     /**
     * * Field Name: Graph
-    * * Display Name: Graph
+    * * Display Name: Graph Name
     * * SQL Data Type: nvarchar(255)
     */
     get Graph(): string {
@@ -109113,11 +109351,20 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: ConceptType
+    * * Display Name: Concept Type Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ConceptType(): string {
+        return this.Get('ConceptType');
     }
 }
 
@@ -109167,7 +109414,7 @@ export class MJGraphEdgeProviderEntity extends BaseEntity<MJGraphEdgeProviderEnt
 
     /**
     * * Field Name: GraphID
-    * * Display Name: Graph ID
+    * * Display Name: Graph
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
     */
@@ -109246,7 +109493,7 @@ export class MJGraphEdgeProviderEntity extends BaseEntity<MJGraphEdgeProviderEnt
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Is Active
+    * * Display Name: Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When 1, this provider participates in graph expansion queries; when 0, it is skipped.
@@ -109460,7 +109707,7 @@ export class MJGraphEdgeTypeEntity extends BaseEntity<MJGraphEdgeTypeEntityType>
 
     /**
     * * Field Name: GraphID
-    * * Display Name: Graph ID
+    * * Display Name: Graph
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
     */
@@ -109574,7 +109821,7 @@ export class MJGraphEdgeTypeEntity extends BaseEntity<MJGraphEdgeTypeEntityType>
 
     /**
     * * Field Name: Graph
-    * * Display Name: Graph
+    * * Display Name: Graph Details
     * * SQL Data Type: nvarchar(255)
     */
     get Graph(): string | null {
@@ -109853,6 +110100,156 @@ export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
 
 
 /**
+ * MJ: Graph Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GraphType
+ * * Base View: vwGraphTypes
+ * * @description Configurable semantic graph classifications (such as Canon, Knowledge, Network, or Custom), defining whether graphs of this type participate in governed organizational Canon (IsCanon) and their precedence rank.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graph Types')
+export class MJGraphTypeEntity extends BaseEntity<MJGraphTypeEntityType> {
+    /**
+    * Loads the MJ: Graph Types record from the database
+    * @param ID: string - primary key value to load the MJ: Graph Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique display name of the graph type (e.g., Canon, Knowledge, Network, Custom).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Plain-language description of what graphs of this type represent and how agents should use them.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: IsCanon
+    * * Display Name: Is Canon
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, graphs of this type feed governed institutional Canon (authoritative definitions, policies, metrics, and workflows); when 0, the graph is non-canonical (such as exploratory Knowledge or Network graphs).
+    */
+    get IsCanon(): boolean {
+        return this.Get('IsCanon');
+    }
+    set IsCanon(value: boolean) {
+        this.Set('IsCanon', value);
+    }
+
+    /**
+    * * Field Name: Rank
+    * * Display Name: Rank
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Sort and priority rank order of the graph type (lower numbers have higher priority).
+    */
+    get Rank(): number {
+        return this.Get('Rank');
+    }
+    set Rank(value: number) {
+        this.Set('Rank', value);
+    }
+
+    /**
+    * * Field Name: IconClass
+    * * Display Name: Icon Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Optional Font Awesome CSS icon class used to render badges for graphs of this type in the UI.
+    */
+    get IconClass(): string | null {
+        return this.Get('IconClass');
+    }
+    set IconClass(value: string | null) {
+        this.Set('IconClass', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Operational status of the graph type (Active or Inactive).
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: Graphs - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Graph
@@ -109922,23 +110319,17 @@ export class MJGraphEntity extends BaseEntity<MJGraphEntityType> {
     }
 
     /**
-    * * Field Name: GraphType
+    * * Field Name: GraphTypeID
     * * Display Name: Graph Type
-    * * SQL Data Type: nvarchar(50)
-    * * Default Value: Custom
-    * * Value List Type: List
-    * * Possible Values 
-    *   * Canon
-    *   * Custom
-    *   * Knowledge
-    *   * Network
-    * * Description: Semantic category of the graph: Canon (governed organizational definitions, policies, metrics, and workflows), Knowledge (document/RAG topic and concept graph), Network (entity relationship network), or Custom.
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Types (vwGraphTypes.ID)
+    * * Description: Foreign key to GraphType defining the semantic classification of this graph and whether it feeds institutional Canon.
     */
-    get GraphType(): 'Canon' | 'Custom' | 'Knowledge' | 'Network' {
-        return this.Get('GraphType');
+    get GraphTypeID(): string {
+        return this.Get('GraphTypeID');
     }
-    set GraphType(value: 'Canon' | 'Custom' | 'Knowledge' | 'Network') {
-        this.Set('GraphType', value);
+    set GraphTypeID(value: string) {
+        this.Set('GraphTypeID', value);
     }
 
     /**
@@ -109995,6 +110386,15 @@ export class MJGraphEntity extends BaseEntity<MJGraphEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: GraphType
+    * * Display Name: Graph Type Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get GraphType(): string {
+        return this.Get('GraphType');
     }
 }
 

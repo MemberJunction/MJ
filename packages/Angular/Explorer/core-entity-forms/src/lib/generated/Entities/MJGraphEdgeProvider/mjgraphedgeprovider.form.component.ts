@@ -15,8 +15,8 @@ export class MJGraphEdgeProviderFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'providerDetails', sectionName: 'Provider Details', isExpanded: true },
-            { sectionKey: 'configurationAndExecution', sectionName: 'Configuration and Execution', isExpanded: true },
+            { sectionKey: 'providerConfiguration', sectionName: 'Provider Configuration', isExpanded: true },
+            { sectionKey: 'executionAndImplementation', sectionName: 'Execution and Implementation', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

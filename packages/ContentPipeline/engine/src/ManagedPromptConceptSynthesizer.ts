@@ -71,10 +71,12 @@ export class ManagedPromptConceptSynthesizer extends BaseConceptSynthesizer {
         const conceptName = existingMatch ? existingMatch.Name : cluster.ConceptName;
         const conceptRecordPlaceholder = existingMatch?.ConceptID ?? `concept:${conceptName}`;
 
+        const resolvedConceptTypeID = existingMatch?.ConceptTypeID ?? cluster.InferredConceptTypeID ?? null;
         const concept: SynthesizedGraphConcept = {
             ExistingConceptID: existingMatch?.ConceptID,
             Name: conceptName,
             ConceptType: existingMatch ? existingMatch.ConceptType : cluster.InferredConceptType,
+            ...(resolvedConceptTypeID ? { ConceptTypeID: resolvedConceptTypeID } : {}),
             Description: description,
             Specification: specification,
             Synonyms: this.mergeSynonyms(cluster.AssociatedTags, existingMatch?.Synonyms ?? [], conceptName),

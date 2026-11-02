@@ -260,11 +260,13 @@ import { MJFormChromeRuleFormComponent } from "./Entities/MJFormChromeRule/mjfor
 import { MJGeneratedCodeCategoryFormComponent } from "./Entities/MJGeneratedCodeCategory/mjgeneratedcodecategory.form.component";
 import { MJGeneratedCodeFormComponent } from "./Entities/MJGeneratedCode/mjgeneratedcode.form.component";
 import { MJGraphConceptFormComponent } from "./Entities/MJGraphConcept/mjgraphconcept.form.component";
+import { MJGraphConceptTypeFormComponent } from "./Entities/MJGraphConceptType/mjgraphconcepttype.form.component";
 import { MJGraphEdgeFormComponent } from "./Entities/MJGraphEdge/mjgraphedge.form.component";
 import { MJGraphEdgeProviderFormComponent } from "./Entities/MJGraphEdgeProvider/mjgraphedgeprovider.form.component";
 import { MJGraphEdgeTypeEndpointFormComponent } from "./Entities/MJGraphEdgeTypeEndpoint/mjgraphedgetypeendpoint.form.component";
 import { MJGraphEdgeTypeFormComponent } from "./Entities/MJGraphEdgeType/mjgraphedgetype.form.component";
 import { MJGraphFormComponent } from "./Entities/MJGraph/mjgraph.form.component";
+import { MJGraphTypeFormComponent } from "./Entities/MJGraphType/mjgraphtype.form.component";
 import { MJIdentityClaimFormComponent } from "./Entities/MJIdentityClaim/mjidentityclaim.form.component";
 import { MJIdentityClaimTypeFormComponent } from "./Entities/MJIdentityClaimType/mjidentityclaimtype.form.component";
 import { MJInstanceConfigurationFormComponent } from "./Entities/MJInstanceConfiguration/mjinstanceconfiguration.form.component";
@@ -922,6 +924,7 @@ declarations: [
     MJDashboardCategoryLinkFormComponent,
     MJFeaturePipelineTypeFormComponent,
     MJGeneratedCodeFormComponent,
+    MJGraphConceptTypeFormComponent,
     MJInteractionLinkFormComponent,
     MJMLTrainingRunFormComponent,
     MJUserApplicationEntityFormComponent
@@ -1170,6 +1173,7 @@ declarations: [
     MJConversationSkillFormComponent,
     MJDashboardCategoryFormComponent,
     MJGraphFormComponent,
+    MJGraphTypeFormComponent,
     MJInteractionFormComponent,
     MJMLModelScoringBindingFormComponent,
     MJRoleFormComponent,

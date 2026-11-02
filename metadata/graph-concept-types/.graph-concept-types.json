@@ -1,0 +1,98 @@
+[
+  {
+    "fields": {
+      "Name": "Policy",
+      "Description": "Governing rules, eligibility requirements, compliance mandates, approval thresholds, grace periods, and exception handling procedures.",
+      "Rank": 10,
+      "IconClass": "fa-solid fa-gavel",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B2F6C8D1-5E22-4A3B-9D81-200000000001"
+    },
+    "sync": {
+      "lastModified": "2026-11-02T23:24:15.636Z",
+      "checksum": "00188625e2d25e645681be1fcf8d53d90a1e64636c2dbc94f14671d46635fac0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Metric",
+      "Description": "Canonical KPIs, financial formulas, retention calculations, scoring definitions, and quantitative benchmarks.",
+      "Rank": 20,
+      "IconClass": "fa-solid fa-chart-line",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B2F6C8D1-5E22-4A3B-9D81-200000000002"
+    },
+    "sync": {
+      "lastModified": "2026-11-02T23:24:15.661Z",
+      "checksum": "8eda406d290d0f79c574f209026b627db22cc8182ec4b9dd5e8ea18021a8af6d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Process",
+      "Description": "Multi-step operational procedures, standard operating workflows, lifecycle stages, and escalation playbooks.",
+      "Rank": 30,
+      "IconClass": "fa-solid fa-gears",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B2F6C8D1-5E22-4A3B-9D81-200000000003"
+    },
+    "sync": {
+      "lastModified": "2026-11-02T23:24:15.675Z",
+      "checksum": "1d4c0f05b2b4c2f67bfeab36dc7aa89d227d615b01ec8361e6384d1b8f0d9d8f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Role",
+      "Description": "Organizational roles, committees, fiduciary responsibilities, decision authorities, and ownership designations.",
+      "Rank": 40,
+      "IconClass": "fa-solid fa-user-shield",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B2F6C8D1-5E22-4A3B-9D81-200000000004"
+    },
+    "sync": {
+      "lastModified": "2026-11-02T23:24:15.689Z",
+      "checksum": "60a942bde1d8799719dcfc82a0a9d8366fbd2ada8154e79e39a3990f54577fa1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Domain",
+      "Description": "High-level subject areas, functional divisions, or taxonomy umbrellas that group narrower concepts.",
+      "Rank": 50,
+      "IconClass": "fa-solid fa-layer-group",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B2F6C8D1-5E22-4A3B-9D81-200000000005"
+    },
+    "sync": {
+      "lastModified": "2026-11-02T23:24:15.701Z",
+      "checksum": "a9aa544c9302f95ddf04945b932a7810064d96d82836a2fe2add270fb6e1a860"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Term",
+      "Description": "Domain vocabulary, acronyms, entity definitions, and canonical terminology.",
+      "Rank": 60,
+      "IconClass": "fa-solid fa-book-bookmark",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B2F6C8D1-5E22-4A3B-9D81-200000000006"
+    },
+    "sync": {
+      "lastModified": "2026-11-02T23:24:15.715Z",
+      "checksum": "092e83e48adfdaa6bbdca3b623ba064fbd161a7d0c1c2fb2c821385801ff7c6b"
+    }
+  }
+]

@@ -24,6 +24,8 @@
     "search-providers",
     "search-scopes",
     "content-source-types",
+    "graph-types",
+    "graph-concept-types",
     "integration-source-types",
     "integrations",
     "ai-model-types",

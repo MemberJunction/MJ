@@ -16,14 +16,14 @@ export class MJGraphFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'graphDetails', sectionName: 'Graph Details', isExpanded: true },
-            { sectionKey: 'configuration', sectionName: 'Configuration', isExpanded: true },
+            { sectionKey: 'graphConfiguration', sectionName: 'Graph Configuration', isExpanded: true },
+            { sectionKey: 'operationalSettings', sectionName: 'Operational Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJGraphConcepts', sectionName: 'Graph Concepts', isExpanded: false },
-            { sectionKey: 'mJGraphEdgeTypes', sectionName: 'Graph Edge Types', isExpanded: false },
             { sectionKey: 'mJGraphEdges', sectionName: 'Graph Edges', isExpanded: false },
+            { sectionKey: 'mJGraphEdgeProviders', sectionName: 'Graph Edge Providers', isExpanded: false },
+            { sectionKey: 'mJGraphEdgeTypes', sectionName: 'Graph Edge Types', isExpanded: false },
             { sectionKey: 'mJContentSources', sectionName: 'Content Sources', isExpanded: false },
-            { sectionKey: 'mJGraphEdgeProviders', sectionName: 'Graph Edge Providers', isExpanded: false }
+            { sectionKey: 'mJGraphConcepts', sectionName: 'Graph Concepts', isExpanded: false }
         ]);
     }
 }

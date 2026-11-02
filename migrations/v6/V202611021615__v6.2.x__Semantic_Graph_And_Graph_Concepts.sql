@@ -1,18 +1,23 @@
 -- =====================================================================================
 -- Semantic Graph Substrate, Generic Graph Concepts, & Content Source Graph Overlay
 --
--- 1. Graph: named semantic graph partitions with GraphType ('Canon', 'Knowledge',
---    'Network', 'Custom') and LoadMode ('Preload', 'OnDemand').
--- 2. GraphEdgeType: global (GraphID IS NULL) or graph-scoped edge types with
+-- 1. GraphType: configurable semantic graph classifications (e.g., 'Canon',
+--    'Knowledge', 'Network', 'Custom') with IsCanon flag and Rank order, seeded via
+--    /metadata/graph-types.
+-- 2. GraphConceptType: configurable concept classifications (e.g., 'Policy',
+--    'Metric', 'Process', 'Role', 'Domain', 'Term') with Rank order, seeded via
+--    /metadata/graph-concept-types.
+-- 3. Graph: named semantic graph partitions referencing GraphTypeID and LoadMode
+--    ('Preload', 'OnDemand').
+-- 4. GraphEdgeType: global (GraphID IS NULL) or graph-scoped edge types with
 --    directionality, inverse label, default retrieval weight, and AllowStored flag.
--- 3. GraphEdgeTypeEndpoint: optional endpoint entity constraints per edge type.
--- 4. GraphEdgeProvider: pluggable derived-edge providers enabled per graph.
--- 5. GraphEdge: polymorphic stored edges (Declared or Inferred, Proposed/Approved/Rejected)
+-- 5. GraphEdgeTypeEndpoint: optional endpoint entity constraints per edge type.
+-- 6. GraphEdgeProvider: pluggable derived-edge providers enabled per graph.
+-- 7. GraphEdge: polymorphic stored edges (Declared or Inferred, Proposed/Approved/Rejected)
 --    connecting any (SourceEntityID, SourceRecordID) to (TargetEntityID, TargetRecordID).
--- 6. GraphConcept: generalized higher-level concept node scoped to a GraphID
---    (replacing the Canon-only CanonConcept table) with ConceptType ('Domain', 'Term',
---    'Policy', 'Metric', 'Process'), Specification, AuthorityTier, ParentID, and Status.
--- 7. ContentSource.GraphID: optional foreign key linking a Content Source to a target
+-- 8. GraphConcept: generalized higher-level concept node scoped to a GraphID and
+--    referencing ConceptTypeID, with Specification, AuthorityTier, ParentID, and Status.
+-- 9. ContentSource.GraphID: optional foreign key linking a Content Source to a target
 --    Graph (supporting single-source or multi-source shared Knowledge/Canon graphs).
 --
 -- Conventions (migrations/CLAUDE.md & guides/SCHEMA_AND_CODE_AUTHORING_GUIDE.md):
@@ -23,25 +28,59 @@
 -- =====================================================================================
 
 -- -------------------------------------------------------------------------------------
--- 1. Graph
+-- 1. GraphType
+-- -------------------------------------------------------------------------------------
+CREATE TABLE [${flyway:defaultSchema}].[GraphType] (
+    [ID]          UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_GraphType_ID] DEFAULT (newsequentialid()),
+    [Name]        NVARCHAR(100)    NOT NULL,
+    [Description] NVARCHAR(MAX)    NULL,
+    [IsCanon]     BIT              NOT NULL CONSTRAINT [DF_GraphType_IsCanon] DEFAULT (0),
+    [Rank]        INT              NOT NULL CONSTRAINT [DF_GraphType_Rank] DEFAULT (100),
+    [IconClass]   NVARCHAR(100)    NULL,
+    [Status]      NVARCHAR(20)     NOT NULL CONSTRAINT [DF_GraphType_Status] DEFAULT (N'Active'),
+    CONSTRAINT [PK_GraphType] PRIMARY KEY CLUSTERED ([ID]),
+    CONSTRAINT [UQ_GraphType_Name] UNIQUE ([Name]),
+    CONSTRAINT [CK_GraphType_Status] CHECK ([Status] IN (N'Active', N'Inactive'))
+);
+GO
+
+-- -------------------------------------------------------------------------------------
+-- 2. GraphConceptType
+-- -------------------------------------------------------------------------------------
+CREATE TABLE [${flyway:defaultSchema}].[GraphConceptType] (
+    [ID]          UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_GraphConceptType_ID] DEFAULT (newsequentialid()),
+    [Name]        NVARCHAR(100)    NOT NULL,
+    [Description] NVARCHAR(MAX)    NULL,
+    [Rank]        INT              NOT NULL CONSTRAINT [DF_GraphConceptType_Rank] DEFAULT (100),
+    [IconClass]   NVARCHAR(100)    NULL,
+    [Status]      NVARCHAR(20)     NOT NULL CONSTRAINT [DF_GraphConceptType_Status] DEFAULT (N'Active'),
+    CONSTRAINT [PK_GraphConceptType] PRIMARY KEY CLUSTERED ([ID]),
+    CONSTRAINT [UQ_GraphConceptType_Name] UNIQUE ([Name]),
+    CONSTRAINT [CK_GraphConceptType_Status] CHECK ([Status] IN (N'Active', N'Inactive'))
+);
+GO
+
+-- -------------------------------------------------------------------------------------
+-- 3. Graph
 -- -------------------------------------------------------------------------------------
 CREATE TABLE [${flyway:defaultSchema}].[Graph] (
     [ID]          UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_Graph_ID] DEFAULT (newsequentialid()),
     [Name]        NVARCHAR(255)    NOT NULL,
     [Description] NVARCHAR(MAX)    NULL,
-    [GraphType]   NVARCHAR(50)     NOT NULL CONSTRAINT [DF_Graph_GraphType] DEFAULT (N'Custom'),
+    [GraphTypeID] UNIQUEIDENTIFIER NOT NULL,
     [LoadMode]    NVARCHAR(20)     NOT NULL CONSTRAINT [DF_Graph_LoadMode] DEFAULT (N'Preload'),
     [Status]      NVARCHAR(20)     NOT NULL CONSTRAINT [DF_Graph_Status] DEFAULT (N'Active'),
     CONSTRAINT [PK_Graph] PRIMARY KEY CLUSTERED ([ID]),
+    CONSTRAINT [FK_Graph_GraphType] FOREIGN KEY ([GraphTypeID])
+        REFERENCES [${flyway:defaultSchema}].[GraphType]([ID]),
     CONSTRAINT [UQ_Graph_Name] UNIQUE ([Name]),
-    CONSTRAINT [CK_Graph_GraphType] CHECK ([GraphType] IN (N'Canon', N'Knowledge', N'Network', N'Custom')),
     CONSTRAINT [CK_Graph_LoadMode] CHECK ([LoadMode] IN (N'Preload', N'OnDemand')),
     CONSTRAINT [CK_Graph_Status] CHECK ([Status] IN (N'Active', N'Disabled'))
 );
 GO
 
 -- -------------------------------------------------------------------------------------
--- 2. GraphEdgeType
+-- 4. GraphEdgeType
 -- -------------------------------------------------------------------------------------
 CREATE TABLE [${flyway:defaultSchema}].[GraphEdgeType] (
     [ID]            UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_GraphEdgeType_ID] DEFAULT (newsequentialid()),
@@ -61,7 +100,7 @@ CREATE TABLE [${flyway:defaultSchema}].[GraphEdgeType] (
 GO
 
 -- -------------------------------------------------------------------------------------
--- 3. GraphEdgeTypeEndpoint
+-- 5. GraphEdgeTypeEndpoint
 -- -------------------------------------------------------------------------------------
 CREATE TABLE [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint] (
     [ID]         UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_GraphEdgeTypeEndpoint_ID] DEFAULT (newsequentialid()),
@@ -79,7 +118,7 @@ CREATE TABLE [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint] (
 GO
 
 -- -------------------------------------------------------------------------------------
--- 4. GraphEdgeProvider
+-- 6. GraphEdgeProvider
 -- -------------------------------------------------------------------------------------
 CREATE TABLE [${flyway:defaultSchema}].[GraphEdgeProvider] (
     [ID]            UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_GraphEdgeProvider_ID] DEFAULT (newsequentialid()),
@@ -98,7 +137,7 @@ CREATE TABLE [${flyway:defaultSchema}].[GraphEdgeProvider] (
 GO
 
 -- -------------------------------------------------------------------------------------
--- 5. GraphEdge
+-- 7. GraphEdge
 -- -------------------------------------------------------------------------------------
 CREATE TABLE [${flyway:defaultSchema}].[GraphEdge] (
     [ID]             UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_GraphEdge_ID] DEFAULT (newsequentialid()),
@@ -133,14 +172,14 @@ CREATE TABLE [${flyway:defaultSchema}].[GraphEdge] (
 GO
 
 -- -------------------------------------------------------------------------------------
--- 6. GraphConcept
+-- 8. GraphConcept
 -- -------------------------------------------------------------------------------------
 CREATE TABLE [${flyway:defaultSchema}].[GraphConcept] (
     [ID]            UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_GraphConcept_ID] DEFAULT (newsequentialid()),
     [GraphID]       UNIQUEIDENTIFIER NOT NULL,
     [ParentID]      UNIQUEIDENTIFIER NULL,
     [Name]          NVARCHAR(255)    NOT NULL,
-    [ConceptType]   NVARCHAR(50)     NOT NULL CONSTRAINT [DF_GraphConcept_ConceptType] DEFAULT (N'Term'),
+    [ConceptTypeID] UNIQUEIDENTIFIER NOT NULL,
     [Description]   NVARCHAR(MAX)    NOT NULL,
     [Specification] NVARCHAR(MAX)    NULL,
     [Synonyms]      NVARCHAR(MAX)    NULL,
@@ -151,16 +190,17 @@ CREATE TABLE [${flyway:defaultSchema}].[GraphConcept] (
         REFERENCES [${flyway:defaultSchema}].[Graph]([ID]),
     CONSTRAINT [FK_GraphConcept_Parent] FOREIGN KEY ([ParentID])
         REFERENCES [${flyway:defaultSchema}].[GraphConcept]([ID]),
+    CONSTRAINT [FK_GraphConcept_GraphConceptType] FOREIGN KEY ([ConceptTypeID])
+        REFERENCES [${flyway:defaultSchema}].[GraphConceptType]([ID]),
     CONSTRAINT [UQ_GraphConcept_GraphID_Name] UNIQUE ([GraphID], [Name]),
     CONSTRAINT [CK_GraphConcept_NoSelfParent] CHECK ([ParentID] <> [ID]),
-    CONSTRAINT [CK_GraphConcept_ConceptType] CHECK ([ConceptType] IN (N'Domain', N'Term', N'Policy', N'Metric', N'Process')),
     CONSTRAINT [CK_GraphConcept_AuthorityTier] CHECK ([AuthorityTier] IN (N'Bylaws', N'BoardPolicy', N'ExecutiveSOP', N'DepartmentPractice', N'Reference', N'Inferred')),
     CONSTRAINT [CK_GraphConcept_Status] CHECK ([Status] IN (N'Draft', N'Proposed', N'Approved', N'Deprecated'))
 );
 GO
 
 -- -------------------------------------------------------------------------------------
--- 7. ContentSource.GraphID
+-- 9. ContentSource.GraphID
 -- -------------------------------------------------------------------------------------
 ALTER TABLE [${flyway:defaultSchema}].[ContentSource]
     ADD [GraphID] UNIQUEIDENTIFIER NULL
@@ -170,8 +210,86 @@ ALTER TABLE [${flyway:defaultSchema}].[ContentSource]
 GO
 
 -- -------------------------------------------------------------------------------------
--- 8. Extended properties (Table & Column descriptions)
+-- 10. Extended properties (Table & Column descriptions)
 -- -------------------------------------------------------------------------------------
+
+-- GraphType
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Configurable semantic graph classifications (such as Canon, Knowledge, Network, or Custom), defining whether graphs of this type participate in governed organizational Canon (IsCanon) and their precedence rank.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'GraphType';
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Unique display name of the graph type (e.g., Canon, Knowledge, Network, Custom).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'GraphType',
+    @level2type = N'COLUMN', @level2name = N'Name';
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Plain-language description of what graphs of this type represent and how agents should use them.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'GraphType',
+    @level2type = N'COLUMN', @level2name = N'Description';
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'When 1, graphs of this type feed governed institutional Canon (authoritative definitions, policies, metrics, and workflows); when 0, the graph is non-canonical (such as exploratory Knowledge or Network graphs).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'GraphType',
+    @level2type = N'COLUMN', @level2name = N'IsCanon';
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Sort and priority rank order of the graph type (lower numbers have higher priority).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'GraphType',
+    @level2type = N'COLUMN', @level2name = N'Rank';
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Optional Font Awesome CSS icon class used to render badges for graphs of this type in the UI.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'GraphType',
+    @level2type = N'COLUMN', @level2name = N'IconClass';
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Operational status of the graph type (Active or Inactive).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'GraphType',
+    @level2type = N'COLUMN', @level2name = N'Status';
+
+-- GraphConceptType
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Configurable semantic concept classifications (such as Policy, Metric, Process, Role, Domain, or Term) with rank ordering and synthesis guidance, seeded via metadata and extensible per organization.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'GraphConceptType';
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Unique name of the concept type (e.g., Policy, Metric, Process, Role, Domain, Term).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'GraphConceptType',
+    @level2type = N'COLUMN', @level2name = N'Name';
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Plain-language definition and LLM extraction guidance describing what qualifies as a concept of this type.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'GraphConceptType',
+    @level2type = N'COLUMN', @level2name = N'Description';
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Precedence and display rank order of this concept type (lower numbers represent higher-order institutional concepts such as Policy and Metric ahead of granular Terms).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'GraphConceptType',
+    @level2type = N'COLUMN', @level2name = N'Rank';
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Optional Font Awesome CSS icon class used to render concept nodes of this type in graph explorers and cards.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'GraphConceptType',
+    @level2type = N'COLUMN', @level2name = N'IconClass';
+
+EXEC sp_addextendedproperty @name = N'MS_Description',
+    @value = N'Operational status of the concept type (Active or Inactive).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'GraphConceptType',
+    @level2type = N'COLUMN', @level2name = N'Status';
 
 -- Graph
 EXEC sp_addextendedproperty @name = N'MS_Description',
@@ -192,10 +310,10 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @level2type = N'COLUMN', @level2name = N'Description';
 
 EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Semantic category of the graph: Canon (governed organizational definitions, policies, metrics, and workflows), Knowledge (document/RAG topic and concept graph), Network (entity relationship network), or Custom.',
+    @value = N'Foreign key to GraphType defining the semantic classification of this graph and whether it feeds institutional Canon.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'Graph',
-    @level2type = N'COLUMN', @level2name = N'GraphType';
+    @level2type = N'COLUMN', @level2name = N'GraphTypeID';
 
 EXEC sp_addextendedproperty @name = N'MS_Description',
     @value = N'Whether the graph is preloaded into memory at startup (Preload, for compact metadata/Canon graphs) or traversed on demand (OnDemand, for large data/document graphs).',
@@ -361,7 +479,7 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
 
 -- GraphConcept
 EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Higher-level semantic concept nodes scoped to a Graph (such as Domain, Term, Policy, Metric, or Process definitions), serving as organizing hubs for Canon governance and Content Source GraphRAG overlays.',
+    @value = N'Higher-level semantic concept nodes scoped to a Graph (referencing GraphConceptType such as Policy, Metric, Process, Role, Domain, or Term), serving as organizing hubs for Canon governance and Content Source GraphRAG overlays.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'GraphConcept';
 
@@ -372,10 +490,10 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
     @level2type = N'COLUMN', @level2name = N'Name';
 
 EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Structural classification of the concept: Domain, Term, Policy, Metric, or Process.',
+    @value = N'Foreign key to GraphConceptType classifying the structural role and priority rank of this concept.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'GraphConcept',
-    @level2type = N'COLUMN', @level2name = N'ConceptType';
+    @level2type = N'COLUMN', @level2name = N'ConceptTypeID';
 
 EXEC sp_addextendedproperty @name = N'MS_Description',
     @value = N'Concise 1-3 sentence definition (~100 tokens) injected into agent subgraphs and search results.',
@@ -479,6 +597,87 @@ GO
 -- re-run CodeGen and replace this entire generated section.
 -- =============================================================================
 
+/* SQL generated to create new entity MJ: Graph Concept Types */
+
+      INSERT INTO [${flyway:defaultSchema}].[Entity] (
+         [ID],
+         [Name],
+         [DisplayName],
+         [Description],
+         [NameSuffix],
+         [BaseTable],
+         [BaseView],
+         [SchemaName],
+         [IncludeInAPI],
+         [AllowUserSearchAPI],
+         [AllowCaching],
+         [TrackRecordChanges],
+         [AuditRecordAccess],
+         [AuditViewRuns],
+         [AllowAllRowsAPI],
+         [AllowCreateAPI],
+         [AllowUpdateAPI],
+         [AllowDeleteAPI],
+         [UserViewMaxRows]
+         , [__mj_CreatedAt]
+         , [__mj_UpdatedAt]
+      )
+      VALUES (
+         '2a8edba7-8ba8-4da7-8f6e-915585c197bd',
+         'MJ: Graph Concept Types',
+         'Graph Concept Types',
+         'Configurable semantic concept classifications (such as Policy, Metric, Process, Role, Domain, or Term) with rank ordering and synthesis guidance, seeded via metadata and extensible per organization.',
+         NULL,
+         'GraphConceptType',
+         'vwGraphConceptTypes',
+         '${flyway:defaultSchema}',
+         1,
+         1,
+         1,
+         1,
+         0,
+         0,
+         0,
+         1,
+         1,
+         1,
+         1000
+         , GETUTCDATE()
+         , GETUTCDATE()
+      );
+
+/* SQL generated to add entity MJ: Graph Concept Types to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
+INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
+                                    ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
+                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '2a8edba7-8ba8-4da7-8f6e-915585c197bd', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+
+/* SQL generated to add new permission for entity MJ: Graph Concept Types for role UI */
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
+                ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
+              SELECT CAST('2a8edba7-8ba8-4da7-8f6e-915585c197bd' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
+              WHERE NOT EXISTS (
+                SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
+                WHERE [EntityID] = CAST('2a8edba7-8ba8-4da7-8f6e-915585c197bd' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+              );
+
+/* SQL generated to add new permission for entity MJ: Graph Concept Types for role Developer */
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
+                ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
+              SELECT CAST('2a8edba7-8ba8-4da7-8f6e-915585c197bd' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              WHERE NOT EXISTS (
+                SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
+                WHERE [EntityID] = CAST('2a8edba7-8ba8-4da7-8f6e-915585c197bd' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+              );
+
+/* SQL generated to add new permission for entity MJ: Graph Concept Types for role Integration */
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
+                ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
+              SELECT CAST('2a8edba7-8ba8-4da7-8f6e-915585c197bd' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              WHERE NOT EXISTS (
+                SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
+                WHERE [EntityID] = CAST('2a8edba7-8ba8-4da7-8f6e-915585c197bd' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+              );
+
 /* SQL generated to create new entity MJ: Graphs */
 
       INSERT INTO [${flyway:defaultSchema}].[Entity] (
@@ -505,7 +704,7 @@ GO
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '9de1db59-5d4b-4f23-adba-e5a521977faa',
+         '6f9d2a33-7a64-4cee-b9d3-52b3cc58e9ea',
          'MJ: Graphs',
          'Graphs',
          'Named semantic graph partitions (such as MJ Canon, Knowledge Hub GraphRAG graphs, or Member Network graphs) that own concepts, edge types, derived edge providers, and stored edges.',
@@ -531,33 +730,33 @@ GO
 /* SQL generated to add entity MJ: Graphs to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                     ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '9de1db59-5d4b-4f23-adba-e5a521977faa', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '6f9d2a33-7a64-4cee-b9d3-52b3cc58e9ea', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Graphs for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('9de1db59-5d4b-4f23-adba-e5a521977faa' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('6f9d2a33-7a64-4cee-b9d3-52b3cc58e9ea' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('9de1db59-5d4b-4f23-adba-e5a521977faa' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('6f9d2a33-7a64-4cee-b9d3-52b3cc58e9ea' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Graphs for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('9de1db59-5d4b-4f23-adba-e5a521977faa' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('6f9d2a33-7a64-4cee-b9d3-52b3cc58e9ea' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('9de1db59-5d4b-4f23-adba-e5a521977faa' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('6f9d2a33-7a64-4cee-b9d3-52b3cc58e9ea' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Graphs for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('9de1db59-5d4b-4f23-adba-e5a521977faa' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('6f9d2a33-7a64-4cee-b9d3-52b3cc58e9ea' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('9de1db59-5d4b-4f23-adba-e5a521977faa' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('6f9d2a33-7a64-4cee-b9d3-52b3cc58e9ea' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to create new entity MJ: Graph Edge Types */
@@ -586,7 +785,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '987a289e-5763-4735-8ee3-ae61ca5c26cb',
+         '4a8d91d6-0933-4cac-966a-95c69f5228ba',
          'MJ: Graph Edge Types',
          'Graph Edge Types',
          'Defines relationship types for semantic graph edges (e.g., Broader Than, Describes, Defines, Measures, Implements, SourcedFrom, Mentions, Contradicts). Global when GraphID is NULL, or scoped to a specific Graph.',
@@ -612,33 +811,33 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 /* SQL generated to add entity MJ: Graph Edge Types to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                     ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '987a289e-5763-4735-8ee3-ae61ca5c26cb', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '4a8d91d6-0933-4cac-966a-95c69f5228ba', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Graph Edge Types for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('987a289e-5763-4735-8ee3-ae61ca5c26cb' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('4a8d91d6-0933-4cac-966a-95c69f5228ba' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('987a289e-5763-4735-8ee3-ae61ca5c26cb' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('4a8d91d6-0933-4cac-966a-95c69f5228ba' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Graph Edge Types for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('987a289e-5763-4735-8ee3-ae61ca5c26cb' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('4a8d91d6-0933-4cac-966a-95c69f5228ba' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('987a289e-5763-4735-8ee3-ae61ca5c26cb' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('4a8d91d6-0933-4cac-966a-95c69f5228ba' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Graph Edge Types for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('987a289e-5763-4735-8ee3-ae61ca5c26cb' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('4a8d91d6-0933-4cac-966a-95c69f5228ba' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('987a289e-5763-4735-8ee3-ae61ca5c26cb' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('4a8d91d6-0933-4cac-966a-95c69f5228ba' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to create new entity MJ: Graph Edge Type Endpoints */
@@ -667,7 +866,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '8b441734-9c58-43b4-a4a0-f2c0e0d0b342',
+         'd74e798f-d63f-479a-bc2b-c629b252fe60',
          'MJ: Graph Edge Type Endpoints',
          'Graph Edge Type Endpoints',
          'Optional endpoint constraints restricting which MJ Entities may appear on the Source or Target side of a GraphEdgeType.',
@@ -693,33 +892,33 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 /* SQL generated to add entity MJ: Graph Edge Type Endpoints to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                     ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '8b441734-9c58-43b4-a4a0-f2c0e0d0b342', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'd74e798f-d63f-479a-bc2b-c629b252fe60', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Graph Edge Type Endpoints for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('8b441734-9c58-43b4-a4a0-f2c0e0d0b342' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('d74e798f-d63f-479a-bc2b-c629b252fe60' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('8b441734-9c58-43b4-a4a0-f2c0e0d0b342' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('d74e798f-d63f-479a-bc2b-c629b252fe60' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Graph Edge Type Endpoints for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('8b441734-9c58-43b4-a4a0-f2c0e0d0b342' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('d74e798f-d63f-479a-bc2b-c629b252fe60' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('8b441734-9c58-43b4-a4a0-f2c0e0d0b342' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('d74e798f-d63f-479a-bc2b-c629b252fe60' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Graph Edge Type Endpoints for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('8b441734-9c58-43b4-a4a0-f2c0e0d0b342' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('d74e798f-d63f-479a-bc2b-c629b252fe60' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('8b441734-9c58-43b4-a4a0-f2c0e0d0b342' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('d74e798f-d63f-479a-bc2b-c629b252fe60' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to create new entity MJ: Graph Edge Providers */
@@ -748,7 +947,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '8068d8e0-6a4b-40d3-952e-ded867c8814a',
+         '234a4d46-27b8-4011-b3f3-8b862d77073c',
          'MJ: Graph Edge Providers',
          'Graph Edge Providers',
          'Registers a BaseGraphEdgeProvider class on a Graph to project derived edges at read time without duplicating underlying relational data.',
@@ -774,33 +973,33 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 /* SQL generated to add entity MJ: Graph Edge Providers to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                     ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '8068d8e0-6a4b-40d3-952e-ded867c8814a', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '234a4d46-27b8-4011-b3f3-8b862d77073c', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Graph Edge Providers for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('8068d8e0-6a4b-40d3-952e-ded867c8814a' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('234a4d46-27b8-4011-b3f3-8b862d77073c' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('8068d8e0-6a4b-40d3-952e-ded867c8814a' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('234a4d46-27b8-4011-b3f3-8b862d77073c' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Graph Edge Providers for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('8068d8e0-6a4b-40d3-952e-ded867c8814a' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('234a4d46-27b8-4011-b3f3-8b862d77073c' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('8068d8e0-6a4b-40d3-952e-ded867c8814a' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('234a4d46-27b8-4011-b3f3-8b862d77073c' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Graph Edge Providers for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('8068d8e0-6a4b-40d3-952e-ded867c8814a' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('234a4d46-27b8-4011-b3f3-8b862d77073c' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('8068d8e0-6a4b-40d3-952e-ded867c8814a' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('234a4d46-27b8-4011-b3f3-8b862d77073c' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to create new entity MJ: Graph Edges */
@@ -829,7 +1028,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '7fc12a09-e43d-44b4-8178-bf21c9cdaec4',
+         '52acc265-e651-4cd9-8c96-088b6263cc2b',
          'MJ: Graph Edges',
          'Graph Edges',
          'Persisted polymorphic graph edges connecting any two entity records within a Graph, carrying retrieval weight, origin (Declared vs Inferred), approval status, and confidence.',
@@ -855,33 +1054,33 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 /* SQL generated to add entity MJ: Graph Edges to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                     ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '7fc12a09-e43d-44b4-8178-bf21c9cdaec4', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '52acc265-e651-4cd9-8c96-088b6263cc2b', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Graph Edges for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('7fc12a09-e43d-44b4-8178-bf21c9cdaec4' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('52acc265-e651-4cd9-8c96-088b6263cc2b' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('7fc12a09-e43d-44b4-8178-bf21c9cdaec4' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('52acc265-e651-4cd9-8c96-088b6263cc2b' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Graph Edges for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('7fc12a09-e43d-44b4-8178-bf21c9cdaec4' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('52acc265-e651-4cd9-8c96-088b6263cc2b' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('7fc12a09-e43d-44b4-8178-bf21c9cdaec4' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('52acc265-e651-4cd9-8c96-088b6263cc2b' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Graph Edges for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('7fc12a09-e43d-44b4-8178-bf21c9cdaec4' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('52acc265-e651-4cd9-8c96-088b6263cc2b' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('7fc12a09-e43d-44b4-8178-bf21c9cdaec4' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('52acc265-e651-4cd9-8c96-088b6263cc2b' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to create new entity MJ: Graph Concepts */
@@ -910,10 +1109,10 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         'fddd3e40-0131-4f60-a019-227d63051cdc',
+         '2c3071c8-ec27-41c4-a4c7-e64f50ba1b99',
          'MJ: Graph Concepts',
          'Graph Concepts',
-         'Higher-level semantic concept nodes scoped to a Graph (such as Domain, Term, Policy, Metric, or Process definitions), serving as organizing hubs for Canon governance and Content Source GraphRAG overlays.',
+         'Higher-level semantic concept nodes scoped to a Graph (referencing GraphConceptType such as Policy, Metric, Process, Role, Domain, or Term), serving as organizing hubs for Canon governance and Content Source GraphRAG overlays.',
          NULL,
          'GraphConcept',
          'vwGraphConcepts',
@@ -936,98 +1135,115 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 /* SQL generated to add entity MJ: Graph Concepts to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                     ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'fddd3e40-0131-4f60-a019-227d63051cdc', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '2c3071c8-ec27-41c4-a4c7-e64f50ba1b99', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Graph Concepts for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('fddd3e40-0131-4f60-a019-227d63051cdc' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('2c3071c8-ec27-41c4-a4c7-e64f50ba1b99' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('fddd3e40-0131-4f60-a019-227d63051cdc' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('2c3071c8-ec27-41c4-a4c7-e64f50ba1b99' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Graph Concepts for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('fddd3e40-0131-4f60-a019-227d63051cdc' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('2c3071c8-ec27-41c4-a4c7-e64f50ba1b99' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('fddd3e40-0131-4f60-a019-227d63051cdc' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('2c3071c8-ec27-41c4-a4c7-e64f50ba1b99' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Graph Concepts for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('fddd3e40-0131-4f60-a019-227d63051cdc' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('2c3071c8-ec27-41c4-a4c7-e64f50ba1b99' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('fddd3e40-0131-4f60-a019-227d63051cdc' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('2c3071c8-ec27-41c4-a4c7-e64f50ba1b99' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphConcept */
-ALTER TABLE [${flyway:defaultSchema}].[GraphConcept] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
-GO
+/* SQL generated to create new entity MJ: Graph Types */
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphConcept */
-UPDATE [${flyway:defaultSchema}].[GraphConcept] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
-GO
+      INSERT INTO [${flyway:defaultSchema}].[Entity] (
+         [ID],
+         [Name],
+         [DisplayName],
+         [Description],
+         [NameSuffix],
+         [BaseTable],
+         [BaseView],
+         [SchemaName],
+         [IncludeInAPI],
+         [AllowUserSearchAPI],
+         [AllowCaching],
+         [TrackRecordChanges],
+         [AuditRecordAccess],
+         [AuditViewRuns],
+         [AllowAllRowsAPI],
+         [AllowCreateAPI],
+         [AllowUpdateAPI],
+         [AllowDeleteAPI],
+         [UserViewMaxRows]
+         , [__mj_CreatedAt]
+         , [__mj_UpdatedAt]
+      )
+      VALUES (
+         '037fd55f-0f21-4584-8f86-90c2e45fc671',
+         'MJ: Graph Types',
+         'Graph Types',
+         'Configurable semantic graph classifications (such as Canon, Knowledge, Network, or Custom), defining whether graphs of this type participate in governed organizational Canon (IsCanon) and their precedence rank.',
+         NULL,
+         'GraphType',
+         'vwGraphTypes',
+         '${flyway:defaultSchema}',
+         1,
+         1,
+         1,
+         1,
+         0,
+         0,
+         0,
+         1,
+         1,
+         1,
+         1000
+         , GETUTCDATE()
+         , GETUTCDATE()
+      );
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphConcept */
-ALTER TABLE [${flyway:defaultSchema}].[GraphConcept] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
-GO
+/* SQL generated to add entity MJ: Graph Types to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
+INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
+                                    ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
+                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '037fd55f-0f21-4584-8f86-90c2e45fc671', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphConcept */
-ALTER TABLE [${flyway:defaultSchema}].[GraphConcept] ADD CONSTRAINT [DF___mj_GraphConcept___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
-GO
+/* SQL generated to add new permission for entity MJ: Graph Types for role UI */
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
+                ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
+              SELECT CAST('037fd55f-0f21-4584-8f86-90c2e45fc671' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
+              WHERE NOT EXISTS (
+                SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
+                WHERE [EntityID] = CAST('037fd55f-0f21-4584-8f86-90c2e45fc671' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+              );
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphConcept */
-ALTER TABLE [${flyway:defaultSchema}].[GraphConcept] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
-GO
+/* SQL generated to add new permission for entity MJ: Graph Types for role Developer */
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
+                ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
+              SELECT CAST('037fd55f-0f21-4584-8f86-90c2e45fc671' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              WHERE NOT EXISTS (
+                SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
+                WHERE [EntityID] = CAST('037fd55f-0f21-4584-8f86-90c2e45fc671' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+              );
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphConcept */
-UPDATE [${flyway:defaultSchema}].[GraphConcept] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphConcept */
-ALTER TABLE [${flyway:defaultSchema}].[GraphConcept] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphConcept */
-ALTER TABLE [${flyway:defaultSchema}].[GraphConcept] ADD CONSTRAINT [DF___mj_GraphConcept___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphEdgeType */
-ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeType] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphEdgeType */
-UPDATE [${flyway:defaultSchema}].[GraphEdgeType] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphEdgeType */
-ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeType] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphEdgeType */
-ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeType] ADD CONSTRAINT [DF___mj_GraphEdgeType___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphEdgeType */
-ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeType] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphEdgeType */
-UPDATE [${flyway:defaultSchema}].[GraphEdgeType] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphEdgeType */
-ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeType] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphEdgeType */
-ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeType] ADD CONSTRAINT [DF___mj_GraphEdgeType___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
-GO
+/* SQL generated to add new permission for entity MJ: Graph Types for role Integration */
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
+                ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
+              SELECT CAST('037fd55f-0f21-4584-8f86-90c2e45fc671' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              WHERE NOT EXISTS (
+                SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
+                WHERE [EntityID] = CAST('037fd55f-0f21-4584-8f86-90c2e45fc671' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+              );
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphEdge */
 ALTER TABLE [${flyway:defaultSchema}].[GraphEdge] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
@@ -1059,38 +1275,6 @@ GO
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphEdge */
 ALTER TABLE [${flyway:defaultSchema}].[GraphEdge] ADD CONSTRAINT [DF___mj_GraphEdge___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphEdgeProvider */
-ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeProvider] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphEdgeProvider */
-UPDATE [${flyway:defaultSchema}].[GraphEdgeProvider] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphEdgeProvider */
-ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeProvider] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphEdgeProvider */
-ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeProvider] ADD CONSTRAINT [DF___mj_GraphEdgeProvider___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphEdgeProvider */
-ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeProvider] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphEdgeProvider */
-UPDATE [${flyway:defaultSchema}].[GraphEdgeProvider] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphEdgeProvider */
-ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeProvider] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphEdgeProvider */
-ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeProvider] ADD CONSTRAINT [DF___mj_GraphEdgeProvider___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
 GO
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.Graph */
@@ -1125,6 +1309,134 @@ GO
 ALTER TABLE [${flyway:defaultSchema}].[Graph] ADD CONSTRAINT [DF___mj_Graph___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
 GO
 
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphEdgeProvider */
+ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeProvider] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphEdgeProvider */
+UPDATE [${flyway:defaultSchema}].[GraphEdgeProvider] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphEdgeProvider */
+ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeProvider] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphEdgeProvider */
+ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeProvider] ADD CONSTRAINT [DF___mj_GraphEdgeProvider___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphEdgeProvider */
+ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeProvider] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphEdgeProvider */
+UPDATE [${flyway:defaultSchema}].[GraphEdgeProvider] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphEdgeProvider */
+ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeProvider] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphEdgeProvider */
+ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeProvider] ADD CONSTRAINT [DF___mj_GraphEdgeProvider___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphType */
+ALTER TABLE [${flyway:defaultSchema}].[GraphType] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphType */
+UPDATE [${flyway:defaultSchema}].[GraphType] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphType */
+ALTER TABLE [${flyway:defaultSchema}].[GraphType] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphType */
+ALTER TABLE [${flyway:defaultSchema}].[GraphType] ADD CONSTRAINT [DF___mj_GraphType___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphType */
+ALTER TABLE [${flyway:defaultSchema}].[GraphType] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphType */
+UPDATE [${flyway:defaultSchema}].[GraphType] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphType */
+ALTER TABLE [${flyway:defaultSchema}].[GraphType] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphType */
+ALTER TABLE [${flyway:defaultSchema}].[GraphType] ADD CONSTRAINT [DF___mj_GraphType___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphConceptType */
+ALTER TABLE [${flyway:defaultSchema}].[GraphConceptType] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphConceptType */
+UPDATE [${flyway:defaultSchema}].[GraphConceptType] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphConceptType */
+ALTER TABLE [${flyway:defaultSchema}].[GraphConceptType] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphConceptType */
+ALTER TABLE [${flyway:defaultSchema}].[GraphConceptType] ADD CONSTRAINT [DF___mj_GraphConceptType___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphConceptType */
+ALTER TABLE [${flyway:defaultSchema}].[GraphConceptType] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphConceptType */
+UPDATE [${flyway:defaultSchema}].[GraphConceptType] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphConceptType */
+ALTER TABLE [${flyway:defaultSchema}].[GraphConceptType] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphConceptType */
+ALTER TABLE [${flyway:defaultSchema}].[GraphConceptType] ADD CONSTRAINT [DF___mj_GraphConceptType___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphEdgeType */
+ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeType] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphEdgeType */
+UPDATE [${flyway:defaultSchema}].[GraphEdgeType] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphEdgeType */
+ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeType] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphEdgeType */
+ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeType] ADD CONSTRAINT [DF___mj_GraphEdgeType___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphEdgeType */
+ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeType] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphEdgeType */
+UPDATE [${flyway:defaultSchema}].[GraphEdgeType] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphEdgeType */
+ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeType] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphEdgeType */
+ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeType] ADD CONSTRAINT [DF___mj_GraphEdgeType___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
+GO
+
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphEdgeTypeEndpoint */
 ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
 GO
@@ -1157,9 +1469,41 @@ GO
 ALTER TABLE [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint] ADD CONSTRAINT [DF___mj_GraphEdgeTypeEndpoint___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
 GO
 
-/* SQL text to insert 62 new entity field(s) */
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphConcept */
+ALTER TABLE [${flyway:defaultSchema}].[GraphConcept] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
+GO
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3b53b127-b8fc-4c36-a36b-5cea55c1a57f' OR (EntityID = 'FDDD3E40-0131-4F60-A019-227D63051CDC' AND Name = 'ID')) BEGIN
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphConcept */
+UPDATE [${flyway:defaultSchema}].[GraphConcept] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphConcept */
+ALTER TABLE [${flyway:defaultSchema}].[GraphConcept] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.GraphConcept */
+ALTER TABLE [${flyway:defaultSchema}].[GraphConcept] ADD CONSTRAINT [DF___mj_GraphConcept___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphConcept */
+ALTER TABLE [${flyway:defaultSchema}].[GraphConcept] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphConcept */
+UPDATE [${flyway:defaultSchema}].[GraphConcept] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphConcept */
+ALTER TABLE [${flyway:defaultSchema}].[GraphConcept] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.GraphConcept */
+ALTER TABLE [${flyway:defaultSchema}].[GraphConcept] ADD CONSTRAINT [DF___mj_GraphConcept___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
+GO
+
+/* SQL text to insert 80 new entity field(s) */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '582c33c6-c6c1-4fe3-9104-f4a042a6b769' OR (EntityID = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1192,9 +1536,9 @@ GO
          )
          VALUES
          (
-            '3b53b127-b8fc-4c36-a36b-5cea55c1a57f',
-            'FDDD3E40-0131-4F60-A019-227D63051CDC', -- Entity: MJ: Graph Concepts
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'FDDD3E40-0131-4F60-A019-227D63051CDC'),
+            '582c33c6-c6c1-4fe3-9104-f4a042a6b769',
+            '52ACC265-E651-4CD9-8C96-088B6263CC2B', -- Entity: MJ: Graph Edges
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B'),
             'ID',
             'ID',
             NULL,
@@ -1222,7 +1566,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '88a38981-5d2b-45c8-b9fe-a84109398933' OR (EntityID = 'FDDD3E40-0131-4F60-A019-227D63051CDC' AND Name = 'GraphID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5a451c92-4937-486b-a99a-86ec356c99b9' OR (EntityID = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND Name = 'GraphID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1255,9 +1599,9 @@ GO
          )
          VALUES
          (
-            '88a38981-5d2b-45c8-b9fe-a84109398933',
-            'FDDD3E40-0131-4F60-A019-227D63051CDC', -- Entity: MJ: Graph Concepts
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'FDDD3E40-0131-4F60-A019-227D63051CDC'),
+            '5a451c92-4937-486b-a99a-86ec356c99b9',
+            '52ACC265-E651-4CD9-8C96-088B6263CC2B', -- Entity: MJ: Graph Edges
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B'),
             'GraphID',
             'Graph ID',
             NULL,
@@ -1271,7 +1615,7 @@ GO
             1,
             0,
             0,
-            '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA',
+            '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA',
             'ID',
             0,
             0,
@@ -1285,7 +1629,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '153b7dbb-ad06-4dd5-b0b1-36968be782c1' OR (EntityID = 'FDDD3E40-0131-4F60-A019-227D63051CDC' AND Name = 'ParentID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3e67fdf9-8943-4d0a-ae2c-1afbf5beb404' OR (EntityID = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND Name = 'EdgeTypeID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1318,1395 +1662,9 @@ GO
          )
          VALUES
          (
-            '153b7dbb-ad06-4dd5-b0b1-36968be782c1',
-            'FDDD3E40-0131-4F60-A019-227D63051CDC', -- Entity: MJ: Graph Concepts
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'FDDD3E40-0131-4F60-A019-227D63051CDC'),
-            'ParentID',
-            'Parent ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            'FDDD3E40-0131-4F60-A019-227D63051CDC',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1932ac9c-278c-4756-97e5-2b50a6368f25' OR (EntityID = 'FDDD3E40-0131-4F60-A019-227D63051CDC' AND Name = 'Name')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '1932ac9c-278c-4756-97e5-2b50a6368f25',
-            'FDDD3E40-0131-4F60-A019-227D63051CDC', -- Entity: MJ: Graph Concepts
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'FDDD3E40-0131-4F60-A019-227D63051CDC'),
-            'Name',
-            'Name',
-            'Canonical name of the concept, unique within its owning GraphID.',
-            'nvarchar',
-            510,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            1,
-            1,
-            0,
-            1,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '63945900-a006-47cf-8c44-5722f4c940cb' OR (EntityID = 'FDDD3E40-0131-4F60-A019-227D63051CDC' AND Name = 'ConceptType')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '63945900-a006-47cf-8c44-5722f4c940cb',
-            'FDDD3E40-0131-4F60-A019-227D63051CDC', -- Entity: MJ: Graph Concepts
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'FDDD3E40-0131-4F60-A019-227D63051CDC'),
-            'ConceptType',
-            'Concept Type',
-            'Structural classification of the concept: Domain, Term, Policy, Metric, or Process.',
-            'nvarchar',
-            100,
-            0,
-            0,
-            0,
-            'Term',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            1,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f8544309-c27c-4b04-89d4-6c8a0c188de9' OR (EntityID = 'FDDD3E40-0131-4F60-A019-227D63051CDC' AND Name = 'Description')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'f8544309-c27c-4b04-89d4-6c8a0c188de9',
-            'FDDD3E40-0131-4F60-A019-227D63051CDC', -- Entity: MJ: Graph Concepts
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'FDDD3E40-0131-4F60-A019-227D63051CDC'),
-            'Description',
-            'Description',
-            'Concise 1-3 sentence definition (~100 tokens) injected into agent subgraphs and search results.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ed6d8cbc-503e-489a-b1de-3c229e3d003d' OR (EntityID = 'FDDD3E40-0131-4F60-A019-227D63051CDC' AND Name = 'Specification')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'ed6d8cbc-503e-489a-b1de-3c229e3d003d',
-            'FDDD3E40-0131-4F60-A019-227D63051CDC', -- Entity: MJ: Graph Concepts
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'FDDD3E40-0131-4F60-A019-227D63051CDC'),
-            'Specification',
-            'Specification',
-            'Structured markdown specification containing authoritative rules, thresholds, decision tables, exceptions, and chunk citations.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7770d8e4-0511-4244-8e7a-fe7814c73fbc' OR (EntityID = 'FDDD3E40-0131-4F60-A019-227D63051CDC' AND Name = 'Synonyms')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '7770d8e4-0511-4244-8e7a-fe7814c73fbc',
-            'FDDD3E40-0131-4F60-A019-227D63051CDC', -- Entity: MJ: Graph Concepts
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'FDDD3E40-0131-4F60-A019-227D63051CDC'),
-            'Synonyms',
-            'Synonyms',
-            'JSON array of alternative names, acronyms, and surface forms that resolve to this concept.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1cfecc86-5c83-451e-85a3-8b2336e3e3ed' OR (EntityID = 'FDDD3E40-0131-4F60-A019-227D63051CDC' AND Name = 'AuthorityTier')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '1cfecc86-5c83-451e-85a3-8b2336e3e3ed',
-            'FDDD3E40-0131-4F60-A019-227D63051CDC', -- Entity: MJ: Graph Concepts
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'FDDD3E40-0131-4F60-A019-227D63051CDC'),
-            'AuthorityTier',
-            'Authority Tier',
-            'Highest evidentiary authority tier backing this concept: Bylaws, BoardPolicy, ExecutiveSOP, DepartmentPractice, Reference, or Inferred.',
-            'nvarchar',
-            100,
-            0,
-            0,
-            0,
-            'Reference',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f2902635-d7e6-4ae3-94cb-9a1a8302c2e1' OR (EntityID = 'FDDD3E40-0131-4F60-A019-227D63051CDC' AND Name = 'Status')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'f2902635-d7e6-4ae3-94cb-9a1a8302c2e1',
-            'FDDD3E40-0131-4F60-A019-227D63051CDC', -- Entity: MJ: Graph Concepts
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'FDDD3E40-0131-4F60-A019-227D63051CDC'),
-            'Status',
-            'Status',
-            'Governance lifecycle status of the concept: Draft, Proposed, Approved, or Deprecated.',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            'Draft',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1adf0971-69c8-47ef-ba62-dea9e5a670b8' OR (EntityID = 'FDDD3E40-0131-4F60-A019-227D63051CDC' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '1adf0971-69c8-47ef-ba62-dea9e5a670b8',
-            'FDDD3E40-0131-4F60-A019-227D63051CDC', -- Entity: MJ: Graph Concepts
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'FDDD3E40-0131-4F60-A019-227D63051CDC'),
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '568f43be-1855-471b-83c6-c07013596b26' OR (EntityID = 'FDDD3E40-0131-4F60-A019-227D63051CDC' AND Name = '__mj_UpdatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '568f43be-1855-471b-83c6-c07013596b26',
-            'FDDD3E40-0131-4F60-A019-227D63051CDC', -- Entity: MJ: Graph Concepts
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'FDDD3E40-0131-4F60-A019-227D63051CDC'),
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a7185cf9-a719-45cf-a215-5865726cb84c' OR (EntityID = '987A289E-5763-4735-8EE3-AE61CA5C26CB' AND Name = 'ID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'a7185cf9-a719-45cf-a215-5865726cb84c',
-            '987A289E-5763-4735-8EE3-AE61CA5C26CB', -- Entity: MJ: Graph Edge Types
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '987A289E-5763-4735-8EE3-AE61CA5C26CB'),
-            'ID',
-            'ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            1,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '490023a0-6e4c-4a32-b902-b1c25e8e7cce' OR (EntityID = '987A289E-5763-4735-8EE3-AE61CA5C26CB' AND Name = 'GraphID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '490023a0-6e4c-4a32-b902-b1c25e8e7cce',
-            '987A289E-5763-4735-8EE3-AE61CA5C26CB', -- Entity: MJ: Graph Edge Types
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '987A289E-5763-4735-8EE3-AE61CA5C26CB'),
-            'GraphID',
-            'Graph ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'eb3b26db-7a7d-4859-9c4a-e2072855a64f' OR (EntityID = '987A289E-5763-4735-8EE3-AE61CA5C26CB' AND Name = 'Name')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'eb3b26db-7a7d-4859-9c4a-e2072855a64f',
-            '987A289E-5763-4735-8EE3-AE61CA5C26CB', -- Entity: MJ: Graph Edge Types
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '987A289E-5763-4735-8EE3-AE61CA5C26CB'),
-            'Name',
-            'Name',
-            'Forward-direction label of the edge type (e.g., Broader Than, Defines, SourcedFrom).',
-            'nvarchar',
-            200,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            1,
-            1,
-            0,
-            1,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '25cfd6f8-ec88-40fa-bbd3-985e4562da2b' OR (EntityID = '987A289E-5763-4735-8EE3-AE61CA5C26CB' AND Name = 'Description')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '25cfd6f8-ec88-40fa-bbd3-985e4562da2b',
-            '987A289E-5763-4735-8EE3-AE61CA5C26CB', -- Entity: MJ: Graph Edge Types
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '987A289E-5763-4735-8EE3-AE61CA5C26CB'),
-            'Description',
-            'Description',
-            'Plain-language definition of what this relationship type means when connecting two nodes.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            1,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b1c88250-da54-49ba-8c8c-706480159318' OR (EntityID = '987A289E-5763-4735-8EE3-AE61CA5C26CB' AND Name = 'IsDirected')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'b1c88250-da54-49ba-8c8c-706480159318',
-            '987A289E-5763-4735-8EE3-AE61CA5C26CB', -- Entity: MJ: Graph Edge Types
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '987A289E-5763-4735-8EE3-AE61CA5C26CB'),
-            'IsDirected',
-            'Is Directed',
-            'When 1, the edge is directed from Source to Target; when 0, the relationship is symmetric/undirected.',
-            'bit',
-            1,
-            1,
-            0,
-            0,
-            '(1)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            1,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '32141bd9-63fd-425e-9cdb-2ac4a22c3767' OR (EntityID = '987A289E-5763-4735-8EE3-AE61CA5C26CB' AND Name = 'InverseName')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '32141bd9-63fd-425e-9cdb-2ac4a22c3767',
-            '987A289E-5763-4735-8EE3-AE61CA5C26CB', -- Entity: MJ: Graph Edge Types
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '987A289E-5763-4735-8EE3-AE61CA5C26CB'),
-            'InverseName',
-            'Inverse Name',
-            'Inverse label shown when traversing a directed edge from Target back to Source (e.g., Narrower Than for Broader Than).',
-            'nvarchar',
-            200,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3064dfcc-8ffa-4ddb-b6a0-0ca7671c83e5' OR (EntityID = '987A289E-5763-4735-8EE3-AE61CA5C26CB' AND Name = 'DefaultWeight')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '3064dfcc-8ffa-4ddb-b6a0-0ca7671c83e5',
-            '987A289E-5763-4735-8EE3-AE61CA5C26CB', -- Entity: MJ: Graph Edge Types
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '987A289E-5763-4735-8EE3-AE61CA5C26CB'),
-            'DefaultWeight',
-            'Default Weight',
-            'Default retrieval weight (0.0000 to 1.0000) assigned to edges of this type during multi-hop graph expansion.',
-            'decimal',
-            5,
-            5,
-            4,
-            0,
-            '(1.0)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'aa81e5b2-b418-4868-9b12-ba5bb2d4fee2' OR (EntityID = '987A289E-5763-4735-8EE3-AE61CA5C26CB' AND Name = 'AllowStored')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'aa81e5b2-b418-4868-9b12-ba5bb2d4fee2',
-            '987A289E-5763-4735-8EE3-AE61CA5C26CB', -- Entity: MJ: Graph Edge Types
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '987A289E-5763-4735-8EE3-AE61CA5C26CB'),
-            'AllowStored',
-            'Allow Stored',
-            'When 1, rows of this edge type may be persisted in GraphEdge; when 0, edges of this type are produced exclusively at read time by a GraphEdgeProvider.',
-            'bit',
-            1,
-            1,
-            0,
-            0,
-            '(1)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1a33eae3-6683-421b-9305-bf387befd1b8' OR (EntityID = '987A289E-5763-4735-8EE3-AE61CA5C26CB' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '1a33eae3-6683-421b-9305-bf387befd1b8',
-            '987A289E-5763-4735-8EE3-AE61CA5C26CB', -- Entity: MJ: Graph Edge Types
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '987A289E-5763-4735-8EE3-AE61CA5C26CB'),
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ee5f33df-d91f-4678-8641-a9a11e17c1bf' OR (EntityID = '987A289E-5763-4735-8EE3-AE61CA5C26CB' AND Name = '__mj_UpdatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'ee5f33df-d91f-4678-8641-a9a11e17c1bf',
-            '987A289E-5763-4735-8EE3-AE61CA5C26CB', -- Entity: MJ: Graph Edge Types
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '987A289E-5763-4735-8EE3-AE61CA5C26CB'),
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c2759bd0-6d4f-4b04-bf48-b752cb13c179' OR (EntityID = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND Name = 'ID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'c2759bd0-6d4f-4b04-bf48-b752cb13c179',
-            '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', -- Entity: MJ: Graph Edges
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4'),
-            'ID',
-            'ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            1,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c4c73bcc-76a4-4bb7-8133-15ec06fd4395' OR (EntityID = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND Name = 'GraphID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'c4c73bcc-76a4-4bb7-8133-15ec06fd4395',
-            '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', -- Entity: MJ: Graph Edges
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4'),
-            'GraphID',
-            'Graph ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '971ffe22-db34-4492-814b-f7dca29524c1' OR (EntityID = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND Name = 'EdgeTypeID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '971ffe22-db34-4492-814b-f7dca29524c1',
-            '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', -- Entity: MJ: Graph Edges
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4'),
+            '3e67fdf9-8943-4d0a-ae2c-1afbf5beb404',
+            '52ACC265-E651-4CD9-8C96-088B6263CC2B', -- Entity: MJ: Graph Edges
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B'),
             'EdgeTypeID',
             'Edge Type ID',
             NULL,
@@ -2720,7 +1678,7 @@ GO
             1,
             0,
             0,
-            '987A289E-5763-4735-8EE3-AE61CA5C26CB',
+            '4A8D91D6-0933-4CAC-966A-95C69F5228BA',
             'ID',
             0,
             0,
@@ -2734,7 +1692,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'dd9f0b61-c44a-47a4-87bd-cc1551defafd' OR (EntityID = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND Name = 'SourceEntityID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7fc72692-952b-4cb4-b964-ec675f74c593' OR (EntityID = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND Name = 'SourceEntityID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2767,9 +1725,9 @@ GO
          )
          VALUES
          (
-            'dd9f0b61-c44a-47a4-87bd-cc1551defafd',
-            '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', -- Entity: MJ: Graph Edges
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4'),
+            '7fc72692-952b-4cb4-b964-ec675f74c593',
+            '52ACC265-E651-4CD9-8C96-088B6263CC2B', -- Entity: MJ: Graph Edges
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B'),
             'SourceEntityID',
             'Source Entity ID',
             NULL,
@@ -2797,7 +1755,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5e64435e-d5f0-4dc0-9f23-52cdfeb05392' OR (EntityID = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND Name = 'SourceRecordID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5817617b-f538-4486-964f-d9a62f133da9' OR (EntityID = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND Name = 'SourceRecordID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2830,9 +1788,9 @@ GO
          )
          VALUES
          (
-            '5e64435e-d5f0-4dc0-9f23-52cdfeb05392',
-            '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', -- Entity: MJ: Graph Edges
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4'),
+            '5817617b-f538-4486-964f-d9a62f133da9',
+            '52ACC265-E651-4CD9-8C96-088B6263CC2B', -- Entity: MJ: Graph Edges
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B'),
             'SourceRecordID',
             'Source Record ID',
             'Record ID of the source node (compact URL segment for composite primary keys), paired with SourceEntityID.',
@@ -2860,7 +1818,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '531b0f00-47d8-401e-bc13-e73a67a52795' OR (EntityID = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND Name = 'TargetEntityID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6959eb2c-729b-4828-9722-222a893300de' OR (EntityID = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND Name = 'TargetEntityID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2893,9 +1851,9 @@ GO
          )
          VALUES
          (
-            '531b0f00-47d8-401e-bc13-e73a67a52795',
-            '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', -- Entity: MJ: Graph Edges
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4'),
+            '6959eb2c-729b-4828-9722-222a893300de',
+            '52ACC265-E651-4CD9-8C96-088B6263CC2B', -- Entity: MJ: Graph Edges
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B'),
             'TargetEntityID',
             'Target Entity ID',
             NULL,
@@ -2923,7 +1881,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3d9b184e-d1b8-4ba9-8948-9d7bad62df95' OR (EntityID = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND Name = 'TargetRecordID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '89db171e-292c-4e1d-aea4-89d4f0ab5801' OR (EntityID = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND Name = 'TargetRecordID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2956,9 +1914,9 @@ GO
          )
          VALUES
          (
-            '3d9b184e-d1b8-4ba9-8948-9d7bad62df95',
-            '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', -- Entity: MJ: Graph Edges
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4'),
+            '89db171e-292c-4e1d-aea4-89d4f0ab5801',
+            '52ACC265-E651-4CD9-8C96-088B6263CC2B', -- Entity: MJ: Graph Edges
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B'),
             'TargetRecordID',
             'Target Record ID',
             'Record ID of the target node (compact URL segment for composite primary keys), paired with TargetEntityID.',
@@ -2986,7 +1944,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1efcd4ea-2c03-478d-b3cc-db9f1194f4f2' OR (EntityID = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND Name = 'Weight')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2e9a60e9-694c-418f-95cb-9d4fddf44334' OR (EntityID = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND Name = 'Weight')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3019,9 +1977,9 @@ GO
          )
          VALUES
          (
-            '1efcd4ea-2c03-478d-b3cc-db9f1194f4f2',
-            '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', -- Entity: MJ: Graph Edges
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4'),
+            '2e9a60e9-694c-418f-95cb-9d4fddf44334',
+            '52ACC265-E651-4CD9-8C96-088B6263CC2B', -- Entity: MJ: Graph Edges
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B'),
             'Weight',
             'Weight',
             'Retrieval pull weight (0.0000 to 1.0000) used when scoring multi-hop graph paths.',
@@ -3049,7 +2007,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'dd04a2f5-0b9b-432e-8dea-ed781c7f6856' OR (EntityID = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND Name = 'Description')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '36c6bf28-c912-4344-86aa-f56854dc7d1f' OR (EntityID = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND Name = 'Description')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3082,9 +2040,9 @@ GO
          )
          VALUES
          (
-            'dd04a2f5-0b9b-432e-8dea-ed781c7f6856',
-            '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', -- Entity: MJ: Graph Edges
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4'),
+            '36c6bf28-c912-4344-86aa-f56854dc7d1f',
+            '52ACC265-E651-4CD9-8C96-088B6263CC2B', -- Entity: MJ: Graph Edges
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B'),
             'Description',
             'Description',
             'Human-readable explanation or provenance summary for why this edge connects the source and target nodes.',
@@ -3112,7 +2070,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0830c6d0-1269-42dc-9a83-8ff8a340ef16' OR (EntityID = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND Name = 'Attributes')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9fe71313-94d8-43cc-b72b-2d9c289a4195' OR (EntityID = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND Name = 'Attributes')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3145,9 +2103,9 @@ GO
          )
          VALUES
          (
-            '0830c6d0-1269-42dc-9a83-8ff8a340ef16',
-            '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', -- Entity: MJ: Graph Edges
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4'),
+            '9fe71313-94d8-43cc-b72b-2d9c289a4195',
+            '52ACC265-E651-4CD9-8C96-088B6263CC2B', -- Entity: MJ: Graph Edges
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B'),
             'Attributes',
             'Attributes',
             'Optional JSON object holding structured edge metadata (such as citations, authority tiers, or conflict details).',
@@ -3175,7 +2133,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '48a4919a-91a9-424b-981f-95680d2ad912' OR (EntityID = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND Name = 'Origin')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f4878649-5999-4cc7-b195-fc17b88667a3' OR (EntityID = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND Name = 'Origin')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3208,9 +2166,9 @@ GO
          )
          VALUES
          (
-            '48a4919a-91a9-424b-981f-95680d2ad912',
-            '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', -- Entity: MJ: Graph Edges
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4'),
+            'f4878649-5999-4cc7-b195-fc17b88667a3',
+            '52ACC265-E651-4CD9-8C96-088B6263CC2B', -- Entity: MJ: Graph Edges
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B'),
             'Origin',
             'Origin',
             'How this edge was created: Declared (explicitly authored by a human or seed metadata) or Inferred (proposed by an AI or content pipeline stage).',
@@ -3238,7 +2196,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4883a949-53bb-4a14-bf07-8c00b27dd685' OR (EntityID = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND Name = 'Status')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '214b6e6f-3e16-4f55-b9a4-5e4a78a77a1b' OR (EntityID = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND Name = 'Status')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3271,9 +2229,9 @@ GO
          )
          VALUES
          (
-            '4883a949-53bb-4a14-bf07-8c00b27dd685',
-            '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', -- Entity: MJ: Graph Edges
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4'),
+            '214b6e6f-3e16-4f55-b9a4-5e4a78a77a1b',
+            '52ACC265-E651-4CD9-8C96-088B6263CC2B', -- Entity: MJ: Graph Edges
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B'),
             'Status',
             'Status',
             'Governance lifecycle status of the edge: Proposed, Approved, or Rejected. Default graph traversal includes Approved edges only.',
@@ -3301,7 +2259,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '413fd549-1b28-4df3-b731-fcdad7a4ea20' OR (EntityID = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND Name = 'Confidence')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '030c1bde-f141-4107-ab0c-1c29be2bc5ab' OR (EntityID = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND Name = 'Confidence')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3334,9 +2292,9 @@ GO
          )
          VALUES
          (
-            '413fd549-1b28-4df3-b731-fcdad7a4ea20',
-            '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', -- Entity: MJ: Graph Edges
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4'),
+            '030c1bde-f141-4107-ab0c-1c29be2bc5ab',
+            '52ACC265-E651-4CD9-8C96-088B6263CC2B', -- Entity: MJ: Graph Edges
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B'),
             'Confidence',
             'Confidence',
             'Confidence score (0.0000 to 1.0000) for Inferred edges; NULL for Declared edges.',
@@ -3364,7 +2322,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '826c61c5-8ecd-4783-aad7-e77f3b7c20c9' OR (EntityID = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6d4fb832-c5ca-426b-9576-cf89c0ba2ab7' OR (EntityID = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3397,9 +2355,9 @@ GO
          )
          VALUES
          (
-            '826c61c5-8ecd-4783-aad7-e77f3b7c20c9',
-            '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', -- Entity: MJ: Graph Edges
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4'),
+            '6d4fb832-c5ca-426b-9576-cf89c0ba2ab7',
+            '52ACC265-E651-4CD9-8C96-088B6263CC2B', -- Entity: MJ: Graph Edges
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B'),
             '__mj_CreatedAt',
             'Created At',
             NULL,
@@ -3427,7 +2385,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '40f253d2-1fe9-4315-bbcd-acdf28e0aeaf' OR (EntityID = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'da4021c1-1495-4707-9777-dd6a634396b3' OR (EntityID = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3460,9 +2418,9 @@ GO
          )
          VALUES
          (
-            '40f253d2-1fe9-4315-bbcd-acdf28e0aeaf',
-            '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', -- Entity: MJ: Graph Edges
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4'),
+            'da4021c1-1495-4707-9777-dd6a634396b3',
+            '52ACC265-E651-4CD9-8C96-088B6263CC2B', -- Entity: MJ: Graph Edges
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B'),
             '__mj_UpdatedAt',
             'Updated At',
             NULL,
@@ -3490,7 +2448,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1e8e5b79-0be9-40c6-bdf9-b0e9c1f50b68' OR (EntityID = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'GraphID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'def208fa-d4cf-4e48-a3f1-b403fc1f8a57' OR (EntityID = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3523,72 +2481,9 @@ GO
          )
          VALUES
          (
-            '1e8e5b79-0be9-40c6-bdf9-b0e9c1f50b68',
-            'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Sources
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22'),
-            'GraphID',
-            'Graph ID',
-            'Optional target Semantic Graph (MJ: Graphs) that this Content Source populates when the Content Pipeline Graph overlay stage runs. Multiple Content Sources can share the same GraphID.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2609e0c9-6e2c-49ed-86fd-0dd88ca2b749' OR (EntityID = '8068D8E0-6A4B-40D3-952E-DED867C8814A' AND Name = 'ID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '2609e0c9-6e2c-49ed-86fd-0dd88ca2b749',
-            '8068D8E0-6A4B-40D3-952E-DED867C8814A', -- Entity: MJ: Graph Edge Providers
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8068D8E0-6A4B-40D3-952E-DED867C8814A'),
+            'def208fa-d4cf-4e48-a3f1-b403fc1f8a57',
+            '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA', -- Entity: MJ: Graphs
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA'),
             'ID',
             'ID',
             NULL,
@@ -3616,7 +2511,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '01b30f44-b87c-465e-87ef-594c5fbf1673' OR (EntityID = '8068D8E0-6A4B-40D3-952E-DED867C8814A' AND Name = 'GraphID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5fa41b09-f360-47ea-aaf8-715b76cc81fc' OR (EntityID = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA' AND Name = 'Name')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3649,639 +2544,9 @@ GO
          )
          VALUES
          (
-            '01b30f44-b87c-465e-87ef-594c5fbf1673',
-            '8068D8E0-6A4B-40D3-952E-DED867C8814A', -- Entity: MJ: Graph Edge Providers
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8068D8E0-6A4B-40D3-952E-DED867C8814A'),
-            'GraphID',
-            'Graph ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4c7e26fc-e89d-480f-9345-75fd3e277777' OR (EntityID = '8068D8E0-6A4B-40D3-952E-DED867C8814A' AND Name = 'Name')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '4c7e26fc-e89d-480f-9345-75fd3e277777',
-            '8068D8E0-6A4B-40D3-952E-DED867C8814A', -- Entity: MJ: Graph Edge Providers
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8068D8E0-6A4B-40D3-952E-DED867C8814A'),
-            'Name',
-            'Name',
-            'Display name of this provider registration within the graph.',
-            'nvarchar',
-            510,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            1,
-            1,
-            0,
-            1,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a647866b-51f7-4512-8e25-99319081c374' OR (EntityID = '8068D8E0-6A4B-40D3-952E-DED867C8814A' AND Name = 'Description')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'a647866b-51f7-4512-8e25-99319081c374',
-            '8068D8E0-6A4B-40D3-952E-DED867C8814A', -- Entity: MJ: Graph Edge Providers
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8068D8E0-6A4B-40D3-952E-DED867C8814A'),
-            'Description',
-            'Description',
-            'Description of which derived edges this provider projects into the graph.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            1,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5f90da51-db48-4f90-a669-e262bafdea96' OR (EntityID = '8068D8E0-6A4B-40D3-952E-DED867C8814A' AND Name = 'DriverClass')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '5f90da51-db48-4f90-a669-e262bafdea96',
-            '8068D8E0-6A4B-40D3-952E-DED867C8814A', -- Entity: MJ: Graph Edge Providers
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8068D8E0-6A4B-40D3-952E-DED867C8814A'),
-            'DriverClass',
-            'Driver Class',
-            'ClassFactory registration key of the BaseGraphEdgeProvider subclass.',
-            'nvarchar',
-            510,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            1,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3750013c-01a7-4532-8335-1970125d80ff' OR (EntityID = '8068D8E0-6A4B-40D3-952E-DED867C8814A' AND Name = 'Configuration')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '3750013c-01a7-4532-8335-1970125d80ff',
-            '8068D8E0-6A4B-40D3-952E-DED867C8814A', -- Entity: MJ: Graph Edge Providers
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8068D8E0-6A4B-40D3-952E-DED867C8814A'),
-            'Configuration',
-            'Configuration',
-            'Provider-specific JSON configuration object passed to the provider at query time.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd8fc2008-8d43-4540-9347-5e7f38757be0' OR (EntityID = '8068D8E0-6A4B-40D3-952E-DED867C8814A' AND Name = 'Sequence')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'd8fc2008-8d43-4540-9347-5e7f38757be0',
-            '8068D8E0-6A4B-40D3-952E-DED867C8814A', -- Entity: MJ: Graph Edge Providers
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8068D8E0-6A4B-40D3-952E-DED867C8814A'),
-            'Sequence',
-            'Sequence',
-            'Execution order of this provider relative to other providers on the same graph.',
-            'int',
-            4,
-            10,
-            0,
-            0,
-            '(0)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '85263880-7be7-4b49-91bc-ee9e7ef3036b' OR (EntityID = '8068D8E0-6A4B-40D3-952E-DED867C8814A' AND Name = 'IsActive')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '85263880-7be7-4b49-91bc-ee9e7ef3036b',
-            '8068D8E0-6A4B-40D3-952E-DED867C8814A', -- Entity: MJ: Graph Edge Providers
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8068D8E0-6A4B-40D3-952E-DED867C8814A'),
-            'IsActive',
-            'Is Active',
-            'When 1, this provider participates in graph expansion queries; when 0, it is skipped.',
-            'bit',
-            1,
-            1,
-            0,
-            0,
-            '(1)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '051b91e2-32fc-4a01-a571-ff0b713545b1' OR (EntityID = '8068D8E0-6A4B-40D3-952E-DED867C8814A' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '051b91e2-32fc-4a01-a571-ff0b713545b1',
-            '8068D8E0-6A4B-40D3-952E-DED867C8814A', -- Entity: MJ: Graph Edge Providers
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8068D8E0-6A4B-40D3-952E-DED867C8814A'),
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '286e55c8-f1f2-4404-955d-93a10e27ed45' OR (EntityID = '8068D8E0-6A4B-40D3-952E-DED867C8814A' AND Name = '__mj_UpdatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '286e55c8-f1f2-4404-955d-93a10e27ed45',
-            '8068D8E0-6A4B-40D3-952E-DED867C8814A', -- Entity: MJ: Graph Edge Providers
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8068D8E0-6A4B-40D3-952E-DED867C8814A'),
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2b343bfb-249d-486c-a867-57c0108e406b' OR (EntityID = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA' AND Name = 'ID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '2b343bfb-249d-486c-a867-57c0108e406b',
-            '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA', -- Entity: MJ: Graphs
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA'),
-            'ID',
-            'ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            1,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8a5a82d9-e2b1-44f4-968d-b3c4d12b30b3' OR (EntityID = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA' AND Name = 'Name')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '8a5a82d9-e2b1-44f4-968d-b3c4d12b30b3',
-            '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA', -- Entity: MJ: Graphs
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA'),
+            '5fa41b09-f360-47ea-aaf8-715b76cc81fc',
+            '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA', -- Entity: MJ: Graphs
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA'),
             'Name',
             'Name',
             'Unique name of the semantic graph partition (e.g., MJ Canon, Industry Research Graph).',
@@ -4309,7 +2574,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '27a2fe17-f973-4b4e-8efe-0e32724524c8' OR (EntityID = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA' AND Name = 'Description')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ed4e169d-1c52-4d3b-97be-842e2a2b0a53' OR (EntityID = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA' AND Name = 'Description')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4342,9 +2607,9 @@ GO
          )
          VALUES
          (
-            '27a2fe17-f973-4b4e-8efe-0e32724524c8',
-            '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA', -- Entity: MJ: Graphs
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA'),
+            'ed4e169d-1c52-4d3b-97be-842e2a2b0a53',
+            '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA', -- Entity: MJ: Graphs
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA'),
             'Description',
             'Description',
             'Plain-language description of the domain, purpose, and governance scope of this graph.',
@@ -4372,7 +2637,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ba67a003-ed4f-4553-ac95-297a02398709' OR (EntityID = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA' AND Name = 'GraphType')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '025c4b99-dd64-4935-b134-463b03577cd1' OR (EntityID = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA' AND Name = 'GraphTypeID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4405,28 +2670,28 @@ GO
          )
          VALUES
          (
-            'ba67a003-ed4f-4553-ac95-297a02398709',
-            '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA', -- Entity: MJ: Graphs
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA'),
-            'GraphType',
-            'Graph Type',
-            'Semantic category of the graph: Canon (governed organizational definitions, policies, metrics, and workflows), Knowledge (document/RAG topic and concept graph), Network (entity relationship network), or Custom.',
-            'nvarchar',
-            100,
+            '025c4b99-dd64-4935-b134-463b03577cd1',
+            '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA', -- Entity: MJ: Graphs
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA'),
+            'GraphTypeID',
+            'Graph Type ID',
+            'Foreign key to GraphType defining the semantic classification of this graph and whether it feeds institutional Canon.',
+            'uniqueidentifier',
+            16,
             0,
             0,
             0,
-            'Custom',
+            NULL,
             0,
             1,
             0,
             0,
-            NULL,
-            NULL,
-            0,
+            '037FD55F-0F21-4584-8F86-90C2E45FC671',
+            'ID',
             0,
             0,
             1,
+            0,
             0,
             0,
             'Search',
@@ -4435,7 +2700,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cc5403f2-78d9-4e19-8793-fb2bdfa9c121' OR (EntityID = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA' AND Name = 'LoadMode')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '124810dc-8beb-4ede-8ba3-d9421781e145' OR (EntityID = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA' AND Name = 'LoadMode')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4468,9 +2733,9 @@ GO
          )
          VALUES
          (
-            'cc5403f2-78d9-4e19-8793-fb2bdfa9c121',
-            '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA', -- Entity: MJ: Graphs
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA'),
+            '124810dc-8beb-4ede-8ba3-d9421781e145',
+            '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA', -- Entity: MJ: Graphs
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA'),
             'LoadMode',
             'Load Mode',
             'Whether the graph is preloaded into memory at startup (Preload, for compact metadata/Canon graphs) or traversed on demand (OnDemand, for large data/document graphs).',
@@ -4498,7 +2763,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1e1cfe3c-c3fe-4c06-8d01-fdd52a7d91e9' OR (EntityID = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA' AND Name = 'Status')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a339b589-1899-478c-8b29-7dfc6685931a' OR (EntityID = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA' AND Name = 'Status')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4531,9 +2796,9 @@ GO
          )
          VALUES
          (
-            '1e1cfe3c-c3fe-4c06-8d01-fdd52a7d91e9',
-            '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA', -- Entity: MJ: Graphs
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA'),
+            'a339b589-1899-478c-8b29-7dfc6685931a',
+            '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA', -- Entity: MJ: Graphs
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA'),
             'Status',
             'Status',
             'Operational status of the graph (Active or Disabled).',
@@ -4561,7 +2826,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9b76ba3a-a2b9-44cc-ac87-a92d26147918' OR (EntityID = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fac9102e-33c3-4276-94ee-5e27956039b5' OR (EntityID = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4594,9 +2859,9 @@ GO
          )
          VALUES
          (
-            '9b76ba3a-a2b9-44cc-ac87-a92d26147918',
-            '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA', -- Entity: MJ: Graphs
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA'),
+            'fac9102e-33c3-4276-94ee-5e27956039b5',
+            '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA', -- Entity: MJ: Graphs
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA'),
             '__mj_CreatedAt',
             'Created At',
             NULL,
@@ -4624,7 +2889,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8257e963-a41a-488c-8534-7cb4fca05366' OR (EntityID = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '69c52773-8871-4990-bd54-f5d685bb4175' OR (EntityID = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4657,9 +2922,9 @@ GO
          )
          VALUES
          (
-            '8257e963-a41a-488c-8534-7cb4fca05366',
-            '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA', -- Entity: MJ: Graphs
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA'),
+            '69c52773-8871-4990-bd54-f5d685bb4175',
+            '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA', -- Entity: MJ: Graphs
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA'),
             '__mj_UpdatedAt',
             'Updated At',
             NULL,
@@ -4687,7 +2952,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '51df14c0-f6e9-4be2-84bf-a851239d0cd4' OR (EntityID = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ee599e24-5e75-43c9-be96-1518ac266c35' OR (EntityID = '234A4D46-27B8-4011-B3F3-8B862D77073C' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4720,9 +2985,9 @@ GO
          )
          VALUES
          (
-            '51df14c0-f6e9-4be2-84bf-a851239d0cd4',
-            '8B441734-9C58-43B4-A4A0-F2C0E0D0B342', -- Entity: MJ: Graph Edge Type Endpoints
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342'),
+            'ee599e24-5e75-43c9-be96-1518ac266c35',
+            '234A4D46-27B8-4011-B3F3-8B862D77073C', -- Entity: MJ: Graph Edge Providers
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '234A4D46-27B8-4011-B3F3-8B862D77073C'),
             'ID',
             'ID',
             NULL,
@@ -4750,7 +3015,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '91d9fa3b-9b66-4c86-b3f3-a6af9ea9ce80' OR (EntityID = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342' AND Name = 'EdgeTypeID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0a1cf78b-e858-4773-9e07-6b9b9b78a27a' OR (EntityID = '234A4D46-27B8-4011-B3F3-8B862D77073C' AND Name = 'GraphID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4783,11 +3048,11 @@ GO
          )
          VALUES
          (
-            '91d9fa3b-9b66-4c86-b3f3-a6af9ea9ce80',
-            '8B441734-9C58-43B4-A4A0-F2C0E0D0B342', -- Entity: MJ: Graph Edge Type Endpoints
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342'),
-            'EdgeTypeID',
-            'Edge Type ID',
+            '0a1cf78b-e858-4773-9e07-6b9b9b78a27a',
+            '234A4D46-27B8-4011-B3F3-8B862D77073C', -- Entity: MJ: Graph Edge Providers
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '234A4D46-27B8-4011-B3F3-8B862D77073C'),
+            'GraphID',
+            'Graph ID',
             NULL,
             'uniqueidentifier',
             16,
@@ -4799,7 +3064,7 @@ GO
             1,
             0,
             0,
-            '987A289E-5763-4735-8EE3-AE61CA5C26CB',
+            '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA',
             'ID',
             0,
             0,
@@ -4813,7 +3078,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8a36fe7d-721f-4463-b5c8-fcf4e98baba1' OR (EntityID = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342' AND Name = 'Side')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '664125d1-6eb7-4afc-b73b-3b6d5eb7e9b7' OR (EntityID = '234A4D46-27B8-4011-B3F3-8B862D77073C' AND Name = 'Name')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4846,14 +3111,14 @@ GO
          )
          VALUES
          (
-            '8a36fe7d-721f-4463-b5c8-fcf4e98baba1',
-            '8B441734-9C58-43B4-A4A0-F2C0E0D0B342', -- Entity: MJ: Graph Edge Type Endpoints
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342'),
-            'Side',
-            'Side',
-            'Which endpoint of the edge this entity constraint applies to (Source or Target).',
+            '664125d1-6eb7-4afc-b73b-3b6d5eb7e9b7',
+            '234A4D46-27B8-4011-B3F3-8B862D77073C', -- Entity: MJ: Graph Edge Providers
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '234A4D46-27B8-4011-B3F3-8B862D77073C'),
+            'Name',
+            'Name',
+            'Display name of this provider registration within the graph.',
             'nvarchar',
-            20,
+            510,
             0,
             0,
             0,
@@ -4864,8 +3129,8 @@ GO
             0,
             NULL,
             NULL,
-            0,
-            0,
+            1,
+            1,
             0,
             1,
             0,
@@ -4876,7 +3141,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ce286c25-49da-4e7a-a06a-ef5ecd48fb9d' OR (EntityID = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342' AND Name = 'EntityID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '42664051-b612-4a2d-b82b-5e50850fdd4a' OR (EntityID = '234A4D46-27B8-4011-B3F3-8B862D77073C' AND Name = 'Description')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4909,37 +3174,37 @@ GO
          )
          VALUES
          (
-            'ce286c25-49da-4e7a-a06a-ef5ecd48fb9d',
-            '8B441734-9C58-43B4-A4A0-F2C0E0D0B342', -- Entity: MJ: Graph Edge Type Endpoints
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342'),
-            'EntityID',
-            'Entity ID',
+            '42664051-b612-4a2d-b82b-5e50850fdd4a',
+            '234A4D46-27B8-4011-B3F3-8B862D77073C', -- Entity: MJ: Graph Edge Providers
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '234A4D46-27B8-4011-B3F3-8B862D77073C'),
+            'Description',
+            'Description',
+            'Description of which derived edges this provider projects into the graph.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
             NULL,
-            'uniqueidentifier',
-            16,
             0,
+            1,
             0,
             0,
             NULL,
+            NULL,
+            0,
+            0,
             0,
             1,
             0,
             0,
-            'E0238F34-2837-EF11-86D4-6045BDEE16E6',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            1,
             'Search',
             GETUTCDATE(),
             GETUTCDATE()
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3d4cab6d-6514-45e9-b70f-0a7c81d8b4fb' OR (EntityID = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '35e93800-9085-4636-b16d-3017a117f300' OR (EntityID = '234A4D46-27B8-4011-B3F3-8B862D77073C' AND Name = 'DriverClass')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4972,9 +3237,261 @@ GO
          )
          VALUES
          (
-            '3d4cab6d-6514-45e9-b70f-0a7c81d8b4fb',
-            '8B441734-9C58-43B4-A4A0-F2C0E0D0B342', -- Entity: MJ: Graph Edge Type Endpoints
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342'),
+            '35e93800-9085-4636-b16d-3017a117f300',
+            '234A4D46-27B8-4011-B3F3-8B862D77073C', -- Entity: MJ: Graph Edge Providers
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '234A4D46-27B8-4011-B3F3-8B862D77073C'),
+            'DriverClass',
+            'Driver Class',
+            'ClassFactory registration key of the BaseGraphEdgeProvider subclass.',
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ea46c851-185b-48cb-9c30-242250eb4b08' OR (EntityID = '234A4D46-27B8-4011-B3F3-8B862D77073C' AND Name = 'Configuration')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'ea46c851-185b-48cb-9c30-242250eb4b08',
+            '234A4D46-27B8-4011-B3F3-8B862D77073C', -- Entity: MJ: Graph Edge Providers
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '234A4D46-27B8-4011-B3F3-8B862D77073C'),
+            'Configuration',
+            'Configuration',
+            'Provider-specific JSON configuration object passed to the provider at query time.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '36cd6ce2-3598-4652-8587-aca7f51c9cd4' OR (EntityID = '234A4D46-27B8-4011-B3F3-8B862D77073C' AND Name = 'Sequence')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '36cd6ce2-3598-4652-8587-aca7f51c9cd4',
+            '234A4D46-27B8-4011-B3F3-8B862D77073C', -- Entity: MJ: Graph Edge Providers
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '234A4D46-27B8-4011-B3F3-8B862D77073C'),
+            'Sequence',
+            'Sequence',
+            'Execution order of this provider relative to other providers on the same graph.',
+            'int',
+            4,
+            10,
+            0,
+            0,
+            '(0)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2fd60774-47da-44dd-be9d-6d8d0cd3bcd3' OR (EntityID = '234A4D46-27B8-4011-B3F3-8B862D77073C' AND Name = 'IsActive')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '2fd60774-47da-44dd-be9d-6d8d0cd3bcd3',
+            '234A4D46-27B8-4011-B3F3-8B862D77073C', -- Entity: MJ: Graph Edge Providers
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '234A4D46-27B8-4011-B3F3-8B862D77073C'),
+            'IsActive',
+            'Is Active',
+            'When 1, this provider participates in graph expansion queries; when 0, it is skipped.',
+            'bit',
+            1,
+            1,
+            0,
+            0,
+            '(1)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2bacbf2a-4c4c-4c37-aed6-0850391f875c' OR (EntityID = '234A4D46-27B8-4011-B3F3-8B862D77073C' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '2bacbf2a-4c4c-4c37-aed6-0850391f875c',
+            '234A4D46-27B8-4011-B3F3-8B862D77073C', -- Entity: MJ: Graph Edge Providers
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '234A4D46-27B8-4011-B3F3-8B862D77073C'),
             '__mj_CreatedAt',
             'Created At',
             NULL,
@@ -4993,7 +3510,7 @@ GO
             0,
             0,
             0,
-            1,
+            0,
             0,
             0,
             'Search',
@@ -5002,7 +3519,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '09617ec9-202f-436d-8927-930a2f504136' OR (EntityID = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0c81340c-8f85-4c53-b973-47b393842b1b' OR (EntityID = '234A4D46-27B8-4011-B3F3-8B862D77073C' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5035,9 +3552,9 @@ GO
          )
          VALUES
          (
-            '09617ec9-202f-436d-8927-930a2f504136',
-            '8B441734-9C58-43B4-A4A0-F2C0E0D0B342', -- Entity: MJ: Graph Edge Type Endpoints
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342'),
+            '0c81340c-8f85-4c53-b973-47b393842b1b',
+            '234A4D46-27B8-4011-B3F3-8B862D77073C', -- Entity: MJ: Graph Edge Providers
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '234A4D46-27B8-4011-B3F3-8B862D77073C'),
             '__mj_UpdatedAt',
             'Updated At',
             NULL,
@@ -5065,212 +3582,3143 @@ GO
          )
       END;
 
-/* SQL text to insert entity field value with ID 4eaf68b3-67ea-4882-b3b6-c38b4dda385c */
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0cda78d2-75bd-4ae3-b94a-4a585fdbc347' OR (EntityID = '037FD55F-0F21-4584-8F86-90C2E45FC671' AND Name = 'ID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '0cda78d2-75bd-4ae3-b94a-4a585fdbc347',
+            '037FD55F-0F21-4584-8F86-90C2E45FC671', -- Entity: MJ: Graph Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '037FD55F-0F21-4584-8F86-90C2E45FC671'),
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e89a1147-4b30-4947-92bc-1094b59f28ac' OR (EntityID = '037FD55F-0F21-4584-8F86-90C2E45FC671' AND Name = 'Name')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'e89a1147-4b30-4947-92bc-1094b59f28ac',
+            '037FD55F-0F21-4584-8F86-90C2E45FC671', -- Entity: MJ: Graph Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '037FD55F-0F21-4584-8F86-90C2E45FC671'),
+            'Name',
+            'Name',
+            'Unique display name of the graph type (e.g., Canon, Knowledge, Network, Custom).',
+            'nvarchar',
+            200,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            1,
+            1,
+            0,
+            1,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e7c33a26-dfec-4c27-a503-8ddf050457b3' OR (EntityID = '037FD55F-0F21-4584-8F86-90C2E45FC671' AND Name = 'Description')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'e7c33a26-dfec-4c27-a503-8ddf050457b3',
+            '037FD55F-0F21-4584-8F86-90C2E45FC671', -- Entity: MJ: Graph Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '037FD55F-0F21-4584-8F86-90C2E45FC671'),
+            'Description',
+            'Description',
+            'Plain-language description of what graphs of this type represent and how agents should use them.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '81c1a0ed-6563-4dc8-8564-eedc8b097120' OR (EntityID = '037FD55F-0F21-4584-8F86-90C2E45FC671' AND Name = 'IsCanon')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '81c1a0ed-6563-4dc8-8564-eedc8b097120',
+            '037FD55F-0F21-4584-8F86-90C2E45FC671', -- Entity: MJ: Graph Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '037FD55F-0F21-4584-8F86-90C2E45FC671'),
+            'IsCanon',
+            'Is Canon',
+            'When 1, graphs of this type feed governed institutional Canon (authoritative definitions, policies, metrics, and workflows); when 0, the graph is non-canonical (such as exploratory Knowledge or Network graphs).',
+            'bit',
+            1,
+            1,
+            0,
+            0,
+            '(0)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '96838cad-b3ee-42be-a8d5-d2b2b18cee15' OR (EntityID = '037FD55F-0F21-4584-8F86-90C2E45FC671' AND Name = 'Rank')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '96838cad-b3ee-42be-a8d5-d2b2b18cee15',
+            '037FD55F-0F21-4584-8F86-90C2E45FC671', -- Entity: MJ: Graph Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '037FD55F-0F21-4584-8F86-90C2E45FC671'),
+            'Rank',
+            'Rank',
+            'Sort and priority rank order of the graph type (lower numbers have higher priority).',
+            'int',
+            4,
+            10,
+            0,
+            0,
+            '(100)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'de62f801-9a1e-4b1f-b382-b93ffd8dc144' OR (EntityID = '037FD55F-0F21-4584-8F86-90C2E45FC671' AND Name = 'IconClass')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'de62f801-9a1e-4b1f-b382-b93ffd8dc144',
+            '037FD55F-0F21-4584-8F86-90C2E45FC671', -- Entity: MJ: Graph Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '037FD55F-0F21-4584-8F86-90C2E45FC671'),
+            'IconClass',
+            'Icon Class',
+            'Optional Font Awesome CSS icon class used to render badges for graphs of this type in the UI.',
+            'nvarchar',
+            200,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c7fa5dac-4eb3-4f1b-a840-c4b40a781ae4' OR (EntityID = '037FD55F-0F21-4584-8F86-90C2E45FC671' AND Name = 'Status')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c7fa5dac-4eb3-4f1b-a840-c4b40a781ae4',
+            '037FD55F-0F21-4584-8F86-90C2E45FC671', -- Entity: MJ: Graph Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '037FD55F-0F21-4584-8F86-90C2E45FC671'),
+            'Status',
+            'Status',
+            'Operational status of the graph type (Active or Inactive).',
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'Active',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '33c5a5ac-4140-44b0-b0eb-293f57d01806' OR (EntityID = '037FD55F-0F21-4584-8F86-90C2E45FC671' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '33c5a5ac-4140-44b0-b0eb-293f57d01806',
+            '037FD55F-0F21-4584-8F86-90C2E45FC671', -- Entity: MJ: Graph Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '037FD55F-0F21-4584-8F86-90C2E45FC671'),
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4faccae0-29d6-4e2e-a928-77066cd3046d' OR (EntityID = '037FD55F-0F21-4584-8F86-90C2E45FC671' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '4faccae0-29d6-4e2e-a928-77066cd3046d',
+            '037FD55F-0F21-4584-8F86-90C2E45FC671', -- Entity: MJ: Graph Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '037FD55F-0F21-4584-8F86-90C2E45FC671'),
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f686dd28-8d73-498c-8722-a380d1d11b1e' OR (EntityID = '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD' AND Name = 'ID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'f686dd28-8d73-498c-8722-a380d1d11b1e',
+            '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD', -- Entity: MJ: Graph Concept Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD'),
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ab2108b3-9f48-45cd-ba01-284e2f022781' OR (EntityID = '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD' AND Name = 'Name')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'ab2108b3-9f48-45cd-ba01-284e2f022781',
+            '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD', -- Entity: MJ: Graph Concept Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD'),
+            'Name',
+            'Name',
+            'Unique name of the concept type (e.g., Policy, Metric, Process, Role, Domain, Term).',
+            'nvarchar',
+            200,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            1,
+            1,
+            0,
+            1,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7a1e68bd-fa0a-4e1a-8b56-d5cacddde466' OR (EntityID = '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD' AND Name = 'Description')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '7a1e68bd-fa0a-4e1a-8b56-d5cacddde466',
+            '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD', -- Entity: MJ: Graph Concept Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD'),
+            'Description',
+            'Description',
+            'Plain-language definition and LLM extraction guidance describing what qualifies as a concept of this type.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '22385146-7d25-447d-b63f-d32fd4c28059' OR (EntityID = '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD' AND Name = 'Rank')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '22385146-7d25-447d-b63f-d32fd4c28059',
+            '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD', -- Entity: MJ: Graph Concept Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD'),
+            'Rank',
+            'Rank',
+            'Precedence and display rank order of this concept type (lower numbers represent higher-order institutional concepts such as Policy and Metric ahead of granular Terms).',
+            'int',
+            4,
+            10,
+            0,
+            0,
+            '(100)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '68b47cef-6010-4372-be71-47d6066daf9d' OR (EntityID = '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD' AND Name = 'IconClass')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '68b47cef-6010-4372-be71-47d6066daf9d',
+            '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD', -- Entity: MJ: Graph Concept Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD'),
+            'IconClass',
+            'Icon Class',
+            'Optional Font Awesome CSS icon class used to render concept nodes of this type in graph explorers and cards.',
+            'nvarchar',
+            200,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1fec2e91-754c-40b5-91dd-917447714548' OR (EntityID = '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD' AND Name = 'Status')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '1fec2e91-754c-40b5-91dd-917447714548',
+            '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD', -- Entity: MJ: Graph Concept Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD'),
+            'Status',
+            'Status',
+            'Operational status of the concept type (Active or Inactive).',
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'Active',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e3cca960-1f9d-4124-b670-07836c77bffe' OR (EntityID = '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'e3cca960-1f9d-4124-b670-07836c77bffe',
+            '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD', -- Entity: MJ: Graph Concept Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD'),
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c46305b4-9536-4d08-b706-9f01adea4243' OR (EntityID = '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c46305b4-9536-4d08-b706-9f01adea4243',
+            '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD', -- Entity: MJ: Graph Concept Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD'),
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0200db32-1b57-4bcf-8d2c-a1f80bdcf843' OR (EntityID = '4A8D91D6-0933-4CAC-966A-95C69F5228BA' AND Name = 'ID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '0200db32-1b57-4bcf-8d2c-a1f80bdcf843',
+            '4A8D91D6-0933-4CAC-966A-95C69F5228BA', -- Entity: MJ: Graph Edge Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '4A8D91D6-0933-4CAC-966A-95C69F5228BA'),
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a185ae28-27d9-4d81-95a9-eb66493e9198' OR (EntityID = '4A8D91D6-0933-4CAC-966A-95C69F5228BA' AND Name = 'GraphID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'a185ae28-27d9-4d81-95a9-eb66493e9198',
+            '4A8D91D6-0933-4CAC-966A-95C69F5228BA', -- Entity: MJ: Graph Edge Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '4A8D91D6-0933-4CAC-966A-95C69F5228BA'),
+            'GraphID',
+            'Graph ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a05ddd69-e6d9-4121-856c-a0b9eaedc882' OR (EntityID = '4A8D91D6-0933-4CAC-966A-95C69F5228BA' AND Name = 'Name')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'a05ddd69-e6d9-4121-856c-a0b9eaedc882',
+            '4A8D91D6-0933-4CAC-966A-95C69F5228BA', -- Entity: MJ: Graph Edge Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '4A8D91D6-0933-4CAC-966A-95C69F5228BA'),
+            'Name',
+            'Name',
+            'Forward-direction label of the edge type (e.g., Broader Than, Defines, SourcedFrom).',
+            'nvarchar',
+            200,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            1,
+            1,
+            0,
+            1,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '799b5f84-5186-4ee0-b810-b92fbe5781f6' OR (EntityID = '4A8D91D6-0933-4CAC-966A-95C69F5228BA' AND Name = 'Description')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '799b5f84-5186-4ee0-b810-b92fbe5781f6',
+            '4A8D91D6-0933-4CAC-966A-95C69F5228BA', -- Entity: MJ: Graph Edge Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '4A8D91D6-0933-4CAC-966A-95C69F5228BA'),
+            'Description',
+            'Description',
+            'Plain-language definition of what this relationship type means when connecting two nodes.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '679f79db-e2e6-40b2-a830-d92e52928a68' OR (EntityID = '4A8D91D6-0933-4CAC-966A-95C69F5228BA' AND Name = 'IsDirected')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '679f79db-e2e6-40b2-a830-d92e52928a68',
+            '4A8D91D6-0933-4CAC-966A-95C69F5228BA', -- Entity: MJ: Graph Edge Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '4A8D91D6-0933-4CAC-966A-95C69F5228BA'),
+            'IsDirected',
+            'Is Directed',
+            'When 1, the edge is directed from Source to Target; when 0, the relationship is symmetric/undirected.',
+            'bit',
+            1,
+            1,
+            0,
+            0,
+            '(1)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fb8aaa3d-685b-4347-985d-ef4a3c66f8b7' OR (EntityID = '4A8D91D6-0933-4CAC-966A-95C69F5228BA' AND Name = 'InverseName')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'fb8aaa3d-685b-4347-985d-ef4a3c66f8b7',
+            '4A8D91D6-0933-4CAC-966A-95C69F5228BA', -- Entity: MJ: Graph Edge Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '4A8D91D6-0933-4CAC-966A-95C69F5228BA'),
+            'InverseName',
+            'Inverse Name',
+            'Inverse label shown when traversing a directed edge from Target back to Source (e.g., Narrower Than for Broader Than).',
+            'nvarchar',
+            200,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c540096a-437c-4202-b7c9-e13b6a233f1f' OR (EntityID = '4A8D91D6-0933-4CAC-966A-95C69F5228BA' AND Name = 'DefaultWeight')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c540096a-437c-4202-b7c9-e13b6a233f1f',
+            '4A8D91D6-0933-4CAC-966A-95C69F5228BA', -- Entity: MJ: Graph Edge Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '4A8D91D6-0933-4CAC-966A-95C69F5228BA'),
+            'DefaultWeight',
+            'Default Weight',
+            'Default retrieval weight (0.0000 to 1.0000) assigned to edges of this type during multi-hop graph expansion.',
+            'decimal',
+            5,
+            5,
+            4,
+            0,
+            '(1.0)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a44e9352-951b-4719-9e19-38cc3744ea0a' OR (EntityID = '4A8D91D6-0933-4CAC-966A-95C69F5228BA' AND Name = 'AllowStored')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'a44e9352-951b-4719-9e19-38cc3744ea0a',
+            '4A8D91D6-0933-4CAC-966A-95C69F5228BA', -- Entity: MJ: Graph Edge Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '4A8D91D6-0933-4CAC-966A-95C69F5228BA'),
+            'AllowStored',
+            'Allow Stored',
+            'When 1, rows of this edge type may be persisted in GraphEdge; when 0, edges of this type are produced exclusively at read time by a GraphEdgeProvider.',
+            'bit',
+            1,
+            1,
+            0,
+            0,
+            '(1)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '607f0f42-b7d5-439a-9bfb-d9893ca5d363' OR (EntityID = '4A8D91D6-0933-4CAC-966A-95C69F5228BA' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '607f0f42-b7d5-439a-9bfb-d9893ca5d363',
+            '4A8D91D6-0933-4CAC-966A-95C69F5228BA', -- Entity: MJ: Graph Edge Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '4A8D91D6-0933-4CAC-966A-95C69F5228BA'),
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0ec98d00-2621-4d02-9b71-d8d7b41f99e7' OR (EntityID = '4A8D91D6-0933-4CAC-966A-95C69F5228BA' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '0ec98d00-2621-4d02-9b71-d8d7b41f99e7',
+            '4A8D91D6-0933-4CAC-966A-95C69F5228BA', -- Entity: MJ: Graph Edge Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '4A8D91D6-0933-4CAC-966A-95C69F5228BA'),
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '89139890-8f7b-4d8d-a77d-1643f617b6d5' OR (EntityID = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'GraphID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '89139890-8f7b-4d8d-a77d-1643f617b6d5',
+            'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Sources
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22'),
+            'GraphID',
+            'Graph ID',
+            'Optional target Semantic Graph (MJ: Graphs) that this Content Source populates when the Content Pipeline Graph overlay stage runs. Multiple Content Sources can share the same GraphID.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '75645c36-084d-405b-9015-b6f0389341c5' OR (EntityID = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'Graph')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '75645c36-084d-405b-9015-b6f0389341c5',
+            'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Sources
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22'),
+            'Graph',
+            'Graph',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c273aff5-6bc3-49c0-8027-00f4c6d9efcf' OR (EntityID = 'D74E798F-D63F-479A-BC2B-C629B252FE60' AND Name = 'ID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c273aff5-6bc3-49c0-8027-00f4c6d9efcf',
+            'D74E798F-D63F-479A-BC2B-C629B252FE60', -- Entity: MJ: Graph Edge Type Endpoints
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D74E798F-D63F-479A-BC2B-C629B252FE60'),
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '606dfb4b-6789-4adf-9e64-24668092d9db' OR (EntityID = 'D74E798F-D63F-479A-BC2B-C629B252FE60' AND Name = 'EdgeTypeID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '606dfb4b-6789-4adf-9e64-24668092d9db',
+            'D74E798F-D63F-479A-BC2B-C629B252FE60', -- Entity: MJ: Graph Edge Type Endpoints
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D74E798F-D63F-479A-BC2B-C629B252FE60'),
+            'EdgeTypeID',
+            'Edge Type ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            '4A8D91D6-0933-4CAC-966A-95C69F5228BA',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5957a809-6c5a-42d2-a500-6d06cda9e4e3' OR (EntityID = 'D74E798F-D63F-479A-BC2B-C629B252FE60' AND Name = 'Side')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '5957a809-6c5a-42d2-a500-6d06cda9e4e3',
+            'D74E798F-D63F-479A-BC2B-C629B252FE60', -- Entity: MJ: Graph Edge Type Endpoints
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D74E798F-D63F-479A-BC2B-C629B252FE60'),
+            'Side',
+            'Side',
+            'Which endpoint of the edge this entity constraint applies to (Source or Target).',
+            'nvarchar',
+            20,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '73d2c416-437e-4fdc-8abc-ccd200023753' OR (EntityID = 'D74E798F-D63F-479A-BC2B-C629B252FE60' AND Name = 'EntityID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '73d2c416-437e-4fdc-8abc-ccd200023753',
+            'D74E798F-D63F-479A-BC2B-C629B252FE60', -- Entity: MJ: Graph Edge Type Endpoints
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D74E798F-D63F-479A-BC2B-C629B252FE60'),
+            'EntityID',
+            'Entity ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            'E0238F34-2837-EF11-86D4-6045BDEE16E6',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b75aaf6d-b753-4379-b41c-5b09b68a998c' OR (EntityID = 'D74E798F-D63F-479A-BC2B-C629B252FE60' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'b75aaf6d-b753-4379-b41c-5b09b68a998c',
+            'D74E798F-D63F-479A-BC2B-C629B252FE60', -- Entity: MJ: Graph Edge Type Endpoints
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D74E798F-D63F-479A-BC2B-C629B252FE60'),
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cdfa1c03-c365-4dbb-b051-e58f09d32975' OR (EntityID = 'D74E798F-D63F-479A-BC2B-C629B252FE60' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'cdfa1c03-c365-4dbb-b051-e58f09d32975',
+            'D74E798F-D63F-479A-BC2B-C629B252FE60', -- Entity: MJ: Graph Edge Type Endpoints
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D74E798F-D63F-479A-BC2B-C629B252FE60'),
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '494179a9-693e-48ed-a4f5-de092bf848f9' OR (EntityID = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99' AND Name = 'ID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '494179a9-693e-48ed-a4f5-de092bf848f9',
+            '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99', -- Entity: MJ: Graph Concepts
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99'),
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2c493f15-ad4b-4123-a1f5-7cedb0b72be7' OR (EntityID = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99' AND Name = 'GraphID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '2c493f15-ad4b-4123-a1f5-7cedb0b72be7',
+            '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99', -- Entity: MJ: Graph Concepts
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99'),
+            'GraphID',
+            'Graph ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '60681b95-ff7a-4c95-b09b-e919ddfed6b4' OR (EntityID = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99' AND Name = 'ParentID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '60681b95-ff7a-4c95-b09b-e919ddfed6b4',
+            '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99', -- Entity: MJ: Graph Concepts
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99'),
+            'ParentID',
+            'Parent ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '684bf023-df26-40f3-ac2a-6455fe606db9' OR (EntityID = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99' AND Name = 'Name')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '684bf023-df26-40f3-ac2a-6455fe606db9',
+            '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99', -- Entity: MJ: Graph Concepts
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99'),
+            'Name',
+            'Name',
+            'Canonical name of the concept, unique within its owning GraphID.',
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            1,
+            1,
+            0,
+            1,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '095762fb-adc5-48d7-9d74-523ce01e0cc9' OR (EntityID = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99' AND Name = 'ConceptTypeID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '095762fb-adc5-48d7-9d74-523ce01e0cc9',
+            '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99', -- Entity: MJ: Graph Concepts
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99'),
+            'ConceptTypeID',
+            'Concept Type ID',
+            'Foreign key to GraphConceptType classifying the structural role and priority rank of this concept.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'af541026-7247-41dd-952b-3bc4769eb459' OR (EntityID = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99' AND Name = 'Description')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'af541026-7247-41dd-952b-3bc4769eb459',
+            '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99', -- Entity: MJ: Graph Concepts
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99'),
+            'Description',
+            'Description',
+            'Concise 1-3 sentence definition (~100 tokens) injected into agent subgraphs and search results.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8301a585-cf27-493e-b5e9-0ad3df585488' OR (EntityID = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99' AND Name = 'Specification')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '8301a585-cf27-493e-b5e9-0ad3df585488',
+            '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99', -- Entity: MJ: Graph Concepts
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99'),
+            'Specification',
+            'Specification',
+            'Structured markdown specification containing authoritative rules, thresholds, decision tables, exceptions, and chunk citations.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7ac32b20-f7ac-4865-a8c3-f95e74f47da2' OR (EntityID = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99' AND Name = 'Synonyms')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '7ac32b20-f7ac-4865-a8c3-f95e74f47da2',
+            '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99', -- Entity: MJ: Graph Concepts
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99'),
+            'Synonyms',
+            'Synonyms',
+            'JSON array of alternative names, acronyms, and surface forms that resolve to this concept.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4c240ea1-0ac2-41bf-ae25-07c667c32318' OR (EntityID = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99' AND Name = 'AuthorityTier')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '4c240ea1-0ac2-41bf-ae25-07c667c32318',
+            '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99', -- Entity: MJ: Graph Concepts
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99'),
+            'AuthorityTier',
+            'Authority Tier',
+            'Highest evidentiary authority tier backing this concept: Bylaws, BoardPolicy, ExecutiveSOP, DepartmentPractice, Reference, or Inferred.',
+            'nvarchar',
+            100,
+            0,
+            0,
+            0,
+            'Reference',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '01d914e7-bef0-4f12-8fef-1d4c93cacb97' OR (EntityID = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99' AND Name = 'Status')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '01d914e7-bef0-4f12-8fef-1d4c93cacb97',
+            '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99', -- Entity: MJ: Graph Concepts
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99'),
+            'Status',
+            'Status',
+            'Governance lifecycle status of the concept: Draft, Proposed, Approved, or Deprecated.',
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'Draft',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '68fc9db9-58bc-4abd-9674-85844a8ebdcb' OR (EntityID = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '68fc9db9-58bc-4abd-9674-85844a8ebdcb',
+            '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99', -- Entity: MJ: Graph Concepts
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99'),
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5b31597e-d660-4a6a-b257-2e74c298cfd5' OR (EntityID = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '5b31597e-d660-4a6a-b257-2e74c298cfd5',
+            '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99', -- Entity: MJ: Graph Concepts
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99'),
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert entity field value with ID 5a2c553e-ba7b-4d26-b5e6-3ee1ce134491 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('4eaf68b3-67ea-4882-b3b6-c38b4dda385c', 'BA67A003-ED4F-4553-AC95-297A02398709', 1, 'Canon', 'Canon', GETUTCDATE(), GETUTCDATE());
+                                       ('5a2c553e-ba7b-4d26-b5e6-3ee1ce134491', 'C7FA5DAC-4EB3-4F1B-A840-C4B40A781AE4', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID e5fad9ed-3359-4e9c-a5a8-8d29ebfe1c0f */
+/* SQL text to insert entity field value with ID 57bef8d9-a15e-4589-89a8-e524901081b9 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('e5fad9ed-3359-4e9c-a5a8-8d29ebfe1c0f', 'BA67A003-ED4F-4553-AC95-297A02398709', 2, 'Custom', 'Custom', GETUTCDATE(), GETUTCDATE());
+                                       ('57bef8d9-a15e-4589-89a8-e524901081b9', 'C7FA5DAC-4EB3-4F1B-A840-C4B40A781AE4', 2, 'Inactive', 'Inactive', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 11091896-caf6-4391-ab8f-a12a70f3ddab */
+/* SQL text to update ValueListType for entity field ID C7FA5DAC-4EB3-4F1B-A840-C4B40A781AE4 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='C7FA5DAC-4EB3-4F1B-A840-C4B40A781AE4';
+
+/* SQL text to insert entity field value with ID 6d5c3bc4-2ce2-4127-9eda-eb90327c93f2 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('11091896-caf6-4391-ab8f-a12a70f3ddab', 'BA67A003-ED4F-4553-AC95-297A02398709', 3, 'Knowledge', 'Knowledge', GETUTCDATE(), GETUTCDATE());
+                                       ('6d5c3bc4-2ce2-4127-9eda-eb90327c93f2', '1FEC2E91-754C-40B5-91DD-917447714548', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID c828171c-2200-4618-9cf4-fdf361bfb932 */
+/* SQL text to insert entity field value with ID 6d875e01-96de-44eb-978e-59d24a66ea92 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('c828171c-2200-4618-9cf4-fdf361bfb932', 'BA67A003-ED4F-4553-AC95-297A02398709', 4, 'Network', 'Network', GETUTCDATE(), GETUTCDATE());
+                                       ('6d875e01-96de-44eb-978e-59d24a66ea92', '1FEC2E91-754C-40B5-91DD-917447714548', 2, 'Inactive', 'Inactive', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID BA67A003-ED4F-4553-AC95-297A02398709 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='BA67A003-ED4F-4553-AC95-297A02398709';
+/* SQL text to update ValueListType for entity field ID 1FEC2E91-754C-40B5-91DD-917447714548 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='1FEC2E91-754C-40B5-91DD-917447714548';
 
-/* SQL text to insert entity field value with ID 98a5684d-2b8c-4684-889c-fd9e3eaf7f95 */
+/* SQL text to insert entity field value with ID ff5c3b79-bb24-4f5e-9beb-7395ab4dd5e1 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('98a5684d-2b8c-4684-889c-fd9e3eaf7f95', 'CC5403F2-78D9-4E19-8793-FB2BDFA9C121', 1, 'OnDemand', 'OnDemand', GETUTCDATE(), GETUTCDATE());
+                                       ('ff5c3b79-bb24-4f5e-9beb-7395ab4dd5e1', '124810DC-8BEB-4EDE-8BA3-D9421781E145', 1, 'OnDemand', 'OnDemand', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID a7a4fea3-adc6-4ae8-8230-809e9b432956 */
+/* SQL text to insert entity field value with ID 6aa8f2de-0737-4a0d-9b55-d4b2f889bc76 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('a7a4fea3-adc6-4ae8-8230-809e9b432956', 'CC5403F2-78D9-4E19-8793-FB2BDFA9C121', 2, 'Preload', 'Preload', GETUTCDATE(), GETUTCDATE());
+                                       ('6aa8f2de-0737-4a0d-9b55-d4b2f889bc76', '124810DC-8BEB-4EDE-8BA3-D9421781E145', 2, 'Preload', 'Preload', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID CC5403F2-78D9-4E19-8793-FB2BDFA9C121 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='CC5403F2-78D9-4E19-8793-FB2BDFA9C121';
+/* SQL text to update ValueListType for entity field ID 124810DC-8BEB-4EDE-8BA3-D9421781E145 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='124810DC-8BEB-4EDE-8BA3-D9421781E145';
 
-/* SQL text to insert entity field value with ID 0828ae46-325c-46bb-8771-a3b2f1151cfd */
+/* SQL text to insert entity field value with ID ed836598-f57a-4fd1-9a2c-d83bab88c1e5 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('0828ae46-325c-46bb-8771-a3b2f1151cfd', '1E1CFE3C-C3FE-4C06-8D01-FDD52A7D91E9', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
+                                       ('ed836598-f57a-4fd1-9a2c-d83bab88c1e5', 'A339B589-1899-478C-8B29-7DFC6685931A', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID a427647f-dcce-4aef-8086-9940f5d49469 */
+/* SQL text to insert entity field value with ID 15a1594d-7b83-48a2-bad6-f89318c3e6b3 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('a427647f-dcce-4aef-8086-9940f5d49469', '1E1CFE3C-C3FE-4C06-8D01-FDD52A7D91E9', 2, 'Disabled', 'Disabled', GETUTCDATE(), GETUTCDATE());
+                                       ('15a1594d-7b83-48a2-bad6-f89318c3e6b3', 'A339B589-1899-478C-8B29-7DFC6685931A', 2, 'Disabled', 'Disabled', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 1E1CFE3C-C3FE-4C06-8D01-FDD52A7D91E9 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='1E1CFE3C-C3FE-4C06-8D01-FDD52A7D91E9';
+/* SQL text to update ValueListType for entity field ID A339B589-1899-478C-8B29-7DFC6685931A */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='A339B589-1899-478C-8B29-7DFC6685931A';
 
-/* SQL text to insert entity field value with ID f2e36c94-bbc1-4338-9bc7-9ed60e1b60b0 */
+/* SQL text to insert entity field value with ID 9f413b38-2335-4f72-9f46-6497312832be */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('f2e36c94-bbc1-4338-9bc7-9ed60e1b60b0', '8A36FE7D-721F-4463-B5C8-FCF4E98BABA1', 1, 'Source', 'Source', GETUTCDATE(), GETUTCDATE());
+                                       ('9f413b38-2335-4f72-9f46-6497312832be', '5957A809-6C5A-42D2-A500-6D06CDA9E4E3', 1, 'Source', 'Source', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID a68be9af-6ac6-4e67-ba31-b008d784030b */
+/* SQL text to insert entity field value with ID feed4c0b-e83a-436b-9b82-176d464a7c43 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('a68be9af-6ac6-4e67-ba31-b008d784030b', '8A36FE7D-721F-4463-B5C8-FCF4E98BABA1', 2, 'Target', 'Target', GETUTCDATE(), GETUTCDATE());
+                                       ('feed4c0b-e83a-436b-9b82-176d464a7c43', '5957A809-6C5A-42D2-A500-6D06CDA9E4E3', 2, 'Target', 'Target', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 8A36FE7D-721F-4463-B5C8-FCF4E98BABA1 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='8A36FE7D-721F-4463-B5C8-FCF4E98BABA1';
+/* SQL text to update ValueListType for entity field ID 5957A809-6C5A-42D2-A500-6D06CDA9E4E3 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='5957A809-6C5A-42D2-A500-6D06CDA9E4E3';
 
-/* SQL text to insert entity field value with ID 145d5340-7e6c-4de3-9ba6-4d5483c1c0cb */
+/* SQL text to insert entity field value with ID e140ac60-8436-4b73-a7c9-69c15c7c0b52 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('145d5340-7e6c-4de3-9ba6-4d5483c1c0cb', '48A4919A-91A9-424B-981F-95680D2AD912', 1, 'Declared', 'Declared', GETUTCDATE(), GETUTCDATE());
+                                       ('e140ac60-8436-4b73-a7c9-69c15c7c0b52', 'F4878649-5999-4CC7-B195-FC17B88667A3', 1, 'Declared', 'Declared', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 8a377e93-d399-4dd5-a13b-8af0e053af7e */
+/* SQL text to insert entity field value with ID 171dd2ae-8b02-4f52-a3ef-8bfffdb4cf59 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('8a377e93-d399-4dd5-a13b-8af0e053af7e', '48A4919A-91A9-424B-981F-95680D2AD912', 2, 'Inferred', 'Inferred', GETUTCDATE(), GETUTCDATE());
+                                       ('171dd2ae-8b02-4f52-a3ef-8bfffdb4cf59', 'F4878649-5999-4CC7-B195-FC17B88667A3', 2, 'Inferred', 'Inferred', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 48A4919A-91A9-424B-981F-95680D2AD912 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='48A4919A-91A9-424B-981F-95680D2AD912';
+/* SQL text to update ValueListType for entity field ID F4878649-5999-4CC7-B195-FC17B88667A3 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='F4878649-5999-4CC7-B195-FC17B88667A3';
 
-/* SQL text to insert entity field value with ID c6d00347-e0e1-4761-a2d4-8ebf2e1d93fc */
+/* SQL text to insert entity field value with ID 0211b055-4418-4bf8-a940-b782340f51f0 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('c6d00347-e0e1-4761-a2d4-8ebf2e1d93fc', '4883A949-53BB-4A14-BF07-8C00B27DD685', 1, 'Approved', 'Approved', GETUTCDATE(), GETUTCDATE());
+                                       ('0211b055-4418-4bf8-a940-b782340f51f0', '214B6E6F-3E16-4F55-B9A4-5E4A78A77A1B', 1, 'Approved', 'Approved', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 6a755b27-da79-4e9a-9332-d693ff930340 */
+/* SQL text to insert entity field value with ID 079dc61e-923c-492c-8d45-d517a3a7c9de */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('6a755b27-da79-4e9a-9332-d693ff930340', '4883A949-53BB-4A14-BF07-8C00B27DD685', 2, 'Proposed', 'Proposed', GETUTCDATE(), GETUTCDATE());
+                                       ('079dc61e-923c-492c-8d45-d517a3a7c9de', '214B6E6F-3E16-4F55-B9A4-5E4A78A77A1B', 2, 'Proposed', 'Proposed', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 10961477-071f-47a5-afbe-c3ded8f14886 */
+/* SQL text to insert entity field value with ID ccd8aa86-a16a-4946-acea-22381c079c6f */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('10961477-071f-47a5-afbe-c3ded8f14886', '4883A949-53BB-4A14-BF07-8C00B27DD685', 3, 'Rejected', 'Rejected', GETUTCDATE(), GETUTCDATE());
+                                       ('ccd8aa86-a16a-4946-acea-22381c079c6f', '214B6E6F-3E16-4F55-B9A4-5E4A78A77A1B', 3, 'Rejected', 'Rejected', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 4883A949-53BB-4A14-BF07-8C00B27DD685 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='4883A949-53BB-4A14-BF07-8C00B27DD685';
+/* SQL text to update ValueListType for entity field ID 214B6E6F-3E16-4F55-B9A4-5E4A78A77A1B */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='214B6E6F-3E16-4F55-B9A4-5E4A78A77A1B';
 
-/* SQL text to insert entity field value with ID 8bd98e89-4a74-45b2-ad09-26566374d407 */
+/* SQL text to insert entity field value with ID 4628b947-5031-4e84-bc5b-80be40ff7d50 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('8bd98e89-4a74-45b2-ad09-26566374d407', '63945900-A006-47CF-8C44-5722F4C940CB', 1, 'Domain', 'Domain', GETUTCDATE(), GETUTCDATE());
+                                       ('4628b947-5031-4e84-bc5b-80be40ff7d50', '4C240EA1-0AC2-41BF-AE25-07C667C32318', 1, 'BoardPolicy', 'BoardPolicy', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID ea3b3c22-dc34-4f74-b34a-b25646c348d9 */
+/* SQL text to insert entity field value with ID 407e6127-4d84-41c9-a21a-d8f6ad0b4b68 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('ea3b3c22-dc34-4f74-b34a-b25646c348d9', '63945900-A006-47CF-8C44-5722F4C940CB', 2, 'Metric', 'Metric', GETUTCDATE(), GETUTCDATE());
+                                       ('407e6127-4d84-41c9-a21a-d8f6ad0b4b68', '4C240EA1-0AC2-41BF-AE25-07C667C32318', 2, 'Bylaws', 'Bylaws', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 499fe8df-426d-44a0-b010-7489a521fa45 */
+/* SQL text to insert entity field value with ID 3ffb16bd-6bcf-4cb3-832f-fda07465d09d */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('499fe8df-426d-44a0-b010-7489a521fa45', '63945900-A006-47CF-8C44-5722F4C940CB', 3, 'Policy', 'Policy', GETUTCDATE(), GETUTCDATE());
+                                       ('3ffb16bd-6bcf-4cb3-832f-fda07465d09d', '4C240EA1-0AC2-41BF-AE25-07C667C32318', 3, 'DepartmentPractice', 'DepartmentPractice', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 1d32c476-ab9d-403c-b1b7-542c79586100 */
+/* SQL text to insert entity field value with ID 0244b22e-ebb3-4a41-8a21-66bb04ab9b1a */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('1d32c476-ab9d-403c-b1b7-542c79586100', '63945900-A006-47CF-8C44-5722F4C940CB', 4, 'Process', 'Process', GETUTCDATE(), GETUTCDATE());
+                                       ('0244b22e-ebb3-4a41-8a21-66bb04ab9b1a', '4C240EA1-0AC2-41BF-AE25-07C667C32318', 4, 'ExecutiveSOP', 'ExecutiveSOP', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 0ce9ec7c-848d-431f-8e03-16fd6a02e7b5 */
+/* SQL text to insert entity field value with ID 53aaa853-733b-49d1-9138-b5355a480e48 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('0ce9ec7c-848d-431f-8e03-16fd6a02e7b5', '63945900-A006-47CF-8C44-5722F4C940CB', 5, 'Term', 'Term', GETUTCDATE(), GETUTCDATE());
+                                       ('53aaa853-733b-49d1-9138-b5355a480e48', '4C240EA1-0AC2-41BF-AE25-07C667C32318', 5, 'Inferred', 'Inferred', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 63945900-A006-47CF-8C44-5722F4C940CB */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='63945900-A006-47CF-8C44-5722F4C940CB';
-
-/* SQL text to insert entity field value with ID a9bbac08-d689-4f33-8d8a-1eea48d4f528 */
+/* SQL text to insert entity field value with ID 68c20bae-dd31-4373-83ce-9fa3d3897a76 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('a9bbac08-d689-4f33-8d8a-1eea48d4f528', '1CFECC86-5C83-451E-85A3-8B2336E3E3ED', 1, 'BoardPolicy', 'BoardPolicy', GETUTCDATE(), GETUTCDATE());
+                                       ('68c20bae-dd31-4373-83ce-9fa3d3897a76', '4C240EA1-0AC2-41BF-AE25-07C667C32318', 6, 'Reference', 'Reference', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID d10dfe31-0ddb-452b-a2a1-52e7b79f1ea7 */
+/* SQL text to update ValueListType for entity field ID 4C240EA1-0AC2-41BF-AE25-07C667C32318 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='4C240EA1-0AC2-41BF-AE25-07C667C32318';
+
+/* SQL text to insert entity field value with ID 2c841db1-23e7-47c4-85fa-3af6838968e3 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('d10dfe31-0ddb-452b-a2a1-52e7b79f1ea7', '1CFECC86-5C83-451E-85A3-8B2336E3E3ED', 2, 'Bylaws', 'Bylaws', GETUTCDATE(), GETUTCDATE());
+                                       ('2c841db1-23e7-47c4-85fa-3af6838968e3', '01D914E7-BEF0-4F12-8FEF-1D4C93CACB97', 1, 'Approved', 'Approved', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 745d34b4-2b7e-4c2e-8398-e79709228c88 */
+/* SQL text to insert entity field value with ID 61dcac00-2fa8-4512-a4dd-119e23c76473 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('745d34b4-2b7e-4c2e-8398-e79709228c88', '1CFECC86-5C83-451E-85A3-8B2336E3E3ED', 3, 'DepartmentPractice', 'DepartmentPractice', GETUTCDATE(), GETUTCDATE());
+                                       ('61dcac00-2fa8-4512-a4dd-119e23c76473', '01D914E7-BEF0-4F12-8FEF-1D4C93CACB97', 2, 'Deprecated', 'Deprecated', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID f0d102f3-f6c1-43d1-839f-36a75f78bbb1 */
+/* SQL text to insert entity field value with ID e386ceb3-9dc0-4f7c-a94f-1b959daaf083 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('f0d102f3-f6c1-43d1-839f-36a75f78bbb1', '1CFECC86-5C83-451E-85A3-8B2336E3E3ED', 4, 'ExecutiveSOP', 'ExecutiveSOP', GETUTCDATE(), GETUTCDATE());
+                                       ('e386ceb3-9dc0-4f7c-a94f-1b959daaf083', '01D914E7-BEF0-4F12-8FEF-1D4C93CACB97', 3, 'Draft', 'Draft', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 63a46901-6d1c-41d9-98e8-708e61e5fad0 */
+/* SQL text to insert entity field value with ID 4316f951-e25d-4689-9e69-fca1451555ef */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('63a46901-6d1c-41d9-98e8-708e61e5fad0', '1CFECC86-5C83-451E-85A3-8B2336E3E3ED', 5, 'Inferred', 'Inferred', GETUTCDATE(), GETUTCDATE());
+                                       ('4316f951-e25d-4689-9e69-fca1451555ef', '01D914E7-BEF0-4F12-8FEF-1D4C93CACB97', 4, 'Proposed', 'Proposed', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 82e7b849-ca12-4457-b419-bdcdcb6345c2 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('82e7b849-ca12-4457-b419-bdcdcb6345c2', '1CFECC86-5C83-451E-85A3-8B2336E3E3ED', 6, 'Reference', 'Reference', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to update ValueListType for entity field ID 1CFECC86-5C83-451E-85A3-8B2336E3E3ED */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='1CFECC86-5C83-451E-85A3-8B2336E3E3ED';
-
-/* SQL text to insert entity field value with ID 5f52c36c-6a76-4d72-8c4d-1c653b1d2779 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('5f52c36c-6a76-4d72-8c4d-1c653b1d2779', 'F2902635-D7E6-4AE3-94CB-9A1A8302C2E1', 1, 'Approved', 'Approved', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID d0689a8a-eb64-4fba-b4e3-372bceee36b5 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('d0689a8a-eb64-4fba-b4e3-372bceee36b5', 'F2902635-D7E6-4AE3-94CB-9A1A8302C2E1', 2, 'Deprecated', 'Deprecated', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID 2ac77750-25a1-4863-a2cc-5c64b32ed5d6 */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('2ac77750-25a1-4863-a2cc-5c64b32ed5d6', 'F2902635-D7E6-4AE3-94CB-9A1A8302C2E1', 3, 'Draft', 'Draft', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to insert entity field value with ID f7a46ffe-ee49-45e8-8272-dc6aac68e69d */
-INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
-                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
-                                    VALUES
-                                       ('f7a46ffe-ee49-45e8-8272-dc6aac68e69d', 'F2902635-D7E6-4AE3-94CB-9A1A8302C2E1', 4, 'Proposed', 'Proposed', GETUTCDATE(), GETUTCDATE());
-
-/* SQL text to update ValueListType for entity field ID F2902635-D7E6-4AE3-94CB-9A1A8302C2E1 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='F2902635-D7E6-4AE3-94CB-9A1A8302C2E1';
+/* SQL text to update ValueListType for entity field ID 01D914E7-BEF0-4F12-8FEF-1D4C93CACB97 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='01D914E7-BEF0-4F12-8FEF-1D4C93CACB97';
 
 /* Deterministic search-flag hygiene — clear AllowUserSearchAPI */
 
@@ -5292,108 +6740,127 @@ UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID
          );
 
 
-/* Create Entity Relationship: MJ: Graph Concepts -> MJ: Graph Concepts (One To Many via ParentID) */
+/* Create Entity Relationship: MJ: Graphs -> MJ: Graph Edges (One To Many via GraphID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'd3cb49eb-81ab-4bd6-8ecf-9362c85ea078' OR ([EntityID] = 'FDDD3E40-0131-4F60-A019-227D63051CDC' AND [RelatedEntityID] = 'FDDD3E40-0131-4F60-A019-227D63051CDC' AND [RelatedEntityJoinField] = 'ParentID')
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'ddfb3c46-36e3-45fc-88b7-0903f0ddbbe0' OR ([EntityID] = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA' AND [RelatedEntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND [RelatedEntityJoinField] = 'GraphID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('d3cb49eb-81ab-4bd6-8ecf-9362c85ea078', 'FDDD3E40-0131-4F60-A019-227D63051CDC', 'FDDD3E40-0131-4F60-A019-227D63051CDC', 'ParentID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('ddfb3c46-36e3-45fc-88b7-0903f0ddbbe0', '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA', '52ACC265-E651-4CD9-8C96-088B6263CC2B', 'GraphID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+   END;
+                    
+/* Create Entity Relationship: MJ: Graphs -> MJ: Graph Edge Providers (One To Many via GraphID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '33ef9319-e0aa-4c1c-a577-cb0dd73032e2' OR ([EntityID] = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA' AND [RelatedEntityID] = '234A4D46-27B8-4011-B3F3-8B862D77073C' AND [RelatedEntityJoinField] = 'GraphID')
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('33ef9319-e0aa-4c1c-a577-cb0dd73032e2', '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA', '234A4D46-27B8-4011-B3F3-8B862D77073C', 'GraphID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
+   END;
+
+
+/* Create Entity Relationship: MJ: Graphs -> MJ: Graph Edge Types (One To Many via GraphID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'c2e55bda-132d-40b8-85ff-0780e383ea39' OR ([EntityID] = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA' AND [RelatedEntityID] = '4A8D91D6-0933-4CAC-966A-95C69F5228BA' AND [RelatedEntityJoinField] = 'GraphID')
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('c2e55bda-132d-40b8-85ff-0780e383ea39', '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA', '4A8D91D6-0933-4CAC-966A-95C69F5228BA', 'GraphID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
+   END;
+                    
+/* Create Entity Relationship: MJ: Graphs -> MJ: Content Sources (One To Many via GraphID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'd8400b3f-7364-4b56-81ef-7cd368cfd5fb' OR ([EntityID] = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA' AND [RelatedEntityID] = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22' AND [RelatedEntityJoinField] = 'GraphID')
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('d8400b3f-7364-4b56-81ef-7cd368cfd5fb', '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA', 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 'GraphID', 'One To Many', 1, 1, 4, GETUTCDATE(), GETUTCDATE())
+   END;
+                    
+/* Create Entity Relationship: MJ: Graphs -> MJ: Graph Concepts (One To Many via GraphID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'c521c7a6-debd-4052-bd5c-d636490e8435' OR ([EntityID] = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA' AND [RelatedEntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99' AND [RelatedEntityJoinField] = 'GraphID')
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('c521c7a6-debd-4052-bd5c-d636490e8435', '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA', '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99', 'GraphID', 'One To Many', 1, 1, 5, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: Entities -> MJ: Graph Edges (One To Many via SourceEntityID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'f59c0402-95dc-45f5-ae0d-79385a2d531b' OR ([EntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND [RelatedEntityJoinField] = 'SourceEntityID')
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '4e7d0cc1-6fca-4d88-9874-5960ff283e1c' OR ([EntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND [RelatedEntityJoinField] = 'SourceEntityID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('f59c0402-95dc-45f5-ae0d-79385a2d531b', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', 'SourceEntityID', 'One To Many', 1, 1, 90, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('4e7d0cc1-6fca-4d88-9874-5960ff283e1c', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '52ACC265-E651-4CD9-8C96-088B6263CC2B', 'SourceEntityID', 'One To Many', 1, 1, 90, GETUTCDATE(), GETUTCDATE())
    END;
                     
 /* Create Entity Relationship: MJ: Entities -> MJ: Graph Edges (One To Many via TargetEntityID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '9b7a90c1-8731-4177-8022-f44e12a1a405' OR ([EntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND [RelatedEntityJoinField] = 'TargetEntityID')
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '96f6ed73-d417-4d11-b0ef-d1f93760e188' OR ([EntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND [RelatedEntityJoinField] = 'TargetEntityID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('9b7a90c1-8731-4177-8022-f44e12a1a405', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', 'TargetEntityID', 'One To Many', 1, 1, 91, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('96f6ed73-d417-4d11-b0ef-d1f93760e188', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '52ACC265-E651-4CD9-8C96-088B6263CC2B', 'TargetEntityID', 'One To Many', 1, 1, 91, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: Entities -> MJ: Graph Edge Type Endpoints (One To Many via EntityID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'a679d54b-f7f4-46bb-90a9-43c34f80ea2a' OR ([EntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342' AND [RelatedEntityJoinField] = 'EntityID')
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'd310399e-868f-408b-82d2-24e45bfee34a' OR ([EntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = 'D74E798F-D63F-479A-BC2B-C629B252FE60' AND [RelatedEntityJoinField] = 'EntityID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('a679d54b-f7f4-46bb-90a9-43c34f80ea2a', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '8B441734-9C58-43B4-A4A0-F2C0E0D0B342', 'EntityID', 'One To Many', 1, 1, 92, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('d310399e-868f-408b-82d2-24e45bfee34a', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'D74E798F-D63F-479A-BC2B-C629B252FE60', 'EntityID', 'One To Many', 1, 1, 92, GETUTCDATE(), GETUTCDATE())
+   END;
+
+
+/* Create Entity Relationship: MJ: Graph Types -> MJ: Graphs (One To Many via GraphTypeID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'd69d6e91-531c-4fe3-bdf2-3da664e29871' OR ([EntityID] = '037FD55F-0F21-4584-8F86-90C2E45FC671' AND [RelatedEntityID] = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA' AND [RelatedEntityJoinField] = 'GraphTypeID')
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('d69d6e91-531c-4fe3-bdf2-3da664e29871', '037FD55F-0F21-4584-8F86-90C2E45FC671', '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA', 'GraphTypeID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+   END;
+                    
+/* Create Entity Relationship: MJ: Graph Concept Types -> MJ: Graph Concepts (One To Many via ConceptTypeID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '6a9fc8a9-35bc-40a9-8ad0-787ebb11a85d' OR ([EntityID] = '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD' AND [RelatedEntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99' AND [RelatedEntityJoinField] = 'ConceptTypeID')
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('6a9fc8a9-35bc-40a9-8ad0-787ebb11a85d', '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD', '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99', 'ConceptTypeID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: Graph Edge Types -> MJ: Graph Edges (One To Many via EdgeTypeID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'dbc5e541-2a99-405f-844e-42d792f50bab' OR ([EntityID] = '987A289E-5763-4735-8EE3-AE61CA5C26CB' AND [RelatedEntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND [RelatedEntityJoinField] = 'EdgeTypeID')
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '81e10655-181f-4e95-bc84-e34ea9951527' OR ([EntityID] = '4A8D91D6-0933-4CAC-966A-95C69F5228BA' AND [RelatedEntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND [RelatedEntityJoinField] = 'EdgeTypeID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('dbc5e541-2a99-405f-844e-42d792f50bab', '987A289E-5763-4735-8EE3-AE61CA5C26CB', '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', 'EdgeTypeID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('81e10655-181f-4e95-bc84-e34ea9951527', '4A8D91D6-0933-4CAC-966A-95C69F5228BA', '52ACC265-E651-4CD9-8C96-088B6263CC2B', 'EdgeTypeID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
    END;
                     
 /* Create Entity Relationship: MJ: Graph Edge Types -> MJ: Graph Edge Type Endpoints (One To Many via EdgeTypeID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '531128a5-9ab9-4069-a367-eee4698fd46f' OR ([EntityID] = '987A289E-5763-4735-8EE3-AE61CA5C26CB' AND [RelatedEntityID] = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342' AND [RelatedEntityJoinField] = 'EdgeTypeID')
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'f09c2c87-f164-42fb-8428-938642e00716' OR ([EntityID] = '4A8D91D6-0933-4CAC-966A-95C69F5228BA' AND [RelatedEntityID] = 'D74E798F-D63F-479A-BC2B-C629B252FE60' AND [RelatedEntityJoinField] = 'EdgeTypeID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('531128a5-9ab9-4069-a367-eee4698fd46f', '987A289E-5763-4735-8EE3-AE61CA5C26CB', '8B441734-9C58-43B4-A4A0-F2C0E0D0B342', 'EdgeTypeID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('f09c2c87-f164-42fb-8428-938642e00716', '4A8D91D6-0933-4CAC-966A-95C69F5228BA', 'D74E798F-D63F-479A-BC2B-C629B252FE60', 'EdgeTypeID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
    END;
 
 
-/* Create Entity Relationship: MJ: Graphs -> MJ: Graph Concepts (One To Many via GraphID) */
+/* Create Entity Relationship: MJ: Graph Concepts -> MJ: Graph Concepts (One To Many via ParentID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '186f81b5-cfc6-43c6-b0df-a2a13a599f5c' OR ([EntityID] = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA' AND [RelatedEntityID] = 'FDDD3E40-0131-4F60-A019-227D63051CDC' AND [RelatedEntityJoinField] = 'GraphID')
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '474ce08d-0ac2-47dc-9500-6d4501fb17d5' OR ([EntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99' AND [RelatedEntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99' AND [RelatedEntityJoinField] = 'ParentID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('186f81b5-cfc6-43c6-b0df-a2a13a599f5c', '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA', 'FDDD3E40-0131-4F60-A019-227D63051CDC', 'GraphID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
-   END;
-                    
-/* Create Entity Relationship: MJ: Graphs -> MJ: Graph Edge Types (One To Many via GraphID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '7a74673e-e942-4dc9-a58d-b41249090c37' OR ([EntityID] = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA' AND [RelatedEntityID] = '987A289E-5763-4735-8EE3-AE61CA5C26CB' AND [RelatedEntityJoinField] = 'GraphID')
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('7a74673e-e942-4dc9-a58d-b41249090c37', '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA', '987A289E-5763-4735-8EE3-AE61CA5C26CB', 'GraphID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
-   END;
-                    
-/* Create Entity Relationship: MJ: Graphs -> MJ: Graph Edges (One To Many via GraphID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '629ae722-c9a0-4d52-8b1b-288925586566' OR ([EntityID] = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA' AND [RelatedEntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND [RelatedEntityJoinField] = 'GraphID')
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('629ae722-c9a0-4d52-8b1b-288925586566', '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA', '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', 'GraphID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
-   END;
-                    
-/* Create Entity Relationship: MJ: Graphs -> MJ: Content Sources (One To Many via GraphID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'a4418bc1-b258-42fb-a5bb-6115e6b0ae47' OR ([EntityID] = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA' AND [RelatedEntityID] = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22' AND [RelatedEntityJoinField] = 'GraphID')
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('a4418bc1-b258-42fb-a5bb-6115e6b0ae47', '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA', 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 'GraphID', 'One To Many', 1, 1, 4, GETUTCDATE(), GETUTCDATE())
-   END;
-
-
-/* Create Entity Relationship: MJ: Graphs -> MJ: Graph Edge Providers (One To Many via GraphID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '2cee0329-a49c-4c5c-916e-0a97a79cb7fa' OR ([EntityID] = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA' AND [RelatedEntityID] = '8068D8E0-6A4B-40D3-952E-DED867C8814A' AND [RelatedEntityJoinField] = 'GraphID')
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('2cee0329-a49c-4c5c-916e-0a97a79cb7fa', '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA', '8068D8E0-6A4B-40D3-952E-DED867C8814A', 'GraphID', 'One To Many', 1, 1, 5, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('474ce08d-0ac2-47dc-9500-6d4501fb17d5', '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99', '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99', 'ParentID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
    END;
 
 /* Index for Foreign Keys for ContentSource */
@@ -5486,8 +6953,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_ContentSource_GraphID ON [${flyway:defaultSchema}].[ContentSource] ([GraphID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 1E8E5B79-0BE9-40C6-BDF9-B0E9C1F50B68 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='1E8E5B79-0BE9-40C6-BDF9-B0E9C1F50B68', @RelatedEntityNameFieldMap='Graph';
+/* SQL text to update entity field related entity name field map for entity field ID 89139890-8F7B-4D8D-A77D-1643F617B6D5 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='89139890-8F7B-4D8D-A77D-1643F617B6D5', @RelatedEntityNameFieldMap='Graph';
 
 /* Base View SQL for MJ: Content Sources */
 -----------------------------------------------------------------
@@ -5920,6 +7387,16 @@ REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentSource] FROM [cdp_De
 REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentSource] FROM [cdp_Integration]
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteContentSource] TO [cdp_Developer], [cdp_Integration];
 
+/* Index for Foreign Keys for GraphConceptType */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Concept Types
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------;
+
 /* Index for Foreign Keys for GraphConcept */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -5947,8 +7424,17 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_GraphConcept_ParentID ON [${flyway:defaultSchema}].[GraphConcept] ([ParentID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 88A38981-5D2B-45C8-B9FE-A84109398933 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='88A38981-5D2B-45C8-B9FE-A84109398933', @RelatedEntityNameFieldMap='Graph';
+-- Index for foreign key ConceptTypeID in table GraphConcept
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_GraphConcept_ConceptTypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[GraphConcept]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_GraphConcept_ConceptTypeID ON [${flyway:defaultSchema}].[GraphConcept] ([ConceptTypeID]);
+
+/* SQL text to update entity field related entity name field map for entity field ID 2C493F15-AD4B-4123-A1F5-7CEDB0B72BE7 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='2C493F15-AD4B-4123-A1F5-7CEDB0B72BE7', @RelatedEntityNameFieldMap='Graph';
 
 /* Index for Foreign Keys for GraphEdgeProvider */
 -----------------------------------------------------------------
@@ -5968,8 +7454,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_GraphEdgeProvider_GraphID ON [${flyway:defaultSchema}].[GraphEdgeProvider] ([GraphID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 01B30F44-B87C-465E-87EF-594C5FBF1673 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='01B30F44-B87C-465E-87EF-594C5FBF1673', @RelatedEntityNameFieldMap='Graph';
+/* SQL text to update entity field related entity name field map for entity field ID 0A1CF78B-E858-4773-9E07-6B9B9B78A27A */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='0A1CF78B-E858-4773-9E07-6B9B9B78A27A', @RelatedEntityNameFieldMap='Graph';
 
 /* Index for Foreign Keys for GraphEdgeTypeEndpoint */
 -----------------------------------------------------------------
@@ -5998,29 +7484,266 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_GraphEdgeTypeEndpoint_EntityID ON [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint] ([EntityID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 91D9FA3B-9B66-4C86-B3F3-A6AF9EA9CE80 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='91D9FA3B-9B66-4C86-B3F3-A6AF9EA9CE80', @RelatedEntityNameFieldMap='EdgeType';
+/* SQL text to update entity field related entity name field map for entity field ID 606DFB4B-6789-4ADF-9E64-24668092D9DB */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='606DFB4B-6789-4ADF-9E64-24668092D9DB', @RelatedEntityNameFieldMap='EdgeType';
 
-/* Index for Foreign Keys for GraphEdgeType */
+/* Base View SQL for MJ: Graph Concept Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: Graph Edge Types
--- Item: Index for Foreign Keys
+-- Entity: MJ: Graph Concept Types
+-- Item: vwGraphConceptTypes
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
--- Index for foreign key GraphID in table GraphEdgeType
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_GraphEdgeType_GraphID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[GraphEdgeType]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_GraphEdgeType_GraphID ON [${flyway:defaultSchema}].[GraphEdgeType] ([GraphID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 490023A0-6E4C-4A32-B902-B1C25E8E7CCE */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='490023A0-6E4C-4A32-B902-B1C25E8E7CCE', @RelatedEntityNameFieldMap='Graph';
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Graph Concept Types
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  GraphConceptType
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwGraphConceptTypes]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwGraphConceptTypes];
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwGraphConceptTypes]
+AS
+SELECT
+    g.*
+FROM
+    [${flyway:defaultSchema}].[GraphConceptType] AS g
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwGraphConceptTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* Base View Permissions SQL for MJ: Graph Concept Types */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Concept Types
+-- Item: Permissions for vwGraphConceptTypes
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwGraphConceptTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* spCreate SQL for MJ: Graph Concept Types */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Concept Types
+-- Item: spCreateGraphConceptType
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR GraphConceptType
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateGraphConceptType]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateGraphConceptType];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateGraphConceptType]
+    @ID uniqueidentifier = NULL,
+    @Name nvarchar(100),
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @Rank int = NULL,
+    @IconClass_Clear bit = 0,
+    @IconClass nvarchar(100) = NULL,
+    @Status nvarchar(20) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[GraphConceptType]
+            (
+                [ID],
+                [Name],
+                [Description],
+                [Rank],
+                [IconClass],
+                [Status]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @Name,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                ISNULL(@Rank, 100),
+                CASE WHEN @IconClass_Clear = 1 THEN NULL ELSE ISNULL(@IconClass, NULL) END,
+                ISNULL(@Status, 'Active')
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[GraphConceptType]
+            (
+                [Name],
+                [Description],
+                [Rank],
+                [IconClass],
+                [Status]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @Name,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                ISNULL(@Rank, 100),
+                CASE WHEN @IconClass_Clear = 1 THEN NULL ELSE ISNULL(@IconClass, NULL) END,
+                ISNULL(@Status, 'Active')
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwGraphConceptTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateGraphConceptType] TO [cdp_Developer], [cdp_Integration];
+
+/* spCreate Permissions for MJ: Graph Concept Types */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateGraphConceptType] TO [cdp_Developer], [cdp_Integration];
+
+/* spUpdate SQL for MJ: Graph Concept Types */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Concept Types
+-- Item: spUpdateGraphConceptType
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR GraphConceptType
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateGraphConceptType]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateGraphConceptType];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateGraphConceptType]
+    @ID uniqueidentifier,
+    @Name nvarchar(100) = NULL,
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @Rank int = NULL,
+    @IconClass_Clear bit = 0,
+    @IconClass nvarchar(100) = NULL,
+    @Status nvarchar(20) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[GraphConceptType]
+    SET
+        [Name] = ISNULL(@Name, [Name]),
+        [Description] = CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, [Description]) END,
+        [Rank] = ISNULL(@Rank, [Rank]),
+        [IconClass] = CASE WHEN @IconClass_Clear = 1 THEN NULL ELSE ISNULL(@IconClass, [IconClass]) END,
+        [Status] = ISNULL(@Status, [Status])
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwGraphConceptTypes] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwGraphConceptTypes]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateGraphConceptType] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the GraphConceptType table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateGraphConceptType]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateGraphConceptType];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateGraphConceptType
+ON [${flyway:defaultSchema}].[GraphConceptType]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[GraphConceptType]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[GraphConceptType] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+
+/* spUpdate Permissions for MJ: Graph Concept Types */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateGraphConceptType] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete SQL for MJ: Graph Concept Types */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Concept Types
+-- Item: spDeleteGraphConceptType
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR GraphConceptType
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteGraphConceptType]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteGraphConceptType];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteGraphConceptType]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[GraphConceptType]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphConceptType] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete Permissions for MJ: Graph Concept Types */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphConceptType] TO [cdp_Developer], [cdp_Integration];
+
+/* SQL text to update entity field related entity name field map for entity field ID 73D2C416-437E-4FDC-8ABC-CCD200023753 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='73D2C416-437E-4FDC-8ABC-CCD200023753', @RelatedEntityNameFieldMap='Entity';
 
 /* Base View SQL for MJ: Graph Edge Providers */
 -----------------------------------------------------------------
@@ -6296,6 +8019,924 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdgeProvider] TO [cdp_D
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdgeProvider] TO [cdp_Developer], [cdp_Integration];
 
+/* SQL text to update entity field related entity name field map for entity field ID 60681B95-FF7A-4C95-B09B-E919DDFED6B4 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='60681B95-FF7A-4C95-B09B-E919DDFED6B4', @RelatedEntityNameFieldMap='Parent';
+
+/* SQL text to update entity field related entity name field map for entity field ID 095762FB-ADC5-48D7-9D74-523CE01E0CC9 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='095762FB-ADC5-48D7-9D74-523CE01E0CC9', @RelatedEntityNameFieldMap='ConceptType';
+
+/* Base View SQL for MJ: Graph Edge Type Endpoints */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Edge Type Endpoints
+-- Item: vwGraphEdgeTypeEndpoints
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Graph Edge Type Endpoints
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  GraphEdgeTypeEndpoint
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwGraphEdgeTypeEndpoints]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwGraphEdgeTypeEndpoints];
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwGraphEdgeTypeEndpoints]
+AS
+SELECT
+    g.*,
+    MJGraphEdgeType_EdgeTypeID.[Name] AS [EdgeType],
+    MJEntity_EntityID.[Name] AS [Entity]
+FROM
+    [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint] AS g
+INNER JOIN
+    [${flyway:defaultSchema}].[GraphEdgeType] AS MJGraphEdgeType_EdgeTypeID
+  ON
+    [g].[EdgeTypeID] = MJGraphEdgeType_EdgeTypeID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[Entity] AS MJEntity_EntityID
+  ON
+    [g].[EntityID] = MJEntity_EntityID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwGraphEdgeTypeEndpoints] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* Base View Permissions SQL for MJ: Graph Edge Type Endpoints */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Edge Type Endpoints
+-- Item: Permissions for vwGraphEdgeTypeEndpoints
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwGraphEdgeTypeEndpoints] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* spCreate SQL for MJ: Graph Edge Type Endpoints */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Edge Type Endpoints
+-- Item: spCreateGraphEdgeTypeEndpoint
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR GraphEdgeTypeEndpoint
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateGraphEdgeTypeEndpoint]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateGraphEdgeTypeEndpoint];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateGraphEdgeTypeEndpoint]
+    @ID uniqueidentifier = NULL,
+    @EdgeTypeID uniqueidentifier,
+    @Side nvarchar(10),
+    @EntityID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint]
+            (
+                [ID],
+                [EdgeTypeID],
+                [Side],
+                [EntityID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @EdgeTypeID,
+                @Side,
+                @EntityID
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint]
+            (
+                [EdgeTypeID],
+                [Side],
+                [EntityID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @EdgeTypeID,
+                @Side,
+                @EntityID
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwGraphEdgeTypeEndpoints] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateGraphEdgeTypeEndpoint] TO [cdp_Developer], [cdp_Integration];
+
+/* spCreate Permissions for MJ: Graph Edge Type Endpoints */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateGraphEdgeTypeEndpoint] TO [cdp_Developer], [cdp_Integration];
+
+/* spUpdate SQL for MJ: Graph Edge Type Endpoints */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Edge Type Endpoints
+-- Item: spUpdateGraphEdgeTypeEndpoint
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR GraphEdgeTypeEndpoint
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateGraphEdgeTypeEndpoint]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateGraphEdgeTypeEndpoint];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateGraphEdgeTypeEndpoint]
+    @ID uniqueidentifier,
+    @EdgeTypeID uniqueidentifier = NULL,
+    @Side nvarchar(10) = NULL,
+    @EntityID uniqueidentifier = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint]
+    SET
+        [EdgeTypeID] = ISNULL(@EdgeTypeID, [EdgeTypeID]),
+        [Side] = ISNULL(@Side, [Side]),
+        [EntityID] = ISNULL(@EntityID, [EntityID])
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwGraphEdgeTypeEndpoints] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwGraphEdgeTypeEndpoints]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateGraphEdgeTypeEndpoint] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the GraphEdgeTypeEndpoint table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateGraphEdgeTypeEndpoint]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateGraphEdgeTypeEndpoint];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateGraphEdgeTypeEndpoint
+ON [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+
+/* spUpdate Permissions for MJ: Graph Edge Type Endpoints */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateGraphEdgeTypeEndpoint] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete SQL for MJ: Graph Edge Type Endpoints */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Edge Type Endpoints
+-- Item: spDeleteGraphEdgeTypeEndpoint
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR GraphEdgeTypeEndpoint
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteGraphEdgeTypeEndpoint]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteGraphEdgeTypeEndpoint];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteGraphEdgeTypeEndpoint]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdgeTypeEndpoint] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete Permissions for MJ: Graph Edge Type Endpoints */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdgeTypeEndpoint] TO [cdp_Developer], [cdp_Integration];
+
+/* Base View SQL for MJ: Graph Concepts */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Concepts
+-- Item: vwGraphConcepts
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Graph Concepts
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  GraphConcept
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwGraphConcepts]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwGraphConcepts];
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwGraphConcepts]
+AS
+SELECT
+    g.*,
+    MJGraph_GraphID.[Name] AS [Graph],
+    MJGraphConcept_ParentID.[Name] AS [Parent],
+    MJGraphConceptType_ConceptTypeID.[Name] AS [ConceptType]
+FROM
+    [${flyway:defaultSchema}].[GraphConcept] AS g
+INNER JOIN
+    [${flyway:defaultSchema}].[Graph] AS MJGraph_GraphID
+  ON
+    [g].[GraphID] = MJGraph_GraphID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[GraphConcept] AS MJGraphConcept_ParentID
+  ON
+    [g].[ParentID] = MJGraphConcept_ParentID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[GraphConceptType] AS MJGraphConceptType_ConceptTypeID
+  ON
+    [g].[ConceptTypeID] = MJGraphConceptType_ConceptTypeID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwGraphConcepts] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* Base View Permissions SQL for MJ: Graph Concepts */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Concepts
+-- Item: Permissions for vwGraphConcepts
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwGraphConcepts] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* spCreate SQL for MJ: Graph Concepts */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Concepts
+-- Item: spCreateGraphConcept
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR GraphConcept
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateGraphConcept]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateGraphConcept];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateGraphConcept]
+    @ID uniqueidentifier = NULL,
+    @GraphID uniqueidentifier,
+    @ParentID_Clear bit = 0,
+    @ParentID uniqueidentifier = NULL,
+    @Name nvarchar(255),
+    @ConceptTypeID uniqueidentifier,
+    @Description nvarchar(MAX),
+    @Specification_Clear bit = 0,
+    @Specification nvarchar(MAX) = NULL,
+    @Synonyms_Clear bit = 0,
+    @Synonyms nvarchar(MAX) = NULL,
+    @AuthorityTier nvarchar(50) = NULL,
+    @Status nvarchar(20) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[GraphConcept]
+            (
+                [ID],
+                [GraphID],
+                [ParentID],
+                [Name],
+                [ConceptTypeID],
+                [Description],
+                [Specification],
+                [Synonyms],
+                [AuthorityTier],
+                [Status]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @GraphID,
+                CASE WHEN @ParentID_Clear = 1 THEN NULL ELSE ISNULL(@ParentID, NULL) END,
+                @Name,
+                @ConceptTypeID,
+                @Description,
+                CASE WHEN @Specification_Clear = 1 THEN NULL ELSE ISNULL(@Specification, NULL) END,
+                CASE WHEN @Synonyms_Clear = 1 THEN NULL ELSE ISNULL(@Synonyms, NULL) END,
+                ISNULL(@AuthorityTier, 'Reference'),
+                ISNULL(@Status, 'Draft')
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[GraphConcept]
+            (
+                [GraphID],
+                [ParentID],
+                [Name],
+                [ConceptTypeID],
+                [Description],
+                [Specification],
+                [Synonyms],
+                [AuthorityTier],
+                [Status]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @GraphID,
+                CASE WHEN @ParentID_Clear = 1 THEN NULL ELSE ISNULL(@ParentID, NULL) END,
+                @Name,
+                @ConceptTypeID,
+                @Description,
+                CASE WHEN @Specification_Clear = 1 THEN NULL ELSE ISNULL(@Specification, NULL) END,
+                CASE WHEN @Synonyms_Clear = 1 THEN NULL ELSE ISNULL(@Synonyms, NULL) END,
+                ISNULL(@AuthorityTier, 'Reference'),
+                ISNULL(@Status, 'Draft')
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwGraphConcepts] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateGraphConcept] TO [cdp_Developer], [cdp_Integration];
+
+/* spCreate Permissions for MJ: Graph Concepts */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateGraphConcept] TO [cdp_Developer], [cdp_Integration];
+
+/* spUpdate SQL for MJ: Graph Concepts */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Concepts
+-- Item: spUpdateGraphConcept
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR GraphConcept
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateGraphConcept]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateGraphConcept];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateGraphConcept]
+    @ID uniqueidentifier,
+    @GraphID uniqueidentifier = NULL,
+    @ParentID_Clear bit = 0,
+    @ParentID uniqueidentifier = NULL,
+    @Name nvarchar(255) = NULL,
+    @ConceptTypeID uniqueidentifier = NULL,
+    @Description nvarchar(MAX) = NULL,
+    @Specification_Clear bit = 0,
+    @Specification nvarchar(MAX) = NULL,
+    @Synonyms_Clear bit = 0,
+    @Synonyms nvarchar(MAX) = NULL,
+    @AuthorityTier nvarchar(50) = NULL,
+    @Status nvarchar(20) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[GraphConcept]
+    SET
+        [GraphID] = ISNULL(@GraphID, [GraphID]),
+        [ParentID] = CASE WHEN @ParentID_Clear = 1 THEN NULL ELSE ISNULL(@ParentID, [ParentID]) END,
+        [Name] = ISNULL(@Name, [Name]),
+        [ConceptTypeID] = ISNULL(@ConceptTypeID, [ConceptTypeID]),
+        [Description] = ISNULL(@Description, [Description]),
+        [Specification] = CASE WHEN @Specification_Clear = 1 THEN NULL ELSE ISNULL(@Specification, [Specification]) END,
+        [Synonyms] = CASE WHEN @Synonyms_Clear = 1 THEN NULL ELSE ISNULL(@Synonyms, [Synonyms]) END,
+        [AuthorityTier] = ISNULL(@AuthorityTier, [AuthorityTier]),
+        [Status] = ISNULL(@Status, [Status])
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwGraphConcepts] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwGraphConcepts]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateGraphConcept] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the GraphConcept table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateGraphConcept]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateGraphConcept];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateGraphConcept
+ON [${flyway:defaultSchema}].[GraphConcept]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[GraphConcept]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[GraphConcept] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+
+/* spUpdate Permissions for MJ: Graph Concepts */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateGraphConcept] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete SQL for MJ: Graph Concepts */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Concepts
+-- Item: spDeleteGraphConcept
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR GraphConcept
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteGraphConcept]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteGraphConcept];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteGraphConcept]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[GraphConcept]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphConcept] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete Permissions for MJ: Graph Concepts */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphConcept] TO [cdp_Developer], [cdp_Integration];
+
+/* Index for Foreign Keys for GraphEdgeType */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Edge Types
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key GraphID in table GraphEdgeType
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_GraphEdgeType_GraphID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[GraphEdgeType]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_GraphEdgeType_GraphID ON [${flyway:defaultSchema}].[GraphEdgeType] ([GraphID]);
+
+/* SQL text to update entity field related entity name field map for entity field ID A185AE28-27D9-4D81-95A9-EB66493E9198 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='A185AE28-27D9-4D81-95A9-EB66493E9198', @RelatedEntityNameFieldMap='Graph';
+
+/* Index for Foreign Keys for GraphEdge */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Edges
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key GraphID in table GraphEdge
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_GraphEdge_GraphID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[GraphEdge]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_GraphEdge_GraphID ON [${flyway:defaultSchema}].[GraphEdge] ([GraphID]);
+
+-- Index for foreign key EdgeTypeID in table GraphEdge
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_GraphEdge_EdgeTypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[GraphEdge]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_GraphEdge_EdgeTypeID ON [${flyway:defaultSchema}].[GraphEdge] ([EdgeTypeID]);
+
+-- Index for foreign key SourceEntityID in table GraphEdge
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_GraphEdge_SourceEntityID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[GraphEdge]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_GraphEdge_SourceEntityID ON [${flyway:defaultSchema}].[GraphEdge] ([SourceEntityID]);
+
+-- Index for foreign key TargetEntityID in table GraphEdge
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_GraphEdge_TargetEntityID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[GraphEdge]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_GraphEdge_TargetEntityID ON [${flyway:defaultSchema}].[GraphEdge] ([TargetEntityID]);
+
+/* SQL text to update entity field related entity name field map for entity field ID 5A451C92-4937-486B-A99A-86EC356C99B9 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='5A451C92-4937-486B-A99A-86EC356C99B9', @RelatedEntityNameFieldMap='Graph';
+
+/* Index for Foreign Keys for GraphType */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Types
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------;
+
+/* Index for Foreign Keys for Graph */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graphs
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key GraphTypeID in table Graph
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Graph_GraphTypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Graph]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Graph_GraphTypeID ON [${flyway:defaultSchema}].[Graph] ([GraphTypeID]);
+
+/* SQL text to update entity field related entity name field map for entity field ID 025C4B99-DD64-4935-B134-463B03577CD1 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='025C4B99-DD64-4935-B134-463B03577CD1', @RelatedEntityNameFieldMap='GraphType';
+
+/* Base View SQL for MJ: Graph Types */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Types
+-- Item: vwGraphTypes
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Graph Types
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  GraphType
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwGraphTypes]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwGraphTypes];
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwGraphTypes]
+AS
+SELECT
+    g.*
+FROM
+    [${flyway:defaultSchema}].[GraphType] AS g
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwGraphTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* Base View Permissions SQL for MJ: Graph Types */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Types
+-- Item: Permissions for vwGraphTypes
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwGraphTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* spCreate SQL for MJ: Graph Types */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Types
+-- Item: spCreateGraphType
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR GraphType
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateGraphType]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateGraphType];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateGraphType]
+    @ID uniqueidentifier = NULL,
+    @Name nvarchar(100),
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @IsCanon bit = NULL,
+    @Rank int = NULL,
+    @IconClass_Clear bit = 0,
+    @IconClass nvarchar(100) = NULL,
+    @Status nvarchar(20) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[GraphType]
+            (
+                [ID],
+                [Name],
+                [Description],
+                [IsCanon],
+                [Rank],
+                [IconClass],
+                [Status]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @Name,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                ISNULL(@IsCanon, 0),
+                ISNULL(@Rank, 100),
+                CASE WHEN @IconClass_Clear = 1 THEN NULL ELSE ISNULL(@IconClass, NULL) END,
+                ISNULL(@Status, 'Active')
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[GraphType]
+            (
+                [Name],
+                [Description],
+                [IsCanon],
+                [Rank],
+                [IconClass],
+                [Status]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @Name,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                ISNULL(@IsCanon, 0),
+                ISNULL(@Rank, 100),
+                CASE WHEN @IconClass_Clear = 1 THEN NULL ELSE ISNULL(@IconClass, NULL) END,
+                ISNULL(@Status, 'Active')
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwGraphTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateGraphType] TO [cdp_Developer], [cdp_Integration];
+
+/* spCreate Permissions for MJ: Graph Types */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateGraphType] TO [cdp_Developer], [cdp_Integration];
+
+/* spUpdate SQL for MJ: Graph Types */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Types
+-- Item: spUpdateGraphType
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR GraphType
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateGraphType]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateGraphType];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateGraphType]
+    @ID uniqueidentifier,
+    @Name nvarchar(100) = NULL,
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @IsCanon bit = NULL,
+    @Rank int = NULL,
+    @IconClass_Clear bit = 0,
+    @IconClass nvarchar(100) = NULL,
+    @Status nvarchar(20) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[GraphType]
+    SET
+        [Name] = ISNULL(@Name, [Name]),
+        [Description] = CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, [Description]) END,
+        [IsCanon] = ISNULL(@IsCanon, [IsCanon]),
+        [Rank] = ISNULL(@Rank, [Rank]),
+        [IconClass] = CASE WHEN @IconClass_Clear = 1 THEN NULL ELSE ISNULL(@IconClass, [IconClass]) END,
+        [Status] = ISNULL(@Status, [Status])
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwGraphTypes] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwGraphTypes]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateGraphType] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the GraphType table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateGraphType]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateGraphType];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateGraphType
+ON [${flyway:defaultSchema}].[GraphType]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[GraphType]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[GraphType] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+
+/* spUpdate Permissions for MJ: Graph Types */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateGraphType] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete SQL for MJ: Graph Types */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Graph Types
+-- Item: spDeleteGraphType
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR GraphType
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteGraphType]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteGraphType];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteGraphType]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[GraphType]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphType] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete Permissions for MJ: Graph Types */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphType] TO [cdp_Developer], [cdp_Integration];
+
+/* SQL text to update entity field related entity name field map for entity field ID 3E67FDF9-8943-4D0A-AE2C-1AFBF5BEB404 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='3E67FDF9-8943-4D0A-AE2C-1AFBF5BEB404', @RelatedEntityNameFieldMap='EdgeType';
+
 /* Base View SQL for MJ: Graph Edge Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -6570,612 +9211,6 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdgeType] TO [cdp_Devel
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdgeType] TO [cdp_Developer], [cdp_Integration];
 
-/* SQL text to update entity field related entity name field map for entity field ID 153B7DBB-AD06-4DD5-B0B1-36968BE782C1 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='153B7DBB-AD06-4DD5-B0B1-36968BE782C1', @RelatedEntityNameFieldMap='Parent';
-
-/* SQL text to update entity field related entity name field map for entity field ID CE286C25-49DA-4E7A-A06A-EF5ECD48FB9D */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='CE286C25-49DA-4E7A-A06A-EF5ECD48FB9D', @RelatedEntityNameFieldMap='Entity';
-
-/* Base View SQL for MJ: Graph Edge Type Endpoints */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Graph Edge Type Endpoints
--- Item: vwGraphEdgeTypeEndpoints
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ BASE VIEW FOR ENTITY:      MJ: Graph Edge Type Endpoints
------               SCHEMA:      ${flyway:defaultSchema}
------               BASE TABLE:  GraphEdgeTypeEndpoint
------               PRIMARY KEY: ID
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[vwGraphEdgeTypeEndpoints]', 'V') IS NOT NULL
-    DROP VIEW [${flyway:defaultSchema}].[vwGraphEdgeTypeEndpoints];
-GO
-
-CREATE VIEW [${flyway:defaultSchema}].[vwGraphEdgeTypeEndpoints]
-AS
-SELECT
-    g.*,
-    MJGraphEdgeType_EdgeTypeID.[Name] AS [EdgeType],
-    MJEntity_EntityID.[Name] AS [Entity]
-FROM
-    [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint] AS g
-INNER JOIN
-    [${flyway:defaultSchema}].[GraphEdgeType] AS MJGraphEdgeType_EdgeTypeID
-  ON
-    [g].[EdgeTypeID] = MJGraphEdgeType_EdgeTypeID.[ID]
-INNER JOIN
-    [${flyway:defaultSchema}].[Entity] AS MJEntity_EntityID
-  ON
-    [g].[EntityID] = MJEntity_EntityID.[ID]
-GO
-GRANT SELECT ON [${flyway:defaultSchema}].[vwGraphEdgeTypeEndpoints] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* Base View Permissions SQL for MJ: Graph Edge Type Endpoints */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Graph Edge Type Endpoints
--- Item: Permissions for vwGraphEdgeTypeEndpoints
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-GRANT SELECT ON [${flyway:defaultSchema}].[vwGraphEdgeTypeEndpoints] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* spCreate SQL for MJ: Graph Edge Type Endpoints */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Graph Edge Type Endpoints
--- Item: spCreateGraphEdgeTypeEndpoint
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ CREATE PROCEDURE FOR GraphEdgeTypeEndpoint
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateGraphEdgeTypeEndpoint]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateGraphEdgeTypeEndpoint];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateGraphEdgeTypeEndpoint]
-    @ID uniqueidentifier = NULL,
-    @EdgeTypeID uniqueidentifier,
-    @Side nvarchar(10),
-    @EntityID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-
-    IF @ID IS NOT NULL
-    BEGIN
-        -- User provided a value, use it
-        INSERT INTO [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint]
-            (
-                [ID],
-                [EdgeTypeID],
-                [Side],
-                [EntityID]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @ID,
-                @EdgeTypeID,
-                @Side,
-                @EntityID
-            )
-    END
-    ELSE
-    BEGIN
-        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
-        INSERT INTO [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint]
-            (
-                [EdgeTypeID],
-                [Side],
-                [EntityID]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @EdgeTypeID,
-                @Side,
-                @EntityID
-            )
-    END
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [${flyway:defaultSchema}].[vwGraphEdgeTypeEndpoints] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateGraphEdgeTypeEndpoint] TO [cdp_Developer], [cdp_Integration];
-
-/* spCreate Permissions for MJ: Graph Edge Type Endpoints */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateGraphEdgeTypeEndpoint] TO [cdp_Developer], [cdp_Integration];
-
-/* spUpdate SQL for MJ: Graph Edge Type Endpoints */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Graph Edge Type Endpoints
--- Item: spUpdateGraphEdgeTypeEndpoint
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ UPDATE PROCEDURE FOR GraphEdgeTypeEndpoint
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateGraphEdgeTypeEndpoint]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateGraphEdgeTypeEndpoint];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateGraphEdgeTypeEndpoint]
-    @ID uniqueidentifier,
-    @EdgeTypeID uniqueidentifier = NULL,
-    @Side nvarchar(10) = NULL,
-    @EntityID uniqueidentifier = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint]
-    SET
-        [EdgeTypeID] = ISNULL(@EdgeTypeID, [EdgeTypeID]),
-        [Side] = ISNULL(@Side, [Side]),
-        [EntityID] = ISNULL(@EntityID, [EntityID])
-    WHERE
-        [ID] = @ID
-
-    -- Check if the update was successful
-    IF @@ROWCOUNT = 0
-        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwGraphEdgeTypeEndpoints] WHERE 1=0
-    ELSE
-        -- Return the updated record so the caller can see the updated values and any calculated fields
-        SELECT
-                                        *
-                                    FROM
-                                        [${flyway:defaultSchema}].[vwGraphEdgeTypeEndpoints]
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateGraphEdgeTypeEndpoint] TO [cdp_Developer], [cdp_Integration]
-GO
-
-------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the GraphEdgeTypeEndpoint table
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateGraphEdgeTypeEndpoint]', 'TR') IS NOT NULL
-    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateGraphEdgeTypeEndpoint];
-GO
-CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateGraphEdgeTypeEndpoint
-ON [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint]
-    SET
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM
-        [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint] AS _organicTable
-    INNER JOIN
-        INSERTED AS I ON
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-
-/* spUpdate Permissions for MJ: Graph Edge Type Endpoints */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateGraphEdgeTypeEndpoint] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete SQL for MJ: Graph Edge Type Endpoints */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Graph Edge Type Endpoints
--- Item: spDeleteGraphEdgeTypeEndpoint
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR GraphEdgeTypeEndpoint
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteGraphEdgeTypeEndpoint]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteGraphEdgeTypeEndpoint];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteGraphEdgeTypeEndpoint]
-    @ID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM
-        [${flyway:defaultSchema}].[GraphEdgeTypeEndpoint]
-    WHERE
-        [ID] = @ID
-
-
-    -- Check if the delete was successful
-    IF @@ROWCOUNT = 0
-        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
-    ELSE
-        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdgeTypeEndpoint] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete Permissions for MJ: Graph Edge Type Endpoints */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdgeTypeEndpoint] TO [cdp_Developer], [cdp_Integration];
-
-/* Base View SQL for MJ: Graph Concepts */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Graph Concepts
--- Item: vwGraphConcepts
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ BASE VIEW FOR ENTITY:      MJ: Graph Concepts
------               SCHEMA:      ${flyway:defaultSchema}
------               BASE TABLE:  GraphConcept
------               PRIMARY KEY: ID
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[vwGraphConcepts]', 'V') IS NOT NULL
-    DROP VIEW [${flyway:defaultSchema}].[vwGraphConcepts];
-GO
-
-CREATE VIEW [${flyway:defaultSchema}].[vwGraphConcepts]
-AS
-SELECT
-    g.*,
-    MJGraph_GraphID.[Name] AS [Graph],
-    MJGraphConcept_ParentID.[Name] AS [Parent]
-FROM
-    [${flyway:defaultSchema}].[GraphConcept] AS g
-INNER JOIN
-    [${flyway:defaultSchema}].[Graph] AS MJGraph_GraphID
-  ON
-    [g].[GraphID] = MJGraph_GraphID.[ID]
-LEFT OUTER JOIN
-    [${flyway:defaultSchema}].[GraphConcept] AS MJGraphConcept_ParentID
-  ON
-    [g].[ParentID] = MJGraphConcept_ParentID.[ID]
-GO
-GRANT SELECT ON [${flyway:defaultSchema}].[vwGraphConcepts] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* Base View Permissions SQL for MJ: Graph Concepts */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Graph Concepts
--- Item: Permissions for vwGraphConcepts
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-GRANT SELECT ON [${flyway:defaultSchema}].[vwGraphConcepts] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* spCreate SQL for MJ: Graph Concepts */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Graph Concepts
--- Item: spCreateGraphConcept
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ CREATE PROCEDURE FOR GraphConcept
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateGraphConcept]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateGraphConcept];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateGraphConcept]
-    @ID uniqueidentifier = NULL,
-    @GraphID uniqueidentifier,
-    @ParentID_Clear bit = 0,
-    @ParentID uniqueidentifier = NULL,
-    @Name nvarchar(255),
-    @ConceptType nvarchar(50) = NULL,
-    @Description nvarchar(MAX),
-    @Specification_Clear bit = 0,
-    @Specification nvarchar(MAX) = NULL,
-    @Synonyms_Clear bit = 0,
-    @Synonyms nvarchar(MAX) = NULL,
-    @AuthorityTier nvarchar(50) = NULL,
-    @Status nvarchar(20) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-
-    IF @ID IS NOT NULL
-    BEGIN
-        -- User provided a value, use it
-        INSERT INTO [${flyway:defaultSchema}].[GraphConcept]
-            (
-                [ID],
-                [GraphID],
-                [ParentID],
-                [Name],
-                [ConceptType],
-                [Description],
-                [Specification],
-                [Synonyms],
-                [AuthorityTier],
-                [Status]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @ID,
-                @GraphID,
-                CASE WHEN @ParentID_Clear = 1 THEN NULL ELSE ISNULL(@ParentID, NULL) END,
-                @Name,
-                ISNULL(@ConceptType, 'Term'),
-                @Description,
-                CASE WHEN @Specification_Clear = 1 THEN NULL ELSE ISNULL(@Specification, NULL) END,
-                CASE WHEN @Synonyms_Clear = 1 THEN NULL ELSE ISNULL(@Synonyms, NULL) END,
-                ISNULL(@AuthorityTier, 'Reference'),
-                ISNULL(@Status, 'Draft')
-            )
-    END
-    ELSE
-    BEGIN
-        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
-        INSERT INTO [${flyway:defaultSchema}].[GraphConcept]
-            (
-                [GraphID],
-                [ParentID],
-                [Name],
-                [ConceptType],
-                [Description],
-                [Specification],
-                [Synonyms],
-                [AuthorityTier],
-                [Status]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @GraphID,
-                CASE WHEN @ParentID_Clear = 1 THEN NULL ELSE ISNULL(@ParentID, NULL) END,
-                @Name,
-                ISNULL(@ConceptType, 'Term'),
-                @Description,
-                CASE WHEN @Specification_Clear = 1 THEN NULL ELSE ISNULL(@Specification, NULL) END,
-                CASE WHEN @Synonyms_Clear = 1 THEN NULL ELSE ISNULL(@Synonyms, NULL) END,
-                ISNULL(@AuthorityTier, 'Reference'),
-                ISNULL(@Status, 'Draft')
-            )
-    END
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [${flyway:defaultSchema}].[vwGraphConcepts] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateGraphConcept] TO [cdp_Developer], [cdp_Integration];
-
-/* spCreate Permissions for MJ: Graph Concepts */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateGraphConcept] TO [cdp_Developer], [cdp_Integration];
-
-/* spUpdate SQL for MJ: Graph Concepts */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Graph Concepts
--- Item: spUpdateGraphConcept
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ UPDATE PROCEDURE FOR GraphConcept
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateGraphConcept]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateGraphConcept];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateGraphConcept]
-    @ID uniqueidentifier,
-    @GraphID uniqueidentifier = NULL,
-    @ParentID_Clear bit = 0,
-    @ParentID uniqueidentifier = NULL,
-    @Name nvarchar(255) = NULL,
-    @ConceptType nvarchar(50) = NULL,
-    @Description nvarchar(MAX) = NULL,
-    @Specification_Clear bit = 0,
-    @Specification nvarchar(MAX) = NULL,
-    @Synonyms_Clear bit = 0,
-    @Synonyms nvarchar(MAX) = NULL,
-    @AuthorityTier nvarchar(50) = NULL,
-    @Status nvarchar(20) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[GraphConcept]
-    SET
-        [GraphID] = ISNULL(@GraphID, [GraphID]),
-        [ParentID] = CASE WHEN @ParentID_Clear = 1 THEN NULL ELSE ISNULL(@ParentID, [ParentID]) END,
-        [Name] = ISNULL(@Name, [Name]),
-        [ConceptType] = ISNULL(@ConceptType, [ConceptType]),
-        [Description] = ISNULL(@Description, [Description]),
-        [Specification] = CASE WHEN @Specification_Clear = 1 THEN NULL ELSE ISNULL(@Specification, [Specification]) END,
-        [Synonyms] = CASE WHEN @Synonyms_Clear = 1 THEN NULL ELSE ISNULL(@Synonyms, [Synonyms]) END,
-        [AuthorityTier] = ISNULL(@AuthorityTier, [AuthorityTier]),
-        [Status] = ISNULL(@Status, [Status])
-    WHERE
-        [ID] = @ID
-
-    -- Check if the update was successful
-    IF @@ROWCOUNT = 0
-        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwGraphConcepts] WHERE 1=0
-    ELSE
-        -- Return the updated record so the caller can see the updated values and any calculated fields
-        SELECT
-                                        *
-                                    FROM
-                                        [${flyway:defaultSchema}].[vwGraphConcepts]
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateGraphConcept] TO [cdp_Developer], [cdp_Integration]
-GO
-
-------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the GraphConcept table
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateGraphConcept]', 'TR') IS NOT NULL
-    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateGraphConcept];
-GO
-CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateGraphConcept
-ON [${flyway:defaultSchema}].[GraphConcept]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[GraphConcept]
-    SET
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM
-        [${flyway:defaultSchema}].[GraphConcept] AS _organicTable
-    INNER JOIN
-        INSERTED AS I ON
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-
-/* spUpdate Permissions for MJ: Graph Concepts */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateGraphConcept] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete SQL for MJ: Graph Concepts */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Graph Concepts
--- Item: spDeleteGraphConcept
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR GraphConcept
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteGraphConcept]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteGraphConcept];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteGraphConcept]
-    @ID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM
-        [${flyway:defaultSchema}].[GraphConcept]
-    WHERE
-        [ID] = @ID
-
-
-    -- Check if the delete was successful
-    IF @@ROWCOUNT = 0
-        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
-    ELSE
-        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphConcept] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete Permissions for MJ: Graph Concepts */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphConcept] TO [cdp_Developer], [cdp_Integration];
-
-/* Index for Foreign Keys for GraphEdge */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Graph Edges
--- Item: Index for Foreign Keys
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
--- Index for foreign key GraphID in table GraphEdge
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_GraphEdge_GraphID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[GraphEdge]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_GraphEdge_GraphID ON [${flyway:defaultSchema}].[GraphEdge] ([GraphID]);
-
--- Index for foreign key EdgeTypeID in table GraphEdge
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_GraphEdge_EdgeTypeID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[GraphEdge]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_GraphEdge_EdgeTypeID ON [${flyway:defaultSchema}].[GraphEdge] ([EdgeTypeID]);
-
--- Index for foreign key SourceEntityID in table GraphEdge
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_GraphEdge_SourceEntityID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[GraphEdge]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_GraphEdge_SourceEntityID ON [${flyway:defaultSchema}].[GraphEdge] ([SourceEntityID]);
-
--- Index for foreign key TargetEntityID in table GraphEdge
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_GraphEdge_TargetEntityID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[GraphEdge]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_GraphEdge_TargetEntityID ON [${flyway:defaultSchema}].[GraphEdge] ([TargetEntityID]);
-
-/* SQL text to update entity field related entity name field map for entity field ID C4C73BCC-76A4-4BB7-8133-15EC06FD4395 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='C4C73BCC-76A4-4BB7-8133-15EC06FD4395', @RelatedEntityNameFieldMap='Graph';
-
-/* Index for Foreign Keys for Graph */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Graphs
--- Item: Index for Foreign Keys
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------;
-
 /* Base View SQL for MJ: Graphs */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -7199,9 +9234,14 @@ GO
 CREATE VIEW [${flyway:defaultSchema}].[vwGraphs]
 AS
 SELECT
-    g.*
+    g.*,
+    MJGraphType_GraphTypeID.[Name] AS [GraphType]
 FROM
     [${flyway:defaultSchema}].[Graph] AS g
+INNER JOIN
+    [${flyway:defaultSchema}].[GraphType] AS MJGraphType_GraphTypeID
+  ON
+    [g].[GraphTypeID] = MJGraphType_GraphTypeID.[ID]
 GO
 GRANT SELECT ON [${flyway:defaultSchema}].[vwGraphs] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
 
@@ -7239,7 +9279,7 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateGraph]
     @Name nvarchar(255),
     @Description_Clear bit = 0,
     @Description nvarchar(MAX) = NULL,
-    @GraphType nvarchar(50) = NULL,
+    @GraphTypeID uniqueidentifier,
     @LoadMode nvarchar(20) = NULL,
     @Status nvarchar(20) = NULL
 AS
@@ -7255,7 +9295,7 @@ BEGIN
                 [ID],
                 [Name],
                 [Description],
-                [GraphType],
+                [GraphTypeID],
                 [LoadMode],
                 [Status]
             )
@@ -7265,7 +9305,7 @@ BEGIN
                 @ID,
                 @Name,
                 CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
-                ISNULL(@GraphType, 'Custom'),
+                @GraphTypeID,
                 ISNULL(@LoadMode, 'Preload'),
                 ISNULL(@Status, 'Active')
             )
@@ -7277,7 +9317,7 @@ BEGIN
             (
                 [Name],
                 [Description],
-                [GraphType],
+                [GraphTypeID],
                 [LoadMode],
                 [Status]
             )
@@ -7286,7 +9326,7 @@ BEGIN
             (
                 @Name,
                 CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
-                ISNULL(@GraphType, 'Custom'),
+                @GraphTypeID,
                 ISNULL(@LoadMode, 'Preload'),
                 ISNULL(@Status, 'Active')
             )
@@ -7323,7 +9363,7 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateGraph]
     @Name nvarchar(255) = NULL,
     @Description_Clear bit = 0,
     @Description nvarchar(MAX) = NULL,
-    @GraphType nvarchar(50) = NULL,
+    @GraphTypeID uniqueidentifier = NULL,
     @LoadMode nvarchar(20) = NULL,
     @Status nvarchar(20) = NULL
 AS
@@ -7334,7 +9374,7 @@ BEGIN
     SET
         [Name] = ISNULL(@Name, [Name]),
         [Description] = CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, [Description]) END,
-        [GraphType] = ISNULL(@GraphType, [GraphType]),
+        [GraphTypeID] = ISNULL(@GraphTypeID, [GraphTypeID]),
         [LoadMode] = ISNULL(@LoadMode, [LoadMode]),
         [Status] = ISNULL(@Status, [Status])
     WHERE
@@ -7429,14 +9469,11 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraph] TO [cdp_Developer], [
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraph] TO [cdp_Developer], [cdp_Integration];
 
-/* SQL text to update entity field related entity name field map for entity field ID 971FFE22-DB34-4492-814B-F7DCA29524C1 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='971FFE22-DB34-4492-814B-F7DCA29524C1', @RelatedEntityNameFieldMap='EdgeType';
+/* SQL text to update entity field related entity name field map for entity field ID 7FC72692-952B-4CB4-B964-EC675F74C593 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='7FC72692-952B-4CB4-B964-EC675F74C593', @RelatedEntityNameFieldMap='SourceEntity';
 
-/* SQL text to update entity field related entity name field map for entity field ID DD9F0B61-C44A-47A4-87BD-CC1551DEFAFD */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='DD9F0B61-C44A-47A4-87BD-CC1551DEFAFD', @RelatedEntityNameFieldMap='SourceEntity';
-
-/* SQL text to update entity field related entity name field map for entity field ID 531B0F00-47D8-401E-BC13-E73A67A52795 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='531B0F00-47D8-401E-BC13-E73A67A52795', @RelatedEntityNameFieldMap='TargetEntity';
+/* SQL text to update entity field related entity name field map for entity field ID 6959EB2C-729B-4828-9722-222A893300DE */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='6959EB2C-729B-4828-9722-222A893300DE', @RelatedEntityNameFieldMap='TargetEntity';
 
 /* Base View SQL for MJ: Graph Edges */
 -----------------------------------------------------------------
@@ -7764,9 +9801,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdge] TO [cdp_Developer
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdge] TO [cdp_Developer], [cdp_Integration];
 
-/* SQL text to insert 11 new entity field(s) */
+/* SQL text to insert 12 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '08658d91-9ea0-43db-9d5f-576444934215' OR (EntityID = 'FDDD3E40-0131-4F60-A019-227D63051CDC' AND Name = 'Graph')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '74aa4448-ab89-4ee5-82d4-601bffce09f7' OR (EntityID = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND Name = 'Graph')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -7799,9 +9836,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdge] TO [cdp_Developer
          )
          VALUES
          (
-            '08658d91-9ea0-43db-9d5f-576444934215',
-            'FDDD3E40-0131-4F60-A019-227D63051CDC', -- Entity: MJ: Graph Concepts
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'FDDD3E40-0131-4F60-A019-227D63051CDC'),
+            '74aa4448-ab89-4ee5-82d4-601bffce09f7',
+            '52ACC265-E651-4CD9-8C96-088B6263CC2B', -- Entity: MJ: Graph Edges
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B'),
             'Graph',
             'Graph',
             NULL,
@@ -7829,7 +9866,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdge] TO [cdp_Developer
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '009bb3c5-676b-43ac-9d01-50108f6b1389' OR (EntityID = 'FDDD3E40-0131-4F60-A019-227D63051CDC' AND Name = 'Parent')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3a162e04-62b6-48b7-b6a0-01f674ee1d45' OR (EntityID = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND Name = 'EdgeType')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -7862,198 +9899,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdge] TO [cdp_Developer
          )
          VALUES
          (
-            '009bb3c5-676b-43ac-9d01-50108f6b1389',
-            'FDDD3E40-0131-4F60-A019-227D63051CDC', -- Entity: MJ: Graph Concepts
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'FDDD3E40-0131-4F60-A019-227D63051CDC'),
-            'Parent',
-            'Parent',
-            NULL,
-            'nvarchar',
-            510,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f5dcf83d-714f-4c91-87df-8ce63e55daf2' OR (EntityID = '987A289E-5763-4735-8EE3-AE61CA5C26CB' AND Name = 'Graph')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'f5dcf83d-714f-4c91-87df-8ce63e55daf2',
-            '987A289E-5763-4735-8EE3-AE61CA5C26CB', -- Entity: MJ: Graph Edge Types
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '987A289E-5763-4735-8EE3-AE61CA5C26CB'),
-            'Graph',
-            'Graph',
-            NULL,
-            'nvarchar',
-            510,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5c8e589f-096b-4237-95da-bd1b7e3a4ed4' OR (EntityID = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND Name = 'Graph')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '5c8e589f-096b-4237-95da-bd1b7e3a4ed4',
-            '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', -- Entity: MJ: Graph Edges
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4'),
-            'Graph',
-            'Graph',
-            NULL,
-            'nvarchar',
-            510,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c9bc6597-f8d1-42d9-8202-5bb329ab3c22' OR (EntityID = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND Name = 'EdgeType')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'c9bc6597-f8d1-42d9-8202-5bb329ab3c22',
-            '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', -- Entity: MJ: Graph Edges
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4'),
+            '3a162e04-62b6-48b7-b6a0-01f674ee1d45',
+            '52ACC265-E651-4CD9-8C96-088B6263CC2B', -- Entity: MJ: Graph Edges
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B'),
             'EdgeType',
             'Edge Type',
             NULL,
@@ -8081,7 +9929,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdge] TO [cdp_Developer
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '51fc8ca8-396e-4d2f-859a-faba7a0f6dcd' OR (EntityID = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND Name = 'SourceEntity')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd78ff032-780e-4e18-9c15-0321dbb2ec8e' OR (EntityID = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND Name = 'SourceEntity')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -8114,9 +9962,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdge] TO [cdp_Developer
          )
          VALUES
          (
-            '51fc8ca8-396e-4d2f-859a-faba7a0f6dcd',
-            '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', -- Entity: MJ: Graph Edges
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4'),
+            'd78ff032-780e-4e18-9c15-0321dbb2ec8e',
+            '52ACC265-E651-4CD9-8C96-088B6263CC2B', -- Entity: MJ: Graph Edges
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B'),
             'SourceEntity',
             'Source Entity',
             NULL,
@@ -8144,7 +9992,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdge] TO [cdp_Developer
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b812eb8d-1153-4f8f-a893-ca9962042151' OR (EntityID = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND Name = 'TargetEntity')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '27cec05b-74e2-4320-84fe-17cfb0cfa049' OR (EntityID = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND Name = 'TargetEntity')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -8177,9 +10025,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdge] TO [cdp_Developer
          )
          VALUES
          (
-            'b812eb8d-1153-4f8f-a893-ca9962042151',
-            '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', -- Entity: MJ: Graph Edges
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4'),
+            '27cec05b-74e2-4320-84fe-17cfb0cfa049',
+            '52ACC265-E651-4CD9-8C96-088B6263CC2B', -- Entity: MJ: Graph Edges
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B'),
             'TargetEntity',
             'Target Entity',
             NULL,
@@ -8207,7 +10055,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdge] TO [cdp_Developer
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '00cc6479-2587-4154-9646-020fe1152656' OR (EntityID = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22' AND Name = 'Graph')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4cd2ad93-52be-49f8-8457-f30e8439f695' OR (EntityID = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA' AND Name = 'GraphType')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -8240,9 +10088,135 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdge] TO [cdp_Developer
          )
          VALUES
          (
-            '00cc6479-2587-4154-9646-020fe1152656',
-            'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', -- Entity: MJ: Content Sources
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22'),
+            '4cd2ad93-52be-49f8-8457-f30e8439f695',
+            '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA', -- Entity: MJ: Graphs
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA'),
+            'GraphType',
+            'Graph Type',
+            NULL,
+            'nvarchar',
+            200,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '25121b0a-ec51-415b-8c4c-ec1bab0caa17' OR (EntityID = '234A4D46-27B8-4011-B3F3-8B862D77073C' AND Name = 'Graph')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '25121b0a-ec51-415b-8c4c-ec1bab0caa17',
+            '234A4D46-27B8-4011-B3F3-8B862D77073C', -- Entity: MJ: Graph Edge Providers
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '234A4D46-27B8-4011-B3F3-8B862D77073C'),
+            'Graph',
+            'Graph',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '27bf477d-a199-40c1-8601-39f1a6edcc83' OR (EntityID = '4A8D91D6-0933-4CAC-966A-95C69F5228BA' AND Name = 'Graph')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '27bf477d-a199-40c1-8601-39f1a6edcc83',
+            '4A8D91D6-0933-4CAC-966A-95C69F5228BA', -- Entity: MJ: Graph Edge Types
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '4A8D91D6-0933-4CAC-966A-95C69F5228BA'),
             'Graph',
             'Graph',
             NULL,
@@ -8270,7 +10244,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdge] TO [cdp_Developer
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4ec99a13-ba90-4043-b637-b3383de88f1f' OR (EntityID = '8068D8E0-6A4B-40D3-952E-DED867C8814A' AND Name = 'Graph')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cc8bda97-f827-4583-879e-30044a20c2ab' OR (EntityID = 'D74E798F-D63F-479A-BC2B-C629B252FE60' AND Name = 'EdgeType')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -8303,72 +10277,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdge] TO [cdp_Developer
          )
          VALUES
          (
-            '4ec99a13-ba90-4043-b637-b3383de88f1f',
-            '8068D8E0-6A4B-40D3-952E-DED867C8814A', -- Entity: MJ: Graph Edge Providers
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8068D8E0-6A4B-40D3-952E-DED867C8814A'),
-            'Graph',
-            'Graph',
-            NULL,
-            'nvarchar',
-            510,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9be74cf9-67e5-4a9f-abb8-b35ca2657e36' OR (EntityID = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342' AND Name = 'EdgeType')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '9be74cf9-67e5-4a9f-abb8-b35ca2657e36',
-            '8B441734-9C58-43B4-A4A0-F2C0E0D0B342', -- Entity: MJ: Graph Edge Type Endpoints
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342'),
+            'cc8bda97-f827-4583-879e-30044a20c2ab',
+            'D74E798F-D63F-479A-BC2B-C629B252FE60', -- Entity: MJ: Graph Edge Type Endpoints
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D74E798F-D63F-479A-BC2B-C629B252FE60'),
             'EdgeType',
             'Edge Type',
             NULL,
@@ -8396,7 +10307,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdge] TO [cdp_Developer
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '888de2f0-2cea-4a28-93ba-fa6a5b466bd4' OR (EntityID = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342' AND Name = 'Entity')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3daebebe-9239-43c6-a618-c454525af894' OR (EntityID = 'D74E798F-D63F-479A-BC2B-C629B252FE60' AND Name = 'Entity')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -8429,9 +10340,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdge] TO [cdp_Developer
          )
          VALUES
          (
-            '888de2f0-2cea-4a28-93ba-fa6a5b466bd4',
-            '8B441734-9C58-43B4-A4A0-F2C0E0D0B342', -- Entity: MJ: Graph Edge Type Endpoints
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342'),
+            '3daebebe-9239-43c6-a618-c454525af894',
+            'D74E798F-D63F-479A-BC2B-C629B252FE60', -- Entity: MJ: Graph Edge Type Endpoints
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D74E798F-D63F-479A-BC2B-C629B252FE60'),
             'Entity',
             'Entity',
             NULL,
@@ -8459,39 +10370,331 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteGraphEdge] TO [cdp_Developer
          )
       END;
 
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ed884c9f-cab1-4adb-9b77-d9d161ea7ae8' OR (EntityID = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99' AND Name = 'Graph')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'ed884c9f-cab1-4adb-9b77-d9d161ea7ae8',
+            '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99', -- Entity: MJ: Graph Concepts
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99'),
+            'Graph',
+            'Graph',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5216386c-bbda-4b9e-a431-0c27ceacd857' OR (EntityID = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99' AND Name = 'Parent')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '5216386c-bbda-4b9e-a431-0c27ceacd857',
+            '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99', -- Entity: MJ: Graph Concepts
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99'),
+            'Parent',
+            'Parent',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9ba3c4e0-7dab-4b9b-a24a-c7c097179f97' OR (EntityID = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99' AND Name = 'ConceptType')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '9ba3c4e0-7dab-4b9b-a24a-c7c097179f97',
+            '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99', -- Entity: MJ: Graph Concepts
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99'),
+            'ConceptType',
+            'Concept Type',
+            NULL,
+            'nvarchar',
+            200,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '1E1CFE3C-C3FE-4C06-8D01-FDD52A7D91E9'
+               WHERE ID = 'A339B589-1899-478C-8B29-7DFC6685931A'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '4CD2AD93-52BE-49F8-8457-F30E8439F695'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '8A5A82D9-E2B1-44F4-968D-B3C4D12B30B3'
+               WHERE ID = '5FA41B09-F360-47EA-AAF8-715B76CC81FC'
                AND AutoUpdateUserSearchPredicate = 1;
 
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '1CFECC86-5C83-451E-85A3-8B2336E3E3ED'
+               WHERE ID = '4C240EA1-0AC2-41BF-AE25-07C667C32318'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'F2902635-D7E6-4AE3-94CB-9A1A8302C2E1'
+               WHERE ID = '01D914E7-BEF0-4F12-8FEF-1D4C93CACB97'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '08658D91-9EA0-43DB-9D5F-576444934215'
+               WHERE ID = 'ED884C9F-CAB1-4ADB-9B77-D9D161EA7AE8'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '9BA3C4E0-7DAB-4B9B-A24A-C7C097179F97'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '1932AC9C-278C-4756-97E5-2B50A6368F25'
+               WHERE ID = '684BF023-DF26-40F3-AC2A-6455FE606DB9'
                AND AutoUpdateUserSearchPredicate = 1;
+
+/* Set field properties for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '36CD6CE2-3598-4652-8587-ACA7F51C9CD4'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '2FD60774-47DA-44DD-BE9D-6D8D0CD3BCD3'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IncludeInUserSearchAPI = 1
+               WHERE ID = '35E93800-9085-4636-B16D-3017A117F300'
+               AND AutoUpdateIncludeInUserSearchAPI = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'BeginsWith'
+               WHERE ID = '664125D1-6EB7-4AFC-B73B-3B6D5EB7E9B7'
+               AND AutoUpdateUserSearchPredicate = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'BeginsWith'
+               WHERE ID = '35E93800-9085-4636-B16D-3017A117F300'
+               AND AutoUpdateUserSearchPredicate = 1;
+
+/* Set field properties for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '2E9A60E9-694C-418F-95CB-9D4FDDF44334'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'F4878649-5999-4CC7-B195-FC17B88667A3'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '214B6E6F-3E16-4F55-B9A4-5E4A78A77A1B'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '3A162E04-62B6-48B7-B6A0-01F674EE1D45'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'D78FF032-780E-4E18-9C15-0321DBB2EC8E'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '27CEC05B-74E2-4320-84FE-17CFB0CFA049'
+               AND AutoUpdateDefaultInView = 1;
+
+/* Set field properties for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '1FEC2E91-754C-40B5-91DD-917447714548'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'BeginsWith'
+               WHERE ID = 'AB2108B3-9F48-45CD-BA01-284E2F022781'
+               AND AutoUpdateUserSearchPredicate = 1;
+
+/* Set field properties for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'FB8AAA3D-685B-4347-985D-EF4A3C66F8B7'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'C540096A-437C-4202-B7C9-E13B6A233F1F'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'A44E9352-951B-4719-9E19-38CC3744EA0A'
+               AND AutoUpdateDefaultInView = 1;
+
+            UPDATE [${flyway:defaultSchema}].[Entity]
+            SET AllowUserSearchAPI = 0
+            WHERE ID = '4A8D91D6-0933-4CAC-966A-95C69F5228BA'
+            AND AutoUpdateAllowUserSearchAPI = 1;
 
 /* Set categories for 2 fields */
 
@@ -8502,7 +10705,7 @@ SET
    GeneratedFormSection = 'Category',
    DisplayName = 'Graph'
 WHERE 
-   ID = '1E8E5B79-0BE9-40C6-BDF9-B0E9C1F50B68';
+   ID = '89139890-8F7B-4D8D-A77D-1643F617B6D5';
 
 -- UPDATE Entity Field Category Info MJ: Content Sources.Graph 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8511,94 +10714,95 @@ SET
    GeneratedFormSection = 'Category',
    DisplayName = 'Graph Name'
 WHERE 
-   ID = '00CC6479-2587-4154-9646-020FE1152656';
+   ID = '75645C36-084D-405B-9015-B6F0389341C5';
 
 /* Set categories for 8 fields */
 
--- UPDATE Entity Field Category Info MJ: Graphs.ID 
+-- UPDATE Entity Field Category Info MJ: Graph Concept Types.ID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '2B343BFB-249D-486C-A867-57C0108E406B';
+   ID = 'F686DD28-8D73-498C-8722-A380D1D11B1E';
 
--- UPDATE Entity Field Category Info MJ: Graphs.Name 
+-- UPDATE Entity Field Category Info MJ: Graph Concept Types.Name 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Graph Details',
+   Category = 'Concept Type Details',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '8A5A82D9-E2B1-44F4-968D-B3C4D12B30B3';
+   ID = 'AB2108B3-9F48-45CD-BA01-284E2F022781';
 
--- UPDATE Entity Field Category Info MJ: Graphs.Description 
+-- UPDATE Entity Field Category Info MJ: Graph Concept Types.Description 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Graph Details',
+   Category = 'Concept Type Details',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '27A2FE17-F973-4B4E-8EFE-0E32724524C8';
+   ID = '7A1E68BD-FA0A-4E1A-8B56-D5CACDDDE466';
 
--- UPDATE Entity Field Category Info MJ: Graphs.GraphType 
+-- UPDATE Entity Field Category Info MJ: Graph Concept Types.Rank 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Configuration',
+   Category = 'Configuration and Display',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'BA67A003-ED4F-4553-AC95-297A02398709';
+   ID = '22385146-7D25-447D-B63F-D32FD4C28059';
 
--- UPDATE Entity Field Category Info MJ: Graphs.LoadMode 
+-- UPDATE Entity Field Category Info MJ: Graph Concept Types.IconClass 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Configuration',
-   GeneratedFormSection = 'Category'
+   Category = 'Configuration and Display',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Icon'
 WHERE 
-   ID = 'CC5403F2-78D9-4E19-8793-FB2BDFA9C121';
+   ID = '68B47CEF-6010-4372-BE71-47D6066DAF9D';
 
--- UPDATE Entity Field Category Info MJ: Graphs.Status 
+-- UPDATE Entity Field Category Info MJ: Graph Concept Types.Status 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Configuration',
+   Category = 'Configuration and Display',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '1E1CFE3C-C3FE-4C06-8D01-FDD52A7D91E9';
+   ID = '1FEC2E91-754C-40B5-91DD-917447714548';
 
--- UPDATE Entity Field Category Info MJ: Graphs.__mj_CreatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '9B76BA3A-A2B9-44CC-AC87-A92D26147918';
-
--- UPDATE Entity Field Category Info MJ: Graphs.__mj_UpdatedAt 
+-- UPDATE Entity Field Category Info MJ: Graph Concept Types.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '8257E963-A41A-488C-8534-7CB4FCA05366';
+   ID = 'E3CCA960-1F9D-4124-B670-07836C77BFFE';
+
+-- UPDATE Entity Field Category Info MJ: Graph Concept Types.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'C46305B4-9536-4D08-B706-9F01ADEA4243';
 
 /* Set entity icon to fa fa-project-diagram */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
                SET [Icon] = 'fa fa-project-diagram', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA';
+               WHERE [ID] = '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD';
 
 /* Insert FieldCategoryInfo setting for entity */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA' AND [Name] = 'FieldCategoryInfo'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD' AND [Name] = 'FieldCategoryInfo'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('4ab57ac0-4f5d-5f53-b388-5507ee25af22', '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA', 'FieldCategoryInfo', '{
-  "Configuration": {
-    "description": "Operational settings, loading modes, and graph categorization",
-    "icon": "fa fa-cogs"
-  },
-  "Graph Details": {
-    "description": "Core identifying information and purpose of the semantic graph",
+               VALUES ('cc10fee8-9c4e-5476-9f96-d99e0871d539', '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD', 'FieldCategoryInfo', '{
+  "Concept Type Details": {
+    "description": "Core descriptive information defining the concept type and its semantic purpose",
     "icon": "fa fa-info-circle"
+  },
+  "Configuration and Display": {
+    "description": "Rank ordering, visual styling, and operational status settings",
+    "icon": "fa fa-sliders-h"
   },
   "System Metadata": {
     "description": "System-managed audit and tracking fields",
@@ -8609,13 +10813,13 @@ IF NOT EXISTS (
 
 /* Insert FieldCategoryIcons setting (legacy) */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA' AND [Name] = 'FieldCategoryIcons'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD' AND [Name] = 'FieldCategoryIcons'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('af043832-5b26-5f37-8237-26f3abe274df', '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA', 'FieldCategoryIcons', '{
-  "Configuration": "fa fa-cogs",
-  "Graph Details": "fa fa-info-circle",
+               VALUES ('07792307-b214-5a02-a9f8-43ce85840e82', '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD', 'FieldCategoryIcons', '{
+  "Concept Type Details": "fa fa-info-circle",
+  "Configuration and Display": "fa fa-sliders-h",
   "System Metadata": "fa fa-cog"
 }', GETUTCDATE(), GETUTCDATE())
    END;
@@ -8624,21 +10828,428 @@ IF NOT EXISTS (
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '9DE1DB59-5D4B-4F23-ADBA-E5A521977FAA';
+         WHERE [EntityID] = '2A8EDBA7-8BA8-4DA7-8F6E-915585C197BD';
+
+/* Set categories for 9 fields */
+
+-- UPDATE Entity Field Category Info MJ: Graphs.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'DEF208FA-D4CF-4E48-A3F1-B403FC1F8A57';
+
+-- UPDATE Entity Field Category Info MJ: Graphs.Name 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Graph Configuration',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '5FA41B09-F360-47EA-AAF8-715B76CC81FC';
+
+-- UPDATE Entity Field Category Info MJ: Graphs.Description 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Graph Configuration',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'ED4E169D-1C52-4D3B-97BE-842E2A2B0A53';
+
+-- UPDATE Entity Field Category Info MJ: Graphs.GraphTypeID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Graph Configuration',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Graph Type'
+WHERE 
+   ID = '025C4B99-DD64-4935-B134-463B03577CD1';
+
+-- UPDATE Entity Field Category Info MJ: Graphs.LoadMode 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Operational Settings',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '124810DC-8BEB-4EDE-8BA3-D9421781E145';
+
+-- UPDATE Entity Field Category Info MJ: Graphs.Status 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Operational Settings',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'A339B589-1899-478C-8B29-7DFC6685931A';
+
+-- UPDATE Entity Field Category Info MJ: Graphs.GraphType 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Graph Configuration',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Graph Type Name'
+WHERE 
+   ID = '4CD2AD93-52BE-49F8-8457-F30E8439F695';
+
+-- UPDATE Entity Field Category Info MJ: Graphs.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'FAC9102E-33C3-4276-94EE-5E27956039B5';
+
+-- UPDATE Entity Field Category Info MJ: Graphs.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '69C52773-8871-4990-BD54-F5D685BB4175';
+
+/* Set entity icon to fa fa-project-diagram */
+
+               UPDATE [${flyway:defaultSchema}].[Entity]
+               SET [Icon] = 'fa fa-project-diagram', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA';
+
+/* Insert FieldCategoryInfo setting for entity */
+IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA' AND [Name] = 'FieldCategoryInfo'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('8cfcaf57-2df0-5ee1-9053-6cee06202fde', '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA', 'FieldCategoryInfo', '{
+  "Graph Configuration": {
+    "description": "Core configuration and identity attributes of the semantic graph partition",
+    "icon": "fa fa-project-diagram"
+  },
+  "Operational Settings": {
+    "description": "Runtime behavior, loading modes, and operational status settings",
+    "icon": "fa fa-cogs"
+  },
+  "System Metadata": {
+    "description": "System-managed audit and tracking fields",
+    "icon": "fa fa-cog"
+  }
+}', GETUTCDATE(), GETUTCDATE())
+   END;
+
+/* Insert FieldCategoryIcons setting (legacy) */
+IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA' AND [Name] = 'FieldCategoryIcons'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('6b87e292-376e-5e7d-a2b1-d87fb9924c4b', '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA', 'FieldCategoryIcons', '{
+  "Graph Configuration": "fa fa-project-diagram",
+  "Operational Settings": "fa fa-cogs",
+  "System Metadata": "fa fa-cog"
+}', GETUTCDATE(), GETUTCDATE())
+   END;
+
+/* Set DefaultForNewUser=false for NEW entity (category: reference, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
+         SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
+         WHERE [EntityID] = '6F9D2A33-7A64-4CEE-B9D3-52B3CC58E9EA';
+
+/* Set categories for 11 fields */
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Providers.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'EE599E24-5E75-43C9-BE96-1518AC266C35';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Providers.GraphID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Provider Configuration',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Graph'
+WHERE 
+   ID = '0A1CF78B-E858-4773-9E07-6B9B9B78A27A';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Providers.Graph 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Provider Configuration',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '25121B0A-EC51-415B-8C4C-EC1BAB0CAA17';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Providers.Name 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Provider Configuration',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '664125D1-6EB7-4AFC-B73B-3B6D5EB7E9B7';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Providers.Description 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Provider Configuration',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '42664051-B612-4A2D-B82B-5E50850FDD4A';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Providers.DriverClass 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Execution and Implementation',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '35E93800-9085-4636-B16D-3017A117F300';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Providers.Configuration 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Execution and Implementation',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = 'EA46C851-185B-48CB-9C30-242250EB4B08';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Providers.Sequence 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Execution and Implementation',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '36CD6CE2-3598-4652-8587-ACA7F51C9CD4';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Providers.IsActive 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Execution and Implementation',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Active'
+WHERE 
+   ID = '2FD60774-47DA-44DD-BE9D-6D8D0CD3BCD3';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Providers.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '2BACBF2A-4C4C-4C37-AED6-0850391F875C';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Providers.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '0C81340C-8F85-4C53-B973-47B393842B1B';
+
+/* Set entity icon to fa fa-project-diagram */
+
+               UPDATE [${flyway:defaultSchema}].[Entity]
+               SET [Icon] = 'fa fa-project-diagram', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = '234A4D46-27B8-4011-B3F3-8B862D77073C';
+
+/* Insert FieldCategoryInfo setting for entity */
+IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '234A4D46-27B8-4011-B3F3-8B862D77073C' AND [Name] = 'FieldCategoryInfo'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('3c657943-3a20-5641-8e20-38eaff124b62', '234A4D46-27B8-4011-B3F3-8B862D77073C', 'FieldCategoryInfo', '{
+  "Execution and Implementation": {
+    "description": "Technical settings governing execution order, driver class, and configuration parameters",
+    "icon": "fa fa-cogs"
+  },
+  "Provider Configuration": {
+    "description": "Core identifying attributes and descriptive details for the edge provider",
+    "icon": "fa fa-sliders-h"
+  },
+  "System Metadata": {
+    "description": "System-managed audit and tracking fields",
+    "icon": "fa fa-cog"
+  }
+}', GETUTCDATE(), GETUTCDATE())
+   END;
+
+/* Insert FieldCategoryIcons setting (legacy) */
+IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '234A4D46-27B8-4011-B3F3-8B862D77073C' AND [Name] = 'FieldCategoryIcons'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('23e39cc8-c095-5b38-bbdd-6c41e847c52a', '234A4D46-27B8-4011-B3F3-8B862D77073C', 'FieldCategoryIcons', '{
+  "Execution and Implementation": "fa fa-cogs",
+  "Provider Configuration": "fa fa-sliders-h",
+  "System Metadata": "fa fa-cog"
+}', GETUTCDATE(), GETUTCDATE())
+   END;
+
+/* Set DefaultForNewUser=false for NEW entity (category: supporting, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
+         SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
+         WHERE [EntityID] = '234A4D46-27B8-4011-B3F3-8B862D77073C';
+
+/* Set categories for 11 fields */
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Types.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '0200DB32-1B57-4BCF-8D2C-A1F80BDCF843';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Types.GraphID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Relationship Scope',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Graph'
+WHERE 
+   ID = 'A185AE28-27D9-4D81-95A9-EB66493E9198';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Types.Graph 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Relationship Scope',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Graph Details'
+WHERE 
+   ID = '27BF477D-A199-40C1-8601-39F1A6EDCC83';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Types.Name 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Edge Type Definition',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'A05DDD69-E6D9-4121-856C-A0B9EAEDC882';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Types.Description 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Edge Type Definition',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '799B5F84-5186-4EE0-B810-B92FBE5781F6';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Types.InverseName 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Edge Type Definition',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'FB8AAA3D-685B-4347-985D-EF4A3C66F8B7';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Types.IsDirected 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Configuration and Behavior',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '679F79DB-E2E6-40B2-A830-D92E52928A68';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Types.DefaultWeight 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Configuration and Behavior',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'C540096A-437C-4202-B7C9-E13B6A233F1F';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Types.AllowStored 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Configuration and Behavior',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'A44E9352-951B-4719-9E19-38CC3744EA0A';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Types.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '607F0F42-B7D5-439A-9BFB-D9893CA5D363';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edge Types.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '0EC98D00-2621-4D02-9B71-D8D7B41F99E7';
+
+/* Set entity icon to fa fa-project-diagram */
+
+               UPDATE [${flyway:defaultSchema}].[Entity]
+               SET [Icon] = 'fa fa-project-diagram', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = '4A8D91D6-0933-4CAC-966A-95C69F5228BA';
+
+/* Insert FieldCategoryInfo setting for entity */
+IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '4A8D91D6-0933-4CAC-966A-95C69F5228BA' AND [Name] = 'FieldCategoryInfo'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('372fef26-518a-5536-9deb-4175e9e531e4', '4A8D91D6-0933-4CAC-966A-95C69F5228BA', 'FieldCategoryInfo', '{
+  "Configuration and Behavior": {
+    "description": "Behavioral flags and retrieval weights for graph expansion",
+    "icon": "fa fa-sliders-h"
+  },
+  "Edge Type Definition": {
+    "description": "Semantic labels and descriptions defining the relationship type",
+    "icon": "fa fa-font"
+  },
+  "Relationship Scope": {
+    "description": "Defines whether the edge type is global or scoped to a specific graph",
+    "icon": "fa fa-sitemap"
+  },
+  "System Metadata": {
+    "description": "System-managed audit and tracking fields",
+    "icon": "fa fa-cog"
+  }
+}', GETUTCDATE(), GETUTCDATE())
+   END;
+
+/* Insert FieldCategoryIcons setting (legacy) */
+IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '4A8D91D6-0933-4CAC-966A-95C69F5228BA' AND [Name] = 'FieldCategoryIcons'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('6101fd47-7b41-508c-b911-defff1683ccc', '4A8D91D6-0933-4CAC-966A-95C69F5228BA', 'FieldCategoryIcons', '{
+  "Configuration and Behavior": "fa fa-sliders-h",
+  "Edge Type Definition": "fa fa-font",
+  "Relationship Scope": "fa fa-sitemap",
+  "System Metadata": "fa fa-cog"
+}', GETUTCDATE(), GETUTCDATE())
+   END;
+
+/* Set DefaultForNewUser=false for NEW entity (category: reference, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
+         SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
+         WHERE [EntityID] = '4A8D91D6-0933-4CAC-966A-95C69F5228BA';
 
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '9BE74CF9-67E5-4A9F-ABB8-B35CA2657E36'
+               WHERE ID = 'C7FA5DAC-4EB3-4F1B-A840-C4B40A781AE4'
                AND AutoUpdateDefaultInView = 1;
 
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '888DE2F0-2CEA-4A28-93BA-FA6A5B466BD4'
-               AND AutoUpdateDefaultInView = 1;
+            UPDATE [${flyway:defaultSchema}].[Entity]
+            SET AllowUserSearchAPI = 0
+            WHERE ID = '037FD55F-0F21-4584-8F86-90C2E45FC671'
+            AND AutoUpdateAllowUserSearchAPI = 1;
 
-/* Set categories for 14 fields */
+/* Set categories for 15 fields */
 
 -- UPDATE Entity Field Category Info MJ: Graph Concepts.ID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8646,47 +11257,50 @@ SET
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '3B53B127-B8FC-4C36-A36B-5CEA55C1A57F';
+   ID = '494179A9-693E-48ED-A4F5-DE092BF848F9';
 
 -- UPDATE Entity Field Category Info MJ: Graph Concepts.GraphID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Concept Relationships',
-   GeneratedFormSection = 'Category'
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Graph'
 WHERE 
-   ID = '88A38981-5D2B-45C8-B9FE-A84109398933';
+   ID = '2C493F15-AD4B-4123-A1F5-7CEDB0B72BE7';
 
 -- UPDATE Entity Field Category Info MJ: Graph Concepts.ParentID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Concept Relationships',
-   GeneratedFormSection = 'Category'
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Parent Concept'
 WHERE 
-   ID = '153B7DBB-AD06-4DD5-B0B1-36968BE782C1';
+   ID = '60681B95-FF7A-4C95-B09B-E919DDFED6B4';
 
 -- UPDATE Entity Field Category Info MJ: Graph Concepts.Name 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Concept Definition',
+   Category = 'Concept Details',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '1932AC9C-278C-4756-97E5-2B50A6368F25';
+   ID = '684BF023-DF26-40F3-AC2A-6455FE606DB9';
 
--- UPDATE Entity Field Category Info MJ: Graph Concepts.ConceptType 
+-- UPDATE Entity Field Category Info MJ: Graph Concepts.ConceptTypeID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Concept Definition',
-   GeneratedFormSection = 'Category'
+   Category = 'Concept Details',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Concept Type'
 WHERE 
-   ID = '63945900-A006-47CF-8C44-5722F4C940CB';
+   ID = '095762FB-ADC5-48D7-9D74-523CE01E0CC9';
 
 -- UPDATE Entity Field Category Info MJ: Graph Concepts.Description 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Concept Definition',
+   Category = 'Concept Details',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'F8544309-C27C-4B04-89D4-6C8A0C188DE9';
+   ID = 'AF541026-7247-41DD-952B-3BC4769EB459';
 
 -- UPDATE Entity Field Category Info MJ: Graph Concepts.Specification 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8695,16 +11309,16 @@ SET
    GeneratedFormSection = 'Category',
    ExtendedType = 'Markdown'
 WHERE 
-   ID = 'ED6D8CBC-503E-489A-B1DE-3C229E3D003D';
+   ID = '8301A585-CF27-493E-B5E9-0AD3DF585488';
 
 -- UPDATE Entity Field Category Info MJ: Graph Concepts.Synonyms 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Concept Definition',
+   Category = 'Concept Details',
    GeneratedFormSection = 'Category',
    ExtendedType = 'JSON'
 WHERE 
-   ID = '7770D8E4-0511-4244-8E7A-FE7814C73FBC';
+   ID = '7AC32B20-F7AC-4865-A8C3-F95E74F47DA2';
 
 -- UPDATE Entity Field Category Info MJ: Graph Concepts.AuthorityTier 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8712,7 +11326,7 @@ SET
    Category = 'Governance and Rules',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '1CFECC86-5C83-451E-85A3-8B2336E3E3ED';
+   ID = '4C240EA1-0AC2-41BF-AE25-07C667C32318';
 
 -- UPDATE Entity Field Category Info MJ: Graph Concepts.Status 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8720,7 +11334,7 @@ SET
    Category = 'Governance and Rules',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'F2902635-D7E6-4AE3-94CB-9A1A8302C2E1';
+   ID = '01D914E7-BEF0-4F12-8FEF-1D4C93CACB97';
 
 -- UPDATE Entity Field Category Info MJ: Graph Concepts.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8728,7 +11342,7 @@ SET
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '1ADF0971-69C8-47EF-BA62-DEA9E5A670B8';
+   ID = '68FC9DB9-58BC-4ABD-9674-85844A8EBDCB';
 
 -- UPDATE Entity Field Category Info MJ: Graph Concepts.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8736,47 +11350,58 @@ SET
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '568F43BE-1855-471B-83C6-C07013596B26';
+   ID = '5B31597E-D660-4A6A-B257-2E74C298CFD5';
 
 -- UPDATE Entity Field Category Info MJ: Graph Concepts.Graph 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Concept Relationships',
-   GeneratedFormSection = 'Category'
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Graph Name'
 WHERE 
-   ID = '08658D91-9EA0-43DB-9D5F-576444934215';
+   ID = 'ED884C9F-CAB1-4ADB-9B77-D9D161EA7AE8';
 
 -- UPDATE Entity Field Category Info MJ: Graph Concepts.Parent 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Concept Relationships',
-   GeneratedFormSection = 'Category'
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Parent Name'
 WHERE 
-   ID = '009BB3C5-676B-43AC-9D01-50108F6B1389';
+   ID = '5216386C-BBDA-4B9E-A431-0C27CEACD857';
+
+-- UPDATE Entity Field Category Info MJ: Graph Concepts.ConceptType 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Concept Details',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Concept Type Name'
+WHERE 
+   ID = '9BA3C4E0-7DAB-4B9B-A24A-C7C097179F97';
 
 /* Set entity icon to fa fa-project-diagram */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
                SET [Icon] = 'fa fa-project-diagram', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = 'FDDD3E40-0131-4F60-A019-227D63051CDC';
+               WHERE [ID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99';
 
 /* Insert FieldCategoryInfo setting for entity */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'FDDD3E40-0131-4F60-A019-227D63051CDC' AND [Name] = 'FieldCategoryInfo'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99' AND [Name] = 'FieldCategoryInfo'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('025349f0-7782-5eb2-abf5-cb6431797762', 'FDDD3E40-0131-4F60-A019-227D63051CDC', 'FieldCategoryInfo', '{
-  "Concept Definition": {
-    "description": "Core identity, naming, and definition attributes of the concept",
-    "icon": "fa fa-book"
+               VALUES ('fc25ac14-ff1e-5796-b36c-2fe1e514b3e0', '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99', 'FieldCategoryInfo', '{
+  "Concept Details": {
+    "description": "Core identifying attributes, definitions, and naming variations of the concept",
+    "icon": "fa fa-info-circle"
   },
   "Concept Relationships": {
-    "description": "Graph association and hierarchical parent-child relationships",
+    "description": "Graph scoping and hierarchical parent-child relationships",
     "icon": "fa fa-sitemap"
   },
   "Governance and Rules": {
-    "description": "Authoritative rules, specifications, authority tiers, and lifecycle statuses",
+    "description": "Authoritative specifications, lifecycle status, and evidentiary tiers",
     "icon": "fa fa-shield-alt"
   },
   "System Metadata": {
@@ -8788,12 +11413,12 @@ IF NOT EXISTS (
 
 /* Insert FieldCategoryIcons setting (legacy) */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'FDDD3E40-0131-4F60-A019-227D63051CDC' AND [Name] = 'FieldCategoryIcons'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99' AND [Name] = 'FieldCategoryIcons'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('ab799d2f-f448-555d-bc47-fe0fff634be7', 'FDDD3E40-0131-4F60-A019-227D63051CDC', 'FieldCategoryIcons', '{
-  "Concept Definition": "fa fa-book",
+               VALUES ('4c06d00a-913d-591a-be40-f4f5dbe10cc2', '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99', 'FieldCategoryIcons', '{
+  "Concept Details": "fa fa-info-circle",
   "Concept Relationships": "fa fa-sitemap",
   "Governance and Rules": "fa fa-shield-alt",
   "System Metadata": "fa fa-cog"
@@ -8804,326 +11429,344 @@ IF NOT EXISTS (
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = 'FDDD3E40-0131-4F60-A019-227D63051CDC';
+         WHERE [EntityID] = '2C3071C8-EC27-41C4-A4C7-E64F50BA1B99';
 
-/* Set field properties for entity */
+/* Set categories for 19 fields */
 
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '32141BD9-63FD-425E-9CDB-2AC4A22C3767'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '3064DFCC-8FFA-4DDB-B6A0-0CA7671C83E5'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = 'F5DCF83D-714F-4C91-87DF-8CE63E55DAF2'
-               AND AutoUpdateDefaultInView = 1;
-
-            UPDATE [${flyway:defaultSchema}].[Entity]
-            SET AllowUserSearchAPI = 0
-            WHERE ID = '987A289E-5763-4735-8EE3-AE61CA5C26CB'
-            AND AutoUpdateAllowUserSearchAPI = 1;
-
-/* Set field properties for entity */
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = 'D8FC2008-8D43-4540-9347-5E7F38757BE0'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '85263880-7BE7-4B49-91BC-EE9E7EF3036B'
-               AND AutoUpdateDefaultInView = 1;
-
-            UPDATE [${flyway:defaultSchema}].[Entity]
-            SET AllowUserSearchAPI = 0
-            WHERE ID = '8068D8E0-6A4B-40D3-952E-DED867C8814A'
-            AND AutoUpdateAllowUserSearchAPI = 1;
-
-/* Set field properties for entity */
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '1EFCD4EA-2C03-478D-B3CC-DB9F1194F4F2'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '48A4919A-91A9-424B-981F-95680D2AD912'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '4883A949-53BB-4A14-BF07-8C00B27DD685'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '413FD549-1B28-4DF3-B731-FCDAD7A4EA20'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = 'C9BC6597-F8D1-42D9-8202-5BB329AB3C22'
-               AND AutoUpdateDefaultInView = 1;
-
-/* Set categories for 11 fields */
-
--- UPDATE Entity Field Category Info MJ: Graph Edge Types.ID 
+-- UPDATE Entity Field Category Info MJ: Graph Edges.ID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'A7185CF9-A719-45CF-A215-5865726CB84C';
+   ID = '582C33C6-C6C1-4FE3-9104-F4A042A6B769';
 
--- UPDATE Entity Field Category Info MJ: Graph Edge Types.GraphID 
+-- UPDATE Entity Field Category Info MJ: Graph Edges.GraphID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Graph Definition',
-   GeneratedFormSection = 'Category'
+   Category = 'Edge Relationships',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Graph'
 WHERE 
-   ID = '490023A0-6E4C-4A32-B902-B1C25E8E7CCE';
+   ID = '5A451C92-4937-486B-A99A-86EC356C99B9';
 
--- UPDATE Entity Field Category Info MJ: Graph Edge Types.Graph 
+-- UPDATE Entity Field Category Info MJ: Graph Edges.EdgeTypeID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Graph Definition',
-   GeneratedFormSection = 'Category'
+   Category = 'Edge Relationships',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Edge Type'
 WHERE 
-   ID = 'F5DCF83D-714F-4C91-87DF-8CE63E55DAF2';
+   ID = '3E67FDF9-8943-4D0A-AE2C-1AFBF5BEB404';
 
--- UPDATE Entity Field Category Info MJ: Graph Edge Types.Name 
+-- UPDATE Entity Field Category Info MJ: Graph Edges.SourceEntityID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Relationship Properties',
-   GeneratedFormSection = 'Category'
+   Category = 'Source Node',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Source Entity'
 WHERE 
-   ID = 'EB3B26DB-7A7D-4859-9C4A-E2072855A64F';
+   ID = '7FC72692-952B-4CB4-B964-EC675F74C593';
 
--- UPDATE Entity Field Category Info MJ: Graph Edge Types.InverseName 
+-- UPDATE Entity Field Category Info MJ: Graph Edges.SourceRecordID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Relationship Properties',
+   Category = 'Source Node',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '32141BD9-63FD-425E-9CDB-2AC4A22C3767';
+   ID = '5817617B-F538-4486-964F-D9A62F133DA9';
 
--- UPDATE Entity Field Category Info MJ: Graph Edge Types.Description 
+-- UPDATE Entity Field Category Info MJ: Graph Edges.TargetEntityID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Relationship Properties',
-   GeneratedFormSection = 'Category'
+   Category = 'Target Node',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Target Entity'
 WHERE 
-   ID = '25CFD6F8-EC88-40FA-BBD3-985E4562DA2B';
+   ID = '6959EB2C-729B-4828-9722-222A893300DE';
 
--- UPDATE Entity Field Category Info MJ: Graph Edge Types.IsDirected 
+-- UPDATE Entity Field Category Info MJ: Graph Edges.TargetRecordID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Behavior and Weights',
+   Category = 'Target Node',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'B1C88250-DA54-49BA-8C8C-706480159318';
+   ID = '89DB171E-292C-4E1D-AEA4-89D4F0AB5801';
 
--- UPDATE Entity Field Category Info MJ: Graph Edge Types.DefaultWeight 
+-- UPDATE Entity Field Category Info MJ: Graph Edges.Weight 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Behavior and Weights',
+   Category = 'Edge Properties',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '3064DFCC-8FFA-4DDB-B6A0-0CA7671C83E5';
+   ID = '2E9A60E9-694C-418F-95CB-9D4FDDF44334';
 
--- UPDATE Entity Field Category Info MJ: Graph Edge Types.AllowStored 
+-- UPDATE Entity Field Category Info MJ: Graph Edges.Description 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Behavior and Weights',
+   Category = 'Edge Properties',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'AA81E5B2-B418-4868-9B12-BA5BB2D4FEE2';
+   ID = '36C6BF28-C912-4344-86AA-F56854DC7D1F';
 
--- UPDATE Entity Field Category Info MJ: Graph Edge Types.__mj_CreatedAt 
+-- UPDATE Entity Field Category Info MJ: Graph Edges.Attributes 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Edge Properties',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '9FE71313-94D8-43CC-B72B-2D9C289A4195';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edges.Origin 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Governance and Origin',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'F4878649-5999-4CC7-B195-FC17B88667A3';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edges.Status 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Governance and Origin',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '214B6E6F-3E16-4F55-B9A4-5E4A78A77A1B';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edges.Confidence 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Governance and Origin',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '030C1BDE-F141-4107-AB0C-1C29BE2BC5AB';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edges.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '1A33EAE3-6683-421B-9305-BF387BEFD1B8';
+   ID = '6D4FB832-C5CA-426B-9576-CF89C0BA2AB7';
 
--- UPDATE Entity Field Category Info MJ: Graph Edge Types.__mj_UpdatedAt 
+-- UPDATE Entity Field Category Info MJ: Graph Edges.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'EE5F33DF-D91F-4678-8641-A9A11E17C1BF';
+   ID = 'DA4021C1-1495-4707-9777-DD6A634396B3';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edges.Graph 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Edge Relationships',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Graph Name'
+WHERE 
+   ID = '74AA4448-AB89-4EE5-82D4-601BFFCE09F7';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edges.EdgeType 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Edge Relationships',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Edge Type Name'
+WHERE 
+   ID = '3A162E04-62B6-48B7-B6A0-01F674EE1D45';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edges.SourceEntity 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Source Node',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Source Entity Name'
+WHERE 
+   ID = 'D78FF032-780E-4E18-9C15-0321DBB2EC8E';
+
+-- UPDATE Entity Field Category Info MJ: Graph Edges.TargetEntity 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Target Node',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Target Entity Name'
+WHERE 
+   ID = '27CEC05B-74E2-4320-84FE-17CFB0CFA049';
 
 /* Set entity icon to fa fa-project-diagram */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
                SET [Icon] = 'fa fa-project-diagram', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '987A289E-5763-4735-8EE3-AE61CA5C26CB';
+               WHERE [ID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B';
 
 /* Insert FieldCategoryInfo setting for entity */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '987A289E-5763-4735-8EE3-AE61CA5C26CB' AND [Name] = 'FieldCategoryInfo'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND [Name] = 'FieldCategoryInfo'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('20c6ca52-5515-5290-ab7a-ef5e7fd62511', '987A289E-5763-4735-8EE3-AE61CA5C26CB', 'FieldCategoryInfo', '{
-  "Behavior and Weights": {
-    "description": "Directionality, weights, and persistence configuration",
+               VALUES ('252dd426-93e1-55b6-b9c0-1527a1e58101', '52ACC265-E651-4CD9-8C96-088B6263CC2B', 'FieldCategoryInfo', '{
+  "Edge Properties": {
+    "description": "Weight, descriptions, and structured metadata attributes of the edge",
     "icon": "fa fa-sliders-h"
   },
-  "Graph Definition": {
-    "description": "Defines global or graph-specific scope for the edge type",
-    "icon": "fa fa-sitemap"
+  "Edge Relationships": {
+    "description": "Association links connecting the edge to graphs and types",
+    "icon": "fa fa-link"
   },
-  "Relationship Properties": {
-    "description": "Labels and descriptions defining the semantic relationship",
-    "icon": "fa fa-font"
+  "Governance and Origin": {
+    "description": "Lifecycle status, origin tracking, and confidence scoring",
+    "icon": "fa fa-shield-alt"
+  },
+  "Source Node": {
+    "description": "Identification details for the origin node of the edge",
+    "icon": "fa fa-arrow-alt-circle-right"
   },
   "System Metadata": {
     "description": "System-managed audit and tracking fields",
     "icon": "fa fa-cog"
+  },
+  "Target Node": {
+    "description": "Identification details for the destination node of the edge",
+    "icon": "fa fa-arrow-alt-circle-left"
   }
 }', GETUTCDATE(), GETUTCDATE())
    END;
 
 /* Insert FieldCategoryIcons setting (legacy) */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '987A289E-5763-4735-8EE3-AE61CA5C26CB' AND [Name] = 'FieldCategoryIcons'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B' AND [Name] = 'FieldCategoryIcons'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('c49695bb-ea59-5811-9728-29c4a0d5ef18', '987A289E-5763-4735-8EE3-AE61CA5C26CB', 'FieldCategoryIcons', '{
-  "Behavior and Weights": "fa fa-sliders-h",
-  "Graph Definition": "fa fa-sitemap",
-  "Relationship Properties": "fa fa-font",
-  "System Metadata": "fa fa-cog"
+               VALUES ('d27ee910-3d0b-501b-879b-44aeea3496c4', '52ACC265-E651-4CD9-8C96-088B6263CC2B', 'FieldCategoryIcons', '{
+  "Edge Properties": "fa fa-sliders-h",
+  "Edge Relationships": "fa fa-link",
+  "Governance and Origin": "fa fa-shield-alt",
+  "Source Node": "fa fa-arrow-alt-circle-right",
+  "System Metadata": "fa fa-cog",
+  "Target Node": "fa fa-arrow-alt-circle-left"
 }', GETUTCDATE(), GETUTCDATE())
    END;
 
-/* Set DefaultForNewUser=false for NEW entity (category: reference, confidence: high) */
+/* Set DefaultForNewUser=false for NEW entity (category: junction, confidence: high) */
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '987A289E-5763-4735-8EE3-AE61CA5C26CB';
+         WHERE [EntityID] = '52ACC265-E651-4CD9-8C96-088B6263CC2B';
 
-/* Set categories for 11 fields */
+/* Set field properties for entity */
 
--- UPDATE Entity Field Category Info MJ: Graph Edge Providers.ID 
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IsNameField = 1
+               WHERE ID = '5957A809-6C5A-42D2-A500-6D06CDA9E4E3'
+               AND AutoUpdateIsNameField = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'CC8BDA97-F827-4583-879E-30044A20C2AB'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '3DAEBEBE-9239-43C6-A618-C454525AF894'
+               AND AutoUpdateDefaultInView = 1;
+
+/* Set categories for 9 fields */
+
+-- UPDATE Entity Field Category Info MJ: Graph Types.ID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '2609E0C9-6E2C-49ED-86FD-0DD88CA2B749';
+   ID = '0CDA78D2-75BD-4AE3-B94A-4A585FDBC347';
 
--- UPDATE Entity Field Category Info MJ: Graph Edge Providers.GraphID 
+-- UPDATE Entity Field Category Info MJ: Graph Types.Name 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Provider Details',
+   Category = 'Graph Type Details',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '01B30F44-B87C-465E-87EF-594C5FBF1673';
+   ID = 'E89A1147-4B30-4947-92BC-1094B59F28AC';
 
--- UPDATE Entity Field Category Info MJ: Graph Edge Providers.Name 
+-- UPDATE Entity Field Category Info MJ: Graph Types.Description 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Provider Details',
+   Category = 'Graph Type Details',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '4C7E26FC-E89D-480F-9345-75FD3E277777';
+   ID = 'E7C33A26-DFEC-4C27-A503-8DDF050457B3';
 
--- UPDATE Entity Field Category Info MJ: Graph Edge Providers.Description 
+-- UPDATE Entity Field Category Info MJ: Graph Types.IsCanon 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Provider Details',
+   Category = 'Configuration',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'A647866B-51F7-4512-8E25-99319081C374';
+   ID = '81C1A0ED-6563-4DC8-8564-EEDC8B097120';
 
--- UPDATE Entity Field Category Info MJ: Graph Edge Providers.DriverClass 
+-- UPDATE Entity Field Category Info MJ: Graph Types.Rank 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Configuration and Execution',
+   Category = 'Configuration',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '5F90DA51-DB48-4F90-A669-E262BAFDEA96';
+   ID = '96838CAD-B3EE-42BE-A8D5-D2B2B18CEE15';
 
--- UPDATE Entity Field Category Info MJ: Graph Edge Providers.Configuration 
+-- UPDATE Entity Field Category Info MJ: Graph Types.IconClass 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Configuration and Execution',
+   Category = 'Configuration',
    GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
+   ExtendedType = 'Icon'
 WHERE 
-   ID = '3750013C-01A7-4532-8335-1970125D80FF';
+   ID = 'DE62F801-9A1E-4B1F-B382-B93FFD8DC144';
 
--- UPDATE Entity Field Category Info MJ: Graph Edge Providers.Sequence 
+-- UPDATE Entity Field Category Info MJ: Graph Types.Status 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Configuration and Execution',
+   Category = 'Configuration',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'D8FC2008-8D43-4540-9347-5E7F38757BE0';
+   ID = 'C7FA5DAC-4EB3-4F1B-A840-C4B40A781AE4';
 
--- UPDATE Entity Field Category Info MJ: Graph Edge Providers.IsActive 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Configuration and Execution',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '85263880-7BE7-4B49-91BC-EE9E7EF3036B';
-
--- UPDATE Entity Field Category Info MJ: Graph Edge Providers.Graph 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Provider Details',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '4EC99A13-BA90-4043-B637-B3383DE88F1F';
-
--- UPDATE Entity Field Category Info MJ: Graph Edge Providers.__mj_CreatedAt 
+-- UPDATE Entity Field Category Info MJ: Graph Types.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '051B91E2-32FC-4A01-A571-FF0B713545B1';
+   ID = '33C5A5AC-4140-44B0-B0EB-293F57D01806';
 
--- UPDATE Entity Field Category Info MJ: Graph Edge Providers.__mj_UpdatedAt 
+-- UPDATE Entity Field Category Info MJ: Graph Types.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '286E55C8-F1F2-4404-955D-93A10E27ED45';
+   ID = '4FACCAE0-29D6-4E2E-A928-77066CD3046D';
 
 /* Set entity icon to fa fa-project-diagram */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
                SET [Icon] = 'fa fa-project-diagram', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '8068D8E0-6A4B-40D3-952E-DED867C8814A';
+               WHERE [ID] = '037FD55F-0F21-4584-8F86-90C2E45FC671';
 
 /* Insert FieldCategoryInfo setting for entity */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '8068D8E0-6A4B-40D3-952E-DED867C8814A' AND [Name] = 'FieldCategoryInfo'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '037FD55F-0F21-4584-8F86-90C2E45FC671' AND [Name] = 'FieldCategoryInfo'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('446390ed-2930-5d67-93b9-6fdc088207d0', '8068D8E0-6A4B-40D3-952E-DED867C8814A', 'FieldCategoryInfo', '{
-  "Configuration and Execution": {
-    "description": "Driver implementation settings, JSON configurations, and execution control",
+               VALUES ('54b52a9b-d5fb-5b30-9456-a18c81ce55b3', '037FD55F-0F21-4584-8F86-90C2E45FC671', 'FieldCategoryInfo', '{
+  "Configuration": {
+    "description": "Behavioral settings, canon governance, precedence ranking, and visual styling",
     "icon": "fa fa-sliders-h"
   },
-  "Provider Details": {
-    "description": "General identification and descriptive details of the edge provider",
+  "Graph Type Details": {
+    "description": "Primary identification and descriptive details for the graph classification",
     "icon": "fa fa-info-circle"
   },
   "System Metadata": {
@@ -9135,237 +11778,22 @@ IF NOT EXISTS (
 
 /* Insert FieldCategoryIcons setting (legacy) */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '8068D8E0-6A4B-40D3-952E-DED867C8814A' AND [Name] = 'FieldCategoryIcons'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '037FD55F-0F21-4584-8F86-90C2E45FC671' AND [Name] = 'FieldCategoryIcons'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('550e7c09-2270-5d61-875e-36a8782db11e', '8068D8E0-6A4B-40D3-952E-DED867C8814A', 'FieldCategoryIcons', '{
-  "Configuration and Execution": "fa fa-sliders-h",
-  "Provider Details": "fa fa-info-circle",
+               VALUES ('b90af78c-505c-535f-822c-3e05c02036bd', '037FD55F-0F21-4584-8F86-90C2E45FC671', 'FieldCategoryIcons', '{
+  "Configuration": "fa fa-sliders-h",
+  "Graph Type Details": "fa fa-info-circle",
   "System Metadata": "fa fa-cog"
 }', GETUTCDATE(), GETUTCDATE())
    END;
 
-/* Set DefaultForNewUser=false for NEW entity (category: supporting, confidence: high) */
+/* Set DefaultForNewUser=false for NEW entity (category: reference, confidence: high) */
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '8068D8E0-6A4B-40D3-952E-DED867C8814A';
-
-/* Set categories for 19 fields */
-
--- UPDATE Entity Field Category Info MJ: Graph Edges.ID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'C2759BD0-6D4F-4B04-BF48-B752CB13C179';
-
--- UPDATE Entity Field Category Info MJ: Graph Edges.GraphID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Edge Relationships',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Graph'
-WHERE 
-   ID = 'C4C73BCC-76A4-4BB7-8133-15EC06FD4395';
-
--- UPDATE Entity Field Category Info MJ: Graph Edges.EdgeTypeID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Edge Relationships',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Edge Type'
-WHERE 
-   ID = '971FFE22-DB34-4492-814B-F7DCA29524C1';
-
--- UPDATE Entity Field Category Info MJ: Graph Edges.SourceEntityID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Edge Relationships',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Source Entity'
-WHERE 
-   ID = 'DD9F0B61-C44A-47A4-87BD-CC1551DEFAFD';
-
--- UPDATE Entity Field Category Info MJ: Graph Edges.SourceRecordID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Edge Relationships',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '5E64435E-D5F0-4DC0-9F23-52CDFEB05392';
-
--- UPDATE Entity Field Category Info MJ: Graph Edges.TargetEntityID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Edge Relationships',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Target Entity'
-WHERE 
-   ID = '531B0F00-47D8-401E-BC13-E73A67A52795';
-
--- UPDATE Entity Field Category Info MJ: Graph Edges.TargetRecordID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Edge Relationships',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '3D9B184E-D1B8-4BA9-8948-9D7BAD62DF95';
-
--- UPDATE Entity Field Category Info MJ: Graph Edges.Weight 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Edge Properties',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '1EFCD4EA-2C03-478D-B3CC-DB9F1194F4F2';
-
--- UPDATE Entity Field Category Info MJ: Graph Edges.Description 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Edge Properties',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'DD04A2F5-0B9B-432E-8DEA-ED781C7F6856';
-
--- UPDATE Entity Field Category Info MJ: Graph Edges.Attributes 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Edge Properties',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '0830C6D0-1269-42DC-9A83-8FF8A340EF16';
-
--- UPDATE Entity Field Category Info MJ: Graph Edges.Origin 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Governance and Scoring',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '48A4919A-91A9-424B-981F-95680D2AD912';
-
--- UPDATE Entity Field Category Info MJ: Graph Edges.Status 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Governance and Scoring',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '4883A949-53BB-4A14-BF07-8C00B27DD685';
-
--- UPDATE Entity Field Category Info MJ: Graph Edges.Confidence 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Governance and Scoring',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '413FD549-1B28-4DF3-B731-FCDAD7A4EA20';
-
--- UPDATE Entity Field Category Info MJ: Graph Edges.__mj_CreatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '826C61C5-8ECD-4783-AAD7-E77F3B7C20C9';
-
--- UPDATE Entity Field Category Info MJ: Graph Edges.__mj_UpdatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '40F253D2-1FE9-4315-BBCD-ACDF28E0AEAF';
-
--- UPDATE Entity Field Category Info MJ: Graph Edges.Graph 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Edge Relationships',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Graph Name'
-WHERE 
-   ID = '5C8E589F-096B-4237-95DA-BD1B7E3A4ED4';
-
--- UPDATE Entity Field Category Info MJ: Graph Edges.EdgeType 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Edge Relationships',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Edge Type Name'
-WHERE 
-   ID = 'C9BC6597-F8D1-42D9-8202-5BB329AB3C22';
-
--- UPDATE Entity Field Category Info MJ: Graph Edges.SourceEntity 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Edge Relationships',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Source Entity Name'
-WHERE 
-   ID = '51FC8CA8-396E-4D2F-859A-FABA7A0F6DCD';
-
--- UPDATE Entity Field Category Info MJ: Graph Edges.TargetEntity 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Edge Relationships',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Target Entity Name'
-WHERE 
-   ID = 'B812EB8D-1153-4F8F-A893-CA9962042151';
-
-/* Set entity icon to fa fa-project-diagram */
-
-               UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-project-diagram', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4';
-
-/* Insert FieldCategoryInfo setting for entity */
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND [Name] = 'FieldCategoryInfo'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('c92d6a2a-1b50-534b-8b63-001713a9f3bc', '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', 'FieldCategoryInfo', '{
-  "Edge Properties": {
-    "description": "Weights, descriptions, and metadata attributes characterizing the edge",
-    "icon": "fa fa-sliders-h"
-  },
-  "Edge Relationships": {
-    "description": "Source and target entity references linking nodes within the graph",
-    "icon": "fa fa-link"
-  },
-  "Governance and Scoring": {
-    "description": "Origin provenance, lifecycle approval status, and confidence metrics",
-    "icon": "fa fa-shield-alt"
-  },
-  "System Metadata": {
-    "description": "System-managed audit and tracking fields",
-    "icon": "fa fa-cog"
-  }
-}', GETUTCDATE(), GETUTCDATE())
-   END;
-
-/* Insert FieldCategoryIcons setting (legacy) */
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4' AND [Name] = 'FieldCategoryIcons'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('7db0e94a-0478-599b-968d-30b33871e6f3', '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4', 'FieldCategoryIcons', '{
-  "Edge Properties": "fa fa-sliders-h",
-  "Edge Relationships": "fa fa-link",
-  "Governance and Scoring": "fa fa-shield-alt",
-  "System Metadata": "fa fa-cog"
-}', GETUTCDATE(), GETUTCDATE())
-   END;
-
-/* Set DefaultForNewUser=false for NEW entity (category: supporting, confidence: high) */
-
-         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
-         SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '7FC12A09-E43D-44B4-8178-BF21C9CDAEC4';
+         WHERE [EntityID] = '037FD55F-0F21-4584-8F86-90C2E45FC671';
 
 /* Set categories for 8 fields */
 
@@ -9375,47 +11803,47 @@ SET
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '51DF14C0-F6E9-4BE2-84BF-A851239D0CD4';
+   ID = 'C273AFF5-6BC3-49C0-8027-00F4C6D9EFCF';
 
 -- UPDATE Entity Field Category Info MJ: Graph Edge Type Endpoints.EdgeTypeID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Endpoint Configuration',
+   Category = 'Endpoint Constraints',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '91D9FA3B-9B66-4C86-B3F3-A6AF9EA9CE80';
+   ID = '606DFB4B-6789-4ADF-9E64-24668092D9DB';
 
 -- UPDATE Entity Field Category Info MJ: Graph Edge Type Endpoints.Side 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Endpoint Configuration',
+   Category = 'Endpoint Constraints',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '8A36FE7D-721F-4463-B5C8-FCF4E98BABA1';
+   ID = '5957A809-6C5A-42D2-A500-6D06CDA9E4E3';
 
 -- UPDATE Entity Field Category Info MJ: Graph Edge Type Endpoints.EntityID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Endpoint Configuration',
+   Category = 'Endpoint Constraints',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'CE286C25-49DA-4E7A-A06A-EF5ECD48FB9D';
+   ID = '73D2C416-437E-4FDC-8ABC-CCD200023753';
 
 -- UPDATE Entity Field Category Info MJ: Graph Edge Type Endpoints.EdgeType 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Endpoint Configuration',
+   Category = 'Endpoint Constraints',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '9BE74CF9-67E5-4A9F-ABB8-B35CA2657E36';
+   ID = 'CC8BDA97-F827-4583-879E-30044A20C2AB';
 
 -- UPDATE Entity Field Category Info MJ: Graph Edge Type Endpoints.Entity 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Endpoint Configuration',
+   Category = 'Endpoint Constraints',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '888DE2F0-2CEA-4A28-93BA-FA6A5B466BD4';
+   ID = '3DAEBEBE-9239-43C6-A618-C454525AF894';
 
 -- UPDATE Entity Field Category Info MJ: Graph Edge Type Endpoints.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9423,7 +11851,7 @@ SET
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '3D4CAB6D-6514-45E9-B70F-0A7C81D8B4FB';
+   ID = 'B75AAF6D-B753-4379-B41C-5B09B68A998C';
 
 -- UPDATE Entity Field Category Info MJ: Graph Edge Type Endpoints.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9431,24 +11859,24 @@ SET
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '09617EC9-202F-436D-8927-930A2F504136';
+   ID = 'CDFA1C03-C365-4DBB-B051-E58F09D32975';
 
 /* Set entity icon to fa fa-project-diagram */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
                SET [Icon] = 'fa fa-project-diagram', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342';
+               WHERE [ID] = 'D74E798F-D63F-479A-BC2B-C629B252FE60';
 
 /* Insert FieldCategoryInfo setting for entity */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342' AND [Name] = 'FieldCategoryInfo'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'D74E798F-D63F-479A-BC2B-C629B252FE60' AND [Name] = 'FieldCategoryInfo'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('b369c4ce-0fc9-59fa-896a-18b0b60ac4f0', '8B441734-9C58-43B4-A4A0-F2C0E0D0B342', 'FieldCategoryInfo', '{
-  "Endpoint Configuration": {
-    "description": "Configuration settings defining source and target entity constraints for graph edge types",
-    "icon": "fa fa-sitemap"
+               VALUES ('34261007-cb66-5654-97e4-d377ff3a765f', 'D74E798F-D63F-479A-BC2B-C629B252FE60', 'FieldCategoryInfo', '{
+  "Endpoint Constraints": {
+    "description": "Rules and relationships defining valid source and target entities for graph edges",
+    "icon": "fa fa-link"
   },
   "System Metadata": {
     "description": "System-managed audit and tracking fields",
@@ -9459,19 +11887,19 @@ IF NOT EXISTS (
 
 /* Insert FieldCategoryIcons setting (legacy) */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342' AND [Name] = 'FieldCategoryIcons'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'D74E798F-D63F-479A-BC2B-C629B252FE60' AND [Name] = 'FieldCategoryIcons'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('552b8985-484f-54dd-b49c-eeb0384c1970', '8B441734-9C58-43B4-A4A0-F2C0E0D0B342', 'FieldCategoryIcons', '{
-  "Endpoint Configuration": "fa fa-sitemap",
+               VALUES ('66a389cd-00e3-5995-957f-eb4ee1719ffe', 'D74E798F-D63F-479A-BC2B-C629B252FE60', 'FieldCategoryIcons', '{
+  "Endpoint Constraints": "fa fa-link",
   "System Metadata": "fa fa-cog"
 }', GETUTCDATE(), GETUTCDATE())
    END;
 
-/* Set DefaultForNewUser=false for NEW entity (category: system, confidence: high) */
+/* Set DefaultForNewUser=false for NEW entity (category: junction, confidence: high) */
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '8B441734-9C58-43B4-A4A0-F2C0E0D0B342';
+         WHERE [EntityID] = 'D74E798F-D63F-479A-BC2B-C629B252FE60';
 

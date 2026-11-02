@@ -3,11 +3,13 @@ import {
     ClusterContentIntoConceptSeeds,
     ExtractLeafTopicFromHeading,
     GetAuthorityTierRank,
+    GetConceptTypeRank,
     InferConceptTypeFromSignals,
     ResolveGraphOverlayConfig,
     ScoreConceptNameSimilarity,
     type ContentChunkSeedInput,
     type ExistingGraphConceptSeed,
+    type GraphConceptTypeDescriptor,
     type SchemaGroundingTarget,
 } from '../graph/index.js';
 
@@ -270,5 +272,63 @@ describe('GraphOverlay & ConceptSeedClustering', () => {
 
         expect(InferConceptTypeFromSignals('Finance & Accounting Committee', ['Oversees budget'])).toBe('Domain');
         expect(InferConceptTypeFromSignals('Emeritus Member Definition', ['Honorary designation'])).toBe('Term');
+        expect(InferConceptTypeFromSignals('Board Treasurer Role & Fiduciary Duties', ['Oversees audit'])).toBe('Role');
+    });
+
+    it('supports custom GraphTypes with IsCanon=true and prioritizes higher-ranked GraphConceptTypes when capped', () => {
+        const customCanon = ResolveGraphOverlayConfig('graph-reg-canon', {
+            GraphOverlay: {
+                TargetGraphType: 'Regulatory Governance',
+                IsCanon: true,
+            },
+        });
+        expect(customCanon.TargetGraphType).toBe('Regulatory Governance');
+        expect(customCanon.IsCanon).toBe(true);
+        expect(customCanon.ConceptTaxonomyMode).toBe('propose-only');
+        expect(customCanon.GroundingMode).toBe('full-canon');
+
+        const configuredConceptTypes: GraphConceptTypeDescriptor[] = [
+            { ID: 'ct-policy', Name: 'Policy', Rank: 10 },
+            { ID: 'ct-role', Name: 'Role', Rank: 40 },
+            { ID: 'ct-term', Name: 'Term', Rank: 60 },
+        ];
+        expect(GetConceptTypeRank('Policy', configuredConceptTypes)).toBe(10);
+        expect(GetConceptTypeRank('Term', configuredConceptTypes)).toBe(60);
+
+        const chunks: ContentChunkSeedInput[] = [
+            {
+                ChunkID: 'c-term',
+                ContentItemID: 'item-1',
+                ContentSourceID: 'src-1',
+                ContentItemTitle: 'Glossary',
+                HeadingPath: 'Glossary > Affiliate Glossary Term',
+                Text: 'Affiliate members hold non-voting status.',
+                Tags: ['Affiliate Glossary Term'],
+                AuthorityTier: 'ExecutiveSOP',
+            },
+            {
+                ChunkID: 'c-policy',
+                ContentItemID: 'item-1',
+                ContentSourceID: 'src-1',
+                ContentItemTitle: 'Handbook',
+                HeadingPath: 'Governance > Conflict of Interest Policy',
+                Text: 'Board members must disclose conflicts annually.',
+                Tags: ['Conflict of Interest Policy'],
+                AuthorityTier: 'ExecutiveSOP',
+            },
+        ];
+
+        const result = ClusterContentIntoConceptSeeds(chunks, [], {
+            taxonomyMode: 'propose-only',
+            maxNewConcepts: 1,
+            conceptTypes: configuredConceptTypes,
+        });
+
+        // Both have 1 chunk and ExecutiveSOP authority, so Policy (Rank 10) beats Term (Rank 60)
+        expect(result.Clusters.length).toBe(1);
+        expect(result.Clusters[0].ConceptName).toBe('Conflict of Interest Policy');
+        expect(result.Clusters[0].InferredConceptType).toBe('Policy');
+        expect(result.Clusters[0].InferredConceptTypeID).toBe('ct-policy');
+        expect(result.Clusters[0].ConceptTypeRank).toBe(10);
     });
 });

@@ -32,6 +32,8 @@ export interface SynthesizedGraphConcept {
     readonly ExistingConceptID?: string;
     readonly Name: string;
     readonly ConceptType: GraphConceptType;
+    /** Optional foreign key to `MJ: Graph Concept Types` (`__mj.GraphConceptType.ID`). */
+    readonly ConceptTypeID?: string | null;
     /** Crisp 1–3 sentence summary (~100 tokens) used for fast prompt subgraph descriptions. */
     readonly Description: string;
     /** Full markdown specification (rules, decision tables, thresholds, exceptions, inline citations). */

@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Graph Details Section -->
+    <!-- Graph Configuration Section -->
     <mj-collapsible-panel
-        SectionKey="graphDetails"
-        SectionName="Graph Details"
-        Icon="fa fa-info-circle"
+        SectionKey="graphConfiguration"
+        SectionName="Graph Configuration"
+        Icon="fa fa-project-diagram"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -33,24 +33,25 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Configuration Section -->
-    <mj-collapsible-panel
-        SectionKey="configuration"
-        SectionName="Configuration"
-        Icon="fa fa-cogs"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="GraphType"
-            Type="select"
+            FieldName="GraphTypeID"
+            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Operational Settings Section -->
+    <mj-collapsible-panel
+        SectionKey="operationalSettings"
+        SectionName="Operational Settings"
+        Icon="fa fa-cogs"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -102,25 +103,50 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Graph Concepts Section -->
+    <!-- Graph Edges Section -->
     <mj-collapsible-panel
-        SectionKey="mJGraphConcepts"
-        SectionName="Graph Concepts"
+        SectionKey="mJGraphEdges"
+        SectionName="Graph Edges"
         Icon="fa fa-project-diagram"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJGraphConcepts')"
+        [BadgeCount]="GetSectionRowCount('mJGraphEdges')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Graph Concepts','GraphID')"
-                [NewRecordValues]="NewRecordValues('MJ: Graph Concepts','GraphID')"
-                [AllowLoad]="IsSectionExpanded('mJGraphConcepts')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Graph Edges','GraphID')"
+                [NewRecordValues]="NewRecordValues('MJ: Graph Edges','GraphID')"
+                [AllowLoad]="IsSectionExpanded('mJGraphEdges')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJGraphConcepts', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJGraphEdges', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Graph Edge Providers Section -->
+    <mj-collapsible-panel
+        SectionKey="mJGraphEdgeProviders"
+        SectionName="Graph Edge Providers"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJGraphEdgeProviders')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Graph Edge Providers','GraphID')"
+                [NewRecordValues]="NewRecordValues('MJ: Graph Edge Providers','GraphID')"
+                [AllowLoad]="IsSectionExpanded('mJGraphEdgeProviders')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJGraphEdgeProviders', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -152,31 +178,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Graph Edges Section -->
-    <mj-collapsible-panel
-        SectionKey="mJGraphEdges"
-        SectionName="Graph Edges"
-        Icon="fa fa-project-diagram"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJGraphEdges')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Graph Edges','GraphID')"
-                [NewRecordValues]="NewRecordValues('MJ: Graph Edges','GraphID')"
-                [AllowLoad]="IsSectionExpanded('mJGraphEdges')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJGraphEdges', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Content Sources Section -->
     <mj-collapsible-panel
         SectionKey="mJContentSources"
@@ -202,25 +203,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Graph Edge Providers Section -->
+    <!-- Graph Concepts Section -->
     <mj-collapsible-panel
-        SectionKey="mJGraphEdgeProviders"
-        SectionName="Graph Edge Providers"
+        SectionKey="mJGraphConcepts"
+        SectionName="Graph Concepts"
         Icon="fa fa-project-diagram"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJGraphEdgeProviders')"
+        [BadgeCount]="GetSectionRowCount('mJGraphConcepts')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Graph Edge Providers','GraphID')"
-                [NewRecordValues]="NewRecordValues('MJ: Graph Edge Providers','GraphID')"
-                [AllowLoad]="IsSectionExpanded('mJGraphEdgeProviders')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Graph Concepts','GraphID')"
+                [NewRecordValues]="NewRecordValues('MJ: Graph Concepts','GraphID')"
+                [AllowLoad]="IsSectionExpanded('mJGraphConcepts')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJGraphEdgeProviders', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJGraphConcepts', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

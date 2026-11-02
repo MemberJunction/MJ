@@ -4,6 +4,7 @@ import {
     ClassifiedTag,
     ContentChunkSeedInput,
     ExistingGraphConceptSeed,
+    GraphConceptTypeDescriptor,
     SchemaGroundingTarget,
     StageContext,
     SynthesizedGraphConcept,
@@ -21,6 +22,14 @@ import { TAG_STAGE } from '../stages/TagStage.js';
 
 class InMemoryGraphOverlayStore implements IGraphOverlayStore {
     public ExistingConcepts: ExistingGraphConceptSeed[] = [];
+    public ConceptTypes: GraphConceptTypeDescriptor[] = [
+        { ID: 'B2F6C8D1-5E22-4A3B-9D81-200000000001', Name: 'Policy', Rank: 10 },
+        { ID: 'B2F6C8D1-5E22-4A3B-9D81-200000000002', Name: 'Metric', Rank: 20 },
+        { ID: 'B2F6C8D1-5E22-4A3B-9D81-200000000003', Name: 'Process', Rank: 30 },
+        { ID: 'B2F6C8D1-5E22-4A3B-9D81-200000000004', Name: 'Role', Rank: 40 },
+        { ID: 'B2F6C8D1-5E22-4A3B-9D81-200000000005', Name: 'Domain', Rank: 50 },
+        { ID: 'B2F6C8D1-5E22-4A3B-9D81-200000000006', Name: 'Term', Rank: 60 },
+    ];
     public GroundingTargets: SchemaGroundingTarget[] = [];
     public CustomChunks?: ContentChunkSeedInput[];
     public SavedConcepts: Array<{
@@ -38,6 +47,10 @@ class InMemoryGraphOverlayStore implements IGraphOverlayStore {
 
     public async LoadExistingConcepts(): Promise<ExistingGraphConceptSeed[]> {
         return this.ExistingConcepts;
+    }
+
+    public async LoadConceptTypes(): Promise<GraphConceptTypeDescriptor[]> {
+        return this.ConceptTypes;
     }
 
     public async LoadGroundingTargets(): Promise<SchemaGroundingTarget[]> {
@@ -383,6 +396,7 @@ describe('GraphStage (@memberjunction/content-pipeline)', () => {
 
         const synth = summary.SynthesizedResults[0];
         expect(synth.Concept.Name).toBe('Annual Dues Assessment');
+        expect(synth.Concept.ConceptTypeID).toBe('B2F6C8D1-5E22-4A3B-9D81-200000000006');
         expect(synth.Concept.ParentConceptName).toBe('Membership Governance');
 
         const edgeTypes = synth.Edges.map((e) => e.EdgeTypeName);

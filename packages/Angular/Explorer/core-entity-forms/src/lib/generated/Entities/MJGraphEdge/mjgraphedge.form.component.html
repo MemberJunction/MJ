@@ -35,6 +35,16 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Source Node Section -->
+    <mj-collapsible-panel
+        SectionKey="sourceNode"
+        SectionName="Source Node"
+        Icon="fa fa-arrow-alt-circle-right"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -52,6 +62,16 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Target Node Section -->
+    <mj-collapsible-panel
+        SectionKey="targetNode"
+        SectionName="Target Node"
+        Icon="fa fa-arrow-alt-circle-left"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -106,10 +126,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Governance and Scoring Section -->
+    <!-- Governance and Origin Section -->
     <mj-collapsible-panel
-        SectionKey="governanceAndScoring"
-        SectionName="Governance and Scoring"
+        SectionKey="governanceAndOrigin"
+        SectionName="Governance and Origin"
         Icon="fa fa-shield-alt"
         [Form]="this"
         [FormContext]="formContext">

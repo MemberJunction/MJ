@@ -14,9 +14,11 @@
 
 import {
     GetAuthorityTierRank,
+    GetConceptTypeRank,
     type ConceptTaxonomyMode,
     type GraphAuthorityTier,
     type GraphConceptType,
+    type GraphConceptTypeDescriptor,
 } from './GraphOverlay.types.js';
 
 /** Input representation of a segmented `MJ: Content Item Chunk` with its parent item's tags and source metadata. */
@@ -42,6 +44,8 @@ export interface ExistingGraphConceptSeed {
     readonly ConceptID: string;
     readonly Name: string;
     readonly ConceptType: GraphConceptType;
+    /** Optional foreign key to `MJ: Graph Concept Types` (`__mj.GraphConceptType.ID`). */
+    readonly ConceptTypeID?: string | null;
     readonly Synonyms?: readonly string[];
     readonly Description?: string | null;
     readonly Specification?: string | null;
@@ -74,6 +78,10 @@ export interface ConceptSeedCluster {
     readonly ConceptName: string;
     /** Inferred concept classification based on heading/text signals or existing concept. */
     readonly InferredConceptType: GraphConceptType;
+    /** Resolved `MJ: Graph Concept Types` ID when `conceptTypes` descriptors are provided or matched from an existing concept. */
+    readonly InferredConceptTypeID?: string | null;
+    /** Rank order of `InferredConceptType` (lower = higher priority, e.g., Policy = 10, Term = 60). */
+    readonly ConceptTypeRank: number;
     /** Populated when this cluster matched an existing `GraphConcept` in the target graph. */
     readonly MatchedExistingConcept?: ExistingGraphConceptSeed;
     /** Match score in [0, 1] against `MatchedExistingConcept` (or 0 when net-new). */
@@ -100,6 +108,8 @@ export interface ConceptClusteringOptions {
     readonly conceptMatchThreshold?: number;
     readonly maxNewConcepts?: number | null;
     readonly groundingTargets?: readonly SchemaGroundingTarget[];
+    /** Optional active `MJ: Graph Concept Types` rows for rank ordering and `ConceptTypeID` resolution. */
+    readonly conceptTypes?: readonly GraphConceptTypeDescriptor[];
 }
 
 /** Output of `ClusterContentIntoConceptSeeds`. */
@@ -238,7 +248,7 @@ export function ScoreConceptNameSimilarity(
 }
 
 /**
- * Infers the `GraphConceptType` (`'Domain' | 'Term' | 'Policy' | 'Metric' | 'Process'`)
+ * Infers the `GraphConceptType` (`'Policy' | 'Metric' | 'Process' | 'Role' | 'Domain' | 'Term'`)
  * from a topic label and its associated chunk text.
  */
 export function InferConceptTypeFromSignals(
@@ -271,6 +281,13 @@ export function InferConceptTypeFromSignals(
     ) {
         return 'Policy';
     }
+    if (
+        /\b(role|chair|officer|director|steward|treasurer|secretary|owner|fiduciary|counsel)\b/.test(
+            combinedHeader,
+        )
+    ) {
+        return 'Role';
+    }
     if (/\b(department|division|program|committee|finance|membership|operations|accounting)\b/.test(combinedHeader)) {
         return 'Domain';
     }
@@ -291,6 +308,7 @@ export function ClusterContentIntoConceptSeeds(
     const matchThreshold = options.conceptMatchThreshold ?? 0.82;
     const maxNew = options.maxNewConcepts ?? null;
     const groundingTargets = options.groundingTargets ?? [];
+    const configuredConceptTypes = options.conceptTypes ?? [];
 
     interface MutableBucket {
         key: string;
@@ -404,6 +422,13 @@ export function ClusterContentIntoConceptSeeds(
                 bucket.displayName,
                 sortedChunks.map((c) => c.Text),
             );
+        const resolvedConceptTypeID =
+            bucket.matchedConcept?.ConceptTypeID ??
+            configuredConceptTypes.find(
+                (t) => t.Name.trim().toLowerCase() === inferredType.trim().toLowerCase(),
+            )?.ID ??
+            null;
+        const conceptTypeRank = GetConceptTypeRank(inferredType, configuredConceptTypes);
 
         const groundingMatches = matchGroundingTargets(
             bucket.displayName,
@@ -416,6 +441,8 @@ export function ClusterContentIntoConceptSeeds(
             ClusterKey: bucket.key,
             ConceptName: bucket.displayName,
             InferredConceptType: inferredType,
+            ...(resolvedConceptTypeID ? { InferredConceptTypeID: resolvedConceptTypeID } : {}),
+            ConceptTypeRank: conceptTypeRank,
             ...(bucket.matchedConcept ? { MatchedExistingConcept: bucket.matchedConcept } : {}),
             ExistingConceptMatchScore: bucket.matchScore,
             Chunks: sortedChunks,
@@ -432,11 +459,12 @@ export function ClusterContentIntoConceptSeeds(
         }
     }
 
-    // Prioritize candidate clusters with more chunks and higher authority tiers
+    // Prioritize candidate clusters with more chunks, higher authority tiers, and higher-priority concept type rank (lower number = higher priority)
     candidateClusters.sort(
         (a, b) =>
             b.Chunks.length - a.Chunks.length ||
             GetAuthorityTierRank(b.HighestAuthorityTier) - GetAuthorityTierRank(a.HighestAuthorityTier) ||
+            a.ConceptTypeRank - b.ConceptTypeRank ||
             a.ConceptName.localeCompare(b.ConceptName),
     );
 

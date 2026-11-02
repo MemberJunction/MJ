@@ -18,9 +18,11 @@
 import { RunView } from '@memberjunction/core';
 import {
     MJGraphConceptEntity,
+    MJGraphConceptTypeEntity,
     MJGraphEdgeEntity,
     MJGraphEdgeTypeEntity,
     MJGraphEntity,
+    MJGraphTypeEntity,
 } from '@memberjunction/core-entities';
 import {
     CompareDAGFingerprints,
@@ -74,10 +76,22 @@ const GRAPH_ENTITIES: ReadonlyArray<{
     RequiredFields: readonly string[];
 }> = [
     {
+        EntityName: 'MJ: Graph Types',
+        BaseTable: 'GraphType',
+        BaseView: 'vwGraphTypes',
+        RequiredFields: ['ID', 'Name', 'Description', 'IsCanon', 'Rank', 'IconClass', 'Status'],
+    },
+    {
+        EntityName: 'MJ: Graph Concept Types',
+        BaseTable: 'GraphConceptType',
+        BaseView: 'vwGraphConceptTypes',
+        RequiredFields: ['ID', 'Name', 'Description', 'Rank', 'IconClass', 'Status'],
+    },
+    {
         EntityName: 'MJ: Graphs',
         BaseTable: 'Graph',
         BaseView: 'vwGraphs',
-        RequiredFields: ['ID', 'Name', 'Description', 'GraphType', 'LoadMode', 'Status'],
+        RequiredFields: ['ID', 'Name', 'Description', 'GraphTypeID', 'GraphType', 'LoadMode', 'Status'],
     },
     {
         EntityName: 'MJ: Graph Edge Types',
@@ -126,6 +140,7 @@ const GRAPH_ENTITIES: ReadonlyArray<{
             'GraphID',
             'ParentID',
             'Name',
+            'ConceptTypeID',
             'ConceptType',
             'Description',
             'Specification',
@@ -136,7 +151,7 @@ const GRAPH_ENTITIES: ReadonlyArray<{
     },
 ];
 
-// ─── SG1: Metadata coherence, value lists, and polymorphic FK links ──────────
+// ─── SG1: Metadata coherence, FK links, and polymorphic EntityIDFieldName ────
 
 async function checkSg1MetadataCoherence(ctx: IntegrationCheckContext): Promise<void> {
     for (const spec of GRAPH_ENTITIES) {
@@ -153,27 +168,23 @@ async function checkSg1MetadataCoherence(ctx: IntegrationCheckContext): Promise<
         );
     }
 
-    // Verify GraphType value list on MJ: Graphs
+    // Verify Graph.GraphTypeID FK metadata points to MJ: Graph Types
     const graphsEnt = ctx.Provider.Entities.find((e) => e.Name === 'MJ: Graphs')!;
-    const graphTypeField = graphsEnt.Fields.find((f) => f.Name === 'GraphType');
-    const graphTypeValues = new Set((graphTypeField?.EntityFieldValues ?? []).map((v) => v.Value));
-    for (const expected of ['Canon', 'Knowledge', 'Network', 'Custom']) {
-        Assert(
-            graphTypeValues.has(expected),
-            `MJ: Graphs.GraphType missing value-list entry '${expected}'`,
-        );
-    }
+    const graphTypeIdField = graphsEnt.Fields.find((f) => f.Name === 'GraphTypeID');
+    AssertEqual(
+        graphTypeIdField?.RelatedEntity,
+        'MJ: Graph Types',
+        'MJ: Graphs.GraphTypeID RelatedEntity',
+    );
 
-    // Verify ConceptType value list on MJ: Graph Concepts
+    // Verify GraphConcept.ConceptTypeID FK metadata points to MJ: Graph Concept Types
     const conceptsEnt = ctx.Provider.Entities.find((e) => e.Name === 'MJ: Graph Concepts')!;
-    const conceptTypeField = conceptsEnt.Fields.find((f) => f.Name === 'ConceptType');
-    const conceptTypeValues = new Set((conceptTypeField?.EntityFieldValues ?? []).map((v) => v.Value));
-    for (const expected of ['Domain', 'Term', 'Policy', 'Metric', 'Process']) {
-        Assert(
-            conceptTypeValues.has(expected),
-            `MJ: Graph Concepts.ConceptType missing value-list entry '${expected}'`,
-        );
-    }
+    const conceptTypeIdField = conceptsEnt.Fields.find((f) => f.Name === 'ConceptTypeID');
+    AssertEqual(
+        conceptTypeIdField?.RelatedEntity,
+        'MJ: Graph Concept Types',
+        'MJ: Graph Concepts.ConceptTypeID RelatedEntity',
+    );
 
     // Verify polymorphic EntityIDFieldName on MJ: Graph Edges (SourceRecordID -> SourceEntityID, TargetRecordID -> TargetEntityID)
     const edgesEnt = ctx.Provider.Entities.find((e) => e.Name === 'MJ: Graph Edges')!;
@@ -205,9 +216,15 @@ async function checkSg1MetadataCoherence(ctx: IntegrationCheckContext): Promise<
 
 async function checkSg2PhysicalConstraints(ctx: IntegrationCheckContext): Promise<void> {
     const expectedConstraints = [
+        'PK_GraphType',
+        'UQ_GraphType_Name',
+        'CK_GraphType_Status',
+        'PK_GraphConceptType',
+        'UQ_GraphConceptType_Name',
+        'CK_GraphConceptType_Status',
         'PK_Graph',
+        'FK_Graph_GraphType',
         'UQ_Graph_Name',
-        'CK_Graph_GraphType',
         'CK_Graph_LoadMode',
         'CK_Graph_Status',
         'PK_GraphEdgeType',
@@ -236,9 +253,9 @@ async function checkSg2PhysicalConstraints(ctx: IntegrationCheckContext): Promis
         'PK_GraphConcept',
         'FK_GraphConcept_Graph',
         'FK_GraphConcept_Parent',
+        'FK_GraphConcept_GraphConceptType',
         'UQ_GraphConcept_GraphID_Name',
         'CK_GraphConcept_NoSelfParent',
-        'CK_GraphConcept_ConceptType',
         'CK_GraphConcept_AuthorityTier',
         'CK_GraphConcept_Status',
         'FK_ContentSource_Graph',
@@ -310,6 +327,9 @@ async function checkSg3BaseViewsRunView(ctx: IntegrationCheckContext): Promise<v
 
 async function checkSg4LiveEntityCrudAndConstraints(ctx: IntegrationCheckContext): Promise<void> {
     const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    let graphType: MJGraphTypeEntity | null = null;
+    let domainConceptType: MJGraphConceptTypeEntity | null = null;
+    let policyConceptType: MJGraphConceptTypeEntity | null = null;
     let graph: MJGraphEntity | null = null;
     let parentConcept: MJGraphConceptEntity | null = null;
     let childConcept: MJGraphConceptEntity | null = null;
@@ -317,25 +337,64 @@ async function checkSg4LiveEntityCrudAndConstraints(ctx: IntegrationCheckContext
     let edge: MJGraphEdgeEntity | null = null;
 
     try {
-        // 1. Create a Canon Graph
+        // 1. Create a custom canonical GraphType (IsCanon = true, Rank = 15) and two ranked GraphConceptTypes
+        graphType = await ctx.Provider.GetEntityObject<MJGraphTypeEntity>('MJ: Graph Types', ctx.User);
+        graphType.NewRecord();
+        graphType.Name = `__IT162_Governance_Canon_${suffix}`;
+        graphType.Description = 'Integration test canonical graph type';
+        graphType.IsCanon = true;
+        graphType.Rank = 15;
+        graphType.IconClass = 'fa-solid fa-scale-balanced';
+        graphType.Status = 'Active';
+        Assert(
+            await graphType.Save(),
+            `Failed to save MJGraphTypeEntity: ${graphType.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+        );
+
+        domainConceptType = await ctx.Provider.GetEntityObject<MJGraphConceptTypeEntity>('MJ: Graph Concept Types', ctx.User);
+        domainConceptType.NewRecord();
+        domainConceptType.Name = `__IT162_Domain_${suffix}`;
+        domainConceptType.Description = 'High-level domain umbrella';
+        domainConceptType.Rank = 50;
+        domainConceptType.IconClass = 'fa-solid fa-layer-group';
+        domainConceptType.Status = 'Active';
+        Assert(
+            await domainConceptType.Save(),
+            `Failed to save domain MJGraphConceptTypeEntity: ${domainConceptType.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+        );
+
+        policyConceptType = await ctx.Provider.GetEntityObject<MJGraphConceptTypeEntity>('MJ: Graph Concept Types', ctx.User);
+        policyConceptType.NewRecord();
+        policyConceptType.Name = `__IT162_Policy_${suffix}`;
+        policyConceptType.Description = 'Governing policy rule';
+        policyConceptType.Rank = 10;
+        policyConceptType.IconClass = 'fa-solid fa-gavel';
+        policyConceptType.Status = 'Active';
+        Assert(
+            await policyConceptType.Save(),
+            `Failed to save policy MJGraphConceptTypeEntity: ${policyConceptType.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+        );
+
+        // 2. Create a Canon Graph referencing graphType.ID
         graph = await ctx.Provider.GetEntityObject<MJGraphEntity>('MJ: Graphs', ctx.User);
         graph.NewRecord();
         graph.Name = `__IT162_Canon_Graph_${suffix}`;
         graph.Description = 'Integration test Canon Graph';
-        graph.GraphType = 'Canon';
+        graph.GraphTypeID = graphType.ID;
         graph.LoadMode = 'Preload';
         graph.Status = 'Active';
         Assert(
             await graph.Save(),
             `Failed to save MJGraphEntity: ${graph.LatestResult?.CompleteMessage ?? 'unknown error'}`,
         );
+        AssertEqual(graph.GraphType, graphType.Name, 'graph.GraphType virtual field');
 
-        // 2. Create Parent Domain Concept + Child Policy Concept
+        // 3. Create Parent Domain Concept + Child Policy Concept
         parentConcept = await ctx.Provider.GetEntityObject<MJGraphConceptEntity>('MJ: Graph Concepts', ctx.User);
         parentConcept.NewRecord();
         parentConcept.GraphID = graph.ID;
         parentConcept.Name = `Membership Governance ${suffix}`;
-        parentConcept.ConceptType = 'Domain';
+        parentConcept.ConceptTypeID = domainConceptType.ID;
         parentConcept.Description = 'Governance domain for membership policies.';
         parentConcept.AuthorityTier = 'Bylaws';
         parentConcept.Status = 'Approved';
@@ -343,13 +402,14 @@ async function checkSg4LiveEntityCrudAndConstraints(ctx: IntegrationCheckContext
             await parentConcept.Save(),
             `Failed to save parent MJGraphConceptEntity: ${parentConcept.LatestResult?.CompleteMessage ?? 'unknown'}`,
         );
+        AssertEqual(parentConcept.ConceptType, domainConceptType.Name, 'parentConcept.ConceptType virtual field');
 
         childConcept = await ctx.Provider.GetEntityObject<MJGraphConceptEntity>('MJ: Graph Concepts', ctx.User);
         childConcept.NewRecord();
         childConcept.GraphID = graph.ID;
         childConcept.ParentID = parentConcept.ID;
         childConcept.Name = `Renewal Grace Period ${suffix}`;
-        childConcept.ConceptType = 'Policy';
+        childConcept.ConceptTypeID = policyConceptType.ID;
         childConcept.Description = 'Members have 60 days from invoice due date before suspension.';
         childConcept.Specification = '### Rule\nGrace period is strictly 60 days per Article IV.';
         childConcept.Synonyms = JSON.stringify(['Dues Grace Window']);
@@ -360,11 +420,12 @@ async function checkSg4LiveEntityCrudAndConstraints(ctx: IntegrationCheckContext
             `Failed to save child MJGraphConceptEntity: ${childConcept.LatestResult?.CompleteMessage ?? 'unknown'}`,
         );
 
-        // Verify base view virtual fields (Graph, Parent) populated on reload
+        // Verify base view virtual fields (Graph, Parent, ConceptType) populated on reload
         AssertEqual(childConcept.Graph, graph.Name, 'childConcept.Graph virtual field');
         AssertEqual(childConcept.Parent, parentConcept.Name, 'childConcept.Parent virtual field');
+        AssertEqual(childConcept.ConceptType, policyConceptType.Name, 'childConcept.ConceptType virtual field');
 
-        // 3. Verify CK_GraphConcept_NoSelfParent rejects setting ParentID = ID
+        // 4. Verify CK_GraphConcept_NoSelfParent rejects setting ParentID = ID
         childConcept.ParentID = childConcept.ID;
         const selfParentSaved = await childConcept.Save();
         Assert(
@@ -373,7 +434,7 @@ async function checkSg4LiveEntityCrudAndConstraints(ctx: IntegrationCheckContext
         );
         childConcept.ParentID = parentConcept.ID;
 
-        // 4. Create GraphEdgeType and GraphEdge linking ParentConcept -> ChildConcept
+        // 5. Create GraphEdgeType and GraphEdge linking ParentConcept -> ChildConcept
         edgeType = await ctx.Provider.GetEntityObject<MJGraphEdgeTypeEntity>('MJ: Graph Edge Types', ctx.User);
         edgeType.NewRecord();
         edgeType.GraphID = graph.ID;
@@ -411,7 +472,7 @@ async function checkSg4LiveEntityCrudAndConstraints(ctx: IntegrationCheckContext
         AssertEqual(edge.SourceEntity, 'MJ: Graph Concepts', 'edge.SourceEntity virtual field');
         AssertEqual(edge.TargetEntity, 'MJ: Graph Concepts', 'edge.TargetEntity virtual field');
 
-        // 5. Verify CK_GraphEdge_NoSelfLoop rejects self-loop edge
+        // 6. Verify CK_GraphEdge_NoSelfLoop rejects self-loop edge
         const selfLoopEdge = await ctx.Provider.GetEntityObject<MJGraphEdgeEntity>('MJ: Graph Edges', ctx.User);
         selfLoopEdge.NewRecord();
         selfLoopEdge.GraphID = graph.ID;
@@ -437,6 +498,9 @@ async function checkSg4LiveEntityCrudAndConstraints(ctx: IntegrationCheckContext
         }
         if (parentConcept?.IsSaved) await parentConcept.Delete();
         if (graph?.IsSaved) await graph.Delete();
+        if (policyConceptType?.IsSaved) await policyConceptType.Delete();
+        if (domainConceptType?.IsSaved) await domainConceptType.Delete();
+        if (graphType?.IsSaved) await graphType.Delete();
     }
 }
 
@@ -786,22 +850,22 @@ async function checkSg7WorkflowCanonHealthTelemetry(): Promise<void> {
 export const SemanticGraphChecks: NamedCheck[] = [
     {
         Id: 'semantic-graph.SG1',
-        Name: 'SG1: metadata coherence across all 6 Semantic Graph entities, ContentSource.GraphID, value lists, and polymorphic EntityIDFieldName',
+        Name: 'SG1: metadata coherence across all 8 Semantic Graph entities, ContentSource.GraphID, FK links, and polymorphic EntityIDFieldName',
         Fn: checkSg1MetadataCoherence,
     },
     {
         Id: 'semantic-graph.SG2',
-        Name: 'SG2: physical catalog PK, UQ, FK, and CHECK constraints exist on all 6 Graph tables and ContentSource',
+        Name: 'SG2: physical catalog PK, UQ, FK, and CHECK constraints exist on all 8 Graph tables and ContentSource',
         Fn: checkSg2PhysicalConstraints,
     },
     {
         Id: 'semantic-graph.SG3',
-        Name: 'SG3: RunView simple and count_only succeed across all 6 Semantic Graph base views and MJ: Content Sources',
+        Name: 'SG3: RunView simple and count_only succeed across all 8 Semantic Graph base views and MJ: Content Sources',
         Fn: checkSg3BaseViewsRunView,
     },
     {
         Id: 'semantic-graph.SG4',
-        Name: 'SG4: live DB CRUD for MJGraphEntity, hierarchical MJGraphConceptEntity, MJGraphEdgeTypeEntity, MJGraphEdgeEntity, and CHECK constraint enforcement',
+        Name: 'SG4: live DB CRUD for MJGraphTypeEntity, MJGraphConceptTypeEntity, MJGraphEntity, hierarchical MJGraphConceptEntity, MJGraphEdgeTypeEntity, MJGraphEdgeEntity, and CHECK constraint enforcement',
         Fn: checkSg4LiveEntityCrudAndConstraints,
         RequiresMutation: true,
     },

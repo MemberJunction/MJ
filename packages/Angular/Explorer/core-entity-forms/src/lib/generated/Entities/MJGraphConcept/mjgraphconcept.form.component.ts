@@ -17,7 +17,7 @@ export class MJGraphConceptFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'conceptRelationships', sectionName: 'Concept Relationships', isExpanded: true },
-            { sectionKey: 'conceptDefinition', sectionName: 'Concept Definition', isExpanded: true },
+            { sectionKey: 'conceptDetails', sectionName: 'Concept Details', isExpanded: true },
             { sectionKey: 'governanceAndRules', sectionName: 'Governance and Rules', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJGraphConcepts', sectionName: 'Graph Concepts', isExpanded: false }

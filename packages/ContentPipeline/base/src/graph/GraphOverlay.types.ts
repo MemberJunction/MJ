@@ -9,11 +9,67 @@
  * @module @memberjunction/content-pipeline-base
  */
 
-/** Partition type of an `MJ: Graphs` record. */
-export type SemanticGraphType = 'Canon' | 'Knowledge' | 'Network' | 'Custom';
+/**
+ * Seeded `MJ: Graph Types` names (`Canon`, `Knowledge`, `Network`, `Custom`) plus any
+ * organization-configured graph type defined in `MJ: Graph Types`.
+ */
+export type SemanticGraphType = 'Canon' | 'Knowledge' | 'Network' | 'Custom' | (string & {});
 
-/** Classification of an `MJ: Graph Concepts` node within its owning graph. */
-export type GraphConceptType = 'Domain' | 'Term' | 'Policy' | 'Metric' | 'Process';
+/**
+ * Seeded `MJ: Graph Concept Types` names (`Policy`, `Metric`, `Process`, `Role`, `Domain`, `Term`)
+ * plus any organization-configured concept type defined in `MJ: Graph Concept Types`.
+ */
+export type GraphConceptType = 'Policy' | 'Metric' | 'Process' | 'Role' | 'Domain' | 'Term' | (string & {});
+
+/** Descriptor for a row in `MJ: Graph Types` (`__mj.GraphType`). */
+export interface GraphTypeDescriptor {
+    readonly ID: string;
+    readonly Name: SemanticGraphType;
+    readonly Description?: string | null;
+    /** When true, graphs of this type participate in governed institutional Canon. */
+    readonly IsCanon: boolean;
+    /** Sort and priority rank order (lower = higher priority). */
+    readonly Rank: number;
+    readonly IconClass?: string | null;
+}
+
+/** Descriptor for a row in `MJ: Graph Concept Types` (`__mj.GraphConceptType`). */
+export interface GraphConceptTypeDescriptor {
+    readonly ID: string;
+    readonly Name: GraphConceptType;
+    readonly Description?: string | null;
+    /** Precedence and display rank order (lower = higher priority, e.g., Policy = 10, Term = 60). */
+    readonly Rank: number;
+    readonly IconClass?: string | null;
+}
+
+/** Default rank order for seeded `MJ: Graph Concept Types` (lower = higher priority). */
+export const DefaultConceptTypeRanks: Readonly<Record<string, number>> = {
+    Policy: 10,
+    Metric: 20,
+    Process: 30,
+    Role: 40,
+    Domain: 50,
+    Term: 60,
+} as const;
+
+/**
+ * Returns the rank order of a `GraphConceptType` (lower = higher priority), consulting
+ * organization-configured `MJ: Graph Concept Types` descriptors first and falling back to
+ * {@link DefaultConceptTypeRanks} (default `100`).
+ */
+export function GetConceptTypeRank(
+    conceptType: GraphConceptType | undefined | null,
+    configuredTypes?: readonly GraphConceptTypeDescriptor[],
+): number {
+    if (!conceptType) return 100;
+    if (configuredTypes && configuredTypes.length > 0) {
+        const lower = conceptType.trim().toLowerCase();
+        const match = configuredTypes.find((t) => t.Name.trim().toLowerCase() === lower);
+        if (match) return match.Rank;
+    }
+    return DefaultConceptTypeRanks[conceptType] ?? 100;
+}
 
 /**
  * Governance / evidentiary weight of a source document or concept.
@@ -73,13 +129,15 @@ export interface ContentSourceGraphOverlayConfig {
     EnableGraphOverlay?: boolean;
     /** Target `MJ: Graphs` ID. Overrides or supplements `ContentSource.GraphID`. */
     GraphID?: string | null;
-    /** Target graph's `GraphType`, used to select sensible defaults (`'Canon'` vs `'Knowledge'`). */
+    /** Target graph's `GraphType` name, used to select sensible defaults (`'Canon'` vs `'Knowledge'`). */
     TargetGraphType?: SemanticGraphType;
-    /** How new concepts are handled. Defaults to `'propose-only'` for `'Canon'` graphs and `'auto-grow'` for `'Knowledge'` graphs. */
+    /** Explicit override or resolved `GraphType.IsCanon` flag indicating whether the target graph feeds institutional Canon. */
+    IsCanon?: boolean;
+    /** How new concepts are handled. Defaults to `'propose-only'` when `IsCanon` is true and `'auto-grow'` otherwise. */
     ConceptTaxonomyMode?: ConceptTaxonomyMode;
     /** Authority tier stamped on concepts and `SourcedFrom` edges originating from this Content Source. */
     AuthorityTier?: GraphAuthorityTier;
-    /** Metadata grounding depth. Defaults to `'full-canon'` for `'Canon'` graphs and `'none'` for `'Knowledge'` graphs. */
+    /** Metadata grounding depth. Defaults to `'full-canon'` when `IsCanon` is true and `'none'` otherwise. */
     GroundingMode?: GraphGroundingMode;
     /** Minimum lexical/vector similarity score (0..1) to bind a chunk/tag cluster to an existing `GraphConcept`. Default 0.82. */
     ConceptMatchThreshold?: number;
@@ -89,11 +147,12 @@ export interface ContentSourceGraphOverlayConfig {
     SynthesizerKey?: string;
 }
 
-/** Fully-resolved Graph Overlay settings with defaults filled in based on `TargetGraphType`. */
+/** Fully-resolved Graph Overlay settings with defaults filled in based on `TargetGraphType` and `IsCanon`. */
 export interface ResolvedGraphOverlayConfig {
     readonly EnableGraphOverlay: boolean;
     readonly GraphID: string | null;
     readonly TargetGraphType: SemanticGraphType;
+    readonly IsCanon: boolean;
     readonly ConceptTaxonomyMode: ConceptTaxonomyMode;
     readonly AuthorityTier: GraphAuthorityTier;
     readonly GroundingMode: GraphGroundingMode;
@@ -105,7 +164,7 @@ export interface ResolvedGraphOverlayConfig {
 /**
  * Resolves `ContentSourceGraphOverlayConfig` across configuration layers
  * (`ContentSourceType.Configuration` → `ContentSource.Configuration` → Run `Configuration`),
- * applying defaults tailored to whether the target graph is `'Canon'` or `'Knowledge'`.
+ * applying defaults tailored to whether the target graph is canonical (`IsCanon` or `TargetGraphType === 'Canon'`).
  */
 export function ResolveGraphOverlayConfig(
     explicitGraphID: string | null | undefined,
@@ -125,7 +184,10 @@ export function ResolveGraphOverlayConfig(
             merged.GraphID = overlay.GraphID.trim();
         }
         if (isValidGraphType(overlay.TargetGraphType)) {
-            merged.TargetGraphType = overlay.TargetGraphType;
+            merged.TargetGraphType = overlay.TargetGraphType.trim();
+        }
+        if (typeof overlay.IsCanon === 'boolean') {
+            merged.IsCanon = overlay.IsCanon;
         }
         if (isValidTaxonomyMode(overlay.ConceptTaxonomyMode)) {
             merged.ConceptTaxonomyMode = overlay.ConceptTaxonomyMode;
@@ -159,12 +221,13 @@ export function ResolveGraphOverlayConfig(
 
     const graphID = merged.GraphID || explicitGraphID?.trim() || null;
     const graphType: SemanticGraphType = merged.TargetGraphType ?? 'Knowledge';
-    const isCanon = graphType === 'Canon';
+    const isCanon = merged.IsCanon ?? graphType === 'Canon';
 
     return {
         EnableGraphOverlay: merged.EnableGraphOverlay ?? graphID !== null,
         GraphID: graphID,
         TargetGraphType: graphType,
+        IsCanon: isCanon,
         ConceptTaxonomyMode: merged.ConceptTaxonomyMode ?? (isCanon ? 'propose-only' : 'auto-grow'),
         AuthorityTier: merged.AuthorityTier ?? (isCanon ? 'ExecutiveSOP' : 'Reference'),
         GroundingMode: merged.GroundingMode ?? (isCanon ? 'full-canon' : 'none'),
@@ -175,7 +238,7 @@ export function ResolveGraphOverlayConfig(
 }
 
 function isValidGraphType(val: unknown): val is SemanticGraphType {
-    return val === 'Canon' || val === 'Knowledge' || val === 'Network' || val === 'Custom';
+    return typeof val === 'string' && val.trim().length > 0;
 }
 
 function isValidTaxonomyMode(val: unknown): val is ConceptTaxonomyMode {

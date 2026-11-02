@@ -1,0 +1,70 @@
+[
+  {
+    "fields": {
+      "Name": "Canon",
+      "Description": "Governed institutional Canon containing authoritative organizational definitions, policies, metrics, processes, roles, and verified workflows.",
+      "IsCanon": true,
+      "Rank": 10,
+      "IconClass": "fa-solid fa-scale-balanced",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A1E5B7C0-4D11-4F2A-8C90-100000000001"
+    },
+    "sync": {
+      "lastModified": "2026-11-02T23:24:08.805Z",
+      "checksum": "82160cd2228da7698a1d935f268cd5c6304b89b91959aea0df503e478cf3626e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Knowledge",
+      "Description": "General-purpose document and topic Knowledge Graph built from one or more Content Sources to augment vector retrieval with GraphRAG concept and entity relationships.",
+      "IsCanon": false,
+      "Rank": 20,
+      "IconClass": "fa-solid fa-diagram-project",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A1E5B7C0-4D11-4F2A-8C90-100000000002"
+    },
+    "sync": {
+      "lastModified": "2026-11-02T23:24:08.831Z",
+      "checksum": "569ad26ba82b93af8eb262e1dc4003dfab8fc7e94e5bb31a4cb5fbb4dbd0a46e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Network",
+      "Description": "Entity-to-entity relationship network (such as member, organization, committee, or account influence graphs).",
+      "IsCanon": false,
+      "Rank": 30,
+      "IconClass": "fa-solid fa-circle-nodes",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A1E5B7C0-4D11-4F2A-8C90-100000000003"
+    },
+    "sync": {
+      "lastModified": "2026-11-02T23:24:08.849Z",
+      "checksum": "f375241754700802685e164e48ea3035670fc68f6e138cf5e2ed2270ecee54b7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Custom",
+      "Description": "Custom domain-specific semantic graph partition.",
+      "IsCanon": false,
+      "Rank": 40,
+      "IconClass": "fa-solid fa-share-nodes",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A1E5B7C0-4D11-4F2A-8C90-100000000004"
+    },
+    "sync": {
+      "lastModified": "2026-11-02T23:24:08.869Z",
+      "checksum": "f66578ecf24456fe912bc056a1ec0cfeeea240c8285fdd0c3fa1c3ddd78decd7"
+    }
+  }
+]

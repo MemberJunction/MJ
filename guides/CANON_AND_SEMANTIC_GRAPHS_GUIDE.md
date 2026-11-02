@@ -3,8 +3,8 @@
 **Read this before building or customizing Semantic Graphs (`MJ: Graphs`, `MJ: Graph Concepts`, `MJ: Graph Edges`), configuring Content Pipeline Graph Overlays (`GraphStage`), or working with Executable Canon workflow promotion and health telemetry.**
 
 - **Packages**:
-  - [`@memberjunction/core-entities`](../packages/MJCoreEntities/README.md) — Generated entity classes for `MJ: Graphs`, `MJ: Graph Concepts`, `MJ: Graph Edge Types`, `MJ: Graph Edge Type Endpoints`, `MJ: Graph Edge Providers`, `MJ: Graph Edges`, and `MJ: Content Sources` (`GraphID`, `Configuration.GraphOverlay`)
-  - [`@memberjunction/content-pipeline-base`](../packages/ContentPipeline/base/README.md) — `ContentSourceGraphOverlayConfig`, `ResolveGraphOverlayConfig`, `ClusterContentIntoConceptSeeds`, `BaseConceptSynthesizer`, `AuthorityTierPrecedence`
+  - [`@memberjunction/core-entities`](../packages/MJCoreEntities/README.md) — Generated entity classes for `MJ: Graph Types`, `MJ: Graph Concept Types`, `MJ: Graphs`, `MJ: Graph Concepts`, `MJ: Graph Edge Types`, `MJ: Graph Edge Type Endpoints`, `MJ: Graph Edge Providers`, `MJ: Graph Edges`, and `MJ: Content Sources` (`GraphID`, `Configuration.GraphOverlay`)
+  - [`@memberjunction/content-pipeline-base`](../packages/ContentPipeline/base/README.md) — `ContentSourceGraphOverlayConfig`, `ResolveGraphOverlayConfig`, `GraphTypeDescriptor`, `GraphConceptTypeDescriptor`, `ClusterContentIntoConceptSeeds`, `BaseConceptSynthesizer`, `AuthorityTierPrecedence`
   - [`@memberjunction/content-pipeline`](../packages/ContentPipeline/engine/README.md) — `GraphStage` (`@RegisterClass(BasePipelineStage, 'Graph')`) and `ManagedPromptConceptSynthesizer`
   - [`@memberjunction/ai-core-plus`](../packages/AI/CorePlus/README.md) — Deterministic `TaskGraph` DAG fingerprinting, Weisfeiler-Lehman similarity, clustering, promotion discovery (`dag-similarity.ts`), and saved-workflow health telemetry (`workflow-telemetry.ts`)
 - **Companion Guides**:
@@ -18,14 +18,31 @@
 
 In MemberJunction, **Canon** is the governed, machine-readable representation of how an organization defines its concepts, computes its metrics, enforces its policies, and executes its recurring processes.
 
-Rather than building a separate, siloed schema just for Canon, MemberJunction provides a **general-purpose Semantic Graph substrate** (`MJ: Graphs` + `MJ: Graph Concepts` + `MJ: Graph Edges`) where **Canon is a `GraphType`**:
+Rather than building a separate, siloed schema just for Canon, MemberJunction provides a **general-purpose Semantic Graph substrate** (`MJ:Graph Types` + `MJ: Graphs` + `MJ: Graph Concept Types` + `MJ: Graph Concepts` + `MJ: Graph Edges`) where **Canon is governed by `MJ: Graph Types` (`IsCanon = 1`)**:
 
-| `Graph.GraphType` | Primary Purpose | Default `ConceptTaxonomyMode` | Default `GroundingMode` | Default `AuthorityTier` |
-|---|---|---|---|---|
-| `'Canon'` | Governed organizational definitions, bylaws, policies, metrics, and processes anchored to live MJ schema, queries, actions, and workflows | `'propose-only'` (creates `Status = 'Proposed'` for human/steward approval) | `'full-canon'` (grounds concepts to `Entities`, `Alternate Base Views`, `Queries`, `Actions`, and `AI Skills`) | `'ExecutiveSOP'` |
-| `'Knowledge'` | Document / RAG topic & concept overlay across one or more `MJ: Content Sources` (GraphRAG) | `'auto-grow'` (creates `Status = 'Approved'` automatically) | `'none'` (or `'schema-and-queries'` when opted in) | `'Reference'` |
-| `'Network'` | Entity-to-entity relationship networks (e.g., people, organizations, chapters, committees) | `'constrained'` | `'none'` | `'Reference'` |
-| `'Custom'` | Application-specific semantic graphs | Configurable per graph/source | Configurable | Configurable |
+### Seeded `MJ: Graph Types` (`/metadata/graph-types/.graph-types.json`)
+
+Organizations can add custom graph types via metadata or UI and toggle `IsCanon = 1` on any graph type that should feed organizational Canon:
+
+| `GraphType.Name` | `IsCanon` | `Rank` | Primary Purpose | Default `ConceptTaxonomyMode` | Default `GroundingMode` | Default `AuthorityTier` |
+|---|---|---|---|---|---|---|
+| `'Canon'` | `true` | `10` | Governed organizational definitions, bylaws, policies, metrics, and processes anchored to live MJ schema, queries, actions, and workflows | `'propose-only'` (creates `Status = 'Proposed'` for human/steward approval) | `'full-canon'` (grounds concepts to `Entities`, `Alternate Base Views`, `Queries`, `Actions`, and `AI Skills`) | `'ExecutiveSOP'` |
+| `'Knowledge'` | `false` | `20` | Document / RAG topic & concept overlay across one or more `MJ: Content Sources` (GraphRAG) | `'auto-grow'` (creates `Status = 'Approved'` automatically) | `'none'` (or `'schema-and-queries'` when opted in) | `'Reference'` |
+| `'Network'` | `false` | `30` | Entity-to-entity relationship networks (e.g., people, organizations, chapters, committees) | `'constrained'` | `'none'` | `'Reference'` |
+| `'Custom'` | `false` | `40` | Application-specific semantic graphs (or custom canonical graphs when `IsCanon = true`) | Configurable per graph/source | Configurable | Configurable |
+
+### Seeded `MJ: Graph Concept Types` (`/metadata/graph-concept-types/.graph-concept-types.json`)
+
+Concept types are also configurable and ranked via `MJ: Graph Concept Types` (`Rank` controls UI sorting and tie-breaking during `GraphStage` synthesis, with lower numbers taking higher priority):
+
+| `GraphConceptType.Name` | `Rank` | `IconClass` | Purpose |
+|---|---|---|---|
+| `'Policy'` | `10` | `fa-solid fa-gavel` | Governing rule, bylaw provision, compliance mandate, threshold, or eligibility requirement |
+| `'Metric'` | `20` | `fa-solid fa-chart-line` | Quantifiable KPI, financial calculation, retention formula, or operational benchmark |
+| `'Process'` | `30` | `fa-solid fa-diagram-project` | Repeatable business procedure, multi-step operational SOP, or lifecycle workflow |
+| `'Role'` | `40` | `fa-solid fa-user-shield` | Organizational role, committee, steward, or decision-making authority |
+| `'Domain'` | `50` | `fa-solid fa-layer-group` | High-level functional area or subject-matter umbrella that groups child concepts |
+| `'Term'` | `60` | `fa-solid fa-book-bookmark` | Canonical glossary term, entity cohort definition, or domain vocabulary item |
 
 ```mermaid
 flowchart TB
@@ -39,10 +56,14 @@ flowchart TB
     end
 
     subgraph "2. Semantic Graph Substrate (__mj.Graph*)"
-        G["MJ: Graphs<br/>(GraphType = 'Canon' | 'Knowledge')"]
-        GC["MJ: Graph Concepts<br/>(Domain | Term | Policy | Metric | Process)<br/>+ Specification & AuthorityTier"]
+        GT["MJ: Graph Types<br/>(Canon [IsCanon=1], Knowledge, Network, Custom)"]
+        GCT["MJ: Graph Concept Types<br/>(Policy [10], Metric [20], Process [30],<br/>Role [40], Domain [50], Term [60])"]
+        G["MJ: Graphs<br/>(GraphTypeID → MJ: Graph Types)"]
+        GC["MJ: Graph Concepts<br/>(ConceptTypeID → MJ: Graph Concept Types)<br/>+ Specification & AuthorityTier"]
         GE["MJ: Graph Edges<br/>(SourcedFrom, Mentions, Broader Than,<br/>Describes, Defines, Measures, Implements, Contradicts)"]
+        GT --> G
         G --> GC
+        GCT --> GC
         G --> GE
     end
 
@@ -65,12 +86,14 @@ flowchart TB
 
 ## 2. The Semantic Graph Schema (`__mj.Graph*`)
 
-All six Semantic Graph tables live in `__mj` and are created in [`V202611021615__v6.2.x__Semantic_Graph_And_Graph_Concepts.sql`](../migrations/v6/V202611021615__v6.2.x__Semantic_Graph_And_Graph_Concepts.sql):
+All eight Semantic Graph tables live in `__mj` and are created in [`V202611021615__v6.2.x__Semantic_Graph_And_Graph_Concepts.sql`](../migrations/v6/V202611021615__v6.2.x__Semantic_Graph_And_Graph_Concepts.sql):
 
 | Entity Name | Table / Base View | Role |
 |---|---|---|
-| `MJ: Graphs` | `Graph` / `vwGraphs` | Named graph partition (`Name`, `Description`, `GraphType` = `'Canon' \| 'Knowledge' \| 'Network' \| 'Custom'`, `LoadMode` = `'Preload' \| 'OnDemand'`, `Status` = `'Active' \| 'Disabled'`). |
-| `MJ: Graph Concepts` | `GraphConcept` / `vwGraphConcepts` | Higher-level concept node scoped to a `GraphID`, with self-referencing `ParentID` hierarchy, `ConceptType` (`'Domain' \| 'Term' \| 'Policy' \| 'Metric' \| 'Process'`), short `Description`, structured Markdown `Specification`, JSON `Synonyms`, `AuthorityTier` (`'Bylaws' \| 'BoardPolicy' \| 'ExecutiveSOP' \| 'DepartmentPractice' \| 'Reference' \| 'Inferred'`), and `Status` (`'Draft' \| 'Proposed' \| 'Approved' \| 'Deprecated'`). |
+| `MJ: Graph Types` | `GraphType` / `vwGraphTypes` | Configurable lookup table of semantic graph types (`Name`, `Description`, `IsCanon` bit flag indicating whether graphs of this type contribute to organizational Canon, `Rank` sort order, `IconClass`, `Status` = `'Active' \| 'Inactive'`). Seeded via [`metadata/graph-types/.graph-types.json`](../metadata/graph-types/.graph-types.json). |
+| `MJ: Graph Concept Types` | `GraphConceptType` / `vwGraphConceptTypes` | Configurable lookup table of concept classifications (`Name`, `Description`, `Rank` priority order, `IconClass`, `Status` = `'Active' \| 'Inactive'`). Seeded via [`metadata/graph-concept-types/.graph-concept-types.json`](../metadata/graph-concept-types/.graph-concept-types.json). |
+| `MJ: Graphs` | `Graph` / `vwGraphs` | Named graph partition (`Name`, `Description`, `GraphTypeID` FK to `MJ: Graph Types`, `LoadMode` = `'Preload' \| 'OnDemand'`, `Status` = `'Active' \| 'Disabled'`). |
+| `MJ: Graph Concepts` | `GraphConcept` / `vwGraphConcepts` | Higher-level concept node scoped to a `GraphID`, with self-referencing `ParentID` hierarchy, `ConceptTypeID` FK to `MJ: Graph Concept Types`, short `Description`, structured Markdown `Specification`, JSON `Synonyms`, `AuthorityTier` (`'Bylaws' \| 'BoardPolicy' \| 'ExecutiveSOP' \| 'DepartmentPractice' \| 'Reference' \| 'Inferred'`), and `Status` (`'Draft' \| 'Proposed' \| 'Approved' \| 'Deprecated'`). |
 | `MJ: Graph Edge Types` | `GraphEdgeType` / `vwGraphEdgeTypes` | Global (`GraphID IS NULL`) or graph-scoped relationship definitions (`Name`, `InverseName`, `IsDirected`, `DefaultWeight`, `AllowStored`). Standard edge types include `Broader Than`, `SourcedFrom`, `Mentions`, `Describes`, `Defines`, `Measures`, `Implements`, `Governs`, `Contradicts`, and `Related To`. |
 | `MJ: Graph Edge Type Endpoints` | `GraphEdgeTypeEndpoint` / `vwGraphEdgeTypeEndpoints` | Optional schema constraints restricting which `MJ: Entities` may appear on the `Source` or `Target` side of an edge type. |
 | `MJ: Graph Edge Providers` | `GraphEdgeProvider` / `vwGraphEdgeProviders` | Pluggable derived-edge providers (`DriverClass`, `Configuration`, `Sequence`, `IsActive`) that project edges from existing relational FKs (`QueryEntity`, `EntityRelationship`, `TaggedItem`) at read time without duplicating rows. |
@@ -212,4 +235,4 @@ for (const report of healthReports) {
   - [`packages/AI/CorePlus/src/__tests__/dag-similarity.test.ts`](../packages/AI/CorePlus/src/__tests__/dag-similarity.test.ts) — Node signature canonicalization across all 8 `TaskGraphNodeKind` variants, WL isomorphism invariance, diamond/fan-out/fan-in topologies, 2-hop transitive reachability, complete-linkage clustering, and `DiscoverWorkflowPromotionCandidates`.
   - [`packages/AI/CorePlus/src/__tests__/workflow-telemetry.test.ts`](../packages/AI/CorePlus/src/__tests__/workflow-telemetry.test.ts) — `Dormant`, `UsageDecay` vs. seasonal domain slowdown (`DomainAdjustedVelocityRatio`), `ExceptionSpike` + `HotspotNodes`, `OutcomeDrift`, and `ShadowBypassed` correlation.
 - **Integration Tests (`@memberjunction/integration-test-suite`)**:
-  - [`packages/TestingFramework/integration-test-suite/src/checks/semantic-graph.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/semantic-graph.checks.ts) (`IT162`, checks `SG1`–`SG7`) — Verifies live metadata coherence, polymorphic `EntityIDFieldName` links, physical SQL catalog constraints, `RunView` execution across all 6 Semantic Graph views, live DB CRUD + CHECK constraint rejection (`RequiresMutation: true`), end-to-end `GraphStage` execution with live `Provider.Entities`, and deterministic DAG similarity & workflow health telemetry.
+  - [`packages/TestingFramework/integration-test-suite/src/checks/semantic-graph.checks.ts`](../packages/TestingFramework/integration-test-suite/src/checks/semantic-graph.checks.ts) (`IT162`, checks `SG1`–`SG7`) — Verifies live metadata coherence, polymorphic `EntityIDFieldName` links, physical SQL catalog constraints, `RunView` execution across all 8 Semantic Graph views (`MJ: Graph Types`, `MJ: Graph Concept Types`, `MJ: Graphs`, `MJ: Graph Concepts`, `MJ: Graph Edge Types`, `MJ: Graph Edge Type Endpoints`, `MJ: Graph Edge Providers`, `MJ: Graph Edges`), live DB CRUD + CHECK constraint rejection (`RequiresMutation: true`), end-to-end `GraphStage` execution with live `Provider.Entities`, and deterministic DAG similarity & workflow health telemetry.
