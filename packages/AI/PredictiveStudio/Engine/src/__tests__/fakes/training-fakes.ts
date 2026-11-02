@@ -298,10 +298,6 @@ export class TrainerAnswers {
 /** Builders for a TrainingEngine's dependencies over the fakes in this module. */
 export class TrainingHarness {
   /**
-   * The model a training run created; throws when the run shipped none. For tests of paths that always create one (a
-   * pipeline without a Prediction Unit, or a gate decision that ships an artifact).
-   */
-  /**
    * A typed engine result over the fake rows: the run (and the model, when given) with the given fields, typed as
    * entities by the factory seam.
    */
@@ -315,6 +311,10 @@ export class TrainingHarness {
     };
   }
 
+  /**
+   * The model a training run created; throws when the run shipped none. For tests of paths that always create one (a
+   * pipeline without a Prediction Unit, or a gate decision that ships an artifact).
+   */
   public static ModelOf(result: TrainModelResult): MJMLModelEntity {
     if (result.model === null) throw new Error(`training run ${result.run.ID} shipped no model`);
     return result.model;
