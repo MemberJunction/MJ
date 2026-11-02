@@ -29,7 +29,7 @@ interface StoredSnapshotCheck { readonly ManifestRows: number; readonly ContentH
 /** One scored row's provenance outcome: the entries it carried, the expected values that resolved, the matrix columns no entry covers. */
 interface RowResolution { readonly Seen: number; readonly Resolved: number; readonly Uncovered: number }
 
-/** The Training Snapshot and provenance gate bodies (G1.10, G1.11), as static members on one owner class. */
+/** The Training Snapshot and provenance gate bodies (G1.10, G1.11). */
 export class TrainingSnapshotGates {
   /** The run's Training Snapshot row, read through the product's snapshot store. */
   private static async snapshotOf(h: TruthHarness, run: LatestTrainingRun): Promise<MJTrainingSnapshotEntity | null> {

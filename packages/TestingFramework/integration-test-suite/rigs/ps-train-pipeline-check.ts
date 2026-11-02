@@ -4,8 +4,8 @@
  * or the typed refusal (`{"refused": …}`). Training needs the Python sidecar
  * (`PREDICTIVE_STUDIO_SIDECAR_URL`), so the check runs only with `PS_INTEGRATION=1`; without it the script exits 0
  * after saying so. Training stores its artifacts through an active File Storage Provider: when none is active, the first
- * by priority is switched on for the run and back off afterwards (`ActivateStorage` / `RestoreStorage`, which the
- * pipeline migration check shares).
+ * by priority is switched on for the run and back off afterwards (`RigStorage`, which the pipeline migration check
+ * shares).
  *
  * With `--via-operation` the training goes through the `PredictiveStudio.TrainModel` Remote Operation, dispatched
  * in-process (`DispatchRemoteOperationInProcess`, the server path every client call reaches), and the line is the
@@ -23,35 +23,12 @@ import { BootstrapAI } from './lib/ai-bootstrap';
 import '@memberjunction/core-entities';
 import { DispatchRemoteOperationInProcess, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type {
-  MJFileStorageProviderEntity, MJMLTrainingRunEntity, PredictiveStudioTrainModelInput, PredictiveStudioTrainModelOutput, RetiredTrainModelInputs,
+  MJMLTrainingRunEntity, PredictiveStudioTrainModelInput, PredictiveStudioTrainModelOutput, RetiredTrainModelInputs,
 } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
 import { GateRecords } from '@memberjunction/predictive-studio-core';
 import { TrainingDelegation, TrainingRefusedError } from '@memberjunction/predictive-studio';
-
-/**
- * Training stores its artifacts through the active File Storage Provider. When none is active (this private test
- * database keeps them off), the first by priority is switched on through the entity layer and switched back off
- * afterwards. Returns the provider switched on, or null.
- */
-export async function ActivateStorage(provider: IMetadataProvider, user: UserInfo): Promise<MJFileStorageProviderEntity | null> {
-  const rows = await RunView.FromMetadataProvider(provider).RunView<MJFileStorageProviderEntity>(
-    { EntityName: 'MJ: File Storage Providers', OrderBy: 'Priority ASC, ID ASC', ResultType: 'entity_object', BypassCache: true }, user);
-  if (!rows.Success) throw new Error(rows.ErrorMessage);
-  if (rows.Results.some((r) => r.IsActive)) return null;
-  const first = rows.Results[0];
-  if (first === undefined) throw new Error('no MJ: File Storage Providers rows exist');
-  first.IsActive = true;
-  if (!(await first.Save())) throw new Error(`activating ${first.Name}: ${first.LatestResult?.CompleteMessage}`);
-  return first;
-}
-
-export async function RestoreStorage(row: MJFileStorageProviderEntity | null): Promise<void> {
-  if (row === null) return;
-  row.IsActive = false;
-  if (!(await row.Save())) throw new Error(`deactivating ${row.Name}: ${row.LatestResult?.CompleteMessage}`);
-  console.log(JSON.stringify({ storage: `switched ${row.Name} back off` }));
-}
+import { RigStorage } from './lib/rig-storage';
 
 /** Sample values for each retired input a `--retired=` flag names (the operation refuses them by presence). */
 const RETIRED_SAMPLES: Required<RetiredTrainModelInputs> = {
@@ -101,12 +78,12 @@ async function main(): Promise<void> {
   }
   const { provider, user, pool } = await BootstrapAI();
   try {
-    const storage = await ActivateStorage(provider, user);
+    const storage = await RigStorage.Activate(provider, user);
     try {
       if (process.argv.includes('--via-operation')) return await trainViaOperation(pipelineId, provider, user);
       await trainViaEngine(pipelineId, provider, user);
     } finally {
-      await RestoreStorage(storage);
+      await RigStorage.Restore(storage);
     }
   } finally {
     await pool.close();
@@ -130,8 +107,7 @@ async function trainViaEngine(pipelineId: string, provider: IMetadataProvider, u
   }
 }
 
-// Run only as a script: the migration check imports the storage helpers above.
-if (process.argv[1] !== undefined && process.argv[1].endsWith('ps-train-pipeline-check.ts')) main().catch((e: Error) => {
+main().catch((e: Error) => {
   console.error(e.stack || e.message);
   process.exit(1);
 });

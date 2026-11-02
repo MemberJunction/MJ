@@ -66,7 +66,7 @@ const C1_NEW_ENTITY_FRACTION = 0.15;
  */
 const W6_MIN_BIAS = 0.14;
 
-/** Evaluation Protocol gate bodies (static members on one owner, coding standards §2). */
+/** Evaluation Protocol gate bodies: protocol, holdout carve, new-entity and in-fold measurements. */
 export class EvaluationProtocolGates {
   /**
    * C1's reference split: date-carved at 2024-01-01 with rows from 2025-01-01 on left out (the reference pipeline's

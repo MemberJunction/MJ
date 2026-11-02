@@ -21,9 +21,7 @@ interface KeyComparison { readonly Matched: number; readonly Expected: number; r
 /** W5's newest (censored) cycle is decided on this day: StartDate 2026-01-01 plus the unit's 334-day offset. */
 const W5_CENSORED_DECISION_DAY = '2026-12-01';
 
-/**
- * The Prediction Unit gate bodies (G1.1, G1.2, G1.3, G1.6, G1.7, G1.8), as static members on one owner class.
- */
+/** The Prediction Unit gate bodies (G1.1, G1.2, G1.3, G1.6, G1.7, G1.8). */
 export class PredictionUnitGates {
   private static async readUnitRows(h: TruthHarness, unit: PredictionUnitSpec): Promise<UnitRowReadResult> {
     return new PredictionUnitRowReader().Read(unit, {

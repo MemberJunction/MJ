@@ -1,7 +1,7 @@
 /**
  * Runtime check of the Prediction Unit pipeline migration, in-process against the database the harness resolves. It
  * copies a truth-suite W1 pipeline that has no unit (`PS_LEGACY_PIPELINE_ID`; the default is the legacy W1 pipeline kept in the test database) into
- * five pipelines named `PR3 migration check …` with `PredictionUnitID`/`EvaluationProtocolID` NULL:
+ * five pipelines named `Pipeline migration check …` with `PredictionUnitID`/`EvaluationProtocolID` NULL:
  *   (a) `AsOfStrategy {"Mode":"column","Column":"StartDate"}`, (b) `AsOfStrategy` NULL, (c) `{"Mode":"offset","OffsetDays":30}`,
  *   (d) a classification of `PS Truth: Scn_C2.Target` (two classes, a name with no polarity, no OutcomeConfig, no model),
  *   (e) like (b), migrated as of 2026-01-01.
@@ -12,7 +12,7 @@
  *   4. training (b) creates no unit version 2 (same day); (e) migrated on 2026-01-01 trains under version 2 dated today,
  *      authored `decision-date-advance`;
  *   5. the legacy pipeline it copied is migrated by its own rules.
- * The rows are left for the Action run and the SQL checks; `--cleanup` deletes every `PR3 migration check` row (pipelines,
+ * The rows are left for the Action run and the SQL checks; `--cleanup` deletes every `Pipeline migration check` row (pipelines,
  * runs, models, snapshots, files, unit and protocol versions) through the entity layer.
  *
  * Usage (from the repo root, env exported, the truth sidecar in PREDICTIVE_STUDIO_SIDECAR_URL):
@@ -29,9 +29,9 @@ import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { ADVERSE_CLASS_HOLD_REASON, PredictionUnit, UtcDay } from '@memberjunction/predictive-studio-core';
 import { MetadataEntityFactory, PipelineMigration, TrainingDelegation, type MigrationDeps, type MigrationReportRow } from '@memberjunction/predictive-studio';
 import { HarnessCleanup, RunRecords } from '@memberjunction/predictive-studio-truth-suite';
-import { ActivateStorage, RestoreStorage } from './ps-train-pipeline-check';
+import { RigStorage } from './lib/rig-storage';
 
-const PREFIX = 'PR3 migration check';
+const PREFIX = 'Pipeline migration check';
 const LEGACY_PIPELINE_ID = process.env.PS_LEGACY_PIPELINE_ID || '50616EEC-34BB-4E7C-B3DA-5CFF94E1ECF2';
 const C2_ENTITY = 'PS Truth: Scn_C2';
 
@@ -191,11 +191,11 @@ async function main(): Promise<void> {
     const copies = await createCopies(provider, user, await loadPipeline(provider, user, LEGACY_PIPELINE_ID));
     console.log(JSON.stringify({ copies: Object.fromEntries(Object.entries(copies).map(([k, p]) => [k, p.ID])) }));
     await steps1to3(deps, copies);
-    const storage = await ActivateStorage(provider, user);
+    const storage = await RigStorage.Activate(provider, user);
     try {
       await step4(deps, copies);
     } finally {
-      await RestoreStorage(storage);
+      await RigStorage.Restore(storage);
     }
     await step5(deps);
   } finally {

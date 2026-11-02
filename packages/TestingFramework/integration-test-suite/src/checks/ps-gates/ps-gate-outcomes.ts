@@ -37,7 +37,7 @@ interface HeuristicOutcome { readonly Passed: boolean; readonly Measured: GateMe
 const W7_SEEDS = [42, 43, 44] as const;
 const W7_FEATURES = ['EventsAttended', 'AutoRenew', 'IncomeK'];
 
-/** Gate outcome measurements (static members on one owner). */
+/** Gate outcome measurements read from the gate record stored on the training run. */
 export class GateOutcomeMeasures {
   private static async trainAndRead(h: TruthHarness, pipeline: MJMLTrainingPipelineEntity): Promise<StoredRun> {
     await h.Train(pipeline);

@@ -22,7 +22,7 @@ interface LapseReplay { readonly Lapsers: number; readonly LapsedAfter: number; 
 /** How many rows the train/serve parity check compares. */
 const PARITY_SAMPLE = 100;
 
-/** The as-of assembly gate bodies (G1.4, G1.5, G1.9, G1.12), as static members on one owner class. */
+/** The as-of assembly gate bodies (G1.4, G1.5, G1.9, G1.12). */
 export class AsOfAssemblyGates {
   /** The assembly refusal a training run stored, or null when the run was not refused at the assembly stage. */
   private static assemblyRefusal(run: LatestTrainingRun): AssemblyRefusal | null {

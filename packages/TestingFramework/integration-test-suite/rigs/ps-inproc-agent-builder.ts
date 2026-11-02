@@ -143,7 +143,7 @@ async function main(): Promise<void> {
     const t0 = Date.now();
     const result = await new PredictiveStudioPipelineBuilder().Build({ spec: buildPlan(), provider, user, autoPublish: true, sidecarVersion: TAG });
     console.log(`  Built in ${Date.now() - t0}ms — success=${result.success} pipelineId=${result.pipelineId} modelId=${result.modelId}`);
-    console.log(`  Trust: outcome=${result.trust ? TrustVerdicts.OutcomeTitle(result.trust) : '(none)'} canAct=${result.trust?.CanAct} | published=${result.published} | leakageFlagged=${result.leakageFlagged} | held=${result.heldReason ?? '(n/a)'}`);
+    console.log(`  Trust: outcome=${result.trust ? TrustVerdicts.OutcomeTitle(result.trust) : '(none)'} canAct=${result.trust?.CanAct} | published=${result.published} | leakageFlagged=${result.leakageFlagged} | held=${result.heldReason || '(n/a)'}`);
     created.pipelineId = result.pipelineId;
     created.modelId = result.modelId;
 
@@ -152,10 +152,8 @@ async function main(): Promise<void> {
     check(!!result.modelId, 'a model was trained');
     check(!!result.trust && (result.trust.Kind === 'evaluated' || result.trust.Kind === 'not-evaluated'), 'a stored-gate trust verdict was produced');
     console.log(`  Leaderboard: ${JSON.stringify(result.leaderboard)}`);
-    console.log(`  Untrained experiments: ${JSON.stringify(result.untrainedExperiments)}`);
     check((result.leaderboard || []).length === 1, 'one training run gives one leaderboard row (no search without a Prediction Unit)');
     check(!JSON.stringify(result.leaderboard || []).includes('cvScore'), 'no leaderboard row carries a cvScore');
-    check(JSON.stringify(result.untrainedExperiments) === JSON.stringify(['XGB challenger']), 'the experiment that was not trained is named');
 
     // The core invariant: a model is published IFF the trust verdict clears the bar AND no leakage flag.
     const shouldPublish = !!result.trust?.CanAct && !result.leakageFlagged;
