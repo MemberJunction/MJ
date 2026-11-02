@@ -1,7 +1,7 @@
 import { ChangeDetectorRef, Component, inject, Input, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RunView, type RunViewParams } from '@memberjunction/core';
-import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
+import type { MJMLModelEntity, MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -9,16 +9,17 @@ import { EvaluationViews, type EvaluationRunInput, type EvaluationRunState } fro
 import { PSEvaluationResultsComponent } from '../evaluation-results/evaluation-results.component';
 import type { ValueRead } from '../versioned-list/lineage-reads';
 
-type RunFields = Pick<MJMLTrainingRunEntity, 'ID' | 'ValidationResults' | 'ResultingModelID' | 'Status'>;
+type RunFields = Pick<MJMLTrainingRunEntity, 'ID' | 'ValidationResults' | 'ResultingModelID' | 'Status' | 'TrainingSnapshotID'>;
+type SnapshotFields = Pick<MJTrainingSnapshotEntity, 'ID' | 'UncoveredHistoryRowsExcluded'>;
 type ModelFields = Pick<MJMLModelEntity, 'ID' | 'Lineage'>;
 
 /** What the results state is built from when there is no run. */
-const NO_RUN: EvaluationRunInput = { ValidationResults: null, Lineage: null, RunStatus: null };
+const NO_RUN: EvaluationRunInput = { ValidationResults: null, Lineage: null, RunStatus: null, UncoveredHistoryRows: null };
 
 /**
  * L2 widget: loads a training run — the latest run of a model (`ModelID`) or a run by id (`TrainingRunID`) — with its
- * status and the resulting model's `Lineage`, and shows its protocol results. The lineage is null only when the run
- * produced no model.
+ * status, the resulting model's `Lineage` and its Training Snapshot's uncovered-history counts, and shows its protocol
+ * results. The lineage is null only when the run produced no model; the counts only when the run has no snapshot.
  */
 @Component({
   standalone: true,
@@ -100,7 +101,7 @@ export class PSRunEvaluationComponent extends BaseAngularComponent implements On
     const run = runs.Results.find(PSRunEvaluationComponent.isRun);
     const model = models.Results.find(PSRunEvaluationComponent.isModel);
     if (run === undefined) return { Ok: true, Value: NO_RUN };
-    return { Ok: true, Value: { ValidationResults: run.ValidationResults, Lineage: model?.Lineage || null, RunStatus: run.Status } };
+    return this.withSnapshot(run, model?.Lineage || null);
   }
 
   /** A run, then the model it produced (the run names it), if any. */
@@ -110,14 +111,30 @@ export class PSRunEvaluationComponent extends BaseAngularComponent implements On
     if (!runs.Success) return { Ok: false, Error: runs.ErrorMessage };
     const run = runs.Results[0];
     if (run === undefined) return { Ok: true, Value: NO_RUN };
-    if (!run.ResultingModelID) return { Ok: true, Value: { ValidationResults: run.ValidationResults, Lineage: null, RunStatus: run.Status } };
+    if (!run.ResultingModelID) return this.withSnapshot(run, null);
     const models = await rv.RunView<ModelFields>(PSRunEvaluationComponent.modelParams(EscapeSQLString(run.ResultingModelID)));
     if (!models.Success) return { Ok: false, Error: models.ErrorMessage };
-    return { Ok: true, Value: { ValidationResults: run.ValidationResults, Lineage: models.Results[0]?.Lineage || null, RunStatus: run.Status } };
+    return this.withSnapshot(run, models.Results[0]?.Lineage || null);
+  }
+
+  /** The run's results input with its Training Snapshot's uncovered-history counts (null when the run has no snapshot). */
+  private async withSnapshot(run: RunFields, lineage: string | null): Promise<ValueRead<EvaluationRunInput>> {
+    const input = { ValidationResults: run.ValidationResults, Lineage: lineage, RunStatus: run.Status };
+    if (!run.TrainingSnapshotID) return { Ok: true, Value: { ...input, UncoveredHistoryRows: null } };
+    const snapshots = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<SnapshotFields>({
+      EntityName: 'MJ: Training Snapshots',
+      ExtraFilter: `ID='${EscapeSQLString(run.TrainingSnapshotID)}'`,
+      Fields: ['ID', 'UncoveredHistoryRowsExcluded'],
+      ResultType: 'simple',
+    });
+    if (!snapshots.Success) return { Ok: false, Error: snapshots.ErrorMessage };
+    const snapshot = snapshots.Results[0];
+    if (snapshot === undefined) return { Ok: false, Error: `The run's Training Snapshot ${run.TrainingSnapshotID} was not found.` };
+    return { Ok: true, Value: { ...input, UncoveredHistoryRows: snapshot.UncoveredHistoryRowsExcluded } };
   }
 
   private static runParams(filter: string): RunViewParams {
-    return { EntityName: 'MJ: ML Training Runs', ExtraFilter: filter, Fields: ['ID', 'ValidationResults', 'ResultingModelID', 'Status'], ResultType: 'simple' };
+    return { EntityName: 'MJ: ML Training Runs', ExtraFilter: filter, Fields: ['ID', 'ValidationResults', 'ResultingModelID', 'Status', 'TrainingSnapshotID'], ResultType: 'simple' };
   }
 
   private static modelParams(escapedModelId: string): RunViewParams {

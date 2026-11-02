@@ -6,9 +6,9 @@ import { WidgetFixtures } from './widget-fixtures';
 import { PSDomQueries } from '../ps-dom-queries.test-support';
 
 describe('PSEvaluationResultsComponent (DOM)', () => {
-  function render(json: string | null, runStatus: 'Completed' | 'Failed' | 'Running' | null = 'Completed'): HTMLElement {
+  function render(json: string | null, runStatus: 'Completed' | 'Failed' | 'Running' | null = 'Completed', uncovered: string | null = null): HTMLElement {
     const fixture = TestBed.createComponent(PSEvaluationResultsComponent);
-    fixture.componentInstance.State = EvaluationViews.DescribeRun({ ValidationResults: json, Lineage: null, RunStatus: runStatus });
+    fixture.componentInstance.State = EvaluationViews.DescribeRun({ ValidationResults: json, Lineage: null, RunStatus: runStatus, UncoveredHistoryRows: uncovered });
     fixture.detectChanges();
     return PSDomQueries.HostElement(fixture);
   }
@@ -23,6 +23,28 @@ describe('PSEvaluationResultsComponent (DOM)', () => {
     expect(host.querySelector('[data-testid="ps-eval-optimistic"]')?.textContent).toContain('optimistic');
     expect(host.querySelector('[data-testid="ps-eval-calibration"]')?.textContent).toContain('0.826');
     expect(host.querySelector('[data-testid="ps-eval-leakage"]')?.textContent).toContain('TicketCode');
+  });
+
+  it('shows the snapshot counts above the test set: resolved, censored, label-known, empty-label and uncovered rows', () => {
+    const host = render(WidgetFixtures.StoredRunJson(), 'Completed', JSON.stringify([{ entity: 'Members', field: 'Tier', rows: 12 }]));
+    const rows = host.querySelector('[data-testid="ps-eval-rows"]');
+    const cells = Array.from(rows?.querySelectorAll('tr') || []).map((tr) => Array.from(tr.querySelectorAll('td')).map((td) => td.textContent?.trim()).join(' = '));
+    expect(cells).toEqual([
+      'Rows read = 6673',
+      'Resolved (trained and tested on) = 4873',
+      'Censored (outcome not yet known) = 1756',
+      'Label already known at the decision date = 44',
+      'Empty label = 0',
+      'Duplicates removed = 0',
+    ]);
+    expect(host.querySelector('[data-testid="ps-eval-uncovered"]')?.textContent).toContain('Members.Tier: 12');
+    const scores = host.querySelector('[data-testid="ps-eval-scores"]');
+    expect(rows !== null && scores !== null && (rows.compareDocumentPosition(scores) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0).toBe(true);
+  });
+
+  it('says when the run has no Training Snapshot to read uncovered rows from', () => {
+    const host = render(WidgetFixtures.StoredRunJson());
+    expect(host.querySelector('[data-testid="ps-eval-uncovered"]')?.textContent).toContain('no Training Snapshot');
   });
 
   it('says plainly when a run was not evaluated under a protocol', () => {

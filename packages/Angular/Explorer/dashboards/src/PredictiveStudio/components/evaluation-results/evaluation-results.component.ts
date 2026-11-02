@@ -1,9 +1,10 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { EvaluationViews, type EvaluationRunState, type EvaluationView, type IntervalCell } from './evaluation-view';
+import { EvaluationViews, type EvaluationRunState, type EvaluationView, type IntervalCell, type UncoveredField } from './evaluation-view';
 
 /**
- * L1 widget: a training run's protocol results — outcome and reason, test-set scores with intervals, baselines on the
+ * L1 widget: a training run's protocol results — outcome and reason, the rows the run read, kept and excluded (with the
+ * snapshot's uncovered history rows), test-set scores with intervals, baselines on the
  * same rows, improvement over the flat guess, candidates (the winner's inner score labelled optimistic), calibration
  * and leakage flags — or, for a run without protocol results, why: never evaluated under a protocol, not finished,
  * refused at a stage, or unreadable. Renders the state it is given; reads no data.
@@ -21,6 +22,34 @@ import { EvaluationViews, type EvaluationRunState, type EvaluationView, type Int
           <span class="ps-eval-headline">{{ v.Headline }}</span>
           <p class="ps-eval-reason" data-testid="ps-eval-reason">{{ v.Reason }}</p>
         </header>
+
+        <h4>Rows — data as of {{ v.Rows.DataCutoff }}</h4>
+        <table class="ps-eval-table" data-testid="ps-eval-rows">
+          <tbody>
+            <tr><td>Rows read</td><td>{{ v.Rows.Read }}</td></tr>
+            <tr><td>Resolved (trained and tested on)</td><td>{{ v.Rows.Resolved }}</td></tr>
+            <tr><td>Censored (outcome not yet known)</td><td>{{ v.Rows.Censored }}</td></tr>
+            <tr><td>Label already known at the decision date</td><td>{{ v.Rows.LabelKnown }}</td></tr>
+            <tr><td>Empty label</td><td>{{ v.Rows.EmptyLabel }}</td></tr>
+            <tr><td>Duplicates removed</td><td>{{ v.Rows.Duplicates }}</td></tr>
+          </tbody>
+        </table>
+        <div data-testid="ps-eval-uncovered">
+          @switch (v.Rows.Uncovered.Kind) {
+            @case ('counted') {
+              @if (UncoveredFields(v).length === 0) {
+                <p class="ps-muted">Uncovered history rows excluded: none.</p>
+              } @else {
+                <p class="ps-muted">Uncovered history rows excluded:</p>
+                <ul>
+                  @for (u of UncoveredFields(v); track u.Entity + '.' + u.Field) { <li>{{ u.Entity }}.{{ u.Field }}: {{ u.Rows }}</li> }
+                </ul>
+              }
+            }
+            @case ('no-snapshot') { <p class="ps-muted">Uncovered history rows: this run has no Training Snapshot to count them.</p> }
+            @default { <p class="ps-refusals">Uncovered history rows: the Training Snapshot's stored counts cannot be read.</p> }
+          }
+        </div>
 
         <h4>Test set — {{ v.Holdout.Rows }} rows, read once</h4>
         <table class="ps-eval-table" data-testid="ps-eval-scores">
@@ -112,6 +141,11 @@ export class PSEvaluationResultsComponent {
 
   public get Detail(): string {
     return this.State !== null && (this.State.Kind === 'refused' || this.State.Kind === 'unreadable') ? this.State.Detail : '';
+  }
+
+  /** The uncovered fields of a counted snapshot; empty otherwise. */
+  public UncoveredFields(v: EvaluationView): readonly UncoveredField[] {
+    return v.Rows.Uncovered.Kind === 'counted' ? v.Rows.Uncovered.Fields : [];
   }
 
   /** A value with its interval, as the tables show it. */

@@ -7,7 +7,7 @@ import type { MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 import {
   HoldoutCarve, JsonParse, TrustVerdicts, TrainingRunResultsParser, TRAINING_RUN_RESULTS_SCHEMA,
   type BaselineSpec, type TrainingRefusal, type GateOutcome, type LeakageFlag, type MetricWithInterval, type OutcomeTitleText,
-  type StoredGateIntervals, type StoredGateRecord, type StoredInterval, type StoredTrainerResult, type TrustInput,
+  type StoredGateIntervals, type StoredGateRecord, type StoredInterval, type StoredTrainerResult, type TrustInput, type UnitResolutionCounts,
 } from '@memberjunction/predictive-studio-core';
 
 /** A value with its 95% interval. */
@@ -25,12 +25,41 @@ export interface CalibrationBin {
   readonly N: number;
 }
 
+/** Rows of one entity field the change history did not cover, excluded from the run. */
+export interface UncoveredField {
+  readonly Entity: string;
+  readonly Field: string;
+  readonly Rows: number;
+}
+
+/**
+ * The run's Training Snapshot uncovered-history counts: counted (possibly none), the run has no snapshot, or the
+ * snapshot's stored counts cannot be read.
+ */
+export type UncoveredRows =
+  | { readonly Kind: 'counted'; readonly Fields: readonly UncoveredField[] }
+  | { readonly Kind: 'no-snapshot' }
+  | { readonly Kind: 'unreadable' };
+
+/** What the run's read of the Prediction Unit kept and excluded, and the history rows the snapshot left uncovered. */
+export interface EvaluationRows {
+  readonly Read: number;
+  readonly Resolved: number;
+  readonly Censored: number;
+  readonly LabelKnown: number;
+  readonly EmptyLabel: number;
+  readonly Duplicates: number;
+  readonly DataCutoff: string;
+  readonly Uncovered: UncoveredRows;
+}
+
 /** Everything the results widget shows for one run. */
 export interface EvaluationView {
   readonly Outcome: GateOutcome;
   readonly OutcomeTitle: OutcomeTitleText;
   readonly Headline: string;
   readonly Reason: string;
+  readonly Rows: EvaluationRows;
   readonly Holdout: { readonly Metric: string; readonly Cell: IntervalCell; readonly Rows: number };
   readonly Secondary: readonly { readonly Metric: string; readonly Cell: IntervalCell }[];
   readonly Baselines: readonly { readonly Name: string; readonly Role: string; readonly Cell: IntervalCell }[];
@@ -45,6 +74,8 @@ export interface EvaluationView {
 export interface EvaluationRunInput extends TrustInput {
   /** The run's `Status`; null when there is no run. */
   readonly RunStatus: MJMLTrainingRunEntity['Status'] | null;
+  /** The run's Training Snapshot `UncoveredHistoryRowsExcluded` JSON; null when the run has no snapshot. */
+  readonly UncoveredHistoryRows: string | null;
 }
 
 /**
@@ -77,20 +108,56 @@ export class EvaluationViews {
     if (parsed.Value.status === 'refused') {
       return { Kind: 'refused', Stage: parsed.Value.refusal.stage, Detail: EvaluationViews.refusalDetail(parsed.Value.refusal) };
     }
-    const view = EvaluationViews.BuildEvaluationView(input);
+    const view = EvaluationViews.BuildEvaluationView(input, input.UncoveredHistoryRows);
     return view === null ? { Kind: 'not-evaluated' } : { Kind: 'evaluated', View: view };
   }
 
   /**
    * The view of a run's `ValidationResults` with the model's `Lineage` (both as `TrustVerdicts.DeriveTrustVerdict`
-   * reads them); null unless the envelope is a completed run holding a trainer result and a gate record.
+   * reads them) and its Training Snapshot's `UncoveredHistoryRowsExcluded` (null when the run has no snapshot); null
+   * unless the envelope is a completed run holding a trainer result and a gate record.
    */
-  public static BuildEvaluationView(input: TrustInput): EvaluationView | null {
+  public static BuildEvaluationView(input: TrustInput, uncoveredHistoryRows: string | null): EvaluationView | null {
     const parsed = TrainingRunResultsParser.ParseTrainingRunResults(input.ValidationResults);
     if (!parsed.Ok || parsed.Value.status !== 'completed') return null;
-    const { trainer, gate } = parsed.Value;
+    const { trainer, gate, unitResolution } = parsed.Value;
     if (trainer === null || gate === null) return null;
-    return { ...EvaluationViews.verdictPart(input, gate), ...EvaluationViews.trainerPart(trainer, gate.intervals) };
+    return {
+      ...EvaluationViews.verdictPart(input, gate),
+      Rows: EvaluationViews.rows(unitResolution, uncoveredHistoryRows),
+      ...EvaluationViews.trainerPart(trainer, gate.intervals),
+    };
+  }
+
+  /** The unit read's counts as the envelope stores them, with the snapshot's uncovered-history counts. */
+  private static rows(u: UnitResolutionCounts, uncoveredHistoryRows: string | null): EvaluationRows {
+    return {
+      Read: u.rowsRead,
+      Resolved: u.resolvedRows,
+      Censored: u.censoredRowsExcluded,
+      LabelKnown: u.labelKnownRowsExcluded,
+      EmptyLabel: u.emptyLabelRowsExcluded,
+      Duplicates: u.duplicateRowsRemoved,
+      DataCutoff: u.dataCutoff,
+      Uncovered: EvaluationViews.uncovered(uncoveredHistoryRows),
+    };
+  }
+
+  /** The snapshot's `[{ entity, field, rows }]` list; unreadable when the text or any entry does not have that shape. */
+  private static uncovered(text: string | null): UncoveredRows {
+    if (text === null) return { Kind: 'no-snapshot' };
+    const json = JsonParse.ParseJsonText(text, 'UncoveredHistoryRowsExcluded');
+    if (!json.Ok || !Array.isArray(json.Value)) return { Kind: 'unreadable' };
+    const fields: UncoveredField[] = [];
+    for (const entry of json.Value) {
+      if (!JsonParse.IsJsonObject(entry)) return { Kind: 'unreadable' };
+      const entity = JsonParse.JsonString(entry, 'entity');
+      const field = JsonParse.JsonString(entry, 'field');
+      const rows = JsonParse.JsonInteger(entry, 'rows');
+      if (entity === null || field === null || rows === null) return { Kind: 'unreadable' };
+      fields.push({ Entity: entity, Field: field, Rows: rows });
+    }
+    return { Kind: 'counted', Fields: fields };
   }
 
   /** The decision rows: outcome, its title and headline (the trust verdict's rendering) and the stored reason. */
@@ -100,7 +167,7 @@ export class EvaluationViews {
   }
 
   /** The measured rows: test-set scores, baselines, improvements, candidates, calibration, leakage, operating point. */
-  private static trainerPart(e: StoredTrainerResult, iv: StoredGateIntervals): Omit<EvaluationView, 'Outcome' | 'OutcomeTitle' | 'Headline' | 'Reason'> {
+  private static trainerPart(e: StoredTrainerResult, iv: StoredGateIntervals): Omit<EvaluationView, 'Outcome' | 'OutcomeTitle' | 'Headline' | 'Reason' | 'Rows'> {
     return {
       Holdout: { Metric: e.holdout.primary.metric, Cell: EvaluationViews.cell(e.holdout.primary), Rows: e.holdout.primary.n },
       Secondary: e.holdout.secondary.map((m) => ({ Metric: m.metric, Cell: EvaluationViews.cell(m) })),
