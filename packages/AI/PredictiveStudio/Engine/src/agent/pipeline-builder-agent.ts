@@ -19,7 +19,7 @@ import { BaseAgent } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, ArtifactDirective } from '@memberjunction/ai-core-plus';
 import { ImportanceDisplay, EvaluationLineage, TrustVerdicts, type GateOutcome, type ModelingPlanSpec, type OutcomeTitleText, type FeatureStepWarning } from '@memberjunction/predictive-studio-core';
 
-import { PredictiveStudioPipelineBuilder, type BuildPredictionResult, type MLLeaderboardEntryPayload } from './pipeline-builder';
+import { PredictiveStudioPipelineBuilder, type BuildGateDecision, type BuildPredictionResult, type MLLeaderboardEntryPayload } from './pipeline-builder';
 export type { MLLeaderboardEntryPayload };
 
 /** The compact, payload-safe outcome the builder writes back so the agent can narrate the result. */
@@ -176,10 +176,11 @@ export function GenerateMarkdownReport(
   published: boolean,
   features: MLFeatureImportancePayload[],
   leaderboard: MLLeaderboardEntryPayload[] | undefined,
+  gate: BuildGateDecision | null,
   importanceHidden: boolean,
   hiddenImportanceNote: string = ImportanceDisplay.HiddenNote,
 ): string {
-  return renderMarkdownReport(name, targetVar, targetMetric, score, trustTitle, headline, published, features, leaderboard, importanceHidden, hiddenImportanceNote);
+  return renderMarkdownReport(name, targetVar, targetMetric, score, trustTitle, headline, published, features, leaderboard, gate, importanceHidden, hiddenImportanceNote);
 }
 
 /** The report body. */
@@ -193,6 +194,7 @@ function renderMarkdownReport(
   published: boolean,
   features: MLFeatureImportancePayload[],
   leaderboard: MLLeaderboardEntryPayload[] | undefined,
+  gate: BuildGateDecision | null,
   importanceHidden: boolean,
   hiddenImportanceNote: string,
 ): string {
@@ -203,24 +205,41 @@ function renderMarkdownReport(
       : '- No feature importance weights were recorded for this model.';
   const isTournament = (leaderboard?.length ?? 0) > 1;
   const hasWinner = (leaderboard ?? []).some((r) => r.isWinner === true);
+  const shipped = finalistShipped(gate);
 
   return `# Model Development Results: ${name}
 
 ## Executive Summary
 ${headline}
 
-## ${isTournament ? (hasWinner ? 'Winning Model Performance' : 'Selected Model Performance') : 'Model Performance'}
-- **Target Variable**: \`${targetVar}\`
+## ${performanceHeading(gate, isTournament, hasWinner)}
+${gate !== null && !shipped ? `- **Why**: ${gate.Reason}\n` : ''}- **Target Variable**: \`${targetVar}\`
 - **Primary Metric**: **${targetMetric}** = **${score !== null && score !== undefined ? score.toFixed(3) : 'not measured'}**
 - **Outcome**: **${trustTitle}** (${published ? 'Published to Catalog' : 'Held for Review'})
-${renderLeaderboardSection(leaderboard, targetMetric, hasWinner)}
+${renderLeaderboardSection(leaderboard, targetMetric, hasWinner, shipped)}
 ## Features the model weighted most (associations, not causes)
 ${topFeatures}
 
 ## How this was measured
-- ${measurementNote(isSearchLeaderboard(leaderboard))}
+- ${measurementNote(isSearchLeaderboard(leaderboard), shipped)}
 - Registered in the Predictive Studio Models catalog; the Outcome line above says whether it was published.
 `;
+}
+
+/**
+ * Whether the marked finalist shipped: the stored gate outcome is `model`, or the run stores no gate record (the
+ * report then says nothing the gate did not decide). A finalist the gate did not ship is never called the winner.
+ */
+function finalistShipped(gate: BuildGateDecision | null): boolean {
+  return gate === null || gate.Outcome === 'model';
+}
+
+/** The performance section's heading: the winning model's, or what the stored gate decided instead. */
+function performanceHeading(gate: BuildGateDecision | null, isTournament: boolean, hasWinner: boolean): string {
+  if (gate !== null && gate.Outcome === 'no-signal') return 'No model shipped';
+  if (gate !== null && gate.Outcome === 'keep-simple-baseline') return 'Kept a simple baseline';
+  if (!isTournament) return 'Model Performance';
+  return hasWinner ? 'Winning Model Performance' : 'Selected Model Performance';
 }
 
 /** Whether a leaderboard holds a search's inner-fold scores (optimistic by construction) rather than a holdout score. */
@@ -233,7 +252,7 @@ function isSearchLeaderboard(leaderboard: readonly MLLeaderboardEntryPayload[] |
  * those scores are optimistic; any other leaderboard prints its score. An unmeasured row says so, and a leaderboard of
  * several rows with no measured one says it has no winner.
  */
-function renderLeaderboardSection(leaderboard: MLLeaderboardEntryPayload[] | undefined, targetMetric: string, hasWinner: boolean): string {
+function renderLeaderboardSection(leaderboard: MLLeaderboardEntryPayload[] | undefined, targetMetric: string, hasWinner: boolean, shipped: boolean): string {
   if (!leaderboard || leaderboard.length === 0) {
     return '';
   }
@@ -242,7 +261,7 @@ function renderLeaderboardSection(leaderboard: MLLeaderboardEntryPayload[] | und
     .map((r) => {
       const measured = typeof r.score === 'number';
       const scoreText = typeof r.score === 'number' ? leaderboardScoreText(r, r.score, search) : 'not measured';
-      const status = r.isWinner ? '🏆 Winner (Selected)' : measured ? 'Evaluated' : 'Not measured';
+      const status = r.isWinner ? (shipped ? '🏆 Winner (Selected)' : 'Finalist (not shipped)') : measured ? 'Evaluated' : 'Not measured';
       return `| ${r.rank ?? '—'} | ${r.algorithm ?? 'Candidate'} | ${scoreText} | ${status} |`;
     })
     .join('\n');
@@ -262,11 +281,13 @@ function leaderboardScoreText(r: MLLeaderboardEntryPayload, score: number, searc
 
 /**
  * How the result was measured. A search picked its winner on inner-fold scores over the training rows and read the
- * held-back rows once, for the winner; a single model was scored on the held-back rows.
+ * held-back rows once, for the winner; a single model was scored on the held-back rows. A finalist the gate did not
+ * ship is called the finalist, not the winner.
  */
-function measurementNote(search: boolean): string {
+function measurementNote(search: boolean, shipped: boolean): string {
   if (search) {
-    return 'The winner is the simplest candidate whose inner-fold score is within one standard error of the best; inner-fold scores are optimistic, and the held-back rows were read once, for the winner.';
+    const picked = shipped ? 'winner' : 'finalist';
+    return `The ${picked} is the simplest candidate whose inner-fold score is within one standard error of the best; inner-fold scores are optimistic, and the held-back rows were read once, for the ${picked}.`;
   }
   return 'The score comes from the rows held back from training.';
 }
@@ -343,7 +364,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     const reportMarkdown = GenerateMarkdownReport(
       name, goal, targetVar, reportMetric, comparison === null ? null : comparison.Value,
       result.trust === undefined ? 'No model shipped' : TrustVerdicts.OutcomeTitle(result.trust),
-      summaryText, result.published, featureBars, leaderboard,
+      summaryText, result.published, featureBars, leaderboard, result.Gate || null,
       rawFeatures.length > 0 && !showable, HiddenImportanceNote(result.model?.Lineage),
     );
     return {

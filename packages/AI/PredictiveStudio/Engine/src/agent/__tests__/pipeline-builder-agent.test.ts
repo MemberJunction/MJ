@@ -15,6 +15,7 @@ import {
 import {
   PredictiveStudioPipelineBuilder,
   type BuildPredictionInput,
+  type BuildGateDecision,
   type BuildPredictionResult,
   type MLLeaderboardEntryPayload,
 } from '../pipeline-builder';
@@ -180,6 +181,7 @@ describe('GenerateMarkdownReport', () => {
       true,
       [{ feature: 'DuesAmount', importance: 0.45 }],
       [],
+      null,
       false,
     );
     expect(md).toContain('# Model Development Results: Member Renewal Risk');
@@ -224,7 +226,7 @@ describe('ResolveEntity', () => {
 
 describe('GenerateMarkdownReport — model not evaluated', () => {
   it('says the metric was not measured and names the not-evaluated outcome', () => {
-    const md = GenerateMarkdownReport('Renewal', 'Predict renewal', 'Renewed', 'AUC', null, 'Not evaluated yet', 'Not evaluated yet.', false, [], [], false);
+    const md = GenerateMarkdownReport('Renewal', 'Predict renewal', 'Renewed', 'AUC', null, 'Not evaluated yet', 'Not evaluated yet.', false, [], [], null, false);
     expect(md).toContain('**AUC** = **not measured**');
     expect(md).not.toMatch(/0\.850/);
     expect(md).toContain('**Outcome**: **Not evaluated yet** (Held for Review)');
@@ -237,7 +239,7 @@ describe('GenerateMarkdownReport — measurement copy (M8)', () => {
     IterationID: `m${rank}`, Metric: score, rank, algorithm: `Algo ${rank}`, score, metricName: score === null ? null : 'AUC', isWinner,
   });
   it('says nothing about picking a winner for a single-model build', () => {
-    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Ships — the model beats the flat guess', 'ok', true, [], [row(1, 0.8, true)], false);
+    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Ships — the model beats the flat guess', 'ok', true, [], [row(1, 0.8, true)], null, false);
     expect(md).not.toMatch(/winner was picked/);
     expect(md).toContain('## Model Performance');
   });
@@ -245,7 +247,7 @@ describe('GenerateMarkdownReport — measurement copy (M8)', () => {
     const searchRow = (rank: number, mean: number, isWinner: boolean): MLLeaderboardEntryPayload => ({
       IterationID: 'run-1', Metric: mean, rank, algorithm: `Algo ${rank}`, score: mean, metricName: 'log-loss', innerLower: mean - 0.02, innerUpper: mean + 0.02, optimistic: true, isWinner,
     });
-    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Ships — the model beats the flat guess', 'ok', true, [], [searchRow(1, 0.4, false), searchRow(2, 0.41, true)], false);
+    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Ships — the model beats the flat guess', 'ok', true, [], [searchRow(1, 0.4, false), searchRow(2, 0.41, true)], null, false);
     expect(md).toContain('The winner is the simplest candidate whose inner-fold score is within one standard error of the best; inner-fold scores are optimistic, and the held-back rows were read once, for the winner.');
     expect(md).toContain('| Rank | Algorithm | Inner-CV log-loss [95% interval] (optimistic) | Status |');
     expect(md).toContain('| 1 | Algo 1 | 0.400 [0.380, 0.420] | Evaluated |');
@@ -253,17 +255,60 @@ describe('GenerateMarkdownReport — measurement copy (M8)', () => {
     expect(md).toContain('## Winning Model Performance');
   });
   it('says a single model was scored on the held-back rows', () => {
-    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Ships — the model beats the flat guess', 'ok', true, [], [row(1, 0.8, true)], false, ImportanceDisplay.HiddenNote);
+    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Ships — the model beats the flat guess', 'ok', true, [], [row(1, 0.8, true)], null, false, ImportanceDisplay.HiddenNote);
     expect(md).toContain('- The score comes from the rows held back from training.\n');
     expect(md).toContain('| Rank | Algorithm | Score (AUC) | Status |');
   });
   it('says a tournament with no measured candidate has no winner', () => {
-    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', null, 'Not evaluated yet', 'x', false, [], [row(1, null, false), row(2, null, false)], false);
+    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', null, 'Not evaluated yet', 'x', false, [], [row(1, null, false), row(2, null, false)], null, false);
     expect(md).toContain('No candidate was measured, so no winner was picked.');
     expect(md).not.toContain('🏆');
     expect(md).not.toMatch(/inner-fold score/);
   });
 });
+
+describe('GenerateMarkdownReport — the stored gate outcome', () => {
+  const searchRow = (rank: number, mean: number, isWinner: boolean): MLLeaderboardEntryPayload => ({
+    IterationID: 'run-1', Metric: mean, rank, algorithm: `Algo ${rank}`, score: mean, metricName: 'log-loss', innerLower: mean - 0.02, innerUpper: mean + 0.02, optimistic: true, isWinner,
+  });
+  const rows = [searchRow(1, 0.4, false), searchRow(2, 0.41, true)];
+  const report = (gate: BuildGateDecision | null) => GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', null, 'No model shipped', 'held', false, [], rows, gate, false);
+
+  it('crowns no winner on a no-signal search and titles the section by the outcome with the stored reason', () => {
+    const md = report({ Outcome: 'no-signal', Reason: 'Neither the model nor any simple baseline beats the flat guess.' });
+    expect(md).not.toContain('🏆');
+    expect(md).not.toMatch(/Winning Model|Winner/);
+    expect(md).toContain('## No model shipped\n- **Why**: Neither the model nor any simple baseline beats the flat guess.');
+    expect(md).toContain('| 2 | Algo 2 | 0.410 [0.390, 0.430] | Finalist (not shipped) |');
+    expect(md).toContain('The finalist is the simplest candidate');
+  });
+
+  it('titles the section "Kept a simple baseline" when the gate kept a baseline', () => {
+    const md = report({ Outcome: 'keep-simple-baseline', Reason: 'The simple baseline glm is kept.' });
+    expect(md).not.toContain('🏆');
+    expect(md).toContain('## Kept a simple baseline\n- **Why**: The simple baseline glm is kept.');
+  });
+
+  it('keeps the winner wording when the stored outcome ships the finalist, or the run stores none', () => {
+    for (const gate of [{ Outcome: 'model' as const, Reason: 'The model beats the flat guess.' }, null]) {
+      const md = report(gate);
+      expect(md).toContain('## Winning Model Performance');
+      expect(md).toContain('| 2 | Algo 2 | 0.410 [0.390, 0.430] | 🏆 Winner (Selected) |');
+    }
+  });
+});
+
+/** A builder stub whose search shipped nothing: the finalist row is marked, and the stored outcome is no-signal. */
+class NoSignalSearchBuilder extends PredictiveStudioPipelineBuilder {
+  public override async Build(_input: BuildPredictionInput): Promise<BuildPredictionResult> {
+    return {
+      success: true, pipelineId: 'pipe-1', published: false, leakageFlagged: false, errorMessage: null,
+      leaderboard: [{ IterationID: 'run-1', Metric: 0.41, rank: 1, algorithm: 'xgb', score: 0.41, metricName: 'log-loss', innerLower: 0.39, innerUpper: 0.43, optimistic: true, isWinner: true }],
+      heldReason: 'Not published — the training run shipped no model: no signal.',
+      Gate: { Outcome: 'no-signal', Reason: 'no signal.' },
+    };
+  }
+}
 
 describe('HiddenImportanceNote (M7)', () => {
   const lineage = (kind: string | null): string => JSON.stringify({ evaluation: { ImportanceKind: kind } });
@@ -280,7 +325,7 @@ describe('HiddenImportanceNote (M7)', () => {
 
 describe('GenerateMarkdownReport — copy', () => {
   const report = (features: Array<{ feature: string; importance: number }>, importanceHidden = true) =>
-    GenerateMarkdownReport('Renewal', 'Predict renewal', 'Renewed', 'AUC', 0.72, 'Ships — the model beats the flat guess', 'Beats the flat guess by 0.0200 [0.0100, 0.0300] (log-loss).', true, features, [], importanceHidden);
+    GenerateMarkdownReport('Renewal', 'Predict renewal', 'Renewed', 'AUC', 0.72, 'Ships — the model beats the flat guess', 'Beats the flat guess by 0.0200 [0.0100, 0.0300] (log-loss).', true, features, [], null, importanceHidden);
   it('prints the hidden-list note instead of inventing a ranking when importance is hidden', () => {
     const md = report([]);
     expect(md).toContain('split or impurity counts');
@@ -418,6 +463,12 @@ describe('PredictiveStudioPipelineBuilderAgent.executeAgentInternal — a build 
   it("carries the run's stored gate outcome and reason, so the artifact can title its card by them", async () => {
     const payload = (await new TestableBuilderAgent(new NoModelBuilder()).Run({ ...plan })).newPayload as PredictiveStudioBuilderPayload;
     expect([payload.GateOutcome, payload.GateReason]).toEqual(['no-signal', 'Neither the model nor any simple baseline beats the flat guess.']);
+  });
+
+  it("writes the report tab without a winner when the search's stored outcome shipped nothing", async () => {
+    const payload = (await new TestableBuilderAgent(new NoSignalSearchBuilder()).Run({ ...plan })).newPayload as PredictiveStudioBuilderPayload;
+    expect(payload.Markdown).not.toContain('🏆');
+    expect(payload.Markdown).toContain('## No model shipped\n- **Why**: no signal.');
   });
 
   it('carries no gate outcome for a build whose run stores no gate record', async () => {
