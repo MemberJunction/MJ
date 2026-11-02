@@ -1,5 +1,49 @@
 # @memberjunction/ng-agents
 
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- da449bb: Add the `--mj-text-violet` and `--mj-status-on-warning` design tokens (light and dark) and use them, with `--mj-text-inverse` and the brand-primary tokens, in place of the remaining `purple`, `black`, `white` and hex colours in the priority matrix, permission panels, query form, list form nav rail and lazy-module status bar.
+- 19119a8: Replace CSS keyword colours (`white`, `darkblue`) with design tokens: text on brand-primary backgrounds uses `--mj-brand-on-primary`, text on status and muted backgrounds uses `--mj-text-inverse`, and link text uses `--mj-text-link`.
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [91cba84]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [953086f]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [6779eed]
+- Updated dependencies [397ae9a]
+- Updated dependencies [89a5b59]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [da449bb]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/ai-core-plus@6.2.0-edge.7
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/ai-engine-base@6.2.0-edge.7
+  - @memberjunction/ng-shared-generic@6.2.0-edge.7
+  - @memberjunction/ng-base-types@6.2.0-edge.7
+  - @memberjunction/ng-ui-components@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes

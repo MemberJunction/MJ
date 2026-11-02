@@ -1,5 +1,404 @@
 # Change Log - @memberjunction/server
 
+## 6.2.0-edge.7
+
+### Minor Changes
+
+- 305c429: `MJ: AI Agent Sessions` treats the server-only `CloseReason` values (`TimeLimit`, `Idle`, `Janitor`, `Shutdown`) as server-managed: an ordinary save, such as the generic `UpdateMJAIAgentSession` mutation, may set only `Explicit` or `Error` and cannot replace a server-only reason already recorded, so a session owner can no longer stamp `TimeLimit` and skip the deadline check in `SessionManager.CloseSession`. The server's own close paths (`SessionManager.CloseSession` and the telephony call bookkeeping) save inside `RunWithTrustedSessionConfigWrites`. `@memberjunction/telephony-adapters` now depends on `@memberjunction/core-entities-server`.
+- ecf36eb: `AIAgentSession.CloseReason` now accepts `TimeLimit` (the session's authored deadline passed) and `Idle` (no activity beyond the idle threshold), so an expiry close records why the session ended instead of the generic `Janitor`. `RealtimeChannelCloseReason` in `@memberjunction/ai` widens to the same six values. The realtime dashboards, the session review and agent banner in conversations, and the conversations-runtime session timeline label the two new reasons, and the realtime overview's KPI, now named "System closes", counts every close not made by a person (orphan, idle and time-limit); a time-limit close is not titled as a janitor close, since the browser's verified deadline alarm records it too. A stale session whose `LastActiveAt` will not parse now closes as `Idle` with a logged error instead of staying open.
+- ccfd553: Integration GraphQL additions: `IntegrationStartSchemaRefresh` (detached discovery start returning a tailable run id), live `RecordsCreated/Updated/Errored/Skipped` that actually count, offset paging on sync history and run listing with per-entity counts recovered from the run artifact, `IntegrationGetActiveOperations`, and `IntegrationProbeCredentials` (tests credentials without persisting anything).
+- 4c0eaec: Local embeddings move to `@huggingface/transformers` 4.3.1 and can switch models safely; EmbeddingGemma 2 is available as an opt-in model.
+  - `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` names the local model every process embeds with (default: the highest-PowerRank active local model). Agent note, example, tag and query indexes leave out vectors from other models, a save re-embeds such a row, and the new "Re-embed Local Vectors" action moves them all.
+  - Embedding calls take an optional `inputType` (`'query' | 'document'`); Cohere and Bedrock map it natively, and catalog prefixes come from `ModelConfiguration.Embedding`. `LocalEmbedding` batches, honors `dimensions`, truncates to the catalog's `MaxInputTokens`, and sizes ONNX Runtime's thread pool to the CPUs the process may use (in a 2-CPU container, queries were about 10× faster).
+  - A failed embed now returns `null` from `AIEngine.EmbedText` instead of an empty vector.
+
+  **Upgrade notes:**
+  - After upgrading, run `mj ai actions run -n "Re-embed Local Vectors" --param "Force=true"`, then restart the MJ server processes. The new runtime changes all-mpnet-base-v2's vectors (about 0.95 cosine on Linux x64) under the same model ID, and long texts are now truncated at `MaxInputTokens` (256 tokens for all-MiniLM-L6-v2, matching sentence-transformers).
+  - A `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` that names no active local model turns local embedding off, with an error. An inactive model is no longer picked as the default.
+  - TagEngine embeds with the default local model whenever one exists, even if the "Tag Semantic Matching" prompt names a hosted model.
+  - `LocalEmbedding` honors a vector index's `Dimensions`: a value above the model's size now fails instead of being ignored.
+  - The GraphQL `EmbedText` mutation's `modelSize: 'medium'` now means the default local model.
+  - `LocalEmbedding` no longer reads the `useQuantized` / `localURL` settings or `TRANSFORMERS_LOCAL_URL`; it always loads the 8-bit weights.
+
+- efbe5f5: The realtime runtime now runs the session-deadline alarm. `SetSessionDeadline(deadline, { autoEnd?, warnBeforeMs? })` arms it; `SessionDeadlineWarning$` fires once per offset and `SessionDeadlineReached$` at the deadline, then (unless `autoEnd: false`) the runtime ends the call with the new `SessionEndReason` `'deadline'`. A server-verified deadline (`identity.verified`) also arms the alarm with the current options, so a host that receives one now gets the call ended at that deadline unless it calls `SetSessionDeadline(d, { autoEnd: false })`. A deadline reached before the call goes live (while it is minted, or while the microphone and connect are in flight) is announced only after `SessionStarted$`, with the call live, and then ends it. `EndRealtimeSession('deadline')` lets a host that owns the hang-up report the same end. A deadline end claims `CloseReason` `TimeLimit`; `CloseAgentSession` accepts the claim and `SessionManager.CloseSession` verifies it against the session's stored deadline (passed or within 60 s), otherwise records `Explicit` and logs it, so a deadline known only to the browser records `Explicit`; channel plugins are told the verified reason. `RealtimeSessionStartOptions.SessionDeadline` hands the deadline in with the start: the runtime arms it in the same tick it takes the call slot, so a start refused on a busy runtime never arms it. The realtime widget drops its own deadline timer, reports the runtime's `'deadline'`, and passes its guest deadline with the start, so it never sets, clears or replaces the deadline of a call it does not own; the conversations chat area shows no failure notice for a deadline end; the sessions adapter's `SessionEndReason` gains `'deadline'`.
+- 4b9542c: SQL pipeline redesign. Stored queries are now written in a specified language, the MJ Query language (`guides/MJ_QUERY_LANGUAGE.md`), which is checked when a query is saved and before every render. Queries are rendered, then composed, behind a lexer-based safety gate, with per-request dialects, paging, materialized reads and field-level security applied to the rendered statement. A query's fields, parameters and entities now come from the database server's description of the query and from MJ's template parser, and any saved query can be refreshed on demand with `mj query refresh`, the `Query.RefreshExtraction` remote operation, or "Refresh metadata" in Explorer.
+
+  ### New features
+
+  **SQL parsing and dialects** (`@memberjunction/sql-parser`, `@memberjunction/sql-dialect`). SQL dialects are split into facets, and query-only dialects cover external data sources. `@memberjunction/sql-parser` gains a dialect-aware lexer (`SqlTokens`), `QueryTemplate` (the MJ Query language parser and save-time checks), the tolerant structural parser `SqlDocument` with its analyses, `EditSet` transforms that edit the SQL as written instead of regenerating it, and `StrictFragmentValidator`, the fail-closed screen for caller-supplied SQL fragments. The language includes `<name>.length` (`{% if Codes and Codes.length > 0 %}`) and the inline if (`{{ MaxRows | sqlNumber if MaxRows else 12 }}`), which many stored queries use; any other attribute access is refused.
+
+  **Query metadata in the schema** (`@memberjunction/core-entities`). The schema records what the database server reports about a query's output: `QueryField` gains `SourceEntityFieldID` (linked to the entity field, cleared when that field is deleted), `IsNullable` and `SourceObjectName`, and `DetectionMethod` allows `Database` and `Parser`; `Query` gains `ExtractedSQLHash`, `ExtractionStatus` (`OK`, `Warning`, `Error`, `Skipped`) and `ExtractionMessage`. `MJ: Queries` declares `Parameters`, `Fields` and `Entities` collections, so a query and the child rows it declares save as one graph, and declared rows win over extraction for the same name. Query field nullability and source entity field are part of a query's definition signature.
+
+  **Metadata sync** (`@memberjunction/metadata-sync`). `mj sync push` saves `relatedEntities` groups through a parent's declared collection, in the parent's graph save, and `mj sync pull` writes new records in the `collections` format. The `relatedEntities` file format keeps working.
+
+  **Extraction on save** (`@memberjunction/core-entities-server`, `@memberjunction/server`). Saving a new or edited query extracts its metadata from the database server's description of the query (the base render and one render per `{% if %}` branch) and from MJ's template parser: output fields with exact types, nullability and their source entity field, parameters with composition pass-throughs, the entities it reads (`DetectionMethod` `Parser` on parameters and entity links), and its dependencies. Facts are corrected on every row; authored annotations (descriptions, a `Manual` parameter's type, default, sample and filters) are kept. Doc comments (`{# @param / @field #}`, trailing `--:`) count as authored, and an authored parameter the SQL no longer uses is kept and flagged. `UsesTemplate` comes from the lexer, and `ExtractedSQLHash`, `ExtractionStatus` and `ExtractionMessage` record each run: external-data-source queries are `Skipped`, and a describe failure is an `Error` that keeps the stored rows. The derived rows are written as the system user, and the LLM only fills empty descriptions after the save commits (skipped with `SkipEntityAIActions`). `MJQueryEntityServer.ExtractionOverride` (`Auto` / `Skip` / `Force`) controls extraction per save, and `SkipEmbeddings` is honoured. A query that reads a table named by a template parameter (the External Change Detection queries) keeps its declared fields instead of describing a sample table.
+
+  **Refresh without changing SQL** (`@memberjunction/core-entities-server`, `@memberjunction/cli`, `@memberjunction/codegen-lib`). `QueryExtractionService` (`RefreshQuery`, `RefreshQueries` by ID, name or full path, category path, entity read, or all) runs the same extraction a save runs: one transaction per query, the queries a composition depends on first, a dry run that reports the changes without writing, and an optional LLM description pass. Each query gets a report: its outcome, the child rows added, updated and removed, flagged parameters and the run's diagnostics. The entry points are the `Query.RefreshExtraction` remote operation (long-running with progress; API keys need the new `query:refresh` scope), `mj query refresh [--id|--name|--category|--entity|--all] [--dry-run] [--with-ai] [--format text|json]`, and a CodeGen pass that re-binds the queries reading an entity whose fields were added, dropped or changed type. That pass records a query the change broke as an `Error` with the server's message, and warns when a query authorized by its role list gains a field-restricted column.
+
+  **Explorer** (`@memberjunction/ng-core-entity-forms`, `@memberjunction/ng-query-viewer`, `@memberjunction/ng-dashboards`, `@memberjunction/ng-artifacts`, `@memberjunction/ng-code-editor`). The query form saves the query with its parameters, fields and entity links as one graph save; a refused save lists each finding with its rule code, line, column and fix, and marks it in the SQL editor (`<mj-code-editor>` gains `SetDiagnosticMarkers` and `RevealPosition`). The form shows the extraction status and message, and its field and parameter grids show how each row was detected, nullability and the source entity field (as a link) or server-reported object; facts are read-only and annotations editable. "Refresh metadata" in the form and in the Query Browser (the selected query, a category, or all) always runs a dry run first, shows live progress and a per-query report with change counts and a drill-in, then applies on request; a user setting skips the dry run for single-query refreshes. The save-query dialog, the data artifact's "update query" and the Query Browser editor show the server's findings instead of a generic failure; findings travel as text lines read with `ParseQuerySaveMessage` / `ParseQueryDiagnostics`.
+
+  ### Improvements
+  - **Shipped queries declare their metadata** (`metadata/queries`). Every shipped query declares its parameters and output fields, with field facts taken from the database server's description; primary keys reuse the IDs earlier releases gave the rows. `GetAgentRunTree` filters its parameters, the composition demo names its targets by full path, and 17 shipped queries gain PostgreSQL variants.
+  - **External Change Detection queries take server-set values** (`@memberjunction/external-change-detection`). Every value is a server-set parameter, identifiers are quoted with `sqlIdentifier`, and `ChangeDetector` passes them as `ServerParameters`.
+  - **Extraction reads the database, not the cache** (`@memberjunction/core-entities-server`). A query's stored child rows are read from the database on the save's transaction, so a dialect variant saved in the same push no longer overwrites them, and extraction uses the saving provider's platform.
+  - **Materialized reads bind typed, named parameters** (`@memberjunction/generic-database-provider`), typed from the snapshot table's columns, so the database can use its indexes. Rows are unchanged.
+  - **Paging and materialization edit the SQL as written** (`@memberjunction/generic-database-provider`, `@memberjunction/materialization`, `@memberjunction/codegen-lib`). Row caps, ORDER BY removal and CTE hoisting no longer regenerate the statement, so `CountSQL`, the persisted materialization `BroadSQL` and `StripTopLevelOrderBy` output keep the author's text; a `WITH`-headed source no longer lands inside a derived table, and a dependency's ORDER BY under TOP is kept.
+  - **Engines coalesce remote reloads** (`@memberjunction/core`). When a burst of remote cache invalidations arrives without row data, a `BaseEngine` config reloads at most twice (one reload in flight plus one trailing reload) instead of once per event; invalidations that carry row data are still applied in place.
+  - **Engines space out repeated reloads** (`@memberjunction/core`). When a stream of remote or peer changes keeps a `BaseEngine` config reloading, the next reload now starts at least `BaseEngine.ExternalChangeFollowUpDelayMs` (default 1 s) after the previous one ended, and every change that arrives meanwhile shares it. A steady stream costs about one reload per second instead of reloads back to back, each reading the whole table; the first reload after a quiet second still starts at once.
+  - **The testing CLI starts engines the same way on PostgreSQL and SQL Server** (`@memberjunction/testing-cli`), so engines bind to the direct provider on both platforms.
+
+  ### Bug fixes
+  - **Query child rows past 1,000 are reconciled** (`@memberjunction/core-entities-server`, `@memberjunction/server`). Extraction, refresh, the CodeGen re-bind and the query resolvers read a query's stored rows without the entity's default row cap, so a query with more than 1,000 stale fields is cleaned up in one save and `mj query refresh --all` sees every query.
+  - **`CreateQueryExtended` with `AutoResolveCollision` gives every concurrent request its own query** (#6007), and its existence checks read the database uncached. `CreateQueryExtended` / `UpdateQueryExtended` return every column of the child rows.
+  - **Composed queries render correctly in cases that failed before**: doubled quotes in composed string arguments, `NaN` from untyped arithmetic, a query starting with `;`, and a caller's `null` reaching a composing query's template (`default(…)` now applies).
+  - **Extraction fixes**: a refresh reports and writes a field whose nullability changed between unknown and known; an outer parameter read only by an arithmetic composition argument takes the number type of the parameter it feeds; describe renders give untyped and array parameters numeric samples; describing a statement with a leading or trailing `;` works on PostgreSQL; `MJQueryEntityServer` saved through a network provider leaves extraction to the server; doc-comment continuation lines lose their alignment spaces.
+  - **Multiple row-level security filters are grouped in parentheses** (#4078) by `EntityInfo.GetUserRowLevelSecurityWhereClause`, so an `OR` between two filters no longer escapes the surrounding condition.
+  - **The legacy extractors stop reporting phantom tables**: `ExtractTableRefs` / `Parse().Tables` no longer return CTE names, read nothing from comments or string literals, and no longer invent a `dbo` schema on PostgreSQL; `ExtractSelectColumns` / `ExtractColumnRefs` return results for SQL node-sql-parser rejects; `ExtractCTEs` returns each CTE's exact source text.
+
+  ### Upgrade Notes
+
+  **Run a query refresh after upgrading.** Two migrations apply on `mj migrate` (`Query_Extraction_Metadata` and `Query_Child_Detection_Methods`). After migrating, refresh every saved query so its fields, parameters, entities and extraction columns are established from its SQL and the database server:
+
+  ```bash
+  mj query refresh --all --dry-run   # review: writes nothing
+  mj query refresh --all             # apply
+  ```
+
+  - The dry run lists each query as would-refresh or unchanged, with the field, parameter and entity rows it would add, update or remove, and its diagnostics. `--verbose` also lists unchanged queries; `--format json` gives a machine-readable report.
+  - Expect most queries to show corrected field facts: exact types where a placeholder such as `decimal(18,2)` was stored, nullability, a linked source entity field, missing columns added, and columns collected from inside a CTE removed. Field descriptions and other authored values are kept.
+  - The real run writes those rows and sets each query's `ExtractionStatus` (`OK`, `Warning`, `Error` or `Skipped`) and `ExtractionMessage`. It never changes a query's SQL. A dry run afterwards should report every query unchanged.
+  - `mj query refresh` runs in process as the system user. A refresh started from Explorer or the `Query.RefreshExtraction` remote operation needs Update on `MJ: Queries`, Create/Update/Delete on `MJ: Query Fields`, `MJ: Query Parameters`, `MJ: Query Entities` and `MJ: Query Dependencies`, and read access to the entities the queries read; queries the caller may not refresh are reported as not permitted and left alone. The command exits non-zero when a query fails, or when a query named with `--id` or `--name` cannot be refreshed.
+  - Client query caches miss once after the upgrade, because a query's definition signature now includes its field facts.
+
+  **Saved queries with a template tag inside quotes stop running until they are fixed.** A saved query that writes a value tag inside a SQL string literal, such as `WHERE Region = '{{ Region }}'`, or inside a quoted identifier, such as `SELECT [{{ Col }}]` (`"{{ Col }}"` on PostgreSQL, backticks on MySQL and Databricks), is now refused on every run, not only when its SQL is saved: the value is pasted between the quotes without escaping, so a value containing the closing quote can change the statement. The refusal names the query, each tag's parameter, line and column, and the fix; a query with both kinds gets one message covering both. To find them, run `mj query refresh --all --dry-run`: they are listed as `Error` (`MJQ_TAG_IN_STRING_LITERAL` or `MJQ_TAG_IN_QUOTED_IDENTIFIER`). The fix is one line per tag. For a string literal, replace `'{{ Region }}'` with `{{ Region | sqlString }}` and drop the surrounding quotes (`sqlString` adds the quotes and escapes the value); use `sqlLikeContains` for `'%{{ x }}%'`, and `sqlNumber`, `sqlDate` or `sqlBoolean` when the value is not text. For a quoted identifier, replace `[{{ Col }}]` with `{{ Col | sqlIdentifier }}` and drop the brackets or quotes (`sqlIdentifier` quotes the name for the database and accepts only letters, digits and underscores). A caller who may not run the query still gets the not-found message.
+
+  **Saved queries to review after the refresh.** These kinds of existing queries may report `Warning` or `Error`. Unless noted, they keep running as before, but a save that changes their SQL is refused until it is fixed; the message names the rule and the fix (`guides/MJ_QUERY_LANGUAGE.md` lists every rule, and which ones also stop a run).
+  - A query that composes another query and relies on a same-named parameter flowing into it without passing it: `Warning` (`MJQ_COMPOSITION_IMPLICIT_ARGUMENT`), **and its results change** (see below).
+  - A template tag inside a string literal (`'{{ x }}'`) or a quoted identifier (`[{{ x }}]`): **refused at run time** (see above).
+  - A string, array or date value written into the SQL without an MJ SQL filter (`sqlString`, `sqlIn`, `sqlDate`, …), unless the parameter is server-set.
+  - A composition reference whose category path is partial or wrong, or a composition outside a FROM / JOIN table position.
+  - Two output columns with the same name (compared case-insensitively).
+  - Arithmetic inside `{{ }}`, a non-literal `default(…)`, or a filter that does not match the parameter's type.
+  - Template syntax outside the language: macros, includes, function calls, an unknown filter or `Context.*` token, member access other than `.length`, or a composition reference that names no existing query: **refused at run time**, because the template is checked before it is rendered. The dry run shows these as `Error`.
+  - A query that writes, runs more than one statement, starts with `SET` / `DECLARE`, or calls a function the dialect forbids: **refused at run time** as well as at save.
+  - A query whose SQL no longer runs against the current schema (a dropped or renamed column): `Error`, with the database server's message; its stored rows are kept.
+  - A query against an external data source: `Skipped` (it is not described).
+
+  **Behaviour changes.**
+  - **Composition arguments must be listed explicitly.** A composed query only receives the arguments written in its reference, as in `{{query:"Path/Name(StartDate=StartDate)"}}`. An inner parameter that is not passed is absent (its `{% if %}` blocks are false), even when the outer query has a parameter of the same name. Before, same-named values could flow in by accident. A query that relied on that now returns the inner query's unfiltered rows; add the arguments to its reference. An unpassed _required_ parameter is an error, and a composed query's required parameters are now checked at run time.
+  - **Composition lookup needs the category path.** The name-only fallback is gone. A new or edited query must give the full path; at run time an existing query whose partial path matches exactly one query still runs, and a warning is logged.
+  - **New save-time refusals.** A new or edited query that breaks a rule of the MJ Query language, writes, or repeats an output column name is not saved: `Save()` fails, and `CreateQueryExtended` / `UpdateQueryExtended` return `Success: false` with each finding (rule code, line, column, fix). Agents and tools that create queries must handle the refusal. Existing queries keep running unless they use syntax outside the language (listed above); the refresh reports them.
+  - **`.length` and the inline if are supported.** `{% if Codes and Codes.length > 0 %}` and `{{ X | sqlNumber if X else 12 }}` keep working; no other member access is allowed.
+  - **Field-level security applies to queries.** A query is checked against the running user's field permissions on the rendered statement. When the query names a field the user may not read, the run is refused with the same message as a query that does not exist (`Query 'X' does not exist or you do not have permission to run it.`), so code that matched the old "Denied entities" text must change. A restricted field reached only through `SELECT *` or `alias.*` is dropped from that user's results instead of refusing the query, so result columns can differ per user. Queries authorized through Query Permissions (definer's rights) are unchanged. The Explorer grid builds its columns from the result, so a dropped column never appears.
+  - **Extraction no longer overwrites what people wrote.** A parameter's authored type, required flag, default, sample and description are kept, and `DetectionMethod` is no longer forced to `AI`. Field facts (name, order, type, nullability, source, computed flag) follow the database server, and `SourceFieldName` is always the real entity field name, never the output alias. The LLM writes descriptions only, after the save commits, so descriptions are not yet present in the `CreateQueryExtended` result.
+  - **`UsesTemplate` is a fact about the SQL.** A failed extraction no longer sets it to `false`, and a query with template syntax is rendered whatever the stored flag says.
+  - **Rendering uses the request's dialect.** Template filters follow the provider that runs the query, not a process-wide platform, so one process can serve SQL Server and PostgreSQL providers.
+  - **Composed SQL text differs.** `RenderedSQL`, `RenderResult.FinalSQL` and the paging `CountSQL` keep the same columns and rows but may differ in CTE names and whitespace, and a branch not taken emits no CTE. In `RenderResult.Trace`, `AfterComposition` and `AfterTemplates` both hold the assembled SQL, because templates are now rendered before composition. CodeGen may rewrite persisted `BroadSQL` text on its next run.
+  - **The query form saves child rows with the query.** In Explorer, adding a parameter or field is saved when the query is saved, not immediately.
+  - **Legacy extractor results change** as listed under Bug fixes: callers that subtracted CTE names keep working, code that expected them, or compared `SchemaName` with `'dbo'` to mean "unqualified", should be checked. `ExtractTemplateExpressions`, `ExtractCompositionRefs` and `ExtractParameterInfo` no longer report tags written inside SQL comments; `Tokenize` is unchanged.
+
+  **Deprecations.** These keep working, unchanged, through 6.x and are removed no earlier than 7.0. Each JSDoc names its replacement.
+  - `SQLParser` (`@memberjunction/sql-parser`), static and instance members: read SQL with `SqlDocument.Parse(sql, dialect)` (`TableReferences()`, `ColumnReferences()`, `OutputItems()`, `CTEs()`, `TopLevelOrderBy()`, `RowCaps()`, `StatementKinds()`, `HasStackedStatements()`), read templates with `QueryTemplate.Parse(sql, dialect)` (`Parameters()`, `CompositionReferences()`, its nodes), and change SQL with `EditSet` and the transforms (`StripOrderBy`, `SetRowCap`, `ReplaceSelectList`, `AppendTail`, `HoistCTEs`, `RenameCTE`, `WrapAsDerivedTable`). `Astify`, `ParseSQL`, `SqlifyAST`, `WalkAST` and the node-sql-parser AST stay for callers that walk that tree.
+  - `SQLParser.HasWriteStatement` must not be used to decide whether SQL is safe to run (it returns false when it cannot parse). Use `IsReadOnlyQuery`, `SqlDocument.IsReadOnly()`, or `StrictFragmentValidator.ValidateReadOnlyStatement` for untrusted SQL.
+  - `LexSQL`, `SignificantTokens`, `IsKeyword` → `SqlTokens.Lex(sql, dialect)`; `SplitLeadingCTEs` → `SqlDocument.CTEs()` or `HoistCTEs`; `AnalyzePagingShape` → `SqlDocument` analyses and the transforms; `AnalyzeTopLevelOrderBy`, `HasTopLevelOrderBy`, `ExtractOrderBy`, `FindOrderByStatement`, `IsOrderByLegalInCTE` → `SqlDocument.TopLevelOrderBy()` and `StripOrderBy`; `ParseToIR` / `RenderIR` → `QueryTemplate` and `EditSet`; `CheckAggregateExpression` → `StrictFragmentValidator.ValidateAggregateExpression`. `IsReadOnlyQuery` is not deprecated.
+  - `SQLParserDialect` (`@memberjunction/sql-dialect`) → `ParserDialect` or a `QueryDialect`.
+  - `RunQuerySQLFilterManager.SetPlatform` (`@memberjunction/core`): a render for a known provider passes its dialect instead.
+  - `RunExtractionPipeline` (`@memberjunction/core-entities-server`): saves now extract with `ComputeQueryExtraction` and `WriteExtractedChildRows`.
+  - `ClientClauseScreen.AstContainsWriteNode` → `StrictFragmentValidator.ValidateReadOnlyStatement`; `QueryPagingEngine.StripTopClause` → `SqlDocument.RowCaps()` and an `EditSet`; the `isPostgres` option of `buildMaterializedReadQuery` → pass the dialect (`@memberjunction/generic-database-provider`).
+
+  **Security.** This release closes several ways a saved query, a query specification or caller-supplied SQL could get past the read-only check, and makes it fail closed: every query path now runs the same lexer-based check on the rendered statement, and writes and forbidden function calls are refused when a query is saved. Template values that were written into shipped queries without escaping are now filtered or server-set. Field-level security is enforced on query results, and the refresh service and the Explorer query views show nothing about fields or entities a user may not read. Deployments should upgrade; no configuration is needed beyond the refresh above.
+
+- aca4317: Add multi-step action loop bodies (`steps?: LoopBodyActionStep[]`) to `ForEach` and `While` operations across `@memberjunction/ai-core-plus`, `@memberjunction/task-graph`, `@memberjunction/ai-agents`, and `@memberjunction/server`, together with sanitized native tool-name resolution, structured JSON action-message projection in `Pipeline`, and an updated Loop Agent system prompt covering the full execution primitive hierarchy and single-channel native tool-calling JSON envelope bridge.
+  - **`@memberjunction/ai-core-plus`**: Extend `ForEachOperation` and `WhileOperation` with `steps?: LoopBodyActionStep[]` (`id`, `name`, `params`, optional `condition` over `steps.<id>.*` and loop bindings, optional `outputMapping`), add `ResolveLoopBodyParams` and shared `BuildActionOutputObject` / `LoopStepFold` in `payload-mapping.ts` (blocking prototype-chain lookups across all path resolvers), export `ValidateLoopOperationStructure` in `task-graph-validator.ts` (enforcing `steps.<prevId>` ordering across `step.condition` and `step.params`), and preserve multi-step loop bodies losslessly across `ConvertTaskGraphToAgentSpec` ↔ `CompileFlowToTaskGraph`.
+  - **`@memberjunction/task-graph`**: Pre-resolve per-step `ActionID`s into `TaskStepConfiguration.stepActionIds` in `TaskGraphService` via shared `ResolveRecordsByNameOrToolName` (using `EscapeSQLString` and `SanitizeToolName` fallback with surfaced `RunView` error handling), unify durable single-arm and `steps[]` loop parameter resolution on `ResolveLoopBodyParams` (supporting both `<itemVar>.*` / `{{...}}` and legacy `payload.<itemVar>.*` / `static:*` mappings while preserving unresolved paths and downstream `{{template}}` tokens as literals; note that exact bare binding variable names like `"index"` resolve to the loop binding unless escaped with `"static:index"`), and execute multi-step `ForEach` and `While` loop bodies in `TaskGraphDispatcher` with deterministic ascending-index parallel output folding.
+  - **`@memberjunction/ai-agents`, `@memberjunction/server`, & `metadata/prompts`**: Support `steps[]` and single-arm `action.outputMapping` in in-turn `BaseAgent.executeForEachLoop` and `BaseAgent.executeWhileLoop` as well as `FlowAgentType` in-run execution, resolve sanitized native tool names (`calculate_expression` → `"Calculate Expression"`, `delegate_to_<slug>` → sub-agent name) without mutating caller inputs in validators, include `'Both'` parameters and unambiguous JSON container `ActionResult.Message` payloads in `StructureActionResult` and `TaskGraphActionRunner` via `BuildActionOutputObject`, and update `loop-agent-type-system-prompt.template.md` with comprehensive guidance on `Pipeline`, multi-step `ForEach`/`While`, all 7 runnable `TaskGraphSpec` node kinds, `inputMapping`/`outputMapping`, XOR `exclusiveGroup` forks, `failureSemantics`, `Execute Code` transform nodes, `continuation: 'reinvoke'` sleep/wake, and native tool-calling JSON bridging.
+
+- b0b2cc9: Add Video Studio (`@memberjunction/video-studio-core`, `@memberjunction/video-studio`, `@memberjunction/video-studio-render-worker`), including the Video Studio orchestrator agent and its Pre-Production, Render, Critic, and Repair stages, deterministic G1–G6 quality gates and rubric scoring, optional spoken voiceover narration (`VideoNarrationSpec.Enabled`) with automatic `<audio>` track injection in `BuildRenderBundle`, the isolated HyperFrames render worker and `LocalWorker`, `Remote`, and `Docker` render drivers, the Video Studio application (`Productions`, `Brand Kits`, `Archetypes`) with a built-in `ng-conversations` right-side slide-in copilot pinned to the Video Studio agent, the `Video Production` artifact type and viewer plugin, the `Produce Video` action, and the `VideoStudio.SetupHealth` remote operation and setup health card. Add general `MJ: Brand Kits` (`@memberjunction/ng-brand-kits`) for shared palette, typography, logo, voice, and generation policy management. The Video Studio pages share one right-side slide-in (chat from the first open, the brief above the composer, Iterate on the same conversation), pages can hide the floating chat bubble with `SuppressChatOverlay` in their agent context, and `@memberjunction/ng-brand-kits` adds a brand kit creator with a live preview. Add video generation (`BaseVideoGenerator`, `AIVideoRunner`, the Black Forest Labs FLUX 3 video driver, the `Generate Video` action, and `Per Second` pricing unit support), pre-call generation spend-cap enforcement, and FLUX.2 Pro endpoint, polling, and reported-cost recording fixes. Generated assets are always disclosed in the viewer, inline preview, review notes, and manifest provenance, never stand in for data or `NeverInvent` items, and any integrity criterion failure or synthetic person violation blocks delivery even when repair rounds are exhausted.
+
+  Add the `Consult` sub-agent chat-handling channel (`AIAgent.ChatHandlingOption`, `AIAgent.MaxSubAgentConsultRounds`, `AIAgentRelationship.ChatHandlingOption`), caller-chosen sub-agent configuration presets (`AIAgentRelationship.ConfigurationPresetID`), sub-agent consultation and `resumeRunId` resumption across child, related, parallel, and native sub-agent paths, and root escalation to `MJ: AI Agent Requests` when consult rounds are exhausted. Add peer-to-peer Sage transfers (`Handoff` step type, inline `mj-agent-handoff-card`, conversation ownership chrome, and `FollowHandoffs` messaging-adapter support). `SaveAgentRunMedia` now persists `FileID` on `MJ: AI Agent Run Medias` rows, the artifact viewer registers dedicated Video and Audio plugins, and `AgentScheduledJobDriver` forwards `ConfigurationID` when starting scheduled agent runs.
+
+  Task graphs opted in through agent metadata (`enableTaskGraphs`) now run through `LoopAgentType` with merged prompt parameters and parent hierarchy cycle guards. Explicit `@Sage` mentions or clicking Return to Sage ends specialist agent continuity in every conversation. Follow-up messages to a continued specialist agent resolve that agent's own configuration preset rather than forwarding the conversation manager's preset. Typing a reply in the conversation thread resumes an open sub-agent consult escalated to the user, matching the requests dashboard flow. `ChatHandlingOption = 'Retry'` re-prompts the loop and returns a sub-agent's question to the parent as a result rather than ending the run, capped by the unproductive-retry limit. Claude Opus 5.5, Claude Fable 5.1, Claude Sonnet 5.5, and Gemini 3.8 Flash now declare Image and File (and Gemini also Audio and Video) input modalities; Computer Use auto-select now picks Claude Opus 5.5 or Claude Fable 5.1 instead of the text-only fallback, which can change that feature's cost, and chat file attachments turn on for agents using these models. Also harden regex parsing in `@memberjunction/ai-form-builder` and `@memberjunction/database-designer-core` against polynomial backtracking (ReDoS).
+
+  The Video Studio render worker requires Node >= 22 and system `ffmpeg` on `PATH`; the `Docker` render driver is recommended for production deployments.
+
+### Patch Changes
+
+- 4bf741c: Add `RequestOrigin` to `AppContext`: the request's normalized `Origin` header, so resolvers can enforce an origin allowlist. The origin normalizer the realtime widget allowlist uses moves to a shared `NormalizeOrigin` helper that both use.
+- 1de408c: `IntegrationApplyAllBatch` matches `IntegrationApplyAll`: first-apply full-sync determination, and unselected entity maps are disabled on the no-restart path. Schema evolution detects a re-keyed object, where a connector release changes its primary key's members or their order, and clears that object's record maps and rows so the next sync rebuilds it. The check reads the connection's field rows, and an object whose field rows were not read is never treated as re-keyed.
+- 9d6f675: A text conversation can open a Remote Browser its agents drive. The server must opt in with `realtime.conversationBrowser.enabled` (default false); `allowAnonymous` (default false), `maxPerUser` (default 2, counted per anonymous guest for guests), `maxAnonymousTotal` (default 4, across all guests), `idleMinutes` (default 15) and `allowedPrivateHosts` (default none) tune it. `<mj-conversation-chat-area>` takes `AllowRemoteBrowser` (default false); when set, a Browser button opens a drawer with a live view and URL bar, and the conversation's agents get the `browser_*` tools (not AchieveGoal), including the new `browser_Inspect` (fields `f1…`, buttons and links `a1…`) and `browser_Fill`. The browser belongs to the conversation: it ends when the drawer closes, the conversation changes, the chat area is destroyed (new `EndRemoteBrowserSession` mutation), it goes unused for `idleMinutes` (used means an agent or the user acts on it, or its open drawer polls for a snapshot), or the server shuts down gracefully, and only its owner can drive or end it. A conversation browser refuses loopback, link-local and private-network hostnames (private IPv4 and IPv6 ranges, `localhost`, names under `.local`, `.localdomain`, `.internal`, `.intranet`, `.lan`, `.corp`, `.home`, `.home.arpa`, `.private` and `.svc`, and the Docker, Kubernetes and cloud-metadata names), including where a main-frame redirect lands and in popups; this is a best-effort hostname check (names that resolve to private addresses, WebSockets, service-worker fetches, iframes that redirect to a private host, redirects of the page's own requests and the redirect request itself get through), so run browsers under network egress rules for real isolation. Every remote browser now opens only http(s) pages, and refuses a click, Enter or Space that would activate a control labelled to submit, pay, place an order, confirm a payment, transfer, delete or sign in. Adapters gain `EvaluateInPage` (default `null`) and `RestrictNavigation`.
+- 3bace5a: - **Optimistic concurrency & non-overlapping field merge (`ResolverBase.TestAndSetClientOldValuesToDBValues`)**: Reject conflicting overlapping concurrent field edits where `ClientNewValue !== DBValue` with `CONCURRENT_MODIFICATION_CONFLICT` after logging `SAVE_INCONSISTENCY` to `MJ: Error Logs`, allow idempotent concurrent writes to the same value, and preserve concurrent database modifications on non-overlapping fields instead of overwriting them with stale client values. The conflict comparison ignores representation drift: JSON strings are compared by canonical content, and `datetime` / `smalldatetime` values are compared at the column's resolution, so a cosmetic rewrite or a sub-tick timestamp difference is not a conflict. Encrypted fields the API never decrypts (`AllowDecryptInAPI === false`) are left out of the comparison, because a client only ever holds the sentinel or fresh ciphertext for them; an echoed sentinel or unchanged ciphertext in the new values is dropped rather than written. Conflict diagnostics replace every encrypted field's values with the sentinel before they reach the console, the error log or `MJ: Error Logs`.
+  - **Multi-user WebSocket entity message routing (`ResolverBase.ListenForEntityMessages`)**: Track active sessions dynamically per entity type so status updates fan out to every active matching session rather than closing over only the first caller's `userPayload`/`pubSub`, while still emitting CloudEvents once per event.
+  - **Ciphertext-preserving cache & zero decrypt-then-re-encrypt API reads**: Persist pre-decryption ciphertext in `LocalCacheManager` / Redis across `RunView`, `RunViews`, `RunViewsWithCacheCheck`, and `GetDatasetByName`, materialize decrypted rows on in-process cache hits, keep the ciphertext copy when an external entity's rows are narrowed by field-level security, guard against plaintext `BaseEntity` `save` cache writes, skip `Decrypt()` + `Encrypt()` for `AllowDecryptInAPI === false` fields on GraphQL reads (`PreserveRestrictedApiCiphertext`), and apply `ArrayFilterEncryptedFieldsForAPI` on `RunViewResolver.RunViewsWithCacheCheck` stale and differential responses.
+  - **Update response carries every loaded field (`GraphQLDataProvider.Save`)**: the update mutation's selection set now requests all loaded non-binary fields, not only the dirty ones, so a concurrent change the server preserved on an untouched column reaches the client entity instead of leaving it stale until the next load. The input stays delta-only.
+  - **Integration bundles for the three fixes (`@memberjunction/integration-test-suite`)**: IT158 optimistic concurrency across two GraphQL sessions, IT159 entity status push fan-out over two WebSocket sessions, IT160 encrypted field reads over GraphQL (miss and server-cache hit), and IT161 ciphertext at rest in the RunView cache. All four are mutation-gated members of the deterministic suite.
+- d6b39c4: Enhance `BaseRemotableOperation` with transport context (`requestOrigin`, `clientIp`, `sessionId`, `apiKeyHash`), 3-arg `Authorize(input, user, context)`, 4-arg CodeGen `InternalExecute`, structured `RemoteOperationError`, end-to-end `ContractFingerprint` validation, and opt-in Agent/MCP tool discovery; extend `ServerExtensionServiceRegistry` and `MagicLinkService` with programmatic invite management (`RedirectUrl` with RS256 binding, `SendEmail` control, `RevokeInvite`, `UpdateInviteExpiry`, `VerifySessionToken`) and host runtime services (`CreateIsolatedProvider`, `GetSystemUser`, `ResolvePrincipal`).
+- f65fec7: Enable durable `WorkQueue` Database transport by default in `MJServer`, defer `NotifyPublished` and `KickTaskGraphDispatchers` onto `RunAfterCommit`, add `ExhaustionBehavior: 'DeadLetter' | 'Discard'` for ordered partitions, and enlist `DurableEntityActionRegistry` submissions atomically inside `entity.Save()`'s SQL transaction.
+- 896334a: Let an idle MJAPI stop polling its database. `AgentRunWatchdog` stops its heartbeat and stop-relay poll when the last run finishes and starts them again on the next run, untracks a run before the subclass `finalizeRun` hook, and validates `Configure()`; its stale-run sweep keeps its default (every 5 minutes once an agent has run) and `agentRunWatchdog.sweepIntervalMs: 0` (env `MJ_AGENT_RUN_WATCHDOG_SWEEP_INTERVAL_MS`) leaves only the startup sweep. New switches, defaults unchanged: `agentSessions.janitor` (`MJ_SESSION_JANITOR_ENABLED`, `MJ_SESSION_JANITOR_SWEEP_INTERVAL_MS`), `agentSessions.bridgeReconciler` (`MJ_BRIDGE_RECONCILER_ENABLED`, `MJ_BRIDGE_RECONCILER_SWEEP_INTERVAL_MS`), `agentSessions.handoffOfferExpiry` (`MJ_HANDOFF_OFFER_EXPIRY_ENABLED`, `MJ_HANDOFF_OFFER_EXPIRY_SWEEP_INTERVAL_MS`; `HandoffOfferRegistry.StartPeriodicSweep()` is new) and `conversationDetailReconciler` (`MJ_CONVERSATION_DETAIL_RECONCILER_ENABLED`, `MJ_CONVERSATION_DETAIL_RECONCILER_SWEEP_INTERVAL_MS`). See `guides/SERVERLESS_DATABASE_AUTO_PAUSE_GUIDE.md`.
+- 5fe21e5: The server now says when a login runs as a User record whose email differs from the identity in its token. A configured `USER_EMAIL_MAP` is printed at startup with every entry, each remapped login logs a warning naming both addresses, and any other mismatch logs a warning too. The `Session Established` audit row records the token email, the lookup email, the resolved user's email and whether they differ, and its description names both when they do. Login behavior is unchanged.
+- 5e55474: A pause that moves jobs while a paused-schedule record is already stored adds them to that record instead of leaving them out, so resume can put them back.
+- 97ad55e: Per-connection integration catalog, server half: the overflow promoter and `enforceSchemaLimits` write the connection's own rows, and every catalog-touching mutation runs in the connection's catalog scope. A schema build and a refresh's field-map reconcile read the connection's field rows directly, so a cold field cache can no longer build empty tables or disable field maps. The post-restart introspection loads the connection's catalog and warms the fields it reads, and a post-restart promotion that fails for an entity now fails its pending work instead of completing it.
+
+  Behaviour change for API callers: `autoEnableNewObjects` and `autoEnableNewColumns` both default to `false` again. Newly discovered objects arrive Active but unselected, while still reaching key inference and the migration, and new columns on a refresh arrive with their field maps disabled. Pass `true` to adopt them automatically.
+
+- 397ae9a: Performance and memory optimizations across cache invalidation, entity save/hydration, narrow `RunView` SQL projections, and multi-pool metadata startup:
+  - **Row-delta (`row_delta`) cross-replica cache invalidation & $O(\Delta)$ `BaseEngine` updates**: `LocalCacheManager.ApplyRowChanges` and `RedisLocalStorageProvider` now broadcast compact `row_delta` pub/sub payloads (`upsertedRows`, `deletedPrimaryKeys`, `rowCount`, `maxUpdatedAt`, `schemaHash`) instead of re-serializing the full `CachedRunViewData` array, and `BaseEngine.OnExternalCacheChange` updates in-memory arrays in $O(\Delta)$ while preserving untouched `BaseEntity` object references (falling back safely on `rowCount` drift, `schemaHash` mismatch, or custom `OrderBy`).
+  - **In-place `BaseEntity.finalizeSave()` / `Hydrate()` & batched IS-A discovery/hydration**: Reuses hydrated `EntityField` instances and field-name lookup maps across saves (`0` `EntityField` reallocations), adds `FindISAChildEntitiesBatch` (`UNION ALL` `WHERE pk IN (...)`) to `DatabaseProviderBase` / SQL Server / PostgreSQL, batches `TransformSimpleObjectToEntityObject` IS-A child hydration from $2N$ queries to $1\text{–}2$ queries per level, and collapses `CheckForChildRecords()` / `ResolveLeafEntity()` to 1 `UNION ALL` probe.
+  - **Narrow `Fields` server `RunView` / `RunViews`: cache-first read and an explicit opt-out**: On the server (`TrustLocalCacheCompletely`), a narrow `Fields` request first consults a warm superset cache slot (0-SQL hit projected to `Fields ∪ PK`). On a miss, cache-allowed entities still widen to the full entity superset and populate the shared slot (so later `Fields` subsets hit); `CacheLocal: false` or `BypassCache: true` now opts out end-to-end, preserving the narrow SQL `SELECT` without writing partial rows to the cache. Batched `RunViews` project each miss to its own param's `Fields`.
+  - **Test harness**: `InstrumentedLocalStorageProvider` records each write's options (`Writes` / `RowDeltaWrites`) so integration checks can assert what a distributed provider would broadcast.
+  - **Shared read-only metadata catalog & multi-pool `ViewColumnOrderCache` deduplication**: `MJServer` CodeGen DDL providers adopt the global `Metadata.Provider` catalog on boot (`ignoreExistingMetadata: false`), `SQLServerDataProvider` keys view-column-order `sys.columns` scans by database target and login (same-login pools share one scan; the read-only and CodeGen logins never stand in for the read-write one) with cross-pool invalidation, and `MJServer/src/context.ts` replaces dynamic PostgreSQL provider imports with a static import.
+
+- d7e95b9: Realtime sessions without a co-agent prompt run now say why once, when the session is prepared (the co-agent has no active prompt, or a run save failed), and the usage, transcript and tool-turn relays log the missing prompt run once per session instead of on every delta.
+- 4ef13d6: Warn when magic-link signing keys are ephemeral outside local dev (and expose `MagicLinkKeyManager.IsEphemeral`); explain unregistered dashboard classes with the registered keys and likely causes via the new `ClassFactory.DescribeMissingRegistration`.
+- 14c7719: The runtime schema update is observable across its own restart: the progress emitter can resume a run (manifest preserved, sequence continues), RSU run artifacts carry the connection id so they are readable over the API, and the post-restart half emits `CreateEntityMaps` and `StartSync` steps before closing the run.
+
+  A run is also survivable and stoppable. Listing runs now applies its filters and limit to the run manifests before hydrating anything, and a finished run's counts, warnings, event count and final event come from the `result.json` the emitter already wrote — so `IntegrationListRuns` with `limit:1` reads one journal instead of every journal four times. Retention prunes by run start time and sacrifices finished runs before result-less ones, so a stranded run's evidence is no longer the first thing deleted. `MJ_INTEGRATION_RUN_ARTIFACT_ROOT` moves the artifact tree out of the directory a deploy swaps. And the RSU compile runs with bounded turbo concurrency in its own process group, is killed (group-wide) when it exceeds its timeout instead of running on unattended, reports elapsed time while it runs, and fails the pipeline before the commit and restart steps rather than restarting the API onto an uncompiled tree.
+
+- fe03f54: An apply whose selected objects produce no tables now fails instead of running RSU on nothing.
+
+  `buildTargetConfigs` already drops a selected object that is not in the source schema, has no fields or has no primary key, and logs each drop — but every execution path then built and ran a migration anyway. With nothing accepted that migration was a header-only file, and every step after it was green: RSU wrote the file, opened and merged the PR, ran CodeGen, Explorer redeployed, and the sync "completed" over zero entity maps. Seen 2026-10-29 on a PropFuel connection — three selections requested, three dropped as `notInSchema`, three empty `RSU_` migrations committed, no entities.
+
+  `IntegrationApplySchema`, the connector build behind `IntegrationApplySchemaBatch`, `IntegrationApplyAll` and `IntegrationApplyAllBatch`, and `IntegrationSchemaEvolution` now throw `NO_TARGET_TABLES` when none of the selected objects produced a target table. The error names the requested objects (up to five, then a count) and why each was dropped. The existing `catch` turns it into `Success: false`. In the two batch mutations it fails only that connector. Schema evolution's error says what it had already committed: the refreshed catalog, and the removed objects' maps disabled. `IntegrationSchemaPreview` is not gated, because an empty preview is an honest answer.
+
+  `IntegrationApplySchema` now matches selected names case-insensitively, as `buildSchemaForConnector` already did. Before, a selection whose casing differed from the stored name selected nothing.
+
+  Empty migration SQL is still valid. A re-apply whose tables already exist, with no column changes, produces none, and still has entity maps to create, unselected maps to disable and a sync to start.
+
+- 9a2d7cc: RunView's `TotalRowCount` contract is now explicit: a number is always a real total, and `undefined` means the caller passed `SkipTotalRowCount: true`.
+
+  **Contract change.** `RunViewResult.TotalRowCount` is now optional (`TotalRowCount?: number`). With `SkipTotalRowCount: true` it is always `undefined`, including on a page that was not full, where it used to be the number of rows returned. A caller that needs a total must not pass the flag. Strict TypeScript consumers that read the field will see a compile error; a call without the flag always gets a number, so `?? 0` is safe there. `ResultType: 'count_only'` ignores the flag and always counts.
+
+  `MaxRows: 1` is no longer special-cased: a full page of one row now runs the same count as any other full page and reports the real total. Callers that only read `Results` should pass `SkipTotalRowCount: true` to avoid that second query; about 270 such reads in this repo now do. `SkipTotalRowCount` is now sent over GraphQL, so browser callers can use it too.
+
+- 36a3f9e: Security hardening across SQL filter construction, expression sandboxing, token verification, fail-closed endpoints, and client URL/selector screening:
+  - **Pure AST transform evaluation (`@memberjunction/global`)**: Replace `new Function` in `FieldTransformEngine` with an Acorn-based AST interpreter (`SafeTransformAstEvaluator`) that blocks prototype climbs, ambient global callback smuggling, and dynamic code generation, while supporting standard string/array transform methods (`split`, `slice`, `join`, `substring`, `replace`, `padStart`, `padEnd`, etc.). Harden `SafeExpressionEvaluator` against higher-order callback smuggling.
+  - **SQL filter & token hardening (`@memberjunction/server`, `@memberjunction/external-change-detection`, `@memberjunction/metadata-sync`)**: Enforce strict UUID shape validation and SQL string escaping on `ExtraFilter` interpolations across resolvers and REST handlers, reject non-primitive/non-literal primary key and lookup filter values in `MetadataSync`, perform non-short-circuiting constant-time access-token lookups in `GetDataResolver` with full token redaction from error messages, derive a domain-separated HS256 media-access signing subkey from `MJ_BASE_ENCRYPTION_KEY`, and default `SetupRESTEndpoints` to disabled (`enabled: false`).
+  - **Fail-closed registry auth (`@memberjunction/component-registry-server`)**: Refuse requests by default in `ComponentRegistryAPIServer.checkAPIKey` until overridden by a subclass, and protect both `/components` and `/feedback` routes when `requireAuth` is enabled.
+  - **Client URL-scheme & DOM selector screening (`@memberjunction/ng-core-entity-forms`, `@memberjunction/ng-conversations`, `@memberjunction/react-runtime`)**: Screen media and subresource URLs to `http:` / `https:` (rejecting `javascript:`, `data:`, `blob:`, and scheme-relative `//` targets) across viewer, open-in-tab, download, session-state rehydration, and dynamic `<script>` / `<link>` loaders, and replace interpolated `document.querySelector` URL lookups with direct attribute comparison.
+
+- ba00ac7: Optimize realtime voice session control/data planes, AI prompt/agent pre-model scaling, and core/server hot paths:
+  - **Template engine & voice control-plane (`@memberjunction/templates`, `@memberjunction/ai-agents`, `@memberjunction/ai-vertex`, `@memberjunction/server`)**: Preserve compiled Nunjucks templates across warm `TemplateEngineServer.Config(false)` calls (variable analyses still reset on every `Config()`, since they follow embedded templates by name); assemble the session-start memory context once instead of twice in `RealtimeClientSessionService`; share `VertexGoogleAuth` instances across sessions inside `GeminiEnterpriseRealtime.CreateGoogleAuth` keyed by a SHA-256 credential hash (inline service-account keys only; a key file or ADC is re-read per session so a rotated key takes effect); and skip the conversation read in the realtime session-access check for a named owner without a scope, through a new `AuthorizeLoadedSession` beside `AuthorizeSessionAccess` (`LoadSessionConversationScope` still always reads).
+  - **Realtime session usage accumulation fix (`@memberjunction/ai-agents`)**: Preserve `VideoTokens` and `VideoSeconds` modality detail fields when `RealtimeSessionRunner` merges incremental `RealtimeUsage` updates in `sumModalityDetail`, and compute each direction's modality detail once per update instead of twice.
+  - **Realtime audio/video data-plane & recording DSP (`@memberjunction/global`, `@memberjunction/ai-agents`, `@memberjunction/ai-bridge-base`, `@memberjunction/ai-bridge-ringcentral`, `@memberjunction/ai-realtime-client`, `@memberjunction/realtime-runtime`)**: Export `IS_LITTLE_ENDIAN` from `@memberjunction/global` and share it across audio/recording codecs; cache mixed timelines across `EncodeWav()` and `GetPeaks()` in `RealtimeRecordingCapture`; evaluate the 65-tap anti-aliasing FIR filter in `StreamingResampler` only at decimated output sample positions; use a 256-entry lookup table in `MuLawToPcm16`; replace the full-buffer concatenation on every `RealtimeRtpSender.Enqueue` call with an $O(1)$ chunk queue; and eliminate redundant per-frame allocations and double `JSON.parse` passes in `FrameSampler`, `Pcm16ToFloat32`, and `RealtimeSessionRuntime`.
+  - **AI prompt & agent pre-model scaling (`@memberjunction/ai-prompts`, `@memberjunction/ai-agents`)**: Fast-path clean UTF-8 strings in `BuildTemplateDataObjectShape`; use `AIEngine.Instance.PromptModelsByPromptID` via a single `getPromptModelsForPromptId` helper instead of linear `PromptModels.filter()` scans (`@memberjunction/ai-engine-base`: the index now raises the same `PermissionConstrainedError` as `PromptModels` instead of returning an empty map); and fast-path `EscapeRuntimeStateTags` when message text contains no `<` character.
+  - **Core foundations (`@memberjunction/core`)**: Consolidate `ProviderBase` `DedupLingerMs` expiry timers into a single `WeakRef(this)` + `.unref()` helper.
+
+- 3f92ec2: Sync lifecycle: `IntegrationGetResourcePressure` plus run warnings before a host runs out of memory or disk; deactivating a connection pauses its schedules, requests cancel of an in-flight sync and refuses refresh/evolution with a named reason; schema evolution offers accumulated custom columns and materialises accepted ones in the same migration; connectors declare a `SettingsSchema` exposed by `IntegrationGetConnectorSettingsSchema`.
+- 48d2b32: Sync sheds load under host memory pressure instead of only warning about it.
+
+  `ResourcePressure` previously watched the V8 heap, which cannot see the memory that actually
+  kills a sync: `--max-old-space-size` bounds old space only, while an HTTP response body lives in
+  `Buffer`/`ArrayBuffer` — external, and counted in neither. A throttle watching the heap reads
+  healthy right up to the kill. Measured on a 3,830 MB box: the kernel killed node at 3,478 MB RSS
+  against a 1,964 MB heap ceiling — 1.8x — with heap usage unremarkable.
+
+  It now also reads host RAM from `/proc/meminfo` (MemAvailable, not MemFree, which excludes
+  reclaimable page cache and reads far tighter than what a process can obtain) and reports
+  `ResidentFraction`. Where both thresholds trip, the worse of the two is reported under one code,
+  so a caller has a single number to act on.
+
+  `MemoryGovernor` decides and `RunMemoryControl` applies, split so the decision is testable without
+  a live sync. The governor runs PER BATCH rather than between entity maps: a table fetching twelve
+  consecutive 2,000-record pages allocates all of it without ever reaching a boundary, which is the
+  difference between noticing and dying. One control per run, never shared — the engine is a
+  singleton across concurrent syncs, so calibration held on it would let one connection's behaviour
+  throttle another's.
+
+  `AdaptiveConcurrency` gains `Hold()`/`Release()`: stop the cap GROWING without lowering it. The
+  cheapest possible response — everything in flight keeps running and nothing new is admitted — so
+  it costs no throughput. Without it the only options were "carry on" and "halve", and halving work
+  that is already succeeding is a real cost paid for a problem holding would have solved.
+
+  Memory pressure feeds the SAME AIMD signal a source rate-limit uses, so no per-connector tuning
+  and no advance knowledge of which connector misbehaves is required: a connector returning 10x the
+  requested batch costs 10x the memory, the reading notices, and the cap follows. The floor is 1, so
+  a sync always makes progress rather than deadlocking on a full box.
+
+  `ResourcePressureOutput` exposes `ResidentFraction`, `HostMemTotalMB` and `HostMemAvailableMB`.
+
+  The governor judges pressure on the HOST — memory in use, `MemTotal - MemAvailable` — not this
+  process's RSS, and sheds above 0.85 / releases below 0.75. RSS counts heap the deployment gave V8
+  on purpose: with the heap sized at (RAM - 1 GB) x 0.70, a large workspace sits at 72.7% of RAM five
+  minutes after a restart with nothing running, so a 0.70 trigger fired on ordinary work and a 0.55
+  release line sat below the idle floor. It takes at most one step per run every 10 s
+  (`DECISION_INTERVAL_MS`), whichever map reports, and under the release line gives one step back:
+  `ReleaseAdmissions` lets the concurrency controller ramp again and the page doubles back to its
+  configured size. Measured on a 825-table sync before this: five tables at 25 records a page for 75
+  minutes while 711 never started. `EvaluatePressure` uses the same reading and line.
+
+- 94e3a12: A sync's numbers, warnings and successes now correspond to what the run did: `RecordsSynced` counts records written (not created+updated+skipped+errored) and is finalised after the loop, so an object that completes in one page no longer sits at 0 forever; a discovery re-checks its connection before persisting and refuses when it has been deleted (which on the shared catalog used to succeed and overwrite the declared floor); discovery completion messages name the field counts, so a run that created 69 fields no longer reports "0 objects created, 0 updated"; repeated warnings are rolled up by code instead of burying a run under one cause, and the rollup keeps what each rolled-up occurrence reported; the batch apply and the schema evolution surface the declared-but-deactivated row warnings the single apply already had; the single apply reads `APIRestarted` from the pipeline, filters its fallback describe, and invalidates the catalog caches the batch always did; and the record-map read streams to its caller rather than holding every row of the table in memory.
+- Updated dependencies [2d46d11]
+- Updated dependencies [54f6563]
+- Updated dependencies [1419ba7]
+- Updated dependencies [305c429]
+- Updated dependencies [7d0885a]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [1515a51]
+- Updated dependencies [e8b240f]
+- Updated dependencies [971e7de]
+- Updated dependencies [91cba84]
+- Updated dependencies [8e10354]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [3db39aa]
+- Updated dependencies [f938b65]
+- Updated dependencies [9ec7306]
+- Updated dependencies [8f370b3]
+- Updated dependencies [e3e5892]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [9d6f675]
+- Updated dependencies [3bace5a]
+- Updated dependencies [b1a656b]
+- Updated dependencies [953086f]
+- Updated dependencies [da1a46f]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [038a857]
+- Updated dependencies [794660a]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [08f8966]
+- Updated dependencies [48c9cd2]
+- Updated dependencies [0fb3649]
+- Updated dependencies [896334a]
+- Updated dependencies [d659bb2]
+- Updated dependencies [2c38278]
+- Updated dependencies [ccfd553]
+- Updated dependencies [f53d786]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [bc0503a]
+- Updated dependencies [bbca6b6]
+- Updated dependencies [9202afc]
+- Updated dependencies [6779eed]
+- Updated dependencies [0b406e8]
+- Updated dependencies [c018cb9]
+- Updated dependencies [397ae9a]
+- Updated dependencies [40308bf]
+- Updated dependencies [cf6aee6]
+- Updated dependencies [6e43622]
+- Updated dependencies [89a5b59]
+- Updated dependencies [d7e95b9]
+- Updated dependencies [6b0de38]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [c8bbfce]
+- Updated dependencies [effedda]
+- Updated dependencies [14c7719]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [bd83dec]
+- Updated dependencies [81c5f3f]
+- Updated dependencies [c4a4eb9]
+- Updated dependencies [28395e0]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [3f92ec2]
+- Updated dependencies [48d2b32]
+- Updated dependencies [94e3a12]
+- Updated dependencies [aca4317]
+- Updated dependencies [d2e89fe]
+- Updated dependencies [7b543fb]
+- Updated dependencies [c8fb9d7]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/actions-bizapps-accounting@6.2.0-edge.7
+  - @memberjunction/ai-agents@6.2.0-edge.7
+  - @memberjunction/core-actions@6.2.0-edge.7
+  - @memberjunction/actions@6.2.0-edge.7
+  - @memberjunction/actions-base@6.2.0-edge.7
+  - @memberjunction/ai-core-plus@6.2.0-edge.7
+  - @memberjunction/search-engine@6.2.0-edge.7
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/core-entities-server@6.2.0-edge.7
+  - @memberjunction/livekit-room-server@6.2.0-edge.7
+  - @memberjunction/ai@6.2.0-edge.7
+  - @memberjunction/aiengine@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/generic-database-provider@6.2.0-edge.7
+  - @memberjunction/codegen-lib@6.2.0-edge.7
+  - @memberjunction/computer-use-engine@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/computer-use@6.2.0-edge.7
+  - @memberjunction/remote-browser-base@6.2.0-edge.7
+  - @memberjunction/remote-browser-cdp@6.2.0-edge.7
+  - @memberjunction/remote-browser-server@6.2.0-edge.7
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.7
+  - @memberjunction/scheduling-engine@6.2.0-edge.7
+  - @memberjunction/ai-engine-base@6.2.0-edge.7
+  - @memberjunction/ai-vector-sync@6.2.0-edge.7
+  - @memberjunction/integration-engine@6.2.0-edge.7
+  - @memberjunction/lists@6.2.0-edge.7
+  - @memberjunction/server-extensions-core@6.2.0-edge.7
+  - @memberjunction/task-graph@6.2.0-edge.7
+  - @memberjunction/work-queue-engine@6.2.0-edge.7
+  - @memberjunction/integration-engine-base@6.2.0-edge.7
+  - @memberjunction/integration-progress-artifacts@6.2.0-edge.7
+  - @memberjunction/ai-prompts@6.2.0-edge.7
+  - @memberjunction/tag-engine@6.2.0-edge.7
+  - @memberjunction/interactive-component-types@6.2.0-edge.7
+  - @memberjunction/testing-engine@6.2.0-edge.7
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.7
+  - @memberjunction/postgresql-dataprovider@6.2.0-edge.7
+  - @memberjunction/redis-provider@6.2.0-edge.7
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.7
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.7
+  - @memberjunction/schema-engine@6.2.0-edge.7
+  - @memberjunction/ai-agent-manager-actions@6.2.0-edge.7
+  - @memberjunction/ai-bridge-server@6.2.0-edge.7
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.7
+  - @memberjunction/api-keys@6.2.0-edge.7
+  - @memberjunction/clustering-engine@6.2.0-edge.7
+  - @memberjunction/communication-engine@6.2.0-edge.7
+  - @memberjunction/encryption@6.2.0-edge.7
+  - @memberjunction/esignature@6.2.0-edge.7
+  - @memberjunction/record-cloning@6.2.0-edge.7
+  - @memberjunction/record-comparison@6.2.0-edge.7
+  - @memberjunction/tag-engine-base@6.2.0-edge.7
+  - @memberjunction/templates@6.2.0-edge.7
+  - @memberjunction/version-history@6.2.0-edge.7
+  - @memberjunction/external-change-detection@6.2.0-edge.7
+  - @memberjunction/sql-parser@6.2.0-edge.7
+  - @memberjunction/sql-dialect@6.2.0-edge.7
+  - @memberjunction/ai-bridge-base@6.2.0-edge.7
+  - @memberjunction/ai-bridge-ringcentral@6.2.0-edge.7
+  - @memberjunction/ai-agent-manager@6.2.0-edge.7
+  - @memberjunction/scheduling-base-types@6.2.0-edge.7
+  - @memberjunction/actions-apollo@6.2.0-edge.7
+  - @memberjunction/actions-bizapps-crm@6.2.0-edge.7
+  - @memberjunction/actions-bizapps-formbuilders@6.2.0-edge.7
+  - @memberjunction/actions-bizapps-lms@6.2.0-edge.7
+  - @memberjunction/actions-bizapps-social@6.2.0-edge.7
+  - @memberjunction/actions-peopledatalabs@6.2.0-edge.7
+  - @memberjunction/scheduling-actions@6.2.0-edge.7
+  - @memberjunction/ai-mcp-client@6.2.0-edge.7
+  - @memberjunction/ai-bridge-teams@6.2.0-edge.7
+  - @memberjunction/ai-bridge-twilio@6.2.0-edge.7
+  - @memberjunction/ai-bridge-vonage@6.2.0-edge.7
+  - @memberjunction/remote-browser-selfhost@6.2.0-edge.7
+  - @memberjunction/ai-vectordb@6.2.0-edge.7
+  - @memberjunction/auth-providers@6.2.0-edge.7
+  - @memberjunction/communication-types@6.2.0-edge.7
+  - @memberjunction/entity-communications-base@6.2.0-edge.7
+  - @memberjunction/entity-communications-server@6.2.0-edge.7
+  - @memberjunction/notifications@6.2.0-edge.7
+  - @memberjunction/communication-ms-graph@6.2.0-edge.7
+  - @memberjunction/communication-sendgrid@6.2.0-edge.7
+  - @memberjunction/component-registry-client-sdk@6.2.0-edge.7
+  - @memberjunction/credentials@6.2.0-edge.7
+  - @memberjunction/doc-utils@6.2.0-edge.7
+  - @memberjunction/integration-schema-builder@6.2.0-edge.7
+  - @memberjunction/data-context@6.2.0-edge.7
+  - @memberjunction/data-context-server@6.2.0-edge.7
+  - @memberjunction/queue@6.2.0-edge.7
+  - @memberjunction/storage@6.2.0-edge.7
+  - @memberjunction/scheduling-engine-base@6.2.0-edge.7
+  - @memberjunction/testing-engine-base@6.2.0-edge.7
+  - @memberjunction/config@6.2.0-edge.7
+  - @memberjunction/lists-base@6.2.0-edge.7
+  - @memberjunction/network-utils@6.2.0-edge.7
+  - @memberjunction/theme-engine@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Minor Changes
