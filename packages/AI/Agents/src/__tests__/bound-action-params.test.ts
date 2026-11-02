@@ -467,6 +467,13 @@ describe('runs that inherit the bindings', () => {
         expect(runAgent).toHaveBeenCalledTimes(1);
         expect(runAgent.mock.calls[0][0].boundActionParams).toBe(bound);
     });
+    it("a realtime delegation target gets the run's host-assigned search scopes", async () => {
+        const probe = new Probe();
+        probe.Internals.resolveRealtimeTargetAgent = () => child;
+        probe.Internals.parseDelegateRequestText = () => 'do the thing';
+        await probe.Internals.delegateRealtimeToTarget(agentParams({ SearchScopeIDs: ['scope-1'] }), {} as AgentConfiguration, { CallID: 'c1', Arguments: '{}' });
+        expect(runAgent.mock.calls[0][0].SearchScopeIDs).toEqual(['scope-1']);
+    });
 });
 
 describe('a run that continues another (lastRunId)', () => {

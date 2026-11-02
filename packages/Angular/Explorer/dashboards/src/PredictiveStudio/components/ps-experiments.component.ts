@@ -335,6 +335,7 @@ export class PSExperimentsComponent implements OnInit {
         ExtraFilter: `Comments = '${EscapeSQLString(sessionComment)}'`,
         Fields: ['ID'],
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'simple',
       }, this.currentUser ?? undefined);
 

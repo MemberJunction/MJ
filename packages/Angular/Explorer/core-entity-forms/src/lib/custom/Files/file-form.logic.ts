@@ -59,3 +59,21 @@ export function DescribeFileSize(bytes: number | null | undefined): string | nul
   const val = bytes / Math.pow(1024, idx);
   return `${val.toFixed(idx === 0 ? 0 : 1)} ${units[idx]}`;
 }
+
+/**
+ * Returns true only when `url` resolves (against `baseOrigin`) to an `http:` or `https:` URL
+ * and is not a scheme-relative `//host/...` reference. Rejects `javascript:`, `data:`, `blob:`,
+ * `vbscript:`, `file:`, and malformed URLs so poisoned File URLs never reach
+ * `bypassSecurityTrustResourceUrl`, `window.open`, `fetch`, or sub-viewers.
+ */
+export function IsEmbeddableMediaUrl(url: string | null | undefined, baseOrigin: string): boolean {
+  if (typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed || trimmed.startsWith('//')) return false;
+  try {
+    const parsed = new URL(trimmed, baseOrigin);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}

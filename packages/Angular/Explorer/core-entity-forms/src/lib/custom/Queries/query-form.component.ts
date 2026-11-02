@@ -1,5 +1,6 @@
 import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, AfterViewInit, inject } from '@angular/core';
-import { MJQueryEntityExtended, MJQueryParameterEntity, MJQueryCategoryEntity, MJQueryFieldEntity, MJQueryEntityEntity, MJQueryPermissionEntity, MJQueryDependencyEntity, QueryEngine } from '@memberjunction/core-entities';
+import { MJQueryEntityExtended, MJQueryParameterEntity, MJQueryCategoryEntity, MJQueryFieldEntity, MJQueryEntityEntity, MJQueryPermissionEntity, MJQueryDependencyEntity, QueryEngine, ParseQueryDiagnostics } from '@memberjunction/core-entities';
+import type { QueryDiagnosticLine, QueryRefreshExtractionOutput } from '@memberjunction/core-entities';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent, FormToolbarConfig, CUSTOM_LAYOUT_TOOLBAR_CONFIG, MJFormPresenterService } from '@memberjunction/ng-base-forms';
 import { MJQueryFormComponent } from '../../generated/Entities/MJQuery/mjquery.form.component';
@@ -7,6 +8,8 @@ import { RUN_QUERY_SQL_FILTERS, CompositeKey, BaseEntity } from '@memberjunction
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CodeEditorComponent, CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
+import { EditorMarkersFor, ExtractionSeverityOf, HideUnreadableFieldRows, SaveRefusalOf } from './query-form-logic';
+import type { QueryRefreshScope } from '@memberjunction/ng-query-viewer';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { Subject } from 'rxjs';
@@ -372,6 +375,10 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
 
         this.isInitialLoad = false;
         this.cdr.detectChanges();
+
+        // The editable child rows come from the database, not the cache, so a save writes exactly
+        // what the user saw and changed.
+        await this.loadDeclaredChildren();
     }
 
     ngOnDestroy() {
@@ -406,8 +413,11 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
 
     override CancelEdit(): void {
         super.CancelEdit();
+        this.clearSaveDiagnostics();
         this.updateEditorValue(); // Reset editor value to record SQL
         this.SqlEditor?.setEditable(false);
+        // Discard added, removed and edited child rows: reload them as stored.
+        void this.loadDeclaredChildren(true).then(() => this.updateUnsavedChangesFlag());
         this.updateUnsavedChangesFlag(); // Reset unsaved changes flag
     }
 
@@ -428,6 +438,8 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
             // Use the setValue method from mj-code-editor component
             this.SqlEditor.setValue(sqlValue);
             this.isUpdatingEditorValue = false;
+            // Replacing the text drops the markers, so set them again for the new text.
+            this.applyEditorMarkers();
         }, 0);
     }
 
@@ -441,8 +453,9 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     }
 
     LoadQueryParameters() {
-        if (this.record && this.record.ID) {
-            this.QueryParameters = this.record.QueryParameters;
+        if (this.record) {
+            const declared = this.record.DeclaredParameters;
+            this.QueryParameters = declared.IsLoaded || !this.record.IsSaved ? [...declared.Items] : this.record.QueryParameters;
             if (!this.isInitialLoad) this.cdr.detectChanges();
         }
     }
@@ -453,10 +466,22 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     }
 
     LoadQueryFields() {
-        if (this.record && this.record.ID) {
-            this.QueryFields = this.record.QueryFields;
+        if (this.record) {
+            const declared = this.record.DeclaredFields;
+            const rows = declared.IsLoaded || !this.record.IsSaved ? [...declared.Items] : this.record.QueryFields;
+            this.QueryFields = this.fieldsVisibleToUser(rows);
             if (!this.isInitialLoad) this.cdr.detectChanges();
         }
+    }
+
+    /**
+     * Leaves out the fields whose source the current user may not read: the user's results never
+     * carry those columns, so the form does not name them either.
+     */
+    private fieldsVisibleToUser(rows: MJQueryFieldEntity[]): MJQueryFieldEntity[] {
+        const provider = this.ProviderToUse;
+        const visible = this.record.QueryFieldsVisibleTo(provider.CurrentUser, provider.Entities);
+        return HideUnreadableFieldRows(rows, this.record.QueryFields, visible);
     }
 
     /** @deprecated Use {@link LoadQueryFields}. */
@@ -465,10 +490,48 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     }
 
     LoadQueryEntities() {
-        if (this.record && this.record.ID) {
-            this.QueryEntities = this.record.QueryEntities;
+        if (this.record) {
+            const declared = this.record.DeclaredEntities;
+            this.QueryEntities = declared.IsLoaded || !this.record.IsSaved ? [...declared.Items] : this.record.QueryEntities;
             if (!this.isInitialLoad) this.cdr.detectChanges();
         }
+    }
+
+    /**
+     * Loads the query's parameters, fields and entity links into the declared collections, which
+     * the form edits and the query's save writes as one unit (a graph save). `force` discards
+     * unsaved changes to them.
+     */
+    private async loadDeclaredChildren(force = false): Promise<void> {
+        if (!this.record?.IsSaved) {
+            this.refreshChildLists();
+            return;
+        }
+        this.IsLoadingParameters = this.IsLoadingFields = this.IsLoadingEntities = true;
+        this.cdr.detectChanges();
+        try {
+            await Promise.all([
+                this.record.DeclaredParameters.Load(force),
+                this.record.DeclaredFields.Load(force),
+                this.record.DeclaredEntities.Load(force),
+            ]);
+        } catch (error) {
+            console.error('Error loading the query\'s parameters, fields and entities:', error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Could not load this query\'s parameters, fields and entities for editing; showing the cached copy.', 'warning', 5000);
+        } finally {
+            this.IsLoadingParameters = this.IsLoadingFields = this.IsLoadingEntities = false;
+            this.refreshChildLists();
+        }
+    }
+
+    /** Copies the declared collections into the lists the template shows. */
+    private refreshChildLists(): void {
+        this.LoadQueryParameters();
+        this.LoadQueryFields();
+        this.LoadQueryEntities();
+        this.updateUnsavedChangesFlag();
+        this.cdr.detectChanges();
     }
 
     /** @deprecated Use {@link LoadQueryEntities}. */
@@ -652,8 +715,13 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
      * Updates the hasUnsavedChanges flag based on entity dirty states
      */
     private updateUnsavedChangesFlag() {
-        this.HasUnsavedChanges = this.QueryParameters.some(param => param.Dirty) || 
-                                this.record?.Dirty || false;
+        // The record's Dirty includes its declared collections (added, removed and edited rows).
+        this.HasUnsavedChanges = this.record?.Dirty ?? false;
+    }
+
+    /** A child row's annotation changed in a grid. */
+    public OnChildRowChanged(): void {
+        this.updateUnsavedChangesFlag();
     }
 
     ToggleFiltersHelp() {
@@ -722,40 +790,20 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     }
     
     /**
-     * Add a new parameter
+     * Adds a parameter the user declares. It is written with the query when the query is saved.
      */
     async AddParameter() {
         try {
-            const md = this.ProviderToUse;
-            const newParam = await md.GetEntityObject<MJQueryParameterEntity>('MJ: Query Parameters');
-            newParam.QueryID = this.record.ID;
-            newParam.Name = `param${this.QueryParameters.length + 1}`;
-            newParam.Type = 'string';
-            newParam.IsRequired = false;
-            
-            const saved = await newParam.Save();
-            if (saved) {
-                this.QueryParameters.push(newParam);
-                this.updateUnsavedChangesFlag();
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    'Parameter added successfully',
-                    'success',
-                    3000
-                );
-            } else {
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    'Failed to add parameter',
-                    'error',
-                    3000
-                );
-            }
+            const param = await this.record.DeclaredParameters.Create();
+            param.Name = `param${this.QueryParameters.length + 1}`;
+            param.Type = 'string';
+            param.IsRequired = false;
+            param.DetectionMethod = 'Manual';
+            this.ParametersPanelExpanded = true;
+            this.refreshChildLists();
         } catch (error) {
             console.error('Error adding parameter:', error);
-            MJNotificationService.Instance.CreateSimpleNotification(
-                'Error adding parameter',
-                'error',
-                3000
-            );
+            MJNotificationService.Instance.CreateSimpleNotification('Error adding parameter', 'error', 3000);
         }
     }
 
@@ -778,55 +826,13 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     }
     
     /**
-     * Delete a parameter
+     * Removes a parameter. A stored one is deleted when the query is saved.
      */
     async DeleteParameter(param: MJQueryParameterEntity) {
-        if (!(await this.confirmService.ConfirmDelete({ title: 'Delete Parameter', message: `Delete parameter "${param.Name}"?` }))) {
+        if (!(await this.confirmService.ConfirmDelete({ title: 'Remove Parameter', message: `Remove parameter "${param.Name}"? It is deleted when you save the query.` }))) {
             return;
         }
-
-        try {
-            // Reload the parameter entity fresh to ensure we have a clean copy
-            // not tied to any form transaction state
-            const md = this.ProviderToUse;
-            const freshParam = await md.GetEntityObject<MJQueryParameterEntity>('MJ: Query Parameters');
-            const loaded = await freshParam.Load(param.ID);
-            if (!loaded) {
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    'Could not load parameter record. It may have already been deleted.',
-                    'warning',
-                    3000
-                );
-                // Remove from local list anyway since it doesn't exist
-                this.removeParameterFromList(param);
-                return;
-            }
-
-            const deleted = await freshParam.Delete();
-            if (deleted) {
-                this.removeParameterFromList(param);
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    'Parameter deleted successfully',
-                    'success',
-                    3000
-                );
-            } else {
-                const errorDetail = freshParam.LatestResult?.CompleteMessage ?? 'Unknown reason';
-                console.error('Failed to delete parameter:', errorDetail);
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    `Failed to delete parameter: ${errorDetail}`,
-                    'error',
-                    5000
-                );
-            }
-        } catch (error) {
-            console.error('Error deleting parameter:', error);
-            MJNotificationService.Instance.CreateSimpleNotification(
-                'Error deleting parameter',
-                'error',
-                3000
-            );
-        }
+        this.removeChildRow(this.record.DeclaredParameters.Items, row => this.record.DeclaredParameters.Remove(row), param);
     }
 
     /** @deprecated Use {@link DeleteParameter}. */
@@ -834,14 +840,19 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
       return this.DeleteParameter(param);
     }
 
-    private removeParameterFromList(param: MJQueryParameterEntity): void {
-        const index = this.QueryParameters.indexOf(param);
-        if (index > -1) {
-            this.QueryParameters.splice(index, 1);
+    /**
+     * Removes a row from one of the declared collections and refreshes the lists. A row the form
+     * shows from the cache (the collections could not be loaded) cannot be removed this way.
+     */
+    private removeChildRow<T>(items: readonly T[], remove: (row: T) => void, row: T): void {
+        if (!items.includes(row)) {
+            MJNotificationService.Instance.CreateSimpleNotification('This row cannot be removed here; reload the query and try again.', 'warning', 4000);
+            return;
         }
-        this.cdr.detectChanges();
+        remove(row);
+        this.refreshChildLists();
     }
-    
+
     /**
      * Create a new Query Category in a slide-in via the generic
      * MJFormPresenterService. A new record opens in edit mode automatically.
@@ -979,36 +990,171 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
             }
         }
 
-        // Save any unsaved query entities first
-        if (this.EditMode) {
-            for (const entity of this.QueryEntities) {
-                if (!entity.IsSaved && entity.EntityID) {
-                    try {
-                        await entity.Save();
-                    } catch (error) {
-                        console.error('Error saving query entity:', error);
-                    }
-                }
-            }
+        // An entity link with no entity chosen yet is not saved with the query.
+        for (const link of [...this.record.DeclaredEntities.Items]) {
+            if (!link.IsSaved && !link.EntityID) this.record.DeclaredEntities.Remove(link);
         }
 
-        // Call the parent save method
+        // One graph save: the query row and its declared parameters, fields and entity links are
+        // written together, so the server's extraction sees the children in the same transaction.
         const result = await super.SaveRecord(StopEditModeAfterSave);
-        
-        if (result) {
-            this.updateUnsavedChangesFlag();
 
-            // Reload related data after successful save as server-side processes may have updated them
-            if (this.record && this.record.ID) {
-                this.LoadQueryParameters();
-                this.LoadQueryFields();
-                this.LoadQueryEntities();
-                this.updateCategoryPathDisplay();
-                this.cdr.detectChanges();
+        if (result) {
+            this.clearSaveDiagnostics();
+            // The server re-derives facts after the save, so reload the rows as now stored.
+            await this.loadDeclaredChildren(true);
+            this.updateCategoryPathDisplay();
+            this.applyEditorMarkers();
+            this.cdr.detectChanges();
+        } else {
+            this.showSaveDiagnostics();
+        }
+
+        return result;
+    }
+
+    /**
+     * Saves the query with its declared parameters, fields and entity links as one graph save, then
+     * any permission rows the permissions grid queued, in a transaction group of their own.
+     *
+     * The base form enrols the record in a transaction group whenever rows are queued, and a graph
+     * save cannot run inside one (the group defers the query's own write, so its children would be
+     * written against a row that does not exist yet). The query is therefore written first; if a
+     * permission row then fails, the query stays saved and the save reports the failure.
+     */
+    protected override async InternalSaveRecord(): Promise<boolean> {
+        if (!this.record) return false;
+        if (!(await this.record.Save())) return false;
+        return this.savePendingRows();
+    }
+
+    private async savePendingRows(): Promise<boolean> {
+        const pending = this.PendingRecords;
+        if (pending.length === 0) return true;
+        const tg = await this.ProviderToUse.CreateTransactionGroup();
+        try {
+            for (const item of pending) {
+                item.entityObject.TransactionGroup = tg;
+                if (item.action === 'save') await item.entityObject.Save();
+                else await item.entityObject.Delete();
+            }
+            return await tg.Submit();
+        } finally {
+            // A member left in a submitted group would queue its next write into a group that is done.
+            for (const item of pending) {
+                if (item.entityObject.TransactionGroup === tg) item.entityObject.TransactionGroup = null;
             }
         }
-        
-        return result;
+    }
+
+    // ─── Save-time diagnostics and extraction status ────────────────────────────
+
+    /** Why the last save was refused, one finding per rule the SQL broke; empty after a successful save. */
+    public SaveDiagnostics: QueryDiagnosticLine[] = [];
+    /** The refusal's headline, e.g. `Query "X" was not saved:`. */
+    public SaveDiagnosticsHeadline: string | null = null;
+
+    /** The findings of the query's last metadata extraction (`ExtractionMessage`), one per line. */
+    public get ExtractionDiagnostics(): QueryDiagnosticLine[] {
+        return ParseQueryDiagnostics(this.record?.ExtractionMessage);
+    }
+
+    /** The extraction status as the badge shows it. */
+    public get ExtractionStatusLabel(): string {
+        return this.record?.ExtractionStatus ?? 'Not extracted';
+    }
+
+    /** CSS modifier for the extraction status badge. */
+    public get ExtractionStatusClass(): string {
+        return `extraction-badge--${(this.record?.ExtractionStatus ?? 'none').toLowerCase()}`;
+    }
+
+    /** How serious the extraction message is, for the diagnostics list. */
+    public get ExtractionSeverity(): 'error' | 'warning' | 'info' {
+        return ExtractionSeverityOf(this.record?.ExtractionStatus);
+    }
+
+    private showSaveDiagnostics(): void {
+        const refusal = SaveRefusalOf(this.record.LatestResult?.Message || this.record.LatestResult?.CompleteMessage);
+        this.SaveDiagnostics = refusal ? [...refusal.Diagnostics] : [];
+        this.SaveDiagnosticsHeadline = refusal?.Headline ?? null;
+        if (refusal) this.SqlPanelExpanded = true;
+        this.applyEditorMarkers();
+        this.cdr.detectChanges();
+    }
+
+    private clearSaveDiagnostics(): void {
+        this.SaveDiagnostics = [];
+        this.SaveDiagnosticsHeadline = null;
+    }
+
+    /**
+     * Marks findings in the SQL editor: a refused save's findings as errors while there are any,
+     * otherwise the last extraction's findings that carry a location.
+     */
+    private applyEditorMarkers(): void {
+        this.SqlEditor?.SetDiagnosticMarkers(EditorMarkersFor(this.SaveDiagnostics, this.ExtractionDiagnostics, this.record?.ExtractionStatus));
+    }
+
+    /** A finding's location was clicked: show that place in the SQL editor. */
+    public OnDiagnosticLocationClick(diagnostic: QueryDiagnosticLine): void {
+        if (diagnostic.Line === null || diagnostic.Column === null) return;
+        this.SqlPanelExpanded = true;
+        this.cdr.detectChanges();
+        this.SqlEditor?.RevealPosition(diagnostic.Line, diagnostic.Column);
+    }
+
+    // ─── Refresh metadata ───────────────────────────────────────────────────────
+
+    public ShowRefreshDialog = false;
+
+    /** This query, as the refresh dialog's scope. */
+    public get RefreshScope(): QueryRefreshScope | null {
+        return this.record?.IsSaved ? { Kind: 'Queries', QueryIDs: [this.record.ID] } : null;
+    }
+
+    /** Names this query in the refresh dialog. */
+    public get RefreshScopeLabel(): string {
+        return `Query “${this.record?.Name ?? ''}”`;
+    }
+
+    /** Whether the user may refresh this query's metadata: a saved query, not being edited, and Update permission on queries. */
+    public get CanRefreshMetadata(): boolean {
+        if (!this.record?.IsSaved || this.EditMode) return false;
+        const user = this.ProviderToUse.CurrentUser;
+        return !!user && !!this.record.EntityInfo?.GetUserPermisions(user)?.CanUpdate;
+    }
+
+    public OpenRefreshDialog(): void {
+        this.ShowRefreshDialog = true;
+        this.cdr.detectChanges();
+    }
+
+    public OnRefreshDialogClosed(): void {
+        this.ShowRefreshDialog = false;
+        this.cdr.detectChanges();
+    }
+
+    /** A refresh was applied: reload the query row (its extraction status) and its child rows. */
+    public async OnRefreshApplied(_output: QueryRefreshExtractionOutput): Promise<void> {
+        try {
+            await this.record.Load(this.record.ID);
+        } catch (error) {
+            console.error('Error reloading the query after a refresh:', error);
+        }
+        await this.loadDeclaredChildren(true);
+        this.applyEditorMarkers();
+        this.cdr.detectChanges();
+    }
+
+    /** Opens a query named in the refresh report. */
+    public OnRefreshOpenQuery(queryID: string): void {
+        this.navigationService.OpenEntityRecord('MJ: Queries', CompositeKey.FromID(queryID));
+    }
+
+    /** Opens the entity field a query column comes from. */
+    public OnOpenSourceField(entityFieldID: string): void {
+        this.navigationService.OpenEntityRecord('MJ: Entity Fields', CompositeKey.FromID(entityFieldID));
     }
 
     GetStatusBadgeColor(): string {
@@ -1125,37 +1271,23 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     }
 
     /**
-     * Add a new field
+     * Adds a field the user declares, by name. Its facts (type, nullability, source) come from the
+     * database server when the query is saved; the user supplies the annotations.
      */
     async AddField() {
         try {
-            const md = this.ProviderToUse;
-            const newField = await md.GetEntityObject<MJQueryFieldEntity>('MJ: Query Fields');
-            newField.QueryID = this.record.ID;
-            newField.Name = `field${this.QueryFields.length + 1}`;
-            newField.Description = '';
-            newField.Sequence = (this.QueryFields.length + 1) * 10;
-            newField.SQLBaseType = 'nvarchar';
-            newField.SQLFullType = 'nvarchar(255)';
-            
-            const saved = await newField.Save();
-            if (saved) {
-                this.QueryFields.push(newField);
-                this.QueryFields.sort((a, b) => (a.Sequence || 0) - (b.Sequence || 0));
-                this.updateUnsavedChangesFlag();
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    'Field added successfully',
-                    'success',
-                    3000
-                );
-            }
+            const field = await this.record.DeclaredFields.Create();
+            field.Name = `field${this.QueryFields.length + 1}`;
+            field.Description = '';
+            field.Sequence = this.QueryFields.length + 1;
+            field.SQLBaseType = 'nvarchar';
+            field.SQLFullType = 'nvarchar(255)';
+            field.DetectionMethod = 'Manual';
+            this.FieldsPanelExpanded = true;
+            this.refreshChildLists();
         } catch (error) {
             console.error('Error adding field:', error);
-            MJNotificationService.Instance.CreateSimpleNotification(
-                'Failed to add field',
-                'error',
-                3000
-            );
+            MJNotificationService.Instance.CreateSimpleNotification('Failed to add field', 'error', 3000);
         }
     }
 
@@ -1165,49 +1297,13 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     }
 
     /**
-     * Delete a field
+     * Removes a field. A stored one is deleted when the query is saved.
      */
     async DeleteField(field: MJQueryFieldEntity) {
-        if (!(await this.confirmService.ConfirmDelete({ title: 'Delete Field', message: `Delete field "${field.Name}"?` }))) {
+        if (!(await this.confirmService.ConfirmDelete({ title: 'Remove Field', message: `Remove field "${field.Name}"? It is deleted when you save the query.` }))) {
             return;
         }
-
-        try {
-            const md = this.ProviderToUse;
-            const freshField = await md.GetEntityObject<MJQueryFieldEntity>('MJ: Query Fields');
-            const loaded = await freshField.Load(field.ID);
-            if (!loaded) {
-                this.QueryFields = this.QueryFields.filter(f => !UUIDsEqual(f.ID, field.ID));
-                this.cdr.detectChanges();
-                return;
-            }
-
-            const deleted = await freshField.Delete();
-            if (deleted) {
-                this.QueryFields = this.QueryFields.filter(f => !UUIDsEqual(f.ID, field.ID));
-                this.updateUnsavedChangesFlag();
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    'Field deleted successfully',
-                    'success',
-                    3000
-                );
-            } else {
-                const errorDetail = freshField.LatestResult?.CompleteMessage ?? 'Unknown reason';
-                console.error('Failed to delete field:', errorDetail);
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    `Failed to delete field: ${errorDetail}`,
-                    'error',
-                    5000
-                );
-            }
-        } catch (error) {
-            console.error('Error deleting field:', error);
-            MJNotificationService.Instance.CreateSimpleNotification(
-                'Failed to delete field',
-                'error',
-                3000
-            );
-        }
+        this.removeChildRow(this.record.DeclaredFields.Items, row => this.record.DeclaredFields.Remove(row), field);
     }
 
     /** @deprecated Use {@link DeleteField}. */
@@ -1216,24 +1312,17 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     }
 
     /**
-     * Add a new entity
+     * Adds an entity link the user declares. It is written with the query when the query is saved.
      */
     async AddEntity() {
         try {
-            const md = this.ProviderToUse;
-            const newEntity = await md.GetEntityObject<MJQueryEntityEntity>('MJ: Query Entities');
-            newEntity.QueryID = this.record.ID;
-            
-            // Add to the list immediately for UI responsiveness
-            this.QueryEntities.push(newEntity);
-            this.updateUnsavedChangesFlag();
+            const entity = await this.record.DeclaredEntities.Create();
+            entity.DetectionMethod = 'Manual';
+            this.EntitiesPanelExpanded = true;
+            this.refreshChildLists();
         } catch (error) {
             console.error('Error adding entity:', error);
-            MJNotificationService.Instance.CreateSimpleNotification(
-                'Failed to add entity',
-                'error',
-                3000
-            );
+            MJNotificationService.Instance.CreateSimpleNotification('Failed to add entity', 'error', 3000);
         }
     }
 
@@ -1243,49 +1332,13 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
     }
 
     /**
-     * Delete an entity
+     * Removes an entity link. A stored one is deleted when the query is saved.
      */
     async DeleteEntity(entity: MJQueryEntityEntity) {
-        if (!(await this.confirmService.ConfirmDelete({ title: 'Delete Entity', message: `Delete entity "${entity.Entity}"?` }))) {
+        if (!(await this.confirmService.ConfirmDelete({ title: 'Remove Entity', message: `Remove entity "${entity.Entity || 'this entity'}"? It is deleted when you save the query.` }))) {
             return;
         }
-
-        try {
-            const md = this.ProviderToUse;
-            const freshEntity = await md.GetEntityObject<MJQueryEntityEntity>('MJ: Query Entities');
-            const loaded = await freshEntity.Load(entity.ID);
-            if (!loaded) {
-                this.QueryEntities = this.QueryEntities.filter(e => !UUIDsEqual(e.ID, entity.ID));
-                this.cdr.detectChanges();
-                return;
-            }
-
-            const deleted = await freshEntity.Delete();
-            if (deleted) {
-                this.QueryEntities = this.QueryEntities.filter(e => !UUIDsEqual(e.ID, entity.ID));
-                this.updateUnsavedChangesFlag();
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    'Entity deleted successfully',
-                    'success',
-                    3000
-                );
-            } else {
-                const errorDetail = freshEntity.LatestResult?.CompleteMessage ?? 'Unknown reason';
-                console.error('Failed to delete entity:', errorDetail);
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    `Failed to delete entity: ${errorDetail}`,
-                    'error',
-                    5000
-                );
-            }
-        } catch (error) {
-            console.error('Error deleting entity:', error);
-            MJNotificationService.Instance.CreateSimpleNotification(
-                'Failed to delete entity',
-                'error',
-                3000
-            );
-        }
+        this.removeChildRow(this.record.DeclaredEntities.Items, row => this.record.DeclaredEntities.Remove(row), entity);
     }
 
     /** @deprecated Use {@link DeleteEntity}. */

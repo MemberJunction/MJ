@@ -664,6 +664,7 @@ const COMPOSED_CASES: RenderCase[] = [
     },
     {
         Name: 'RR Comp Token In String Literal',
+        BreaksSaveRules: true,
         SQL: `SELECT b.ID, '{{query:"Nowhere/Nothing"}}' AS Note FROM {{query:"{P}/RR Dep Base"}} b WHERE b.ID <= 4 ORDER BY b.ID`,
         Columns: ['ID', 'Note'], Ordered: true,
         Expect: items => items.filter(i => i.ID <= 4).map(i => ({ ID: i.ID, Note: '{{query:"Nowhere/Nothing"}}' }))
@@ -818,10 +819,10 @@ export const RunQueryRenderingChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const fixtures = requireFixtures();
             const path = RenderCategoryPath(fixtures);
-            const missing = await CreateRenderQuery(fixtures, { Name: 'RR Comp Missing', SQL: `SELECT ID FROM {{query:"${path}/RR Nonexistent"}}` }, ctx.User);
-            const notReusable = await CreateRenderQuery(fixtures, { Name: 'RR Comp Not Reusable', SQL: `SELECT ID FROM {{query:"${path}/RR Dep Not Reusable"}}` }, ctx.User);
-            const cycleA = await CreateRenderQuery(fixtures, { Name: 'RR Cycle A', Reusable: true, SQL: `SELECT ID FROM {{query:"${path}/RR Cycle B"}}` }, ctx.User);
-            await CreateRenderQuery(fixtures, { Name: 'RR Cycle B', Reusable: true, SQL: `SELECT ID FROM {{query:"${path}/RR Cycle A"}}` }, ctx.User);
+            const missing = await CreateRenderQuery(fixtures, { Name: 'RR Comp Missing', BreaksSaveRules: true, SQL: `SELECT ID FROM {{query:"${path}/RR Nonexistent"}}` }, ctx.User);
+            const notReusable = await CreateRenderQuery(fixtures, { Name: 'RR Comp Not Reusable', BreaksSaveRules: true, SQL: `SELECT ID FROM {{query:"${path}/RR Dep Not Reusable"}}` }, ctx.User);
+            const cycleA = await CreateRenderQuery(fixtures, { Name: 'RR Cycle A', Reusable: true, BreaksSaveRules: true, SQL: `SELECT ID FROM {{query:"${path}/RR Cycle B"}}` }, ctx.User);
+            await CreateRenderQuery(fixtures, { Name: 'RR Cycle B', Reusable: true, BreaksSaveRules: true, SQL: `SELECT ID FROM {{query:"${path}/RR Cycle A"}}` }, ctx.User);
             await RefreshRenderQueries(ctx.User);
             await expectFailure(missing.ID, /not found/i, 'missing dependency', ctx.User);
             await expectFailure(notReusable.ID, /not marked as Reusable/i, 'non-reusable dependency', ctx.User);
@@ -1003,7 +1004,9 @@ async function expectDeniedDependencyFailure(fixtures: RenderFixtures, path: str
     Assert(await permission.Save(), `restricting the dependency failed: ${permission.LatestResult?.CompleteMessage}`);
     try {
         await RefreshRenderQueries(user);
-        await expectFailure(composed.ID, /does not have permission to run query 'RR Comp Restricted'/i, `dependency restricted to role '${role.Name}'`, user);
+        // Run by ID, so the refusal echoes the ID (never the query's name).
+        const unavailable = new RegExp(`^Query '${composed.ID}' does not exist or you do not have permission to run it\\.$`, 'i');
+        await expectFailure(composed.ID, unavailable, `dependency restricted to role '${role.Name}'`, user);
     } finally {
         if (!await permission.Delete()) console.error(`runquery-rendering: removing the dependency restriction failed: ${permission.LatestResult?.CompleteMessage}`);
         await RefreshRenderQueries(user);

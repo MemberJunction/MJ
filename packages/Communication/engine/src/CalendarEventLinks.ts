@@ -311,7 +311,7 @@ export class CalendarEventLinks {
             calendarID ? `CalendarID='${EscapeSQLString(calendarID)}'` : 'CalendarID IS NULL'
         ].join(' AND ');
         const result = await RunView.FromMetadataProvider(this.md).RunView<MJCalendarSyncStateEntity>(
-            { EntityName: SYNC_STATE_ENTITY, ExtraFilter: filter, ResultType: 'entity_object', MaxRows: 1 },
+            { EntityName: SYNC_STATE_ENTITY, ExtraFilter: filter, ResultType: 'entity_object', MaxRows: 1, SkipTotalRowCount: true },
             contextUser
         );
         if (!result.Success) throw new Error(`Loading the calendar sync state failed: ${result.ErrorMessage}`);

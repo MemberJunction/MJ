@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BaseEngine, BaseEnginePropertyConfig, PermissionConstrainedError } from '../generic/baseEngine';
 import { UserInfo } from '../generic/securityInfo';
-import { IMetadataProvider, RunViewResult } from '../generic/interfaces';
+import { DatasetResultType, IMetadataProvider, RunViewResult } from '../generic/interfaces';
 import { GetGlobalObjectStore } from '@memberjunction/global';
 
 /**
@@ -24,6 +24,7 @@ const USER = { ID: 'u1', Email: 'restricted@example.com' } as unknown as UserInf
 class TestEngine extends BaseEngine<TestEngine> {
     public _alpha: unknown[] = [];
     public _beta: unknown[] = [];
+    public _datasetMeta: Record<string, unknown[]> = { AlphaItems: [] };
 
     public async Config(): Promise<void> {
         // configs are injected directly
@@ -43,6 +44,10 @@ class TestEngine extends BaseEngine<TestEngine> {
 
     public HandleResultForTest(config: BaseEnginePropertyConfig, result: RunViewResult): void {
         this.HandleSingleViewResult(config, result, USER);
+    }
+
+    public async LoadDatasetForTest(config: BaseEnginePropertyConfig): Promise<void> {
+        await this.LoadSingleDatasetConfig(config, USER, false);
     }
 
     public Read(propertyName: string): unknown[] {
@@ -141,5 +146,100 @@ describe('BaseEngine loaded-empty permission states', () => {
             expect(vi.getTimerCount()).toBe(0);
         });
 
+    });
+
+    describe('Dataset configs under permission constraints (MJ#6106, MJ#5926)', () => {
+        const DATASET_CONFIG = new BaseEnginePropertyConfig({
+            Type: 'dataset',
+            DatasetName: 'Template_Metadata',
+            DatasetResultHandling: 'single_property',
+            PropertyName: '_datasetMeta',
+            Entities: ['MJ: Templates', 'MJ: Template Contents'],
+        });
+
+        it('CheckPermissionsOrSkipAll skips dataset configs with unreadable Entities and marks them permissionDenied', () => {
+            expect(engine.SkipAllForTest([DATASET_CONFIG])).toEqual([]);
+            expect(engine.IsPermissionConstrained).toBe(true);
+            expect(engine.PermissionConstrainedEntities).toEqual(['MJ: Templates', 'MJ: Template Contents']);
+            expect(engine.EntryFor('_datasetMeta')).toMatchObject({
+                loadedSuccessfully: true,
+                permissionDenied: true,
+            });
+            expect(engine._datasetMeta).toEqual({ AlphaItems: [] });
+        });
+
+        it('LoadSingleDatasetConfig classifies a permission-denied dataset result as loaded-empty (readDenied: true)', async () => {
+            const deniedResult: DatasetResultType = {
+                DatasetID: '',
+                DatasetName: 'Template_Metadata',
+                Success: false,
+                Status: 'User restricted@example.com does not have read permissions on MJ: Templates',
+                LatestUpdateDate: null as unknown as Date,
+                Results: [],
+            };
+            const providerWithDataset = {
+                ...makeProvider({ readable: false }),
+                GetAndCacheDatasetByName: vi.fn().mockResolvedValue(deniedResult),
+            } as unknown as IMetadataProvider;
+            engine.Prepare(providerWithDataset, [DATASET_CONFIG]);
+
+            await engine.LoadDatasetForTest(DATASET_CONFIG);
+
+            expect(engine.EntryFor('_datasetMeta')).toMatchObject({
+                loadedSuccessfully: true,
+                readDenied: true,
+            });
+        });
+
+        it('LoadSingleDatasetConfig leaves loadedSuccessfully=false for a transient dataset failure when user can read', async () => {
+            const transientFailure: DatasetResultType = {
+                DatasetID: '',
+                DatasetName: 'Template_Metadata',
+                Success: false,
+                Status: 'Network connection reset',
+                LatestUpdateDate: null as unknown as Date,
+                Results: [],
+            };
+            const providerWithDataset = {
+                ...makeProvider({ readable: true }),
+                GetAndCacheDatasetByName: vi.fn().mockResolvedValue(transientFailure),
+            } as unknown as IMetadataProvider;
+            engine.Prepare(providerWithDataset, [DATASET_CONFIG]);
+
+            await engine.LoadDatasetForTest(DATASET_CONFIG);
+
+            expect(engine.EntryFor('_datasetMeta')?.loadedSuccessfully).toBe(false);
+        });
+
+        it('LoadSingleDatasetConfig classifies a server read refusal as loaded-empty for a dataset config with no Entities, by the Status text alone', async () => {
+            // No `Entities` on the config and a provider that says the user CAN read, so the local
+            // metadata check cannot classify the failure. Only the server's status message can.
+            const unannotatedConfig = new BaseEnginePropertyConfig({
+                Type: 'dataset',
+                DatasetName: 'Template_Metadata',
+                DatasetResultHandling: 'single_property',
+                PropertyName: '_datasetMeta',
+            });
+            const serverRefusal: DatasetResultType = {
+                DatasetID: '',
+                DatasetName: 'Template_Metadata',
+                Success: false,
+                Status: 'User restricted@example.com does not have read permissions on MJ: Template Contents',
+                LatestUpdateDate: null as unknown as Date,
+                Results: [],
+            };
+            const providerWithDataset = {
+                ...makeProvider({ readable: true }),
+                GetAndCacheDatasetByName: vi.fn().mockResolvedValue(serverRefusal),
+            } as unknown as IMetadataProvider;
+            engine.Prepare(providerWithDataset, [unannotatedConfig]);
+
+            await engine.LoadDatasetForTest(unannotatedConfig);
+
+            expect(engine.EntryFor('_datasetMeta')).toMatchObject({
+                loadedSuccessfully: true,
+                readDenied: true,
+            });
+        });
     });
 });

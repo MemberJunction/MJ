@@ -17,6 +17,7 @@ export * from './custom/ConversationWriteAccess';
 export * from './custom/ConversationForkAccess';
 export * from './custom/MJConversationBranchEntityExtended';
 export * from './custom/MJQueryEntityExtended';
+export * from './custom/QueryDiagnostics';
 export * from './custom/approvals';
 export * from './custom/MJThemeEntityExtended';
 export * from './custom/AIAgentNoteStatus';
@@ -50,6 +51,8 @@ export * from './engines/PermissionEngine';
 export * from './engines/AuditLogTypeEngine';
 export * from './engines/ResourceTypeEngine';
 export * from './engines/IdentityClaimEngine';
+export * from './engines/BrandKitEngine';
+export * from './engines/VideoStudioEngine';
 
 export * from './custom/PermissionProviders';
 export * from './custom/Permissions';
