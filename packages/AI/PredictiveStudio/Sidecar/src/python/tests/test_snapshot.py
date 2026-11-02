@@ -5,6 +5,8 @@ from __future__ import annotations
 import dataclasses
 import datetime as dt
 import json
+import shutil
+import subprocess
 import threading
 from collections.abc import Callable, Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -17,6 +19,7 @@ from app import snapshot as SN
 from app.encoding import MISSING_TOKEN, CategoricalEncoding, MissingPolicy, NumericEncoding
 from app.failures import RunClock, SnapshotLoadFailure, TrainerFailure
 from app.trainer_schemas import TrainerRequest
+from tests.tools.gate_parity import CORE_ENTRY, SIDECAR_ROOT
 from tests.tools.trainer_fixture import FileServer, JsonObject, JsonValue, candidates, protocol, request, snapshot_files
 from tests.tools.trainer_scaffold import FEATS, TASK, binary_frame, server  # noqa: F401 - `server` is a pytest fixture
 
@@ -397,9 +400,11 @@ def _dated(snap: SN.Snapshot, period: SN.DecisionPeriod, dates: list[str],
     [
         ("quarter", [2024 * 4 + 0, 2024 * 4 + 0, 2024 * 4 + 1, 2024 * 4 + 3, 2025 * 4 + 0]),
         ("month", [2024 * 12 + 0, 2024 * 12 + 2, 2024 * 12 + 3, 2024 * 12 + 11, 2025 * 12 + 0]),
-        ("week", [dt.date(2024, 1, 1).toordinal() // 7, dt.date(2024, 3, 31).toordinal() // 7,
-                  dt.date(2024, 4, 1).toordinal() // 7, dt.date(2024, 12, 31).toordinal() // 7,
-                  dt.date(2025, 1, 1).toordinal() // 7]),
+        # Monday weeks: 2024-01-01 is a Monday (ordinal 738886, so week (738886 - 1) // 7); 2024-03-31 is a Sunday,
+        # the last day of the week that 2024-04-01 does not share.
+        ("week", [(dt.date(2024, 1, 1).toordinal() - 1) // 7, (dt.date(2024, 3, 31).toordinal() - 1) // 7,
+                  (dt.date(2024, 4, 1).toordinal() - 1) // 7, (dt.date(2024, 12, 31).toordinal() - 1) // 7,
+                  (dt.date(2025, 1, 1).toordinal() - 1) // 7]),
         ("day", [dt.date(2024, 1, 1).toordinal(), dt.date(2024, 3, 31).toordinal(), dt.date(2024, 4, 1).toordinal(),
                  dt.date(2024, 12, 31).toordinal(), dt.date(2025, 1, 1).toordinal()]),
     ],
@@ -415,8 +420,7 @@ def test_period_ordinals_bucket_each_decision_period(period: SN.DecisionPeriod, 
         ("year", ["2024-01-01", "2024-01-01", "2024-01-01", "2024-01-01", "2025-01-01"]),
         ("quarter", ["2024-01-01", "2024-01-01", "2024-04-01", "2024-10-01", "2025-01-01"]),
         ("month", ["2024-01-01", "2024-03-01", "2024-04-01", "2024-12-01", "2025-01-01"]),
-        ("week", [dt.date.fromordinal(dt.date(2024, m, d).toordinal() // 7 * 7).isoformat()
-                  for m, d in ((1, 1), (3, 31), (4, 1), (12, 31))] + [dt.date.fromordinal(dt.date(2025, 1, 1).toordinal() // 7 * 7).isoformat()]),
+        ("week", ["2024-01-01", "2024-03-25", "2024-04-01", "2024-12-30", "2024-12-30"]),
         ("day", ["2024-01-01", "2024-03-31", "2024-04-01", "2024-12-31", "2025-01-01"]),
     ],
 )
@@ -427,6 +431,36 @@ def test_period_start_is_the_first_day_of_each_rows_period(period: SN.DecisionPe
     got = [SN.period_start(o, period) for o in ordinals]
     assert [d.isoformat() for d in got] == starts
     assert SN.period_ordinals(_dated(SN.parse_snapshot(*_files(), HASH), period, starts)).tolist() == ordinals
+
+
+# Fourteen consecutive days (every weekday twice, across a month and a year boundary) plus quarter and leap-day edges.
+_PARITY_DAYS = [(dt.date(2023, 12, 25) + dt.timedelta(days=i)).isoformat() for i in range(14)] + [
+    "2024-02-29", "2024-03-31", "2024-04-01", "2024-09-30", "2024-10-01", "2025-06-15"]
+
+
+def _ts_holdout_periods(days: list[str], period: str) -> list[str]:
+    """Core `HoldoutCarve.HoldoutPeriods` (built `dist`) over `days`: the period starts the engine names a holdout's
+    out-of-time slices by."""
+    node = shutil.which("node")
+    assert node is not None, "node is required: the TypeScript side of the parity check runs under Node"
+    assert CORE_ENTRY.exists(), f"the built Core is missing ({CORE_ENTRY}): run `pnpm run build` in PredictiveStudio/Core"
+    script = ("import { HoldoutCarve } from '@memberjunction/predictive-studio-core';"
+              "const [days, period] = JSON.parse(process.argv[1]);"
+              "process.stdout.write(JSON.stringify(HoldoutCarve.HoldoutPeriods(days, period)));")
+    done = subprocess.run([node, "--input-type=module", "-e", script, json.dumps([days, period])], check=False,
+                          capture_output=True, text=True, cwd=SIDECAR_ROOT)
+    assert done.returncode == 0, done.stderr
+    starts: list[str] = json.loads(done.stdout)
+    return starts
+
+
+@pytest.mark.parametrize("period", ["day", "week", "month", "quarter", "year"])
+def test_period_starts_match_the_engines_holdout_periods(period: SN.DecisionPeriod) -> None:
+    """The trainer's slice names (`period_start` of each row's period ordinal) are the engine's holdout periods, so
+    out-of-time slice coverage compares like with like; weeks start on Monday on both sides."""
+    snap = _dated(SN.parse_snapshot(*_files(), HASH), period, _PARITY_DAYS)
+    python = sorted({SN.period_start(int(o), period).isoformat() for o in SN.period_ordinals(snap).tolist()})
+    assert python == _ts_holdout_periods(_PARITY_DAYS, period)
 
 
 def test_the_manifest_period_takes_precedence_over_the_decision_date() -> None:

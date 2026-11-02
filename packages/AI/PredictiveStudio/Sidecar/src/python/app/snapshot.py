@@ -526,7 +526,9 @@ def _ordinal(day: dt.date, period: DecisionPeriod) -> int:
     if period == "month":
         return day.year * 12 + day.month - 1
     if period == "week":
-        return day.toordinal() // 7
+        # Weeks start on Monday, as the engine's holdout periods do (Core `HoldoutCarve`): ordinal 1, 0001-01-01, is a
+        # Monday.
+        return (day.toordinal() - 1) // 7
     return day.toordinal()
 
 
@@ -539,7 +541,7 @@ def period_start(ordinal: int, period: DecisionPeriod) -> dt.date:
     if period == "month":
         return dt.date(ordinal // 12, ordinal % 12 + 1, 1)
     if period == "week":
-        return dt.date.fromordinal(ordinal * 7)
+        return dt.date.fromordinal(ordinal * 7 + 1)
     return dt.date.fromordinal(ordinal)
 
 
