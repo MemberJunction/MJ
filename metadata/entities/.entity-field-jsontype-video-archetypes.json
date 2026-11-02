@@ -1,0 +1,44 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on BeatTemplate and Pacing (MJ: Video Archetypes entity)",
+      "so CodeGen emits typed BeatTemplateObject and PacingObject accessors."
+    ],
+    "fields": {
+      "Name": "MJ: Video Archetypes"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "VideoBeatTemplate",
+            "JSONTypeIsArray": true,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IVideoArchetypeJsonTypes.ts"
+          },
+          "_comments": [
+            "BeatTemplate field — ordered array of beat slot definitions for the video archetype"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Video Archetypes&Name=BeatTemplate"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "VideoPacing",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IVideoArchetypeJsonTypes.ts"
+          },
+          "_comments": [
+            "Pacing field — default cut cadence and hold rules for the video archetype"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Video Archetypes&Name=Pacing"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Video Archetypes"
+    }
+  }
+]

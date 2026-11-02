@@ -1,0 +1,493 @@
+{
+  "fields": {
+    "Name": "Video Production Quality",
+    "Status": "Active",
+    "Description": "Judges a rendered film from its frames, contact sheets and timeline: the hook, readability, consistency, motion, sound, brand, data and generated-asset honesty."
+  },
+  "primaryKey": {
+    "ID": "9860024F-9B41-4A44-B0DA-39066BF0FEE2"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Versions": [
+      {
+        "fields": {
+          "RubricID": "@parent:ID",
+          "PassThreshold": 0.7,
+          "NotApplicablePolicy": "NotAllowed",
+          "ScoreDisplayMin": 0,
+          "ScoreDisplayMax": 1,
+          "ChangeSummary": "Initial publish.",
+          "Instructions": "Judge only the rendered frames, contact sheets and the narration/cue timeline, never the agent's intentions; score each criterion Meets, Partial or Miss; Partial is below a gate; mark Not applicable only where a criterion allows it; for each Miss or Partial name the timestamp, beat and evidence."
+        },
+        "primaryKey": {
+          "ID": "9A680DA9-23A5-4CC6-9913-828C31E95C04"
+        },
+        "relatedEntities": {
+          "MJ: Rubric Criteria": [
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "hook-lands-in-the-first-two-seconds",
+                "Name": "The hook lands in the first two seconds",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 0,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "Inspect the opening frames between 0.0s and 2.0s. The core premise, headline metric, or focal subject must be legible and established within the first two seconds rather than hidden behind a slow fade or blank intro slate."
+              },
+              "primaryKey": {
+                "ID": "8FB68B99-CB69-4AD4-99BC-8E96768E53F8"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "The hook is clearly established and legible within the first two seconds."
+                    },
+                    "primaryKey": {
+                      "ID": "9E34FEFF-6B3D-4364-8179-CFCE508A002E"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "Elements of the hook appear in the first two seconds, but the headline or focal point is incomplete or hard to read until after 2.0s."
+                    },
+                    "primaryKey": {
+                      "ID": "34DA6790-8D8B-4AA6-9ECB-576DE99290BA"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "The first two seconds are blank, generic, or fail to present the hook."
+                    },
+                    "primaryKey": {
+                      "ID": "297618E5-6FE3-4B3C-8F8E-12688972CE8F"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "readable-at-phone-size",
+                "Name": "Text is readable at phone size",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 1,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "Check all on-screen text across every rendered format. Headlines, labels, and captions must have sufficient size, contrast, safe-zone clearance, and hold duration to be read comfortably on a phone screen without clipping or overlap."
+              },
+              "primaryKey": {
+                "ID": "2BCE04BD-6BD5-4E4A-AECF-CBF09578543E"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "All on-screen text is crisp, well-contrasted, inside safe zones, and readable at phone size."
+                    },
+                    "primaryKey": {
+                      "ID": "90B918CB-C823-4A0D-9F4A-F0D90E8645EB"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "Primary headlines are readable, but secondary labels, axis ticks, or captions are cramped, low-contrast, or briefly clipped."
+                    },
+                    "primaryKey": {
+                      "ID": "553E5F36-F3D2-44F7-A75C-91D9F1EE84C0"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Key on-screen text is illegible, overlapping, clipped, or too small to read on a phone screen."
+                    },
+                    "primaryKey": {
+                      "ID": "C7EDF831-FCC7-4DCD-A057-8E749B0B0C07"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "type-and-color-stay-consistent",
+                "Name": "Type and color stay consistent",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 2,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "Compare typography hierarchy, font weights, and color tokens from beat to beat. Identical roles (headlines, body copy, data callouts, backgrounds) must use consistent type treatments and palette values throughout the film."
+              },
+              "primaryKey": {
+                "ID": "8D6E6B2A-B029-4CB9-B4D0-18867AD4264F"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Typography hierarchy and color palette remain cohesive and consistent across every beat."
+                    },
+                    "primaryKey": {
+                      "ID": "99DF98CA-2B9F-4CA3-B595-F5AA916810FC"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "Most beats share a consistent visual system, with minor drift in font sizing, weight, or accent colors on one or two beats."
+                    },
+                    "primaryKey": {
+                      "ID": "FA9437BB-4BD1-45B9-A342-0CE2152778CD"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Typefaces, sizes, or colors change arbitrarily between beats with no coherent visual system."
+                    },
+                    "primaryKey": {
+                      "ID": "2AD521CE-F0C5-440C-92A6-AD7B1CDC9E15"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "motion-has-weight-and-a-clear-focus",
+                "Name": "Motion has weight and a clear focus",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 3,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "Evaluate transitions,choreography, and hold times across the contact sheet and frames. Motion should direct the viewer's eye to one focal element at a time with purposeful easing and hold pauses, avoiding simultaneous competing animations or abrupt cuts."
+              },
+              "primaryKey": {
+                "ID": "D1C2569C-761D-4454-B972-0E0F2A3EC546"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Motion is purposeful, weighted, and guides attention to a single clear focal point per beat with adequate hold time."
+                    },
+                    "primaryKey": {
+                      "ID": "29280BF1-F1DA-4515-ABF7-B042BE653059"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "Motion is generally clear, but some transitions feel rushed, mechanical, or divide attention between competing elements."
+                    },
+                    "primaryKey": {
+                      "ID": "196FB247-0F8E-48A4-A9D4-0F29DE4F3AB9"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Motion is chaotic, frozen, or cuts away before key content settles into a readable hold."
+                    },
+                    "primaryKey": {
+                      "ID": "4574165D-45A3-4947-BEE0-4D0972506D12"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "sound-is-in-sync-with-the-picture",
+                "Name": "Sound is in sync with the picture",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "ExcludeAndRedistribute",
+                "Sequence": 4,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "Compare narration word timing and audio cues against the visual beat transitions and on-screen reveals. Spoken figures and callouts should align with the moment those visuals appear on screen. Not applicable only when the film has no narration, music or cues."
+              },
+              "primaryKey": {
+                "ID": "DEDC51DB-4A67-432B-BAB7-5457543A4903"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Narration, music, and cues align tightly with visual beat transitions and on-screen reveals."
+                    },
+                    "primaryKey": {
+                      "ID": "1A1E6BDE-1799-40B0-B037-D2F657862FC5"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "Audio generally follows the picture, but one or more spoken callouts or cues land noticeably early or late."
+                    },
+                    "primaryKey": {
+                      "ID": "78731564-DAAC-4BD3-A519-DE4AD5BE6744"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "Narration or audio cues are out of sync with the visual beats, clipped at the end, or contradict what is shown on screen."
+                    },
+                    "primaryKey": {
+                      "ID": "7FF1651E-2F8A-4BEE-B4F0-DADEB34C4D5E"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "stays-on-brand",
+                "Name": "The film stays on brand",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 5,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "Check the rendered frames against the spec's Style palette, typography, imagery rules, Keep/Avoid lists, and approved brand assets. The film must honor the brand kit's visual direction and avoid prohibited patterns."
+              },
+              "primaryKey": {
+                "ID": "2362BE09-1B71-44DF-B0E7-2D78182E3395"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "The film faithfully applies the brand palette, typography, approved assets, and Keep/Avoid rules."
+                    },
+                    "primaryKey": {
+                      "ID": "11B99DA5-EA1F-47F2-B103-9FA6A8B8599F"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "The film mostly follows the brand style but includes a minor off-palette color, unstyled element, or Avoid pattern."
+                    },
+                    "primaryKey": {
+                      "ID": "A2C1F8C8-F3E3-4C99-91ED-3954FC326076"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "The film ignores the brand palette, typography, or NeverInvent/Avoid rules."
+                    },
+                    "primaryKey": {
+                      "ID": "F532CFF5-315B-4ECC-990C-12F55FBE0AA7"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "shown-values-match-the-data-snapshot",
+                "Name": "Every value shown matches the data snapshot",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": true,
+                "GateMinimumScore": 0.6,
+                "NotApplicablePolicy": "ExcludeAndRedistribute",
+                "Sequence": 6,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "Compare every on-screen number, percent and currency value with the snapshot; verify that the closing or provenance beat displays the snapshot's AsOf timestamp when data is shown. Not applicable only when the film shows no data."
+              },
+              "primaryKey": {
+                "ID": "B70A9BCF-DEC6-4A07-9936-196FDDB57498"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Every on-screen number, percent, currency value, and as-of timestamp matches the data snapshot exactly."
+                    },
+                    "primaryKey": {
+                      "ID": "7A47373F-65D8-47D3-84DC-C1470BD17D2B"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "Shown figures match the data snapshot, but a unit label, rounding format, or as-of timestamp is missing or imprecise."
+                    },
+                    "primaryKey": {
+                      "ID": "98A3837C-6B1A-4E48-8839-A9A989008161"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "At least one on-screen number, percent, or currency value is invented or disagrees with the data snapshot."
+                    },
+                    "primaryKey": {
+                      "ID": "73E4A952-BEBF-4A90-AA90-F7A98AE8E041"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "final-frame-works-as-a-poster",
+                "Name": "The final frame works as a poster",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 7,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "Inspect the closing beat and final rendered frame. The ending state must hold as a clean, self-contained summary or call-to-action poster rather than fading to black or cutting mid-transition."
+              },
+              "primaryKey": {
+                "ID": "72D2D1D7-5AE7-4C74-BAA9-9C98819BAC97"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "The final frame is a balanced, legible, self-contained composition that works as a standalone poster."
+                    },
+                    "primaryKey": {
+                      "ID": "4CCDECC1-B1A2-4B04-95FD-A310DACBD0F0"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "The final frame is legible but visually sparse, mid-fade, or missing the closing takeaway."
+                    },
+                    "primaryKey": {
+                      "ID": "C67DC012-1FEE-45CF-8336-F74437844964"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "The final frame is blank, faded out, or unintelligible as a standalone frame."
+                    },
+                    "primaryKey": {
+                      "ID": "684DD3B8-8DBC-420C-93AB-1A6715CAD6F4"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "generated-assets-are-honest-and-disclosed",
+                "Name": "Generated assets are honest and disclosed",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": true,
+                "GateMinimumScore": 0.6,
+                "NotApplicablePolicy": "ExcludeAndRedistribute",
+                "Sequence": 8,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Meets / Partial / Miss",
+                "Guidance": "Miss if a generated person is presented as a real member, customer, employee, speaker or beneficiary; if generated imagery shows a real person's likeness or garbled text or a look-alike logo; or if a generated asset stands in for a real product screen, logo, number or a real place the organization claims. Partial if every generated asset is honest but at least one is not marked Generated in the production or not listed in the human-review notes. Not applicable only when the film uses no generated assets."
+              },
+              "primaryKey": {
+                "ID": "2A603A33-C75E-4647-B545-2E416EF4FDA2"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "42707415-F55B-4658-BDED-E6C63CEBAA5C",
+                      "Descriptor": "Every generated asset is honest (never impersonating real people, product screens, logos, metrics, or places) and is both marked Generated in the production and listed in the human-review notes."
+                    },
+                    "primaryKey": {
+                      "ID": "CE173A0D-A1B6-4C4E-B7B1-28C8A295A89E"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "A9E1A258-D99F-47A4-87EF-646C160D0282",
+                      "Descriptor": "Every generated asset is honest, but at least one is not marked Generated in the production or not listed in the human-review notes."
+                    },
+                    "primaryKey": {
+                      "ID": "D5A3FD53-56E0-4BA9-A27E-5EE25C67E614"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "B555FE53-2E9B-4FB6-A092-0AE8E9557367",
+                      "Descriptor": "A generated person is presented as a real member, customer, employee, speaker or beneficiary; generated imagery shows a real person's likeness, garbled text, or a look-alike logo; or a generated asset stands in for a real product screen, logo, number, or real place."
+                    },
+                    "primaryKey": {
+                      "ID": "997554D8-8A2B-4F35-8240-EC34301E8F65"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

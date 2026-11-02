@@ -1,0 +1,323 @@
+[
+  {
+    "fields": {
+      "Name": "Generate Video",
+      "Description": "Generates a single raw AI video clip using AI video generation models (such as Black Forest Labs FLUX 3) via AIVideoRunner, with no multi-shot composition, captions, narration, or audio mixing. For composed multi-shot films with titles, lower thirds, captions, narration, and music, use Video Studio. Supports TextToVideo, ImageToVideo, Continuation, and VideoToVideo modes with reference images, keyframes, and source video loaded from MJ Storage as the caller.",
+      "DriverClass": "Generate Video",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-film",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=AI"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Prompt",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Text description of the video clip to generate.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "11B7A3E9-1ADD-411E-93BB-9B8DECD4BF24"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Mode",
+            "DefaultValue": "TextToVideo",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Video generation mode: 'TextToVideo' (default), 'ImageToVideo', 'Continuation', or 'VideoToVideo'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C59A6969-23FD-4EC0-A65B-D34C2010325E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DurationSeconds",
+            "DefaultValue": "5",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Requested clip duration in seconds on input (default: 5); actual duration of the generated video clip in seconds on output.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BC2CF2A9-0867-4E4B-97D0-55DBF274662A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AspectRatio",
+            "DefaultValue": "16:9",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Target aspect ratio in W:H format, such as '16:9' (default), '9:16', or '1:1'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EFBA63DF-02DD-471E-84A4-5BDCA982DABE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Quality",
+            "DefaultValue": "standard",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Generation quality tier: 'draft', 'standard' (default), or 'high'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FEABF610-A84B-49B2-8191-E847BC547A50"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ReferenceImageFileIDs",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Optional array of MJ: Files IDs for reference images (for example in ImageToVideo mode). Every file must be readable by the calling user.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C735F2FA-FD8C-4563-A833-F476B00516A9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Keyframes",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Optional JSON array of keyframe image bindings, each shaped as { \"Seconds\": 0, \"FileID\": \"...\" } referencing an MJ: Files record readable by the calling user.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "25D99BAA-F3AE-41D7-87B2-A4F00E2A3E2A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SourceVideoFileID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional MJ: Files ID of the source video clip for Continuation or VideoToVideo modes. Must be readable by the calling user.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "14D1A59B-AA2D-4843-AE46-0E4DE43A872E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WantAudio",
+            "DefaultValue": "false",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether the video generator should synthesize native audio when supported (default: false).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4DE9A5D7-9CC7-4A05-BF69-8C692508371B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Model",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional active Video model Name or APIName to pin (for example 'FLUX 3 Video' or 'flux-3-video'). When omitted, the Default Generative Video prompt's model bindings select the model with failover.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "70AC0C5C-A0BC-4E97-948A-B14C9B2FABFD"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FileID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the MJ: Files record where the generated video clip was stored (present when ResultCode is VIDEO_GENERATED)."
+          },
+          "primaryKey": {
+            "ID": "A8EEE04B-BD5C-4B42-BD4A-127EB4EEBBED"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Videos",
+            "Type": "Output",
+            "ValueType": "MediaOutput",
+            "MediaModality": "Video",
+            "IsArray": true,
+            "Description": "Single-element MediaOutput array describing the generated video clip (with fileId when stored, or inline base64 data when storage failed, plus dimensions, durationSeconds, and provenance metadata)."
+          },
+          "primaryKey": {
+            "ID": "D994CB25-4272-42CE-9986-474CE57F3B43"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ModelUsed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the AI model that generated the video clip."
+          },
+          "primaryKey": {
+            "ID": "3F733583-44F8-4029-95C7-92E7F7E4840C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PromptRunID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the MJ: AI Prompt Runs record logged for this video generation call."
+          },
+          "primaryKey": {
+            "ID": "769B446E-CF26-4EDA-92CD-0F8A86100D46"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Cost",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Driver-reported cost for the video generation run, when reported by the provider."
+          },
+          "primaryKey": {
+            "ID": "6F87186E-8A8C-4C4F-8BF8-CC4CDCF3B063"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Provenance",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Provenance metadata object ({ Provenance: 'Generated', ModelID, ModelName, PromptRunID, JobID, Prompt, DurationSeconds, C2PA, Cost })."
+          },
+          "primaryKey": {
+            "ID": "B1AB76B9-DAD0-45DA-A195-7EA6F29AF8E1"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VIDEO_GENERATED",
+            "IsSuccess": true,
+            "Description": "Video clip was successfully generated and saved to MJ Storage."
+          },
+          "primaryKey": {
+            "ID": "02A8B5EC-58A3-4D7B-9968-999F254B5289"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VIDEO_GENERATED_INLINE",
+            "IsSuccess": true,
+            "Description": "Video clip was generated, but saving to MJ Storage failed; the clip is returned inline in the Videos output parameter."
+          },
+          "primaryKey": {
+            "ID": "1BD35E74-1F96-4EE1-ACF3-B0B0BBA57C2C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PROMPT",
+            "IsSuccess": false,
+            "Description": "The required Prompt parameter was not provided."
+          },
+          "primaryKey": {
+            "ID": "04EC5ECD-190C-4483-9900-29660F43C7D2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMS",
+            "IsSuccess": false,
+            "Description": "One or more input parameters (Mode, DurationSeconds, AspectRatio, Quality, Keyframes, ReferenceImageFileIDs, WantAudio, or Model) were invalid."
+          },
+          "primaryKey": {
+            "ID": "B5FB7F35-763A-40C9-9FF2-B82600E4097B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "REFERENCE_NOT_READABLE",
+            "IsSuccess": false,
+            "Description": "One or more referenced MJ: Files records could not be found or read by the calling user."
+          },
+          "primaryKey": {
+            "ID": "12A0C50D-4CC0-4A78-A0FE-F5F18336CA43"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "GENERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "The video generation runner or provider returned a failure."
+          },
+          "primaryKey": {
+            "ID": "4D058573-85D4-4A7F-92E2-CCA49B611AEF"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ACTION_FAILED",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred during action execution."
+          },
+          "primaryKey": {
+            "ID": "25304C4F-8A9A-4342-A210-99DD31558CC3"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "1B1FEEFF-9D87-425E-99DA-2F68CE53F822"
+    }
+  }
+]

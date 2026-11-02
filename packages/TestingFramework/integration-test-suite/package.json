@@ -87,6 +87,8 @@
     "@memberjunction/testing-engine-base": "6.2.0-edge.6",
     "@memberjunction/testing-integration": "6.2.0-edge.6",
     "@memberjunction/unit-testing": "6.2.0-edge.6",
+    "@memberjunction/video-studio": "6.2.0-edge.6",
+    "@memberjunction/video-studio-core": "6.2.0-edge.6",
     "@memberjunction/work-queue-core": "6.2.0-edge.6",
     "@memberjunction/work-queue-engine": "6.2.0-edge.6",
     "@memberjunction/work-queue-server": "6.2.0-edge.6",

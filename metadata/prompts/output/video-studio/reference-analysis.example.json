@@ -1,0 +1,14 @@
+{
+  "SourceKey": "ref-annual-report-deck",
+  "PaletteLearned": "Deep slate-navy background (#0B1020) with crisp off-white typography (#F8FAFC) and single-hue electric cyan (#38BDF8) data highlights.",
+  "TypographyLearned": "Heavy geometric sans-serif display headings paired with medium monospace numerals for KPI figures and generous line height.",
+  "CompositionLearned": "Asymmetric two-column layout with primary KPI numeral anchored at upper-left and wide 8% outer safe margins.",
+  "PacingLearned": "Measured 5-second beat cadence with at least 1.5 seconds of static hold after each counter settles.",
+  "MotionLearned": "Calm, high-damping cubic-bezier entrances with staggered vertical reveals.",
+  "TextureLearned": "Subtle 1px slate hairline borders separating metric cards over flat dark surfaces.",
+  "DoNotCopy": [
+    "The reference deck's proprietary company logo and wordmark in the top-right corner",
+    "Verbatim customer quote text and named enterprise logos on slide 2",
+    "The specific isometric server-rack illustration on the cover frame"
+  ]
+}

@@ -73,6 +73,8 @@ interface PaginatedFetchResult {
     NextPage?: number;
     NextOffset?: number;
     NextCursor?: string;
+    /** The object's total as the API last stated it (`PaginationState.TotalRecords`); absent when it never said. */
+    TotalRecords?: number;
 }
 
 /** One template variable resolved to its parent IntegrationObject + FK field. */
@@ -556,6 +558,9 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             NextPage: result.NextPage,
             NextOffset: result.NextOffset,
             NextCursor: result.NextCursor,
+            // Carried out so the engine can check a clean scan against it (FETCH_SHORT_OF_SOURCE_TOTAL).
+            // Flat endpoints only: a per-parent fetch's total counts one parent's children, not the object.
+            SourceTotalRecords: result.TotalRecords,
         };
     }
 
@@ -1363,6 +1368,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         let cursor: string | undefined = ctx.CurrentCursor;
         let hasMore = true;
         let previousFirstRecordKey: string | undefined;
+        let totalRecords: number | undefined;
 
         while (hasMore && allRecords.length < batchLimit) {
             // Cap the requested page size so the API never returns more than we can fit.
@@ -1408,6 +1414,8 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
                 response.Body, obj.PaginationType, page, offset, obj.DefaultPageSize ?? records.length
             );
             hasMore = paginationState.HasMore;
+            // The latest page's statement wins: a total that moves while we page is normal.
+            if (typeof paginationState.TotalRecords === 'number') totalRecords = paginationState.TotalRecords;
             page = paginationState.NextPage ?? page + 1;
             offset = paginationState.NextOffset ?? offset + records.length;
             cursor = paginationState.NextCursor;
@@ -1419,6 +1427,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             NextPage: page,
             NextOffset: offset,
             NextCursor: cursor,
+            TotalRecords: totalRecords,
         };
     }
 

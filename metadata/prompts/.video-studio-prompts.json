@@ -1,0 +1,1018 @@
+[
+  {
+    "fields": {
+      "Name": "Video Studio - Orchestrator",
+      "Description": "Root Loop orchestrator prompt for Video Studio. Sequences the seven production stages, honours code-enforced gates, escalates missing data or blocked asset generation via Chat, and handles sub-agent consults.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/video-studio/orchestrator.template.md",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Video Studio",
+      "ResponseFormat": "JSON",
+      "Status": "Active",
+      "OutputType": "object",
+      "OutputExample": "@file:output/video-studio/orchestrator.example.json",
+      "ValidationBehavior": "Warn",
+      "SelectionStrategy": "Specific",
+      "PromptRole": "System",
+      "PromptPosition": "First"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6B5C4038-5553-4F30-9EE8-79D721471CC6"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4E2B3383-6BE3-4993-9670-78FE459E001E"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "772C154A-2FFD-421B-BE6E-58ACA9FB6378"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio Draft",
+            "Priority": 2,
+            "EffortLevel": 25,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D8802FF1-87AF-45A0-AFB1-88FDA1EF3E4B"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio Draft",
+            "Priority": 1,
+            "EffortLevel": 25,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BD1A21E7-CE36-4A7C-B26E-35574EB71253"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Opus 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4C8DC3DF-84F4-4A2D-8A62-C8D07E8DDB37"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Fable 5.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3E173FB7-233E-433E-9496-C485F61F4B12"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Pro",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DBBF1B6F-176C-4188-87E8-B10A6FB560AE"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "5FA2F025-E655-47DE-B11F-BB524B199CDC"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Video Studio - Director",
+      "Description": "Stage 1 Loop prompt for Video Studio Director. Establishes Film brief, selects Archetype, inventories Assets.Required and NeverInvent, specifies DataBindings, and optionally declares illustrative Assets.Generate.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/video-studio/director.template.md",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Video Studio",
+      "ResponseFormat": "JSON",
+      "Status": "Active",
+      "OutputType": "object",
+      "OutputExample": "@file:output/video-studio/director.example.json",
+      "ValidationBehavior": "Warn",
+      "SelectionStrategy": "Specific",
+      "PromptRole": "System",
+      "PromptPosition": "First"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E1EF835F-D777-454A-A5AE-F3E2E52179CF"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2C979059-1DC6-4700-B338-D6DA67F1ADE5"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "84923293-1BC9-4933-993A-11DA4A5DDBB8"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio Draft",
+            "Priority": 2,
+            "EffortLevel": 25,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "88EBF45F-2AEC-4E89-AD82-95C843F32CBD"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio Draft",
+            "Priority": 1,
+            "EffortLevel": 25,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "193FD888-182F-453D-A2B2-2F9241ADE3B1"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Opus 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "542728AE-9C1A-449F-A47F-6A0D15C4452A"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Fable 5.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6CD0E689-049E-4C5E-A864-F2950FC80706"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Pro",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "93624AAB-39CC-4EE1-9428-EFD2BE14A999"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "661D374B-36DB-4AB7-AD0F-C416CBD8427C"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Video Studio - Art Director",
+      "Description": "Stage 2 Loop prompt for Video Studio Art Director. Translates brand kit defaults and driver-supplied Style.References into concrete Style tokens, Avoid rules, and optional illustrative Assets.Generate.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/video-studio/art-director.template.md",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Video Studio",
+      "ResponseFormat": "JSON",
+      "Status": "Active",
+      "OutputType": "object",
+      "OutputExample": "@file:output/video-studio/art-director.example.json",
+      "ValidationBehavior": "Warn",
+      "SelectionStrategy": "Specific",
+      "PromptRole": "System",
+      "PromptPosition": "First"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E25F2D64-D8F3-4E26-9FD0-C90A25F0AC0B"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "822CDEA4-5782-4E7C-87FA-F542456C1312"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4BBA7A0B-5BBF-4D76-9DB9-02CE2238D4A2"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio Draft",
+            "Priority": 2,
+            "EffortLevel": 25,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C6CCB4E7-7A16-4761-AFD7-BA884F3D70B9"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio Draft",
+            "Priority": 1,
+            "EffortLevel": 25,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8201A3D1-7AFC-4F58-A984-E6D8CECCE193"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Opus 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "44002B04-2A82-4E81-B961-388E6468D941"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Fable 5.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9A76BA73-EDB3-4B8C-8329-319D530EC39F"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Pro",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7DA4CDAB-E8ED-4481-A3B1-C489687F3608"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "12F1D057-FF31-4CFF-A173-09CE51F76B34"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Video Studio - Storyboard",
+      "Description": "Stage 3 Loop prompt for Video Studio Storyboard. Designs contiguous Beats with {BindingKey} placeholders and per-format LayoutNotes, StateList, Audio.Narration.Script, and Audio.Cues.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/video-studio/storyboard.template.md",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Video Studio",
+      "ResponseFormat": "JSON",
+      "Status": "Active",
+      "OutputType": "object",
+      "OutputExample": "@file:output/video-studio/storyboard.example.json",
+      "ValidationBehavior": "Warn",
+      "SelectionStrategy": "Specific",
+      "PromptRole": "System",
+      "PromptPosition": "First"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8E249070-C156-48DB-A745-F28A4900F375"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "FB460F56-D474-4475-9CA4-13B770E3B889"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "27E041D9-E33D-49D9-B6A6-6589ADDB5B4F"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio Draft",
+            "Priority": 2,
+            "EffortLevel": 25,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "764DB8FF-363F-4570-B79B-71A381BF9C01"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio Draft",
+            "Priority": 1,
+            "EffortLevel": 25,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D312DEE0-E279-4445-AE2F-BB87239B43BC"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Opus 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2FC1AD12-118B-47B1-9DA6-0FEE8993155D"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Fable 5.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "95B950CA-5E94-463C-A152-94C89B5D60FA"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Pro",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8902BF73-955D-4FFC-AC8C-7AD421A4D326"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "4928C0BF-2E9F-4E24-B7D6-C397B145E30A"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Video Studio - Motion Engineer",
+      "Description": "Stage 5 Loop prompt for Video Studio Motion Engineer. Authors deterministic HyperFrames HTML/CSS/JS compositions per format using window.MJVideo and window.MJChartKit, and applies targeted patches during repair rounds.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/video-studio/motion-engineer.template.md",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Video Studio",
+      "ResponseFormat": "JSON",
+      "Status": "Active",
+      "OutputType": "object",
+      "OutputExample": "@file:output/video-studio/motion-engineer.example.json",
+      "ValidationBehavior": "Warn",
+      "SelectionStrategy": "Specific",
+      "PromptRole": "System",
+      "PromptPosition": "First"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "34C302B4-0C89-427B-A148-C7FE2E653611"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D25026A4-3601-4107-BD84-0299D027A9E6"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "83AC189B-16BF-4330-A051-3CA4F41B2B0D"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio Draft",
+            "Priority": 2,
+            "EffortLevel": 25,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "80CD1A97-7C07-4E13-B88C-6C619F081661"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio Draft",
+            "Priority": 1,
+            "EffortLevel": 25,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BA19E646-7E77-44B0-A03D-62094A1441D4"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Opus 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4C67B79D-4C61-442B-AA7D-EE2C816ACFB5"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Fable 5.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7B5B3A62-FEC7-4CA3-8FD8-345308BAA03A"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Pro",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0A7821A8-6D97-4F4A-9B37-2FE1DD5F3980"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "DF0F0A4B-B78B-46BA-B6CF-73837B925AED"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Video Studio - Motion Engineer Lint Fix",
+      "Description": "Code-run prompt invoked by the Motion Engineer driver when HyperFrames lint reports errors on generated composition files.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/video-studio/motion-engineer-lint-fix.template.md",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Video Studio",
+      "ResponseFormat": "JSON",
+      "Status": "Active",
+      "OutputType": "object",
+      "OutputExample": "@file:output/video-studio/motion-engineer-lint-fix.example.json",
+      "ValidationBehavior": "Strict",
+      "SelectionStrategy": "Specific",
+      "PromptRole": "System",
+      "PromptPosition": "First"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E32B3DA2-D2A9-423E-9F67-5B4EAF7EDFC9"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8347AD6B-2879-4C90-BEC7-AB3625D703E6"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4BE9190E-EB7C-41AE-B068-D5841C755B23"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio Draft",
+            "Priority": 2,
+            "EffortLevel": 25,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0FCE9667-1F1A-4F90-998F-F02361AB8ADD"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio Draft",
+            "Priority": 1,
+            "EffortLevel": 25,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "1A5F49E5-26D8-4A84-8324-B9849BBF36AB"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Opus 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "083F2F32-3471-44CF-86E1-B5CEBBAE26B4"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Fable 5.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "FDFF4E3E-42CE-47F6-8AEC-5C2443ED4A59"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Pro",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "86AA861B-8921-4C69-8AE7-6DB37118F081"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "CEBD4F5C-8F00-4357-B276-36E81F9A5DF5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Video Studio - Critic",
+      "Description": "Code-run multimodal prompt invoked by the Critic driver to inspect rendered contact sheets and beat frames, report up to 3 actionable defects, and score rubric criteria.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/video-studio/critic.template.md",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Video Studio",
+      "ResponseFormat": "JSON",
+      "Status": "Active",
+      "OutputType": "object",
+      "OutputExample": "@file:output/video-studio/critic.example.json",
+      "ValidationBehavior": "Strict",
+      "SelectionStrategy": "Specific",
+      "PromptRole": "System",
+      "PromptPosition": "First"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C1B5AC97-BE11-492B-A595-13C6BB2F224F"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "433D1016-B963-45E0-83A0-78DF2DCFA623"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BF503558-12F6-4581-B7B5-3AA1D053460B"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio Draft",
+            "Priority": 2,
+            "EffortLevel": 25,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "09482158-027F-4BA0-A1EB-78C8F7494671"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio Draft",
+            "Priority": 1,
+            "EffortLevel": 25,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "77C6AAC2-389A-408C-8721-4B34A82A27D5"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Opus 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CDC7AB0D-48B7-4A1F-B0F3-089DC2FD6DD2"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Fable 5.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A31A58D3-BA4C-45AD-8954-4F4EB50DB03B"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Pro",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2A200B8F-AE9F-4E7F-8807-FCB97E12CC02"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "23631361-AE38-46F4-A72F-18CDD7829BC5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Video Studio - Reference Analysis",
+      "Description": "Code-run multimodal prompt invoked by the Art Director driver to analyze visual style references and extract reusable treatment patterns and DoNotCopy boundaries.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/video-studio/reference-analysis.template.md",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Video Studio",
+      "ResponseFormat": "JSON",
+      "Status": "Active",
+      "OutputType": "object",
+      "OutputExample": "@file:output/video-studio/reference-analysis.example.json",
+      "ValidationBehavior": "Strict",
+      "SelectionStrategy": "Specific",
+      "PromptRole": "System",
+      "PromptPosition": "First"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "68B3A5E6-F112-461D-9BFB-260EFE1B96DD"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0152FF32-FEB7-48D2-8C64-F5CBB728673E"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "84EC147D-E7FE-4C9C-89E0-DBE576B733EE"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio Draft",
+            "Priority": 2,
+            "EffortLevel": 25,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CF83E1BE-3CB8-4EE7-B9A9-D5A6769EAFED"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio Draft",
+            "Priority": 1,
+            "EffortLevel": 25,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "282937A4-595E-477E-A50A-EF58E3EDA1E1"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Opus 5.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "33B28AD4-0AD7-4BD0-BFDA-FFBEBA81AE91"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Fable 5.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "329E79AA-433D-481B-8A85-DB77D1243D07"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Pro",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Video Studio High",
+            "Priority": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3CC990D7-F78A-4D5A-AC26-8F3ED609C05D"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B72CEB9C-359E-4449-A71B-EA8F7BB44E7A"
+    }
+  }
+]

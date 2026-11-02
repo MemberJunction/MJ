@@ -1,0 +1,88 @@
+[
+  {
+    "fields": {
+      "Name": "MemberJunction",
+      "Description": "Sample org-wide brand kit with MemberJunction colors and type. Copy it or build your own; it is not the default kit.",
+      "IsDefault": false,
+      "Style": {
+        "Palette": [
+          {
+            "Name": "Primary",
+            "Value": "#0076B6",
+            "Usage": "Primary brand blue for focal highlights, active states, and primary data series."
+          },
+          {
+            "Name": "Navy",
+            "Value": "#092340",
+            "Usage": "Primary dark surface and deep background canvas for high-contrast compositions."
+          },
+          {
+            "Name": "Accent",
+            "Value": "#5CC0ED",
+            "Usage": "Secondary sky-blue accent for supporting callouts, badges, and comparison series."
+          },
+          {
+            "Name": "Cyan",
+            "Value": "#06B6D4",
+            "Usage": "Interactive highlight and positive delta indicator."
+          },
+          {
+            "Name": "White",
+            "Value": "#FFFFFF",
+            "Usage": "Primary headline and body copy on dark navy surfaces, or clean card surfaces in light compositions."
+          }
+        ],
+        "Typography": [
+          {
+            "Role": "Headline",
+            "FontFamily": "MJ Sans",
+            "Weight": 700,
+            "Notes": "MJ Sans is Inter (SIL OFL 1.1), bundled with the render worker. Display headlines and beat titles with tight tracking."
+          },
+          {
+            "Role": "Body",
+            "FontFamily": "MJ Sans",
+            "Weight": 400,
+            "Notes": "MJ Sans is Inter (SIL OFL 1.1), bundled with the render worker. Supporting labels, subtitles, and explanatory callouts."
+          },
+          {
+            "Role": "Data",
+            "FontFamily": "MJ Mono",
+            "Weight": 500,
+            "Notes": "MJ Mono is JetBrains Mono (SIL OFL 1.1), bundled with the render worker. Tabular KPI figures, deltas, timestamps, and code identifiers."
+          }
+        ],
+        "ImageryStyle": "Clean, flat and high-contrast. Product UI only from real screenshots.",
+        "Avoid": [
+          "centered text on a gradient",
+          "fade-in on everything",
+          "stock photos of people"
+        ]
+      },
+      "GenerationPolicy": {
+        "AllowGeneratedImages": true,
+        "AllowGeneratedVideo": true,
+        "AllowSyntheticPeople": false,
+        "StylePrompt": "flat illustration in the brand palette, no text, no logos",
+        "AvoidSubjects": [
+          "people",
+          "faces",
+          "logos",
+          "on-screen text",
+          "product screens"
+        ]
+      },
+      "NeverInvent": [
+        "product screens",
+        "the MemberJunction logo",
+        "metrics or statistics",
+        "customer or member names",
+        "quotes or testimonials"
+      ],
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "DBBE8BC2-8FEF-4DA9-B24A-C6038129B696"
+    }
+  }
+]

@@ -25,7 +25,8 @@
         "includeVariableRefsDocs": false,
         "includeScratchpadDocs": true,
         "includeMessageExpansionDocs": false,
-        "enableTaskGraphs": true
+        "enableTaskGraphs": true,
+        "enableHandoff": true
       },
       "RerankerConfiguration": {
         "enabled": true,

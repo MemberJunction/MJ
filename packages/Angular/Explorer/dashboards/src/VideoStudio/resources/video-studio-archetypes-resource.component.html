@@ -1,0 +1,408 @@
+<div class="vs-resource-shell">
+  <mj-page-layout class="vs-resource-shell__page">
+    <mj-page-header
+      Title="Archetypes"
+      Icon="fa-solid fa-layer-group"
+      Subtitle="Reusable beat templates, duration ranges, and pacing rules for video productions"
+    >
+    <div meta>
+      <mj-stat-badge
+        [Count]="FilteredCount"
+        [Total]="TotalCount"
+        Label="Archetypes"
+      />
+    </div>
+
+    <div actions>
+      <mj-refresh-button
+        [Loading]="IsLoading"
+        (Clicked)="Refresh()"
+      />
+      <button
+        type="button"
+        mjButton
+        Variant="primary"
+        data-testid="new-archetype-button"
+        (click)="OpenNewArchetypeEditor()"
+      >
+        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        <span>New archetype</span>
+      </button>
+    </div>
+
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search archetypes by name, category, format, or beat..."
+        [Value]="SearchText"
+        (ValueChange)="OnSearchChange($event)"
+      />
+      <mj-filter-popover
+        Label="Filters"
+        Icon="fa-solid fa-filter"
+        [ActiveCount]="ActivePopoverFilterCount"
+        [ShowClearAll]="ActivePopoverFilterCount > 0"
+        (ClearAllRequested)="ClearAllFilters()"
+      >
+        <mj-filter-panel
+          [Fields]="FilterFields"
+          [Values]="FilterValues"
+          [ShowReset]="false"
+          (ValuesChange)="OnFilterValuesChange($event)"
+        />
+      </mj-filter-popover>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
+    @if (IsLoading && AllArchetypes.length === 0) {
+      <div class="vs-loading-state" data-testid="archetypes-loading">
+        <mj-loading Text="Loading video archetypes..." Size="medium" />
+      </div>
+    } @else if (LoadError) {
+      <mj-empty-state
+        data-testid="archetypes-error"
+        Role="alert"
+        Variant="error"
+        Icon="fa-solid fa-triangle-exclamation"
+        Title="Unable to load archetypes"
+        [Message]="LoadError"
+        ActionText="Try again"
+        ActionIcon="fa-solid fa-rotate"
+        ActionVariant="secondary"
+        (Action)="Refresh()"
+      ></mj-empty-state>
+    } @else if (AllArchetypes.length === 0) {
+      <mj-empty-state
+        data-testid="archetypes-empty"
+        Variant="empty"
+        Icon="fa-solid fa-layer-group"
+        Title="No video archetypes available"
+        Message="Archetypes define reusable narrative structures, beat templates, and pacing rules."
+      ></mj-empty-state>
+    } @else {
+      <div
+        class="vs-archetypes-workspace"
+        [class.vs-archetypes-workspace--split]="SelectedArchetype !== null"
+      >
+        <div class="vs-archetypes-main">
+          <div class="vs-archetypes-filter-bar" data-testid="archetypes-filter-chips">
+            <div class="vs-archetypes-chip-group" role="group" aria-label="Filter by category">
+              <mj-filter-chip
+                data-testid="archetype-category-chip-all"
+                Label="All"
+                [Count]="CategoryAllCount"
+                [Active]="CategoryFilter === 'all'"
+                (Clicked)="SelectCategoryChip('all')"
+              ></mj-filter-chip>
+              @for (chip of CategoryChipItems; track chip.Category) {
+                <mj-filter-chip
+                  [attr.data-testid]="'archetype-category-chip-' + chip.Category"
+                  [Label]="chip.Label"
+                  [Count]="chip.Count"
+                  [Active]="CategoryFilter === chip.Category"
+                  (Clicked)="SelectCategoryChip(chip.Category)"
+                ></mj-filter-chip>
+              }
+            </div>
+
+            <span class="vs-archetypes-chip-divider" aria-hidden="true"></span>
+
+            <div class="vs-archetypes-chip-group" role="group" aria-label="Filter by scope">
+              <mj-filter-chip
+                data-testid="archetype-scope-chip-shipped"
+                Label="Shipped"
+                [Count]="ShippedCount"
+                [Active]="ScopeFilter === 'shipped'"
+                (Clicked)="ToggleScopeChip('shipped')"
+              ></mj-filter-chip>
+              <mj-filter-chip
+                data-testid="archetype-scope-chip-company"
+                Label="Yours"
+                [Count]="CompanyCount"
+                [Active]="ScopeFilter === 'company'"
+                (Clicked)="ToggleScopeChip('company')"
+              ></mj-filter-chip>
+            </div>
+          </div>
+
+          @if (FilteredArchetypes.length === 0) {
+            <mj-empty-state
+              data-testid="archetypes-empty"
+              Variant="no-results"
+              Icon="fa-solid fa-layer-group"
+              Title="No archetypes match your filters"
+              Message="Try clearing your search query or adjusting the active category or scope filters."
+              ActionText="Reset filters"
+              ActionIcon="fa-solid fa-filter-circle-xmark"
+              ActionVariant="secondary"
+              (Action)="ResetFiltersAndSearch()"
+            ></mj-empty-state>
+          } @else {
+            <div class="vs-archetypes-grid" data-testid="archetypes-grid">
+              @for (arch of FilteredArchetypes; track arch.ID) {
+                <article
+                  class="vs-archetype-card"
+                  [class.vs-archetype-card--selected]="SelectedArchetype?.ID === arch.ID"
+                  [attr.data-testid]="'archetype-card-' + arch.ID"
+                  tabindex="0"
+                  role="button"
+                  [attr.aria-pressed]="SelectedArchetype?.ID === arch.ID"
+                  (click)="SelectArchetype(arch)"
+                  (keydown.enter)="SelectArchetype(arch)"
+                  (keydown.space)="$event.preventDefault(); SelectArchetype(arch)"
+                >
+                  <div class="vs-archetype-card-header">
+                    <h3 class="vs-archetype-title" [title]="arch.Name">
+                      {{ arch.Name }}
+                    </h3>
+
+                    @if (arch.CompanyName) {
+                      <span
+                        class="vs-archetype-company-meta"
+                        data-testid="archetype-company-badge"
+                      >
+                        {{ arch.CompanyName }}
+                      </span>
+                    } @else if (arch.IsShipped) {
+                      <mj-video-badge
+                        Variant="neutral"
+                        data-testid="archetype-shipped-badge"
+                      >
+                        <i class="fa-solid fa-lock" aria-hidden="true"></i>
+                        <span>Shipped</span>
+                      </mj-video-badge>
+                    }
+                  </div>
+
+                  @if (arch.Description) {
+                    <p class="vs-archetype-description">{{ arch.Description }}</p>
+                  }
+
+                  <div class="vs-archetype-meta-line">
+                    <span
+                      class="vs-archetype-category-meta"
+                      data-testid="archetype-category-meta"
+                    >
+                      {{ FormatCategoryLabel(arch.Category) }}
+                    </span>
+                    <span class="vs-archetype-meta-sep" aria-hidden="true">·</span>
+                    <span class="vs-archetype-duration-meta" data-testid="archetype-duration-badge">
+                      {{ FormatTime(arch.DefaultDurationSeconds) }}
+                      ({{ FormatTimeRange(arch.MinDurationSeconds, arch.MaxDurationSeconds) }})
+                    </span>
+                    <span class="vs-archetype-meta-sep" aria-hidden="true">·</span>
+                    <span class="vs-archetype-formats-meta" data-testid="archetype-formats-badge">
+                      @for (fmt of ParseFormats(arch.DefaultFormats); track fmt) {
+                        <mj-video-format-glyph [Format]="fmt" Size="sm"></mj-video-format-glyph>
+                      }
+                    </span>
+                  </div>
+
+                  <div class="vs-archetype-beat-strip-wrap">
+                    <mj-video-beat-strip
+                      data-testid="archetype-beat-timeline"
+                      [Beats]="arch.BeatItems || []"
+                    ></mj-video-beat-strip>
+                  </div>
+                </article>
+              }
+            </div>
+          }
+        </div>
+
+        @if (SelectedArchetype; as selected) {
+          <aside class="vs-archetype-slideout" data-testid="archetype-slideout">
+            <header class="vs-slideout-header">
+              <div class="vs-slideout-title-wrap">
+                <span class="vs-slideout-category-tag">
+                  {{ FormatCategoryLabel(selected.Category) }}
+                </span>
+                <h2 class="vs-slideout-title">{{ selected.Name }}</h2>
+              </div>
+
+              <div class="vs-slideout-actions">
+                @if (selected.IsShipped) {
+                  <button
+                    type="button"
+                    mjButton
+                    Variant="primary"
+                    Size="sm"
+                    data-testid="archetype-make-copy-button"
+                    (click)="OpenCopyArchetypeEditor(selected, $event)"
+                  >
+                    <i class="fa-regular fa-copy" aria-hidden="true"></i>
+                    <span>Make a copy</span>
+                  </button>
+                } @else {
+                  <button
+                    type="button"
+                    mjButton
+                    Variant="primary"
+                    Size="sm"
+                    data-testid="archetype-edit-button"
+                    (click)="OpenEditArchetypeEditor(selected, $event)"
+                  >
+                    <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                    <span>Edit</span>
+                  </button>
+                  <button
+                    type="button"
+                    mjButton
+                    Variant="flat"
+                    Size="sm"
+                    data-testid="archetype-open-record-button"
+                    (click)="OpenArchetypeRecord(selected, $event)"
+                  >
+                    <span>Open record</span>
+                  </button>
+                }
+                <button
+                  type="button"
+                  mjButton
+                  Variant="icon"
+                  Size="sm"
+                  [AriaLabel]="'Close archetype preview'"
+                  data-testid="archetype-slideout-close"
+                  (click)="CloseSlideOut()"
+                >
+                  <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+              </div>
+            </header>
+
+            <div class="vs-slideout-body">
+              @if (selected.IsShipped) {
+                <div class="vs-shipped-readonly-banner" data-testid="archetype-shipped-readonly-banner">
+                  <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                  <span>
+                    Shipped archetypes are read-only templates. Make a copy of this archetype to customize it for a specific company.
+                  </span>
+                </div>
+              }
+
+              @if (selected.Description) {
+                <p class="vs-slideout-description">{{ selected.Description }}</p>
+              }
+
+              <div class="vs-slideout-summary-grid">
+                <div class="vs-summary-item">
+                  <span class="vs-summary-label">Default duration</span>
+                  <span class="vs-summary-value vs-summary-value--mono">
+                    {{ FormatTime(selected.DefaultDurationSeconds) }}
+                  </span>
+                </div>
+                <div class="vs-summary-item">
+                  <span class="vs-summary-label">Duration range</span>
+                  <span class="vs-summary-value vs-summary-value--mono">
+                    {{ FormatTimeRange(selected.MinDurationSeconds, selected.MaxDurationSeconds) }}
+                  </span>
+                </div>
+                <div class="vs-summary-item">
+                  <span class="vs-summary-label">Default formats</span>
+                  <span class="vs-summary-value vs-archetype-formats-meta">
+                    @for (fmt of ParseFormats(selected.DefaultFormats); track fmt) {
+                      <mj-video-format-glyph [Format]="fmt" Size="sm"></mj-video-format-glyph>
+                    }
+                  </span>
+                </div>
+                <div class="vs-summary-item">
+                  <span class="vs-summary-label">Interaction mode</span>
+                  <span class="vs-summary-value">{{ selected.DefaultInteractionMode }}</span>
+                </div>
+              </div>
+
+              <section class="vs-slideout-section">
+                <h3 class="vs-slideout-section-title">
+                  <i class="fa-solid fa-timeline" aria-hidden="true"></i>
+                  <span>Beat template ({{ selected.Beats.length }})</span>
+                </h3>
+                <mj-video-beat-strip
+                  [Beats]="selected.BeatItems || []"
+                ></mj-video-beat-strip>
+                <div class="vs-slideout-beat-list">
+                  @for (beat of selected.Beats; track beat.Key; let idx = $index) {
+                    <div class="vs-slideout-beat-item" data-testid="slideout-beat-item">
+                      <div class="vs-slideout-beat-header">
+                        <span class="vs-slideout-beat-index">{{ idx + 1 }}</span>
+                        <strong class="vs-slideout-beat-name">{{ beat.Label }}</strong>
+                        <span class="vs-slideout-beat-duration">
+                          {{ FormatTime(beat.ComputedDurationSeconds) }}
+                          ({{ FormatTimeRange(beat.MinDurationSeconds, beat.MaxDurationSeconds) }})
+                        </span>
+                        @if (beat.RequiresDataBinding) {
+                          <mj-video-badge Variant="info">Data bound</mj-video-badge>
+                        }
+                      </div>
+                      <p class="vs-slideout-beat-purpose">{{ beat.Purpose }}</p>
+                      @if (beat.Guidance) {
+                        <p class="vs-slideout-beat-guidance">{{ beat.Guidance }}</p>
+                      }
+                    </div>
+                  }
+                </div>
+              </section>
+
+              @if (selected.Pacing) {
+                <section class="vs-slideout-section" data-testid="slideout-pacing-section">
+                  <h3 class="vs-slideout-section-title">
+                    <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
+                    <span>Pacing rules</span>
+                  </h3>
+                  <div class="vs-pacing-box">
+                    <div class="vs-pacing-stat">
+                      <span>Average time between visual changes:</span>
+                      <strong>{{ FormatTime(selected.Pacing.AvgSecondsBetweenChanges) }}</strong>
+                    </div>
+                    @if (selected.Pacing.HoldRules) {
+                      <p class="vs-pacing-hold-rules">{{ selected.Pacing.HoldRules }}</p>
+                    }
+                  </div>
+                </section>
+              }
+
+              @if (selected.Guidance) {
+                <section class="vs-slideout-section" data-testid="slideout-guidance-section">
+                  <h3 class="vs-slideout-section-title">
+                    <i class="fa-solid fa-compass" aria-hidden="true"></i>
+                    <span>Producer guidance</span>
+                  </h3>
+                  <p class="vs-guidance-text">{{ selected.Guidance }}</p>
+                </section>
+              }
+            </div>
+          </aside>
+        }
+      </div>
+    }
+
+    @if (IsEditorOpen) {
+      <mj-dialog
+        [Visible]="true"
+        [Title]="EditorDialogTitle"
+        Size="lg"
+        (Close)="CloseArchetypeEditor()"
+      >
+        <vs-archetype-editor
+          [Provider]="ProviderToUse"
+          [Mode]="EditorMode"
+          [SourceArchetypeId]="EditorSourceArchetypeId"
+          [EditingArchetypeId]="EditorEditingArchetypeId"
+          (Saved)="OnArchetypeEditorSaved($event)"
+          (Cancelled)="CloseArchetypeEditor()"
+        ></vs-archetype-editor>
+      </mj-dialog>
+    }
+  </mj-page-body>
+  </mj-page-layout>
+
+  <vs-studio-slide-in
+    [Provider]="ProviderToUse"
+    [CurrentUser]="CurrentUser"
+    [EnvironmentId]="EnvironmentId"
+    [ApplicationId]="ApplicationId"
+    [PageSource]="this"
+    [PageContext]="PageContext"
+    [PageTools]="PageTools"
+    [HeaderTitle]="'Video Studio'"
+  ></vs-studio-slide-in>
+</div>
