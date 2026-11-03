@@ -353,6 +353,11 @@
   z-index: 10;
 }
 
+/* Phone section picker: hidden until the 768px rule swaps it in for the strip */
+.phone-section-picker {
+  display: none;
+}
+
 .tabs {
   display: flex;
   padding: 0 24px;
@@ -1026,6 +1031,16 @@ kbd {
    Responsive Design - Mobile
    =================================== */
 @media (max-width: 768px) {
+  /* The tab strip becomes one section-picker button (same pattern as the standard record form). */
+  .tabs {
+    display: none;
+  }
+
+  .phone-section-picker {
+    display: block;
+    padding: 4px 8px;
+  }
+
   .suite-run-header {
     padding: 16px;
   }
