@@ -371,12 +371,15 @@ describe('ProductionModelPromotionGate — leakage sign-off gate', () => {
   });
 
   it("refuses a model whose Lineage leakage audit is dominant although its own importance is {} (a kept simple baseline)", async () => {
+    const status = ConsoleCapture.Status();
     const model = new FakeModel({});
     model.Lineage = JSON.stringify({ shippedMember: 'glm', trainingLeakageAudit: { topFeature: 'cancelled_flag', topShare: 0.92 } });
     expect(await new TestableGate(model).promote(req({ targetStatus: 'Validated' }))).toEqual({ kind: 'refused-leakage', topFeature: 'cancelled_flag', topShare: 0.92 });
     expect(model.SaveCallCount).toBe(0);
     const signedOff = await new TestableGate(model).promote(req({ targetStatus: 'Validated', signOff: true, reason: 'cancelled_flag is set before the decision date.' }));
     expect(signedOff.kind).toBe('promoted');
+    // the sign-off override is logged for audit
+    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining('leakage flag on feature "cancelled_flag" (92% share) overridden to Validated')]);
   });
 
   it("promotes a model whose recorded audit is under the pipeline's current threshold, or that records none", async () => {

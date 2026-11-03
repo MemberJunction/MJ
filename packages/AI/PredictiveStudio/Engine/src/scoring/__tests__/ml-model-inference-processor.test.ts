@@ -303,6 +303,8 @@ describe('MLModelInferenceProcessor — a model trained before Prediction Units 
   });
 
   it('fails loudly for an unreadable Lineage on a unit-bound pipeline, and loads it as legacy on an unbound one', async () => {
+    const errors = ConsoleCapture.Errors();
+    const warnings = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const broken = new FakeMLModel();
     broken.Lineage = '{not json';
     const { deps } = buildDeps(broken);
@@ -310,6 +312,9 @@ describe('MLModelInferenceProcessor — a model trained before Prediction Units 
     await expect(bound.Preflight(CTX)).rejects.toThrow(/model 'model-1' has an unreadable Lineage/);
     const unbound = new MLModelInferenceProcessor({ modelId: 'model-1', deps }, new TestAssembler(new InMemoryDataAccess()));
     await expect(unbound.Preflight(CTX)).resolves.toBeUndefined();
+    // the unreadable Lineage is reported, and the unbound pipeline's legacy load logs that its fallback read failed
+    expect(warnings.mock.calls.map((c) => String(c[0]))).toContain('ResolveOutcomeConfig: failed to parse Lineage JSON');
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("failed to load fallback pipeline 'pipe-members'")]);
   });
 });
 

@@ -323,11 +323,13 @@ describe('PipelineAutoTrainer', () => {
   });
 
   it('does not archive the reused model when the process already pointed at it (IDs compared as UUIDs, any letter case)', async () => {
+    const status = ConsoleCapture.Status();
     const gate = new RecordingGate();
     const trainer = new TestableAutoTrainer(gate, OLD.toLowerCase());
     const id = await trainer.EnsureTrainedModel({ pipelineId: PIPE, currentModelId: OLD, recordProcessId: null }, USER, PROVIDER);
     expect(id).toBe(OLD.toLowerCase());
     expect(gate.Calls).toEqual([]);
+    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining(`reused model '${OLD.toLowerCase()}'`)]);
   });
 
   it('rejects a malformed pipeline id before touching anything', async () => {

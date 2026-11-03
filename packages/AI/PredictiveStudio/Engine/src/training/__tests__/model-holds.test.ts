@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 import type { UserInfo } from '@memberjunction/core';
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -131,12 +132,15 @@ describe('G-6: a kept simple baseline carries the run\'s leakage audit to promot
 
   it('refuses to promote the kept baseline without a sign-off, and promotes it with a sign-off and a reason', async () => {
     const { model } = await train(keptBaseline({ importance: LEAKING }));
+    const status = ConsoleCapture.Status();
     const refused = await new TrainedModelGate(model).promote(request(model));
     expect(refused).toMatchObject({ kind: 'refused-leakage', topFeature: 'EventsAttended' });
     expect([model.Status, model.SaveCallCount]).toEqual(['Draft', 1]);
     const signedOff = await new TrainedModelGate(model).promote(request(model, { signOff: true, reason: 'EventsAttended is recorded before the decision date.' }));
     expect(signedOff).toMatchObject({ kind: 'promoted', newStatus: 'Validated' });
     expect(signedOff.kind === 'promoted' ? signedOff.signOffNote : '').toContain('on feature "EventsAttended"');
+    // the sign-off override is logged for audit
+    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("Leakage sign-off override for ML Model 'model-1'")]);
   });
 
   it("judges the audit against the pipeline's current threshold, as it judges the importance", async () => {

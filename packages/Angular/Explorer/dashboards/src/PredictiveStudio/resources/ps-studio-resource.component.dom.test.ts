@@ -21,6 +21,7 @@ afterEach(() => vi.restoreAllMocks());
 describe('PSStudioResourceComponent — the co-pilot agent lookup', () => {
   it("loads the AI engine through the resource's provider", async () => {
     const provider = CreateFakeProvider({ entities: [] });
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const config = vi.spyOn(AIEngineBase.Instance, 'Config').mockResolvedValue(undefined);
     const resource: PSStudioResourceComponent = Object.assign(Object.create(PSStudioResourceComponent.prototype), {
       Provider: provider,
@@ -28,5 +29,7 @@ describe('PSStudioResourceComponent — the co-pilot agent lookup', () => {
     });
     await resource['ensureModelDevAgentResolved']();
     expect(config.mock.calls.map((c) => c[2] === provider)).toEqual([true]);
+    // the stubbed engine holds no agents, so the lookup logs that chat falls back to default routing
+    expect(errors.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringContaining("'Model Development Agent' not found")]);
   });
 });

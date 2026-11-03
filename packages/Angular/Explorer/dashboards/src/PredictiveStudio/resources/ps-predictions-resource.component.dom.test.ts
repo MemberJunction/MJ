@@ -341,29 +341,36 @@ describe('PSPredictionsResourceComponent (DOM) — at-risk workspace', () => {
   });
 
   it('counts nothing added when the batch fails, naming the first error', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const lists = listProvider(async () => false);
     const { fixture, resource } = await renderWorkspace(lists.Provider);
     await sendAtRisk(fixture, resource);
     expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('Added 0 of 200 records to “At-Risk: ');
     expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('200 failed to add (first error: detail 0 refused)');
+    expect(errors.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringContaining('sendToList: 200/200 adds failed. First: detail 0 refused')]);
   });
 
   it('counts a member refused before it joined the batch as failed, and the rest as added', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const lists = listProvider(async () => true, (i) => i !== 3);
     const { fixture, resource } = await renderWorkspace(lists.Provider);
     await sendAtRisk(fixture, resource);
     expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('Added 199 of 200 records');
     expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('1 failed to add (first error: detail 3 refused)');
+    expect(errors.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringContaining('sendToList: 1/200 adds failed. First: detail 3 refused')]);
   });
 });
 
 describe('PSPredictionsResourceComponent (DOM) — the co-pilot agent lookup', () => {
   it("loads the AI engine through the workspace's provider", async () => {
     const provider = defaultProvider();
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const config = vi.spyOn(AIEngineBase.Instance, 'Config').mockResolvedValue(undefined);
     const { resource } = await renderCatalog(provider);
     // the lookup every co-pilot entry point runs; called directly so the chat area (not stubbed here) stays closed
     await resource['ensureModelDevAgentResolved']();
     expect(config.mock.calls.map((c) => c[2] === provider)).toEqual([true]);
+    // the stubbed engine holds no agents, so the lookup logs that chat falls back to default routing
+    expect(errors.mock.calls.map((c) => String(c[0]))).toEqual([expect.stringContaining("'Model Development Agent' not found")]);
   });
 });
