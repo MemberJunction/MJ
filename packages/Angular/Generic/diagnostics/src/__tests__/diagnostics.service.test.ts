@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type MockInstance } from 'vitest';
 import {
     DiagnosticsUploadClientCaptureOperation,
     DiagnosticsBuildBundleOperation,
@@ -458,7 +458,7 @@ describe('MJDiagnosticsService', () => {
 
         describe('uploads to a session the server already holds', () => {
             const logEntry = (message: string) => ({ timestamp: '2026-11-02T12:00:00.000Z', severity: 'info' as const, source: 'client' as const, message });
-            let uploadSpy: ReturnType<typeof vi.spyOn<DiagnosticsUploadClientCaptureOperation, 'Execute'>>;
+            let uploadSpy: MockInstance<DiagnosticsUploadClientCaptureOperation['Execute']>;
 
             beforeEach(() => {
                 uploadSpy = vi.spyOn(DiagnosticsUploadClientCaptureOperation.prototype, 'Execute').mockImplementation(async (input) => ({
