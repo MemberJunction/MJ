@@ -1412,6 +1412,83 @@ describe('TransformSimpleObjectToEntityObject batched IS-A hydration & 1-query C
         }
     });
 
+    describe('a parent whose subtype is already known falls back to the DB when the child engine cache lacks its row', () => {
+        const LAGGING_ID = 'c2000000-0000-0000-0000-000000000000';
+        let laggingEngine: object | null = null;
+
+        afterEach(() => {
+            if (laggingEngine) {
+                BaseEngineRegistry.Instance.UnregisterEngine(laggingEngine);
+                laggingEngine = null;
+            }
+        });
+
+        /** Caches every Meetings row except product 0's: the cache is behind the DB for that one row. */
+        async function registerLaggingMeetingsCache(): Promise<void> {
+            const meetingsInfo = batchedProvider.EntityByName('Meetings')!;
+            const meetingRows: Record<string, unknown>[] = [];
+            for (let i = 2; i < BATCH_ROWS; i += 2) {
+                meetingRows.push(store.ViewRow(meetingsInfo, `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`)!);
+            }
+            laggingEngine = {
+                Loaded: true,
+                Meetings: meetingRows,
+                ReadonlyConfigs: [{ PropertyName: 'Meetings', EntityName: 'Meetings', Type: 'entity', ResultType: 'simple' }],
+            };
+            BaseEngineRegistry.Instance.RegisterEngine(laggingEngine);
+        }
+
+        function productRows(): Record<string, unknown>[] {
+            const productsInfo = batchedProvider.EntityByName('Products')!;
+            return Array.from({ length: BATCH_ROWS }, (_, i) =>
+                store.ViewRow(productsInfo, `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`)!
+            );
+        }
+
+        function expectLaggingRowLoadedFromDb(results: BaseEntity[]): void {
+            expect(results[0].ISAChild?.EntityInfo.Name).toBe('Meetings');
+            expect(results[0].ISAChild?.Get('Venue')).toBe('Hall 0');
+            results.forEach((p, idx) => {
+                expect(p.ISAChild?.EntityInfo.Name, `product ${idx}`).toBe(idx % 2 === 0 ? 'Meetings' : 'Publications');
+            });
+            const meetingReads = batchedProvider.RunViewsParams.filter(p => p.EntityName === 'Meetings');
+            expect(meetingReads).toHaveLength(1);
+            expect(String(meetingReads[0].ExtraFilter)).toContain(LAGGING_ID);
+        }
+
+        it('when a SubtypeSelector hint names the child', async () => {
+            const productsInfo = batchedProvider.EntityByName('Products')!;
+            productsInfo.SubtypeSelector = JSON.stringify({ Path: 'ProductTypeID.ProductExtensionEntity', UseForLoadedRecords: true });
+            const ptInfo = batchedProvider.EntityByName('Product Types')!;
+            const typeEntities = await TransformSimpleObjectToEntityObject<LoadHintTestEntity>(
+                batchedProvider as object as IMetadataProvider,
+                'Product Types',
+                [MEETING_TYPE_ID, PUB_TYPE_ID].map(id => store.ViewRow(ptInfo, id)!),
+                user
+            );
+            registeredEngine = new FakeProductTypeEngine(typeEntities);
+            BaseEngineRegistry.Instance.RegisterEngine(registeredEngine);
+            await registerLaggingMeetingsCache();
+
+            const results = await TransformSimpleObjectToEntityObject<BaseEntity>(
+                batchedProvider as object as IMetadataProvider, 'Products', productRows(), user
+            );
+
+            expectLaggingRowLoadedFromDb(results);
+        });
+
+        it('when FindISAChildEntitiesBatch discovered the child', async () => {
+            await registerLaggingMeetingsCache();
+
+            const results = await TransformSimpleObjectToEntityObject<BaseEntity>(
+                batchedProvider as object as IMetadataProvider, 'Products', productRows(), user
+            );
+
+            expect(batchedProvider.BatchDiscoveryCalls).toBe(1);
+            expectLaggingRowLoadedFromDb(results);
+        });
+    });
+
     it('narrows field-level security denied columns when linking an IS-A child from a system-user engine cache', async () => {
         const productsInfo = batchedProvider.EntityByName('Products')!;
         const meetingsInfo = batchedProvider.EntityByName('Meetings')!;
