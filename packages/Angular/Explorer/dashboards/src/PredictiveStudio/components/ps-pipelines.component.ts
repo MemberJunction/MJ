@@ -52,7 +52,29 @@ const PAD_X = 40;
 const PAD_Y = 40;
 
 const SOURCE_KINDS: SourceBinding['Kind'][] = ['Entity', 'Query', 'ExternalEntity', 'VectorSet', 'FeaturePipeline'];
-const STEP_KINDS: FeatureStepKind[] = ['select', 'impute', 'standardize', 'onehot', 'bin', 'embedding', 'llm-derived', 'flow-agent', 'vision-llm'];
+/**
+ * The step kinds the picker offers: the ones that change what trains. `select` produces the feature columns and
+ * `impute` sets a numeric column's fill (Engine feature-resolution.ts, Sidecar snapshot.py `_policies`). Every other
+ * kind is either ignored by the trainer or refused by the assembler; see TRAINER_STEP_NOTES.
+ */
+const STEP_KINDS: FeatureStepKind[] = ['select', 'impute'];
+
+/**
+ * What the trainer does with a saved step of a kind the picker does not offer. `standardize` and `onehot` only name
+ * columns: the assembler one-hot encodes every categorical (as-of-assembler.ts BuildPreprocessingOps) and the trainer
+ * scales every numeric (Sidecar encoding.py `_numeric_pipe`); `bin` ops are dropped (snapshot.py `_policies` reads
+ * impute ops only). The other four are refused by FeatureResolver.ResolveStep, so training fails on them.
+ * `windowed-aggregate` and `series` produce columns, so they carry no note.
+ */
+const TRAINER_STEP_NOTES: Partial<Record<FeatureStepKind, string>> = {
+  standardize: 'Ignored by the trainer: it standardizes every numeric column anyway.',
+  onehot: 'Ignored by the trainer: it one-hot encodes every text column anyway.',
+  bin: 'Ignored by the trainer: it does not bin columns.',
+  embedding: 'Training refuses this step: the trainer cannot assemble an embedding step.',
+  'llm-derived': 'Training refuses this step: the trainer cannot assemble an llm-derived step.',
+  'flow-agent': 'Training refuses this step: the trainer cannot assemble a flow-agent step.',
+  'vision-llm': 'Training refuses this step: the trainer cannot assemble a vision-llm step.',
+};
 const PROBLEM_TYPES: ProblemType[] = ['classification', 'regression'];
 const IMPUTE_STRATEGIES: Array<'mean' | 'median' | 'mode' | 'constant'> = ['mean', 'median', 'mode', 'constant'];
 
@@ -314,6 +336,9 @@ const PS_PIPELINES_STARTER_PROMPT =
                               <span class="pl-feature-name">{{ st.Label || st.Kind }}</span>
                               <span class="ps-tag">{{ st.Kind }}</span>
                             </div>
+                            @if (TrainerStepNote(st); as note) {
+                              <div class="ps-small ps-step-trainer-note" data-testid="ps-pipelines-step-trainer-note"><i class="fa-solid fa-circle-exclamation"></i> {{ note }}</div>
+                            }
                             @if (GetStepColumns(st); as cols) {
                               @if (cols.length > 0) {
                                 <div class="pl-col-chips">
@@ -638,10 +663,13 @@ const PS_PIPELINES_STARTER_PROMPT =
                       }
                       @if (SelectedStep) {
                         <div class="ps-field"><label>Kind</label>
-                          <select class="mj-input" [value]="SelectedStep.Kind" (change)="SetStepKind(InputVal($event))">
-                            @for (k of StepKinds; track k) { <option [value]="k">{{ k }}</option> }
+                          <select class="mj-input" data-testid="ps-pipelines-step-kind" [value]="SelectedStep.Kind" (change)="SetStepKind(InputVal($event))">
+                            @for (k of StepKindOptions; track k) { <option [value]="k" [selected]="k === SelectedStep.Kind">{{ k }}</option> }
                           </select>
                         </div>
+                        @if (TrainerStepNote(SelectedStep); as note) {
+                          <p class="ps-small ps-step-trainer-note" data-testid="ps-pipelines-step-trainer-note"><i class="fa-solid fa-circle-exclamation"></i> {{ note }}</p>
+                        }
                         <div class="ps-field"><label>Label</label>
                           <input class="mj-input" type="text" [value]="SelectedStep.Label || ''" (input)="SetStepLabel(InputVal($event))" />
                         </div>
@@ -651,6 +679,9 @@ const PS_PIPELINES_STARTER_PROMPT =
                           @case ('impute') {
                             <div class="ps-field"><label>Column</label><input class="mj-input" type="text" [value]="StepField('Column')" (input)="SetStepStr('Column', InputVal($event))" /></div>
                             <div class="ps-field"><label>Strategy</label><select class="mj-input" [value]="StepField('Strategy')" (change)="SetStepStr('Strategy', InputVal($event))">@for (s of ImputeStrategies; track s) { <option [value]="s">{{ s }}</option> }</select></div>
+                            @if (StepField('Strategy') === 'constant') {
+                              <div class="ps-field"><label>Fill value</label><input class="mj-input" type="number" data-testid="ps-pipelines-impute-fill" [value]="StepField('FillValue')" (input)="SetStepNum('FillValue', InputVal($event))" /></div>
+                            }
                           }
                           @case ('onehot') { <div class="ps-field"><label>Column</label><input class="mj-input" type="text" [value]="StepField('Column')" (input)="SetStepStr('Column', InputVal($event))" /></div> }
                           @case ('bin') {
@@ -833,7 +864,16 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
 
   public readonly SourceKinds = SOURCE_KINDS;
 
-  public readonly StepKinds = STEP_KINDS;
+  /** The kinds the inspector's picker lists: the honoured ones, plus the selected step's own kind when it is not one. */
+  public get StepKindOptions(): FeatureStepKind[] {
+    const kind = this.SelectedStep?.Kind;
+    return kind === undefined || STEP_KINDS.includes(kind) ? STEP_KINDS : [...STEP_KINDS, kind];
+  }
+
+  /** The marker a saved step carries when the trainer ignores or refuses its kind; null when the step changes training. */
+  public TrainerStepNote(step: FeatureStep): string | null {
+    return TRAINER_STEP_NOTES[step.Kind] ?? null;
+  }
 
   public readonly ProblemTypes = PROBLEM_TYPES;
 

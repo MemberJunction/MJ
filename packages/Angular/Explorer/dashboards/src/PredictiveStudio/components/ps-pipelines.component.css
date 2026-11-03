@@ -585,6 +585,15 @@
   margin-top: 2px;
 }
 
+/* A saved step whose kind the trainer ignores or refuses */
+.ps-pipelines .ps-step-trainer-note {
+  color: var(--mj-status-warning-text);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 4px 0;
+}
+
 /* Leakage Guard Box */
 .ps-pipelines .pl-leakage-box {
   background: var(--mj-status-warning-bg);

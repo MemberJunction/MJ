@@ -344,3 +344,56 @@ describe('PSPipelinesComponent (DOM)', () => {
     });
   });
 });
+
+describe('PSPipelinesComponent (DOM) — step kinds the trainer honours', () => {
+  const STEPS = [
+    { Id: 'step_1', Kind: 'select', Columns: ['Tenure', 'City'] },
+    { Id: 'step_2', Kind: 'standardize', Columns: ['Tenure'], Inputs: ['step_1'] },
+    { Id: 'step_3', Kind: 'onehot', Column: 'City', Inputs: ['step_1'] },
+    { Id: 'step_4', Kind: 'bin', Column: 'Tenure', Bins: 5, Inputs: ['step_1'] },
+    { Id: 'step_5', Kind: 'embedding', Entity: 'Members', EmbeddingModelRef: 'm', Dims: 8, Inputs: ['step_1'] },
+  ];
+  const withSteps = () => makePipeline({ FeatureSteps: JSON.stringify({ Steps: STEPS }) });
+  const kindOptions = (fixture: ReturnType<typeof render>): string[] =>
+    queryAll(fixture, '[data-testid="ps-pipelines-step-kind"] option').map((o) => (o instanceof HTMLOptionElement ? o.value : ''));
+  /** Selects a node the way a user does: a click on it in the DAG. */
+  const inspect = (fixture: ReturnType<typeof render>, id: string): void => {
+    const node = query(fixture, `[data-node-id="${id}"]`);
+    if (!(node instanceof HTMLElement)) throw new Error(`no node ${id}`);
+    node.click();
+    fixture.detectChanges();
+  };
+
+  it('offers only select and impute when adding or changing a step', () => {
+    const fixture = render([makePipeline()], 'dag');
+    inspect(fixture, 'step_1');
+    expect(kindOptions(fixture)).toEqual(['select', 'impute']);
+  });
+
+  it('marks each saved step the trainer ignores or refuses, on its card and in the inspector, and keeps its kind visible', () => {
+    const stages = render([withSteps()]);
+    const notes = queryAll(stages, '[data-testid="ps-pipelines-step-card"]').map((c) => c.querySelector('[data-testid="ps-pipelines-step-trainer-note"]')?.textContent?.trim() ?? null);
+    expect(notes).toEqual([
+      null,
+      'Ignored by the trainer: it standardizes every numeric column anyway.',
+      'Ignored by the trainer: it one-hot encodes every text column anyway.',
+      'Ignored by the trainer: it does not bin columns.',
+      'Training refuses this step: the trainer cannot assemble an embedding step.',
+    ]);
+
+    const dag = render([withSteps()], 'dag');
+    inspect(dag, 'step_2');
+    expect([kindOptions(dag), query(dag, '[data-testid="ps-pipelines-inspector"] [data-testid="ps-pipelines-step-trainer-note"]')?.textContent?.trim()])
+      .toEqual([['select', 'impute', 'standardize'], 'Ignored by the trainer: it standardizes every numeric column anyway.']);
+  });
+
+  it('asks for the fill value of a constant impute, which training refuses without one, and saves it as a number', () => {
+    const fixture = render([makePipeline({ FeatureSteps: JSON.stringify({ Steps: [{ Id: 'step_1', Kind: 'impute', Column: 'Tenure', Strategy: 'constant' }] }) })], 'dag');
+    inspect(fixture, 'step_1');
+    const fill = query(fixture, '[data-testid="ps-pipelines-impute-fill"]');
+    if (!(fill instanceof HTMLInputElement)) throw new Error('no fill value input');
+    fill.value = '7';
+    fill.dispatchEvent(new Event('input'));
+    expect(fixture.componentInstance.EditSteps[0]).toEqual({ Id: 'step_1', Kind: 'impute', Column: 'Tenure', Strategy: 'constant', FillValue: 7 });
+  });
+});

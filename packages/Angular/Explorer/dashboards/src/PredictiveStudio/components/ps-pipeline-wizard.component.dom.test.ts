@@ -247,12 +247,29 @@ describe('PSPipelineWizardComponent (DOM) — every control round-trips', () => 
     expect(steps(captured.Saved[0]).filter((st) => st.Kind === 'impute').map((st) => st.Kind === 'impute' ? [st.Column, st.Strategy] : null)).toEqual([['Tenure', 'median'], ['Spend', 'median']]);
   });
 
-  it('offers only the scaling the trainer runs', async () => {
+  it('offers no encoding or scaling choice, and says the trainer standardizes numerics and one-hot encodes text every time', async () => {
     const fixture = renderWizard();
     fixture.componentInstance.GoToStep('preprocessing');
     await settle(fixture);
-    const scaling = Query(fixture, '[data-testid="ps-wizard-standardize"]');
-    expect(scaling instanceof HTMLSelectElement ? Array.from(scaling.options).map((o) => o.value) : null).toEqual(['standard', 'none']);
+    const step = Query(fixture, '[data-testid="ps-wizard-step-preprocessing"]');
+    const note = Query(fixture, '[data-testid="ps-wizard-encoding-note"]')?.textContent?.replace(/\s+/g, ' ').trim();
+    expect([step?.querySelectorAll('select').length, note]).toEqual([
+      1,
+      'Every time it trains, the trainer standardizes each numeric column (mean 0, variance 1) and one-hot encodes each text column, with its own "missing" level. Neither is a choice.',
+    ]);
+  });
+
+  it('saves the standardize and one-hot steps that describe what the trainer does', async () => {
+    vi.spyOn(PipelineWizardBindings, 'ReadClassLabels').mockResolvedValue(['A', 'B', 'C']);
+    const captured = captureSave();
+    const fixture = saveable();
+    await goalStep(fixture, 'Segment', 'W1');
+    await fixture.componentInstance.SaveDraft();
+    const saved = steps(captured.Saved[0]);
+    expect([
+      saved.filter((st) => st.Kind === 'standardize').map((st) => st.Kind === 'standardize' ? st.Columns : null),
+      saved.filter((st) => st.Kind === 'onehot').map((st) => st.Kind === 'onehot' ? st.Column : null),
+    ]).toEqual([[['Tenure', 'Spend', 'Age']], ['Region', 'Tier']]);
   });
 
   it('clones every saved setting: save A with non-default choices, clone it, and B saves the same steps and validation', async () => {
@@ -266,7 +283,6 @@ describe('PSPipelineWizardComponent (DOM) — every control round-trips', () => 
       if (item) item.selected = false;
     }
     a.ImputeStrategy = 'mode';
-    a.StandardizeStrategy = 'none';
     a.ValidationStrategyType = 'kfold';
     a.KFolds = 7;
     await a.SaveDraft();
@@ -275,12 +291,12 @@ describe('PSPipelineWizardComponent (DOM) — every control round-trips', () => 
     const second = saveable(pipelineA);
     await settle(second);
     const b = second.componentInstance;
-    expect([b.ImputeStrategy, b.StandardizeStrategy, b.CategoricalEncoding, b.ValidationStrategyType, b.KFolds]).toEqual(['mode', 'none', 'onehot', 'kfold', 7]);
+    expect([b.ImputeStrategy, b.ValidationStrategyType, b.KFolds]).toEqual(['mode', 'kfold', 7]);
     await b.SaveDraft();
     const pipelineB = captured.Saved[1];
     expect(pipelineB?.FeatureSteps).toEqual(pipelineA?.FeatureSteps);
     expect(pipelineB?.ValidationStrategy).toEqual(pipelineA?.ValidationStrategy);
-    expect(steps(pipelineA).some((st) => st.Kind === 'standardize')).toBe(false);
+    expect(steps(pipelineA).some((st) => st.Kind === 'standardize')).toBe(true);
   });
 
   it('clones the adverse class of a two-class target: B saves without a re-pick and equals A, OutcomeConfig included', async () => {
@@ -323,18 +339,17 @@ describe('PSPipelineWizardComponent (DOM) — every control round-trips', () => 
     expect(b.CanSave()).toBe(true);
   });
 
-  it('clones the protocol-default inner validation and the native categorical handling', async () => {
+  it('clones the protocol-default inner validation', async () => {
     vi.spyOn(PipelineWizardBindings, 'ReadClassLabels').mockResolvedValue(['A', 'B', 'C']);
     const captured = captureSave();
     const first = saveable();
     await goalStep(first, 'Segment', 'W1');
-    first.componentInstance.CategoricalEncoding = 'none';
     await first.componentInstance.SaveDraft();
     const second = saveable(captured.Saved[0]);
     await settle(second);
     await second.componentInstance.SaveDraft();
     expect([captured.Saved[1]?.FeatureSteps, captured.Saved[1]?.ValidationStrategy]).toEqual([captured.Saved[0]?.FeatureSteps, captured.Saved[0]?.ValidationStrategy]);
-    expect([second.componentInstance.CategoricalEncoding, second.componentInstance.ValidationStrategyType]).toEqual(['none', 'train_test_split']);
+    expect(second.componentInstance.ValidationStrategyType).toEqual('train_test_split');
   });
 
   it('saves only the ValidationStrategy fields the protocol mapping reads: Strategy, K for k-fold, the fixed holdout share; never a TestSize', async () => {
@@ -374,7 +389,7 @@ describe('PSPipelineWizardComponent (DOM) — every control round-trips', () => 
     const fixture = saveable(broken);
     await settle(fixture);
     const c = fixture.componentInstance;
-    expect([c.ImputeStrategy, c.StandardizeStrategy, c.CategoricalEncoding, c.ValidationStrategyType, c.KFolds, c.SelectedFeaturesCount])
-      .toEqual(['median', 'standard', 'onehot', 'train_test_split', 5, 5]);
+    expect([c.ImputeStrategy, c.ValidationStrategyType, c.KFolds, c.SelectedFeaturesCount])
+      .toEqual(['median', 'train_test_split', 5, 5]);
   });
 });

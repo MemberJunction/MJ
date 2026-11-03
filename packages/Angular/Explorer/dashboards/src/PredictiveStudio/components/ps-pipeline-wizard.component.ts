@@ -249,12 +249,8 @@ export type WizardStep = 'goal' | 'features' | 'preprocessing' | 'algorithm';
               <div class="recipe-card">
                 <div class="recipe-icon"><i class="fa-solid fa-table-cells"></i></div>
                 <div class="recipe-details">
-                  <h4>Categorical Encoding</h4>
-                  <p class="ps-small ps-muted">Converts text and discrete categoricals into numerical representations.</p>
-                  <select class="mj-input" [(ngModel)]="CategoricalEncoding">
-                    <option value="onehot">One-Hot Encoding (Recommended for cardinality &lt; 50)</option>
-                    <option value="none">Pass-Through / Native Algorithm Handling</option>
-                  </select>
+                  <h4>Encoding and Scaling</h4>
+                  <p class="ps-small ps-muted" data-testid="ps-wizard-encoding-note">Every time it trains, the trainer standardizes each numeric column (mean 0, variance 1) and one-hot encodes each text column, with its own "missing" level. Neither is a choice.</p>
                 </div>
               </div>
 
@@ -268,18 +264,6 @@ export type WizardStep = 'goal' | 'features' | 'preprocessing' | 'algorithm';
                     <option value="mean">Mean (Standard arithmetic average)</option>
                     <option value="mode">Mode (Most frequent value)</option>
                     <option value="constant">Constant (Zero)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div class="recipe-card">
-                <div class="recipe-icon"><i class="fa-solid fa-ruler-combined"></i></div>
-                <div class="recipe-details">
-                  <h4>Numeric Standardization</h4>
-                  <p class="ps-small ps-muted">Scales numeric features to prevent large magnitudes from dominating.</p>
-                  <select class="mj-input" data-testid="ps-wizard-standardize" [(ngModel)]="StandardizeStrategy">
-                    <option value="standard">Standard Scaling (Z-score: mean 0, variance 1)</option>
-                    <option value="none">None (Native tree-based scaling)</option>
                   </select>
                 </div>
               </div>
@@ -457,11 +441,7 @@ export class PSPipelineWizardComponent implements OnInit {
 
 
   // Step 3: Preprocessing
-  public CategoricalEncoding: 'onehot' | 'none' = 'onehot';
-
   public ImputeStrategy: 'mean' | 'median' | 'mode' | 'constant' = 'median';
-
-  public StandardizeStrategy: 'standard' | 'none' = 'standard';
 
 
   // Step 4: Algorithm & Validation
@@ -796,38 +776,27 @@ export class PSPipelineWizardComponent implements OnInit {
         });
       }
 
-      if (this.CategoricalEncoding === 'onehot') {
-        const catCols = this.FieldItems
-          .filter((i) => i.selected && !i.isDenyList && !i.isTarget)
-          .filter((i) => {
-            const t = i.field.Type?.toLowerCase() ?? '';
-            return t.includes('char') || t.includes('text') || t.includes('string');
-          })
-          .map((i) => i.field.Name);
-
-        for (const c of catCols) {
-          steps.push({
-            Id: `step_onehot_${c}`,
-            Kind: 'onehot',
-            Label: `One-Hot ${c}`,
-            Inputs: ['step_select'],
-            Column: c,
-          });
-        }
+      // The trainer one-hot encodes every text column and standardizes every numeric column, every time
+      // (as-of-assembler.ts BuildPreprocessingOps, Sidecar encoding.py): these steps describe that, they are not a choice.
+      for (const c of this.selectedTextColumns()) {
+        steps.push({
+          Id: `step_onehot_${c}`,
+          Kind: 'onehot',
+          Label: `One-Hot ${c}`,
+          Inputs: ['step_select'],
+          Column: c,
+        });
       }
 
-      if (this.StandardizeStrategy !== 'none') {
-        const numCols = this.selectedNumericColumns();
-
-        if (numCols.length > 0) {
-          steps.push({
-            Id: 'step_standardize',
-            Kind: 'standardize',
-            Label: 'Standardize Numerics',
-            Inputs: ['step_select'],
-            Columns: numCols,
-          });
-        }
+      const numCols = this.selectedNumericColumns();
+      if (numCols.length > 0) {
+        steps.push({
+          Id: 'step_standardize',
+          Kind: 'standardize',
+          Label: 'Standardize Numerics',
+          Inputs: ['step_select'],
+          Columns: numCols,
+        });
       }
 
       p.FeatureSteps = JSON.stringify(
@@ -939,6 +908,17 @@ export class PSPipelineWizardComponent implements OnInit {
     }
   }
 
+  /** The selected feature columns of a text type, which the trainer one-hot encodes. */
+  private selectedTextColumns(): string[] {
+    return this.FieldItems
+      .filter((i) => i.selected && !i.isDenyList && !i.isTarget)
+      .filter((i) => {
+        const t = i.field.Type?.toLowerCase() ?? '';
+        return t.includes('char') || t.includes('text') || t.includes('string');
+      })
+      .map((i) => i.field.Name);
+  }
+
   /** The selected feature columns the trainer treats as numeric. */
   private selectedNumericColumns(): string[] {
     return this.FieldItems
@@ -951,8 +931,8 @@ export class PSPipelineWizardComponent implements OnInit {
   }
 
   /**
-   * The cloned pipeline's saved feature columns and preprocessing choices. Unreadable JSON, or a graph without a
-   * select step, leaves every default; a preprocessing step the wizard does not write is ignored.
+   * The cloned pipeline's saved feature columns and imputation strategy (the one preprocessing choice the trainer
+   * honours). Unreadable JSON, or a graph without a select step, leaves every default; every other step is ignored.
    */
   private restoreClonedFeatureSteps(json: string | null): void {
     const graph = this.jsonObject(json);
@@ -973,8 +953,6 @@ export class PSPipelineWizardComponent implements OnInit {
     const impute = objects.find((st) => kind(st) === 'impute');
     const strategy = impute === undefined ? null : JsonParse.JsonString(impute, 'Strategy');
     if (strategy === 'mean' || strategy === 'median' || strategy === 'mode' || strategy === 'constant') this.ImputeStrategy = strategy;
-    this.StandardizeStrategy = objects.some((st) => kind(st) === 'standardize') ? 'standard' : 'none';
-    this.CategoricalEncoding = objects.some((st) => kind(st) === 'onehot') ? 'onehot' : 'none';
   }
 
   /**
