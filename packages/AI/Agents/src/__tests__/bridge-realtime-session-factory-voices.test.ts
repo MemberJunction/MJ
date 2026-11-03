@@ -97,6 +97,8 @@ vi.mock('@memberjunction/ai', async (importOriginal) => {
 });
 
 vi.mock('../realtime/realtime-vendor-resolution', () => ({
+    // No vendor rows to pre-resolve MJ Credentials for: these cases key vendors through the selector alone.
+    ListRealtimeVendorsForModel: () => [],
     SelectRealtimeVendorForModel: (modelId: string) => {
         if (modelId === 'm1') {
             return { VendorID: 'v1', ModelVendorID: 'mv1', DriverClass: 'LiveDriver', APIName: 'gpt-live-1' };
