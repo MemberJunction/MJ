@@ -553,6 +553,13 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * say which one, and the composer stops them all.
    */
   @Input() public InFlightCount = 0;
+
+  /**
+   * Whether inline markdown links in message text open in a new browser tab (`target="_blank"`).
+   * In-page fragment links (`#heading`) and `mailto:` / `tel:` / `sms:` links stay in the
+   * current tab. Default `true`.
+   */
+  @Input() public OpenLinksInNewTab: boolean = true;
   /** Host override for the AI message display name (white-label persona). Null = the agent record's name. */
   @Input() public AssistantDisplayName: string | null = null;
 

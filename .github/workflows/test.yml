@@ -883,7 +883,9 @@ jobs:
           # PR #3231, twice. Sharding reduces but does not remove the risk: the planner spreads
           # the heavy DOM packages across shards, yet a shard can still draw several.
           # Tee into a log so the digest step below can read the vitest counters on failure.
-          # The job's shell already runs with `-o pipefail`, so teeing does not mask the exit code.
+          # A step with no `shell:` runs as `bash -e {0}`, without pipefail, so the pipeline would
+          # exit with tee's status and a failed test task would leave the shard green.
+          set -o pipefail
           npx turbo run test --concurrency=4 "${FILTER_ARGS[@]}" 2>&1 | tee /tmp/shard-test.log
 
       # A red shard hands you a job log tens of thousands of lines long in which the decisive

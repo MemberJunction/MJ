@@ -11,6 +11,7 @@ import { RunView, type RunViewParams } from '../views/runView';
 import { UserInfo } from './securityInfo';
 import { TransactionGroupBase } from './transactionGroup';
 import { LogDebug, LogError, LogStatus, LogStatusEx, LogWarning } from './logging';
+import { TelemetryManager } from './telemetryManager';
 import { CompositeKey, FieldValueCollection, KeyValuePair } from './compositeKey';
 import { RelatedRecordCollection, RelatedRecordCollectionOptions } from './relatedRecordCollection';
 import { COMPANION_PAYLOAD_KEY, EntityCompanion, EntityCompanionDeserializeMode, EntityCompanionPayload } from './entityCompanion';
@@ -5733,7 +5734,27 @@ export abstract class BaseEntity<T = unknown> {
                             }
                         }
 
-                        const data = await this.ProviderToUse.Save(this, this.ActiveUser, _options)
+                        const saveTelemetryId = TelemetryManager.Instance.StartEvent(
+                            'Custom',
+                            'BaseEntity.Save',
+                            {
+                                operationName: 'BaseEntity.Save',
+                                EntityName: this.EntityInfo?.Name,
+                                SaveSubType: saveSubType,
+                            },
+                            this.ActiveUser?.ID
+                        );
+                        let data: Record<string, unknown> | null;
+                        try {
+                            data = await this.ProviderToUse.Save(this, this.ActiveUser, _options) as Record<string, unknown> | null;
+                            TelemetryManager.Instance.EndEvent(saveTelemetryId, { success: !!data });
+                        } catch (saveErr) {
+                            TelemetryManager.Instance.EndEvent(saveTelemetryId, {
+                                success: false,
+                                error: saveErr instanceof Error ? saveErr.message : String(saveErr),
+                            });
+                            throw saveErr;
+                        }
                         if (!this.TransactionGroup) {
                             // no transaction group, so we have our results here
                             const result = this.finalizeSave(data, saveSubType, _options);
@@ -8100,7 +8121,27 @@ export abstract class BaseEntity<T = unknown> {
                 });
 
                 // Delete OWN row first (FK constraint: child must be deleted before parent)
-                if (await this.ProviderToUse.Delete(this, _options, this.ActiveUser)) {
+                const deleteTelemetryId = TelemetryManager.Instance.StartEvent(
+                    'Custom',
+                    'BaseEntity.Delete',
+                    {
+                        operationName: 'BaseEntity.Delete',
+                        EntityName: this.EntityInfo?.Name,
+                    },
+                    this.ActiveUser?.ID
+                );
+                let deletedOwnRow = false;
+                try {
+                    deletedOwnRow = await this.ProviderToUse.Delete(this, _options, this.ActiveUser);
+                    TelemetryManager.Instance.EndEvent(deleteTelemetryId, { success: deletedOwnRow });
+                } catch (delErr) {
+                    TelemetryManager.Instance.EndEvent(deleteTelemetryId, {
+                        success: false,
+                        error: delErr instanceof Error ? delErr.message : String(delErr),
+                    });
+                    throw delErr;
+                }
+                if (deletedOwnRow) {
                     ownRowDeleted = true;
                     // IS-A: after own delete succeeds, cascade to parent chain
                     if (hasParentChain) {
