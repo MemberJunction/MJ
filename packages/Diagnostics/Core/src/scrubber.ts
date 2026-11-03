@@ -2,21 +2,26 @@
  * Two-stage diagnostic scrubber for MemberJunction Diagnostic Bundles.
  *
  * Stage 1 (ALWAYS ON — non-disableable, even in `FullRaw` mode):
- *   - Authorization / Cookie / X-API-Key / Set-Cookie headers
- *   - Bearer tokens & 3-part JWTs (`eyJ...`)
+ *   - Authorization / Cookie / X-API-Key / Set-Cookie headers, and any `*-token`, `*-key`, `*-secret` header
+ *   - Bearer and Basic credentials & 3-part JWTs (`eyJ...`)
  *   - API keys (`sk-...`, `sk-proj-...`, `AKIA...`, `ASIA...`, `ghp_...`, `github_pat_...`, `xoxb-...`, `SG....`, `mj_sk_...`)
- *   - Connection string secrets (`Password=...`, `Pwd=...`, `AccountKey=...`, `SharedAccessSignature=...`)
+ *   - URI credentials (`scheme://user:pass@host` keeps the scheme and host)
+ *   - Secret `name=value` pairs, quoted or not (connection strings, query strings, form bodies, env lines)
+ *   - Secret JSON (`"password":"..."`, plain or escaped) and `name: value` (header line, YAML) pairs inside strings
  *   - Private key PEM blocks (`-----BEGIN ... PRIVATE KEY-----`)
- *   - Sensitive object property names (`password`, `secret`, `clientSecret`, `apiKey`, `privateKey`, `accessToken`, `refreshToken`, etc.)
- *   - URL query token parameters (`token=`, `code=`, `key=`, `secret=`, `sig=`, `signature=`)
+ *   - Object property names that contain a secret word (`password`, `secret`, `token`, `apiKey`, `credential`, ...),
+ *     except token-count names (`maxTokens`, `tokenCount`, `tokenizer`, ...)
  *
  * Stage 2 (OPT-IN / `Standard` mode — customer-controlled via `ScrubLiterals`):
- *   - Inline SQL string & numeric literals (`'...'` -> `?`, numbers -> `?`)
+ *   - SQL string, hex & numeric literals (`'...'` -> `?`, numbers -> `?`) in server SQL, query plans,
+ *     log messages and filter-like telemetry params (`ExtraFilter`, `OrderBy`, `Filters`, ...)
  *   - Absolute host filesystem paths in stack traces truncated to repo-relative (`packages/...` or `node_modules/...`)
  *   - Custom regex patterns configured by the administrator
+ *
+ * Every pattern runs in linear time on its input.
  */
 
-import type { DiagnosticBundleData, DiagnosticScrubberProfile } from './types.js';
+import type { DiagnosticBundleData, DiagnosticLogEntry, DiagnosticScrubberProfile } from './types.js';
 
 export interface ScrubOptions {
     scrubberProfile?: DiagnosticScrubberProfile;
@@ -61,19 +66,63 @@ const SENSITIVE_HEADER_NAMES: ReadonlySet<string> = new Set([
     'x-csrf-token',
 ]);
 
-const SENSITIVE_KEY_PATTERN =
-    /^(password|passwd|pwd|secret|client_?secret|api_?key|access_?token|refresh_?token|id_?token|private_?key|connection_?string|conn_?str|authorization|cookie|set_?cookie|session_?token|auth_?token|bearer_?token|encryption_?key|signing_?key|master_?key|account_?key|sas_?token)$/i;
+/** Normalized key fragments that mark a key name as a credential wherever they appear in it. */
+const SENSITIVE_KEY_FRAGMENTS: readonly string[] = [
+    'password',
+    'passwd',
+    'pwd',
+    'secret',
+    'token',
+    'apikey',
+    'privatekey',
+    'accesskey',
+    'accountkey',
+    'signingkey',
+    'encryptionkey',
+    'masterkey',
+    'sharedkey',
+    'credential',
+    'signature',
+    'connectionstring',
+    'connstr',
+];
+
+/** Normalized key names that are credentials only as an exact match. */
+const SENSITIVE_EXACT_KEYS: ReadonlySet<string> = new Set([
+    'authorization',
+    'proxyauthorization',
+    'cookie',
+    'setcookie',
+    'sig',
+    'pass',
+]);
+
+/** Normalized key names that contain a sensitive fragment but hold counts or settings, not secrets. */
+const SAFE_KEY_NAMES: ReadonlySet<string> = new Set(['credentialsscrubbedcount', 'tokentype']);
+
+/** Token-count style names (`maxTokens`, `promptTokens`, `tokenCount`, `tokenizer`, `TokensUsed`). */
+const SAFE_TOKEN_KEY_REGEX =
+    /^(?:max|min|total|input|output|prompt|completion|cached|reasoning|estimated)*tokens?(?:count|counts|limit|used|usage|prompt|completion|total|izer|estimate|input|output)+$|^(?:max|min|total|input|output|prompt|completion|cached|reasoning|estimated)+tokens?$/;
+
+/** Header-name suffixes that mark a header as a credential. */
+const SENSITIVE_HEADER_SUFFIX_REGEX = /-(?:token|key|secret|signature|credentials?)$/i;
 
 const PEM_BEGIN_REGEX = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----/g;
 
 const PEM_END_REGEX = /-----END [A-Z0-9 ]*PRIVATE KEY-----/g;
 
-const JWT_REGEX = /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
+/** Runs of JWT alphabet characters long enough to hold a header, a payload and a signature. */
+const JWT_CANDIDATE_REGEX = /[A-Za-z0-9_.-]{32,}/g;
 
 const BEARER_REGEX = /\b(Bearer\s+)[A-Za-z0-9._~+/=-]{8,}/gi;
 
+const BASIC_AUTH_REGEX = /\b(Basic\s+)([A-Za-z0-9+/]{8,}={0,2})(?![A-Za-z0-9+/=])/gi;
+
 const KNOWN_API_KEY_REGEX =
     /\b(sk-proj-[A-Za-z0-9_-]{12,}|sk-ant-[A-Za-z0-9_-]{12,}|sk-[A-Za-z0-9]{16,}|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|gho_[A-Za-z0-9]{20,}|ghs_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}|mj_sk_[A-Za-z0-9_-]{12,})\b/g;
+
+/** `scheme://userinfo@` where the user info may hold a password. */
+const URI_CREDENTIALS_REGEX = /\b([A-Za-z][A-Za-z0-9+.-]{1,31}:\/\/)([^\s/?#@'"<>]+)@/g;
 
 const CONN_STRING_SECRET_REGEX =
     /\b(Password|Pwd|AccountKey|SharedAccessKey|SharedAccessSignature|SecretAccessKey|ClientSecret)\s*=\s*([^;\s"']+)/gi;
@@ -81,13 +130,66 @@ const CONN_STRING_SECRET_REGEX =
 const URL_QUERY_SECRET_REGEX =
     /([?&](?:access_token|refresh_token|id_token|token|api_key|apikey|key|secret|password|sig|signature|code)=)([^&#\s"']+)/gi;
 
+/** `name=value` pairs (query strings, form bodies, env lines, connection strings); the value may be quoted. */
+const KEY_ASSIGNMENT_REGEX =
+    /(^|[^A-Za-z0-9_.-])([A-Za-z][A-Za-z0-9_.-]{0,63})(\s*=\s*)('(?:''|[^'])*(?:'|$)|"(?:""|[^"])*(?:"|$)|[^&\s"';,)=]+)/g;
+
+/** `"name": "value"` pairs inside a string. */
+const JSON_STRING_PAIR_REGEX = /("([A-Za-z0-9_.-]{1,64})"\s*:\s*)"((?:\\.|[^"\\])*)"/g;
+
+/** `\"name\": \"value\"` pairs inside a JSON-escaped string. */
+const ESCAPED_JSON_STRING_PAIR_REGEX = /(\\"([A-Za-z0-9_.-]{1,64})\\"\s*:\s*)\\"([^"]*?)\\"/g;
+
+/** `name: ` at the start of a header line or YAML pair; the value runs to the end of the line. */
+const LINE_KEY_REGEX = /(^|[^A-Za-z0-9_-])([A-Za-z][A-Za-z0-9_-]{0,63})([ \t]*:[ \t]*)/g;
+
+/** HTTP auth schemes kept in front of a redacted header value. */
+const AUTH_SCHEME_PREFIX_REGEX = /^(?:Basic|Bearer|Digest|Negotiate|NTLM|Token|ApiKey|AWS4-HMAC-SHA256)[ \t]+/i;
+
+/** A value that is exactly one redaction marker. */
+const PURE_MARKER_REGEX = /^\[REDACTED_[A-Z_]+\]$/;
+
 const STACK_PATH_PREFIX_REGEX =
     /(?:\(|at\s+)(?:[A-Za-z]:\\|\/)[^\s():]*?[/\\]((packages|node_modules)[/\\][^\s():]+)/g;
 
+/** Longest SQL text normalized; text past it is dropped and replaced by a truncation marker. */
+export const MAX_NORMALIZED_SQL_LENGTH = 65_536;
+
 const SQL_SINGLE_QUOTED_LITERAL_REGEX = /N?'(?:''|[^'])*'/g;
 
-const SQL_NUMERIC_COMPARISON_REGEX =
-    /(\b(?:WHERE|AND|OR|ON|HAVING|SET|VALUES|LIMIT|OFFSET|TOP)\b[^;]*?(=|<>|!=|<=|>=|<|>|\bIN\s*\(|\bBETWEEN\s+)\s*)-?\b\d+(?:\.\d+)?\b/gi;
+const SQL_COMPARISON_NUMBER_REGEX = /(=|<>|!=|<=|>=|<|>)\s*-?\b\d+(?:\.\d+)?\b/g;
+
+const SQL_HEX_LITERAL_REGEX = /(^|[^\w$@#])0x[0-9A-Fa-f]+(?![\w$])/g;
+
+const SQL_NUMBER_LITERAL_REGEX = /(^|[^\w$@#.])\d+(?:\.\d+)?(?:[eE][+-]?\d+)?(?![\w$])/g;
+
+/** Start of a full SQL statement inside log text. */
+const SQL_STATEMENT_START_REGEX = /\b(?:SELECT|INSERT|UPDATE|DELETE|MERGE|EXEC|EXECUTE)\b/;
+
+const TEXT_IN_LIST_REGEX = /(\bIN\s*\()([^()]*)\)/gi;
+
+const TEXT_BETWEEN_REGEX =
+    /(\bBETWEEN\s+)(N?'(?:''|[^'])*'|-?\d+(?:\.\d+)?)(\s+AND\s+)(N?'(?:''|[^'])*'|-?\d+(?:\.\d+)?)/gi;
+
+const TEXT_OPERATOR_STRING_REGEX = /((?:=|<>|!=|<=|>=|<|>|\bLIKE)\s*)N?'(?:''|[^'])*(?:'|$)/gi;
+
+/** Showplan XML attributes whose values hold SQL text or literal values. */
+const PLAN_LITERAL_ATTRIBUTE_REGEX =
+    /(\s(?:StatementText|ScalarString|ConstValue|ParameterCompiledValue|ParameterRuntimeValue)=")([^"]*)"/g;
+
+/** Telemetry param names whose values are SQL filter or sort fragments (normalized names). */
+const SQL_FRAGMENT_PARAM_NAMES: ReadonlySet<string> = new Set([
+    'extrafilter',
+    'filter',
+    'filters',
+    'orderby',
+    'orderbys',
+    'sql',
+    'whereclause',
+]);
+
+/** Telemetry param names whose values are literal record values (normalized names). */
+const LITERAL_VALUE_PARAM_NAMES: ReadonlySet<string> = new Set(['afterkey', 'afterkeys', 'usersearchstring']);
 
 /** Running total of credential redactions made during one scrub call. */
 interface RedactionTally {
@@ -101,14 +203,50 @@ interface CredentialRule {
     secretGroup: number;
     /** Builds the replacement from the match and its capture groups (`groups[0]` is group 1). */
     replace: (groups: string[]) => string;
+    /** When given and false, the match is kept unchanged and not counted. */
+    applies?: (groups: string[]) => boolean;
+}
+
+/** True when a captured key names a credential and its value is not already a redaction marker. */
+function sensitivePair(key: string, value: string): boolean {
+    return IsSensitiveKeyName(key) && !PURE_MARKER_REGEX.test(value);
 }
 
 const CREDENTIAL_RULES: readonly CredentialRule[] = [
-    { regex: JWT_REGEX, secretGroup: 0, replace: () => '[REDACTED_JWT]' },
     { regex: BEARER_REGEX, secretGroup: 0, replace: (groups) => `${groups[0]}[REDACTED_TOKEN]` },
+    {
+        regex: BASIC_AUTH_REGEX,
+        secretGroup: 2,
+        replace: (groups) => `${groups[0]}[REDACTED_TOKEN]`,
+        applies: (groups) => /[0-9+/=]/.test(groups[1]),
+    },
     { regex: KNOWN_API_KEY_REGEX, secretGroup: 0, replace: () => '[REDACTED_API_KEY]' },
+    {
+        regex: URI_CREDENTIALS_REGEX,
+        secretGroup: 2,
+        replace: (groups) => `${groups[0]}[REDACTED_CREDENTIALS]@`,
+        applies: (groups) => groups[1].includes(':'),
+    },
     { regex: CONN_STRING_SECRET_REGEX, secretGroup: 2, replace: (groups) => `${groups[0]}=[REDACTED_SECRET]` },
     { regex: URL_QUERY_SECRET_REGEX, secretGroup: 2, replace: (groups) => `${groups[0]}[REDACTED_QUERY_PARAM]` },
+    {
+        regex: KEY_ASSIGNMENT_REGEX,
+        secretGroup: 4,
+        replace: (groups) => `${groups[0]}${groups[1]}${groups[2]}[REDACTED_SECRET]`,
+        applies: (groups) => sensitivePair(groups[1], groups[3]),
+    },
+    {
+        regex: JSON_STRING_PAIR_REGEX,
+        secretGroup: 3,
+        replace: (groups) => `${groups[0]}"[REDACTED_SECRET]"`,
+        applies: (groups) => sensitivePair(groups[1], groups[2]),
+    },
+    {
+        regex: ESCAPED_JSON_STRING_PAIR_REGEX,
+        secretGroup: 3,
+        replace: (groups) => `${groups[0]}\\"[REDACTED_SECRET]\\"`,
+        applies: (groups) => sensitivePair(groups[1], groups[2]),
+    },
 ];
 
 const REDACTION_MARKER_PREFIX = '[REDACTED_';
@@ -127,6 +265,9 @@ function applyCredentialRule(input: string, rule: CredentialRule, tally: Redacti
     const groupCount = captureGroupCount(rule.regex);
     return input.replace(rule.regex, (match: string, ...rest: Array<string | number | undefined>) => {
         const groups = rest.slice(0, groupCount).map((g) => (typeof g === 'string' ? g : ''));
+        if (rule.applies && !rule.applies(groups)) {
+            return match;
+        }
         const secret = rule.secretGroup === 0 ? match : groups[rule.secretGroup - 1];
         if (!secret.startsWith(REDACTION_MARKER_PREFIX)) {
             tally.count++;
@@ -168,35 +309,204 @@ function redactPemPrivateKeys(input: string, tally: RedactionTally): string {
 }
 
 /**
+ * Returns the index of the first `eyJ` in `segment` that starts a word and has at least 8 characters after it, or -1.
+ */
+function jwtHeaderStart(segment: string): number {
+    let idx = segment.indexOf('eyJ');
+    while (idx >= 0) {
+        if ((idx === 0 || segment[idx - 1] === '-') && segment.length - idx >= 11) {
+            return idx;
+        }
+        idx = segment.indexOf('eyJ', idx + 1);
+    }
+    return -1;
+}
+
+/**
+ * Replaces each `header.payload.signature` JWT inside one dot-separated token with `[REDACTED_JWT]`.
+ */
+function redactJwtsInToken(token: string, tally: RedactionTally): string {
+    const segments = token.split('.');
+    const out: string[] = [];
+    let i = 0;
+    while (i < segments.length) {
+        const start = i + 2 < segments.length ? jwtHeaderStart(segments[i]) : -1;
+        const isJwt =
+            start >= 0 &&
+            segments[i + 1].startsWith('eyJ') &&
+            segments[i + 1].length >= 11 &&
+            segments[i + 2].length >= 8;
+        if (isJwt) {
+            out.push(segments[i].slice(0, start) + '[REDACTED_JWT]');
+            tally.count++;
+            i += 3;
+        } else {
+            out.push(segments[i]);
+            i++;
+        }
+    }
+    return out.join('.');
+}
+
+/**
+ * Replaces each JWT with `[REDACTED_JWT]`. Reads each run of JWT characters once, so it runs in linear time.
+ */
+function redactJwts(input: string, tally: RedactionTally): string {
+    if (!input.includes('eyJ')) {
+        return input;
+    }
+    return input.replace(JWT_CANDIDATE_REGEX, (token: string) =>
+        token.includes('.eyJ') ? redactJwtsInToken(token, tally) : token
+    );
+}
+
+/**
+ * Replaces the value of each `name: value` header line or YAML pair whose name is a credential.
+ * The value runs to the end of the line; a leading HTTP auth scheme is kept.
+ */
+function redactSensitiveLineValues(input: string, tally: RedactionTally): string {
+    let out = '';
+    let cursor = 0;
+    LINE_KEY_REGEX.lastIndex = 0;
+    let match = LINE_KEY_REGEX.exec(input);
+    while (match) {
+        const valueStart = match.index + match[0].length;
+        if (!IsSensitiveHeaderName(match[2])) {
+            LINE_KEY_REGEX.lastIndex = valueStart;
+        } else {
+            const valueEnd = lineEnd(input, valueStart);
+            const value = input.slice(valueStart, valueEnd);
+            const scheme = AUTH_SCHEME_PREFIX_REGEX.exec(value)?.[0] ?? '';
+            const secret = value.slice(scheme.length).trimEnd();
+            if (secret.length > 0 && !PURE_MARKER_REGEX.test(secret)) {
+                if (!secret.startsWith(REDACTION_MARKER_PREFIX)) {
+                    tally.count++;
+                }
+                out += input.slice(cursor, valueStart) + scheme + '[REDACTED_SECRET]';
+                cursor = valueEnd;
+            }
+            LINE_KEY_REGEX.lastIndex = valueEnd;
+        }
+        match = LINE_KEY_REGEX.exec(input);
+    }
+    return cursor === 0 ? input : out + input.slice(cursor);
+}
+
+/** Returns the index of the first line break at or after `from`, or the input length. */
+function lineEnd(input: string, from: number): number {
+    const lf = input.indexOf('\n', from);
+    const cr = input.indexOf('\r', from);
+    const ends = [lf, cr].filter((i) => i >= 0);
+    return ends.length > 0 ? Math.min(...ends) : input.length;
+}
+
+/**
  * Applies the Stage 1 always-on credential rules and adds each redaction to `tally`.
  */
 function redactCredentials(input: string, tally: RedactionTally): string {
     let result = redactPemPrivateKeys(input, tally);
+    result = redactJwts(result, tally);
     for (const rule of CREDENTIAL_RULES) {
         result = applyCredentialRule(result, rule, tally);
     }
-    return result;
+    return redactSensitiveLineValues(result, tally);
 }
 
 /**
  * Checks whether an object key name represents a credential or secret that must always be redacted.
+ * Matches secret words anywhere in the name (case-insensitive, ignoring `-`, `_`, `.` and spaces),
+ * except for token-count style names such as `maxTokens` or `tokenizer`.
  */
 export function IsSensitiveKeyName(key: string): boolean {
-    const normalized = key.trim().replace(/[-.\s]/g, '_');
-    return SENSITIVE_KEY_PATTERN.test(normalized);
+    const normalized = key.trim().toLowerCase().replace(/[-_.\s]/g, '');
+    if (!normalized || SAFE_KEY_NAMES.has(normalized) || SAFE_TOKEN_KEY_REGEX.test(normalized)) {
+        return false;
+    }
+    if (SENSITIVE_EXACT_KEYS.has(normalized)) {
+        return true;
+    }
+    return SENSITIVE_KEY_FRAGMENTS.some((fragment) => normalized.includes(fragment));
 }
 
 /**
- * Normalizes inline SQL string and numeric literals to `?`.
+ * Checks whether an HTTP header name carries a credential: a known auth header, a sensitive key name,
+ * or a name ending in `-token`, `-key`, `-secret`, `-signature` or `-credential`.
+ */
+export function IsSensitiveHeaderName(name: string): boolean {
+    const trimmed = name.trim();
+    return (
+        SENSITIVE_HEADER_NAMES.has(trimmed.toLowerCase()) ||
+        SENSITIVE_HEADER_SUFFIX_REGEX.test(trimmed) ||
+        IsSensitiveKeyName(trimmed)
+    );
+}
+
+/**
+ * Normalizes inline SQL string, hex and numeric literals to `?`.
+ * An unterminated string literal is replaced up to the end of the text.
+ * Text past {@link MAX_NORMALIZED_SQL_LENGTH} characters is dropped and replaced by a truncation marker.
+ * Runs in linear time.
  */
 export function NormalizeSqlLiterals(sql: string): string {
     if (!sql) {
         return sql;
     }
-    let out = sql.replace(SQL_SINGLE_QUOTED_LITERAL_REGEX, '?');
-    out = out.replace(/(=|<>|!=|<=|>=|<|>)\s*-?\b\d+(?:\.\d+)?\b/g, '$1 ?');
-    out = out.replace(SQL_NUMERIC_COMPARISON_REGEX, '$1?');
-    return out;
+    const overflow = sql.length - MAX_NORMALIZED_SQL_LENGTH;
+    const head = overflow > 0 ? sql.slice(0, MAX_NORMALIZED_SQL_LENGTH) : sql;
+    let out = head.replace(SQL_SINGLE_QUOTED_LITERAL_REGEX, '?');
+    const openQuote = out.indexOf("'");
+    if (openQuote >= 0) {
+        out = out.slice(0, openQuote) + '?';
+    }
+    out = out.replace(SQL_COMPARISON_NUMBER_REGEX, '$1 ?');
+    out = out.replace(SQL_HEX_LITERAL_REGEX, '$1?');
+    out = out.replace(SQL_NUMBER_LITERAL_REGEX, '$1?');
+    return overflow > 0 ? `${out} /* [SQL_TRUNCATED: ${overflow} more characters] */` : out;
+}
+
+/**
+ * Normalizes SQL literals inside free text such as log messages.
+ * From the first uppercase statement keyword (`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `EXEC`)
+ * the text is treated as SQL. Before it, only filter literals are replaced: values after comparison
+ * operators and `LIKE`, `IN (...)` lists and `BETWEEN ... AND ...` ranges.
+ */
+export function NormalizeSqlLiteralsInText(text: string): string {
+    if (!text) {
+        return text;
+    }
+    const statement = SQL_STATEMENT_START_REGEX.exec(text);
+    if (statement) {
+        return normalizeFilterLiterals(text.slice(0, statement.index)) + NormalizeSqlLiterals(text.slice(statement.index));
+    }
+    return normalizeFilterLiterals(text);
+}
+
+/** Replaces filter literals in free text; see {@link NormalizeSqlLiteralsInText}. */
+function normalizeFilterLiterals(text: string): string {
+    if (text.length > MAX_NORMALIZED_SQL_LENGTH) {
+        return NormalizeSqlLiterals(text);
+    }
+    let out = text.replace(TEXT_IN_LIST_REGEX, (_m: string, open: string, inner: string) => `${open}${NormalizeSqlLiterals(inner)})`);
+    out = out.replace(TEXT_BETWEEN_REGEX, '$1?$3?');
+    out = out.replace(TEXT_OPERATOR_STRING_REGEX, '$1?');
+    return out.replace(SQL_COMPARISON_NUMBER_REGEX, '$1 ?');
+}
+
+/**
+ * Normalizes literals in a query plan. In Showplan XML, only the attributes that carry SQL text or
+ * literal values are normalized, so row estimates and costs stay. Other plan text is treated as log text.
+ */
+export function NormalizePlanLiterals(plan: string): string {
+    if (!plan) {
+        return plan;
+    }
+    if (!plan.trimStart().startsWith('<')) {
+        return NormalizeSqlLiteralsInText(plan);
+    }
+    return plan.replace(PLAN_LITERAL_ATTRIBUTE_REGEX, (_m: string, open: string, value: string) => {
+        const decoded = value.replace(/&apos;|&#39;/g, "'");
+        return `${open}${NormalizeSqlLiterals(decoded)}"`;
+    });
 }
 
 /**
@@ -282,7 +592,7 @@ export function ScrubHeaders(
 ): Record<string, string> {
     const out: Record<string, string> = {};
     for (const [k, v] of Object.entries(headers)) {
-        if (SENSITIVE_HEADER_NAMES.has(k.toLowerCase().trim())) {
+        if (IsSensitiveHeaderName(k)) {
             out[k] = '[REDACTED_HEADER]';
         } else {
             out[k] = ScrubString(v, optionsOrProfile);
@@ -376,11 +686,58 @@ export function ScrubBundleDataWithCount(
     const cloned = scrubValueInternal(structuredClone(data), optionsOrProfile, new WeakSet<object>(), 0, tally) as DiagnosticBundleData;
 
     if (profile === 'Standard') {
-        cloned.serverSql = cloned.serverSql.map((sqlEntry) => ({
-            ...sqlEntry,
-            sql: NormalizeSqlLiterals(sqlEntry.sql),
-        }));
+        normalizeBundleLiterals(cloned);
     }
 
     return { Data: cloned, CredentialsScrubbedCount: tally.count };
+}
+
+/**
+ * Replaces SQL and filter literals across a bundle: server SQL text and plans, client and server
+ * log messages, and filter-like client telemetry params.
+ */
+function normalizeBundleLiterals(data: DiagnosticBundleData): void {
+    data.serverSql = data.serverSql.map((sqlEntry) => ({
+        ...sqlEntry,
+        sql: NormalizeSqlLiterals(sqlEntry.sql),
+        ...(typeof sqlEntry.executionPlanXml === 'string'
+            ? { executionPlanXml: NormalizePlanLiterals(sqlEntry.executionPlanXml) }
+            : {}),
+    }));
+    data.clientLogs = data.clientLogs.map((log) => normalizeLogMessage(log));
+    data.serverLogs = data.serverLogs.map((log) => normalizeLogMessage(log));
+    data.clientTelemetry = data.clientTelemetry.map((event) =>
+        event.params ? { ...event, params: normalizeTelemetryParams(event.params) } : event
+    );
+}
+
+function normalizeLogMessage(log: DiagnosticLogEntry): DiagnosticLogEntry {
+    return typeof log.message === 'string' ? { ...log, message: NormalizeSqlLiteralsInText(log.message) } : log;
+}
+
+/** Normalizes SQL fragment params and replaces literal-value params with `?`. */
+function normalizeTelemetryParams(params: Record<string, unknown>): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(params)) {
+        const name = key.toLowerCase().replace(/[-_.\s]/g, '');
+        if (SQL_FRAGMENT_PARAM_NAMES.has(name)) {
+            out[key] = mapStrings(value, NormalizeSqlLiterals);
+        } else if (LITERAL_VALUE_PARAM_NAMES.has(name)) {
+            out[key] = mapStrings(value, () => '?');
+        } else {
+            out[key] = value;
+        }
+    }
+    return out;
+}
+
+/** Applies `fn` to a string, or to each string in an array; other values pass through. */
+function mapStrings(value: unknown, fn: (text: string) => string): unknown {
+    if (typeof value === 'string') {
+        return fn(value);
+    }
+    if (Array.isArray(value)) {
+        return value.map((item: unknown) => (typeof item === 'string' ? fn(item) : item));
+    }
+    return value;
 }
