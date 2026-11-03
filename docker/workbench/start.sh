@@ -4,6 +4,12 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# docker-compose.yml requires .env.database (env_file + mount); create it from the template
+if [ ! -f .env.database ]; then
+    echo "No .env.database file found. Creating from .env.database.example..."
+    cp .env.database.example .env.database
+fi
+
 # Check for .env file
 if [ ! -f .env ]; then
     echo "No .env file found. Creating from .env.example..."
