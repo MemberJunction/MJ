@@ -1,5 +1,59 @@
 # Change Log - @memberjunction/ai-vector-sync
 
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- 038a857: Entity documents now render temporal columns as stable text: a `date` column as its stored day (`YYYY-MM-DD`) and a timestamp as ISO 8601, in both the template data an embedding is rendered from and the vector's metadata. Before, a `Date` rendered through `Date.toString()` in the server's time zone, so a stored 1984-05-07 became "Sun May 06 1984 20:00:00 GMT-0400 (Eastern Daylight Time)": the wrong day, with tokens every record shares (#6055). Re-sync the vectors of any entity document whose template uses a date field, so stored vectors match what detection and search now embed.
+- d2e89fe: Add unit tests: duplicate detection and vector sync carry the entity document's record filter through batch, view and paging runs; the Gemini image generator's models, default model and catalog IDs.
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [91cba84]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [8f370b3]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [953086f]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [6779eed]
+- Updated dependencies [0b406e8]
+- Updated dependencies [c018cb9]
+- Updated dependencies [397ae9a]
+- Updated dependencies [6e43622]
+- Updated dependencies [89a5b59]
+- Updated dependencies [6b0de38]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/ai-core-plus@6.2.0-edge.7
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/ai@6.2.0-edge.7
+  - @memberjunction/aiengine@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/templates-base-types@6.2.0-edge.7
+  - @memberjunction/ai-prompts@6.2.0-edge.7
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.7
+  - @memberjunction/entity-documents@6.2.0-edge.7
+  - @memberjunction/templates@6.2.0-edge.7
+  - @memberjunction/ai-vectors@6.2.0-edge.7
+  - @memberjunction/ai-vectordb@6.2.0-edge.7
+  - @memberjunction/credentials@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes

@@ -1,5 +1,19 @@
 # @memberjunction/ng-graph-view
 
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [1419ba7]
+- Updated dependencies [29b16ee]
+- Updated dependencies [4283a82]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/ng-ui-components@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes

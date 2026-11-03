@@ -235,6 +235,142 @@ describe('MarkdownComponent (DOM)', () => {
     });
   });
 
+  describe('OpenLinksInNewTab', () => {
+    const SAMPLE_MARKDOWN =
+      'You can access the invoices site directly at https://invoices.example.com/.\n' +
+      'Most of your billing and invoice needs can be managed through your online account via the [Member Portal](https://portal.example.com/account).';
+
+    it('leaves links in the current tab by default (OpenLinksInNewTab=false)', () => {
+      const f = render({ data: SAMPLE_MARKDOWN });
+      const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(2);
+      for (const link of links) {
+        expect(link.hasAttribute('target')).toBe(false);
+      }
+    });
+
+    it('stamps target="_blank" and rel="noopener noreferrer" on both bare autolinks and markdown links when OpenLinksInNewTab=true', () => {
+      const f = render({ data: SAMPLE_MARKDOWN, OpenLinksInNewTab: true });
+      const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(2);
+      expect(links[0].getAttribute('href')).toBe('https://invoices.example.com/');
+      expect(links[0].getAttribute('target')).toBe('_blank');
+      expect(links[0].getAttribute('rel')).toBe('noopener noreferrer');
+      expect(links[1].getAttribute('href')).toBe('https://portal.example.com/account');
+      expect(links[1].textContent).toBe('Member Portal');
+      expect(links[1].getAttribute('target')).toBe('_blank');
+      expect(links[1].getAttribute('rel')).toBe('noopener noreferrer');
+    });
+
+    it('leaves in-page fragment links (#section) and mailto:/tel:/sms: links in the current tab even when OpenLinksInNewTab=true', () => {
+      const f = render({
+        data:
+          'Jump to [Overview](#overview), email billing@example.com or [Support](mailto:support@example.com), ' +
+          'call [Help Desk](tel:+15550100), or visit [Portal](https://portal.example.com/account).',
+        OpenLinksInNewTab: true,
+      });
+      const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(5);
+      expect(links[0].getAttribute('href')).toBe('#overview');
+      expect(links[0].hasAttribute('target')).toBe(false);
+      expect(links[1].getAttribute('href')).toBe('mailto:billing@example.com');
+      expect(links[1].hasAttribute('target')).toBe(false);
+      expect(links[2].getAttribute('href')).toBe('mailto:support@example.com');
+      expect(links[2].hasAttribute('target')).toBe(false);
+      expect(links[3].getAttribute('href')).toBe('tel:+15550100');
+      expect(links[3].hasAttribute('target')).toBe(false);
+      expect(links[4].getAttribute('href')).toBe('https://portal.example.com/account');
+      expect(links[4].getAttribute('target')).toBe('_blank');
+      expect(links[4].getAttribute('rel')).toBe('noopener noreferrer');
+    });
+
+    it('preserves an explicit target on raw HTML links and merges noopener noreferrer into existing rel attributes', () => {
+      const f = render({
+        data:
+          '<a href="https://example.com/same" target="_self">Same</a> ' +
+          '<a href="https://example.com/ext" rel="nofollow">Ext</a>',
+        OpenLinksInNewTab: true,
+        enableHtml: true,
+      });
+      const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(2);
+      expect(links[0].getAttribute('target')).toBe('_self');
+      expect(links[1].getAttribute('target')).toBe('_blank');
+      expect(links[1].getAttribute('rel')).toBe('nofollow noopener noreferrer');
+    });
+
+    it('works when enableSvgRenderer is false (Angular sanitizer path)', () => {
+      const f = render({
+        data: SAMPLE_MARKDOWN,
+        OpenLinksInNewTab: true,
+        enableSvgRenderer: false,
+      });
+      const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(2);
+      for (const link of links) {
+        expect(link.getAttribute('target')).toBe('_blank');
+        expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+      }
+    });
+
+    it('updates rendered links when OpenLinksInNewTab changes dynamically', async () => {
+      const f = render({ data: SAMPLE_MARKDOWN, OpenLinksInNewTab: false });
+      expect(container(f).querySelector('a')?.hasAttribute('target')).toBe(false);
+
+      f.componentRef.setInput('OpenLinksInNewTab', true);
+      f.detectChanges();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(container(f).querySelector('a')?.getAttribute('target')).toBe('_blank');
+      expect(container(f).querySelector('a')?.getAttribute('rel')).toBe('noopener noreferrer');
+
+      f.componentRef.setInput('OpenLinksInNewTab', false);
+      f.detectChanges();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(container(f).querySelector('a')?.hasAttribute('target')).toBe(false);
+    });
+
+    it('dispatches click events with target="_blank" and rel="noopener noreferrer" when clicking rendered links', () => {
+      const f = render({ data: SAMPLE_MARKDOWN, OpenLinksInNewTab: true });
+      const root = container(f);
+      const clickedLinks: Array<{ href: string | null; target: string; rel: string; defaultPrevented: boolean }> = [];
+
+      root.addEventListener('click', (event: MouseEvent) => {
+        const anchor = (event.target as HTMLElement | null)?.closest('a');
+        if (anchor) {
+          event.preventDefault();
+          clickedLinks.push({
+            href: anchor.getAttribute('href'),
+            target: anchor.target,
+            rel: anchor.rel,
+            defaultPrevented: event.defaultPrevented,
+          });
+        }
+      });
+
+      const links = Array.from(root.querySelectorAll<HTMLAnchorElement>('a'));
+      expect(links).toHaveLength(2);
+      links[0].click();
+      links[1].click();
+
+      expect(clickedLinks).toEqual([
+        {
+          href: 'https://invoices.example.com/',
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          defaultPrevented: true,
+        },
+        {
+          href: 'https://portal.example.com/account',
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          defaultPrevented: true,
+        },
+      ]);
+    });
+  });
+
   /**
    * Sanitization, as seen through the component. With `enableHtml` or the default
    * `enableSvgRenderer`, Angular's sanitizer is bypassed and the HTML the service returns
@@ -371,5 +507,107 @@ describe('MarkdownComponent (DOM)', () => {
       const c = container(render({ data: 'text <img src="x" onerror="alert(1)">', enableSvgRenderer: false }));
       expect(attributeNamesIn(c).some((n) => n.startsWith('on'))).toBe(false);
     });
+
+    it('upgrades an embedded svg[data-mj-diagram="1"] in the middle of a conversation message into an interactive diagram viewer', async () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" data-mj-diagram="1" data-diagram-kind="workflow">' +
+        '<desc id="mj-diagram-meta">{"version":"1","kind":"workflow","title":"Renewal Flow","lanes":{"member":"Member"}}</desc>' +
+        '<defs><marker id="m1-mk-line"><path d="M0 0L8 4L0 8Z"/></marker></defs>' +
+        '<g class="lanes"><g class="lane" data-lane-id="member"><rect x="20" y="20" width="700" height="120"/></g></g>' +
+        '<g class="edges"><g class="edge" data-edge-id="e1" data-edge-from="n1" data-edge-to="n2" data-main-path="true"><path d="M200 80H400" marker-end="url(#m1-mk-line)"/></g></g>' +
+        '<g class="nodes">' +
+        '<g class="node" data-node-id="n1" data-node-kind="start" data-lane="member" data-label="Start"><rect x="60" y="54" width="140" height="52"/><text class="lbl">Start</text></g>' +
+        '<g class="node" data-node-id="n2" data-node-kind="end" data-lane="member" data-label="Finish"><rect x="400" y="54" width="140" height="52"/><text class="lbl">Finish</text></g>' +
+        '</g></svg>';
+      const markdownMessage = `Here is how certification renewal works:\n\n\`\`\`svg\n${svg}\n\`\`\`\n\nClick any step above to inspect deadlines.`;
+      const c = container(render({ data: markdownMessage, enableSvgRenderer: true }));
+      await new Promise((r) => setTimeout(r, 20));
+      expect(c.querySelector('.mjd-shell')).not.toBeNull();
+      expect(c.querySelector('.mjd-toolbar')).toBeNull();
+      expect(c.querySelector('.mjd-stage')).not.toBeNull();
+      expect(c.querySelector('.mjd-panel')).not.toBeNull();
+      expect(c.querySelector('svg[data-mj-diagram="1"]')).not.toBeNull();
+    });
+
+    it('renders a ```mj-diagram JSON fence into an interactive diagram viewer with intact CSS custom properties', async () => {
+      const spec = JSON.stringify({
+        kind: 'lifecycle',
+        title: 'Invoice Lifecycle',
+        lanes: [{ id: 'billing', label: 'Billing' }],
+        nodes: [
+          { id: 'draft', lane: 'billing', kind: 'start', label: 'Draft' },
+          { id: 'paid', lane: 'billing', kind: 'success', label: 'Paid' },
+        ],
+        edges: [{ from: 'draft', to: 'paid', label: 'Pay', role: 'emphasis' }],
+      });
+      const markdownMessage = `Here is the lifecycle:\n\n\`\`\`mj-diagram\n${spec}\n\`\`\``;
+      const f = render({ data: '', enableSvgRenderer: true, enableSmartypants: true });
+      const done = new Promise<void>((resolve) => {
+        const sub = f.componentInstance.Rendered.subscribe(() => {
+          sub.unsubscribe();
+          resolve();
+        });
+      });
+      f.componentRef.setInput('data', markdownMessage);
+      f.detectChanges();
+      await done;
+      const c = container(f);
+      expect(c.querySelector('.mjd-shell')).not.toBeNull();
+      const svg = c.querySelector('svg[data-mj-diagram="1"]');
+      expect(svg).not.toBeNull();
+      const styleText = svg?.querySelector('style')?.textContent ?? '';
+      expect(styleText).toContain('--bg:var(--mj-bg-surface,#fff)');
+      expect(styleText).not.toContain('\u2013');
+    });
+
+    it('cancels pending diagram viewer upgrades when destroyed before async post-render processing settles', async () => {
+      const spec = JSON.stringify({
+        kind: 'workflow',
+        title: 'Quick Flow',
+        lanes: [{ id: 'l', label: 'L' }],
+        nodes: [
+          { id: 'a', lane: 'l', label: 'A' },
+          { id: 'b', lane: 'l', label: 'B' },
+        ],
+        edges: [{ from: 'a', to: 'b' }],
+      });
+      const comp = render({ data: `\`\`\`mj-diagram\n${spec}\n\`\`\``, enableSvgRenderer: true });
+      const c = container(comp);
+      comp.destroy();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(c.querySelector('.mjd-shell')).toBeNull();
+    });
+
+    it('continues post-render processing and mounts inline SVGs when the diagram renderer chunk fails to load', async () => {
+      const inlineSvg =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" data-mj-diagram="1">' +
+        '<g class="nodes"><g class="node" data-node-id="n1" data-label="Step 1"><rect x="10" y="10" width="80" height="40"/></g></g>' +
+        '</svg>';
+      const markdownMessage = `\`\`\`mj-diagram\n{"kind":"workflow"}\n\`\`\`\n\n\`\`\`svg\n${inlineSvg}\n\`\`\``;
+      const f = render({ data: '', enableSvgRenderer: true });
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      vi.spyOn(f.componentInstance, 'LoadDiagramRenderer').mockRejectedValueOnce(new Error('ChunkLoadError'));
+      const done = new Promise<void>((resolve) => {
+        const sub = f.componentInstance.Rendered.subscribe(() => {
+          sub.unsubscribe();
+          resolve();
+        });
+      });
+      f.componentRef.setInput('data', markdownMessage);
+      f.detectChanges();
+      await done;
+      warnSpy.mockRestore();
+
+      const c = container(f);
+      expect(c.querySelector('code.language-mj-diagram')).not.toBeNull();
+      expect(c.querySelector('.mjd-shell')).not.toBeNull();
+    });
+
+    it('does not skip the Angular sanitizer just because a message contains the diagram marker', () => {
+      const c = container(render({ data: 'text <span data-mj-diagram="1" style="position:fixed;inset:0">x</span>', enableSvgRenderer: false }));
+      expect(c.querySelector('[style]')).toBeNull();
+    });
   });
 });
+
+

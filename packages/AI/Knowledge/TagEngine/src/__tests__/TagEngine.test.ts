@@ -180,7 +180,7 @@ vi.mock('@memberjunction/aiengine', () => ({
             Loaded: true,
             Prompts: [],
             Models: [
-                { ID: 'model-1', Name: 'text-embedding-3-small', AIModelType: 'Embeddings', InputTokenLimit: 8191, DriverClass: 'OpenAIEmbeddings', APIName: 'text-embedding-3-small' },
+                { ID: 'model-1', Name: 'text-embedding-3-small', IsActive: true, AIModelType: 'Embeddings', InputTokenLimit: 8191, DriverClass: 'OpenAIEmbeddings', APIName: 'text-embedding-3-small' },
             ],
             ModelVendors: [
                 { ModelID: 'model-1', Status: 'Active', DriverClass: 'OpenAIEmbeddings', APIName: 'text-embedding-3-small', Priority: 1 },

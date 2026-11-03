@@ -1,0 +1,29 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT140 - MetadataSync Declared Query Children",
+    "Description": "Pushes (and pulls) scratch metadata trees through PushService and PullService (zzz-it140 prefix) and asserts the MJ: Queries child rows that result. MSQ1 declared Parameters, Fields and Entities collections are stored as declared on a new query and replaced on update. MSQ2 the legacy relatedEntities format is promoted to the declared collections. MSQ3 a query with no declared children gets its rows from extraction, new and on an SQL update. MSQ4 rows declared later replace the extracted rows of the same name, keeping their own IDs. MSQ5 a declared parameter left out of the file (and the SQL) is kept and flagged as a Warning (the default upsert mode deletes nothing); a deleteRecord entry removes it. MSQ6 an unchanged re-push writes no row (snapshots with timestamps compared). MSQ7 pushing a copy of the shipped metadata/queries tree changes no MJ: Queries, Query Fields, Query Parameters, Query Entities or Query Dependencies row. MSQ8 one push creates a reusable query and a query composing it (the composed query is found inside the push transaction, before the query cache hears of it). MSQ9 a declared field carrying only its name and annotations gets its sequence, types and source from extraction. MSQ10 a pull after auto extraction writes the query's extracted Fields, Parameters and Entities rows under collections (not relatedEntities) with their own IDs and detection methods and no parent key, and pushing the pulled file back writes no row. MSQ7 is also the fresh-install no-op push: a fresh install's rows come from the release migrations, and its first push is this same push of the shipped tree. Self-cleaning.",
+    "MaxExecutionTimeMS": 900000,
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "MetadataSync stores declared query children as declared, falls back to extraction otherwise, and an unchanged push of the shipped queries is a no-op."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "metadata-sync-queries"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "FFD5ABEE-CCEF-46A6-A54D-FD606594DAFC"
+  },
+  "sync": {
+    "lastModified": "2026-10-28T22:16:26.142Z",
+    "checksum": "2f7b1862727d2118547ed88f803fc6c7a7325fcf90980d8fad4832ee9d14d8e0"
+  }
+}

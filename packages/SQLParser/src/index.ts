@@ -7,8 +7,8 @@ export { AnalyzeTopLevelOrderBy, HasTopLevelOrderBy, ExtractOrderBy, FindOrderBy
 export type { OrderByAnalysis } from './orderByAnalyzer.js';
 // Token-level SQL reading that works on any statement, including SQL the AST parser rejects
 export { LexSQL, SignificantTokens, IsKeyword } from './sqlLexer.js';
-export type { SQLLexToken, SQLLexTokenKind } from './sqlLexer.js';
-export { SplitLeadingCTEs, IsReadOnlyQuery } from './sqlShape.js';
+export type { SQLLexToken, SQLLexTokenKind, LexDialect } from './sqlLexer.js';
+export { SplitLeadingCTEs, IsReadOnlyQuery, UNREADABLE_WITH_CLAUSE_REASON } from './sqlShape.js';
 export type { LeadingCTEs, LeadingCTEDefinition, ReadOnlyQueryCheck } from './sqlShape.js';
 export { IsBalancedSQLFragment, SplitTopLevelAndTerms } from './balancedFragment.js';
 export type { BalancedFragmentCheck, BalancedFragmentOptions } from './balancedFragment.js';
@@ -32,6 +32,8 @@ export type {
     SQLParseOptions,
     SQLStatementKind,
     RowCapInfo,
+    CheckedSelectColumns,
+    CheckedColumnReferences,
 } from './sql-parser.js';
 
 // Re-export node-sql-parser's AST type so consumers don't need a direct dependency
@@ -74,3 +76,180 @@ export type {
     MJASTAnnotation,
     MJASTWalkResult,
 } from './mj-ast-types.js';
+
+// ─── MJ Query language: token stream and template layer ───────────────
+export { MakeDiagnostic, MakeSpan, SpanContains } from './common/analysis.js';
+export type { Analysis, Diagnostic, DiagnosticSeverity, Span } from './common/analysis.js';
+export { MJQueryDiagnosticCodes } from './common/diagnosticCodes.js';
+export type { MJQueryDiagnosticCode } from './common/diagnosticCodes.js';
+export { SqlTokens, IsSignificantToken } from './lexer/sqlTokens.js';
+export type { SqlToken, SqlTokenKind, TemplateSqlContext, TemplateTagForm, TemplateTagInfo } from './lexer/sqlTokenTypes.js';
+export { QueryTemplate } from './template/queryTemplate.js';
+export { TemplateExpressionParser } from './template/expressionParser.js';
+export type { ParsedExpression, ParsedArgument, ParsedArguments } from './template/expressionParser.js';
+export { ExpressionChildren, WalkExpression } from './template/expressionTypes.js';
+export type {
+    TemplateExpression,
+    TemplateBinaryOperator,
+    TemplateUnaryOperator,
+    TemplateLiteralValue,
+    UnsupportedConstruct,
+    NameExpression,
+    ContextExpression,
+    LoopMemberExpression,
+    LengthExpression,
+    InlineIfExpression,
+    LiteralExpression,
+    UnaryExpression,
+    BinaryExpression,
+    FilterExpression,
+    UnsupportedExpression,
+} from './template/expressionTypes.js';
+export { AllNodes, ChildBodies, NodeExpressions } from './template/templateNodes.js';
+export type {
+    TemplateNode,
+    SqlTextNode,
+    ExpressionNode,
+    IfNode,
+    IfBranch,
+    ElseBranch,
+    ForNode,
+    SetNode,
+    CompositionNode,
+    CompositionArgument,
+    DocCommentNode,
+    UnknownTemplateNode,
+} from './template/templateNodes.js';
+export {
+    MJ_QUERY_SQL_FILTERS,
+    MJ_QUERY_CONTEXT_TOKENS,
+    MJ_QUERY_LOOP_MEMBERS,
+    MJ_QUERY_BLOCK_TAGS,
+    DEFAULT_FILTER_NAME,
+    FindSqlFilter,
+    ContextTokenFilters,
+} from './template/queryLanguage.js';
+export type { TemplateParameterType, MJQuerySqlFilter } from './template/queryLanguage.js';
+export type { TemplateParameter, ParameterUse, ContextTokenUse } from './template/parameterAnalysis.js';
+export type { ValueUseRole } from './template/templateWalker.js';
+export type { CompositionReference } from './template/compositionReferences.js';
+export {
+    MatchCompositionPath,
+    CompositionPathSegments,
+    CompositionFullPath,
+    NormalizeCompositionCategoryPath,
+} from './template/compositionPathMatch.js';
+export type { CompositionPathCandidate, CompositionPathMatch } from './template/compositionPathMatch.js';
+export type { TemplateDocComments, DocCommentEntry, DocCommentSource } from './template/docComments.js';
+export { BranchVariantValues } from './template/branchVariants.js';
+export type { BranchVariant, BranchVariantSet, BranchToggle } from './template/branchVariants.js';
+export type { BranchValue } from './template/branchEvaluator.js';
+export type {
+    QueryTemplateValidateOptions,
+    QueryTemplateValidationMode,
+    QueryTemplateValidation,
+    DeclaredTemplateParameter,
+    KnownTemplateParameterType,
+    CompositionTarget,
+    CompositionTargetParameter,
+    CompositionResolver,
+} from './template/validationTypes.js';
+
+// ─── SqlDocument: the tolerant structural parser, scope, analyses and edits ───
+export { SqlDocument } from './sql/sqlDocument.js';
+export { TemplateSqlViews, ReadWithoutErrors } from './legacy/templateSqlViews.js';
+export type { SqlView } from './legacy/templateSqlViews.js';
+export { SqlDocumentDiagnosticCodes } from './sql/sqlDiagnosticCodes.js';
+export type { SqlDocumentDiagnosticCode } from './sql/sqlDiagnosticCodes.js';
+export { SqlExpression } from './sql/sqlExpression.js';
+export type { IdentifierPath, FunctionCall, StarReference } from './sql/sqlExpression.js';
+export { SqlScope, NameKey } from './sql/sqlScope.js';
+export type {
+    ColumnClause,
+    ScopeSource,
+    ScopeSourceKind,
+    QueryScope,
+    ExpressionContext,
+    QualifierBinding,
+} from './sql/sqlScope.js';
+export { SqlNodeChildren, WalkSqlNodes, LeftmostSelect, IsQueryExpression } from './sql/sqlWalker.js';
+export type {
+    SqlNode,
+    UnknownNode,
+    IdentifierNode,
+    ObjectName,
+    SqlStatementKind,
+    StatementNode,
+    QueryNode,
+    WithClause,
+    CTEDeclaration,
+    QueryTailClauses,
+    QueryExpression,
+    SelectCore,
+    SetOperator,
+    SetOperationNode,
+    ParenthesizedQuery,
+    ValuesQuery,
+    DistinctClause,
+    TopClause,
+    SelectItem,
+    IntoClause,
+    FromClause,
+    FromSource,
+    SourceAlias,
+    TableSource,
+    DerivedSource,
+    FunctionSource,
+    ValuesSource,
+    JoinKind,
+    JoinSource,
+    ApplySource,
+    PivotSource,
+    ParenthesizedSource,
+    ConditionClause,
+    GroupByClause,
+    WindowClause,
+    WindowDefinition,
+    OrderByClause,
+    OrderByItem,
+    LimitClause,
+    OffsetClause,
+    FetchClause,
+    ForClauseForm,
+    ForClause,
+    OptionClause,
+} from './sql/sqlNodes.js';
+export type {
+    TableReference,
+    CTEInfo,
+    OutputItem,
+    OutputItems,
+    TopLevelOrderBy,
+    RowCap,
+    ReadOnlyCheck,
+    ColumnBinding,
+    ColumnReference,
+    WholeRowKind,
+    WholeRowConstruct,
+    DuplicateOutputName,
+    DuplicateOutputNameOptions,
+} from './sql/analyses/analysisTypes.js';
+export { EditSet, EditConflictError, SpanMap } from './edit/editSet.js';
+export type { EditTarget, TextEdit, TextEditKind, AppliedEdits, OffsetBias } from './edit/editSet.js';
+export type { SqlTransformResult, TransformDialect } from './edit/transformSupport.js';
+export { StripOrderBy, ReplaceSelectList, AppendTail, SetRowCap } from './edit/clauseTransforms.js';
+export type { AppendTailOptions } from './edit/clauseTransforms.js';
+export { HoistCTEs, RenameCTE, WrapAsDerivedTable, OutputOrderBy } from './edit/cteTransforms.js';
+export type { HoistedCTE, HoistedCTEs, WrapOptions } from './edit/cteTransforms.js';
+
+// ─── StrictFragmentValidator ───
+export { StrictFragmentValidator } from './strict/strictFragmentValidator.js';
+export type {
+    StrictRelation,
+    StrictStatementReads,
+    StrictRefusal,
+    StrictParseOptions,
+    StrictFilterOptions,
+    StrictValidationResult,
+    StrictAggregateResult,
+} from './strict/strictTypes.js';

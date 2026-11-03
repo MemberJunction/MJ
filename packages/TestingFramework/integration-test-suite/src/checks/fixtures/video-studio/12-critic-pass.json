@@ -1,0 +1,53 @@
+{
+    "Defects": [],
+    "Scores": {
+        "Criteria": [
+            {
+                "Criterion": "hook-lands-in-the-first-two-seconds",
+                "Level": "Meets",
+                "Notes": "Headline statement is legible at 0.8s."
+            },
+            {
+                "Criterion": "readable-at-phone-size",
+                "Level": "Meets",
+                "Notes": "Typography meets legibility thresholds with generous margins."
+            },
+            {
+                "Criterion": "type-and-color-stay-consistent",
+                "Level": "Meets",
+                "Notes": "MJ Sans and MJ Mono hierarchy is consistent across all three beats."
+            },
+            {
+                "Criterion": "motion-has-weight-and-a-clear-focus",
+                "Level": "Meets",
+                "Notes": "Cubic-bezier entrances settle 1.5s before beat transitions."
+            },
+            {
+                "Criterion": "sound-is-in-sync-with-the-picture",
+                "Level": "Meets",
+                "Notes": "Narration and music duck align with beat boundaries."
+            },
+            {
+                "Criterion": "stays-on-brand",
+                "Level": "Meets",
+                "Notes": "Palette adheres strictly to dark navy and cyan tokens."
+            },
+            {
+                "Criterion": "shown-values-match-the-data-snapshot",
+                "Level": "Meets",
+                "Notes": "All rendered values match DataSnapshot and AsOf footer is visible."
+            },
+            {
+                "Criterion": "final-frame-works-as-a-poster",
+                "Level": "Meets",
+                "Notes": "Closing beat settles into a clean executive summary poster frame."
+            },
+            {
+                "Criterion": "generated-assets-are-honest-and-disclosed",
+                "Level": "Meets",
+                "Notes": "Any generated background is purely illustrative and provenance is recorded."
+            }
+        ]
+    },
+    "Summary": "Clean delivery across all formats."
+}
