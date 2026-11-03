@@ -486,11 +486,11 @@ describe('TagCoOccurrenceEngine', () => {
                 if (callCount === 2) {
                     return Promise.resolve({ Success: true, Results: [] });
                 }
-                // Existing pair
+                // Existing pair with a different prior count so updateExistingPair is triggered
                 return Promise.resolve({
                     Success: true,
                     Results: [
-                        { ID: 'pair-1', TagAID: 'aaa', TagBID: 'bbb', CoOccurrenceCount: 1 },
+                        { ID: 'pair-1', TagAID: 'aaa', TagBID: 'bbb', CoOccurrenceCount: 5 },
                     ]
                 });
             });
@@ -502,6 +502,38 @@ describe('TagCoOccurrenceEngine', () => {
             expect(result.PairsDeleted).toBe(0);
             // Load was called (for update), not NewRecord
             expect(mockLoad).toHaveBeenCalled();
+        });
+
+        it('should skip updateExistingPair when existing CoOccurrenceCount equals computed count', async () => {
+            let callCount = 0;
+            mockRunView.mockImplementation(() => {
+                callCount++;
+                if (callCount === 1) {
+                    return Promise.resolve({
+                        Success: true,
+                        Results: [
+                            { ItemID: 'item-1', TagID: 'bbb' },
+                            { ItemID: 'item-1', TagID: 'aaa' },
+                        ]
+                    });
+                }
+                if (callCount === 2) {
+                    return Promise.resolve({ Success: true, Results: [] });
+                }
+                return Promise.resolve({
+                    Success: true,
+                    Results: [
+                        { ID: 'pair-1', TagAID: 'aaa', TagBID: 'bbb', CoOccurrenceCount: 1 },
+                    ]
+                });
+            });
+
+            const result = await engine.RecomputeCoOccurrence(mockUser);
+
+            expect(result.PairsUpdated).toBe(0);
+            expect(result.PairsDeleted).toBe(0);
+            expect(mockLoad).not.toHaveBeenCalled();
+            expect(mockSave).not.toHaveBeenCalled();
         });
     });
 
@@ -529,7 +561,7 @@ describe('TagCoOccurrenceEngine', () => {
                 return Promise.resolve({
                     Success: true,
                     Results: [
-                        { ID: 'pair-1', TagAID: 'aaa', TagBID: 'bbb', CoOccurrenceCount: 1 },
+                        { ID: 'pair-1', TagAID: 'aaa', TagBID: 'bbb', CoOccurrenceCount: 5 },
                     ]
                 });
             });
