@@ -38,10 +38,12 @@ const PARTIES_ID = 'lh-entity-parties';
 const CUSTOMERS_ID = 'lh-entity-customers';
 const VENDORS_ID = 'lh-entity-vendors';
 
-interface FieldSpec {
+export interface FieldSpec {
     Name: string;
     Type: string;
     IsPrimaryKey?: boolean;
+    /** A column the entity's view carries from another table, such as an IS-A parent's field mirrored on a child. */
+    IsVirtual?: boolean;
     Length?: number;
     /** Makes the field a foreign key to this entity's `ID`. */
     References?: { ID: string; Name: string };
@@ -62,7 +64,7 @@ function makeFields(entityID: string, entityName: string, specs: FieldSpec[]): R
         IsSoftForeignKey: false,
         AllowsNull: !spec.IsPrimaryKey,
         AutoIncrement: false,
-        IsVirtual: false,
+        IsVirtual: spec.IsVirtual ?? false,
         IsNameField: spec.Name === 'Name',
         AllowUpdateAPI: !spec.IsPrimaryKey,
         ValueListType: 'None',
@@ -167,9 +169,34 @@ const ENTITY_SPECS: EntitySpec[] = [
     },
 ];
 
-/** Fresh EntityInfo objects for the whole fixture hierarchy. */
-export function BuildLoadHintEntities(): EntityInfo[] {
-    return ENTITY_SPECS.map(spec => new EntityInfo(makeEntity(spec)));
+/**
+ * Every non-key field of the IS-A ancestors of `spec`, as the virtual mirror fields a generated
+ * child view carries. `__mj_` timestamps are not mirrored: the child view's are its own table's.
+ */
+function inheritedMirrorFields(spec: EntitySpec, specs: EntitySpec[]): FieldSpec[] {
+    const mirrors: FieldSpec[] = [];
+    let parent = specs.find(s => s.ID === spec.ParentID);
+    for (let depth = 0; parent && depth < specs.length; depth++) {
+        mirrors.push(...parent.Fields.filter(f => !f.IsPrimaryKey && !f.Name.startsWith('__mj_')).map(f => ({ ...f, IsVirtual: true })));
+        parent = specs.find(s => s.ID === parent!.ParentID);
+    }
+    return mirrors;
+}
+
+/**
+ * Fresh EntityInfo objects for the whole fixture hierarchy. With `MirrorParentFields`, every IS-A
+ * child also declares its ancestors' fields as virtual mirror fields, as CodeGen-generated child
+ * entities do; without it, children declare only the shared key and their own columns.
+ * `ExtraFields` appends fields to the named entities (before any mirroring).
+ */
+export function BuildLoadHintEntities(options?: { MirrorParentFields?: boolean; ExtraFields?: Record<string, FieldSpec[]> }): EntityInfo[] {
+    const specs = ENTITY_SPECS.map(spec => ({ ...spec, Fields: [...spec.Fields, ...(options?.ExtraFields?.[spec.Name] ?? [])] }));
+    return specs.map(spec => {
+        if (!options?.MirrorParentFields || !spec.ParentID) {
+            return new EntityInfo(makeEntity(spec));
+        }
+        return new EntityInfo(makeEntity({ ...spec, Fields: [...spec.Fields, ...inheritedMirrorFields(spec, specs)] }));
+    });
 }
 
 export function MakeLoadHintUser(roleID: string): UserInfo {
