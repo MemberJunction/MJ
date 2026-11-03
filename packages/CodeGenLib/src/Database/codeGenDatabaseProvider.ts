@@ -2058,8 +2058,11 @@ export abstract class CodeGenDatabaseProvider {
      *   Phase 2 = CRUD function DDL — ONLY runs if phase 1 succeeded.
      *   Phase 3 = full-text search DDL (ftsSQL) — runs after the view phase
      *             because the search function's result type is the base view.
-     *   Phase 4 = view permissions (viewPermSQL) — runs only if the earlier
-     *             phases succeeded.
+     *   Phase 4 = index DDL (indexStatements) — foreign-key and soft-PK indexes,
+     *             one statement at a time. A failed index is reported as phase
+     *             `indexes` but does not stop the permissions phase.
+     *   Phase 5 = view permissions (viewPermSQL) — runs only if the earlier
+     *             phases (other than indexes) succeeded.
      * The `success`/`phase` pair in the result identifies exactly where things
      * fell over so the caller doesn't have to bisect.
      */
@@ -2077,6 +2080,10 @@ export abstract class CodeGenDatabaseProvider {
          *  AFTER the view phase — the search function `RETURNS SETOF <baseview>`,
          *  so it cannot be created against a missing or stale view. */
         ftsSQL: string;
+        /** Automatic index DDL (foreign-key and soft-PK `CREATE INDEX` statements), one
+         *  statement per element, as written to the entity's index file. Empty when the
+         *  entity gets no automatic indexes. */
+        indexStatements: ReadonlyArray<string>;
         viewPermSQL: string;
         willRegenerate?: Set<string>;
     }): Promise<PhasedExecutionResult>;
@@ -2343,7 +2350,7 @@ export interface PhasedExecutionResult {
     /** Which phase failed. Null when `success` is true. `fulltext-generate`
      *  is the caller-side failure to GENERATE the full-text DDL, as distinct
      *  from `fulltext`, the provider's failure to EXECUTE it. */
-    phase: 'tvf' | 'view' | 'functions' | 'fulltext-generate' | 'fulltext' | 'permissions' | null;
+    phase: 'tvf' | 'view' | 'functions' | 'fulltext-generate' | 'fulltext' | 'indexes' | 'permissions' | null;
     /** Underlying error when `success` is false. */
     error?: Error;
 }

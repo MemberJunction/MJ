@@ -133,3 +133,19 @@ describe('PostgreSQLCodeGenProvider — soft primary key index', () => {
         expect(provider.generateSoftPrimaryKeyIndex(entity)).toEqual([]);
     });
 });
+
+describe('soft-PK index reaches the PostgreSQL phased executor (#5217)', () => {
+    it('is among the statements ExecuteEntityInPhases hands to the index phase', async () => {
+        const { SQLCodeGenBase } = await import('../../../sql_codegen');
+        const provider = new PostgreSQLCodeGenProvider();
+        const codeGen = new SQLCodeGenBase();
+        codeGen.DBProvider = provider;
+        const entity = createMockEntity({}, [softPKField('userid', 1), softPKField('courseid', 2)]);
+
+        const statements = codeGen.BuildEntityIndexStatements({} as never, entity);
+        const softPKStatement = provider.generateSoftPrimaryKeyIndex(entity).join('\n\n');
+
+        expect(softPKStatement).toContain('CREATE INDEX IF NOT EXISTS');
+        expect(statements).toContain(softPKStatement);
+    });
+});
