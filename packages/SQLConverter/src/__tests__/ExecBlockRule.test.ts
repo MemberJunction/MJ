@@ -66,6 +66,18 @@ describe('ExecBlockRule', () => {
       expect(result).toMatch(/n\.nspname = '__mj'/);
     });
 
+    it('lower-cases an unquoted schema, which is how PostgreSQL stores it (#5864)', () => {
+      const sql = execBlock('UpdateEntity', 5).replace('[__mj]', '[__mj_BizAppsSales]');
+      expect(convert(sql)).toMatch(/n\.nspname = '__mj_bizappssales'/);
+    });
+
+    it('keeps the case of a quoted schema (#5864)', () => {
+      const sql = execBlock('UpdateEntity', 5).replace('[__mj]', '"MixedCase"');
+      const result = convert(sql);
+      expect(result).toMatch(/n\.nspname = 'MixedCase'/);
+      expect(result).toMatch(/PERFORM "MixedCase"\."spUpdateEntity"/);
+    });
+
     it('emits JSON-arg unconditionally when the CALL ALONE exceeds the limit', () => {
       // Above the limit no typed-arg function can exist on PostgreSQL at all, so there is
       // nothing to resolve -- emitting the lookup would be dead weight.
@@ -161,5 +173,33 @@ describe('ExecBlockRule — mj-sync create-or-update (IF NOT EXISTS … ELSE …
     expect(out).toMatch(/THEN[\s\S]*PERFORM __mj\."spCreateAIVendor"\([\s\S]*ELSE[\s\S]*PERFORM __mj\."spUpdateAIVendor"\([\s\S]*END IF;/);
     expect(out).not.toMatch(/\[__mj\]|\bEXEC\b|\bBEGIN\s*\n\s*EXEC/);
     expect(out).not.toContain('SKIPPED');
+  });
+});
+
+/**
+ * mj sync push logs a lookup-keyed ID as a subquery on the natural key (#6069). The SET value is
+ * converted inside the `DO $mj$` block, where the PostProcessor's bracket pass never reaches, so
+ * the rule converts its identifiers itself (#6074).
+ */
+describe('ExecBlockRule — SET value holding a subquery (#6074)', () => {
+  const SUBQUERY_BLOCK = [
+    'DECLARE @ID_ab12 UNIQUEIDENTIFIER,',
+    '  @Name_ab12 NVARCHAR(MAX)',
+    'SET',
+    "  @ID_ab12 = (SELECT [ID] FROM [__mj].[Widget] WHERE LOWER([Name]) = LOWER(N'Widgets') AND [EntityID] = (SELECT [ID] FROM [${mjSchema}].[Entity] WHERE LOWER([Name]) = LOWER(N'MJ: Widgets')))",
+    'SET',
+    "  @Name_ab12 = N'see [__mj].[Widget]' EXEC [__mj].spUpdateWidget @ID = @ID_ab12,",
+    '  @Name = @Name_ab12',
+  ].join('\n');
+
+  it('converts the bracket identifiers of the subquery', () => {
+    const out = convert(SUBQUERY_BLOCK);
+    expect(out).toContain(
+      `p_ID_ab12 := (SELECT "ID" FROM __mj."Widget" WHERE LOWER("Name") = LOWER('Widgets') AND "EntityID" = (SELECT "ID" FROM \${mjSchema}."Entity" WHERE LOWER("Name") = LOWER('MJ: Widgets')));`
+    );
+  });
+
+  it('leaves brackets inside a string literal alone', () => {
+    expect(convert(SUBQUERY_BLOCK)).toContain("p_Name_ab12 := 'see [__mj].[Widget]';");
   });
 });

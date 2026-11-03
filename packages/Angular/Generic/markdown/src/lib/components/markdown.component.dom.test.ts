@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ComponentFixture } from '@angular/core/testing';
+import { Component } from '@angular/core';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { CommonModule } from '@angular/common';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
-import { MarkdownComponent } from './markdown.component';
+import { MarkdownComponent, type ImageClickedEventArgs } from './markdown.component';
+import { MarkdownModule } from '../markdown.module';
 import { MarkdownRenderEvent } from '@memberjunction/markdown-core';
 
 /**
@@ -146,6 +148,93 @@ describe('MarkdownComponent (DOM)', () => {
     });
   });
 
+  describe('image clicks', () => {
+    const SRC = 'https://api.example.test/media/F1?token=t';
+
+    async function renderImages(markdown: string, listen: boolean) {
+      const f = render({ data: '' });
+      const events = listen ? capture<ImageClickedEventArgs>(f.componentInstance.ImageClicked) : [];
+      f.componentRef.setInput('data', markdown);
+      f.detectChanges();
+      await Promise.resolve();
+      await Promise.resolve();
+      return { img: container(f).querySelector('img') as HTMLImageElement, events };
+    }
+
+    it('reports a clicked image to a host that listens, and marks it zoomable and focusable', async () => {
+      const { img, events } = await renderImages(`![Pattern 5](${SRC})`, true);
+      expect(img.classList.contains('mj-markdown-image-clickable')).toBe(true);
+      expect(img.tabIndex).toBe(0);
+      expect(img.getAttribute('role')).toBe('button');
+      img.click();
+      expect(events).toEqual([{ Src: SRC, Alt: 'Pattern 5' }]);
+    });
+
+    it('leaves a decorative image alone (a mention badge avatar) and still wires a real one beside it', async () => {
+      const { img: avatar, events } = await renderImages(
+        `<span class="mention-badge"><img src="${SRC}a" alt="" role="presentation" />Sage</span> drew ![Chart](${SRC})`, true);
+      const chart = avatar.closest('.mj-markdown-container')!.querySelectorAll('img')[1] as HTMLImageElement;
+      expect(avatar.getAttribute('role')).toBe('presentation');
+      expect(avatar.classList.contains('mj-markdown-image-clickable')).toBe(false);
+      expect(avatar.hasAttribute('tabindex')).toBe(false);
+      avatar.click();
+      expect(events).toEqual([]);
+      chart.click();
+      expect(events).toEqual([{ Src: SRC, Alt: 'Chart' }]);
+    });
+
+    it('reports Enter and Space on a focused image, and no other key', async () => {
+      const { img, events } = await renderImages(`![Pattern 5](${SRC})`, true);
+      for (const key of ['Enter', ' ', 'a', 'Tab']) img.dispatchEvent(new KeyboardEvent('keydown', { key, cancelable: true }));
+      expect(events).toHaveLength(2);
+    });
+
+    it('leaves images inert when no host listens', async () => {
+      const { img } = await renderImages(`![Pattern 5](${SRC})`, false);
+      expect(img.classList.contains('mj-markdown-image-clickable')).toBe(false);
+      expect(img.hasAttribute('tabindex')).toBe(false);
+    });
+
+    it('reports each click once when a template binds the output and the data is there from the start', async () => {
+      // The real wiring (message-item): post-render runs from ngAfterViewInit AND the render microtask.
+      @Component({
+        // Standalone, importing the module: the package build (ngc) compiles this file too, and a
+        // module-declared host would be unknown to it outside TestBed.
+        standalone: true,
+        imports: [MarkdownModule],
+        template: `<mj-markdown [data]="Md" (ImageClicked)="Events.push($event)"></mj-markdown>`,
+      })
+      class HostComponent {
+        Md = `![Pattern 5](${SRC})`;
+        Events: ImageClickedEventArgs[] = [];
+      }
+      TestBed.configureTestingModule({ imports: [HostComponent] });
+      const f = TestBed.createComponent(HostComponent);
+      f.detectChanges();
+      await Promise.resolve();
+      await Promise.resolve();
+      (f.nativeElement.querySelector('img') as HTMLImageElement).click();
+      expect(f.componentInstance.Events).toEqual([{ Src: SRC, Alt: 'Pattern 5' }]);
+
+      // New data, new images: they are wired too.
+      f.componentInstance.Md = `Then ![Pattern 6](${SRC}6)`;
+      f.detectChanges();
+      await Promise.resolve();
+      await Promise.resolve();
+      f.componentInstance.Events.length = 0;
+      (f.nativeElement.querySelector('img') as HTMLImageElement).click();
+      expect(f.componentInstance.Events).toEqual([{ Src: `${SRC}6`, Alt: 'Pattern 6' }]);
+    });
+
+    it('leaves an image inside a link to that link', async () => {
+      const { img, events } = await renderImages(`[![Pattern 5](${SRC})](https://example.test/page)`, true);
+      expect(img.closest('a')).not.toBeNull();
+      expect(img.classList.contains('mj-markdown-image-clickable')).toBe(false);
+      img.click();
+      expect(events).toEqual([]);
+    });
+  });
+
   /**
    * Sanitization, as seen through the component. With `enableHtml` or the default
    * `enableSvgRenderer`, Angular's sanitizer is bypassed and the HTML the service returns
@@ -282,5 +371,32 @@ describe('MarkdownComponent (DOM)', () => {
       const c = container(render({ data: 'text <img src="x" onerror="alert(1)">', enableSvgRenderer: false }));
       expect(attributeNamesIn(c).some((n) => n.startsWith('on'))).toBe(false);
     });
+
+    it('upgrades an embedded svg[data-mj-diagram="1"] in the middle of a conversation message into an interactive diagram viewer', async () => {
+      const svg =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" data-mj-diagram="1" data-diagram-kind="workflow">' +
+        '<desc id="mj-diagram-meta">{"version":"1","kind":"workflow","title":"Renewal Flow","lanes":{"member":"Member"}}</desc>' +
+        '<defs><marker id="m1-mk-line"><path d="M0 0L8 4L0 8Z"/></marker></defs>' +
+        '<g class="lanes"><g class="lane" data-lane-id="member"><rect x="20" y="20" width="700" height="120"/></g></g>' +
+        '<g class="edges"><g class="edge" data-edge-id="e1" data-edge-from="n1" data-edge-to="n2" data-main-path="true"><path d="M200 80H400" marker-end="url(#m1-mk-line)"/></g></g>' +
+        '<g class="nodes">' +
+        '<g class="node" data-node-id="n1" data-node-kind="start" data-lane="member" data-label="Start"><rect x="60" y="54" width="140" height="52"/><text class="lbl">Start</text></g>' +
+        '<g class="node" data-node-id="n2" data-node-kind="end" data-lane="member" data-label="Finish"><rect x="400" y="54" width="140" height="52"/><text class="lbl">Finish</text></g>' +
+        '</g></svg>';
+      const markdownMessage = `Here is how certification renewal works:\n\n\`\`\`svg\n${svg}\n\`\`\`\n\nClick any step above to inspect deadlines.`;
+      const c = container(render({ data: markdownMessage, enableSvgRenderer: true }));
+      await Promise.resolve();
+      expect(c.querySelector('.mjd-shell')).not.toBeNull();
+      expect(c.querySelector('.mjd-toolbar')).toBeNull();
+      expect(c.querySelector('.mjd-stage')).not.toBeNull();
+      expect(c.querySelector('.mjd-panel')).not.toBeNull();
+      expect(c.querySelector('svg[data-mj-diagram="1"]')).not.toBeNull();
+    });
+
+    it('does not skip the Angular sanitizer just because a message contains the diagram marker', () => {
+      const c = container(render({ data: 'text <span data-mj-diagram="1" style="position:fixed;inset:0">x</span>', enableSvgRenderer: false }));
+      expect(c.querySelector('[style]')).toBeNull();
+    });
   });
 });
+

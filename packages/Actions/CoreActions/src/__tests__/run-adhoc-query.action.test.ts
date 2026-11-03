@@ -240,7 +240,41 @@ describe('Run Ad-hoc Query: output parameters and markdown truncation', () => {
             { ColumnName: 'Month', DataType: 'string', IsNullable: false },
             { ColumnName: 'Total', DataType: 'number', IsNullable: false },
         ]);
-        expect(typeof formattedParam?.Value).toBe('string');
+        // No format was asked for, so the rows travel once: no rendered copy alongside Results.
+        expect(formattedParam).toBeUndefined();
+        expect(result.Message).not.toContain('FormattedResults');
+    });
+
+    it('renders FormattedResults only when a format is asked for', async () => {
+        const params: Param[] = [
+            { Name: 'Query', Type: 'Input', Value: SQL },
+            { Name: 'DataFormat', Type: 'Input', Value: 'csv' },
+        ];
+        const action = new RunAdhocQueryAction() as unknown as Runnable;
+
+        await action.InternalRunAction({ ContextUser: USER, Params: params });
+
+        const formatted = params.find(p => p.Name === 'FormattedResults')?.Value as string;
+        expect(formatted).toContain('Month');
+        expect(formatted).toContain('Jan');
+    });
+
+    it('keeps the rows out of Message: they travel once, in the Results (and FormattedResults) output parameters', async () => {
+        const params: Param[] = [
+            { Name: 'Query', Type: 'Input', Value: SQL },
+            { Name: 'OutputFormat', Type: 'Input', Value: 'markdown' },
+        ];
+        const action = new RunAdhocQueryAction() as unknown as Runnable;
+
+        const result = await action.InternalRunAction({ ContextUser: USER, Params: params });
+
+        expect(result.Success).toBe(true);
+        expect(result.Message).toContain('**Rows Returned:** 2');
+        expect(result.Message).toContain('2 rows in the `Results` output parameter');
+        expect(result.Message).not.toContain('Jan');
+        expect(result.Message).not.toContain('Feb');
+        expect(params.find(p => p.Name === 'Results')?.Value).toEqual(ROWS);
+        expect(params.find(p => p.Name === 'FormattedResults')?.Value).toContain('Jan');
     });
 
     it('uses a default ColumnMaxLength of 200 and appends [...truncated] plus a note when markdown cells exceed the limit', async () => {

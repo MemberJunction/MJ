@@ -40,6 +40,7 @@ import {
 } from '@memberjunction/testing-integration';
 import { GraphQLDataProvider, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
+import { WaitUntil } from './wait-until';
 import {
     MJEntityEntity, MJEntityFieldPermissionEntity, MJEmployeeEntity, MJCompanyEntity,
     MJAPIKeyEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity
@@ -52,7 +53,19 @@ import {
  * are polled through the same reader connection.
  */
 const PROPAGATION_TIMEOUT_MS = 150_000;
-const PROPAGATION_POLL_MS = 5_000;
+/**
+ * Gap between wire reads. This was 5s, which — with the three-consecutive-reads stability rule in
+ * {@link WaitForWirePropagation} — put a hard ~10s floor under every call, paid even when the very
+ * first read already satisfied the condition. The stability requirement now has its own knob
+ * (PROPAGATION_STABLE_FOR_MS), so the poll is free to be as prompt as noticing allows.
+ */
+const PROPAGATION_POLL_MS = 250;
+/**
+ * How long the condition must keep holding across those reads. Convergence here IS time-based —
+ * several MJAPI provider instances settling on refreshed metadata — so the window is kept
+ * explicit rather than dropped; it is the part of the old 5s poll that was load-bearing.
+ */
+const PROPAGATION_STABLE_FOR_MS = 1_000;
 
 // ─────────────────────────────────────────────────────────────────── helpers
 
@@ -392,35 +405,32 @@ export async function MintFullAccessUserKey(ctx: IntegrationCheckContext, fx: Mi
  * rule on the reader connection — live coverage of the 5.6 propagation surface.
  */
 export async function WaitForWirePropagation(reader: IMetadataProvider, condition: (rows: Record<string, unknown>[]) => boolean, what: string): Promise<void> {
-    const deadline = Date.now() + PROPAGATION_TIMEOUT_MS;
-    let lastProblem = '';
-    let consecutive = 0;
-    for (;;) {
-        // A FAILED read is 'not yet', not fatal: the freshly-granted scope rule may still be
-        // inside MJAPI's scope-cache staleness envelope, which surfaces as denied RunViews.
-        try {
-            const rows = await ReadEmployeesOverWire(reader);
-            if (condition(rows)) {
+    try {
+        await WaitUntil(
+            // A FAILED read is 'not yet', not fatal: the freshly-granted scope rule may still be
+            // inside MJAPI's scope-cache staleness envelope, which surfaces as denied RunViews.
+            // WaitUntil treats a throwing condition as unsatisfied and reports the last error.
+            async () => condition(await ReadEmployeesOverWire(reader)),
+            what,
+            {
+                TimeoutMs: PROPAGATION_TIMEOUT_MS,
+                PollMs: PROPAGATION_POLL_MS,
                 // Require STABILITY, not one lucky read: enforcement can briefly flap while
-                // MJAPI's provider instances converge on the refreshed metadata.
-                consecutive++;
-                if (consecutive >= 3) {
-                    return;
-                }
-            } else {
-                consecutive = 0;
-                lastProblem = `condition '${what}' not met over ${rows.length} row(s)`;
+                // MJAPI's provider instances converge on the refreshed metadata. Three reads
+                // spanning at least PROPAGATION_STABLE_FOR_MS is the same guarantee the previous
+                // implementation gave — it just no longer buys the time window by making the
+                // poll slow. At the old 5s poll, three required reads meant a hard ~10s floor on
+                // every call EVEN WHEN THE FIRST READ ALREADY SATISFIED the condition, which is
+                // most of the setup cost of the fls client bundles.
+                StableReads: 3,
+                StableForMs: PROPAGATION_STABLE_FOR_MS
             }
-        } catch (e) {
-            consecutive = 0;
-            lastProblem = e instanceof Error ? e.message : String(e);
-        }
-        if (Date.now() > deadline) {
-            throw new Error(
-                `MJAPI did not reach '${what}' for the reader identity within ${PROPAGATION_TIMEOUT_MS / 1000}s ` +
-                `(last problem: ${lastProblem}) — scope-rule honoring or permission-change propagation failed (test-plan 5.6)`);
-        }
-        await new Promise(resolve => setTimeout(resolve, PROPAGATION_POLL_MS));
+        );
+    } catch (e) {
+        throw new Error(
+            `MJAPI did not reach '${what}' for the reader identity within ${PROPAGATION_TIMEOUT_MS / 1000}s ` +
+            `(${e instanceof Error ? e.message : String(e)}) — scope-rule honoring or permission-change ` +
+            `propagation failed (test-plan 5.6)`);
     }
 }
 

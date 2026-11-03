@@ -176,6 +176,7 @@ export class IntegrationActionGenerator {
             ExtraFilter:
                 `Integration='${this.escape(integrationName)}' AND Name='${this.escape(objectName)}'`,
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'entity_object',
         }, contextUser);
 
@@ -266,6 +267,7 @@ export class IntegrationActionGenerator {
             EntityName: 'MJ: Action Categories',
             ExtraFilter: `Name='${this.escape(name)}'`,
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'entity_object',
         }, contextUser);
 
@@ -346,6 +348,7 @@ export class IntegrationActionGenerator {
             EntityName: 'MJ: Actions',
             ExtraFilter: `Name='${this.escape(actionName)}'`,
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'entity_object',
         }, contextUser);
 

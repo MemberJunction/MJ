@@ -140,10 +140,7 @@ export class DeletionAuditor {
             }
         }
 
-        const deletionLevels = analyzer.reverseTopologicalSort(
-            recordsForSort,
-            reverseDepsForSort
-        );
+        const deletionLevels = analyzer.reverseTopologicalSort(recordsForSort);
 
         // Step 8: Check for circular dependencies among records to delete
         const circularDependencies = this.findCircularDependencies(recordsForSort);

@@ -72,7 +72,10 @@ const CLIENT_DATA = JSON.stringify({
 
 const USER = { ID: 'user-1', Email: 'browser.user@example.com' };
 const SYSTEM_USER = { ID: 'system-user', Email: 'system@example.com' };
-const GUEST = { ID: 'guest-1', Email: 'anonymous@magic-link.local', IsMagicLinkAnonymous: true };
+// A widget guest always carries its per-visitor scope id (mj_sid) as its MagicLinkScope.ResourceID, and its
+// conversation is stamped with the same value as ExternalID: that stamp is what tells one guest from another
+// under the shared Anonymous user (MJ#6032), so the fake conversation below carries it.
+const GUEST = { ID: 'guest-1', Email: 'anonymous@magic-link.local', IsMagicLinkAnonymous: true, AnonymousVisitorID: 'sid-1', MagicLinkScope: { ResourceID: 'sid-1' } };
 
 type Fn = ReturnType<typeof vi.fn>;
 
@@ -100,7 +103,7 @@ function makeResolver(): { resolver: RunAIAgentResolver; seams: ResolverSeams } 
 
 function makeContext(userPayload: Partial<UserPayload>): AppContext {
     const provider = {
-        GetEntityObject: vi.fn().mockResolvedValue({ ConversationID: 'conv-1', Load: vi.fn().mockResolvedValue(true) }),
+        GetEntityObject: vi.fn().mockResolvedValue({ ConversationID: 'conv-1', UserID: GUEST.ID, ExternalID: 'sid-1', Load: vi.fn().mockResolvedValue(true) }),
     };
     return {
         userPayload: { sessionId: 'session-1', email: USER.Email, userRecord: USER, ...userPayload } as UserPayload,
@@ -179,6 +182,21 @@ describe('RunAIAgentFromConversationDetail — who writes the conversation', () 
             expect((args as { contextUser: { ID: string } }).contextUser.ID).toBe(GUEST.ID);
         }
         expect(hoisted.createAgentReplyDetail).toHaveBeenCalledTimes(2);
+    });
+
+    it('refuses a widget guest on another visitor\'s conversation before any row is written (MJ#6032)', async () => {
+        const { resolver } = makeResolver();
+        hoisted.resolveWidgetGuestRunContext.mockResolvedValue({ ElevatedUser: SYSTEM_USER, Widget: {}, PinnedAgentId: 'pinned-agent' });
+        // The conversation is stamped sid-1; this guest's scope is sid-2, so the shared Anonymous user must not be
+        // enough. Without the AuthorizeConversationTurn gate the run would proceed and the reply row below be created.
+        const ctx = makeContext({ email: GUEST.Email, userRecord: { ...GUEST, AnonymousVisitorID: 'sid-2', MagicLinkScope: { ResourceID: 'sid-2' } } as UserPayload['userRecord'] });
+
+        const result = await runFromDetail(resolver, ctx);
+
+        expect(result.success).toBe(false);
+        expect(result.errorMessage).toContain('Not authorized: you do not own this conversation');
+        expect(hoisted.createAgentReplyDetail).not.toHaveBeenCalled();
+        expect(hoisted.runAgentInConversation).not.toHaveBeenCalled();
     });
 
     it('names no separate writer for an ordinary user (it runs and writes as itself)', async () => {

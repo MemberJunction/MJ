@@ -25,7 +25,7 @@ export type GraphNodeCategory =
  * dynamic legend, and inspector drawer.
  */
 export interface GraphCategoryConfig {
-    /** Unique category key matching GraphNode.Category (e.g. 'person', 'organization', 'vendor', 'role') */
+    /** Unique category key matching GraphNode.Category (e.g. 'person', 'organization', 'Policy', 'Metric') */
     Category: string;
     /** Human-readable display label shown in the legend and node inspector */
     Label: string;
@@ -35,6 +35,8 @@ export interface GraphCategoryConfig {
     IconClass?: string;
     /** Optional secondary stroke / accent color */
     StrokeColor?: string;
+    /** Optional numeric rank priority (e.g. from MJ: Graph Concept Types.Rank) */
+    Rank?: number;
 }
 
 /**
@@ -54,6 +56,61 @@ export type GraphEdgeStyle =
     | 'dotted';
 
 /**
+ * Governance or lifecycle status of a semantic graph node.
+ */
+export type GraphNodeStatus =
+    | 'Draft'
+    | 'Proposed'
+    | 'Approved'
+    | 'Deprecated'
+    | 'Rejected'
+    | (string & {});
+
+/**
+ * Conflict detail surfaced on a concept or chunk node when a `Contradicts` edge exists.
+ */
+export interface GraphConflictItem {
+    /** Higher-authority chunk or concept summary (e.g. 'Association Bylaws §4.2 — "60 days"') */
+    HigherAuthoritySummary: string;
+    /** Lower-authority conflicting chunk or concept summary (e.g. 'Staff Desk Manual p.42 — "90 days"') */
+    ConflictingSummary: string;
+    /** Explanation of how authority precedence resolved or flagged the discrepancy */
+    ResolutionNote?: string;
+    /** Edge ID of the underlying `Contradicts` edge if persisted */
+    EdgeID?: string;
+}
+
+/**
+ * Grounded MemberJunction primitive linked to a concept node (e.g. Entity, Alternate Base View, Query, Action, Workflow).
+ */
+export interface GraphGroundingItem {
+    /** Relationship verb (e.g. 'Defines', 'Describes', 'Measures', 'Implements') */
+    EdgeLabel: string;
+    /** Target MJ Entity name (e.g. 'MJ: Entity Alternate Base Views', 'MJ: Queries', 'MJ: AI Agents') */
+    TargetEntityName: string;
+    /** Target record primary key ID */
+    TargetRecordID: string;
+    /** Human-readable display name of the target primitive */
+    TargetDisplayName: string;
+}
+
+/**
+ * Provenance chunk item (`SourcedFrom` edge) attached to a concept node.
+ */
+export interface GraphProvenanceChunkItem {
+    /** Chunk record ID in `MJ: Content Item Chunks` */
+    ChunkID: string;
+    /** Source name (e.g. 'Association Bylaws PDF') */
+    SourceName: string;
+    /** Heading breadcrumb / section locator (e.g. 'Article IV > §4.2') */
+    Locator?: string;
+    /** Authority tier label (e.g. 'Bylaws', 'ExecutiveSOP') */
+    AuthorityTier?: string;
+    /** Excerpt of the chunk text */
+    Snippet: string;
+}
+
+/**
  * Layout simulation mode for graph positioning.
  */
 export type GraphLayoutMode =
@@ -69,26 +126,53 @@ export interface GraphNode<TData = Record<string, unknown>> {
     /** Unique identifier for the node */
     ID: string;
 
-    /** Primary display label (e.g. Person Name, Organization Name) */
+    /** Primary display label (e.g. Person Name, Organization Name, Concept Name) */
     Label: string;
 
-    /** Secondary descriptive sublabel (e.g. Job Title, Industry) */
+    /** Secondary descriptive sublabel (e.g. Job Title, Industry, ConceptType) */
     Sublabel?: string;
 
     /** Semantic category defining the default icon and palette */
     Category: GraphNodeCategory;
 
-    /** Optional Font Awesome icon class override (e.g. 'fa-solid fa-user') */
+    /** Optional Font Awesome icon class override (e.g. 'fa-solid fa-gavel') */
     IconClass?: string;
 
     /** Optional custom hex/HSL color or CSS color variable override */
     Color?: string;
 
-    /** Node radius / diameter scale (default is 28) */
+    /** Node radius / diameter scale (default is 26) */
     Radius?: number;
 
-    /** Optional small badge text or status indicator */
+    /** Optional small badge text or status indicator (e.g. '#10', '§', '⚡') */
     Badge?: string;
+
+    /** Optional governance status (e.g. 'Proposed', 'Approved'); 'Proposed'/'Draft' renders a dashed outer ring */
+    Status?: GraphNodeStatus;
+
+    /** Optional authority tier badge (e.g. 'Bylaws (100)', 'ExecutiveSOP (60)') */
+    AuthorityTier?: string;
+
+    /** Optional numeric rank priority (e.g. from MJ: Graph Concept Types.Rank) */
+    Rank?: number;
+
+    /** Optional parent node ID for hierarchical layouts */
+    ParentID?: string | null;
+
+    /** Optional short description displayed in the node inspector drawer */
+    Description?: string;
+
+    /** Optional Markdown specification or rule definition displayed in the inspector drawer */
+    Specification?: string;
+
+    /** Optional authority/threshold conflicts surfaced on this node */
+    Conflicts?: GraphConflictItem[];
+
+    /** Optional grounded MJ primitives (Entities, Alternate Base Views, Queries, Actions, Workflows) */
+    Groundings?: GraphGroundingItem[];
+
+    /** Optional provenance chunks (`SourcedFrom`) backing this node */
+    ProvenanceChunks?: GraphProvenanceChunkItem[];
 
     /** Distance from root/selected focus node in hops (0 = focal center) */
     HopDistance?: number;

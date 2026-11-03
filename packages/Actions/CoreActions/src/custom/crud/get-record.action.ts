@@ -51,7 +51,8 @@ export class GetRecordAction extends BaseRecordMutationAction {
      * 
      * @param params - The action parameters containing:
      *   - EntityName (required): The name of the entity to retrieve
-     *   - PrimaryKey (required): Object containing primary key field(s) and value(s)
+     *   - PrimaryKey (required): Object keyed by primary key column(s), the CompositeKey `{ KeyValuePairs }` shape,
+     *                 a JSON string of either, or (single-column keys only) the bare key value
      * 
      * @returns ActionResultSimple with:
      *   - Success: true if record was retrieved successfully
@@ -66,14 +67,14 @@ export class GetRecordAction extends BaseRecordMutationAction {
             if (entityNameResult.error) return entityNameResult.error;
             const entityName = entityNameResult.value!;
 
-            const primaryKeyResult = this.getPrimaryKeyParam(params);
-            if (primaryKeyResult.error) return primaryKeyResult.error;
-            const primaryKey = primaryKeyResult.value!;
-
-            // Get entity object and metadata
+            // Get entity object and metadata (needed to interpret the PrimaryKey shape)
             const entityResult = await this.getEntityObject(entityName, params.ContextUser, params.Provider);
             if (entityResult.error) return entityResult.error;
             const { entity, entityInfo } = entityResult;
+
+            const primaryKeyResult = this.getPrimaryKeyParam(params, entityInfo!);
+            if (primaryKeyResult.error) return primaryKeyResult.error;
+            const primaryKey = primaryKeyResult.value!;
 
             // Load the record
             const loadResult = await this.loadRecord(entity!, entityInfo!, primaryKey, entityName);

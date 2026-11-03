@@ -1,5 +1,41 @@
 # @memberjunction/ng-livekit-room
 
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [7d0885a]
+- Updated dependencies [84a0c60]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [f8ddfdc]
+- Updated dependencies [17d1336]
+  - @memberjunction/ng-realtime-media@6.2.0-edge.7
+  - @memberjunction/ai-realtime-client@6.2.0-edge.7
+  - @memberjunction/ng-whiteboard@6.2.0-edge.7
+  - @memberjunction/livekit-room-core@6.2.0-edge.7
+  - @memberjunction/ng-ui-components@6.2.0-edge.7
+
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [0581392]
+- Updated dependencies [b5c11d3]
+- Updated dependencies [c4645bc]
+- Updated dependencies [dae1d31]
+- Updated dependencies [a610c6e]
+- Updated dependencies [cb1e602]
+- Updated dependencies [db4e210]
+- Updated dependencies [c4645bc]
+- Updated dependencies [f125bb4]
+- Updated dependencies [4c34ab8]
+- Updated dependencies [e600813]
+  - @memberjunction/ng-ui-components@6.2.0-edge.6
+  - @memberjunction/ai-realtime-client@6.2.0-edge.6
+  - @memberjunction/ng-whiteboard@6.2.0-edge.6
+  - @memberjunction/ng-realtime-media@6.2.0-edge.6
+  - @memberjunction/livekit-room-core@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Patch Changes

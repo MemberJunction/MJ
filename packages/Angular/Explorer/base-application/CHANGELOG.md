@@ -1,5 +1,82 @@
 # @memberjunction/ng-base-application
 
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- 709f269: Chief of Staff core no longer depends on BizApps (Phase 1 of #6193). The Chief of Staff pages, their agent context and the Chief of Staff prompt use core entities only (`MJ: AI Agent User Policies`, `MJ: User Routines`, `MJ: User Routine Runs`, `MJ: AI Agent Requests`); priorities, objectives, milestones, assignments and to-dos move to an extension in the BizApps Tasks app.
+
+  Chief of Staff application: the single "Cockpit" nav item and its internal tabs become three nav items, each its own resource component extending `BaseChiefOfStaffPage`: Overview (`ChiefOfStaffOverview`, also registered as `ChiefOfStaffDashboard` and `ChiefOfStaffResource` so saved tabs still open), Approvals & Wakes (`ChiefOfStaffApprovals`) and Governance (`ChiefOfStaffGovernance`). The Priorities & OKRs tab, the Overview priority and To-dos panels, the task quick-edit drawer, the People and task-scope loading, and the `tab` and `health` query params are removed. Agent tools are now OpenChiefOfStaffPage, RefreshChiefOfStaff and (on Approvals & Wakes) SearchChiefOfStaffApprovals; the agent context carries `Page` instead of `ActiveTab`.
+
+  Nav items from application settings (`@memberjunction/ng-base-application`): `BaseApplication.GetNavItems()` adds, after an application's `DefaultNavItems`, one nav item per `MJ: Application Settings` row scoped to that application and named `NavItem.<key>`, whose `Value` is the nav item as JSON. `NavItem` gains an optional `Sequence` (an application's own items default to 10, 20, 30…; extension items to 1000). An extension never becomes the default item, and one with a `Label` already present is skipped (`MergeNavItemExtensions`). An Open App uses this to add pages to another application, such as the Chief of Staff, and its teardown removes them.
+
+  Removed public exports from `@memberjunction/ng-dashboards`: `ChiefOfStaffDashboardComponent`, `LoadChiefOfStaffDashboard`, the task scope and filter helpers (`ResolvePersonTaskScope`, `BuildScopeRootTasksFilter`, `BuildOwnedRootTasksFilter`, `BuildPersonScopedTaskFilter`, `LoadTaskAssignees`, `BuildTaskRecordKey`), the priority card and metric types and helpers, the to-do helpers (`IsTodoTask`, `BuildTodoItems`), the health filter helpers, the `BIZAPPS_*` entity names and the tab helpers (`CORE_CHIEF_OF_STAFF_TABS`, `ValidateChiefOfStaffTabParam`). Renamed: `BuildCockpitScopeFilters` → `BuildChiefOfStaffScopeFilters`, `COCKPIT_LIVE_ENTITIES` → `CHIEF_OF_STAFF_LIVE_ENTITIES`, `IsCockpitEntityChange` → `IsChiefOfStaffEntityChange`. `CalculateChiefOfStaffMetrics` takes routines and requests only.
+
+  Prompt (metadata): reminders are one-shot wakes, priorities are kept in the policy's `InstructionsOverride`, and business data comes from an installed skill; the People bridge, the Tasks/OKR and to-do sections and the BizApps view names are gone, and the prompt refers to the Chief of Staff app's pages instead of the cockpit. The agent's description and an action parameter example drop their BizApps references.
+
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [91cba84]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [6779eed]
+- Updated dependencies [397ae9a]
+- Updated dependencies [89a5b59]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [dae1d31]
+- Updated dependencies [4c97994]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Patch Changes

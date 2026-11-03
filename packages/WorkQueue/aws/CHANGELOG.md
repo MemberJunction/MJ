@@ -1,5 +1,18 @@
 # @memberjunction/work-queue-aws
 
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [f65fec7]
+  - @memberjunction/work-queue-core@6.2.0-edge.7
+
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- @memberjunction/work-queue-core@6.2.0-edge.6
+
 ## 6.2.0-edge.5
 
 ### Patch Changes

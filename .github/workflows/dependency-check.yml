@@ -9,6 +9,13 @@ on:
     # would wait forever. The `changes` job applies the same filter; a job skipped by its `if`
     # reports as passing.
 
+# Cancel superseded runs for the same ref. Without this a second push to a PR leaves the
+# first run burning a runner for a commit nobody will merge; 108 such runner-minutes were
+# measured across this repo in a single 23-hour window (2026-10-27).
+concurrency:
+  group: dependency-check-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   changes:
     name: Detect dependency-relevant changes

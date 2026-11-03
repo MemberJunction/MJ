@@ -16,6 +16,17 @@ import {
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MarkdownService } from '../services/markdown.service';
 import { MarkdownConfig, DEFAULT_MARKDOWN_CONFIG, MarkdownRenderEvent, HeadingInfo } from '@memberjunction/markdown-core';
+import { MountDiagramViewer, type DiagramViewerInstance } from '@memberjunction/ai-diagrams/viewer';
+
+/** A rendered image the reader clicked or activated: what a host needs to show it full size. */
+export class ImageClickedEventArgs {
+  constructor(
+    /** The image's `src`, as rendered (absolute). */
+    public readonly Src: string,
+    /** Its alt text; '' when it has none. */
+    public readonly Alt: string,
+  ) {}
+}
 // Collapsible section toggle is handled inline in setupCollapsibleListeners
 
 /** Inputs whose change re-parses the markdown, by camelCase name. */
@@ -397,6 +408,14 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   @Output() codeCopied = this.CodeCopied;
 
   /**
+   * Emitted when a rendered image is clicked (or focused and activated with Enter or Space), so a
+   * host can show it full size; a chat opens its image viewer. Images react only while something
+   * is bound to this output, so a host that does not listen keeps inert images. An image inside a
+   * link keeps the link's behaviour and is not reported.
+   */
+  @Output() ImageClicked = new EventEmitter<ImageClickedEventArgs>();
+
+  /**
    * The sanitized HTML content to display
    */
   public RenderedContent: SafeHtml = '';
@@ -428,6 +447,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   private hasMath: boolean = false;
   private hasCodeBlocks: boolean = false;
   private themeObserver: MutationObserver | null = null;
+  private diagramViewers: DiagramViewerInstance[] = [];
 
   constructor(
     private elementRef: ElementRef<HTMLElement>,
@@ -460,13 +480,22 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   ngOnDestroy(): void {
     this.themeObserver?.disconnect();
     this.themeObserver = null;
+    this.destroyDiagramViewers();
     this.cleanupEventListeners();
+  }
+
+  private destroyDiagramViewers(): void {
+    for (const v of this.diagramViewers) {
+      v.Destroy();
+    }
+    this.diagramViewers = [];
   }
 
   /**
    * Render the markdown content
    */
   private render(): void {
+    this.destroyDiagramViewers();
     if (!this.Data) {
       this.RenderedContent = '';
       this.cdr.markForCheck();
@@ -528,7 +557,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
 
   /**
    * Process rendered content after DOM update
-   * Handles syntax highlighting, mermaid rendering, copy buttons, etc.
+   * Handles syntax highlighting, mermaid rendering, interactive MJ diagrams, copy buttons, etc.
    */
   private async postRenderProcessing(): Promise<void> {
     const container = this.elementRef.nativeElement.querySelector('.mj-markdown-container');
@@ -560,6 +589,9 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
       await this.markdownService.renderMermaid(container as HTMLElement);
     }
 
+    // Upgrade any MJ Interactive Diagram SVGs (`svg[data-mj-diagram="1"]`) embedded in markdown
+    this.mountEmbeddedInteractiveDiagrams(container as HTMLElement);
+
     // Setup heading click listeners
     if (this.EnableHeadingIds) {
       this.setupHeadingClickListeners(container as HTMLElement);
@@ -568,6 +600,11 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     // Setup code copy listeners for custom event emission
     if (this.EnableCodeCopy) {
       this.setupCodeCopyListeners(container as HTMLElement);
+    }
+
+    // Setup image click listeners, only when a host listens
+    if (this.ImageClicked.observed) {
+      this.setupImageClickListeners(container as HTMLElement);
     }
 
     // Emit rendered event
@@ -580,6 +617,18 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
       hasMermaid: this.hasMermaid,
       hasCodeBlocks: this.hasCodeBlocks,
       headingIds,
+    });
+  }
+
+  /**
+   * Upgrades rendered MJ diagram SVGs in place. They are already in the DOM and already sanitized by
+   * MarkdownService.Parse, so they are mounted as they are, not re-serialized and re-parsed.
+   */
+  private mountEmbeddedInteractiveDiagrams(container: HTMLElement): void {
+    container.querySelectorAll<SVGSVGElement>('svg[data-mj-diagram="1"]').forEach((svg) => {
+      if (!svg.closest('.mjd-shell')) {
+        this.diagramViewers.push(MountDiagramViewer(svg));
+      }
     });
   }
 
@@ -757,6 +806,28 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
           level,
           raw: text,
         });
+      });
+    });
+  }
+
+  /**
+   * Report clicks on rendered images, except those inside a link or marked decorative
+   * (`role="presentation"`, e.g. a mention badge's avatar), and make them reachable by keyboard. The class lets the stylesheet show them as zoomable, and marks an image already wired:
+   * post-render processing can run twice over the same DOM (ngAfterViewInit and the render
+   * microtask on first render), and a second listener would report every click twice.
+   */
+  private setupImageClickListeners(container: HTMLElement): void {
+    container.querySelectorAll<HTMLImageElement>('img:not([role="presentation"])').forEach((img) => {
+      if (img.closest('a') || img.classList.contains('mj-markdown-image-clickable')) return;
+      img.classList.add('mj-markdown-image-clickable');
+      img.tabIndex = 0;
+      img.setAttribute('role', 'button');
+      const report = () => this.ImageClicked.emit(new ImageClickedEventArgs(img.src, img.alt));
+      img.addEventListener('click', report);
+      img.addEventListener('keydown', (event: KeyboardEvent) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        report();
       });
     });
   }
