@@ -127,13 +127,32 @@ describe('Stage 1 unterminated quoted values', () => {
     });
 });
 
-describe('Stage 1 line rule keeps diagnostic text', () => {
-    it('redacts only the next value token after a sensitive name that is not a multi-value header', () => {
-        const token = ScrubString('Failed to validate token: signature mismatch', 'FullRaw');
-        expect(token).toContain('mismatch');
-        const pk = ScrubString('primary-key: ID, Name, Email', 'FullRaw');
-        expect(pk).toContain('Name, Email');
-        expect(pk).not.toContain('ID,');
+describe('Stage 1 colon-form values', () => {
+    it('redacts an unquoted value after a sensitive name to the end of the line', () => {
+        const yaml = ScrubString('password: my secret phrase\nhost: db', 'FullRaw');
+        expect(yaml).not.toContain('secret phrase');
+        expect(yaml).toContain('password: [REDACTED_SECRET]');
+        expect(yaml).toContain('host: db');
+        const tight = ScrubString('pwd:hunter2 extra words', 'FullRaw');
+        expect(tight).not.toContain('extra words');
+    });
+
+    it('ends a quoted value after a sensitive name at its closing quote', () => {
+        const out = ScrubString('token: "abc def" then the request failed', 'FullRaw');
+        expect(out).not.toContain('abc def');
+        expect(out).toContain('then the request failed');
+    });
+});
+
+describe('Stage 1 count and length names', () => {
+    it('keeps a Count or Length value only when it is a number', () => {
+        const out = ScrubValue({ passwordLength: 'hunter2', secretCount: 'x1', tokenLength: 7 }, 'FullRaw');
+        expect(out.passwordLength).toBe('[REDACTED_KEY]');
+        expect(out.secretCount).toBe('[REDACTED_KEY]');
+        expect(out.tokenLength).toBe(7);
+        expect(ScrubString('secretCount: hunter2', 'FullRaw')).not.toContain('hunter2');
+        expect(ScrubString('passwordLength=hunter2', 'FullRaw')).not.toContain('hunter2');
+        expect(ScrubString('passwordLength: 12', 'FullRaw')).toContain('12');
     });
 });
 

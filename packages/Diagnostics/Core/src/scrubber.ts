@@ -100,14 +100,18 @@ const SENSITIVE_EXACT_KEYS: ReadonlySet<string> = new Set([
 /** Normalized key names that contain a sensitive fragment but hold counts or settings, not secrets. */
 const SAFE_KEY_NAMES: ReadonlySet<string> = new Set(['credentialsscrubbedcount', 'tokentype', 'tokens']);
 
-/** Normalized name endings that mark a descriptor of a secret (its kind, size or rules), not the secret itself. */
-const SAFE_KEY_SUFFIXES: readonly string[] = ['type', 'version', 'policy', 'count', 'length'];
+/** Normalized name endings that mark a descriptor of a secret (its kind, version or rules), not the secret itself. */
+const SAFE_KEY_SUFFIXES: readonly string[] = ['type', 'version', 'policy'];
+
+/** Normalized name endings whose value is kept only when it is a number. */
+const NUMERIC_ONLY_KEY_SUFFIXES: readonly string[] = ['count', 'length'];
+
+/** Text that is a plain number. */
+const NUMERIC_TEXT_REGEX = /^-?\d+(?:\.\d+)?$/;
 
 /** Names that end in an `Id` / `ID` word, such as `apiKeyId` or `API_KEY_ID`. */
 const SAFE_ID_SUFFIX_REGEX = /(?:Id|ID|[-_.\s][iI][dD])$/;
 
-/** Normalized header names whose value runs to the end of the line (scheme plus credentials, or many cookies). */
-const MULTI_VALUE_HEADER_NAMES: ReadonlySet<string> = new Set(['authorization', 'proxyauthorization', 'cookie', 'setcookie']);
 
 /** Token-count style names (`maxTokens`, `promptTokens`, `tokenCount`, `tokenizer`, `TokensUsed`). */
 const SAFE_TOKEN_KEY_REGEX =
@@ -145,8 +149,8 @@ const KEY_ASSIGNMENT_REGEX = /(^|[^A-Za-z0-9_.-])([A-Za-z][A-Za-z0-9_.-]{0,63})(
 /** The value after `name=`: quoted (ends at the closing quote or the line end) or a bare token. */
 const ASSIGNMENT_VALUE_REGEX = /'(?:''|[^'\r\n])*(?:'|(?=[\r\n])|$)|"(?:""|[^"\r\n])*(?:"|(?=[\r\n])|$)|[^&\s"';,)=]+/y;
 
-/** The value token after `name: `: quoted (ends at the closing quote or the line end) or up to the next whitespace. */
-const LINE_VALUE_TOKEN_REGEX = /"[^"\r\n]*(?:"|(?=[\r\n])|$)|'[^'\r\n]*(?:'|(?=[\r\n])|$)|\S+/y;
+/** A quoted value after `name: `; it ends at the closing quote or the line end. */
+const LINE_QUOTED_VALUE_REGEX = /"[^"\r\n]*(?:"|(?=[\r\n])|$)|'[^'\r\n]*(?:'|(?=[\r\n])|$)/y;
 
 /** The next line break. */
 const LINE_BREAK_REGEX = /[\r\n]/g;
@@ -226,7 +230,24 @@ interface CredentialRule {
 
 /** True when a captured key names a credential and its value is not already a redaction marker. */
 function sensitivePair(key: string, value: string): boolean {
-    return IsSensitiveKeyName(key) && !PURE_MARKER_REGEX.test(value);
+    return IsSensitiveKeyName(key) && !PURE_MARKER_REGEX.test(value) && !isKeptTextValue(key, value);
+}
+
+/** True when `key` ends in `Count` or `Length` (normalized), whose value is kept only when it is a number. */
+function isNumericOnlyKey(key: string): boolean {
+    const normalized = normalizeKeyName(key);
+    return NUMERIC_ONLY_KEY_SUFFIXES.some((suffix) => normalized.endsWith(suffix));
+}
+
+/** True when a text value under a sensitive key is kept: `true`/`false`, or a number under a Count/Length key. */
+function isKeptTextValue(key: string, value: string): boolean {
+    const trimmed = value.trim();
+    return trimmed === 'true' || trimmed === 'false' || (isNumericOnlyKey(key) && NUMERIC_TEXT_REGEX.test(trimmed));
+}
+
+/** Lower-cases a key name and removes `-`, `_`, `.` and spaces. */
+function normalizeKeyName(key: string): string {
+    return key.trim().toLowerCase().replace(/[-_.\s]/g, '');
 }
 
 const CREDENTIAL_RULES: readonly CredentialRule[] = [
@@ -388,7 +409,7 @@ function redactKeyedValues(
     input: string,
     keyRegex: RegExp,
     isSensitive: (name: string) => boolean,
-    readValue: (input: string, start: number, name: string) => KeyedValue | null,
+    readValue: (input: string, start: number) => KeyedValue | null,
     tally: RedactionTally
 ): string {
     let out = '';
@@ -398,13 +419,15 @@ function redactKeyedValues(
     while (match) {
         const valueStart = match.index + match[0].length;
         keyRegex.lastIndex = valueStart;
-        const value = isSensitive(match[2]) ? readValue(input, valueStart, match[2]) : null;
-        if (value && value.secret.length > 0 && !PURE_MARKER_REGEX.test(value.secret)) {
-            if (!value.secret.startsWith(REDACTION_MARKER_PREFIX)) {
-                tally.count++;
+        const value = isSensitive(match[2]) ? readValue(input, valueStart) : null;
+        if (value && value.secret.length > 0) {
+            if (!PURE_MARKER_REGEX.test(value.secret) && !isKeptTextValue(match[2], value.secret)) {
+                if (!value.secret.startsWith(REDACTION_MARKER_PREFIX)) {
+                    tally.count++;
+                }
+                out += input.slice(cursor, valueStart) + value.keptPrefix + '[REDACTED_SECRET]';
+                cursor = value.end;
             }
-            out += input.slice(cursor, valueStart) + value.keptPrefix + '[REDACTED_SECRET]';
-            cursor = value.end;
             keyRegex.lastIndex = value.end;
         }
         match = keyRegex.exec(input);
@@ -420,21 +443,20 @@ function readAssignmentValue(input: string, start: number): KeyedValue | null {
 }
 
 /**
- * Reads the value of a `name: value` header line or YAML pair. For multi-value headers
- * (`Authorization`, `Cookie`, ...) the value runs to the end of the line; for other names it is the
- * next value token. A leading HTTP auth scheme is kept.
+ * Reads the value of a `name: value` header line or YAML pair. A quoted value ends at its closing
+ * quote (or the line end); an unquoted value runs to the end of the line. A leading HTTP auth scheme is kept.
  */
-function readLineValue(input: string, start: number, name: string): KeyedValue | null {
+function readLineValue(input: string, start: number): KeyedValue | null {
     AUTH_SCHEME_PREFIX_REGEX.lastIndex = start;
     const scheme = AUTH_SCHEME_PREFIX_REGEX.exec(input)?.[0] ?? '';
     const valueStart = start + scheme.length;
-    if (MULTI_VALUE_HEADER_NAMES.has(name.toLowerCase().replace(/[-_]/g, ''))) {
-        const secret = input.slice(valueStart, lineEnd(input, valueStart)).trimEnd();
-        return { end: valueStart + secret.length, keptPrefix: scheme, secret };
+    LINE_QUOTED_VALUE_REGEX.lastIndex = valueStart;
+    const quoted = LINE_QUOTED_VALUE_REGEX.exec(input);
+    if (quoted) {
+        return { end: valueStart + quoted[0].length, keptPrefix: scheme, secret: quoted[0] };
     }
-    LINE_VALUE_TOKEN_REGEX.lastIndex = valueStart;
-    const token = LINE_VALUE_TOKEN_REGEX.exec(input);
-    return token ? { end: valueStart + token[0].length, keptPrefix: scheme, secret: token[0] } : null;
+    const secret = input.slice(valueStart, lineEnd(input, valueStart)).trimEnd();
+    return { end: valueStart + secret.length, keptPrefix: scheme, secret };
 }
 
 /** Returns the index of the first line break at or after `from`, or the input length. */
@@ -463,7 +485,7 @@ function redactCredentials(input: string, tally: RedactionTally): string {
  * except for token-count style names such as `maxTokens` or `tokenizer`.
  */
 export function IsSensitiveKeyName(key: string): boolean {
-    const normalized = key.trim().toLowerCase().replace(/[-_.\s]/g, '');
+    const normalized = normalizeKeyName(key);
     if (!normalized || SAFE_KEY_NAMES.has(normalized) || SAFE_TOKEN_KEY_REGEX.test(normalized)) {
         return false;
     }
@@ -695,7 +717,7 @@ function scrubValueInternal(
     const record = value as Record<string, unknown>;
     const scrubbedRecord: Record<string, unknown> = {};
     for (const [key, propVal] of Object.entries(record)) {
-        if (IsSensitiveKeyName(key) && typeof propVal !== 'boolean') {
+        if (IsSensitiveKeyName(key) && !isKeptObjectValue(key, propVal)) {
             scrubbedRecord[key] = '[REDACTED_KEY]';
             tally.count++;
         } else {
@@ -703,6 +725,11 @@ function scrubValueInternal(
         }
     }
     return scrubbedRecord;
+}
+
+/** True when a value under a sensitive key is kept: a boolean, or a number under a Count/Length key. */
+function isKeptObjectValue(key: string, value: unknown): boolean {
+    return typeof value === 'boolean' || (typeof value === 'number' && isNumericOnlyKey(key));
 }
 
 /** Scrubbed bundle plus the number of credential redactions made across it. */
