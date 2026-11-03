@@ -4,8 +4,8 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo } from '@memberjunction/core';
-import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode, UserInfo, GetDiagnosticContext, IsDiagnosticCaptureSuppressed } from '@memberjunction/core';
+import { UserCache, resolveDbPlatformFromEnv, GenericDatabaseProvider, SummarizeSqlParameters } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
@@ -303,7 +303,7 @@ import { EnsureAnchoredConversationReadHookRegistered } from '@memberjunction/co
 import type { RequestHandler, ErrorRequestHandler } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
 import type { GraphQLSchema } from 'graphql';
-import { BaseServerMiddleware } from './middleware/BaseServerMiddleware.js';
+import { BaseServerMiddleware, ServerMiddlewareContext } from './middleware/BaseServerMiddleware.js';
 import { SuppressTaskGraphSubmission } from '@memberjunction/ai-core-plus';
 
 export type MJServerOptions = {
@@ -500,7 +500,8 @@ const setupComplete$ = new ReplaySubject(1);
     await WirePushStatusFanOut(sharedCache);
     await wireHandoffOfferFanOut(sharedCache, startupLog);
     await wireRealtimeSessionEventFanOut(sharedCache);
-    startupLog.LogIf('verbose', `Redis cache provider connected: ${process.env.REDIS_URL}`);
+    const safeRedisUrl = (process.env.REDIS_URL ?? '').replace(/:\/\/[^@]+@/, '://***@');
+    startupLog.LogIf('verbose', `Redis cache provider connected: ${safeRedisUrl}`);
   }
   const cacheManagerConfig = CacheManagerConfigFromSettings(configInfo.cacheSettings);
   const warmupLeaseMs = WarmupLeaseMsFromSettings(configInfo.cacheSettings);
@@ -597,8 +598,38 @@ const setupComplete$ = new ReplaySubject(1);
         const thePgPool = poolAny._pgPool as import('pg').Pool;
         // Translate SQL Server bracket syntax to PostgreSQL double-quote syntax
         const pgQuery = TranslateBracketsToPG(query);
-        const result = await thePgPool.query(pgQuery);
-        return result.rows;
+        const startTime = performance.now();
+        try {
+          const result = await thePgPool.query(pgQuery);
+          if (!IsDiagnosticCaptureSuppressed() && GenericDatabaseProvider.HasSqlObservers()) {
+            GenericDatabaseProvider.NotifySqlObservers({
+              ts: Date.now(),
+              sql: pgQuery,
+              parameterSummaries: SummarizeSqlParameters(parameters),
+              durationMs: performance.now() - startTime,
+              rowCount: result.rows?.length ?? 0,
+              isMutation: false,
+              description: 'ExecuteSQLWithPool(PG)',
+              diagnosticContext: GetDiagnosticContext(),
+            });
+          }
+          return result.rows;
+        } catch (err) {
+          if (!IsDiagnosticCaptureSuppressed() && GenericDatabaseProvider.HasSqlObservers()) {
+            GenericDatabaseProvider.NotifySqlObservers({
+              ts: Date.now(),
+              sql: pgQuery,
+              parameterSummaries: SummarizeSqlParameters(parameters),
+              durationMs: performance.now() - startTime,
+              rowCount: 0,
+              isMutation: false,
+              errorMessage: err instanceof Error ? err.message : String(err),
+              description: 'ExecuteSQLWithPool(PG)',
+              diagnosticContext: GetDiagnosticContext(),
+            });
+          }
+          throw err;
+        }
       }
       return origExecuteSQLWithPool.call(this, pool, query, parameters, contextUser);
     };
@@ -983,8 +1014,9 @@ const setupComplete$ = new ReplaySubject(1);
   }
 
   // Initialize all middleware
+  const middlewareContext: ServerMiddlewareContext = { ApiRoute: (subpath, options) => ApiRoute(subpath, options) };
   for (const mw of middlewares) {
-      await mw.Initialize();
+      await mw.Initialize(middlewareContext);
       startupLog.LogIf('verbose', `  [Middleware] ${mw.Label}`);
   }
 
@@ -1006,7 +1038,7 @@ const setupComplete$ = new ReplaySubject(1);
 
       // Express app configuration escape hatch
       if (mw.ConfigureExpressApp) {
-          await mw.ConfigureExpressApp(app);
+          await mw.ConfigureExpressApp(app, middlewareContext);
       }
 
       // Extract hook methods and register in the global hook store
@@ -1608,7 +1640,7 @@ const setupComplete$ = new ReplaySubject(1);
   app.use(
     graphqlRootPath,
     cors<cors.CorsRequest>({
-      exposedHeaders: ['X-MJ-Cache-Seq', 'X-MJ-Server-ID'],
+      exposedHeaders: ['X-MJ-Cache-Seq', 'X-MJ-Server-ID', 'X-MJ-Trace-ID', 'X-MJ-Diagnostic-Trigger'],
     }),
     BodyParser.json({ limit: '50mb' }),
     // Express 5 leaves req.body as undefined for non-JSON or empty bodies;
@@ -2480,3 +2512,5 @@ export type { MagicLinkJWTClaims } from './auth/magicLink/index.js';
 export { VerifyHostAssertion } from './realtimeWidget/host-identity.js';
 export type { HostAssertedIdentity, HostAssertionResult } from './realtimeWidget/host-identity.js';
 export { IsScopeLimitedPrincipal } from './auth/scopeLimitedPrincipal.js';
+export const GetServerStartupSummary = () => StartupLogger.GetLastStartupSnapshot();
+export type { StartupSummarySnapshot } from './logging/StartupLogger.js';

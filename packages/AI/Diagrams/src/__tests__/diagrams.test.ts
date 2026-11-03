@@ -428,7 +428,7 @@ describe('@memberjunction/ai-diagrams — limits, layout and keyboard', () => {
         spec.cards = [{ id: 'c1', title, body: url, nodes: ['log'] }];
         const svg = RenderDiagramSvg(spec);
         const svgDoc = new JSDOM(svg).window.document;
-        expect(svgDoc.querySelector('.card .ct')?.textContent).toBe(`${title.slice(0, 39)}…`);
+        expect(svgDoc.querySelector('.card .ct')?.textContent).toBe(`${title.slice(0, 31)}…`);
         const bodyLines = [...svgDoc.querySelectorAll('.card .cb')].map((el) => el.textContent ?? '');
         expect(bodyLines).toHaveLength(2);
         expect(Math.max(...bodyLines.map((l) => l.length))).toBeLessThanOrEqual(42);
@@ -489,17 +489,38 @@ describe('@memberjunction/ai-diagrams — limits, layout and keyboard', () => {
         }
     });
 
-    it('places nodes before connections in DOM tab order and scrolls jumped-to nodes into view', () => {
+    it('paints edges under nodes with a roving tabindex, and scrolls both clicked and jumped-to nodes into view', () => {
         const svg = RenderDiagramSvg(validSpec('renewal.workflow.json'));
         const { doc, sanitize } = purifiedDom();
         const host = doc.getElementById('host')!;
         const viewer = MountInteractiveDiagram(host, svg, sanitize)!;
-        const focusable = [...viewer.Svg.querySelectorAll('[tabindex="0"]')];
-        const firstEdgeIdx = focusable.findIndex((el) => el.classList.contains('edge'));
-        const lastNodeIdx = focusable.map((el) => el.classList.contains('node')).lastIndexOf(true);
-        expect(lastNodeIdx).toBeLessThan(firstEdgeIdx);
+        const children = [...viewer.Svg.children];
+        const lastEdgeIdx = children.map((el) => el.classList.contains('edge')).lastIndexOf(true);
+        const firstNodeIdx = children.findIndex((el) => el.classList.contains('node'));
+        expect(lastEdgeIdx).toBeLessThan(firstNodeIdx);
 
+        // Roving tabindex: only one edge is in the Tab order at a time, and ArrowRight moves to the next edge
+        const tabbableEdges = viewer.Svg.querySelectorAll('.edge[tabindex="0"]');
+        expect(tabbableEdges).toHaveLength(1);
+        const edges = [...viewer.Svg.querySelectorAll<SVGGElement>('.edge')];
+        edges[0].focus();
+        edges[0].dispatchEvent(new doc.defaultView!.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+        expect(edges[0].getAttribute('tabindex')).toBe('-1');
+        expect(edges[1].getAttribute('tabindex')).toBe('0');
+        expect(shadow(host).activeElement).toBe(edges[1]);
+
+        // Direct node activation scrolls the clicked node into view
+        const directEl = viewer.Svg.querySelector<SVGGElement>('[data-node-id="review"]')!;
+        let directScrolled: ScrollIntoViewOptions | null = null;
+        Object.assign(directEl, {
+            scrollIntoView: (opts: ScrollIntoViewOptions) => {
+                directScrolled = opts;
+            },
+        });
         viewer.Select('review');
+        expect(directScrolled).toEqual({ block: 'nearest', inline: 'nearest' });
+
+        // Jumping to a connected node from the panel also scrolls it into view
         const row = shadow(host).querySelector<HTMLButtonElement>('.mjd-panel button.mjd-conn')!;
         const targetEl = viewer.Svg.querySelector<SVGGElement>(`[data-node-id="${row.dataset.jump}"]`)!;
         let scrolledOpts: ScrollIntoViewOptions | null = null;
@@ -510,6 +531,111 @@ describe('@memberjunction/ai-diagrams — limits, layout and keyboard', () => {
         });
         row.click();
         expect(scrolledOpts).toEqual({ block: 'nearest', inline: 'nearest' });
-        expect(shadow(host).getElementById('mj-diagram-viewer-styles')?.textContent).toContain('scroll-padding-right: 366px');
+        const css = shadow(host).getElementById('mj-diagram-viewer-styles')?.textContent ?? '';
+        expect(css).toContain('scroll-padding-right: 366px');
+        expect(css).toContain('flex: 0 0 360px');
+        expect(css).toContain('@keyframes mjv-arrive');
+        expect(viewer.Svg.querySelector('g.flow-layer')).not.toBeNull();
+        expect(viewer.Svg.querySelector('[id$="-mk-lit"]')).not.toBeNull();
+    });
+
+    it('repairs smartypants-mangled CSS custom properties inside <svg><style> and provides presentation fallbacks', () => {
+        const rawSvg = RenderDiagramSvg(validSpec('renewal.workflow.json'));
+        expect(rawSvg).toContain('<rect class="bg"');
+        expect(rawSvg).toContain('fill="#ffffff"');
+        expect(rawSvg).toContain('fill="none" stroke="#8c959f"');
+
+        // Simulate marked-smartypants turning `--` inside <style> into `\u2013` (en-dash)
+        const smartypantsSvg = rawSvg.replace(/<style>([\s\S]*?)<\/style>/, (_m, css: string) => `<style>${css.replace(/--/g, '\u2013')}</style>`);
+        expect(smartypantsSvg).toContain('\u2013bg:');
+
+        const { doc, sanitize } = purifiedDom();
+        const host = doc.getElementById('host')!;
+        const viewer = MountInteractiveDiagram(host, smartypantsSvg, sanitize)!;
+        const repairedStyle = viewer.Svg.querySelector('style')?.textContent ?? '';
+        expect(repairedStyle).not.toContain('\u2013');
+        expect(repairedStyle).toContain('--bg:var(--mj-bg-surface,#fff)');
+        const shellStyle = shadow(host).getElementById('mj-diagram-viewer-styles')?.textContent ?? '';
+        expect(shellStyle).toContain('--bg:var(--mj-bg-surface,#fff)');
+    });
+
+    it('assigns distinct lit marker IDs when multiple diagrams mount in the same document, and animates sequence messages in order', () => {
+        const r1 = RenderDiagram(loadFixture('renewal.workflow.json'));
+        const r2 = RenderDiagram(loadFixture('abstract.sequence.json'));
+        if (!r1.Success || !r2.Success) throw new Error('render failed');
+        const { doc, sanitize } = purifiedDom('<div id="h1"></div><div id="h2"></div>');
+        const h1 = doc.getElementById('h1')!;
+        const h2 = doc.getElementById('h2')!;
+        h1.innerHTML = sanitize(r1.Svg);
+        h2.innerHTML = sanitize(r2.Svg);
+        const svg1 = h1.querySelector<SVGSVGElement>('svg')!;
+        const svg2 = h2.querySelector<SVGSVGElement>('svg')!;
+
+        // Stub getTotalLength so createFlowRun populates g.flow-layer in JSDOM
+        [svg1, svg2].forEach((svg) => {
+            svg.querySelectorAll<SVGPathElement>('.edge path').forEach((p) => {
+                Object.assign(p, {
+                    getTotalLength: () => 120,
+                    getPointAtLength: (d: number) => ({ x: d, y: 0 }),
+                });
+            });
+        });
+
+        const v1 = MountInteractiveDiagram(h1, r1.Svg, sanitize)!;
+        const v2 = MountInteractiveDiagram(h2, r2.Svg, sanitize)!;
+        const lit1 = v1.Svg.querySelector('[id$="-mk-lit"]')?.getAttribute('id');
+        const lit2 = v2.Svg.querySelector('[id$="-mk-lit"]')?.getAttribute('id');
+        expect(lit1).toBeTruthy();
+        expect(lit2).toBeTruthy();
+        expect(lit1).not.toBe(lit2);
+
+        // Sequence diagram edges carry sequential data-edge-order attributes 0..N-1
+        const seqOrders = [...v2.Svg.querySelectorAll<SVGGElement>('.edge')].map((e) => Number(e.dataset.edgeOrder));
+        expect(seqOrders).toEqual(seqOrders.map((_, idx) => idx));
+
+        // WCAG 2.2.2: flow does not autoplay on mount; it starts on user selection/trace and stops on Clear()
+        const flowLayer = v1.Svg.querySelector<SVGGElement>('g.flow-layer')!;
+        expect(flowLayer.children).toHaveLength(0);
+        const win = doc.defaultView!;
+        let rafCallback: ((now: number) => void) | null = null;
+        win.requestAnimationFrame = (cb: FrameRequestCallback): number => {
+            rafCallback = cb;
+            return 1;
+        };
+        win.cancelAnimationFrame = (): void => {
+            rafCallback = null;
+        };
+        Object.assign(win.SVGElement.prototype, {
+            getTotalLength: () => 120,
+            getPointAtLength: (d: number) => ({ x: d, y: 0 }),
+        });
+
+        const targetNode = v1.Svg.querySelector<SVGGElement>('[data-node-id="submit"]')!;
+        let reflowReadWithoutArrive = 0;
+        const origRect = targetNode.getBoundingClientRect.bind(targetNode);
+        targetNode.getBoundingClientRect = (): DOMRect => {
+            if (!targetNode.classList.contains('arrive')) reflowReadWithoutArrive++;
+            return origRect();
+        };
+
+        v1.SelectEdge('e1');
+        expect(flowLayer.querySelectorAll('.comet')).toHaveLength(1);
+        expect(rafCallback).not.toBeNull();
+
+        // Simulate two loop cycles landing on targetNode ("submit") and verify reflow happens between remove/add
+        // With 1 beat (STEP_MS=720, period=1820), t > 1 occurs in (840, 1940) and t in [0,1] occurs in [1940, 2660], then t > 1 again at 2700
+        const t0 = win.performance.now();
+        rafCallback!(t0 + 1000);
+        expect(targetNode.classList.contains('arrive')).toBe(true);
+        expect(reflowReadWithoutArrive).toBeGreaterThanOrEqual(1);
+        const countAfterFirstArrive = reflowReadWithoutArrive;
+        rafCallback!(t0 + 2100);
+        rafCallback!(t0 + 2800);
+        expect(reflowReadWithoutArrive).toBeGreaterThan(countAfterFirstArrive);
+
+        v1.Clear();
+        expect(flowLayer.children).toHaveLength(0);
+        expect(rafCallback).toBeNull();
     });
 });
+
