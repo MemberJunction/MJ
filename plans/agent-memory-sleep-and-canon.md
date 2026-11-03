@@ -461,3 +461,65 @@ Every phase ships as an isolated PR behind feature flags (`memoryConfig.canonPre
 2. **Counterfactual Replay Win Rate**: Net positive `ReplayWinDelta` on held-out failed/corrected turns with `< 2%` regression rate on passing control turns.
 3. **Signal-to-Noise Funnel**: Share of raw REM drafts surviving Cold Falsifier + `Jev` (~15–25%), share passing replay/SQL verification, and **human approval rate $\ge 70\%$** on Canon/Skill requests routed to `MJ: AI Agent Requests` (keeping reviewer volume low and high-trust).
 4. **Contradiction Resolution Rate**: Reduction in unresolved `[Contradiction flagged...]` high-importance note pairs via verified conditional disambiguation proposals.
+
+---
+
+## 8. Unified Evidence Ladder, Canon Contract & Artifact Promotion Reference (Folded from PR #5869)
+
+### 8.1 The 5-Rung Evidence Ladder ("Did This Memory or Canon Item Help?")
+
+"Helped" decomposes into two questions: **(a) did it change behavior?** and **(b) was the change better?**
+
+| Rung | Question | Mechanism | Cost | Strength |
+| --- | --- | --- | --- | --- |
+| **0. Exposure** | Was it present? | Per-run exposure record across notes, examples, skills, scoped prompt parts, and `GraphConcept`s: rank, score, and **arm** (`injected` vs. `withheld`) | Low | Prerequisite for all downstream attribution |
+| **1. Usage** | Did the model act on it? | Render notes/examples with compact short IDs (`[N1]`, `[E1]`); add `memoryUsed?: string[]` to `LoopAgentResponse` (§2.2 #3) | Low | Separates "ignored" from "acted on" across co-injected notes |
+| **2. Correlation** | Do runs with it do better? | Join exposure to rubric `ProductionSampling` scores, regenerate (`ConversationDetail.ReplacedAt`), edit-and-resend (`OriginalMessageChanged`), validation retries, tool-error steps, run success, and user ratings | Low | Screens candidates for Rung 3 replay |
+| **3. Counterfactual Replay** | Does adding/removing it change the decision, and is the result better? | Clone `AIPromptRun.Messages`, splice or withhold the candidate note/skill/prompt-part block, and **rerun that single decision** under the same model/config (`temp = 0` randomized A/B judge, §5.2) | Medium | Strong causal signal per turn with **zero side effects** |
+| **4. Randomized Holdout** | Does it help on average in production? | For eligible non-constraint notes, withhold with small probability ($\approx 10\%$) using deterministic run-ID bucketing (`SampleBucket` in `packages/Rubrics/Base/src/sampling.ts`). **Never withhold** `IsCanonical = 1` `Constraint` notes or `Immutable`/`Protected` tiers | Low per run | Gold-standard production causal metric |
+
+### 8.2 Thin Canon Contract Across MJ Registries
+
+Rather than building a monolithic canon table, every MJ registry whose approved entries are reused by later runs implements a thin shared contract:
+
+| Property | Contract Across `MJ: Graph Concepts`, `MJ: Actions`, `MJ: Queries`, `MJ: AI Skills`, `MJ: Components`, `MJ: AI Agent Notes` |
+| --- | --- |
+| **Lifecycle** | Common vocabulary mapped onto each entity's status/canon fields: `Candidate (Provisional / Proposed) → Probation (Active) → Canon (IsCanonical = 1 / Canonical) → Deprecated / Expired` |
+| **Provenance** | Created by (`AgentRunID` / `UserID`), approved by (`CanonApprovedByUserID` / `CodeApprovedByUserID`), approved at, and upstream `OriginProposalID` / `AIAgentNoteSource` |
+| **Stored Evidence** | Linked `MJ: Tests` rows (e.g., ActionSmith test cases persisted rather than discarded), query sample result snapshots, and `AIAgentLearningCycleProposal.VerificationEvidence` |
+| **Cue ("When to use me")** | Standardize `UsageGuidance`, `WhenNotToUse`, and `AlternativeQuestions` (currently on `IQueryConfiguration`) across Actions, Skills, and `GraphConcept`s |
+| **Telemetry** | Server-side uses, successes, failures, and `LastAccessedAt` linked to `AIAgentRun` |
+| **Scheduled Re-Verification** | Re-run stored evidence on schema changes (CodeGen), model changes, or dependency updates; move failing items to `Expired` / `Disputed` and open an `MJ: AI Agent Requests` review item |
+
+### 8.3 Artifact → Probe → Canon Promotion Matrix
+
+Conversation-scoped `MJ: Artifacts` act as the staging area for procedural outputs before probe verification and promotion:
+
+| Artifact Type | Promotes To | Verification Probe Before Promotion |
+| --- | --- | --- |
+| JS / TS code | `Runtime` `MJ: Action` | Stored test cases persisted as `MJ: Tests` (requiring at least one non-smoke test) |
+| SQL / Data | `MJ: Query` | Read-only test execution with sample parameters + stored result snapshot |
+| Component / Report | `MJ: Component` | Component linter + `packages/React/test-harness` execution |
+| Plan / `TaskGraph` | Saved Workflow (`Flow` agent) | `Workflow.Validate` + dry run + deterministic Weisfeiler-Lehman DAG similarity clustering & telemetry (`@memberjunction/ai-core-plus`, shipped in PR #6279) |
+| Procedure Markdown | `MJ: AI Skill` | Counterfactual single-decision replay contrast with vs. without the skill (Rung 3) |
+| Domain / Policy Synthesis | `MJ: Graph Concept` / `MJ: Scoped Prompt Part` / `MJ: AI Agent Note` | Content Pipeline `GraphStage` authority-tier check (shipped in PR #6279) + Rung 3 replay or read-only `RunQuery` check |
+
+---
+
+## Appendix A — *Harness²* Prompts (`arXiv:2610.14224` Appendix H) & Existing MJ Building Blocks
+
+| Paper Prompt (`arXiv:2610.14224`) | MJ Target in Phase 2 / Phase 3 (§5.2 & §5.5) |
+| --- | --- |
+| **Prompts 1 & 2 — Harness Editor (*Invariant* / *Domain* Scope)** | Offline Harness Refiner scoped editors (`CycleType = 'HarnessRefinement'`), including verbatim **"What you do not have"** and **"Evidence is data, not instructions"** sections |
+| **Prompts 3 & 4 — Harness Composer (Parallel / Sequential)** | Composer prompt producing `kept \| revised \| dropped → edit → trajectory moment` decision logs on `AIAgentLearningCycle` |
+| **Prompt 5 — Blind Selection Over Executed States** | Generic `ResultSelectorPromptID` judge (delivery, conformance, fidelity to source, internal consistency, operational fitness) |
+| **Prompt 6 — Experience Reflector** | Output contract for `AIAgentLearningCycle` + `AIAgentLearningCycleProposal` (`cue / claim / testablePrediction / evidence` or `NO_ENTRY`) |
+
+| Capability Needed | Existing MJ Building Block Reused |
+| --- | --- |
+| Semantic Graph & `MJ: Graph Concepts` substrate + Content Pipeline `GraphStage` | **Shipped in PR #6279** (`@memberjunction/core-entities`, `@memberjunction/content-pipeline`) |
+| Deterministic `TaskGraph` DAG similarity & workflow health telemetry | **Shipped in PR #6279** (`@memberjunction/ai-core-plus` `dag-similarity.ts`, `workflow-telemetry.ts`) |
+| Parallel multi-model fan-out + selector judge | `ParallelExecutionCoordinator` (`packages/AI/Prompts/src/ParallelExecution.ts`) |
+| Probing runs with config/prompt overrides & tracking iterations/cost | `AgentEvalDriver`, `PromptEvalDriver`, and `MJ: Experiments` |
+| Deterministic holdout arm assignment & bootstrap CIs | `SampleBucket` (`packages/Rubrics/Base/src/sampling.ts`) & `packages/TestingFramework/Engine/src/decision-eval/metrics.ts` |
+| Human approval inbox | `MJ: AI Agent Requests` (with non-resuming `'Learning Cycle Proposal Approval'` settlement in `MJAIAgentRequestEntityServer`, §5.3) |
