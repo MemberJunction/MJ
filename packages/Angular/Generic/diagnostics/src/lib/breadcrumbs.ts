@@ -19,6 +19,8 @@ const CONTROL_SELECTOR = [
 ].join(', ');
 const MAX_MESSAGE_LENGTH = 300;
 const MAX_ATTRIBUTE_LENGTH = 60;
+/** Characters of element text read for the identifier check. Longer text cannot fit in an identifier. */
+const MAX_TEXT_READ_LENGTH = 200;
 /** A plain identifier: a letter, then letters, digits, `_`, `:`, `.` or `-`. */
 const PLAIN_IDENTIFIER = /^[A-Za-z][\w:.-]*$/;
 /** Attributes a click breadcrumb may name, after `#id`. None of them holds visible text. */
@@ -32,7 +34,7 @@ const DESCRIBED_ATTRIBUTES = ['role', 'type', 'name', 'data-testid', 'data-test-
  */
 export function DescribeClickTarget(clicked: Element): string {
     const target = clicked.closest(CONTROL_SELECTOR) ?? clicked;
-    const text = (target.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const text = (target.textContent ?? '').slice(0, MAX_TEXT_READ_LENGTH).replace(/\s+/g, ' ').trim();
     const usable = (value: string | null): value is string => isSafeIdentifier(value, text);
     const id = usable(target.id) ? `#${target.id}` : '';
     const attributes = DESCRIBED_ATTRIBUTES.map((name) => {

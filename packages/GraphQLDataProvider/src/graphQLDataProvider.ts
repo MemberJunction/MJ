@@ -4191,7 +4191,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      *
      * Specifically clears:
      * - The `MJ_Metadata` IndexedDB database (entity definitions, RunView/RunQuery/Dataset caches)
-     * - The `MJ_Diagnostics` IndexedDB database, if an earlier build left one
+     * - The `MJ_Diagnostics` IndexedDB database, if it exists
      * - All localStorage keys except those in `preservedKeys`
      *
      * @param preservedKeys localStorage keys to keep across logout (e.g. theme preference).
@@ -4208,7 +4208,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
         keysToRemove.forEach(key => localStorage.removeItem(key));
 
-        // Delete the MJ IndexedDB metadata cache and the diagnostics database an earlier build wrote
+        // Delete the `MJ_Metadata` and `MJ_Diagnostics` IndexedDB databases
         await Promise.all(['MJ_Metadata', 'MJ_Diagnostics'].map((name) => GraphQLDataProvider.deleteIndexedDb(name)));
     }
 
