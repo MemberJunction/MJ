@@ -2469,7 +2469,15 @@ function mountRealtimeRecordingRoutes(app: Application): boolean {
 // session scoped to one resource). They are the same pieces WidgetSessionService uses; a generic
 // public-widget session mint remains the long-term replacement.
 export { BuildSessionClaims, MagicLinkKeyManager, MagicLinkService, HashToken, GenerateRawToken } from './auth/magicLink/index.js';
-export type { MagicLinkJWTClaims } from './auth/magicLink/index.js';
+export type {
+  MagicLinkJWTClaims,
+  CreateMagicLinkInviteParams,
+  CreateMagicLinkInviteBaseParams,
+  CreateEmailMagicLinkInviteParams,
+  CreateAnonymousMagicLinkInviteParams,
+  CreateMagicLinkInviteResult,
+  MintableMagicLinkInviteKind,
+} from './auth/magicLink/index.js';
 export { VerifyHostAssertion } from './realtimeWidget/host-identity.js';
 export type { HostAssertedIdentity, HostAssertionResult } from './realtimeWidget/host-identity.js';
 export { IsScopeLimitedPrincipal } from './auth/scopeLimitedPrincipal.js';
