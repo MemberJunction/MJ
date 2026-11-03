@@ -119,7 +119,22 @@ const CHUNK_READ_FIELDS = ['Source', 'ContentKind', 'Sequence', 'EntryCount', 'D
 /** Saved chunks are read one writer at a time (host and process), each in save order. */
 const CHUNK_READ_ORDER = 'HostInstanceLabel ASC, __mj_CreatedAt ASC, Sequence ASC';
 
-const CHUNK_ENTITY = 'MJ: Diagnostic Session Chunks';
+/** Entity name of the saved session chunks. */
+export const DIAGNOSTIC_SESSION_CHUNK_ENTITY = 'MJ: Diagnostic Session Chunks';
+
+/** Wait after a failed chunk save before a background save of the same session starts again. */
+const BACKGROUND_SAVE_RETRY_MS = 30_000;
+
+/** One console method the console tap wraps. */
+interface ConsoleTapMethod {
+  method: 'log' | 'warn' | 'error';
+  severity: DiagnosticLogEntry['severity'];
+  /** The function the wrapper calls after recording. */
+  inner: (...args: unknown[]) => void;
+  wrapper: (...args: unknown[]) => void;
+  /** True while the wrapper is in the console method's call chain. */
+  attached: boolean;
+}
 
 /** A saved chunk row as the bundle build reads it. */
 type SavedChunkRow = Pick<MJDiagnosticSessionChunkEntity, (typeof CHUNK_READ_FIELDS)[number]>;
@@ -138,6 +153,15 @@ export interface SavedSessionChunks {
   ChunksWritten: number;
   /** Compressed bytes of the saved chunks. */
   BytesWritten: number;
+}
+
+/** Options for {@link DiagnosticSessionManager.SaveSessionChunks}. */
+export interface SaveSessionChunksOptions {
+  /**
+   * When true, the result also counts the saves of the same session that were queued or running
+   * when this call started (for example a background save started while an upload was staged).
+   */
+  IncludeQueuedSaves?: boolean;
 }
 
 /** The session entries a bundle holds, by file. */
@@ -216,7 +240,7 @@ function compressEntries(entries: Record<string, unknown>[]): Buffer {
 function chunkProviderOrNull(provider?: IMetadataProvider): IMetadataProvider | null {
   try {
     const md = provider ?? Metadata.Provider;
-    return md?.EntityByName(CHUNK_ENTITY) ? md : null;
+    return md?.EntityByName(DIAGNOSTIC_SESSION_CHUNK_ENTITY) ? md : null;
   } catch {
     return null;
   }
@@ -270,7 +294,8 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
   private _eventLoopHistogram: IntervalHistogram | null = null;
   private _initialized = false;
   private _consoleTapEnabled = true;
-  private _consoleTapRestore: (() => void) | null = null;
+  private _consoleTapMethods: ConsoleTapMethod[] | null = null;
+  private _consoleTapActive = false;
   private _removeLogSink: (() => void) | null = null;
   private _removeSqlObserver: (() => void) | null = null;
   private _expirySweepTimer: ReturnType<typeof setInterval> | null = null;
@@ -278,7 +303,12 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
   private _installId: string = crypto.randomUUID();
   private _onSessionExpired: ((session: ActiveDiagnosticSession) => void) | null = null;
   private _pendingBytes = new Map<string, number>();
-  private _inFlightSaves = new Map<string, Promise<SavedSessionChunks>>();
+  /** Chunks a save could not write, oldest first; the next save of the session retries them first. */
+  private _unsavedChunks = new Map<string, DrainedChunk[]>();
+  /** The end of each session's queue of saves and builds; work on one session runs one item at a time. */
+  private _sessionWorkTails = new Map<string, Promise<void>>();
+  private _queuedSaves = new Map<string, Set<Promise<SavedSessionChunks>>>();
+  private _backgroundRetryAfterMs = new Map<string, number>();
   private _backgroundSave: BackgroundSaveContext | null = null;
 
   public constructor() {
@@ -304,7 +334,10 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     this._sequenceCounters.clear();
     this._redeemedDownloadNonces.clear();
     this._pendingBytes.clear();
-    this._inFlightSaves.clear();
+    this._unsavedChunks.clear();
+    this._sessionWorkTails.clear();
+    this._queuedSaves.clear();
+    this._backgroundRetryAfterMs.clear();
     this.SyncCaptureHooks();
   }
 
@@ -344,7 +377,7 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
   /**
    * Installs the capture hooks while `Diagnostics.Capture.Enabled` is on and this process holds at
    * least one session, and removes them otherwise. Without the hooks, logs, SQL and console output
-   * cost nothing extra.
+   * cost nothing extra. The expiry sweep runs while any session is held.
    */
   public SyncCaptureHooks(): void {
     const wanted = this._initialized && this._activeSessions.size > 0 && DiagnosticsSettings.Current().CaptureEnabled;
@@ -353,6 +386,7 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     } else {
       this.removeCaptureHooks();
     }
+    this.syncExpirySweep();
   }
 
   private installCaptureHooks(): void {
@@ -368,8 +402,6 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     if (this._consoleTapEnabled) {
       this.InstallConsoleTap();
     }
-    this._expirySweepTimer = setInterval(() => this.sweepEndedSessions(), SESSION_EXPIRY_SWEEP_MS);
-    this._expirySweepTimer.unref?.();
   }
 
   private removeCaptureHooks(): void {
@@ -377,9 +409,16 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     this._removeLogSink = null;
     this._removeSqlObserver?.();
     this._removeSqlObserver = null;
-    this._consoleTapRestore?.();
-    this._consoleTapRestore = null;
-    if (this._expirySweepTimer) {
+    this.removeConsoleTap();
+  }
+
+  /** Runs the expiry sweep while this process holds any session, whatever the capture setting. */
+  private syncExpirySweep(): void {
+    const wanted = this._initialized && this._activeSessions.size > 0;
+    if (wanted && !this._expirySweepTimer) {
+      this._expirySweepTimer = setInterval(() => this.sweepEndedSessions(), SESSION_EXPIRY_SWEEP_MS);
+      this._expirySweepTimer.unref?.();
+    } else if (!wanted && this._expirySweepTimer) {
       clearInterval(this._expirySweepTimer);
       this._expirySweepTimer = null;
     }
@@ -393,39 +432,56 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
 
   /**
    * Wraps `console.log`, `console.warn` and `console.error` so direct console calls inside a session
-   * are captured. The wrappers are removed with the other capture hooks; a method that another
-   * library wrapped after this one keeps the wrapper, which then records nothing.
+   * are captured. The wrappers are made once and reused: removing the tap puts back a method that
+   * still holds the wrapper, and a method that another library wrapped later keeps the wrapper,
+   * which records nothing until the tap is installed again.
    */
   public InstallConsoleTap(): void {
-    if (this._consoleTapRestore) {
+    if (this._consoleTapActive) {
       return;
     }
-    let active = true;
-    const methods = [
+    this._consoleTapMethods ??= this.createConsoleTapMethods();
+    for (const m of this._consoleTapMethods) {
+      if (!m.attached) {
+        m.inner = console[m.method];
+        console[m.method] = m.wrapper;
+        m.attached = true;
+      }
+    }
+    this._consoleTapActive = true;
+  }
+
+  private createConsoleTapMethods(): ConsoleTapMethod[] {
+    const specs = [
       ['log', 'info'],
       ['warn', 'warn'],
       ['error', 'error']
     ] as const;
-    const restorers = methods.map(([method, severity]) => {
-      const original = console[method];
-      const bound = original.bind(console);
-      const wrapper = (...args: unknown[]): void => {
-        if (active && !IsInMJLogToConsole()) {
-          this.recordDirectConsoleCall(severity, args);
-        }
-        bound(...args);
-      };
-      console[method] = wrapper;
-      return (): void => {
-        if (console[method] === wrapper) {
-          console[method] = original;
+    return specs.map(([method, severity]) => {
+      const entry: ConsoleTapMethod = {
+        method,
+        severity,
+        inner: console[method],
+        attached: false,
+        wrapper: (...args: unknown[]): void => {
+          if (this._consoleTapActive && !IsInMJLogToConsole()) {
+            this.recordDirectConsoleCall(entry.severity, args);
+          }
+          entry.inner.apply(console, args);
         }
       };
+      return entry;
     });
-    this._consoleTapRestore = () => {
-      active = false;
-      restorers.forEach((restore) => restore());
-    };
+  }
+
+  private removeConsoleTap(): void {
+    this._consoleTapActive = false;
+    for (const m of this._consoleTapMethods ?? []) {
+      if (m.attached && console[m.method] === m.wrapper) {
+        console[m.method] = m.inner;
+        m.attached = false;
+      }
+    }
   }
 
   private recordDirectConsoleCall(severity: DiagnosticLogEntry['severity'], args: unknown[]): void {
@@ -786,11 +842,16 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
 
   /**
    * Saves a session's buffers outside the current request with the background save user.
-   * Does nothing without that user, or when a save of the session is already running and `force` is false.
+   * Does nothing without that user. Unless `force` is true, it also does nothing while other work on
+   * the session is queued, or for {@link BACKGROUND_SAVE_RETRY_MS} after a failed save.
    */
   private startBackgroundSave(sessionId: string, force: boolean): void {
     const ctx = this._backgroundSave;
-    if (!ctx || (!force && this._inFlightSaves.has(sessionId))) {
+    if (!ctx) {
+      return;
+    }
+    const waiting = this._sessionWorkTails.has(sessionId) || Date.now() < (this._backgroundRetryAfterMs.get(sessionId) ?? 0);
+    if (!force && waiting) {
       return;
     }
     RunDetachedFromDiagnosticContext(() => {
@@ -813,6 +874,10 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     return next;
   }
 
+  /**
+   * Takes a session's unsaved chunks out of memory, compressed and numbered: first the chunks an
+   * earlier save could not write (with their sequence numbers), then the current buffers.
+   */
   public DrainPendingBuffersForSession(sessionId: string): Array<{
     source: MJDiagnosticSessionChunkEntity['Source'];
     contentKind: ChunkContentKind;
@@ -821,8 +886,11 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     entryCount: number;
     firstEntryAt: Date;
     lastEntryAt: Date;
+    /** Serialized bytes of the chunk's entries, as counted at append time. */
+    serializedBytes: number;
   }> {
-    const drained: DrainedChunk[] = [];
+    const drained: DrainedChunk[] = [...(this._unsavedChunks.get(sessionId) ?? [])];
+    this._unsavedChunks.delete(sessionId);
 
     for (const [key, buf] of this._chunkBuffers.entries()) {
       if (buf.sessionId !== sessionId || buf.entries.length === 0) {
@@ -836,16 +904,30 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
         compressedData: compressEntries(buf.entries),
         entryCount: buf.entries.length,
         firstEntryAt: buf.firstEntryAt,
-        lastEntryAt: buf.lastEntryAt
+        lastEntryAt: buf.lastEntryAt,
+        serializedBytes: buf.approxBytes
       });
     }
     this._pendingBytes.delete(sessionId);
     return drained;
   }
 
-  /** Copies a session's buffers as chunks to unpack, leaving the buffers in place. */
+  /** Puts chunks a save could not write back in front of the session's unsaved chunks, in order, with their sequence numbers. */
+  private retainUnsavedChunks(sessionId: string, chunks: DrainedChunk[]): void {
+    this._unsavedChunks.set(sessionId, [...chunks, ...(this._unsavedChunks.get(sessionId) ?? [])]);
+    const bytes = chunks.reduce((n, c) => n + c.serializedBytes, 0);
+    this._pendingBytes.set(sessionId, (this._pendingBytes.get(sessionId) ?? 0) + bytes);
+  }
+
+  /** Copies a session's unsaved chunks and buffers as chunks to unpack, leaving them in place. */
   private copyPendingBuffersForSession(sessionId: string): ChunkToUnpack[] {
-    const copies: ChunkToUnpack[] = [];
+    const copies: ChunkToUnpack[] = (this._unsavedChunks.get(sessionId) ?? []).map((c) => ({
+      source: c.source,
+      contentKind: c.contentKind,
+      sequence: c.sequence,
+      entryCount: c.entryCount,
+      compressedData: c.compressedData
+    }));
     for (const buf of this._chunkBuffers.values()) {
       if (buf.sessionId === sessionId && buf.entries.length > 0) {
         copies.push({
@@ -870,30 +952,63 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
   }
 
   /**
-   * Saves every buffered chunk of a session, from any source, to the database. Returns the chunks
-   * and compressed bytes saved. A failed save is logged and its chunk is not counted. Saves of one
-   * session run one after another, so when this resolves, every earlier save of the session has finished.
+   * Saves every unsaved chunk of a session, from any source, to the database. Returns the chunks
+   * and compressed bytes saved. Saves and builds of one session run one at a time, so when this
+   * resolves, every earlier save of the session has finished.
+   *
+   * Chunks are saved oldest first. At the first failed save, that chunk and the ones after it are put
+   * back in memory, in order with their sequence numbers, and one line is logged; the next save retries
+   * them first. They stay counted against the session's `maxBytes`.
    */
   public async SaveSessionChunks(
     sessionId: string,
     contextUser?: UserInfo,
-    provider?: IMetadataProvider
+    provider?: IMetadataProvider,
+    options?: SaveSessionChunksOptions
   ): Promise<SavedSessionChunks> {
-    const previous = this._inFlightSaves.get(sessionId);
-    const run = (previous ?? Promise.resolve(null))
-      .catch(() => null)
-      .then(() => this.saveDrainedChunks(sessionId, contextUser, provider));
-    this._inFlightSaves.set(sessionId, run);
-    try {
-      return await run;
-    } finally {
-      if (this._inFlightSaves.get(sessionId) === run) {
-        this._inFlightSaves.delete(sessionId);
-      }
-    }
+    const earlier = options?.IncludeQueuedSaves ? [...(this._queuedSaves.get(sessionId) ?? [])] : [];
+    const run = this.runSessionWork(sessionId, () => this.saveDrainedChunks(sessionId, contextUser, provider));
+    this.trackQueuedSave(sessionId, run);
+    const own = await run;
+    const others = await Promise.all(earlier.map((p) => p.catch(() => ({ ChunksWritten: 0, BytesWritten: 0 }))));
+    return others.reduce(
+      (sum, r) => ({ ChunksWritten: sum.ChunksWritten + r.ChunksWritten, BytesWritten: sum.BytesWritten + r.BytesWritten }),
+      own
+    );
   }
 
-  /** Drains a session's buffers and saves each chunk, with capture suppressed. */
+  /** Queues work on a session behind its earlier saves and builds. */
+  private runSessionWork<T>(sessionId: string, work: () => Promise<T>): Promise<T> {
+    const tail = this._sessionWorkTails.get(sessionId) ?? Promise.resolve();
+    const run = tail.then(work);
+    const settled = run.then(
+      () => undefined,
+      () => undefined
+    );
+    this._sessionWorkTails.set(sessionId, settled);
+    void settled.then(() => {
+      if (this._sessionWorkTails.get(sessionId) === settled) {
+        this._sessionWorkTails.delete(sessionId);
+      }
+    });
+    return run;
+  }
+
+  /** Keeps a save in the session's queued saves until it settles. */
+  private trackQueuedSave(sessionId: string, save: Promise<SavedSessionChunks>): void {
+    const queued = this._queuedSaves.get(sessionId) ?? new Set<Promise<SavedSessionChunks>>();
+    queued.add(save);
+    this._queuedSaves.set(sessionId, queued);
+    const forget = (): void => {
+      queued.delete(save);
+      if (queued.size === 0 && this._queuedSaves.get(sessionId) === queued) {
+        this._queuedSaves.delete(sessionId);
+      }
+    };
+    save.then(forget, forget);
+  }
+
+  /** Drains a session's unsaved chunks and saves them in order, with capture suppressed. Without a chunk entity, nothing is drained. */
   private async saveDrainedChunks(
     sessionId: string,
     contextUser?: UserInfo,
@@ -901,32 +1016,42 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
   ): Promise<SavedSessionChunks> {
     return WithoutDiagnosticCapture(async () => {
       const saved: SavedSessionChunks = { ChunksWritten: 0, BytesWritten: 0 };
-      const drained = this.DrainPendingBuffersForSession(sessionId);
-      const md = drained.length > 0 ? chunkProviderOrNull(provider) : null;
+      const md = chunkProviderOrNull(provider);
       if (!md) {
+        this._backgroundRetryAfterMs.set(sessionId, Date.now() + BACKGROUND_SAVE_RETRY_MS);
         return saved;
       }
-      const failures: string[] = [];
-      for (const item of drained) {
-        const failure = await this.saveChunk(md, sessionId, item, contextUser);
-        if (failure === null) {
-          saved.ChunksWritten++;
-          saved.BytesWritten += item.compressedData.byteLength;
-        } else {
-          failures.push(failure);
+      const drained = this.DrainPendingBuffersForSession(sessionId);
+      let failure: string | null = null;
+      let index = 0;
+      for (; index < drained.length; index++) {
+        failure = await this.saveChunk(md, sessionId, drained[index], contextUser);
+        if (failure !== null) {
+          break;
         }
+        saved.ChunksWritten++;
+        saved.BytesWritten += drained[index].compressedData.byteLength;
       }
       const session = this._activeSessions.get(sessionId);
       if (session) {
         session.bytesWritten += saved.BytesWritten;
       }
-      if (failures.length > 0) {
-        LogError(
-          `Diagnostic session '${sessionId}': ${failures.length} of ${drained.length} chunk saves failed. First error: ${failures[0]}`
-        );
+      if (failure !== null) {
+        this.keepFailedChunks(sessionId, drained.slice(index), drained.length, failure);
+      } else {
+        this._backgroundRetryAfterMs.delete(sessionId);
       }
       return saved;
     });
+  }
+
+  /** Puts back the chunks a save did not write, delays the next background save, and logs one line. */
+  private keepFailedChunks(sessionId: string, kept: DrainedChunk[], drainedCount: number, failure: string): void {
+    this.retainUnsavedChunks(sessionId, kept);
+    this._backgroundRetryAfterMs.set(sessionId, Date.now() + BACKGROUND_SAVE_RETRY_MS);
+    LogError(
+      `Diagnostic session '${sessionId}': ${kept.length} of ${drainedCount} chunks were not saved and are kept in memory for the next save. First error: ${failure}`
+    );
   }
 
   /** Saves one drained chunk. Returns `null` on success, otherwise the error message. */
@@ -937,7 +1062,7 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     contextUser?: UserInfo
   ): Promise<string | null> {
     try {
-      const chunk = await md.GetEntityObject<MJDiagnosticSessionChunkEntity>(CHUNK_ENTITY, contextUser);
+      const chunk = await md.GetEntityObject<MJDiagnosticSessionChunkEntity>(DIAGNOSTIC_SESSION_CHUNK_ENTITY, contextUser);
       chunk.DiagnosticSessionID = sessionId;
       chunk.Source = item.source;
       chunk.HostInstanceLabel = this._hostInstanceLabel;
@@ -1130,7 +1255,21 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
       }
       return;
     }
-    await this.SaveSessionChunks(sessionId, contextUser, provider);
+    await this.runSessionWork(sessionId, () => this.unpackSavedThenUnsaved(sessionId, entries, contextUser, provider));
+  }
+
+  /**
+   * Saves the session's unsaved chunks, adds every saved chunk, then adds the chunks still in memory
+   * (failed saves and entries buffered since). Runs as one item of the session's work queue, so no
+   * other save moves a chunk between the database and memory meanwhile, and no entry is added twice.
+   */
+  private async unpackSavedThenUnsaved(
+    sessionId: string,
+    entries: AssembledEntries,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider
+  ): Promise<void> {
+    await this.saveDrainedChunks(sessionId, contextUser, provider);
     for (const row of await this.readSavedChunks(sessionId, contextUser, provider)) {
       this.unpackChunk(
         sessionId,
@@ -1143,6 +1282,9 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
         },
         entries
       );
+    }
+    for (const chunk of this.copyPendingBuffersForSession(sessionId)) {
+      this.unpackChunk(sessionId, chunk, entries);
     }
   }
 
@@ -1158,7 +1300,7 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     }
     const res = await RunView.FromMetadataProvider(md).RunView<SavedChunkRow>(
       {
-        EntityName: CHUNK_ENTITY,
+        EntityName: DIAGNOSTIC_SESSION_CHUNK_ENTITY,
         ExtraFilter: `DiagnosticSessionID = '${EscapeSQLString(sessionId)}'`,
         OrderBy: CHUNK_READ_ORDER,
         Fields: [...CHUNK_READ_FIELDS],

@@ -1,10 +1,9 @@
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { Base64ToBytes, EscapeSQLString, IsValidUUID, UUIDMap } from '@memberjunction/global';
 import { MJDiagnosticSessionEntity, MJDiagnosticSessionEntity_IDiagnosticSessionScope as IDiagnosticSessionScope } from '@memberjunction/core-entities';
-import { ActiveDiagnosticSession, DiagnosticSessionManager } from './sessionManager.js';
+import { ActiveDiagnosticSession, DIAGNOSTIC_SESSION_CHUNK_ENTITY, DiagnosticSessionManager } from './sessionManager.js';
 
 const SESSION_ENTITY = 'MJ: Diagnostic Sessions';
-const CHUNK_ENTITY = 'MJ: Diagnostic Session Chunks';
 
 /** The byte counts of a session's saved chunks. */
 interface SavedChunkBytes {
@@ -228,7 +227,7 @@ async function readSavedChunkBytes(
   const idList = sessionIds.map((id) => `'${EscapeSQLString(id)}'`).join(', ');
   const res = await RunView.FromMetadataProvider(md).RunView<ChunkSizeRow>(
     {
-      EntityName: CHUNK_ENTITY,
+      EntityName: DIAGNOSTIC_SESSION_CHUNK_ENTITY,
       ExtraFilter: `DiagnosticSessionID IN (${idList})`,
       Fields: ['DiagnosticSessionID', 'Data'],
       ResultType: 'simple'

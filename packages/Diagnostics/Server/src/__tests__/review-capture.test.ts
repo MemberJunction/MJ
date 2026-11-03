@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { IMetadataProvider, RunView, RunViewParams, UserInfo } from '@memberjunction/core';
 import { InstanceConfigEngine } from '@memberjunction/core-entities';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
-import { ActiveDiagnosticSession, DiagnosticSessionManager } from '../sessionManager.js';
+import { ActiveDiagnosticSession, DiagnosticSessionManager, RunWithServerDiagnosticContext } from '../sessionManager.js';
 import { DiagnosticsServerMiddleware } from '../middleware.js';
 import { RestoreActiveSessions, WatchSessionExpiry } from '../sessionStore.js';
 
@@ -15,9 +15,10 @@ type Row = Record<string, string | number | boolean | Date | null | undefined>;
 
 const ownerUser = { ID: 'user-owner-1', IsActive: true, Type: 'Owner', UserRoles: [{ Role: 'Developer' }] } as unknown as UserInfo;
 
-/** A provider whose entity objects save to in-memory tables; each save stamps `__mj_CreatedAt`. */
-function createFakeProvider(): { Provider: IMetadataProvider; Rows: (entity: string) => Row[] } {
+/** A provider whose entity objects save to in-memory tables; each save stamps `__mj_CreatedAt`. Saves fail while `FailSaves` is true. */
+function createFakeProvider(): { Provider: IMetadataProvider; Rows: (entity: string) => Row[]; FailSaves: boolean } {
     const tables = new Map<string, Row[]>();
+    const state = { FailSaves: false };
     const rowsOf = (entity: string): Row[] => {
         if (!tables.has(entity)) tables.set(entity, []);
         return tables.get(entity)!;
@@ -25,7 +26,9 @@ function createFakeProvider(): { Provider: IMetadataProvider; Rows: (entity: str
     const createRow = (entity: string): Row & { Save: () => Promise<boolean> } => {
         const row = {
             ID: '',
+            LatestResult: { CompleteMessage: `${entity} save rejected` },
             Save: async () => {
+                if (state.FailSaves) return false;
                 row.ID = row.ID || crypto.randomUUID().toUpperCase();
                 const snapshot: Row = { __mj_CreatedAt: new Date() };
                 for (const [k, v] of Object.entries(row)) if (typeof v !== 'function') snapshot[k] = v as Row[string];
@@ -39,7 +42,16 @@ function createFakeProvider(): { Provider: IMetadataProvider; Rows: (entity: str
         GetEntityObject: async (entity: string) => createRow(entity),
         EntityByName: (entity: string) => ({ Name: entity }),
     } as unknown as IMetadataProvider;
-    return { Provider: provider, Rows: rowsOf };
+    return {
+        Provider: provider,
+        Rows: rowsOf,
+        get FailSaves() {
+            return state.FailSaves;
+        },
+        set FailSaves(value: boolean) {
+            state.FailSaves = value;
+        },
+    };
 }
 
 /** Sorts rows by an `OrderBy` clause such as `A ASC, B DESC`. */
@@ -272,6 +284,81 @@ describe('diagnostics server capture (review fixes)', () => {
             expect(restored?.bytesWritten).toBe(compressed);
             manager.AppendToChunkBuffer(sessionId, 'Server', 'SQL', sqlEntry);
             expect(manager.DrainPendingBuffersForSession(sessionId)).toHaveLength(0);
+        });
+    });
+    describe('fix round 1', () => {
+        it('a chunk save that fails during a build still gives the entries in that bundle and in the next one', async () => {
+            const fake = createFakeProvider();
+            mockRunView((entity) => (entity === CHUNK_ENTITY ? fake.Rows(CHUNK_ENTITY) : []));
+            vi.spyOn(console, 'error').mockImplementation(() => {});
+            manager.RegisterActiveSession(session('session-fail-build'));
+            manager.AppendToChunkBuffer('session-fail-build', 'Server', 'SQL', sqlEntry);
+            fake.FailSaves = true;
+
+            const first = await manager.AssembleBundleDataFromChunks('session-fail-build', false, undefined, ownerUser, fake.Provider);
+            const second = await manager.AssembleBundleDataFromChunks('session-fail-build', false, undefined, ownerUser, fake.Provider);
+            fake.FailSaves = false;
+            const third = await manager.AssembleBundleDataFromChunks('session-fail-build', false, undefined, ownerUser, fake.Provider);
+
+            expect(first.bundleData.serverSql).toHaveLength(1);
+            expect(second.bundleData.serverSql).toHaveLength(1);
+            expect(third.bundleData.serverSql).toHaveLength(1);
+            expect(fake.Rows(CHUNK_ENTITY)).toHaveLength(1);
+        });
+
+        it('reuses its console wrapper when another library wrapped console.log after it', () => {
+            const realLog = console.log;
+            const inner = (): void => {};
+            console.log = inner;
+            try {
+                manager.RegisterActiveSession(session('session-tap'));
+                manager.InstallConsoleTap();
+                const beneath = console.log;
+                const library = (...args: unknown[]): void => beneath(...args);
+                console.log = library;
+                manager.StopActiveSessionInMemory('session-tap');
+
+                manager.RegisterActiveSession(session('session-tap-2'));
+                manager.InstallConsoleTap();
+
+                expect(console.log).toBe(library);
+                RunWithServerDiagnosticContext({ sessionId: 'session-tap-2', SessionEndsAtMs: Date.now() + 60_000 }, () => console.log('tapped line'));
+                const drained = manager.DrainPendingBuffersForSession('session-tap-2');
+                expect(drained.reduce((n, c) => n + c.entryCount, 0)).toBe(1);
+            } finally {
+                manager.ResetForTests();
+                console.log = realLog;
+            }
+        });
+
+        it('settles expired sessions while capture is off', () => {
+            vi.useFakeTimers();
+            const expired = vi.fn();
+            manager.SetSessionExpiredHandler(expired);
+            manager.RegisterActiveSession(session('session-capture-off'));
+            mockInstanceSettings({ 'Diagnostics.Capture.Enabled': 'false' });
+            manager.SyncCaptureHooks();
+
+            vi.setSystemTime(Date.now() + 2 * 60_000);
+            vi.advanceTimersByTime(30_000);
+
+            expect(expired).toHaveBeenCalledTimes(1);
+        });
+
+        it('reports the chunks of a running background save when asked for the whole save chain', async () => {
+            const fake = createFakeProvider();
+            WatchSessionExpiry(ownerUser, fake.Provider);
+            manager.RegisterActiveSession(session('session-chain'));
+            const big = 'x'.repeat(10_000);
+            for (let i = 0; i < 120; i++) {
+                manager.AppendToChunkBuffer('session-chain', 'Client', 'Logs', { message: `${i} ${big}` });
+            }
+            manager.AppendToChunkBuffer('session-chain', 'Client', 'Network', { url: '/after-threshold' });
+
+            const saved = await manager.SaveSessionChunks('session-chain', ownerUser, fake.Provider, { IncludeQueuedSaves: true });
+
+            expect(saved.ChunksWritten).toBe(fake.Rows(CHUNK_ENTITY).length);
+            expect(saved.ChunksWritten).toBe(2);
         });
     });
 });
