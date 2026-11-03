@@ -90,7 +90,7 @@ import { validateStringParam } from '../../shared/agent-tool-validation';
       .models-splitter .as-split-gutter { background: transparent; transition: background-color 0.15s ease; position: relative; }
       .models-splitter .as-split-gutter:hover { background-color: var(--mj-brand-primary, #6366f1); }
       .models-splitter .as-split-gutter::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 2px; height: 24px; border-radius: 1px; background: var(--mj-border-strong, #cbd5e1); }
-      .models-splitter .as-split-gutter:hover::after { background: #ffffff; }
+      .models-splitter .as-split-gutter:hover::after { background: var(--mj-text-inverse); }
 
       .ps-nav-collapsed-strip { width: 44px; min-width: 44px; max-width: 44px; flex: none; background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); display: flex; flex-direction: column; align-items: center; padding: 10px 0; gap: 14px; z-index: 2; }
       .ps-nav-rail-collapse { background: var(--mj-bg-surface-subtle); border: 1px solid var(--mj-border-default); border-radius: 6px; color: var(--mj-text-secondary); cursor: pointer; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; font-size: 11px; transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease; }
