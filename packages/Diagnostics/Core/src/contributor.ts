@@ -6,7 +6,7 @@
  */
 
 import { BaseSingleton } from '@memberjunction/global';
-import type { DiagnosticFidelity, DiagnosticMode, DiagnosticScrubberProfile } from './types.js';
+import { IsValidContributorSectionKey, type DiagnosticFidelity, type DiagnosticMode, type DiagnosticScrubberProfile } from './types.js';
 import { ScrubValue } from './scrubber.js';
 
 export interface DiagnosticContributionContext {
@@ -22,7 +22,8 @@ export type DiagnosticContributorContext = DiagnosticContributionContext;
 
 export abstract class BaseDiagnosticContributor {
     /**
-     * Short alphanumeric/hyphen identifier used for the archive file name `contrib/<SectionKey>.json`.
+     * Identifier used for the archive file name `contrib/<SectionKey>.json`:
+     * 1-64 characters from `A-Z a-z 0-9 . _ -`, with no `..` and not ending in `.`.
      */
     public abstract get SectionKey(): string;
 
@@ -46,11 +47,27 @@ export class DiagnosticContributorRegistry extends BaseSingleton<DiagnosticContr
         return DiagnosticContributorRegistry.getInstance<DiagnosticContributorRegistry>();
     }
 
+    /**
+     * Registers a contributor and returns a function that unregisters it.
+     * Throws when the `SectionKey` is not valid (see {@link IsValidContributorSectionKey})
+     * or another contributor already holds it.
+     */
     public RegisterContributor(contributor: BaseDiagnosticContributor): () => void {
-        const safeKey = contributor.SectionKey.replace(/[^A-Za-z0-9._-]/g, '_');
-        this._contributors.set(safeKey, contributor);
+        const key = contributor.SectionKey;
+        if (!IsValidContributorSectionKey(key)) {
+            throw new Error(
+                `Invalid diagnostic contributor SectionKey ${JSON.stringify(key)}: use 1-64 characters from A-Z a-z 0-9 . _ - with no "..", not ending in "."`
+            );
+        }
+        const existing = this._contributors.get(key);
+        if (existing && existing !== contributor) {
+            throw new Error(`A diagnostic contributor with SectionKey "${key}" is already registered; unregister it first`);
+        }
+        this._contributors.set(key, contributor);
         return () => {
-            this._contributors.delete(safeKey);
+            if (this._contributors.get(key) === contributor) {
+                this._contributors.delete(key);
+            }
         };
     }
 

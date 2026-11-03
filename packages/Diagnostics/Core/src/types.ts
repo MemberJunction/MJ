@@ -264,3 +264,15 @@ export function IsAllowedMjdiagEntryPath(entryPath: string): boolean {
     }
     return false;
 }
+
+/**
+ * Checks whether a contributor `SectionKey` can be written as `contrib/<SectionKey>.json`:
+ * 1 to 64 characters from `A-Z a-z 0-9 . _ -`, with no `..` in the resulting path.
+ */
+export function IsValidContributorSectionKey(sectionKey: string): boolean {
+    return (
+        typeof sectionKey === 'string' &&
+        /^[A-Za-z0-9._-]{1,64}$/.test(sectionKey) &&
+        IsAllowedMjdiagEntryPath(`contrib/${sectionKey}.json`)
+    );
+}

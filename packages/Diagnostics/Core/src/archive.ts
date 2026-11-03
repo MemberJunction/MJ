@@ -6,6 +6,7 @@
 
 import {
     IsAllowedMjdiagEntryPath,
+    IsValidContributorSectionKey,
     type DiagnosticBundleData,
     type DiagnosticBundleManifest,
     type DiagnosticFinding,
@@ -255,6 +256,29 @@ export function ParseNdjson<T>(ndjsonText: string): T[] {
 }
 
 /**
+ * Adds one `contrib/<SectionKey>.json` file per contributor section with a valid key.
+ * Returns the number of sections skipped because their key is not valid.
+ */
+function addContributorFiles(
+    payloadFiles: Array<{ name: string; bytes: Uint8Array; entryCount?: number }>,
+    contrib: DiagnosticBundleData['contrib'],
+    encoder: TextEncoder
+): number {
+    let skipped = 0;
+    for (const [sectionKey, sectionValue] of Object.entries(contrib ?? {})) {
+        if (!IsValidContributorSectionKey(sectionKey)) {
+            skipped++;
+            continue;
+        }
+        payloadFiles.push({
+            name: `contrib/${sectionKey}.json`,
+            bytes: encoder.encode(JSON.stringify(sectionValue, null, 2)),
+        });
+    }
+    return skipped;
+}
+
+/**
  * Builds a complete, canonical `.mjdiag` ZIP archive from `DiagnosticBundleData`.
  * Automatically computes per-file SHA-256 digests and writes `manifest.json` and `README.txt`.
  */
@@ -327,15 +351,7 @@ export async function BuildMjdiagArchive(
         });
     }
 
-    if (bundleData.contrib) {
-        for (const [sectionKey, sectionValue] of Object.entries(bundleData.contrib)) {
-            const safeKey = sectionKey.replace(/[^A-Za-z0-9._-]/g, '_');
-            payloadFiles.push({
-                name: `contrib/${safeKey}.json`,
-                bytes: encoder.encode(JSON.stringify(sectionValue, null, 2)),
-            });
-        }
-    }
+    const skippedContribKeys = addContributorFiles(payloadFiles, bundleData.contrib, encoder);
 
     const readmeLines = [
         'MemberJunction Diagnostic Bundle (.mjdiag)',
@@ -346,6 +362,7 @@ export async function BuildMjdiagArchive(
         `Capture Reason:   ${captureReason}`,
         `Scrubber Profile: ${scrubberProfile}`,
         `Findings Count:   ${bundleData.findings.length}`,
+        ...(skippedContribKeys > 0 ? [`Contributor sections skipped (invalid SectionKey): ${skippedContribKeys}`] : []),
         '',
         'Inspect with CLI: mj diag inspect <bundle.mjdiag>',
     ];
@@ -393,6 +410,7 @@ export type ArchiveVerificationReasonCode =
     | 'MISSING_MANIFEST'
     | 'INVALID_MANIFEST_SCHEMA'
     | 'ENTRY_SHA256_MISMATCH'
+    | 'UNLISTED_ENTRY'
     | 'CORRUPT_ZIP_STRUCTURE';
 
 export interface VerifyBundleArchiveOptions {
@@ -417,9 +435,12 @@ export interface BundleArchiveVerificationResult {
  * 1. Verifies ZIP magic bytes (`PK\x03\x04`) and Central Directory integrity
  * 2. Enforces path safety (no `..`, leading `/`, `\`, or symlink attributes) -> `UNSAFE_ENTRY_PATH`
  * 3. Enforces canonical filename allowlist (`IsAllowedMjdiagEntryPath`) -> `DISALLOWED_ENTRY_NAME`
- * 4. Enforces Zip-Bomb protections (`maxCompressionRatio <= 25`, `maxUncompressedBytes <= 100 MiB`, `maxEntries <= 128`)
- * 5. Parses and validates `manifest.json` (`schemaVersion === '1.0'`)
- * 6. Recomputes SHA-256 of every file in `manifest.files` and verifies exact match -> `ENTRY_SHA256_MISMATCH`
+ * 4. Enforces Zip-Bomb protections (`maxCompressionRatio <= 25`, `maxUncompressedBytes <= 100 MiB`, `maxEntries <= 128`);
+ *    each entry inflates to at most its declared uncompressed size
+ * 5. Requires each local file header to repeat its central directory name, method, CRC-32 and sizes -> `CORRUPT_ZIP_STRUCTURE`
+ * 6. Parses and validates `manifest.json` (`schemaVersion === '1.0'`, well-formed file descriptors) -> `INVALID_MANIFEST_SCHEMA`
+ * 7. Refuses any entry other than `manifest.json` that the manifest does not list -> `UNLISTED_ENTRY`
+ * 8. Recomputes SHA-256 of every file in `manifest.files` and verifies exact match -> `ENTRY_SHA256_MISMATCH`
  */
 export async function VerifyBundleArchive(
     archiveBytes: Uint8Array,
@@ -553,6 +574,21 @@ export async function VerifyBundleArchive(
             return fail('CORRUPT_ZIP_STRUCTURE', `Invalid Local File Header for "${entryName}"`, totalUncompressedBytes);
         }
 
+        const localMismatch = describeLocalHeaderMismatch(archiveBytes, view, localHeaderOffset, {
+            nameBytes,
+            compressionMethod,
+            crc32: expectedCrc32,
+            compressedSize,
+            uncompressedSize,
+        });
+        if (localMismatch) {
+            return fail(
+                'CORRUPT_ZIP_STRUCTURE',
+                `Local File Header for "${entryName}" does not match the Central Directory (${localMismatch})`,
+                totalUncompressedBytes
+            );
+        }
+
         const localNameLen = view.getUint16(localHeaderOffset + 26, true);
         const localExtraLen = view.getUint16(localHeaderOffset + 28, true);
         const dataStart = localHeaderOffset + 30 + localNameLen + localExtraLen;
@@ -567,7 +603,7 @@ export async function VerifyBundleArchive(
             decompressed = new Uint8Array(compressedSlice);
         } else if (compressionMethod === 8) {
             try {
-                decompressed = await inflateRaw(compressedSlice, maxUncompressedBytes);
+                decompressed = await inflateRaw(compressedSlice, uncompressedSize);
             } catch (err) {
                 return fail(
                     'CORRUPT_ZIP_STRUCTURE',
@@ -577,17 +613,6 @@ export async function VerifyBundleArchive(
             }
         } else {
             return fail('CORRUPT_ZIP_STRUCTURE', `Unsupported ZIP compression method ${compressionMethod}`, totalUncompressedBytes);
-        }
-
-        if (
-            compressedSlice.byteLength > 0 &&
-            decompressed.byteLength / compressedSlice.byteLength > maxCompressionRatio
-        ) {
-            return fail(
-                'ZIP_BOMB_RATIO_EXCEEDED',
-                `Entry "${entryName}" actual compression ratio exceeds limit (${maxCompressionRatio}:1)`,
-                totalUncompressedBytes
-            );
         }
 
         if (decompressed.byteLength !== uncompressedSize) {
@@ -626,18 +651,9 @@ export async function VerifyBundleArchive(
         return fail('INVALID_MANIFEST_SCHEMA', 'manifest.json failed schema validation', totalUncompressedBytes);
     }
 
-    for (const [filePath, descriptor] of Object.entries(manifest.files)) {
-        const entryBytes = entries.get(filePath);
-        if (!entryBytes) {
-            return fail('ENTRY_SHA256_MISMATCH', `Manifest references missing entry "${filePath}"`, totalUncompressedBytes);
-        }
-        if (entryBytes.byteLength !== descriptor.sizeBytes) {
-            return fail('ENTRY_SHA256_MISMATCH', `Size mismatch for "${filePath}"`, totalUncompressedBytes);
-        }
-        const computedHash = await ComputeSha256Hex(entryBytes);
-        if (computedHash.toLowerCase() !== descriptor.sha256.toLowerCase()) {
-            return fail('ENTRY_SHA256_MISMATCH', `SHA-256 digest mismatch for "${filePath}"`, totalUncompressedBytes);
-        }
+    const manifestFailure = await checkManifestFiles(manifest, entries);
+    if (manifestFailure) {
+        return fail(manifestFailure.code, manifestFailure.reason, totalUncompressedBytes);
     }
 
     return {
@@ -647,6 +663,93 @@ export async function VerifyBundleArchive(
         totalCompressedBytes: archiveBytes.byteLength,
         totalUncompressedBytes,
     };
+}
+
+/** Central directory values that the local file header of the same entry must repeat. */
+interface CentralEntryFields {
+    nameBytes: Uint8Array;
+    compressionMethod: number;
+    crc32: number;
+    compressedSize: number;
+    uncompressedSize: number;
+}
+
+/**
+ * Compares a local file header with its central directory record.
+ * Returns the name of the first field that differs, or null when they agree.
+ */
+function describeLocalHeaderMismatch(
+    archiveBytes: Uint8Array,
+    view: DataView,
+    localOffset: number,
+    central: CentralEntryFields
+): string | null {
+    const localNameLen = view.getUint16(localOffset + 26, true);
+    if (localOffset + 30 + localNameLen > archiveBytes.byteLength) {
+        return 'file name length';
+    }
+    const localName = archiveBytes.subarray(localOffset + 30, localOffset + 30 + localNameLen);
+    if (localNameLen !== central.nameBytes.byteLength || !localName.every((b, i) => b === central.nameBytes[i])) {
+        return 'file name';
+    }
+    if (view.getUint16(localOffset + 8, true) !== central.compressionMethod) {
+        return 'compression method';
+    }
+    if (view.getUint32(localOffset + 14, true) !== central.crc32) {
+        return 'CRC-32';
+    }
+    if (view.getUint32(localOffset + 18, true) !== central.compressedSize) {
+        return 'compressed size';
+    }
+    if (view.getUint32(localOffset + 22, true) !== central.uncompressedSize) {
+        return 'uncompressed size';
+    }
+    return null;
+}
+
+/** True when a manifest file descriptor has a string `sha256` and a non-negative integer `sizeBytes`. */
+function isValidFileDescriptor(descriptor: DiagnosticManifestFileEntry | null | undefined): descriptor is DiagnosticManifestFileEntry {
+    return (
+        typeof descriptor === 'object' &&
+        descriptor !== null &&
+        typeof descriptor.sha256 === 'string' &&
+        typeof descriptor.sizeBytes === 'number' &&
+        Number.isInteger(descriptor.sizeBytes) &&
+        descriptor.sizeBytes >= 0
+    );
+}
+
+/**
+ * Checks that the manifest lists every archive entry except itself, that each descriptor is well formed,
+ * and that each listed entry exists with the listed size and SHA-256. Returns the first failure, or null.
+ */
+async function checkManifestFiles(
+    manifest: DiagnosticBundleManifest,
+    entries: Map<string, Uint8Array>
+): Promise<{ code: ArchiveVerificationReasonCode; reason: string } | null> {
+    const files: Record<string, DiagnosticManifestFileEntry | null | undefined> = manifest.files;
+    for (const entryName of entries.keys()) {
+        if (entryName !== 'manifest.json' && !Object.prototype.hasOwnProperty.call(files, entryName)) {
+            return { code: 'UNLISTED_ENTRY', reason: `Archive entry "${entryName}" is not listed in manifest.json` };
+        }
+    }
+    for (const [filePath, descriptor] of Object.entries(files)) {
+        if (!isValidFileDescriptor(descriptor)) {
+            return { code: 'INVALID_MANIFEST_SCHEMA', reason: `manifest.json has an invalid descriptor for "${filePath}"` };
+        }
+        const entryBytes = entries.get(filePath);
+        if (!entryBytes) {
+            return { code: 'ENTRY_SHA256_MISMATCH', reason: `Manifest references missing entry "${filePath}"` };
+        }
+        if (entryBytes.byteLength !== descriptor.sizeBytes) {
+            return { code: 'ENTRY_SHA256_MISMATCH', reason: `Size mismatch for "${filePath}"` };
+        }
+        const computedHash = await ComputeSha256Hex(entryBytes);
+        if (computedHash.toLowerCase() !== descriptor.sha256.toLowerCase()) {
+            return { code: 'ENTRY_SHA256_MISMATCH', reason: `SHA-256 digest mismatch for "${filePath}"` };
+        }
+    }
+    return null;
 }
 
 /**
