@@ -25,6 +25,7 @@ import {
     EntityFieldTSType,
     ProjectRowsToFields,
     ProjectEntityValueRowsForUser,
+    RecordIDAsKeyType,
     FieldSecurityError,
     FieldSecuritySQLGate,
     ProviderBase,
@@ -97,7 +98,7 @@ import {
     BuildViewPropertyFilter,
 } from '@memberjunction/core';
 
-import { BytesToBase64, GroupByUUID, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, ScanSQLForScreening, SQLExpressionValidator, UUIDsEqual, UUIDSet } from '@memberjunction/global';
+import { BytesToBase64, EscapeSQLString, GroupByUUID, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, ScanSQLForScreening, SQLExpressionValidator, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
 import { createHash } from 'node:crypto';
@@ -2963,25 +2964,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // For a composite key a one-column NOT IN would silently drop every row that shares the
                 // first column's value with a prior run — refuse rather than return the wrong rows.
                 this.assertSingleColumnPrimaryKey(entityInfo, 'ExcludeUserViewRunID / ExcludeDataFromAllPriorViewRuns');
-                let sExcludeSQL = `${this.QuoteIdentifier(entityInfo.FirstPrimaryKey.Name)} NOT IN (SELECT RecordID FROM ${this.QuoteSchemaAndView(this.MJCoreSchemaName, 'vwUserViewRunDetails')} WHERE EntityID='${viewEntity?.EntityID}' AND`; // first-pk-ok: guarded above — view-run RecordID is a single bare key value, PrimaryKeys.length === 1 enforced
-                if (params.ExcludeDataFromAllPriorViewRuns === true) {
-                    // SECURITY: the view ID is interpolated; a loaded view's ID is always a GUID.
-                    if (!IsValidUUID(String(viewEntity?.ID ?? '')))
-                        throw new Error(`ExcludeDataFromAllPriorViewRuns requires a saved view with a GUID ID`);
-                    sExcludeSQL += ` UserViewID=${viewEntity?.ID})`;
-                }
-                else {
-                    // SECURITY: excludeUserViewRunID is user-supplied (GraphQL input) and is
-                    // interpolated directly into SQL here. Unlike ExtraFilter/OrderBy/
-                    // OverrideExcludeFilter (all passed through ValidateUserProvidedSQLClause —
-                    // UserSearchString is free text and is escaped into a literal instead, #4392),
-                    // this value historically had NO validation — allowing SQL injection into the
-                    // view WHERE clause. It is only ever a UserViewRun.ID (a GUID), so reject
-                    // anything that is not a well-formed GUID before it reaches the query.
-                    if (!/^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/.test(excludeUserViewRunID))
-                        throw new Error(`Invalid ExcludeUserViewRunID: must be a GUID`);
-                    sExcludeSQL += ` UserViewRunID=${excludeUserViewRunID})`;
-                }
+                // SECURITY: the view-run / view IDs are interpolated as literals, so both are
+                // validated as GUIDs inside the builder before they reach the query.
+                let sExcludeSQL = this.BuildUserViewRunExclusionSQL(
+                    entityInfo,
+                    params.ExcludeDataFromAllPriorViewRuns === true
+                        ? { UserViewID: String(viewEntity?.ID ?? '') }
+                        : { UserViewRunID: excludeUserViewRunID }
+                );
 
                 if (overrideExcludeFilter.length > 0) {
                     if (!this.ValidateUserProvidedSQLClause(overrideExcludeFilter))
@@ -3765,6 +3755,42 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      */
     protected buildPrimaryKeyOrderBy(entityInfo: EntityInfo): string {
         return entityInfo.PrimaryKeys.map(pk => this.QuoteIdentifier(pk.Name)).join(', ');
+    }
+
+    /**
+     * The `<pk> NOT IN (SELECT RecordID FROM vwUserViewRunDetails WHERE ...)` predicate that drops
+     * rows a prior run of a view already returned — either one run (`UserViewRunID`) or every run
+     * of the view (`UserViewID`). The caller has already checked the key is a single column.
+     *
+     * Runs on SQL Server and PostgreSQL: every identifier is quoted for the dialect, the IDs are
+     * quoted string literals (a bare GUID is a syntax error on both), and `RecordID` (text) is cast
+     * to the key's type, since PostgreSQL has no `uuid = text` operator.
+     *
+     * SECURITY: `UserViewRunID` arrives from GraphQL input and both IDs are interpolated, so each
+     * must be a well-formed GUID; anything else throws before it reaches the query.
+     */
+    protected BuildUserViewRunExclusionSQL(
+        entityInfo: EntityInfo,
+        scope: { UserViewID: string } | { UserViewRunID: string }
+    ): string {
+        const pk = entityInfo.FirstPrimaryKey; // first-pk-ok: callers enforce PrimaryKeys.length === 1 — view-run RecordID is a single bare key value
+        let scopeSQL: string;
+        if ('UserViewID' in scope) {
+            if (!IsValidUUID(scope.UserViewID))
+                throw new Error(`ExcludeDataFromAllPriorViewRuns requires a saved view with a GUID ID`);
+            scopeSQL = `${this.QuoteIdentifier('UserViewID')}='${scope.UserViewID.trim()}'`;
+        }
+        else {
+            if (!IsValidUUID(scope.UserViewRunID))
+                throw new Error(`Invalid ExcludeUserViewRunID: must be a GUID`);
+            scopeSQL = `${this.QuoteIdentifier('UserViewRunID')}='${scope.UserViewRunID.trim()}'`;
+        }
+        // The run details are keyed by the entity being run — the view's own entity. Its ID comes
+        // from metadata, not the caller, but it is still escaped as the literal it becomes.
+        const entityID = EscapeSQLString(entityInfo.ID ?? '');
+        const recordID = RecordIDAsKeyType(pk, this.QuoteIdentifier('RecordID'));
+        const runDetails = this.QuoteSchemaAndView(this.MJCoreSchemaName, 'vwUserViewRunDetails');
+        return `${this.QuoteIdentifier(pk.Name)} NOT IN (SELECT ${recordID} FROM ${runDetails} WHERE ${this.QuoteIdentifier('EntityID')}='${entityID}' AND ${scopeSQL})`;
     }
 
     /**

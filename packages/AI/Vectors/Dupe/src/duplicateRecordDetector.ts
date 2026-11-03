@@ -32,6 +32,7 @@ import {
     PotentialDuplicate,
     DuplicateDetectionOptions,
     DuplicateDetectionProgress,
+    ListMembershipFilter,
 } from "@memberjunction/core";
 import { BaseResponse, VectorDBBase, VectorDatabaseConfiguration } from "@memberjunction/ai-vectordb";
 import { MJGlobal, UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
@@ -1308,12 +1309,14 @@ export class DuplicateRecordDetector extends VectorBase {
             return this.LoadRecordsByKeys(recordIDs.map(id => CompositeKey.FromURLSegment(entityInfo, id)), entityInfo);
         }
 
-        const sanitizedListID = listID.replace(/'/g, "''");
         // The entity is arbitrary — its single key column can have any name. List Details store
-        // that column's raw value, so compare the entity's real key column against it.
+        // that column's raw value, so compare the entity's real key column against it, with
+        // RecordID cast to the key's type (PostgreSQL has no uuid = text operator) and the List
+        // Details view read from the configured core schema rather than a hard-coded `__mj`.
+        const listDetailsView = `${this.Metadata.ConfigData.MJCoreSchemaName}.vwListDetails`;
         const rvResult = await this.RunView.RunView<BaseEntity>({
             EntityName: entityInfo.Name,
-            ExtraFilter: `${entityInfo.FirstPrimaryKey.Name} IN (SELECT RecordID FROM __mj.vwListDetails WHERE ListID = '${sanitizedListID}')`, // first-pk-ok: guarded by PrimaryKeys.length === 1 above
+            ExtraFilter: ListMembershipFilter(entityInfo.PrimaryKeys, listDetailsView, listID),
             ResultType: 'entity_object',
         }, this.CurrentUser);
 

@@ -4,6 +4,7 @@ import {
     AutoQuoteLeavesWordBare,
     PostgreSQLQuotingKeywords,
     PostgreSQLStructuralKeywords,
+    PostgreSQLDeliberatelyUnquotedWords,
 } from '../postgresqlAutoQuote.js';
 
 /**
@@ -223,11 +224,19 @@ describe('AutoQuotePostgreSQLIdentifiers', () => {
             // block at the end of PostgreSQLQuotingKeywords. `USER` is excluded for the same reason
             // and is the sharpest case: unquoted it silently resolves to the session user rather
             // than failing loudly.
-            for (const word of ['USER', 'LEVEL', 'MODE', 'OPTION', 'SHARE', 'START', 'CACHE', 'POLICY']) {
+            for (const word of ['USER', ...PostgreSQLDeliberatelyUnquotedWords]) {
                 expect(
                     AutoQuotePostgreSQLIdentifiers(`SELECT ${word} FROM t`),
                     `${word} must stay quoted — it is a legal bare column name in PostgreSQL`
                 ).toContain(`"${word}"`);
+            }
+        });
+
+        it('keeps every deliberately-excluded word out of the keyword set', () => {
+            expect(PostgreSQLDeliberatelyUnquotedWords).toHaveLength(17);
+            for (const word of ['USER', ...PostgreSQLDeliberatelyUnquotedWords]) {
+                expect(PostgreSQLQuotingKeywords.has(word), `${word} must not be a quoting keyword`).toBe(false);
+                expect(PostgreSQLStructuralKeywords.has(word), `${word} must not be a structural keyword`).toBe(false);
             }
         });
     });

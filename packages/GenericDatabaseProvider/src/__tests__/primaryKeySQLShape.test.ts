@@ -66,6 +66,10 @@ class PrimaryKeyShapeTestProvider extends GenericDatabaseProviderTestBase {
     public assertSingle(entityInfo: EntityInfo, feature: string): void {
         this.assertSingleColumnPrimaryKey(entityInfo, feature);
     }
+    public exclusion(entityInfo: EntityInfo, scope: { UserViewID: string } | { UserViewRunID: string }): string {
+        return this.BuildUserViewRunExclusionSQL(entityInfo, scope);
+    }
+    public override get MJCoreSchemaName(): string { return '__mj'; }
 
     // --- Abstract-member implementations (just enough to satisfy the type system) ---
     protected get UUIDFunctionPattern(): RegExp { return PrimaryKeyShapeTestProvider._uuidPattern; }
@@ -175,5 +179,43 @@ describe('assertSingleColumnPrimaryKey — one-bare-key-value features refuse co
     it('rejects an entity with no primary key at all', () => {
         expect(() => provider.assertSingle(makeEntity('Keyless', []), 'The {%UserView%} template variable'))
             .toThrow(/has 0 primary key columns/);
+    });
+});
+
+describe('BuildUserViewRunExclusionSQL — prior view-run exclusion runs on both platforms', () => {
+    const provider = new PrimaryKeyShapeTestProvider();
+    const ENTITY_ID = '11111111-1111-1111-1111-111111111111';
+    const VIEW_ID = '22222222-2222-2222-2222-222222222222';
+    const RUN_ID = '33333333-3333-3333-3333-333333333333';
+
+    function keyedEntity(pkName: string, pkType: string): EntityInfo {
+        const pk = { Name: pkName, Type: pkType } as unknown as EntityFieldInfo;
+        return { ID: ENTITY_ID, Name: 'Widgets', PrimaryKeys: [pk], FirstPrimaryKey: pk } as unknown as EntityInfo;
+    }
+
+    it('quotes identifiers, quotes the GUID literals and casts RecordID to the key type (one run)', () => {
+        expect(provider.exclusion(keyedEntity('ID', 'uuid'), { UserViewRunID: RUN_ID })).toBe(
+            `[ID] NOT IN (SELECT CAST([RecordID] AS uuid) FROM [__mj].[vwUserViewRunDetails] WHERE [EntityID]='${ENTITY_ID}' AND [UserViewRunID]='${RUN_ID}')`
+        );
+    });
+
+    it('quotes the view ID literal when excluding every prior run of the view', () => {
+        expect(provider.exclusion(keyedEntity('ID', 'uniqueidentifier'), { UserViewID: VIEW_ID })).toBe(
+            `[ID] NOT IN (SELECT CAST([RecordID] AS uniqueidentifier) FROM [__mj].[vwUserViewRunDetails] WHERE [EntityID]='${ENTITY_ID}' AND [UserViewID]='${VIEW_ID}')`
+        );
+    });
+
+    it('compares a text key to RecordID uncast', () => {
+        expect(provider.exclusion(keyedEntity('Code', 'nvarchar'), { UserViewRunID: RUN_ID })).toContain('SELECT [RecordID] FROM');
+    });
+
+    it('rejects a view-run ID that is not a GUID before it reaches the SQL', () => {
+        expect(() => provider.exclusion(keyedEntity('ID', 'uuid'), { UserViewRunID: "x') OR 1=1 --" }))
+            .toThrow(/Invalid ExcludeUserViewRunID: must be a GUID/);
+    });
+
+    it('rejects a view ID that is not a GUID', () => {
+        expect(() => provider.exclusion(keyedEntity('ID', 'uuid'), { UserViewID: 'not-a-guid' }))
+            .toThrow(/requires a saved view with a GUID ID/);
     });
 });

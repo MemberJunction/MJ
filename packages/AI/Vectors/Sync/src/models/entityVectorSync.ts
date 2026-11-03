@@ -4,7 +4,7 @@ import { AIEmbeddingRunner, EmbeddingRunResult } from '@memberjunction/ai-prompt
 import { CredentialEngine } from '@memberjunction/credentials';
 import { BaseResponse, IndexDescription, IndexList, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
-import { BaseEntity, CompositeKey, EntityField, EntityFieldInfo, EntityInfo, GetIndexRestrictedFieldNames, IMetadataProvider, LogError, LogStatus, LogStatusEx, Metadata, RunView, RunViewResult, TypeScriptTypeFromSQLType, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityField, EntityFieldInfo, EntityInfo, GetIndexRestrictedFieldNames, IMetadataProvider, ListMembershipFilter, LogError, LogStatus, LogStatusEx, Metadata, RunView, RunViewResult, TypeScriptTypeFromSQLType, UserInfo } from '@memberjunction/core';
 import { MJAIModelEntity, MJEntityDocumentEntity, MJEntityDocumentTypeEntity, MJEntityRecordDocumentEntity, MJTemplateContentEntity,
   MJTemplateContentTypeEntity, MJTemplateEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJVectorDatabaseEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
 import { Float32VectorToBase64, IsValidUUID, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
@@ -1716,40 +1716,11 @@ export class EntityVectorSyncer extends VectorBase {
   }
 
   /**
-   * Build the SQL filter to select records that are in the given list.
-   * For single PK entities, uses a simple IN clause.
-   * For composite PK entities, uses an EXISTS clause that concatenates PK columns to match the RecordID format.
+   * Build the SQL filter to select records that are in the given list: an IN-subquery for a
+   * single-column key (RecordID cast to the key's type, so it runs on PostgreSQL), an EXISTS over
+   * the concatenated `F1|v1||F2|v2` record id for a composite key. The list id is escaped.
    */
   protected BuildListFilter(entity: EntityInfo, listDetailsSchema: string, listId: string): string {
-    const primaryKeys = entity.PrimaryKeys;
-
-    if (primaryKeys.length === 1) {
-      // Simple case: single primary key
-      // Use a simple IN clause matching the first PK field
-      const pkField = primaryKeys[0].Name;
-      return `${pkField} IN (SELECT RecordID FROM ${listDetailsSchema}.vwListDetails WHERE ListID = '${listId}')`;
-    } else {
-      // Composite key case: need to match concatenated key format
-      // RecordID format is "Field1|Value1||Field2|Value2" (using CompositeKey delimiters)
-      // Build SQL expression that concatenates the PK fields in the same format
-      // Format: 'Field1|' + CAST(Value1 AS NVARCHAR(MAX)) + '||' + 'Field2|' + CAST(Value2 AS NVARCHAR(MAX))
-      const concatParts = primaryKeys.map((pk, index) => {
-        const fieldNameLiteral = `'${pk.Name}|'`;
-        const fieldValue = `CAST([${pk.Name}] AS NVARCHAR(MAX))`;
-        if (index === 0) {
-          return `${fieldNameLiteral} + ${fieldValue}`;
-        } else {
-          return `'||' + ${fieldNameLiteral} + ${fieldValue}`;
-        }
-      });
-      const compositeKeyExpr = concatParts.join(' + ');
-
-      // Use EXISTS with a subquery that matches the concatenated key against RecordID
-      return `EXISTS (
-        SELECT 1 FROM ${listDetailsSchema}.vwListDetails ld
-        WHERE ld.ListID = '${listId}'
-        AND ld.RecordID = (${compositeKeyExpr})
-      )`;
-    }
+    return ListMembershipFilter(entity.PrimaryKeys, `${listDetailsSchema}.vwListDetails`, listId);
   }
 }

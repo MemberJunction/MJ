@@ -305,40 +305,12 @@ export class ListDetailGridComponent extends BaseAngularComponent implements OnI
   }
 
   /**
-   * Build the SQL filter to select records that are in the given list.
-   * For single PK entities, uses a simple IN clause.
-   * For composite PK entities, uses a JOIN that concatenates PK columns to match the RecordID format.
+   * Build the SQL filter to select records that are in the given list: an IN-subquery for a
+   * single-column key, an EXISTS over the concatenated `F1|v1||F2|v2` record id for a composite
+   * key. Both forms run on SQL Server and PostgreSQL.
    */
   private buildListFilter(entityInfo: EntityInfo, listDetailsSchema: string, listId: string): string {
-    const primaryKeys = entityInfo.PrimaryKeys;
-
-    if (primaryKeys.length === 1) {
-      // Single primary key: an IN-subquery on List Details (RecordID is cast to the key's type for PostgreSQL)
-      return ListMembershipFilter(primaryKeys[0], `${listDetailsSchema}.vwListDetails`, listId);
-    } else {
-      // Composite key case: need to JOIN and match concatenated key format
-      // RecordID format is "Field1|Value1||Field2|Value2" (using CompositeKey delimiters)
-      // Build SQL expression that concatenates the PK fields in the same format
-      // Build the concatenation expression for the entity's PK columns
-      // Format: Field1 + '|' + CAST(Value1 AS NVARCHAR(MAX)) + '||' + Field2 + '|' + CAST(Value2 AS NVARCHAR(MAX))
-      const concatParts = primaryKeys.map((pk, index) => {
-        const fieldNameLiteral = `'${pk.Name}|'`;
-        const fieldValue = `CAST([${pk.Name}] AS NVARCHAR(MAX))`;
-        if (index === 0) {
-          return `${fieldNameLiteral} + ${fieldValue}`;
-        } else {
-          return `'||' + ${fieldNameLiteral} + ${fieldValue}`;
-        }
-      });
-      const compositeKeyExpr = concatParts.join(' + ');
-
-      // Use EXISTS with a subquery that matches the concatenated key against RecordID
-      return `EXISTS (
-        SELECT 1 FROM ${listDetailsSchema}.vwListDetails ld
-        WHERE ld.ListID = '${listId}'
-        AND ld.RecordID = (${compositeKeyExpr})
-      )`;
-    }
+    return ListMembershipFilter(entityInfo.PrimaryKeys, `${listDetailsSchema}.vwListDetails`, listId);
   }
 
   /**
