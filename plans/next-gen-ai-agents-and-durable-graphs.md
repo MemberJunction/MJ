@@ -1,11 +1,13 @@
 # Next-Gen AI, Agents, Semantic Graph Retrieval & Durable Workflow Orchestration
 
 ## Status
-- **Status**: **Approved Design Plan — Ready for Implementation Assignment.**
-- **Created**: 2026-10-29
-- **Reviewed against**: `next` @ `1c1a993397`
+- **Status**: **Approved Design Plan — Ready for Implementation Assignment (`@cmbrock-BC`).**
+- **Created**: 2026-10-29 (Updated 2026-11-02 post-merge of PR #6279)
+- **Reviewed against**: `next` @ `4da222e6aa` (includes merged PR #6279 Semantic Graph schema, Content Pipeline `GraphStage`, `ai-core-plus` DAG similarity/telemetry, and Knowledge Hub `Graphs & Canon` UI)
 - **Related plans**:
-  - [`plans/canon-semantic-graph.md`](canon-semantic-graph.md) — Semantic Graph substrate (`@memberjunction/graph-engine`) & MJ Canon
+  - [`plans/canon-semantic-graph.md`](canon-semantic-graph.md) — Semantic Graph substrate (`@memberjunction/core-entities` `GraphEngine`) & MJ Canon
+  - [`plans/canon-first-onboarding-and-ambient-health.md`](canon-first-onboarding-and-ambient-health.md) — Shipped in PR #6279 (9 `Graph*` tables, `ContentSource.GraphID`, `GraphStage`, `ai-core-plus` workflow canon)
+  - [`plans/agent-memory-sleep-and-canon.md`](agent-memory-sleep-and-canon.md) — Companion v6.3 plan (PR #6213, `@arie-glazier-bcc`) for SLEEP memory consolidation, REM dreaming, and *Harness²* recursive improvement
   - [`plans/embeddinggemma-2-local-embeddings.md`](embeddinggemma-2-local-embeddings.md) — Local vector embeddings & Knowledge Hub search pipeline
   - [`packages/OpenApp/PUBLISH_NO_BREAK_POLICY.md`](../packages/OpenApp/PUBLISH_NO_BREAK_POLICY.md) — Additive-only schema and contract evolution rules
 
@@ -15,10 +17,10 @@
 
 MemberJunction 6.2 established a remarkably rich AI and workflow substrate: `BaseAgent`, durable `TaskGraph` (`@memberjunction/task-graph`), `PipelineExecutor`, Knowledge Hub (`SearchEngine` with RRF hybrid fusion), Predictive Studio (`MJ: Record Processes`, `MJ: Feature Values`), and `@memberjunction/a2a-server`.
 
-Auditing these subsystems across `next` (`1c1a993397`) and all peer OpenApp repositories surfaced **five concrete architectural seams** where capabilities built independently have not yet been unified or hardened for multi-pod, multi-tenant production workloads:
+Auditing these subsystems across `next` (`4da222e6aa`) and all peer OpenApp repositories surfaced **five concrete architectural seams** where capabilities built independently have not yet been unified or hardened for multi-pod, multi-tenant production workloads:
 
 1. **WS-4.1 — Durable `TaskGraph` Security Envelopes (`BoundActionParams`, `Audience`, `TenantContext`, `IsRunTainted`)**: Today `BaseAgent` fails closed and refuses to emit or submit durable task graphs whenever `boundActionParams`, `Audience`, or a tenant-scoped run is active (`packages/AI/Agents/src/base-agent.ts:19131-19149`), because `TaskGraphDispatcher` executes nodes outside the originating run's security gates.
-2. **WS-4.2 — Semantic Graph (`@memberjunction/graph-engine`) Integration into RAG (`SearchEngine`) & Deterministic Agent Pipelines (`PipelineExecutor`)**: `plans/canon-semantic-graph.md` introduces `@memberjunction/graph-engine`, but currently exposes graph traversal only as a standalone Action. Wiring it directly as a first-class Reciprocal Rank Fusion (RRF) lane in `SearchEngine` (consumed by `AgentPreExecutionRAG`) and as a deterministic `graphExpand` stage in `PipelineExecutor` gives every agent zero-extra-turn structural context under caller permissions.
+2. **WS-4.2 — Semantic Graph Runtime (`GraphEngine` + Derived Edge Providers) Integration into RAG (`SearchEngine`) & Deterministic Agent Pipelines (`PipelineExecutor`)**: PR #6279 merged the 9-table Semantic Graph database schema (`GraphType`, `GraphConceptType`, `GraphAuthorityTier`, `Graph`, `GraphConcept`, `GraphEdgeType`, `GraphEdgeTypeEndpoint`, `GraphEdgeProvider`, `GraphEdge`), Content Pipeline Stage 6 (`GraphStage`), `@memberjunction/ai-core-plus` DAG similarity/telemetry, and the Knowledge Hub `Graphs & Canon` UI. WS-4.2 builds the remaining runtime traversal layer on top of that merged schema: `GraphEngine` + the 7 built-in `BaseGraphEdgeProvider`s in `@memberjunction/core-entities`, the `Get Graph Context` action, `GraphSearchProvider` as a first-class Reciprocal Rank Fusion (RRF) lane in `SearchEngine` (consumed by `AgentPreExecutionRAG`), and the deterministic `graphExpand` stage in `PipelineExecutor`.
 3. **WS-4.3 — Saga Compensation & Automated Rollback Contracts on `MJ: Actions` & `TaskGraph`**: Multi-step durable task graphs and multi-action agent turns mutate external systems and multiple entities without a compensation contract when step `k` fails after steps `1..k-1` committed.
 4. **WS-4.4 — Online Shadow Scoring (Champion / Challenger) & Scheduled Feature Drift Detection in Predictive Studio**: `MJ: Record Processes` supports `'Action' | 'Agent' | 'FieldRules' | 'Infer' | 'ML Model'`, and `MJ: Feature Values` persists point-in-time feature vectors, yet there is no production shadow-challenger evaluation loop or scheduled Population Stability Index (PSI) / confidence-floor drift monitor.
 5. **WS-4.5 — `BaseAgent` Decomposition, List-Based HITL Assignment Completion, & Durable `MJ: Tasks`-Backed A2A `TaskStore`**: `packages/AI/Agents/src/base-agent.ts` has grown to **22,553 lines** (~1.14 MB), its `'List'` HITL assignment strategy (`RoundRobin` / `LeastBusy` / `Random`) at lines `19617-19623` is still stubbed to fall back to `contextUser`, and `packages/AI/A2AServer/src/TaskStore.ts` stores A2A protocol tasks in process-local memory (losing task state across pod restarts or load-balanced replicas).
@@ -171,30 +173,44 @@ sequenceDiagram
 
 ---
 
-## Workstream 4.2: Semantic Graph Integration into RAG (`SearchEngine`), `ContentPipeline`, & `PipelineExecutor`
+## Workstream 4.2: Semantic Graph Runtime (`GraphEngine` + Derived Edge Providers) Integration into RAG (`SearchEngine`) & `PipelineExecutor`
 
-### Problem Statement
-`plans/canon-semantic-graph.md` (updated by the Canon-First Generic Graph & Onboarding workstream) specifies `@memberjunction/graph-engine` (`GraphEngine.Instance.Expand(...)`, `FindPaths(...)`, `ResolveSeeds(...)`) over polymorphic `(EntityID, RecordID)` nodes, weighted/typed edges, and pluggable `BaseGraphEdgeProvider`s.
+### Problem Statement & Merged PR #6279 Baseline
 
-> **Nov 2026 Design Update (Generic Graph Substrate + Content Source GraphRAG Overlay)**:
-> 1. **Generic `MJ: Graph Concepts` (`__mj.GraphConcept`) & `Graph.GraphType`**: `CanonConcept` has been generalized to `MJ: Graph Concepts` (`__mj.GraphConcept`) with `GraphID NOT NULL` (`UNIQUE (GraphID, Name)`), `ConceptType` (`'Domain' | 'Term' | 'Policy' | 'Metric' | 'Process'`), `Specification`, `AuthorityTier` (`'Bylaws' | 'BoardPolicy' | 'ExecutiveSOP' | 'DepartmentPractice' | 'Reference' | 'Inferred'`), `ParentID`, and `Status` (`'Draft' | 'Proposed' | 'Approved' | 'Deprecated'`). `MJ: Graphs` (`__mj.Graph`) adds `GraphType` (`'Canon' | 'Knowledge' | 'Network' | 'Custom'`) so **Canon** is a first-class graph type (`GraphType = 'Canon'`), while any Content Source (or group of Content Sources) can also build or share a `'Knowledge'` or `'Canon'` graph.
-> 2. **Opt-In `MJ: Content Sources` Graph Overlay (`GraphStage` in `@memberjunction/content-pipeline`)**: `MJ: Content Sources` adds an optional `GraphID` FK and `Configuration.GraphOverlay` settings (`ConceptTaxonomyMode: 'auto-grow' | 'propose-only' | 'locked'`, `SourceAuthorityTier`, `GroundingMode: 'none' | 'schema-only' | 'full-canon'`, `DetectContradictions`). The new `GraphStage` deterministically clusters `MJ: Content Item Chunks` + `MJ: Content Item Tags` + section headings (`ConceptSeedClustering`), detects cross-chunk authority conflicts, and synthesizes `GraphConcept`s and `GraphEdge`s (`SourcedFrom`, `Mentions`, `Broader Than`, `Describes`, `Defines`, `Measures`, `Implements`, `Contradicts`).
-> 3. **Deterministic `TaskGraph` DAG Similarity & Workflow Telemetry (`@memberjunction/ai-core-plus`)**: Adds Weisfeiler-Lehman (WL) topological + operator-bigram + 2-hop reachability DAG fingerprinting (`ComputeDAGFingerprint`, `DiscoverWorkflowPromotionCandidates`) to surface repeated ad-hoc `TaskGraph` executions for promotion to saved Workflows, alongside `EvaluateWorkflowCanonHealth` (`Dormant`, `UsageDecay`, `ExceptionSpike`, `OutcomeDrift`, `ShadowBypassed`).
+> **Already Merged on `next` in PR #6279 (`V202611022300__v6.2.x__Semantic_Graph_And_Graph_Concepts.sql`) — Do Not Rebuild**:
+> 1. **9 Semantic Graph Tables + `ContentSource.GraphID` + CodeGen + `IT162`**:
+>    - **3 Configurable Lookup Tables** (with `Rank` ordering & `metadata/` JSON seeds): `MJ: Graph Types` (`__mj.GraphType` with `IsCanon BIT`: `Canon` #10 [`IsCanon=1`], `Knowledge` #20, `Network` #30, `Custom` #40), `MJ: Graph Concept Types` (`__mj.GraphConceptType`: `Policy` #10, `Metric` #20, `Process` #30, `Role` #40, `Domain` #50, `Term` #60, `Custom` #100), and `MJ: Graph Authority Tiers` (`__mj.GraphAuthorityTier`: `Bylaws` #100, `BoardPolicy` #80, `ExecutiveSOP` #60, `DepartmentPractice` #40, `Reference` #20, `Custom` #10).
+>    - **6 Core Semantic Graph Tables**: `MJ: Graphs` (`__mj.Graph`), `MJ: Graph Concepts` (`__mj.GraphConcept` with `ConceptTypeID`, `AuthorityTierID`, `ParentID`, `Specification`, `Synonyms`, `Status = 'Proposed' | 'Canonical' | 'Disputed' | 'Deprecated'`), `MJ: Graph Edge Types` (`__mj.GraphEdgeType` + 13 global seeded edge types), `MJ: Graph Edge Type Endpoints` (`__mj.GraphEdgeTypeEndpoint`), `MJ: Graph Edge Providers` (`__mj.GraphEdgeProvider`), and `MJ: Graph Edges` (`__mj.GraphEdge` with polymorphic `SourceRecordID`/`TargetRecordID`).
+> 2. **Content Pipeline Stage 6 (`@memberjunction/content-pipeline`)**: `GraphStage`, `ClusterContentIntoConceptSeeds`, authority-tier conflict detection (`Contradicts` edges), and `BaseConceptSynthesizer`.
+> 3. **Deterministic `TaskGraph` DAG Similarity & Workflow Telemetry (`@memberjunction/ai-core-plus`)**: `ComputeDAGFingerprint`, `ComputeDAGSimilarity`, `DiscoverWorkflowPromotionCandidates`, and `EvaluateWorkflowCanonHealth`.
+> 4. **Knowledge Hub UI (`@memberjunction/ng-graph-view` + `@memberjunction/ng-dashboards`)**: Interactive `Graphs & Canon` explorer under **Knowledge Hub → Visualize → Graphs & Canon**.
 
-However, on the retrieval and agent pipeline side:
-1. `AgentPreExecutionRAG` (`packages/AI/Agents/src/agent-pre-execution-rag.ts`) and `SearchEngine` (`packages/AI/Knowledge/Search/...`) currently fuse vector similarity and full-text lexical lanes via Reciprocal Rank Fusion (RRF), without a structural graph neighborhood lane over `MJ: Graph Concepts` and `MJ: Graph Edges`.
-2. Deterministic pipelines (`packages/AI/Agents/src/pipeline/pipeline-executor.ts`) lack a declarative graph-expansion stage, forcing agents to spend an LLM tool-call turn to discover canonical definitions, narrower/broader `GraphConcept`s, and governing queries.
+**What Remains for WS-4.2 (Phase 5 Runtime Scope)**:
+1. `GraphEngine`, `CanonGraphEngine`, `BaseGraphEdgeProvider`, the 7 built-in derived edge providers (`ForeignKeyEdgeProvider`, `JoinEntityEdgeProvider`, `QueryEdgeProvider`, `RecordLinkEdgeProvider`, `EntityMetadataEdgeProvider`, `QueryMetadataEdgeProvider`, `AlternateBaseViewEdgeProvider`), and the `Get Graph Context` action specified in [`plans/canon-semantic-graph.md`](canon-semantic-graph.md) Phases G1.3–G1.5 & G2 have not yet been implemented on top of PR #6279's merged tables.
+2. `AgentPreExecutionRAG` (`packages/AI/Agents/src/agent-pre-execution-rag.ts`) and `SearchEngine` (`packages/AI/Knowledge/Search/...`) currently fuse vector similarity and full-text lexical lanes via Reciprocal Rank Fusion (RRF), without a structural graph neighborhood lane over `MJ: Graph Concepts` and `MJ: Graph Edges`.
+3. Deterministic pipelines (`packages/AI/Agents/src/pipeline/pipeline-executor.ts`) lack a declarative graph-expansion stage, forcing agents to spend an LLM tool-call turn to discover canonical definitions, narrower/broader `GraphConcept`s, and governing queries.
 
-### Design
+### Design (3 Remaining Runtime Deliverables)
 
-#### 1. `GraphSearchProvider` as an RRF Lane in `SearchEngine`
-- Implement `GraphSearchProvider` registering as an optional search provider in Knowledge Hub's `SearchEngine`:
-  - **Seed Resolution**: Map query terms, top-K lexical/entity-name hits, and vector-matched `MJ: Content Item Chunks` (via their `SourcedFrom` / `Mentions` edges to `MJ: Graph Concepts`) to graph seed nodes via `GraphEngine.Instance.ResolveSeeds(queryText, graphNames, contextUser)`.
-  - **Bounded Expansion**: Call `GraphEngine.Instance.Expand({ Seeds, MaxDepth: 2, MaxNodes: 25, MinWeight: 0.25 }, contextUser, provider)`.
-  - **Permission Invariant**: `GraphEngine` already enforces `CanRead` + RLS on data records and `UserCanRun` / `UserCanUse` on queries and alternate views; for runs with an `Audience` (WS-4.1), intersect node visibility across `[contextUser, ...audienceReaders]`.
-  - **RRF Scoring Adapter**: Rank expanded neighbor nodes by path-attenuated edge weight (`product(edge.Weight) * seedScore`), returning standardized `SearchResultItem` entries with `SourceType: 'SemanticGraph'` and human-readable provenance breadcrumbs (e.g., `"Open AR" --[Defined By (0.95)]--> View "Invoices.Open"`).
+#### 1. `GraphEngine` & Built-In `BaseGraphEdgeProvider`s in `@memberjunction/core-entities` + `Get Graph Context` Action
+Following the exact package location and method contract in [`plans/canon-semantic-graph.md`](canon-semantic-graph.md) (reconciling earlier references to `@memberjunction/graph-engine`):
+- Implement in `packages/MJCoreEntities/src/graph/` and `packages/MJCoreEntities/src/engines/CanonGraphEngine.ts`:
+  - `BaseGraphEdgeProvider` (`GetEdges(node, options, contextUser): Promise<GraphEdgeSlice[]>`) + the 7 built-in derived edge providers registered via `@RegisterClass(BaseGraphEdgeProvider, ...)`.
+  - `GraphEngine` (`extends BaseEngine<GraphEngine>`):
+    - `GetEdges(node, options, contextUser): Promise<GraphEdgeSlice[]>` — merges persisted `MJ: Graph Edges` with derived edges from active `MJ: Graph Edge Providers`.
+    - `Subgraph(seeds, options, contextUser): Promise<GraphSubgraph>` (aliased as `Expand` for RAG callers) — bounded BFS (`MaxDepth: 1..4`, `MaxNodes: 1..200`, `MinWeight`) enforcing endpoint visibility (`CanRead` + RLS on data records, `UserCanRun` on queries, `UserCanUse` on alternate base views) and resolving display labels via `NameField`.
+    - `DescribeForPrompt(subgraph): string` — compact markdown rendering for agent prompt injection.
+  - `CanonGraphEngine` (`extends BaseSingleton<CanonGraphEngine>`): `FindConcepts(term, contextUser)` (matching `MJ: Graph Concepts` by `Name` and `Synonyms` in `IsCanon = 1` graphs), `ExplainEntity`, `ExplainConcept`, `ValidateEdgeEndpoint`.
+- Implement `Get Graph Context` action in `packages/Actions/CoreActions/src/custom/data/get-graph-context.action.ts`.
 
-#### 2. Native `graphExpand` Stage in `PipelineExecutor`
+#### 2. `GraphSearchProvider` as an RRF Lane in `SearchEngine`
+- Implement `GraphSearchProvider` registering as the `'graph'` search provider in Knowledge Hub's `SearchEngine`:
+  - **Seed Resolution**: Map query terms, top-$K$ lexical/entity-name hits, and vector-matched `MJ: Content Item Chunks` (via their `SourcedFrom` / `Mentions` edges to `MJ: Graph Concepts`) to graph seed nodes via `CanonGraphEngine.Instance.FindConcepts(queryText, contextUser)`.
+  - **Bounded Expansion**: Call `GraphEngine.Instance.Subgraph(seeds, { MaxDepth: 2, MaxNodes: 25, MinWeight: 0.25 }, contextUser)`.
+  - **Permission Invariant**: `GraphEngine` enforces `CanRead` + RLS on data records and `UserCanRun` / `UserCanUse` on queries and alternate views; for runs with an `Audience` (WS-4.1), intersect node visibility across `[contextUser, ...audienceReaders]`.
+  - **RRF Scoring Adapter**: Rank expanded neighbor nodes by hop-attenuated RRF (`score = 1 / (k + rank + 15 * hopDistance)` weighted by `product(edge.Weight) * seedScore`), returning standardized `SearchResultItem` entries with `SourceType: 'SemanticGraph'` and human-readable provenance breadcrumbs (e.g., `"Open AR" --[Defines (0.95)]--> View "Invoices.Open"`).
+
+#### 3. Native `graphExpand` Stage in `PipelineExecutor`
 Extend `PipelineStageConfig` in `packages/AI/Agents/src/pipeline/` with a deterministic `graphExpand` stage type:
 
 ```typescript
@@ -213,7 +229,7 @@ export interface GraphExpandPipelineStage {
 }
 ```
 
-- **Dependency Sequencing**: Gate WS-4.2 implementation immediately behind `plans/canon-semantic-graph.md` Phase G1 (`@memberjunction/graph-engine` core package). Provide a clean interface seam (`IGraphExpansionService` in `@memberjunction/ai-core-plus`) so `Agents` and `SearchEngine` compile and degrade gracefully when no graph providers are configured.
+- **Interface Seam**: Provide `IGraphExpansionService` in `@memberjunction/ai-core-plus` implemented by `GraphEngine` so `Agents` and `SearchEngine` degrade gracefully when no graphs or edge providers are active.
 
 ---
 
@@ -356,7 +372,7 @@ Each phase ships as an independent, reviewable PR against `next`:
 | **Phase 2** | **WS-4.5b**: Extract `AgentContextAssembler` + `AgentStepDispatcher` from `base-agent.ts` + ship `DurableEntityA2ATaskStore` in `@memberjunction/a2a-server` | Phase 1 | 4–5 days |
 | **Phase 3** | **WS-4.1**: `TaskSecurityEnvelope` migration on `MJ: Tasks`, enforcement in `TaskGraphDispatcher`, tenant-aware `ProviderFactory`, lift `BaseAgent` task-graph refusal | Phase 2 (uses `AgentStepDispatcher`) | 4–5 days |
 | **Phase 4** | **WS-4.3**: Saga compensation metadata on `MJ: Actions` (`CompensationActionID`, `CompensationInputMapping`), `TaskGraphDispatcher` reverse-topological compensation + HITL escalation | Phase 3 | 4–5 days |
-| **Phase 5** | **WS-4.2**: `GraphSearchProvider` RRF lane in `SearchEngine` + `graphExpand` stage in `PipelineExecutor` | `plans/canon-semantic-graph.md` Phase G1 | 3–4 days |
+| **Phase 5** | **WS-4.2**: `GraphEngine` + 7 `BaseGraphEdgeProvider`s in `@memberjunction/core-entities` + `Get Graph Context` action + `GraphSearchProvider` RRF lane in `SearchEngine` + `graphExpand` stage in `PipelineExecutor` | PR #6279 (merged on `next`: 9 `Graph*` tables + `GraphStage` + UI) | 4–5 days |
 | **Phase 6** | **WS-4.4**: `ChallengerConfiguration` shadow scoring via `WorkQueue` on `MJ: Record Processes` + scheduled PSI / confidence-floor drift detector | None (independent) | 3–4 days |
 
 ---
