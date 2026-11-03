@@ -405,10 +405,10 @@ describe('TransformSimpleObjectToEntityObject batched IS-A hydration & 1-query C
         }
 
         /** Every param object handed to RunViews, in call order — lets tests assert cache directives. */
-        public RunViewsParams: Array<{ EntityName?: string; ExtraFilter?: string | object; BypassCache?: boolean }> = [];
+        public RunViewsParams: Array<{ EntityName?: string; ExtraFilter?: string | object; BypassCache?: boolean; IgnoreMaxRows?: boolean }> = [];
 
         public async RunViews(
-            params: Array<{ EntityName?: string; ExtraFilter?: string | object; BypassCache?: boolean }>
+            params: Array<{ EntityName?: string; ExtraFilter?: string | object; BypassCache?: boolean; IgnoreMaxRows?: boolean }>
         ): Promise<Array<{ Success: boolean; Results: Record<string, unknown>[]; RowCount: number; TotalRowCount: number; ExecutionTime: number; ErrorMessage: string; UserViewRunID: string }>> {
             this.RunViewsBatchCalls++;
             this.RunViewsParams.push(...params);
@@ -423,6 +423,10 @@ describe('TransformSimpleObjectToEntityObject batched IS-A hydration & 1-query C
                 for (const id of quotedIds) {
                     const row = this.Store.ViewRow(info, id);
                     if (row) rows.push(row);
+                }
+                // As GenericDatabaseProvider does: TOP (UserViewMaxRows) unless IgnoreMaxRows is set.
+                if (p.IgnoreMaxRows !== true && info.UserViewMaxRows > 0) {
+                    rows.length = Math.min(rows.length, info.UserViewMaxRows);
                 }
                 return {
                     Success: true,
@@ -1168,6 +1172,83 @@ describe('TransformSimpleObjectToEntityObject batched IS-A hydration & 1-query C
         } finally {
             delete (meetingsInfo as unknown as Record<string, unknown>)['UserViewMaxRows'];
         }
+    });
+
+    describe('batched child reads are key-bounded, so the child UserViewMaxRows cap must not truncate them', () => {
+        const CAP = 3;
+        const capped: EntityInfo[] = [];
+
+        function capRows(entityName: string): void {
+            const info = batchedProvider.EntityByName(entityName)!;
+            Object.defineProperty(info, 'UserViewMaxRows', { get: () => CAP, configurable: true });
+            capped.push(info);
+        }
+
+        afterEach(() => {
+            for (const info of capped.splice(0)) {
+                delete (info as unknown as Record<string, unknown>)['UserViewMaxRows'];
+            }
+        });
+
+        function productRows(): Record<string, unknown>[] {
+            const productsInfo = batchedProvider.EntityByName('Products')!;
+            return Array.from({ length: BATCH_ROWS }, (_, i) =>
+                store.ViewRow(productsInfo, `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`)!
+            );
+        }
+
+        function expectAllSubtypesLinked(results: BaseEntity[]): void {
+            expect(results).toHaveLength(BATCH_ROWS);
+            results.forEach((p, idx) => {
+                expect(p.ISAChild?.EntityInfo.Name, `product ${idx}`).toBe(idx % 2 === 0 ? 'Meetings' : 'Publications');
+            });
+            for (const p of batchedProvider.RunViewsParams) {
+                expect(p.IgnoreMaxRows, `child read for ${p.EntityName} must set IgnoreMaxRows`).toBe(true);
+            }
+        }
+
+        it('disjoint children found by FindISAChildEntitiesBatch (buildDisjointChildQuerySlices)', async () => {
+            capRows('Meetings');
+            capRows('Publications');
+            const results = await TransformSimpleObjectToEntityObject<BaseEntity>(
+                batchedProvider as object as IMetadataProvider, 'Products', productRows(), user
+            );
+            expect(batchedProvider.BatchDiscoveryCalls).toBe(1);
+            expectAllSubtypesLinked(results);
+        });
+
+        it('disjoint children discovered by RunViews when FindISAChildEntitiesBatch is absent (discoverAndLoadDisjointChildrenViaRunViews)', async () => {
+            Object.defineProperty(batchedProvider, 'FindISAChildEntitiesBatch', { value: undefined });
+            capRows('Meetings');
+            capRows('Publications');
+            const results = await TransformSimpleObjectToEntityObject<BaseEntity>(
+                batchedProvider as object as IMetadataProvider, 'Products', productRows(), user
+            );
+            expectAllSubtypesLinked(results);
+        });
+
+        it('overlapping children discovered by RunViews (hydrateOverlappingChildrenForGroup)', async () => {
+            Object.defineProperty(batchedProvider, 'FindISAChildEntitiesBatch', { value: undefined });
+            capRows('Customers');
+            const partiesInfo = batchedProvider.EntityByName('Parties')!;
+            const partyIds = Array.from({ length: 10 }, (_, i) => `d3000000-0000-0000-0000-${String(i).padStart(12, '0')}`);
+            for (const id of partyIds) {
+                store.Insert('Parties', { ID: id, Name: `Party ${id}` });
+                store.Insert('Customers', { ID: id, CreditLimit: 100 });
+            }
+
+            const results = await TransformSimpleObjectToEntityObject<BaseEntity>(
+                batchedProvider as object as IMetadataProvider, 'Parties', partyIds.map(id => store.ViewRow(partiesInfo, id)!), user
+            );
+
+            expect(results).toHaveLength(partyIds.length);
+            results.forEach((p, idx) => {
+                expect(p.ISAChildren?.map(c => c.entityName), `party ${idx}`).toEqual(['Customers']);
+            });
+            for (const p of batchedProvider.RunViewsParams) {
+                expect(p.IgnoreMaxRows, `child read for ${p.EntityName} must set IgnoreMaxRows`).toBe(true);
+            }
+        });
     });
 
     it('isolates concurrent RunViews batches across different users sharing the same provider instance', async () => {
