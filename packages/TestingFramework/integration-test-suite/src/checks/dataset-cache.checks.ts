@@ -20,15 +20,20 @@
  * `ProviderBase.DatasetCacheCategory`: the read named a category the writes did not, so it missed
  * on every transport, refetched, and every assertion here still passed. DS4 closes it.
  *
- * Fixture: an EXISTING dataset name (default 'MJ_Metadata', a real seeded dataset). No row
- * mutation — purely read-and-observe. Read the name from the selector config when present.
+ * Fixture: the test-only 'IT_DatasetCache' dataset seeded from metadata-optional/integration-test
+ * (selector config `datasetName` overrides it). Its tables are written only by metadata sync. It
+ * used to be 'MJ_Metadata', which spans the core metadata tables: any write to them between DS1
+ * caching the dataset and DS2 asking whether it is up to date (another bundle, an MJAPI background
+ * job) made the cache stale by design, and DS2 failed intermittently (#6190). No row mutation —
+ * purely read-and-observe.
  */
 import { Metadata } from '@memberjunction/core';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
-const DEFAULT_DATASET = 'MJ_Metadata';
+/** Seeded from metadata-optional/integration-test/datasets; see the file header for why not 'MJ_Metadata'. */
+const DEFAULT_DATASET = 'IT_DatasetCache';
 
 /** The dataset name for this run: selector config `datasetName`, else the default. */
 function datasetName(ctx: IntegrationCheckContext): string {
@@ -48,7 +53,7 @@ export async function CheckDs1ColdThenWarm(ctx: IntegrationCheckContext): Promis
     // Cold fetch: must succeed, return rows, and POPULATE the cache (the false→true transition
     // is the observable proof that the cold path wrote the dataset cache).
     const cold = await md.GetAndCacheDatasetByName(name, undefined, ctx.User);
-    Assert(cold != null && cold.Success, `cold GetAndCacheDatasetByName('${name}') failed — is the dataset seeded?`);
+    Assert(cold != null && cold.Success, `cold GetAndCacheDatasetByName('${name}') failed — is the dataset seeded? (mj sync push --dir=metadata-optional/integration-test)`);
     Assert(cold.Results.length > 0, `dataset '${name}' returned no items`);
     Assert(await md.IsDatasetCached(name), 'cold fetch must populate the dataset cache (IsDatasetCached false→true)');
 
