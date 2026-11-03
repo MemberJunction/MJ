@@ -19,7 +19,7 @@ import { TemplateRenderResult, type TemplateRenderOptions } from '@memberjunctio
 import { ExecutionPlanner } from './ExecutionPlanner';
 import { AIPromptTimeoutError } from './AIPromptTimeoutError';
 import { BuildNoModelFoundMessage, NOT_EVALUATED_REASON } from './no-model-found-message';
-import { ParseManifestEntryMime, TrimSpacesAndTabs } from './linearTextScan';
+import { ContainsPlaceholderPhrase, ParseManifestEntryMime, TrimSpacesAndTabs } from './linearTextScan';
 import { ResultSelectionConfig, type IParallelExecutionCoordinator } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -43,6 +43,7 @@ import {
 // undefined at runtime ("JSON5.parse is not a function"), silently disabling the
 // local JSON-repair tier and forcing every malformed payload onto the AI-repair path.
 import JSON5 from 'json5';
+import { ExtractLeadingJSONValue } from './jsonRecovery';
 
 /**
  * Best-guess MIME family for a ChatMessage content block type when the block
@@ -3428,8 +3429,10 @@ export class AIPromptRunner extends BaseModelRunner {
 
     // Check if string value contains common placeholder text
     if (typeof value === 'string') {
-      const placeholderValuePatterns = /(goes here|placeholder|example|sample value|value\d+|UUID|your .* here|insert .* here)/i;
-      if (placeholderValuePatterns.test(value)) {
+      // "your … here" / "insert … here" are scanned linearly: as `.*` alternatives in this regex
+      // they were polynomial on long OutputExample strings (#4819).
+      const placeholderValuePatterns = /(goes here|placeholder|example|sample value|value\d+|UUID)/i;
+      if (placeholderValuePatterns.test(value) || ContainsPlaceholderPhrase(value)) {
         return true;
       }
     }
@@ -3769,6 +3772,24 @@ export class AIPromptRunner extends BaseModelRunner {
   }
 
   /**
+   * Parses a reply that starts with `{` or `[` but failed a plain parse. For object output, a
+   * complete leading JSON value followed by stray text (#3065) is used and the dropped tail is
+   * logged; anything else goes through `CleanJSON` as before, and its parse error reaches the caller.
+   */
+  private parseWithTrailingFragment(rawOutput: string, prompt: MJAIPromptEntityExtended): unknown {
+    if (prompt.OutputType === 'object') {
+      const leading = ExtractLeadingJSONValue(rawOutput);
+      if (leading) {
+        const tail = leading.Tail.trim();
+        const shown = tail.length > 200 ? `${tail.slice(0, 200)}…` : tail;
+        console.warn(`AIPromptRunner: prompt "${prompt.Name}" returned a complete JSON value followed by ${tail.length} characters of stray text; using the value and dropping: ${shown}`);
+        return leading.Value;
+      }
+    }
+    return JSON.parse(CleanJSON(rawOutput));
+  }
+
+  /**
    * Parses an object (JSON) output value with optional repair capabilities.
    * 
    * @param rawOutput - The raw output from the model
@@ -3799,7 +3820,7 @@ export class AIPromptRunner extends BaseModelRunner {
         try {
           parsedResult = JSON.parse(rawOutput);
         } catch {
-          parsedResult = JSON.parse(CleanJSON(rawOutput));
+          parsedResult = this.parseWithTrailingFragment(rawOutput, prompt);
         }
       } else {
         parsedResult = JSON.parse(CleanJSON(rawOutput));
@@ -3819,8 +3840,11 @@ export class AIPromptRunner extends BaseModelRunner {
       }
     }
     
-    // Clean validation syntax if needed
-    if (parsedResult && (cleanValidationSyntax || (!skipValidation && prompt.OutputExample))) {
+    // Clean validation syntax if needed. An OutputExample alone does not ask for it under
+    // ValidationBehavior 'None': that prompt opted out of validation, and cleaning rewrites reply
+    // keys such as "Is it urgent?" (#4827). An explicit cleanValidationSyntax still cleans.
+    const validationOff = (params?.validationBehavior || prompt.ValidationBehavior) === 'None';
+    if (parsedResult && (cleanValidationSyntax || (!skipValidation && !validationOff && prompt.OutputExample))) {
       parsedResult = this._jsonValidator.cleanValidationSyntax<unknown>(parsedResult);
     }
     
