@@ -22,6 +22,11 @@
 "@memberjunction/server-bootstrap-lite": minor
 "@memberjunction/work-queue-aws": minor
 "@memberjunction/work-queue-engine": minor
+"@memberjunction/ai-core-plus": minor
+"@memberjunction/ai-agents": minor
+"@memberjunction/task-graph": minor
+"@memberjunction/ng-task-graph-editor": minor
+"@memberjunction/ng-ai-test-harness": minor
 ---
 
 Actions, scheduling, notifications and work-queue fixes (minor because HubSpot and LearnWorlds actions gain a `CompanyIntegrationID` param in metadata).
@@ -34,3 +39,4 @@ Actions, scheduling, notifications and work-queue fixes (minor because HubSpot a
 - Engine-made action outcomes record `INPUT_VALIDATION_FAILED`, `PREVENTED_BY_FILTER`, `TIMEOUT` or `ABORTED`; Twitter delete checks ownership; Twitter and Instagram schedule actions return `NOT_SUPPORTED`; CRM, FormBuilders and LMS resolve their connection through `ResolveCompanyIntegration`.
 - The scheduler reloads jobs written without a cache event; scheduled actions receive `Context.ScheduledJobRunID` and `Context.Heartbeat`; Feature Pipelines refuse lookup settings on a non-FK target. The Record Set Processing guide now uses the PascalCase option names (`Source`, `Processor`, `ContextUser`, `BatchSize`, `MaxConcurrency`, `TriggeredBy`, `DryRun`, `Scope`).
 - `mj queue work` mints a provider per delivery above `--concurrency 1` and sweeps/reconciles when long-running; new `mj queue sweep`; SQS dead-letter copies carry `mj_source_message_id`.
+- Workflow breakpoints can be remembered per user and workflow: steps carry a stable `Configuration.stepId`, `taskGraphDebug.breakpointStepIDs` seeds them on a Debug run, and the debugger's step menu offers Remember / Stop Remembering where the host stores them (the AI test harness does).
