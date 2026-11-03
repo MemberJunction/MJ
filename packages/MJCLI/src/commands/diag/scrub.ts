@@ -1,7 +1,12 @@
 import * as fs from 'node:fs';
 import { Args, Command, Flags } from '@oclif/core';
 import { type DiagnosticScrubberProfile } from '@memberjunction/diagnostics';
-import { LoadAndVerifyDiagnosticBundle, RescrubDiagnosticBundle } from '../../utils/diag-utils.js';
+import {
+    LoadAndVerifyDiagnosticBundle,
+    RescrubDiagnosticBundle,
+    DiagPrivateKeyFlags,
+    ResolveDiagnosticPrivateKey,
+} from '../../utils/diag-utils.js';
 
 export default class DiagScrub extends Command {
     static description = 'Re-scrub an existing .mjdiag bundle archive at Standard or FullRaw profile';
@@ -24,14 +29,12 @@ export default class DiagScrub extends Command {
             options: ['Standard', 'FullRaw'],
             default: 'Standard',
         }),
-        'private-key': Flags.string({
-            description: 'Base64 PKCS#8 X25519 private key if the input file is an encrypted MJDB envelope',
-        }),
+        ...DiagPrivateKeyFlags,
     };
 
     public async run(): Promise<void> {
         const { args, flags } = await this.parse(DiagScrub);
-        const loaded = await LoadAndVerifyDiagnosticBundle(args.file, flags['private-key']);
+        const loaded = await LoadAndVerifyDiagnosticBundle(args.file, ResolveDiagnosticPrivateKey(flags));
         const profile: DiagnosticScrubberProfile = flags.profile === 'FullRaw' ? 'FullRaw' : 'Standard';
         const rescrubbedBytes = await RescrubDiagnosticBundle(loaded.Manifest, loaded.Data, profile);
         fs.writeFileSync(flags.output, rescrubbedBytes);

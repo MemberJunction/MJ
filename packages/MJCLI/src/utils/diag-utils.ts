@@ -1,11 +1,12 @@
 import * as fs from 'node:fs';
+import { Flags } from '@oclif/core';
 import {
     BuildMjdiagArchive,
     VerifyBundleArchive,
     ParseBundleDataFromArchive,
     DecryptDiagnosticBundle,
     InspectEncryptedEnvelopeHeader,
-    ScrubBundleData,
+    ScrubBundleDataWithCount,
     ExportToPerfettoTrace,
     ExportToOtlpJson,
     type DiagnosticBreadcrumb,
@@ -13,6 +14,55 @@ import {
     type DiagnosticBundleManifest,
     type DiagnosticScrubberProfile,
 } from '@memberjunction/diagnostics';
+
+/** Environment variable that holds the base64 PKCS#8 X25519 private key for encrypted bundles. */
+export const DIAG_PRIVATE_KEY_ENV_VAR = 'MJ_DIAG_PRIVATE_KEY';
+
+/** Private key flags shared by the `mj diag` commands that read bundles. */
+export const DiagPrivateKeyFlags = {
+    'private-key': Flags.string({
+        description:
+            'Base64 PKCS#8 X25519 private key for an encrypted MJDB envelope. The value is visible to other processes and stays in shell history; prefer --private-key-file or MJ_DIAG_PRIVATE_KEY',
+    }),
+    'private-key-file': Flags.string({
+        description: 'Path to a file that holds the base64 PKCS#8 X25519 private key for an encrypted MJDB envelope',
+    }),
+};
+
+export interface DiagPrivateKeyFlagValues {
+    'private-key'?: string;
+    'private-key-file'?: string;
+}
+
+/**
+ * Returns the private key from `--private-key`, then `--private-key-file`, then `MJ_DIAG_PRIVATE_KEY`.
+ * Returns undefined when none is given. Throws when the key file cannot be read or is empty.
+ */
+export function ResolveDiagnosticPrivateKey(
+    flags: DiagPrivateKeyFlagValues,
+    env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+    if (flags['private-key']) {
+        return flags['private-key'];
+    }
+    const keyFile = flags['private-key-file'];
+    if (keyFile) {
+        let fileText: string;
+        try {
+            fileText = fs.readFileSync(keyFile, 'utf8');
+        } catch (error: unknown) {
+            const reason = error instanceof Error ? error.message : String(error);
+            throw new Error(`Cannot read the private key file "${keyFile}": ${reason}`);
+        }
+        const key = fileText.trim();
+        if (!key) {
+            throw new Error(`The private key file "${keyFile}" is empty.`);
+        }
+        return key;
+    }
+    const envKey = env[DIAG_PRIVATE_KEY_ENV_VAR]?.trim();
+    return envKey ? envKey : undefined;
+}
 
 export interface LoadedDiagnosticBundle {
     WasEncrypted: boolean;
@@ -33,7 +83,7 @@ export async function LoadAndVerifyDiagnosticBundle(
     if (envelopeCheck.valid && envelopeCheck.header) {
         if (!recipientPrivateKeyBase64) {
             throw new Error(
-                `File "${filePath}" is an encrypted MJDB envelope (recipientKeyId=${envelopeCheck.header.recipientKeyId}). Pass --private-key to decrypt.`,
+                `File "${filePath}" is an encrypted MJDB envelope (recipientKeyId=${envelopeCheck.header.recipientKeyId}). Pass --private-key-file, set ${DIAG_PRIVATE_KEY_ENV_VAR}, or pass --private-key to decrypt.`,
             );
         }
         const decrypted = await DecryptDiagnosticBundle(rawBytes, {
@@ -66,13 +116,17 @@ export async function RescrubDiagnosticBundle(
     data: DiagnosticBundleData,
     profile: DiagnosticScrubberProfile,
 ): Promise<Uint8Array> {
-    const scrubbedData = ScrubBundleData(data, profile);
-    return BuildMjdiagArchive(scrubbedData, {
+    const scrubbed = ScrubBundleDataWithCount(data, profile);
+    return BuildMjdiagArchive(scrubbed.Data, {
         bundleId: manifest.bundleId,
         sessionId: manifest.sessionId,
         captureReason: manifest.captureReason,
         scrubberProfile: profile,
-        redactionSummary: manifest.redactionSummary,
+        redactionSummary: {
+            credentialsScrubbedCount: scrubbed.CredentialsScrubbedCount,
+            sqlLiteralsNormalizedCount: profile === 'Standard' ? scrubbed.Data.serverSql.length : 0,
+            customPatternsAppliedCount: 0,
+        },
     });
 }
 

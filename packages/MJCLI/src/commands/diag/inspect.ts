@@ -1,5 +1,9 @@
 import { Args, Command, Flags } from '@oclif/core';
-import { LoadAndVerifyDiagnosticBundle } from '../../utils/diag-utils.js';
+import {
+    LoadAndVerifyDiagnosticBundle,
+    DiagPrivateKeyFlags,
+    ResolveDiagnosticPrivateKey,
+} from '../../utils/diag-utils.js';
 
 export default class DiagInspect extends Command {
     static description = 'Verify and inspect a MemberJunction .mjdiag diagnostic bundle';
@@ -12,9 +16,7 @@ export default class DiagInspect extends Command {
     };
 
     static flags = {
-        'private-key': Flags.string({
-            description: 'Base64 PKCS#8 X25519 private key if inspecting an encrypted MJDB envelope',
-        }),
+        ...DiagPrivateKeyFlags,
         json: Flags.boolean({
             description: 'Emit machine-readable JSON output',
             default: false,
@@ -23,7 +25,7 @@ export default class DiagInspect extends Command {
 
     public async run(): Promise<void> {
         const { args, flags } = await this.parse(DiagInspect);
-        const loaded = await LoadAndVerifyDiagnosticBundle(args.file, flags['private-key']);
+        const loaded = await LoadAndVerifyDiagnosticBundle(args.file, ResolveDiagnosticPrivateKey(flags));
         const { Manifest: manifest, Data: data } = loaded;
 
         if (flags.json) {

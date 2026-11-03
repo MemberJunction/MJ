@@ -1,10 +1,13 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { describe, it, expect } from 'vitest';
+import { fileURLToPath } from 'node:url';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
     BuildMjdiagArchive,
     EncryptDiagnosticBundle,
+    VerifyBundleArchive,
+    ParseBundleDataFromArchive,
     GenerateDiagnosticKeyPair,
     type DiagnosticBundleData,
 } from '@memberjunction/diagnostics';
@@ -162,5 +165,113 @@ describe('mj diag CLI utilities', () => {
             ['client-span', 150, '[query] RunViewUsers'],
             ['breadcrumb', 0, '[error] Save timed out (Unhandled promise rejection)'],
         ]);
+    });
+});
+
+const packageRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+/** Writes an encrypted sample bundle and returns its path and the matching private key. */
+async function writeEncryptedSample(tmpDir: string): Promise<{ File: string; PrivateKeyBase64: string }> {
+    const keyPair = await GenerateDiagnosticKeyPair('X25519', 'cli-key-test');
+    const encBytes = await EncryptDiagnosticBundle(await makeSampleBundleBytes(), {
+        recipientKeyId: keyPair.keyId,
+        recipientPublicKeyBase64: keyPair.publicKeyBase64,
+        manifestSha256: 'abcd',
+    });
+    const file = path.join(tmpDir, 'sample.enc.mjdiag');
+    fs.writeFileSync(file, encBytes);
+    return { File: file, PrivateKeyBase64: keyPair.privateKeyBase64 };
+}
+
+/** Runs `mj diag inspect --json` and returns the parsed JSON output. */
+async function inspectJson(argv: string[]): Promise<{ wasEncrypted: boolean; manifest: { bundleId: string } }> {
+    const { default: DiagInspect } = await import('../commands/diag/inspect.js');
+    const logged: string[] = [];
+    vi.spyOn(DiagInspect.prototype, 'log').mockImplementation((message?: string) => {
+        logged.push(message ?? '');
+    });
+    await DiagInspect.run([...argv, '--json'], packageRoot);
+    return JSON.parse(logged.join('\n'));
+}
+
+describe('mj diag private key sources', () => {
+    let tmpDir = '';
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+        vi.unstubAllEnvs();
+        if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it('reads the private key from --private-key-file, trimmed', async () => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-diag-key-'));
+        const sample = await writeEncryptedSample(tmpDir);
+        const keyFile = path.join(tmpDir, 'key.txt');
+        fs.writeFileSync(keyFile, `  ${sample.PrivateKeyBase64}\n`, 'utf8');
+
+        const out = await inspectJson([sample.File, '--private-key-file', keyFile]);
+
+        expect(out.wasEncrypted).toBe(true);
+        expect(out.manifest.bundleId).toBe('cli-test-bundle');
+    }, 60_000);
+
+    it('reads the private key from MJ_DIAG_PRIVATE_KEY', async () => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-diag-key-'));
+        const sample = await writeEncryptedSample(tmpDir);
+        vi.stubEnv('MJ_DIAG_PRIVATE_KEY', sample.PrivateKeyBase64);
+
+        const out = await inspectJson([sample.File]);
+
+        expect(out.wasEncrypted).toBe(true);
+    }, 60_000);
+
+    it('uses --private-key over --private-key-file, and --private-key-file over MJ_DIAG_PRIVATE_KEY', async () => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-diag-key-'));
+        const sample = await writeEncryptedSample(tmpDir);
+        const wrongKey = (await GenerateDiagnosticKeyPair('X25519', 'wrong')).privateKeyBase64;
+        const wrongKeyFile = path.join(tmpDir, 'wrong.txt');
+        fs.writeFileSync(wrongKeyFile, wrongKey, 'utf8');
+        const goodKeyFile = path.join(tmpDir, 'good.txt');
+        fs.writeFileSync(goodKeyFile, sample.PrivateKeyBase64, 'utf8');
+        vi.stubEnv('MJ_DIAG_PRIVATE_KEY', wrongKey);
+
+        const flagWins = await inspectJson([sample.File, '--private-key', sample.PrivateKeyBase64, '--private-key-file', wrongKeyFile]);
+        const fileWins = await inspectJson([sample.File, '--private-key-file', goodKeyFile]);
+
+        expect(flagWins.wasEncrypted).toBe(true);
+        expect(fileWins.wasEncrypted).toBe(true);
+    }, 60_000);
+
+    it('fails with a clear error when --private-key-file cannot be read', async () => {
+        tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-diag-key-'));
+        const sample = await writeEncryptedSample(tmpDir);
+        const missing = path.join(tmpDir, 'missing.txt');
+
+        await expect(inspectJson([sample.File, '--private-key-file', missing])).rejects.toThrow(
+            `Cannot read the private key file "${missing}"`,
+        );
+    }, 60_000);
+});
+
+describe('RescrubDiagnosticBundle redaction summary', () => {
+    it('counts the redactions of the new scrub run instead of copying the old summary', async () => {
+        const source = await VerifyBundleArchive(await makeSampleBundleBytes());
+        if (!source.manifest) throw new Error(source.reason);
+        const data = ParseBundleDataFromArchive(source);
+        data.serverLogs = [
+            { timestamp: '2023-11-14T22:13:20.300Z', severity: 'info', source: 'server', message: 'call', data: { password: 'hunter2' } },
+        ];
+        const staleManifest = {
+            ...source.manifest,
+            redactionSummary: { credentialsScrubbedCount: 99, sqlLiteralsNormalizedCount: 99, customPatternsAppliedCount: 99 },
+        };
+
+        const rescrubbed = await VerifyBundleArchive(await RescrubDiagnosticBundle(staleManifest, data, 'Standard'));
+
+        expect(rescrubbed.manifest?.redactionSummary).toEqual({
+            credentialsScrubbedCount: 1,
+            sqlLiteralsNormalizedCount: 1,
+            customPatternsAppliedCount: 0,
+        });
     });
 });

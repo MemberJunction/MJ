@@ -1,5 +1,10 @@
 import { Args, Command, Flags } from '@oclif/core';
-import { LoadAndVerifyDiagnosticBundle, FindSlowBundleOperations } from '../../utils/diag-utils.js';
+import {
+    LoadAndVerifyDiagnosticBundle,
+    FindSlowBundleOperations,
+    DiagPrivateKeyFlags,
+    ResolveDiagnosticPrivateKey,
+} from '../../utils/diag-utils.js';
 
 export default class DiagSlow extends Command {
     static description = 'List slow client/server spans and SQL queries from a .mjdiag bundle';
@@ -17,14 +22,12 @@ export default class DiagSlow extends Command {
             description: 'Minimum duration in milliseconds',
             default: 500,
         }),
-        'private-key': Flags.string({
-            description: 'Base64 PKCS#8 X25519 private key if inspecting an encrypted MJDB envelope',
-        }),
+        ...DiagPrivateKeyFlags,
     };
 
     public async run(): Promise<void> {
         const { args, flags } = await this.parse(DiagSlow);
-        const loaded = await LoadAndVerifyDiagnosticBundle(args.file, flags['private-key']);
+        const loaded = await LoadAndVerifyDiagnosticBundle(args.file, ResolveDiagnosticPrivateKey(flags));
         const slowOps = FindSlowBundleOperations(loaded.Data, flags.threshold);
 
         if (slowOps.length === 0) {

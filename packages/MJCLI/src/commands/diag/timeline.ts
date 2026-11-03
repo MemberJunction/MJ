@@ -1,5 +1,10 @@
 import { Args, Command, Flags } from '@oclif/core';
-import { LoadAndVerifyDiagnosticBundle, BuildBundleTimeline } from '../../utils/diag-utils.js';
+import {
+    LoadAndVerifyDiagnosticBundle,
+    BuildBundleTimeline,
+    DiagPrivateKeyFlags,
+    ResolveDiagnosticPrivateKey,
+} from '../../utils/diag-utils.js';
 
 export default class DiagTimeline extends Command {
     static description = 'Print a merged chronological timeline of client spans, server spans, SQL queries and breadcrumbs';
@@ -17,14 +22,12 @@ export default class DiagTimeline extends Command {
             description: 'Maximum number of timeline rows to display',
             default: 50,
         }),
-        'private-key': Flags.string({
-            description: 'Base64 PKCS#8 X25519 private key if inspecting an encrypted MJDB envelope',
-        }),
+        ...DiagPrivateKeyFlags,
     };
 
     public async run(): Promise<void> {
         const { args, flags } = await this.parse(DiagTimeline);
-        const loaded = await LoadAndVerifyDiagnosticBundle(args.file, flags['private-key']);
+        const loaded = await LoadAndVerifyDiagnosticBundle(args.file, ResolveDiagnosticPrivateKey(flags));
         const rows = BuildBundleTimeline(loaded.Data, flags.limit);
 
         for (const r of rows) {
