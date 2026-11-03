@@ -611,8 +611,10 @@ export async function CheckRls14MixedRolesLiveRows(ctx: IntegrationCheckContext)
         { EntityName: MIXED_RLS_ENTITY, ResultType: 'count_only', BypassCache: true }, ctx.User
     );
     Assert(all.Success, `unrestricted count of '${MIXED_RLS_ENTITY}' failed: ${all.ErrorMessage}`);
-    Assert(all.TotalRowCount > got.length,
-        `precondition: other users must own '${MIXED_RLS_ENTITY}' rows (total ${all.TotalRowCount}, scoped ${got.length}), or the filter is not observable`);
+    Assert(all.TotalRowCount !== undefined, `the count_only read of '${MIXED_RLS_ENTITY}' returned no TotalRowCount`);
+    const total = all.TotalRowCount ?? 0;
+    Assert(total > got.length,
+        `precondition: other users must own '${MIXED_RLS_ENTITY}' rows (total ${total}, scoped ${got.length}), or the filter is not observable`);
 }
 
 export const RlsIsolationChecks: NamedCheck[] = [
