@@ -1553,6 +1553,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const baseEntity = entityEvent.baseEntity;
         if (!baseEntity?.EntityInfo?.Name) return;
 
+        if (entityEvent.type === 'delete') {
+            await this.invalidateCascadeDeletedRelatedEntities(baseEntity.EntityInfo);
+        }
+
         const entityName = baseEntity.EntityInfo.Name;
 
         // Short-circuit: if caching is disabled for this entity, skip the fingerprint scan
@@ -1882,13 +1886,48 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
         for (const [entityName, changes] of byEntity) {
             await this.applyEntityChanges(entityName, changes);
+            const cascadeDelete = changes.find(c => c.Type === 'delete' && c.EntityInfo?.CascadeDeletes);
+            if (cascadeDelete) {
+                await this.invalidateCascadeDeletedRelatedEntities(cascadeDelete.EntityInfo);
+            }
         }
     }
 
     /** Invalidates every entity a batch touched — for a batch that failed or was abandoned. */
     private async invalidateBatchEntities(batch: EntityEventBatch): Promise<void> {
-        for (const entityName of batch.TouchedEntities.keys()) {
+        for (const [entityName, entityInfo] of batch.TouchedEntities.entries()) {
             await this.InvalidateEntityCaches(entityName);
+            await this.invalidateCascadeDeletedRelatedEntities(entityInfo);
+        }
+    }
+
+    /**
+     * When a parent entity with `CascadeDeletes = true` is deleted (e.g. via its generated
+     * `spDelete*` stored procedure), the database deletes its `One To Many` child records directly
+     * without raising per-child `BaseEntity.Delete()` events. Invalidate cached RunView/dataset
+     * slots for those child entities so cascade-deleted rows do not linger in `LocalCacheManager`.
+     */
+    private async invalidateCascadeDeletedRelatedEntities(entityInfo: EntityInfo | null | undefined): Promise<void> {
+        if (!entityInfo?.CascadeDeletes || !Array.isArray(entityInfo.RelatedEntities)) {
+            return;
+        }
+        const parentLower = (entityInfo.Name ?? '').trim().toLowerCase();
+        const invalidated = new Set<string>();
+        for (const rel of entityInfo.RelatedEntities) {
+            const relatedName = rel?.RelatedEntity?.trim();
+            if (!relatedName) {
+                continue;
+            }
+            const relType = (rel.Type ?? 'One To Many').trim().toUpperCase();
+            if (relType !== 'ONE TO MANY') {
+                continue;
+            }
+            const relatedLower = relatedName.toLowerCase();
+            if (relatedLower === parentLower || invalidated.has(relatedLower)) {
+                continue;
+            }
+            invalidated.add(relatedLower);
+            await this.InvalidateEntityCaches(relatedName);
         }
     }
 
@@ -1956,6 +1995,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // the Metadata helper itself proxies to the global provider with sensible fallbacks.
         const md = entityEvent.provider ?? new Metadata();
         const entityInfo = md.EntityByName(entityName);
+        if (payload?.action === 'delete' && entityInfo) {
+            await this.invalidateCascadeDeletedRelatedEntities(entityInfo);
+        }
         if (entityInfo && !this.IsCachingEnabledForEntity(entityInfo)) return;
 
         const fingerprints = await this.resolveFingerprintsForEntity(entityName);

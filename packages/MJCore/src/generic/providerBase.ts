@@ -541,6 +541,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             if (!entityName) {
                 return;
             }
+            const cascadeRelatedEntities: string[] = [];
+            const entityInfo = entityEvent.baseEntity?.EntityInfo;
+            if (entityEvent.type === 'delete' && entityInfo?.CascadeDeletes && Array.isArray(entityInfo.RelatedEntities)) {
+                for (const rel of entityInfo.RelatedEntities) {
+                    const relName = rel?.RelatedEntity?.trim().toLowerCase();
+                    const relType = (rel?.Type ?? 'One To Many').trim().toUpperCase();
+                    if (relName && relName !== entityName && relType === 'ONE TO MANY' && !cascadeRelatedEntities.includes(relName)) {
+                        cascadeRelatedEntities.push(relName);
+                    }
+                }
+            }
             for (const ref of ProviderBase._invalidationTargets) {
                 const instance = ref.deref();
                 if (!instance) {
@@ -551,6 +562,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 }
                 instance.invalidateInflightViewsForEntity(entityName);
                 instance.handleMetadataMemberEntityEvent(entityName, entityEvent);
+                for (const relLower of cascadeRelatedEntities) {
+                    instance.invalidateInflightViewsForEntity(relLower);
+                    instance.handleMetadataMemberEntityEvent(relLower, entityEvent);
+                }
             }
         });
     }
@@ -578,6 +593,35 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * Per-entity monotonic mutation counter incremented whenever an entity receives a
+     * BaseEntity save/delete/remote-invalidate or an explicit {@link InvalidateRunViewDedupCache}
+     * call. Used by dataset reads (`GetDatasetByName`) to detect that an entity was mutated while
+     * SQL execution or post-processing was in flight and avoid writing stale pre-mutation rows
+     * back into `LocalCacheManager`.
+     */
+    private _entityMutationVersions = new Map<string, number>();
+
+    /**
+     * Monotonic counter incremented whenever any metadata-member entity is mutated against this
+     * provider's backend. Checked by `GetAllMetadata()` before caching `MJ_Metadata` into
+     * `DatasetCache` so an in-flight background reload does not overwrite `DatasetCache` with a
+     * pre-mutation snapshot after a save/delete has already landed.
+     */
+    private _metadataMemberMutationSeq = 0;
+
+    /**
+     * Returns the current monotonic mutation version for `entityName` (case-insensitive).
+     */
+    public GetEntityMutationVersion(entityName: string): number {
+        this.ensureInflightViewInvalidation();
+        const lower = entityName?.trim().toLowerCase();
+        if (!lower) {
+            return 0;
+        }
+        return this._entityMutationVersions.get(lower) ?? 0;
+    }
+
+    /**
      * Drops this provider's in-flight/lingered RunView dedup entries so the next identical
      * RunView goes to the server instead of replaying a result from the last
      * {@link DedupLingerMs}.
@@ -599,6 +643,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const names = (entityNames ?? []).map(n => n?.trim().toLowerCase()).filter((n): n is string => !!n);
         if (names.length === 0) {
             this._inflightViews.clear();
+            for (const [k, v] of this._entityMutationVersions) {
+                this._entityMutationVersions.set(k, v + 1);
+            }
             return;
         }
         for (const n of names) {
@@ -611,6 +658,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * entity (lowercased name). Called on BaseEntity save/delete/remote-invalidate.
      */
     protected invalidateInflightViewsForEntity(lowerEntityName: string): void {
+        this._entityMutationVersions.set(
+            lowerEntityName,
+            (this._entityMutationVersions.get(lowerEntityName) ?? 0) + 1
+        );
         for (const [key, entry] of this._inflightViews) {
             if (entry.entityNames?.has(lowerEntityName)) {
                 this._inflightViews.delete(key);
@@ -835,6 +886,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (!this.eventTargetsThisProviderBackend(entityEvent)) {
             return;
         }
+        this._metadataMemberMutationSeq++;
         this.scheduleMetadataMemberRefresh();
     }
 
@@ -1073,6 +1125,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return true;
         }
         this._metadataMemberRefreshWaits = 0;
+        if (this._metadataReloadInFlight) {
+            // A metadata reload is already in flight. Do not call RefreshRemoteMetadataTimestamps()
+            // concurrently here, because that mutates _latestRemoteMetadataTimestamps out from under
+            // the in-flight pass before it runs adoptServerMetadata(). Instead, delegate directly to
+            // ReloadMetadata, which sets _metadataReloadQueued = true and re-reads authoritative
+            // remote timestamps at the start of the queued follow-up pass.
+            return this.ReloadMetadata(true, undefined, true);
+        }
         // The writer holds positive evidence, so the timestamps are re-read from the authoritative
         // status query. When they attribute the change entirely to the saved-query family (see
         // PartialRefreshMetadataItemCodes) only that family is reloaded, cache layers bypassed as a
@@ -5758,6 +5818,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     `Not advancing local timestamp for "${remoteEntry.Type}" so the next check self-heals.`,
                     'Metadata'
                 );
+                if (LocalCacheManager.Instance.IsInitialized && remoteEntry.Type) {
+                    LocalCacheManager.Instance.InvalidateEntityCaches(remoteEntry.Type).catch(() => {});
+                }
                 const priorEntry = prevLocal.find(m => norm(m.Type) === norm(remoteEntry.Type));
                 if (priorEntry) {
                     reconciled.push({
@@ -5785,6 +5848,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (!hasMismatch) {
             return remote;
         }
+
+        this.ClearDatasetCache(ProviderBase._mjMetadataDatasetName).catch(() => {});
 
         const remoteRollup = remote.find(r => norm(r.Type) === rollup);
         if (remoteRollup) {
@@ -6186,6 +6251,38 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     protected static _mjMetadataDatasetName: string = 'MJ_Metadata';
     
     /**
+     * Checks whether any item in a freshly fetched `MJ_Metadata` dataset has a row count that
+     * disagrees with `_latestRemoteMetadataTimestamps` (when remote timestamps are populated).
+     * Used to prevent `GetAllMetadata()` from caching a dataset snapshot into `DatasetCache`
+     * whose row counts are already stale relative to remote status.
+     */
+    private hasDatasetRemoteRowCountMismatch(dataset: DatasetResultType): boolean {
+        const remote = this._latestRemoteMetadataTimestamps;
+        if (!remote || remote.length === 0 || !Array.isArray(dataset?.Results)) {
+            return false;
+        }
+        const norm = (v: string | null | undefined) => (v ?? '').trim().toLowerCase();
+        const rollup = norm(ProviderBase._allMetadataTypeName);
+        for (const item of dataset.Results) {
+            if (!Array.isArray(item.Results)) {
+                continue;
+            }
+            const itemEntityNorm = norm(item.EntityName);
+            const itemCodeNorm = norm(item.Code);
+            const remoteEntry = remote.find(r => {
+                if (norm(r.Type) === rollup) return false;
+                if (item.EntityID && r.ID && UUIDsEqual(item.EntityID, r.ID)) return true;
+                const rNorm = norm(r.Type);
+                return rNorm === itemEntityNorm || rNorm === itemCodeNorm;
+            });
+            if (remoteEntry && remoteEntry.RowCount !== undefined && item.Results.length !== remoteEntry.RowCount) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Retrieves all metadata from the server and constructs typed instances.
      * Uses the MJ_Metadata dataset for efficient bulk loading.
      * @returns Complete metadata collection with all relationships
@@ -6195,6 +6292,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // we are now using datasets instead of the custom metadata to GraphQL to simplify GraphQL's work as it was very slow preivously
             // NOTE: Schema filters (IncludeSchemas/ExcludeSchemas) are for CodeGen only, not for runtime
             // metadata loading. We always load all schemas — there are no sys/staging entities in metadata anyway.
+
+            const mutationSeqAtStart = this._metadataMemberMutationSeq;
 
             // Get the dataset and cache it for anyone else who wants to use it
             // When forceRefresh is true (from a hard Refresh() call), bypass LocalCacheManager
@@ -6210,13 +6309,25 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 this.recordMetadataLoadFailure(new Error(`GetAllMetadata() - the ${ProviderBase._mjMetadataDatasetName} dataset returned no entities; keeping the metadata already loaded`));
             }
             else if (d && d.Success) {
-                // cache the dataset for anyone who wants to use it
-                await this.CacheDataset(ProviderBase._mjMetadataDatasetName, null, d);
-
                 // Record which entities this metadata is built from, so a write to any of them
                 // schedules a debounced refresh of this provider's metadata (see
                 // registerMetadataDatasetMembership — membership is the dataset definition, not a list).
                 this.registerMetadataDatasetMembership(d);
+
+                // Only cache the dataset in DatasetCache when no metadata-member mutation occurred
+                // while GetDatasetByName was in flight, no follow-up reload is already queued, and
+                // item row counts match _latestRemoteMetadataTimestamps. Otherwise a slow background
+                // GetAllMetadata() that started before a delete can overwrite DatasetCache with
+                // pre-delete rows right after the delete has already completed.
+                const mutatedDuringLoad =
+                    this._metadataReloadQueued ||
+                    this._metadataMemberMutationSeq !== mutationSeqAtStart ||
+                    this.hasDatasetRemoteRowCountMismatch(d);
+                if (!mutatedDuringLoad) {
+                    await this.CacheDataset(ProviderBase._mjMetadataDatasetName, null, d);
+                } else {
+                    await this.ClearDatasetCache(ProviderBase._mjMetadataDatasetName);
+                }
 
                 // got the results, let's build our response in the format we need
                 const simpleMetadata: any = {};

@@ -545,5 +545,46 @@ describe('Zero-Restart Cache Auto-Reconciliation (RunViewsWithCacheCheck & GetDa
             expect(datasetResult.Results[0].Results).toHaveLength(3);
             expect(datasetResult.Results[0].Results).toEqual(freshSQLFields);
         });
+
+        it('does NOT write pre-mutation SQL rows into LocalCacheManager when the entity is mutated while GetDatasetByName SQL is in flight', async () => {
+            provider.setTrustLocalCache(true);
+
+            const fieldsMetaRow = buildDatasetItemRow({
+                Code: 'QueryCategories',
+                Entity: 'MJ: Query Categories',
+                EntityID: 'ent-qc-001',
+                EntityBaseView: 'vwQueryCategories',
+            });
+
+            const qcFp = LocalCacheManager.Instance.GenerateRunViewFingerprint(
+                { EntityName: 'MJ: Query Categories', ExtraFilter: '' },
+                provider.InstanceConnectionString,
+                undefined,
+                'MJ_Metadata/QueryCategories',
+            );
+
+            const preDeleteRows: TestRow[] = [
+                { ID: 'qc1', Name: 'Cat 1', __mj_UpdatedAt: '2026-04-20T12:00:00.000Z' },
+                { ID: 'qc2', Name: 'Deleted Fixture Cat', __mj_UpdatedAt: '2026-04-20T12:01:00.000Z' },
+            ];
+
+            // Intercept ExecuteSQLBatch to simulate a concurrent delete occurring while SQL batch is in flight
+            vi.spyOn(provider, 'ExecuteSQLBatch').mockImplementation(async () => {
+                provider.InvalidateRunViewDedupCache(['MJ: Query Categories']);
+                return [preDeleteRows as unknown as Record<string, unknown>[]];
+            });
+
+            provider.queueSQLResults([
+                [fieldsMetaRow],
+            ]);
+
+            const datasetResult = await provider.GetDatasetByName('MJ_Metadata', undefined, testUser);
+            expect(datasetResult.Success).toBe(true);
+
+            // Because MJ: Query Categories was mutated while ExecuteSQLBatch was in flight,
+            // Phase 3 must NOT have written the stale pre-delete 2-row snapshot into LocalCacheManager.
+            const cachedAfterInFlightMutation = await LocalCacheManager.Instance.GetRunViewResult(qcFp);
+            expect(cachedAfterInFlightMutation).toBeNull();
+        });
     });
 });
