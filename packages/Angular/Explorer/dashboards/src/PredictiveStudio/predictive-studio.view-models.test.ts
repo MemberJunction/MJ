@@ -170,3 +170,52 @@ describe('SessionSuccessMetric', () => {
     expect([SessionSuccessMetric(null), SessionSuccessMetric('not json'), SessionSuccessMetric('{}')]).toEqual(['', '', '']);
   });
 });
+
+/**
+ * One session read by every surface helper: the experiments leaderboard, the compare panel, the kanban and the stored
+ * gate of the top iteration's run. The surfaces must name the same top iteration on the same metric and value, and none
+ * may claim a winner for a run whose stored gate kept a simple baseline.
+ */
+describe('one session reads the same on every surface', () => {
+  const row = (ID: string, AlgorithmName: string, Sequence: number): PSIterationRow =>
+    ({ ID, ExperimentSessionID: 's1', Sequence, Label: `iteration ${Sequence}`, Status: 'Completed', Score: null, ComputeCost: 1, TokensUsed: null, Rationale: null, AlgorithmName });
+  const PlanSpec = JSON.stringify({ TargetDefinition: { SuccessMetric: 'RMSE' } });
+  // RMSE is the success metric (normalized −12.5, −13); the third entry is a fallback on log-loss.
+  const Leaderboard = JSON.stringify([
+    { IterationID: 'it-a', Metric: -12.5, ScoreMetric: 'rmse', OnSuccessMetric: true },
+    { IterationID: 'it-b', Metric: -13, ScoreMetric: 'rmse', OnSuccessMetric: true },
+    { IterationID: 'it-c', Metric: -0.3, ScoreMetric: 'log-loss', OnSuccessMetric: false },
+  ]);
+  const iterations = [row('it-c', 'GLM', 3), row('it-a', 'XGBoost', 1), row('it-b', 'LightGBM', 2)];
+  // The top iteration's run: its stored gate kept a simple baseline (the fixture's default envelope).
+  const topRun = { ExperimentSessionIterationID: 'it-a', ValidationResults: WidgetFixtures.StoredRunJson() };
+  const ranked = ParseSessionLeaderboard(Leaderboard, SessionSuccessMetric(PlanSpec));
+
+  it('names the same top iteration, metric and value on the leaderboard and the compare panel', () => {
+    const top = DeriveLeaderboard(iterations, ranked)[0];
+    const column = DeriveCompareColumns(iterations, ranked)[0];
+    expect([column.key, column.ScoreMetric, column.holdoutAuc]).toEqual([top.IterationID, top.ScoreMetric, top.Score]);
+    expect([top.IterationID, top.ScoreMetric, top.Score]).toEqual(['it-a', 'rmse', 12.5]);
+  });
+
+  it('badges that iteration, and only it, Best on the kanban', () => {
+    const best = GroupIterationsToKanban(iterations, ranked).Completed.filter((c) => c.Status === 'Best');
+    expect(best.map((c) => [c.Algorithm, c.Iteration, c.ScoreMetric, c.score])).toEqual([['XGBoost', 'iteration 1', 'rmse', 12.5]]);
+  });
+
+  it("reads the top iteration's run as keep-simple-baseline", () => {
+    expect(topRun.ExperimentSessionIterationID).toBe(DeriveLeaderboard(iterations, ranked)[0].IterationID);
+    expect(ReadStoredGate(topRun.ValidationResults)?.Outcome).toBe('keep-simple-baseline');
+  });
+
+  it('sets no winner flag on any surface helper output for that run', () => {
+    const outputs: object[] = [
+      ...DeriveLeaderboard(iterations, ranked),
+      ...DeriveCompareColumns(iterations, ranked),
+      ...BuildCompareMetricRows(DeriveCompareColumns(iterations, ranked)),
+      ...GroupIterationsToKanban(iterations, ranked).Completed,
+    ];
+    const winnerKeys = outputs.flatMap((o) => Object.keys(o).filter((k) => /winner|crown|winning/i.test(k)));
+    expect(winnerKeys).toEqual([]);
+  });
+});
