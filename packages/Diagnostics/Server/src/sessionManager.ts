@@ -31,6 +31,7 @@ import {
   SqlObservation
 } from '@memberjunction/generic-database-provider';
 import {
+  DiagnosticBreadcrumb,
   DiagnosticBundleData,
   DiagnosticLogEntry,
   DiagnosticServerSpanEntry,
@@ -113,6 +114,7 @@ interface AssembledEntries {
   clientLogs: DiagnosticLogEntry[];
   clientWaterfall: DiagnosticNetworkEntry[];
   clientTelemetry: DiagnosticTelemetryEntry[];
+  breadcrumbs: DiagnosticBreadcrumb[];
 }
 
 const diagnosticAls = new AsyncLocalStorage<DiagnosticContext>();
@@ -813,12 +815,13 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
         serverSql: [],
         clientLogs: [...(clientSeed?.clientLogs ?? [])],
         clientWaterfall: [...(clientSeed?.clientWaterfall ?? [])],
-        clientTelemetry: [...(clientSeed?.clientTelemetry ?? [])]
+        clientTelemetry: [...(clientSeed?.clientTelemetry ?? [])],
+        breadcrumbs: [...(clientSeed?.repro?.breadcrumbs ?? [])]
       };
       if (sessionId) {
         await this.unpackSessionChunks(sessionId, entries, contextUser, provider);
       }
-      const { serverLogs, serverTraces, serverSql, clientLogs, clientWaterfall, clientTelemetry } = entries;
+      const { serverLogs, serverTraces, serverSql, clientLogs, clientWaterfall, clientTelemetry, breadcrumbs } = entries;
 
       const scrubberProfile = scrubLiterals ? 'Standard' : 'FullRaw';
       const contrib = await DiagnosticContributorRegistry.Instance.CollectAll({
@@ -836,9 +839,7 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
           osArch: os.arch(),
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
         },
-        repro: clientSeed?.repro ?? {
-          breadcrumbs: []
-        },
+        repro: { ...clientSeed?.repro, breadcrumbs },
         clientLogs,
         clientWaterfall,
         clientTelemetry,
@@ -994,6 +995,8 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
         return (e) => entries.clientWaterfall.push(e as unknown as DiagnosticNetworkEntry);
       case 'Telemetry':
         return (e) => entries.clientTelemetry.push(e as unknown as DiagnosticTelemetryEntry);
+      case 'Timeline':
+        return (e) => entries.breadcrumbs.push(e as unknown as DiagnosticBreadcrumb);
       default:
         return undefined;
     }

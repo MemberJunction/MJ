@@ -304,6 +304,31 @@ export class DiagnosticsGetMySessionStatusServerOperation extends DiagnosticsGet
   }
 }
 
+/** Adds an upload's client buffers to the session's chunk buffers. Breadcrumbs go in as `Timeline` entries. */
+function stageClientCapture(mgr: DiagnosticSessionManager, sessionId: string, input: DiagnosticsUploadClientCaptureInput): void {
+  for (const log of input.ClientLogs ?? []) {
+    mgr.AppendToChunkBuffer(sessionId, 'Client', 'Logs', log);
+  }
+  for (const wf of input.ClientWaterfall ?? []) {
+    mgr.AppendToChunkBuffer(sessionId, 'Client', 'Network', wf);
+  }
+  for (const tel of input.ClientTelemetry ?? []) {
+    mgr.AppendToChunkBuffer(sessionId, 'Client', 'Telemetry', tel);
+  }
+  for (const crumb of uploadedBreadcrumbs(input.Repro)) {
+    mgr.AppendToChunkBuffer(sessionId, 'Client', 'Timeline', crumb);
+  }
+}
+
+/** The breadcrumbs of an uploaded `Repro`. Entries that are not objects are left out. */
+function uploadedBreadcrumbs(repro: DiagnosticsUploadClientCaptureInput['Repro']): Array<Record<string, unknown>> {
+  const crumbs = repro?.['breadcrumbs'];
+  if (!Array.isArray(crumbs)) {
+    return [];
+  }
+  return crumbs.filter((c): c is Record<string, unknown> => typeof c === 'object' && c !== null && !Array.isArray(c));
+}
+
 @RegisterClass(BaseRemotableOperation, 'Diagnostics.UploadClientCapture')
 export class DiagnosticsUploadClientCaptureServerOperation extends DiagnosticsUploadClientCaptureOperation {
   protected override async Authorize(
@@ -372,29 +397,13 @@ export class DiagnosticsUploadClientCaptureServerOperation extends DiagnosticsUp
     const sessionId = input.SessionID ?? (await this.startCallerSession(input, context));
     const mgr = DiagnosticSessionManager.Instance;
 
-    for (const log of input.ClientLogs ?? []) {
-      mgr.AppendToChunkBuffer(sessionId, 'Client', 'Logs', log);
-    }
-    for (const wf of input.ClientWaterfall ?? []) {
-      mgr.AppendToChunkBuffer(sessionId, 'Client', 'Network', wf);
-    }
-    for (const tel of input.ClientTelemetry ?? []) {
-      mgr.AppendToChunkBuffer(sessionId, 'Client', 'Telemetry', tel);
-    }
+    stageClientCapture(mgr, sessionId, input);
 
     const drained = mgr.DrainPendingBuffersForSession(sessionId);
     const totalBytes = drained.reduce((acc, d) => acc + d.compressedData.byteLength, 0);
 
     // Re-stage drained entries in memory so AssembleBundleDataFromChunks can consume them even without DB
-    for (const log of input.ClientLogs ?? []) {
-      mgr.AppendToChunkBuffer(sessionId, 'Client', 'Logs', log);
-    }
-    for (const wf of input.ClientWaterfall ?? []) {
-      mgr.AppendToChunkBuffer(sessionId, 'Client', 'Network', wf);
-    }
-    for (const tel of input.ClientTelemetry ?? []) {
-      mgr.AppendToChunkBuffer(sessionId, 'Client', 'Telemetry', tel);
-    }
+    stageClientCapture(mgr, sessionId, input);
 
     await mgr.FlushSessionChunksToDatabase(sessionId, user, provider);
     if (!input.SessionID) {

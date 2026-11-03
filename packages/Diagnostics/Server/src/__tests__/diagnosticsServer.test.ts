@@ -572,6 +572,21 @@ describe('@memberjunction/diagnostics-server', () => {
             expect(assembled.bundleData.clientLogs).toHaveLength(1);
         });
 
+        it('stores uploaded breadcrumbs as client Timeline chunks and carries them in repro.json', async () => {
+            mockChunkRunView(() => fake.SaveHistory(CHUNK_ENTITY));
+            const crumb = { timestamp: '2026-11-02T12:00:00.000Z', type: 'click', target: 'button#save "Save"', route: '/app/home' };
+
+            const uploaded = await new DiagnosticsUploadClientCaptureServerOperation().ExecuteServer(
+                { Repro: { breadcrumbs: [crumb] } },
+                { provider: fake.Provider, user: ownerUser }
+            );
+
+            expect(uploaded.Success).toBe(true);
+            expect(fake.SaveHistory(CHUNK_ENTITY).map((r) => `${r['Source']} ${r['ContentKind']}`)).toEqual(['Client Timeline']);
+            const assembled = await manager.AssembleBundleDataFromChunks(uploaded.Output!.SessionID, false, undefined, ownerUser, fake.Provider);
+            expect(assembled.bundleData.repro.breadcrumbs).toEqual([crumb]);
+        });
+
         it('fails when the saved chunks cannot be read', async () => {
             mockChunkRunView(() => [], 'database is unavailable');
 
@@ -585,7 +600,7 @@ describe('@memberjunction/diagnostics-server', () => {
             ['is not compressed', { ...chunkRow({ ContentKind: 'SQL', EntryCount: 1, ndjson: '' }), Data: Buffer.from('plain').toString('base64') }],
             ['holds an unreadable entry', chunkRow({ ContentKind: 'SQL', EntryCount: 1, ndjson: '{not json' })],
             ['holds fewer entries than it recorded', chunkRow({ ContentKind: 'SQL', EntryCount: 2, ndjson: JSON.stringify(sqlEntry) })],
-            ['has a content kind the bundle does not hold', chunkRow({ ContentKind: 'Timeline', EntryCount: 1, ndjson: JSON.stringify(logEntry) })],
+            ['has a content kind the bundle does not hold', chunkRow({ ContentKind: 'App', EntryCount: 1, ndjson: JSON.stringify(logEntry) })],
         ])('fails instead of building a partial bundle when a saved chunk %s', async (_label, row) => {
             mockChunkRunView(() => [chunkRow({ ContentKind: 'Logs', EntryCount: 1, ndjson: JSON.stringify(logEntry) }), row]);
 

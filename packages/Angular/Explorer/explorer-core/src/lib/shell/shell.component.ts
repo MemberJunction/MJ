@@ -837,9 +837,23 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.DeveloperModeService = value;
   }
 
+  /** Adds each finished navigation to the diagnostics breadcrumb trail. */
+  private subscribeRouteBreadcrumbs(): void {
+    const diagnostics = this.diagnosticsService;
+    if (!diagnostics) {
+      return;
+    }
+    this.subscriptions.push(
+      this.router.events
+        .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
+        .subscribe((event) => diagnostics.RecordRouteBreadcrumb(event.urlAfterRedirects || event.url))
+    );
+  }
+
   async ngOnInit(): Promise<void> {
     try {
       this.diagnosticsService?.Initialize();
+      this.subscribeRouteBreadcrumbs();
       let loggedIn = false;
       let shellInitialized = false;
       const initShellOnce = async (): Promise<void> => {

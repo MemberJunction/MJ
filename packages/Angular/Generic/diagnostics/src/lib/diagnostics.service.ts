@@ -21,6 +21,7 @@ import {
 } from '@memberjunction/core-entities';
 import {
     BoundedRingBuffer,
+    DiagnosticBreadcrumb,
     DiagnosticLogEntry,
     DiagnosticTelemetryEntry,
     DiagnosticNetworkEntry,
@@ -50,6 +51,7 @@ import {
     UploadFailureMessage,
     UserCanRunDiagnosticSessions,
 } from './live-recording';
+import { RegisterBreadcrumbListeners, RouteBreadcrumb } from './breadcrumbs';
 
 export const MJ_DIAGNOSTICS_IDB_NAME = 'MJ_Diagnostics';
 
@@ -137,6 +139,10 @@ export class MJDiagnosticsService {
         maxItems: 500,
         maxBytes: 4 * 1024 * 1024,
     });
+    private readonly breadcrumbBuffer = new BoundedRingBuffer<DiagnosticBreadcrumb>({
+        maxItems: 100,
+        maxBytes: 64 * 1024,
+    });
 
     private readonly recordingStateSubject = new BehaviorSubject<ActiveRecordingState>({
         isRecording: false,
@@ -153,6 +159,7 @@ export class MJDiagnosticsService {
     private initialized = false;
     private unregisterLoggerSink: (() => void) | null = null;
     private unsubscribeTelemetry: (() => void) | null = null;
+    private unregisterBreadcrumbListeners: (() => void) | null = null;
     /** True while a recording keeps telemetry on that was off before it started. */
     private telemetryEnabledByRecording = false;
     private idbFlushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -241,6 +248,8 @@ export class MJDiagnosticsService {
             this.unregisterResponseHeaders = RegisterResponseHeaderObserver((headers) => {
                 this.onResponseHeaders(headers);
             });
+
+            this.unregisterBreadcrumbListeners = RegisterBreadcrumbListeners((crumb) => this.RecordBreadcrumb(crumb));
         });
     }
 
@@ -262,6 +271,8 @@ export class MJDiagnosticsService {
         }
         this.unregisterResponseHeaders?.();
         this.unregisterResponseHeaders = null;
+        this.unregisterBreadcrumbListeners?.();
+        this.unregisterBreadcrumbListeners = null;
         this.unregisterNetworkObserver?.();
         this.unregisterNetworkObserver = null;
         if (this.ownedServerSessionId) {
@@ -484,6 +495,19 @@ export class MJDiagnosticsService {
     }
 
     /**
+     * Adds a step to the breadcrumb trail that bundles carry in `repro.json`. `Initialize` records
+     * clicks, uncaught errors and unhandled promise rejections; an app adds other steps here.
+     */
+    public RecordBreadcrumb(crumb: DiagnosticBreadcrumb): void {
+        this.breadcrumbBuffer.Push(crumb);
+    }
+
+    /** Adds a page the user went to as a breadcrumb. The query string and fragment are left out. */
+    public RecordRouteBreadcrumb(url: string): void {
+        this.RecordBreadcrumb(RouteBreadcrumb(url));
+    }
+
+    /**
      * Handles the server-sent `X-MJ-Diagnostic-Trigger: <sessionId>` header when an admin/server
      * Watch Session matches the current user or GraphQL operation. Automatically flushes the
      * browser flight-recorder buffers to the server session once per triggered session ID.
@@ -507,6 +531,7 @@ export class MJDiagnosticsService {
                 browserUserAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'headless',
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             },
+            Repro: { breadcrumbs: this.breadcrumbBuffer.ToArray() },
             ClientLogs: this.logBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
             ClientWaterfall: this.networkBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
             ClientTelemetry: this.telemetryBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
@@ -542,7 +567,7 @@ export class MJDiagnosticsService {
             },
             Repro: {
                 userComment: options.note ? ScrubString(options.note, { scrubberProfile }) : undefined,
-                breadcrumbs: [],
+                breadcrumbs: this.breadcrumbBuffer.ToArray(),
             },
             ClientLogs: this.logBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
             ClientWaterfall: this.networkBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
@@ -693,7 +718,7 @@ export class MJDiagnosticsService {
             },
             repro: {
                 userComment: options.note ? ScrubString(options.note, { scrubberProfile }) : undefined,
-                breadcrumbs: [],
+                breadcrumbs: this.breadcrumbBuffer.ToArray(),
             },
             clientLogs: this.logBuffer.ToArray(),
             clientWaterfall: options.includeHar !== false ? this.networkBuffer.ToArray() : [],
@@ -740,6 +765,7 @@ export class MJDiagnosticsService {
         this.logBuffer.Clear();
         this.telemetryBuffer.Clear();
         this.networkBuffer.Clear();
+        this.breadcrumbBuffer.Clear();
         this.flushedTriggerSessions.clear();
     }
 

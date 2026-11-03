@@ -473,4 +473,136 @@ describe('MJDiagnosticsService', () => {
             expect(TelemetryManager.Instance.IsEnabled).toBe(false);
         });
     });
+
+    describe('breadcrumbs', () => {
+        type Listener = (event: object) => void;
+
+        /** A document or window stand-in that keeps its listeners, so a test can fire events at them. */
+        function fakeEventTarget(extra: Record<string, unknown> = {}) {
+            const listeners = new Map<string, Set<Listener>>();
+            return {
+                ...extra,
+                addEventListener: (type: string, fn: Listener) => {
+                    const set = listeners.get(type) ?? new Set<Listener>();
+                    set.add(fn);
+                    listeners.set(type, set);
+                },
+                removeEventListener: (type: string, fn: Listener) => {
+                    listeners.get(type)?.delete(fn);
+                },
+                fire: (type: string, event: object) => {
+                    for (const fn of listeners.get(type) ?? []) fn(event);
+                },
+                get listenerCount() {
+                    return [...listeners.values()].reduce((n, set) => n + set.size, 0);
+                },
+            };
+        }
+
+        /** A clicked element stand-in. `control` is what `closest` finds; by default the element itself. */
+        function fakeElement(
+            tagName: string,
+            options: { id?: string; attributes?: Record<string, string>; text?: string; value?: string; control?: object | null } = {},
+        ): Record<string, unknown> {
+            const element: Record<string, unknown> = {
+                tagName,
+                id: options.id ?? '',
+                textContent: options.text ?? '',
+                value: options.value,
+                getAttribute: (name: string) => options.attributes?.[name] ?? null,
+            };
+            element['closest'] = () => (options.control === undefined ? element : options.control);
+            return element;
+        }
+
+        let doc: ReturnType<typeof fakeEventTarget>;
+        let win: ReturnType<typeof fakeEventTarget>;
+
+        beforeEach(() => {
+            doc = fakeEventTarget();
+            win = fakeEventTarget({ location: { pathname: '/app/home' } });
+            vi.stubGlobal('document', doc);
+            vi.stubGlobal('window', win);
+            service.Initialize();
+        });
+
+        afterEach(() => {
+            service.Dispose();
+            vi.unstubAllGlobals();
+        });
+
+        async function bundleBreadcrumbs() {
+            const built = await service.BuildClientBundle();
+            return ParseBundleDataFromArchive(await VerifyBundleArchive(built.zipBytes)).repro.breadcrumbs;
+        }
+
+        it('records a click with the control it hit and the page it was on, and the bundle carries it', async () => {
+            const button = fakeElement('BUTTON', { id: 'save', text: '  Save\n   Record ' });
+            doc.fire('click', { target: fakeElement('I', { control: button }) });
+
+            expect(await bundleBreadcrumbs()).toEqual([
+                expect.objectContaining({ type: 'click', target: 'button#save "Save Record"', route: '/app/home' }),
+            ]);
+        });
+
+        it('describes form fields and plain elements without what they contain', async () => {
+            doc.fire('click', { target: fakeElement('INPUT', { attributes: { type: 'password', name: 'pwd' }, value: 'hunter2-secret' }) });
+            doc.fire('click', { target: fakeElement('DIV', { attributes: { class: 'ag-cell ng-star-inserted' }, text: 'alice@example.com', control: null }) });
+
+            const crumbs = await bundleBreadcrumbs();
+            expect(crumbs.map((c) => c.target)).toEqual(['input[type=password][name=pwd]', 'div.ag-cell']);
+        });
+
+        it('records uncaught errors and unhandled promise rejections', async () => {
+            win.fire('error', { message: 'Cannot read properties of undefined', filename: 'https://app.test/main.js', lineno: 10, colno: 5 });
+            win.fire('unhandledrejection', { reason: new Error('Save timed out') });
+
+            expect(await bundleBreadcrumbs()).toEqual([
+                expect.objectContaining({ type: 'error', target: 'Cannot read properties of undefined', detail: 'https://app.test/main.js:10:5' }),
+                expect.objectContaining({ type: 'error', target: 'Save timed out', detail: 'Unhandled promise rejection' }),
+            ]);
+        });
+
+        it('records a route as its path, without the query string or fragment', async () => {
+            service.RecordRouteBreadcrumb('/app/search?q=alice%40example.com#results');
+
+            expect(await bundleBreadcrumbs()).toEqual([
+                expect.objectContaining({ type: 'route', target: '/app/search', route: '/app/search' }),
+            ]);
+        });
+
+        it('sends the breadcrumbs with the Submit upload and the server trigger upload', async () => {
+            const uploadSpy = vi.spyOn(DiagnosticsUploadClientCaptureOperation.prototype, 'Execute').mockResolvedValue({
+                Success: true,
+                Output: { SessionID: 'sess-crumbs', ChunksWritten: 1, TotalBytesWritten: 10 },
+            });
+            vi.spyOn(DiagnosticsBuildBundleOperation.prototype, 'Execute').mockResolvedValue({
+                Success: true,
+                Output: { BundleID: 'bundle-crumbs', Status: 'Ready', SizeBytes: 1, SHA256: 'x', FindingsCount: 0 },
+            });
+            vi.spyOn(DiagnosticsSendBundleOperation.prototype, 'Execute').mockResolvedValue({
+                Success: true,
+                Output: { BundleID: 'bundle-crumbs', Status: 'Sent', Destination: 'MJC' },
+            });
+            service.RecordRouteBreadcrumb('/app/home');
+
+            await service.SubmitBundleToSupport();
+            await service.HandleServerTriggerHeader('watch-crumbs');
+
+            expect(uploadSpy).toHaveBeenCalledTimes(2);
+            for (const [input] of uploadSpy.mock.calls) {
+                expect(input.Repro?.['breadcrumbs']).toEqual([expect.objectContaining({ type: 'route', target: '/app/home' })]);
+            }
+        });
+
+        it('stops listening when the service is disposed', () => {
+            expect(doc.listenerCount).toBeGreaterThan(0);
+            expect(win.listenerCount).toBeGreaterThan(0);
+
+            service.Dispose();
+
+            expect(doc.listenerCount).toBe(0);
+            expect(win.listenerCount).toBe(0);
+        });
+    });
 });

@@ -108,8 +108,14 @@ export const DiagnosticsChecks: NamedCheck[] = [
                     sql: "SELECT * FROM AuditLogs WHERE Email = 'alice@example.com'",
                     parameterTypes: [],
                 });
+                manager.AppendToChunkBuffer(sessionId, 'Client', 'Timeline', {
+                    timestamp: new Date().toISOString(),
+                    type: 'click',
+                    target: 'button#save "Save"',
+                    route: '/app/home',
+                });
                 const saved = await manager.FlushSessionChunksToDatabase(sessionId, ctx.User, ctx.Provider);
-                AssertEqual(saved, 1, 'The SQL chunk is saved to the database before the bundle is built');
+                AssertEqual(saved, 2, 'The SQL and breadcrumb chunks are saved to the database before the bundle is built');
             } finally {
                 await new DiagnosticsStopSessionServerOperation().ExecuteServer({ SessionID: sessionId }, opContext);
             }
@@ -119,6 +125,7 @@ export const DiagnosticsChecks: NamedCheck[] = [
             Assert(verification.valid, `Bundle archive must verify cleanly: ${verification.reason}`);
             const data = ParseBundleDataFromArchive(verification);
             AssertEqual(data.serverSql.length, 1, 'The bundle holds the SQL entry read back from the database');
+            AssertEqual(data.repro.breadcrumbs.length, 1, 'The bundle holds the breadcrumb read back from the database');
             Assert(
                 data.findings.some((f) => f.category === 'slow_sql'),
                 'Slow SQL finding generated for 2600ms query',
