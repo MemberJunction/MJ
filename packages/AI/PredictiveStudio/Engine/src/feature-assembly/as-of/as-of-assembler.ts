@@ -491,14 +491,15 @@ export class AsOfFeatureAssembler {
   /**
    * `__mj_CreatedAt` of the records whose history gives no creation instant (it starts with a Snapshot, or is empty),
    * read by key in one read; empty, with no read, when the entity does not list the column or every history starts
-   * with a Create row.
+   * with a Create row. The keys go to the read as given (ReadByKeys matches case-insensitively and keys its rows
+   * lower-cased); a lower-cased key would miss a mixed-case key on a case-sensitive collation.
    */
   private static async storedCreatedAts(entity: AssemblyEntityInfo, history: EntityHistory, keys: readonly string[], input: AsOfAssemblyInput): Promise<ReadonlyMap<string, CellValue>> {
     const none = new Map<string, CellValue>();
     if (!AsOfFeatureAssembler.hasField(entity, '__mj_CreatedAt')) return none;
     const unknown = AsOfFeatureAssembler.uniqueKeys(keys).filter((k) => history.CreatedAt(k) === null);
     if (unknown.length === 0) return none;
-    const read = await KeyedReader.ReadByKeys(input.DataAccess, entity.Name, entity.PrimaryKey, unknown.map((k) => k.toLowerCase()), ['__mj_CreatedAt']);
+    const read = await KeyedReader.ReadByKeys(input.DataAccess, entity.Name, entity.PrimaryKey, unknown, ['__mj_CreatedAt']);
     if (read.Status === 'refused') throw new AssemblyRefused(read.Refusal);
     return new Map([...read.Rows].map(([k, row]) => [k, row.__mj_CreatedAt] as const));
   }

@@ -839,4 +839,34 @@ describe('replay reader — creation rule', () => {
     expect(out.Status).toBe('assembled');
     expect(spy.CreatedAtReads).toBe(0);
   });
+  it('stays uncovered when the record lists __mj_CreatedAt but stores null there: no creation instant is invented', async () => {
+    const storedNull: Record<string, SourceRow[]> = { ...tables, Tiers: [{ ID: 'y2', Tier: 'Silver', __mj_CreatedAt: null }] };
+    const { out, spy } = await assemble(storedNull, snapshotStart);
+    expect(out).toMatchObject({ Status: 'refused', Refusal: { kind: 'decision-date-before-change-history', entity: 'Tiers', field: 'Tier' } });
+    expect(spy.CreatedAtReads).toBe(1);
+  });
+
+  /** A store whose key collation is case-sensitive: an `IN` list matches a key only in its stored spelling. */
+  class CaseSensitiveDataAccess extends SpyDataAccess {
+    public override async fetchRows(p: Parameters<TableDataAccess['fetchRows']>[0]): ReturnType<TableDataAccess['fetchRows']> {
+      const res = await super.fetchRows(p);
+      const list = p.EntityName === 'Tiers' && p.ExtraFilter ? /^\[ID\] IN \((.*)\)$/.exec(p.ExtraFilter) : null;
+      if (list === null || !res.Success) return res;
+      const spellings = new Set([...list[1].matchAll(/'((?:[^']|'')*)'/g)].map((m) => m[1]));
+      return { ...res, Rows: res.Rows.filter((r) => spellings.has(String(r.ID))) };
+    }
+  }
+
+  it('reads __mj_CreatedAt by the key as stored, so a mixed-case key is found on a case-sensitive collation', async () => {
+    const mixedRow: AssemblyRowRef[] = [{ RowID: 'Y2', EntityKey: 'Y2', DecisionDate: new Date('2023-12-01T00:00:00Z'), Period: null }];
+    const data: Record<string, SourceRow[]> = { ...tables, Tiers: [{ ID: 'Y2', Tier: 'Silver', __mj_CreatedAt: new Date('2024-01-01T00:00:00Z') }] };
+    const history: Record<string, RecordChangeRow[]> = { ...changes, Tiers: [rc('ts-2', 'Y2', 'Snapshot', '2024-02-01T00:00:00Z', { ID: 'Y2', Tier: 'Silver' })] };
+    const spy = new CaseSensitiveDataAccess(data);
+    const base = input([tier], { Tables: data, Changes: history, Rows: mixedRow });
+    const withTiers: IAssemblyMetadata = { Entity: (n) => (n === 'Tiers' ? entities.Tiers : metadata.Entity(n)) };
+    const out = await new AsOfFeatureAssembler().Assemble({ ...base, DataAccess: spy, Metadata: withTiers });
+    expect(out.Status === 'refused' ? out.Refusal : null).toBeNull();
+    if (out.Status !== 'assembled') return;
+    expect(out.Rows[0].Provenance[0]).toMatchObject({ sourceRef: 'Tiers/y2/Tier', sourceVersion: 'created-after-decision' });
+  });
 });
