@@ -40,12 +40,8 @@ export class ExperimentScores {
   private static scoreOn(metrics: ReadonlyMap<string, number>, key: string | null): ExperimentScore | null {
     const raw = key === null ? undefined : metrics.get(key);
     if (key === null || raw === undefined || !Number.isFinite(raw)) return null;
-    switch (MetricDirections.MetricDirectionOf(key)) {
-      case 'higher-is-better': return { Score: raw, Metric: key };
-      case 'lower-is-better': return { Score: -raw, Metric: key };
-      case 'closer-to-one': return { Score: -Math.abs(1 - raw), Metric: key };
-      case null: return null;
-    }
+    const score = MetricDirections.NormalizedScore(raw, key);
+    return score === null ? null : { Score: score, Metric: key };
   }
 
   /** The model's primary proper score: the one holdout metric that is a proper score; null when none is, or several are. */

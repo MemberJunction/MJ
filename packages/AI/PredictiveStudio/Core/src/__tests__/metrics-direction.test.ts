@@ -48,3 +48,16 @@ describe('MetricDirections.OnMetricScale / MetricScaleLabel — a normalized sco
     expect([MetricDirections.OnMetricScale(3, 'mystery'), MetricDirections.MetricScaleLabel('mystery')]).toEqual([3, 'mystery']);
   });
 });
+
+describe('MetricDirections.NormalizedScore — a raw score oriented so higher is better (the inverse of OnMetricScale)', () => {
+  it('negates a loss, takes minus the distance from 1 for a closer-to-one metric, keeps a higher-is-better one', () => {
+    expect([MetricDirections.NormalizedScore(12.5, 'rmse'), MetricDirections.NormalizedScore(1.5, 'calibration-slope'), MetricDirections.NormalizedScore(0.81, 'auc')]).toEqual([-12.5, -0.5, 0.81]);
+  });
+
+  it('is null for a metric of unknown direction, and round-trips through OnMetricScale', () => {
+    expect(MetricDirections.NormalizedScore(3, 'mystery')).toBeNull();
+    for (const [raw, metric] of [[12.5, 'rmse'], [0.81, 'auc']] as const) {
+      expect(MetricDirections.OnMetricScale(MetricDirections.NormalizedScore(raw, metric) ?? Number.NaN, metric)).toBe(raw);
+    }
+  });
+});

@@ -348,22 +348,20 @@ export class MaintenanceEngine {
   /**
    * How much the challenger improves over the incumbent, in the metric's natural
    * direction (positive = better). Returns `null` when either value is absent.
-   * For error metrics lower is better → improvement = incumbent − challenger;
-   * for higher-is-better metrics → improvement = challenger − incumbent.
-   * A closer-to-one metric (calibration slope) is never ranked, so it gives no
-   * improvement (null → hold).
+   * The difference of the two normalized scores (`MetricDirections.NormalizedScore`,
+   * the leaderboard's orientation): for error metrics incumbent − challenger, for
+   * higher-is-better metrics challenger − incumbent, for a closer-to-one metric
+   * (calibration slope) |1 − incumbent| − |1 − challenger|. A metric whose direction
+   * is not declared (the earlier sidecar's names, e.g. `roc_auc`) reads as
+   * higher-is-better, as it always has.
    */
   private metricImprovement(metric: string, incumbentValue: number | null, challengerValue: number | null): number | null {
     if ((incumbentValue === null || incumbentValue === undefined) || (challengerValue === null || challengerValue === undefined)) {
       return null;
     }
-    if (MaintenanceEngine.isUnrankedMetric(metric)) return null;
-    return MetricDirections.IsErrorMetric(metric) ? incumbentValue - challengerValue : challengerValue - incumbentValue;
-  }
-
-  /** Whether a metric's declared direction is closer-to-one: such a metric is never ranked (see `MetricDirections`). */
-  private static isUnrankedMetric(metric: string): boolean {
-    return MetricDirections.MetricDirectionOf(metric) === 'closer-to-one';
+    const challenger = MetricDirections.NormalizedScore(challengerValue, metric);
+    const incumbent = MetricDirections.NormalizedScore(incumbentValue, metric);
+    return challenger === null || incumbent === null ? challengerValue - incumbentValue : challenger - incumbent;
   }
 
   /** Decide promote-vs-hold from the directional improvement + margin (hold when unknown). */
@@ -389,17 +387,11 @@ export class MaintenanceEngine {
         `has no holdout value for it. Recommending HOLD until a human reviews. No promotion was performed.`
       );
     }
-    if (MaintenanceEngine.isUnrankedMetric(metric)) {
-      return (
-        `The newly-trained model scores ${challengerValue.toFixed(4)} vs the current model's ${incumbentValue.toFixed(4)} ` +
-        `on "${metric}", but "${metric}" is not a metric a model is ranked on (closer to 1 is better calibrated, not a ` +
-        `higher or lower score). Recommending HOLD until a human reviews. No promotion was performed.`
-      );
-    }
     const verb = recommendation === 'promote' ? 'beats' : 'does not beat';
+    const direction = MetricDirections.MetricDirectionOf(metric) === 'closer-to-one' ? ' (closer to 1 is better)' : '';
     return (
       `The newly-trained model scores ${challengerValue.toFixed(4)} vs the current model's ${incumbentValue.toFixed(4)} ` +
-      `on "${metric}" (a change of ${(delta ?? 0).toFixed(4)}). It ${verb} the current model by the required ` +
+      `on "${metric}"${direction} (a change of ${(delta ?? 0).toFixed(4)}). It ${verb} the current model by the required ` +
       `${margin.toFixed(4)} margin, so the recommendation is to ${recommendation.toUpperCase()}. ` +
       `Promotion still requires explicit human sign-off — nothing has been promoted automatically.`
     );

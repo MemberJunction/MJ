@@ -59,9 +59,10 @@ export function ResolveComparisonMetric(
       return name;
     }
   }
-  // First numeric metric present on BOTH whose direction is declared and rankable (higher- or
-  // lower-is-better): closer-to-one keys (calibration slope) and unknown keys are never auto-picked,
-  // because the comparison can only rank a metric by its direction. An explicit pinned name still wins above.
+  // First numeric metric present on BOTH whose direction is declared higher- or lower-is-better:
+  // closer-to-one keys (calibration slope, a calibration check rather than the model's score) and unknown
+  // keys are never auto-picked. An explicit pinned name still wins above (a pinned calibration slope is
+  // compared by its distance from 1).
   const sharedNumeric = Object.keys(incumbentMetrics).find(
     (k) =>
       isRankableDirection(MetricDirections.MetricDirectionOf(k)) &&

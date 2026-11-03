@@ -493,18 +493,23 @@ describe('MaintenanceEngine.TriggerRetrainIfStale + CompareChallenger', () => {
     expect(promote.delta).toBeCloseTo(-1.0, 5);
   });
 
-  it('never ranks a pinned closer-to-one metric (calibration slope): it holds and says the metric is not one a model is ranked on', () => {
-    // calibration-slope is closer-to-one: 1.5 is farther from 1 than 0.95, so a higher-is-better reading would
-    // promote the worse-calibrated challenger.
+  it('ranks a pinned closer-to-one metric (calibration slope) by distance from 1: closer to 1 is better', () => {
+    // calibration-slope is closer-to-one: |1 − value| decides, as the leaderboard and the inner-fold ranking rank it.
     const policy: RetrainingPolicy = { ...DEFAULT_RETRAINING_POLICY, comparisonMetric: 'calibration-slope', promotionMargin: 0.1 };
-    const incumbent = new FakeModel('m1');
-    incumbent.HoldoutMetrics = JSON.stringify({ 'calibration-slope': 0.95 });
-    const challenger = new FakeModel('m2');
-    challenger.HoldoutMetrics = JSON.stringify({ 'calibration-slope': 1.5 });
-    const cmp = engine.CompareChallenger(asModel(incumbent), asModel(challenger), policy);
-    expect(cmp.recommendation).toBe('hold');
-    expect(cmp.detail).toContain('"calibration-slope" is not a metric a model is ranked on');
-    expect(cmp.detail).not.toMatch(/does not beat|beats/);
+    const model = (id: string, slope: number) => {
+      const m = new FakeModel(id);
+      m.HoldoutMetrics = JSON.stringify({ 'calibration-slope': slope });
+      return asModel(m);
+    };
+    // Incumbent 0.95 (0.05 from 1) vs challenger 1.5 (0.5 from 1): a higher-is-better reading would promote it. HOLD.
+    const hold = engine.CompareChallenger(model('m1', 0.95), model('m2', 1.5), policy);
+    expect(hold.recommendation).toBe('hold');
+    expect(hold.detail).toContain('does not beat');
+    // Incumbent 1.4 (0.4 from 1) vs challenger 1.02 (0.02 from 1): 0.38 closer, past the 0.1 margin. PROMOTE, though lower.
+    const promote = engine.CompareChallenger(model('m3', 1.4), model('m4', 1.02), policy);
+    expect(promote.recommendation).toBe('promote');
+    expect(promote.detail).toContain('beats the current model');
+    expect(promote.detail).toContain('closer to 1 is better');
   });
 
   it('compareChallenger never mutates the models / performs no promotion (pure recommendation)', () => {

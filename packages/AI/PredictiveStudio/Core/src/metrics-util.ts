@@ -3,7 +3,7 @@
  *
  * Metric direction for Predictive Studio, derived from the one declaration `METRIC_DIRECTION`. A metric is
  * **lower-is-better** (log loss, Brier, deviances, RMSE, MAE, MASE), **higher-is-better** (AUC, accuracy, F1,
- * precision, recall, R²) or **closer-to-one** (calibration slope, never ranked).
+ * precision, recall, R²) or **closer-to-one** (calibration slope, ranked by its distance from 1).
  *
  * Direction matters in two places that must agree: the experiment leaderboard normalisation and the maintenance
  * challenger-vs-incumbent comparison. Deriving the lower-is-better set from `METRIC_DIRECTION` (plus the legacy
@@ -38,6 +38,23 @@ export class MetricDirections {
    */
   public static IsErrorMetric(metricKey: string): boolean {
     return ERROR_METRIC_KEYS.has(metricKey.trim().toLowerCase());
+  }
+
+  /**
+   * A raw score oriented so that higher is always better: a lower-is-better metric negated, a closer-to-one metric minus
+   * its distance from one (|1 − value|, how a calibration slope is ranked), a higher-is-better metric as stored; null for
+   * a metric whose direction is not known (it must not be ranked). {@link OnMetricScale} is its inverse.
+   *
+   * @param raw the score as stored
+   * @param metricKey the metric it is on
+   */
+  public static NormalizedScore(raw: number, metricKey: string): number | null {
+    switch (MetricDirections.MetricDirectionOf(metricKey)) {
+      case 'higher-is-better': return raw;
+      case 'lower-is-better': return -raw;
+      case 'closer-to-one': return -Math.abs(1 - raw);
+      default: return null;
+    }
   }
 
   /**
