@@ -14,14 +14,11 @@ export const REDACTED_CONSTRAINT_VALUES = '(values withheld)';
  *   `... is not present in table "t".` The column names stay; only the values go.
  * - PostgreSQL check / not-null detail: `Failing row contains (1, 2, 3).`
  */
-const VALUE_PATTERNS: ReadonlyArray<{ Pattern: RegExp; Replacement: string }> = [
-    { Pattern: /(The duplicate key value is )\([^\n]*\)/g, Replacement: `$1${REDACTED_CONSTRAINT_VALUES}` },
-    { Pattern: /(Truncated value: )'[^\n]*'/g, Replacement: `$1${REDACTED_CONSTRAINT_VALUES}` },
-    {
-        Pattern: /(Key \([^)\n]*\)=)\([^\n]*\)(?=\s+(?:already exists|is not present|is still referenced))/g,
-        Replacement: `$1${REDACTED_CONSTRAINT_VALUES}`,
-    },
-    { Pattern: /(Failing row contains )\([^\n]*\)/g, Replacement: `$1${REDACTED_CONSTRAINT_VALUES}` },
+const VALUE_PATTERNS: ReadonlyArray<RegExp> = [
+    /(The duplicate key value is )\([^\n]*\)/g,
+    /(Truncated value: )'[^\n]*'/g,
+    /(Key \([^)\n]*\)=)\([^\n]*\)(?=\s+(?:already exists|is not present|is still referenced))/g,
+    /(Failing row contains )\([^\n]*\)/g,
 ];
 
 /**
@@ -37,8 +34,9 @@ export function RedactConstraintValues(message: string): string {
         return message;
     }
     let result = message;
-    for (const { Pattern, Replacement } of VALUE_PATTERNS) {
-        result = result.replace(Pattern, Replacement);
+    for (const Pattern of VALUE_PATTERNS) {
+        // Each pattern's first group is the label kept in front of the removed values.
+        result = result.replace(Pattern, (_match: string, label: string) => `${label}${REDACTED_CONSTRAINT_VALUES}`);
     }
     return result;
 }
