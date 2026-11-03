@@ -6400,18 +6400,21 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
         const norm = (v: string | null | undefined) => (v ?? '').trim().toLowerCase();
         const rollup = norm(ProviderBase._allMetadataTypeName);
+        const nonRollupRemote = remote.filter(r => norm(r.Type) !== rollup);
+        const remoteByID = IndexByUUID(nonRollupRemote.filter(r => Boolean(r.ID)), r => r.ID);
+        const remoteByType = new Map<string, MetadataInfo>();
+        for (const r of nonRollupRemote) {
+            if (r.Type) {
+                remoteByType.set(norm(r.Type), r);
+            }
+        }
         for (const item of dataset.Results) {
             if (!Array.isArray(item.Results)) {
                 continue;
             }
-            const itemEntityNorm = norm(item.EntityName);
-            const itemCodeNorm = norm(item.Code);
-            const remoteEntry = remote.find(r => {
-                if (norm(r.Type) === rollup) return false;
-                if (item.EntityID && r.ID && UUIDsEqual(item.EntityID, r.ID)) return true;
-                const rNorm = norm(r.Type);
-                return rNorm === itemEntityNorm || rNorm === itemCodeNorm;
-            });
+            const remoteEntry = (item.EntityID ? remoteByID.Get(item.EntityID) : undefined)
+                ?? remoteByType.get(norm(item.EntityName))
+                ?? remoteByType.get(norm(item.Code));
             if (remoteEntry && remoteEntry.RowCount !== undefined && item.Results.length !== remoteEntry.RowCount) {
                 return true;
             }
