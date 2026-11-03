@@ -6,7 +6,17 @@ import {
   TransformCodeOnly, CastBooleanInsertValues, ConvertJsonFunctions,
   ConvertBooleanLiteralComparisons,
   EscapeRegExp, NeedsHandAuthoring, StripComments,
+  AddRecursiveToSelfReferencingCtes, HasTryConvert,
 } from './ExpressionHelpers.js';
+
+/**
+ * A table reference in a FROM / JOIN: `schema."Table"`, `"Table"` or a bare word. The schema may be
+ * an unresolved Flyway placeholder (`${mjSchema}`, `${flyway:defaultSchema}`), which Open App
+ * migrations use for core tables; without it the UPDATE-alias rewrite gave up and left T-SQL's
+ * `UPDATE ta SET … FROM t ta JOIN …` in the output (issue #5799).
+ */
+const TABLE_REF = String.raw`(?:(?:\$\{[\w:]+\}|\w+)\.)?"[^"]+"|\w+`;
+const QUALIFIED_TABLE_REF = String.raw`(?:\$\{[\w:]+\}|\w+)\."[^"]+"`;
 
 /** Strip trailing comments (both line -- and block /* *‌/) from a SQL string.
  *  Returns the bare SQL and the stripped comment text separately. */
@@ -157,6 +167,10 @@ export class InsertRule implements IConversionRule {
     result = ConvertCharIndex(result);
     result = ConvertStuff(result);
     result = ConvertConvertFunction(result);
+    // TRY_CONVERT to a type without a guarded-cast form has no PostgreSQL spelling: report it.
+    if (HasTryConvert(result)) {
+      return NeedsHandAuthoring('TRY_CONVERT', 'only uniqueidentifier and integer targets convert', sql);
+    }
     result = ConvertIIF(result);
     // Convert SS JSON functions (JSON_VALUE / ISJSON) BEFORE PascalCase quoting,
     // so the function names aren't quoted as identifiers.
@@ -194,6 +208,9 @@ export class InsertRule implements IConversionRule {
     );
     // Quote bare PascalCase identifiers (column names in INSERT/UPDATE/DELETE)
     result = QuotePascalCaseIdentifiers(result);
+    // PostgreSQL needs RECURSIVE for a CTE that reads itself; T-SQL has no keyword (issue #5799).
+    // After quoting, which would otherwise quote the keyword as an identifier.
+    result = AddRecursiveToSelfReferencingCtes(result);
     // Cast SS BIT literals (0/1) → PG boolean (FALSE/TRUE) at boolean-column
     // positions in INSERT VALUES. PG rejects integer literals for boolean columns.
     result = CastBooleanInsertValues(result, context.TableColumns);
@@ -260,7 +277,7 @@ export class InsertRule implements IConversionRule {
 
     // Verify the alias appears in a FROM clause as: <schema>."<table>" [AS] <alias>
     const tableMatch = sql.match(
-      new RegExp(`\\bFROM\\b[\\s\\S]*?(\\w+\\."[^"]+")\\s+(?:AS\\s+)?${alias}\\b`, 'i')
+      new RegExp(`\\bFROM\\b[\\s\\S]*?(${QUALIFIED_TABLE_REF})\\s+(?:AS\\s+)?${alias}\\b`, 'i')
     );
     if (!tableMatch) return sql;
     const tableName = tableMatch[1];
@@ -270,7 +287,7 @@ export class InsertRule implements IConversionRule {
     // (1) UPDATE <alias> → UPDATE <table> AS <alias>
     result = result.replace(
       new RegExp(`(\\bUPDATE\\s+)${alias}(?=\\s+SET\\b)`, 'i'),
-      `$1${tableName} AS ${alias}`
+      (_m, update: string) => `${update}${tableName} AS ${alias}`
     );
 
     // (2) Strip alias. prefix from SET columns (between SET and FROM only)
@@ -319,7 +336,7 @@ export class InsertRule implements IConversionRule {
       // `JOIN numbered ON ...`). The alias is optional — CTE joins commonly omit it —
       // so a negative lookahead keeps ON from being swallowed as an alias.
       const parsed = body.match(
-        /^((?:\w+\.)?"[^"]+"|\w+)(?:\s+(?:AS\s+)?(?!ON\b)(\w+))?\s+ON\s+([\s\S]+)$/i
+        new RegExp(`^(${TABLE_REF})(?:\\s+(?:AS\\s+)?(?!ON\\b)(\\w+))?\\s+ON\\s+([\\s\\S]+)$`, 'i')
       );
       if (parsed) {
         const aliasPart = parsed[2] ? ` ${parsed[2]}` : '';
@@ -348,7 +365,9 @@ export class InsertRule implements IConversionRule {
     } else {
       const newFrom = `FROM\n\t${otherTables.join(',\n\t')}`;
       const allConds = condParts.join('\n\tAND ');
-      result = result.replace(/\bFROM\b[\s\S]*$/i, `${newFrom}\nWHERE\n\t${allConds}`);
+      // A replacement function, not a string: the conditions are SQL and may hold `$'` (the end
+      // of a regex literal such as TRY_CONVERT's UUID pattern), which a replacement string expands.
+      result = result.replace(/\bFROM\b[\s\S]*$/i, () => `${newFrom}\nWHERE\n\t${allConds}`);
     }
 
     return result;

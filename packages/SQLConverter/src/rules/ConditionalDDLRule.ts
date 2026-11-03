@@ -214,7 +214,10 @@ export class ConditionalDDLRule implements IConversionRule {
     const closePos = ConditionalDDLRule.findCloseParen(sql, openPos);
     if (closePos < 0) return null;
 
-    const body = sql.slice(closePos + 1).replace(/^\s*BEGIN\b/i, '').replace(/\bEND\s*;?\s*$/i, '');
+    // Trailing comments first: a batch that runs on into the next statement's heading comment
+    // (`END\n-- 2b. Drop …`) otherwise keeps its END, and the body no longer reads as drops.
+    const body = ConditionalDDLRule.stripTrailingComments(sql.slice(closePos + 1))
+      .replace(/^\s*BEGIN\b/i, '').replace(/\bEND\s*;?\s*$/i, '');
     const statements = body.split(';').map(s => s.trim()).filter(Boolean);
     if (statements.length === 0) return null;
     const converted = statements.map(s => ConvertDropIndex(s));

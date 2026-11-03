@@ -230,3 +230,45 @@ describe('GrantRule', () => {
     });
   });
 });
+
+describe('GrantRule — guarded grants (issue #5567)', () => {
+  it('converts a principal-guarded sp_executesql GRANT to a pg_roles-guarded DO block', () => {
+    const out = convert(`IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'cdp_UI')
+    EXEC sp_executesql N'GRANT SELECT ON [dbo].[vwFoo] TO [cdp_UI]'`);
+    expect(out).toBe([
+      'DO $$',
+      'BEGIN',
+      "    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cdp_UI') THEN",
+      '        GRANT SELECT ON dbo."vwFoo" TO "cdp_UI";',
+      '    END IF;',
+      'END $$;',
+      '',
+    ].join('\n'));
+  });
+
+  it('converts CodeGen\'s OBJECT_ID-guarded layered-view grant to a to_regclass guard', () => {
+    const out = convert(`IF OBJECT_ID('[app].[vwOrganizations]', 'V') IS NOT NULL
+BEGIN
+    EXEC sp_executesql N'GRANT SELECT ON [app].[vwOrganizations] TO [cdp_UI], [cdp_Developer]';
+END;`);
+    expect(out).toContain(`IF to_regclass('app."vwOrganizations"') IS NOT NULL THEN`);
+    expect(out).toContain('GRANT SELECT ON app."vwOrganizations" TO "cdp_UI", "cdp_Developer";');
+    expect(out).not.toMatch(/sp_executesql|OBJECT_ID/i);
+  });
+
+  it('reports a guard or body it cannot read as a NEEDS HAND AUTHORING gap', () => {
+    expect(convert(`IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'x')
+    EXEC sp_executesql N'GRANT SELECT ON [dbo].[x] TO [r]'`)).toMatch(/^-- NEEDS HAND AUTHORING: GUARDED GRANT/);
+    expect(convert(`IF OBJECT_ID('[dbo].[spX]', 'P') IS NOT NULL
+    EXEC sp_executesql N'GRANT EXECUTE ON [dbo].[spX] TO [r]'`)).toMatch(/^-- NEEDS HAND AUTHORING: GUARDED GRANT/);
+    expect(convert(`IF OBJECT_ID('[dbo].[vwX]', 'V') IS NOT NULL
+BEGIN
+    EXEC sp_executesql N'GRANT SELECT ON [dbo].[vwX] TO [r]';
+    DROP VIEW [dbo].[vwY];
+END`)).toMatch(/^-- NEEDS HAND AUTHORING: GUARDED GRANT/);
+  });
+
+  it('leaves a plain GRANT unchanged in shape', () => {
+    expect(convert('GRANT SELECT ON [__mj].[vwFoo] TO [cdp_UI]')).toBe('GRANT SELECT ON __mj."vwFoo" TO "cdp_UI";\n');
+  });
+});

@@ -185,3 +185,15 @@ describe('CreateIndexRule — DROP INDEX (issue #5955)', () => {
     expect(out).not.toMatch(/^DROP INDEX/m);
   });
 });
+
+describe('CreateIndexRule — index names and ASC/DESC columns (issue #5567)', () => {
+  it('quotes an unquoted index name and columns followed by ASC/DESC, and __mj_ columns', () => {
+    expect(convert('CREATE INDEX IX_Foo_Name ON [dbo].[Foo] (Name ASC, __mj_CreatedAt DESC, [Code] DESC)').trim())
+      .toBe('CREATE INDEX "IX_Foo_Name" ON dbo."Foo" ("Name" ASC, "__mj_CreatedAt" DESC, "Code" DESC);');
+  });
+
+  it('leaves lower-case columns and an already quoted name alone', () => {
+    expect(convert('CREATE UNIQUE INDEX [UX_a] ON [dbo].[t] (id DESC, code)').trim())
+      .toBe('CREATE UNIQUE INDEX "UX_a" ON dbo."t" (id DESC, code);');
+  });
+});

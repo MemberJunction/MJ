@@ -3,6 +3,7 @@
  * Ported from Python classify_batch() function.
  */
 import type { StatementType } from './types.js';
+import { StripComments } from './ExpressionHelpers.js';
 
 /** Session SET commands that are SQL Server-specific and should be skipped */
 const SESSION_SETTINGS = [
@@ -47,9 +48,11 @@ export function ClassifyBatch(batch: string): StatementType {
     return 'SKIP_ERROR';
   }
 
-  // IF OBJECT_ID ... DROP PROCEDURE/FUNCTION → skip (CREATE OR REPLACE handles it)
+  // IF OBJECT_ID ... DROP PROCEDURE/FUNCTION → skip (CREATE OR REPLACE handles it).
+  // A guarded grant (`IF OBJECT_ID('…vwX', 'V') IS NOT NULL EXEC sp_executesql N'GRANT …'`,
+  // which CodeGen writes for layered base views) goes to GrantRule instead (issue #5567).
   if (/^IF\s+OBJECT_ID\s*\(/i.test(upper)) {
-    return 'SKIP_SQLSERVER';
+    return grantsInside(batch) ? 'GRANT' : 'SKIP_SQLSERVER';
   }
 
   // IF DATABASE_PRINCIPAL_ID(N'x') IS NULL ... EXEC('CREATE ROLE ...') → the SQL Server
@@ -78,6 +81,9 @@ export function ClassifyBatch(batch: string): StatementType {
     if (/\bDROP\s+INDEX\b/i.test(upper)) {
       return 'CONDITIONAL_DDL';
     }
+    // ...and a guarded grant (`IF EXISTS (… sys.database_principals …) EXEC sp_executesql
+    // N'GRANT …'`). Skipped, the grant was lost without a gap (issue #5567).
+    if (grantsInside(batch)) return 'GRANT';
     return 'SKIP_SQLSERVER';
   }
 
@@ -98,14 +104,15 @@ export function ClassifyBatch(batch: string): StatementType {
     // Skip IF NOT EXISTS blocks that use SQL Server system features
     if (upper.includes('SERVERPROPERTY') || upper.includes('CREATE LOGIN') ||
         upper.includes('SYS.SERVER_PRINCIPAL') || upper.includes('SYS.DATABASE_PRINCIPAL')) {
-      return 'SKIP_SQLSERVER';
+      return !upper.includes('CREATE LOGIN') && grantsInside(batch) ? 'GRANT' : 'SKIP_SQLSERVER';
     }
     return 'CONDITIONAL_DDL';
   }
 
   // User/role creation blocks (SQL Server-specific)
   if (upper.includes('SERVERPROPERTY') || upper.replace(/\s/g, '').includes('SP_EXECUTESQL')) {
-    return 'SKIP_SQLSERVER';
+    // A grant run through sp_executesql is converted (or reported as a gap) by GrantRule.
+    return !upper.includes('SERVERPROPERTY') && grantsInside(batch) ? 'GRANT' : 'SKIP_SQLSERVER';
   }
   if (/^DECLARE\s+@/i.test(upper)) {
     // DECLARE blocks with EXEC calls to schema procedures → convert as EXEC_BLOCK
@@ -282,6 +289,16 @@ export function ClassifyBatch(batch: string): StatementType {
 /** @deprecated Use {@link ClassifyBatch}. */
 export function classifyBatch(batch: string): StatementType {
   return ClassifyBatch(batch);
+}
+
+/**
+ * Whether a batch the classifier would otherwise skip as SQL Server-only carries a GRANT, REVOKE
+ * or DENY, in code or in the string handed to `sp_executesql`. Such a batch goes to GrantRule,
+ * which converts the guarded forms it reads and reports the rest as a gap, so a grant is never
+ * dropped silently. Comments are ignored.
+ */
+function grantsInside(batch: string): boolean {
+  return /\b(?:GRANT|REVOKE|DENY)\s/i.test(StripComments(batch));
 }
 
 /** Classify a CREATE PROCEDURE batch — may be skipped if it uses SQL Server system features */

@@ -3,7 +3,7 @@ import {
   ConvertIdentifiers, ConvertDateFunctions, ConvertCharIndex,
   ConvertStringConcat, ConvertTopToLimit, ConvertIIF,
   RemoveNPrefix, ConvertCommonFunctions, EmitDropOverloadsBlock,
-  ConvertInRoutineSchema, NeedsHandAuthoring, RoutineSchema,
+  ConvertInRoutineSchema, NeedsHandAuthoring, RoutineSchema, AddRecursiveToSelfReferencingCtes,
 } from './ExpressionHelpers.js';
 import { ResolveType } from './TypeResolver.js';
 
@@ -97,10 +97,8 @@ export class FunctionRule implements IConversionRule {
       const params = m[2];
       let query = m[3].trim().replace(/;$/, '');
 
-      // Add WITH RECURSIVE if recursive CTE
-      if (/\bWITH\s+\w+\s+AS\s*\(/i.test(query) && query.toUpperCase().includes('UNION ALL')) {
-        query = query.replace(/\bWITH\b/i, 'WITH RECURSIVE');
-      }
+      // Add WITH RECURSIVE when a CTE reads itself (a UNION ALL alone is not recursion)
+      query = AddRecursiveToSelfReferencingCtes(query);
 
       // Determine return type
       let returnsClause = 'RETURNS SETOF RECORD';

@@ -791,3 +791,26 @@ describe('StatementClassifier — DROP INDEX (issues #5955, #3166)', () => {
     expect(ClassifyBatch(sql)).toBe('CONDITIONAL_DDL');
   });
 });
+
+describe('StatementClassifier — guarded grants (issue #5567)', () => {
+  it('routes a principal-guarded sp_executesql GRANT to GRANT', () => {
+    const sql = `IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = 'cdp_UI')
+    EXEC sp_executesql N'GRANT SELECT ON [dbo].[vwFoo] TO [cdp_UI]'`;
+    expect(ClassifyBatch(sql)).toBe('GRANT');
+  });
+
+  it('routes CodeGen\'s OBJECT_ID-guarded layered-view grant to GRANT', () => {
+    const sql = `IF OBJECT_ID('[app].[vwOrganizations]', 'V') IS NOT NULL
+BEGIN
+    EXEC sp_executesql N'GRANT SELECT ON [app].[vwOrganizations] TO [cdp_UI]';
+END;`;
+    expect(ClassifyBatch(sql)).toBe('GRANT');
+  });
+
+  it('keeps skipping guarded batches without a grant', () => {
+    expect(ClassifyBatch(`IF OBJECT_ID('[__mj].[spFoo]', 'P') IS NOT NULL DROP PROCEDURE [__mj].[spFoo]`)).toBe('SKIP_SQLSERVER');
+    expect(ClassifyBatch(`IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'x') EXEC sp_dropextendedproperty 'MS_Description'`)).toBe('SKIP_SQLSERVER');
+    // "grant" in a comment is not a grant
+    expect(ClassifyBatch(`-- grant access below\nIF OBJECT_ID('[__mj].[spFoo]', 'P') IS NOT NULL DROP PROCEDURE [__mj].[spFoo]`)).toBe('SKIP_SQLSERVER');
+  });
+});
