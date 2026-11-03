@@ -153,6 +153,17 @@ describe('FindUncollatedStringColumns', () => {
         const sql = ['ALTER TABLE s.A ALTER COLUMN Name NVARCHAR(100) NOT NULL;', 'SELECT CAST(1 AS NVARCHAR(10));'].join('\n');
         expect(lines(sql)).toEqual([]);
     });
+
+    it('reads quoted and spaced multi-part names', () => {
+        const sql = ['CREATE TABLE "s"."Q" (Name NVARCHAR(10));', 'ALTER TABLE s . [R] ADD Code NCHAR(2) NULL;'].join('\n');
+        expect(lines(sql)).toEqual([1, 2]);
+    });
+
+    it('returns quickly on a long name that never closes the statement', () => {
+        const started = Date.now();
+        FindUncollatedStringColumns(['CREATE TABLE ' + '"!".'.repeat(20000), 'ALTER TABLE ' + '!.'.repeat(20000)]);
+        expect(Date.now() - started).toBeLessThan(2000);
+    });
 });
 
 describe('migration checks against a repo', () => {

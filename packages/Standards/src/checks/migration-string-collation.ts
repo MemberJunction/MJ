@@ -17,11 +17,17 @@ import { FindMigrations, IsCodeGenStatement, StripSqlComments } from '../lib/mig
 /** The reviewed-exception marker, on the column's line or the line above it. */
 export const STRING_COLLATION_MARKER = 'mj-standards-allow: collation';
 
+/*
+ * A table name is one or more dot-separated parts, each `[bracketed]`, `"quoted"` or bare. A bare
+ * part cannot contain `.`, `"`, `[`, `(` or whitespace, so each character of a name belongs to exactly
+ * one part and the patterns below cannot backtrack over the same text in more than one way.
+ */
+
 /** `CREATE TABLE <name> (` — the name is captured so a `#temp` table can be skipped. */
-const CREATE_TABLE = /\bCREATE\s+TABLE\s+((?:\[[^\]]+\]|"[^"]+"|[^\s(]+)(?:\s*\.\s*(?:\[[^\]]+\]|"[^"]+"|[^\s(.]+))*)\s*\(/gi;
+const CREATE_TABLE = /\bCREATE\s+TABLE\s+((?:\[[^\]]+\]|"[^"]+"|[^\s(."[]+)(?:\s*\.\s*(?:\[[^\]]+\]|"[^"]+"|[^\s(."[]+))*)\s*\(/gi;
 
 /** `ALTER TABLE <name> ADD` — `ADD CONSTRAINT …` items are filtered out per item, not here. */
-const ALTER_TABLE_ADD = /\bALTER\s+TABLE\s+((?:\[[^\]]+\]|"[^"]+"|[^\s(]+)(?:\s*\.\s*(?:\[[^\]]+\]|"[^"]+"|[^\s(.]+))*)\s+ADD\b/gi;
+const ALTER_TABLE_ADD = /\bALTER\s+TABLE\s+((?:\[[^\]]+\]|"[^"]+"|[^\s(."[]+)(?:\s*\.\s*(?:\[[^\]]+\]|"[^"]+"|[^\s(."[]+))*)\s+ADD\b/gi;
 
 /** A column definition whose type is a character type: `<name> [N][VAR]CHAR…`, bracketed or not. */
 const STRING_COLUMN = /^\s*(\[[^\]]+\]|"[^"]+"|[A-Za-z_@#$][\w@#$]*)\s+\[?(N?VARCHAR|N?CHAR)\]?(?![\w])/i;
