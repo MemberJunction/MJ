@@ -2,8 +2,8 @@
  * @fileoverview AgentRunner provides a thin wrapper for executing AI agents
  * using the MemberJunction AI Agent framework.
  * 
- * This module handles agent instantiation using the ClassFactory pattern to ensure
- * the correct agent subclass is used based on the agent type's DriverClass property.
+ * This module handles agent instantiation through {@link CreateAgentInstance}, so the
+ * subclass named by the agent's own DriverClass runs (or the plain BaseAgent when it names none).
  * 
  * @module @memberjunction/ai-agents
  * @author MemberJunction.com
@@ -12,7 +12,7 @@
 
 import { createHash } from 'crypto';
 import { BaseEntity, LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString, IndexByUUID } from '@memberjunction/global';
+import { UUIDsEqual, IsValidUUID, EscapeSQLString, IndexByUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage } from '@memberjunction/ai';
 import {
@@ -22,7 +22,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { ResolveConversationAgentPreset, AgentPresetSource } from '@memberjunction/ai-engine-base';
 import { PlanArtifactTarget, IsKnownArtifactBehavior, ArtifactTargetPlan } from './artifact-target-plan';
-import { BaseAgent } from './base-agent';
+import { CreateAgentInstance } from './agent-instance';
 import { HostAllowedAgentIDs } from './decision-discovery';
 import { ResolveHandoffTarget, HandoffRefusalReasonText } from './handoff-target';
 import {
@@ -184,8 +184,8 @@ export interface FollowHandoffsInput<C = any> {
  * AgentRunner provides a thin wrapper for executing AI agents.
  * 
  * This class handles:
- * - Loading agent type metadata to get the DriverClass
- * - Instantiating the correct agent class using ClassFactory
+ * - Checking the agent's type exists
+ * - Instantiating the agent's own class (CreateAgentInstance)
  * - Passing through to the agent's Execute method
  * 
  * @class AgentRunner
@@ -263,8 +263,8 @@ export class AgentRunner {
      * Runs an AI agent with the specified parameters.
      * 
      * This method acts as a thin pass-through that:
-     * 1. Loads the agent type to get the DriverClass
-     * 2. Uses ClassFactory to instantiate the correct agent class
+     * 1. Checks the agent's type exists
+     * 2. Instantiates the agent's own class via CreateAgentInstance
      * 3. Calls Execute on the agent instance and returns the result
      * 
      * @param {ExecuteAgentParams} params - Parameters for agent execution (same as BaseAgent.Execute)
@@ -285,29 +285,21 @@ export class AgentRunner {
             // Ensure AIEngine is configured
             await AIEngine.Instance.Config(false, params.contextUser);
             
-            // Find the agent type to get the DriverClass
+            // The agent must have a known type
             const agentType = AIEngine.Instance.AgentTypes.find(at => UUIDsEqual(at.ID, params.agent.TypeID));
             if (!agentType) {
                 throw new Error(`Agent type not found for ID: ${params.agent.TypeID}`);
             }
             
-            // Get the correct agent class using ClassFactory, prefer the agent's DriverClass if specified, otherwise fallback to Agent Type, otherwise we get BaseAgent from ClassFactory
-            const driverClass = params.agent.DriverClass || agentType.DriverClass;
+            // The agent's own DriverClass, or the plain BaseAgent when it declares none. Never the
+            // agent type's DriverClass (a BaseAgentType key), and an unregistered key throws (#4112).
             LogStatusEx({
-                message: `AgentRunner: Using driver class: ${driverClass}`,
+                message: `AgentRunner: Using driver class: ${params.agent.DriverClass?.trim() || 'BaseAgent'}`,
                 verboseOnly: true,
                 isVerboseEnabled: () => params.verbose === true || IsVerboseLoggingEnabled()
             });
-            
-            const agentInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAgent>(
-                BaseAgent,
-                driverClass
-            );
-            
-            if (!agentInstance) {
-                throw new Error(`Failed to create agent instance for driver class: ${driverClass}`);
-            }
-            
+            const agentInstance = await CreateAgentInstance(params.agent);
+
             // Ensure caller params carries the shared AgentTreeBudget reference before any shallow
             // clone occurs in hydrateConversationArtifacts or Execute.
             if (!params.treeBudget) {
