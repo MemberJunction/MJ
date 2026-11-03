@@ -1367,6 +1367,51 @@ describe('TransformSimpleObjectToEntityObject batched IS-A hydration & 1-query C
         }
     });
 
+    it('hydrates an engine-cached child\'s inherited mirror fields from the parent, so a later edit records the real old value', async () => {
+        // Generated child entities carry their ancestors' columns as virtual mirror fields.
+        batchedProvider = new BatchedLoadHintTestProvider(BuildLoadHintEntities({ MirrorParentFields: true }), store, user);
+        Metadata.Provider = batchedProvider as object as IMetadataProvider;
+        BaseEntity.Provider = batchedProvider.AsEntityDataProvider;
+        const productsInfo = batchedProvider.EntityByName('Products')!;
+        const meetingsInfo = batchedProvider.EntityByName('Meetings')!;
+        expect(meetingsInfo.Fields.some(f => f.Name === 'Name' && f.IsVirtual)).toBe(true);
+        const id = 'c2000000-0000-0000-0000-000000000000';
+
+        const laggingEngine = {
+            Loaded: true,
+            Meetings: [{ ...store.ViewRow(meetingsInfo, id)!, Name: 'Stale Engine Cached Product Name' }],
+            ReadonlyConfigs: [
+                { PropertyName: 'Meetings', EntityName: 'Meetings', Type: 'entity', ResultType: 'simple' },
+            ],
+        };
+        BaseEngineRegistry.Instance.RegisterEngine(laggingEngine);
+
+        try {
+            const [parent] = await TransformSimpleObjectToEntityObject<BaseEntity>(
+                batchedProvider as object as IMetadataProvider,
+                'Products',
+                [{ ...store.ViewRow(productsInfo, id)!, Name: 'Freshly Read Product Name' }],
+                user
+            );
+            const child = parent.ISAChild!;
+            expect(batchedProvider.RunViewsBatchCalls).toBe(0);
+
+            // The mirror is loaded, with the parent's value, not the engine's stale one.
+            expect(child.GetFieldByName('Name')!.NotLoaded).toBe(false);
+            expect(child.GetFieldByName('Name')!.OldValue).toBe('Freshly Read Product Name');
+            expect(child.GetFieldByName('ProductTypeID')!.NotLoaded).toBe(false);
+
+            // RecordChange diffs read GetAll(true): an edit of an inherited field must report the
+            // value it changed from, not null.
+            child.Set('Name', 'Edited Name');
+            expect(child.GetAll(true).Name).toBe('Freshly Read Product Name');
+            expect(child.GetAll().Name).toBe('Edited Name');
+            expect(parent.Get('Name')).toBe('Edited Name');
+        } finally {
+            BaseEngineRegistry.Instance.UnregisterEngine(laggingEngine);
+        }
+    });
+
     it('narrows field-level security denied columns when linking an IS-A child from a system-user engine cache', async () => {
         const productsInfo = batchedProvider.EntityByName('Products')!;
         const meetingsInfo = batchedProvider.EntityByName('Meetings')!;
