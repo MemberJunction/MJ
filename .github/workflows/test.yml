@@ -337,8 +337,8 @@ jobs:
         run: node .github/scripts/check-ai-model-ranks.mjs
 
       # Turbo caches a package's `test` result on that package's own files, so a test reading
-      # repo-root data (migrations/, metadata/, metadata-optional/) replays its cached pass after
-      # that data changes. Each such package declares the data in its own turbo.json
+      # repo-root data (e.g. migrations/, metadata/, metadata-optional/ and other repo-root
+      # directories) replays its cached pass after that data changes. Each such package declares the data in its own turbo.json
       # (`$TURBO_ROOT$/<dir>/**`); this fails a PR that adds a root read without the declaration.
       # Static scan of test sources only: no build, no turbo run.
       - name: Turbo root-data test inputs guard

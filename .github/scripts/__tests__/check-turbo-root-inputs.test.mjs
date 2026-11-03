@@ -82,7 +82,7 @@ describe('checkRepo (fixture repository)', () => {
             join(pkg, 'src', '__tests__', 'guard.test.ts'),
             `const dir = join(__dirname, '..', '..', '..', '..', 'migrations');\n`,
         );
-        if (turbo !== undefined) writeFileSync(join(pkg, 'turbo.json'), JSON.stringify(turbo));
+        if (turbo !== undefined) writeFileSync(join(pkg, 'turbo.json'), typeof turbo === 'string' ? turbo : JSON.stringify(turbo));
         return dir;
     }
     const turbo = (inputs, ext = ['//']) => ({ extends: ext, tasks: { test: { inputs } } });
@@ -120,11 +120,33 @@ describe('checkRepo (fixture repository)', () => {
         const passing = spawnSync(process.execPath, [SCRIPT, fixture(turbo(['$TURBO_EXTENDS$', '$TURBO_ROOT$/migrations/**']))], { encoding: 'utf8' });
         expect(passing.status).toBe(0);
     });
+
+    it('reports a malformed turbo.json by name instead of throwing', () => {
+        const root = fixture('{ not json');
+        const [problem] = checkRepo(root);
+        expect(problem.packageDir).toBe(join('packages', 'Pkg'));
+        expect(problem.parseError).toEqual(expect.any(String));
+        const run = spawnSync(process.execPath, [SCRIPT, root], { encoding: 'utf8' });
+        expect(run.status).toBe(1);
+        expect(run.stdout).toContain('turbo.json is not valid JSON');
+    });
 });
 
 describe('readPackageTurbo', () => {
     it('returns null for a package without turbo.json', () => {
         expect(readPackageTurbo(tmpdir() + '/does-not-exist')).toBeNull();
+    });
+
+    it('returns a parseError rather than throwing on malformed input', () => {
+        const pkg = mkdtempSync(join(tmpdir(), 'turbo-root-inputs-pkg-'));
+        try {
+            writeFileSync(join(pkg, 'turbo.json'), 'not json at all');
+            const result = readPackageTurbo(pkg);
+            expect(result?.parseError).toEqual(expect.any(String));
+            expect(result?.declared.size).toBe(0);
+        } finally {
+            rmSync(pkg, { recursive: true, force: true });
+        }
     });
 });
 

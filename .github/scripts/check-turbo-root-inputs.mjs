@@ -6,9 +6,9 @@
  *
  * ── WHY ─────────────────────────────────────────────────────────────────────────
  * Turbo's cache key for a package's `test` task covers that package's own files (root
- * turbo.json `tasks.test.inputs`). A guard test that reads `migrations/`, `metadata/` or
- * `metadata-optional/` from the repo root therefore keeps its cached pass when that data
- * changes: turbo replays the pass without running the test. The data such a test guards is
+ * turbo.json `tasks.test.inputs`). A guard test that reads repo-root data (e.g. `migrations/`,
+ * `metadata/`, `metadata-optional/` and other repo-root directories) therefore keeps its cached
+ * pass when that data changes: turbo replays the pass without running the test. The data such a test guards is
  * exactly the data whose edits it cannot see.
  *
  * The fix is a package-level turbo.json that extends the root task and adds the root data:
@@ -173,13 +173,20 @@ export function findRootReads(source, { fileDepth, packageDepth, rootDirs }) {
 
 /**
  * The repo-root directories a package's turbo.json declares as `test` inputs, and whether it
- * keeps the root task's inputs. Null when the package has no turbo.json.
- * @returns {{ declared: Set<string>, keepsRootInputs: boolean, extendsRoot: boolean } | null}
+ * keeps the root task's inputs. Null when the package has no turbo.json. A turbo.json that does
+ * not parse yields `parseError` (and nothing declared) instead of throwing, so the guard names
+ * the broken file rather than crashing with a bare SyntaxError.
+ * @returns {{ declared: Set<string>, keepsRootInputs: boolean, extendsRoot: boolean, parseError?: string } | null}
  */
 export function readPackageTurbo(packageDir) {
     const file = join(packageDir, 'turbo.json');
     if (!existsSync(file)) return null;
-    const json = JSON.parse(readFileSync(file, 'utf8'));
+    let json;
+    try {
+        json = JSON.parse(readFileSync(file, 'utf8'));
+    } catch (err) {
+        return { declared: new Set(), keepsRootInputs: true, extendsRoot: false, parseError: err instanceof Error ? err.message : String(err) };
+    }
     const inputs = json.tasks?.test?.inputs;
     const declared = new Set();
     for (const input of Array.isArray(inputs) ? inputs : []) {
@@ -255,7 +262,10 @@ export function checkRepo(repoRoot) {
             .map(([dir, files]) => ({ dir, files }))
             .sort((a, b) => a.dir.localeCompare(b.dir));
         const dropsRootInputs = turbo !== null && !turbo.keepsRootInputs;
-        if (missing.length || dropsRootInputs) problems.push({ packageDir: relative(repoRoot, pkg), missing, dropsRootInputs });
+        const parseError = turbo?.parseError;
+        if (missing.length || dropsRootInputs || parseError) {
+            problems.push({ packageDir: relative(repoRoot, pkg), missing, dropsRootInputs, ...(parseError ? { parseError } : {}) });
+        }
     }
     return problems;
 }
@@ -269,6 +279,9 @@ function main(argv) {
     }
     for (const p of problems) {
         console.log(`${RED}✗ ${p.packageDir}${NC}`);
+        if (p.parseError) {
+            console.log(`    turbo.json is not valid JSON (${p.parseError}), so its test inputs could not be read`);
+        }
         if (p.dropsRootInputs) {
             console.log(`    turbo.json sets test.inputs without "$TURBO_EXTENDS$" (or "$TURBO_DEFAULT$"), so the package's own source is not in the cache key`);
         }
