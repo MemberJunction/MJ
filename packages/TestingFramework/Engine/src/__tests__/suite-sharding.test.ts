@@ -3,6 +3,9 @@
  * duration-aware LPT shard assignment, and TestEngine.RunSuite sharding invariants.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { RegisterClass } from '@memberjunction/global';
 import type { UserInfo } from '@memberjunction/core';
 import type {
@@ -114,6 +117,15 @@ describe('ResolveTestTransport & FilterTestsByTransport', () => {
         expect(FilterTestsByTransport(all, 'all').map(t => t.ID)).toEqual(['143', '111', '127']);
         expect(FilterTestsByTransport(all, undefined).map(t => t.ID)).toEqual(['143', '111', '127']);
     });
+
+    it('promotes server tests with Configuration.requiresSharedServerDatabase = true to the client worker group', () => {
+        const declarativeCompanion = makeTest('999', 'IT999 - Custom MJAPI Companion', {
+            transport: 'server',
+            requiresSharedServerDatabase: true,
+            checks: [{ type: 'custom-server-bundle' }],
+        });
+        expect(ResolveTestTransport(declarativeCompanion)).toBe('client');
+    });
 });
 
 describe('EstimateTestWeightSeconds & AssignTestsToShard', () => {
@@ -217,6 +229,153 @@ describe('EstimateTestWeightSeconds & AssignTestsToShard', () => {
 
         const pairShard = shards[shardWith111].map(t => t.ID);
         expect(pairShard.indexOf('111')).toBeLessThan(pairShard.indexOf('112'));
+    });
+
+    it('co-locates custom companion bundles declared via Configuration.coLocateWithBundles', () => {
+        const tests: ShardableTest[] = [
+            makeTest('h1', 'IT143 - Heavy 1', { checks: [{ type: 'heavy-1' }] }),
+            makeTest('h2', 'IT146 - Heavy 2', { checks: [{ type: 'heavy-2' }] }),
+            makeTest('seed', 'IT900 - Custom Seed', {
+                coLocateWithBundles: ['custom-verify'],
+                checks: [{ type: 'custom-seed' }],
+            }),
+            makeTest('h3', 'IT145 - Heavy 3', { checks: [{ type: 'heavy-3' }] }),
+            makeTest('verify', 'IT901 - Custom Verify', {
+                estimatedDurationSeconds: 50,
+                checks: [{ type: 'custom-verify' }],
+            }),
+        ];
+
+        const shards = [1, 2, 3].map(index => AssignTestsToShard(tests, { index, total: 3 }));
+        const seedShard = shards.findIndex(s => s.some(t => t.ID === 'seed'));
+        const verifyShard = shards.findIndex(s => s.some(t => t.ID === 'verify'));
+
+        expect(seedShard).toBeGreaterThanOrEqual(0);
+        expect(seedShard).toBe(verifyShard);
+        const ids = shards[seedShard].map(t => t.ID);
+        expect(ids.indexOf('seed')).toBeLessThan(ids.indexOf('verify'));
+    });
+
+    it('partitions the real Integration Tests — Deterministic metadata suite cleanly and guards against weight-table drift', () => {
+        const testDir = path.dirname(fileURLToPath(import.meta.url));
+        const repoRoot = path.resolve(testDir, '../../../../..');
+        const suitePath = path.join(
+            repoRoot,
+            'metadata-optional/integration-test/test-suites/.integration-suite.json'
+        );
+        const testsDir = path.join(repoRoot, 'metadata-optional/integration-test/tests/integration');
+
+        interface RawTestRecord {
+            fields: {
+                Name: string;
+                Configuration?: Record<string, unknown>;
+                Status?: string;
+            };
+            primaryKey: { ID: string };
+        }
+        interface RawSuiteMember {
+            fields: {
+                TestID: string;
+                Sequence: number;
+                Status: string;
+            };
+        }
+        interface RawSuiteRecord {
+            fields: { Name: string };
+            relatedEntities?: {
+                'MJ: Test Suite Tests'?: RawSuiteMember[];
+            };
+        }
+
+        const testsByName = new Map<string, ShardableTest>();
+        for (const entry of fs.readdirSync(testsDir)) {
+            if (!entry.endsWith('.json')) continue;
+            const raw = JSON.parse(fs.readFileSync(path.join(testsDir, entry), 'utf8')) as
+                | RawTestRecord
+                | RawTestRecord[];
+            const records = Array.isArray(raw) ? raw : [raw];
+            for (const rec of records) {
+                if (rec?.fields?.Name && rec?.primaryKey?.ID) {
+                    testsByName.set(rec.fields.Name, {
+                        ID: rec.primaryKey.ID,
+                        Name: rec.fields.Name,
+                        Configuration: rec.fields.Configuration
+                            ? JSON.stringify(rec.fields.Configuration)
+                            : null,
+                    });
+                }
+            }
+        }
+
+        const suites = JSON.parse(fs.readFileSync(suitePath, 'utf8')) as RawSuiteRecord[];
+        const deterministicSuite = suites.find(
+            s => s.fields?.Name === 'Integration Tests — Deterministic'
+        );
+        expect(deterministicSuite).toBeDefined();
+
+        const rawMembers = deterministicSuite?.relatedEntities?.['MJ: Test Suite Tests'] ?? [];
+        const activeMembers: Array<{ test: ShardableTest; sequence: number }> = [];
+        for (const member of rawMembers) {
+            if (member.fields.Status !== 'Active') continue;
+            const lookupPrefix = '@lookup:MJ: Tests.Name=';
+            const testName = member.fields.TestID.startsWith(lookupPrefix)
+                ? member.fields.TestID.slice(lookupPrefix.length)
+                : member.fields.TestID;
+            const test = testsByName.get(testName);
+            expect(test, `Missing test file for suite member '${testName}'`).toBeDefined();
+            activeMembers.push({ test: test!, sequence: member.fields.Sequence ?? 999999 });
+        }
+
+        // Sort identically to TestEngine.filterTestsForExecution (Sequence ASC, Name ASC, ID ASC)
+        activeMembers.sort((a, b) => {
+            if (a.sequence !== b.sequence) return a.sequence - b.sequence;
+            const nameCmp = a.test.Name.localeCompare(b.test.Name);
+            if (nameCmp !== 0) return nameCmp;
+            return a.test.ID.localeCompare(b.test.ID);
+        });
+        const orderedTests = activeMembers.map(m => m.test);
+        expect(orderedTests.length).toBeGreaterThanOrEqual(130);
+
+        // Guard against drift in KNOWN_INTEGRATION_TEST_WEIGHTS_SECONDS: every prefix key must match an active test
+        const activePrefixes = new Set(
+            orderedTests
+                .map(t => /^(IT\d+)\b/.exec(t.Name)?.[1] ?? '')
+                .filter(Boolean)
+        );
+        for (const key of Object.keys(KNOWN_INTEGRATION_TEST_WEIGHTS_SECONDS)) {
+            expect(
+                activePrefixes.has(key),
+                `KNOWN_INTEGRATION_TEST_WEIGHTS_SECONDS key '${key}' does not match any active member of Integration Tests — Deterministic`
+            ).toBe(true);
+        }
+
+        // Transport split + 3-way server sharding must cover 100% of active tests with zero duplicates
+        const serverTests = FilterTestsByTransport(orderedTests, 'server');
+        const clientTests = FilterTestsByTransport(orderedTests, 'client');
+        expect(serverTests.length + clientTests.length).toBe(orderedTests.length);
+
+        const serverShards = [1, 2, 3].map(index =>
+            AssignTestsToShard(serverTests, { index, total: 3 })
+        );
+        const allServerShardIds = serverShards.flatMap(s => s.map(t => t.ID));
+        expect(allServerShardIds.length).toBe(serverTests.length);
+        expect(new Set(allServerShardIds).size).toBe(serverTests.length);
+
+        // Estimated weights across the 3 server shards are balanced within 5 seconds
+        const shardWeights = serverShards.map(s =>
+            s.reduce((sum, t) => sum + EstimateTestWeightSeconds(t), 0)
+        );
+        expect(Math.max(...shardWeights) - Math.min(...shardWeights)).toBeLessThanOrEqual(5);
+
+        // Wire-companion server bundles (IT111, IT127) must be in the client worker ahead of sequence-50+ client tests
+        const clientNames = clientTests.map(t => t.Name);
+        const idx111 = clientNames.findIndex(n => n.startsWith('IT111 '));
+        const idx127 = clientNames.findIndex(n => n.startsWith('IT127 '));
+        const idx112 = clientNames.findIndex(n => n.startsWith('IT112 '));
+        expect(idx111).toBeGreaterThanOrEqual(0);
+        expect(idx127).toBeGreaterThanOrEqual(0);
+        expect(idx112).toBeGreaterThan(idx111);
+        expect(idx112).toBeGreaterThan(idx127);
     });
 });
 

@@ -19,12 +19,25 @@ export interface SuiteShardSpec {
 interface ParsedTestConfig {
     transport?: 'server' | 'client';
     estimatedDurationSeconds?: number;
+    /**
+     * Declarative opt-in for server-transport tests that talk to the live MJAPI instance
+     * or seed database/in-memory state consumed by a client-transport test. When true,
+     * `ResolveTestTransport` routes the test to the `'client'` worker group (which shares
+     * MJAPI's database and executes sequence-ordered server prerequisites before client bundles).
+     */
+    requiresSharedServerDatabase?: boolean;
+    /**
+     * Declarative list of companion bundle names that must be assigned to the same LPT shard
+     * as this test when both are present in the candidate list.
+     */
+    coLocateWithBundles?: string[];
     checks?: Array<{ type?: string }>;
 }
 
 /**
- * Bundles whose transport is `'client'` when `Configuration.transport` is omitted
- * (mirrors `IntegrationTestDriver.CLIENT_BUNDLES`).
+ * Legacy fallback for bundles whose transport is `'client'` when `Configuration.transport`
+ * is omitted (mirrors `IntegrationTestDriver.CLIENT_BUNDLES`). All current suite members set
+ * `Configuration.transport` explicitly; kept as a defensive fallback for ad-hoc test records.
  */
 const CLIENT_BUNDLES: ReadonlySet<string> = new Set([
     'client-cache',
@@ -34,8 +47,9 @@ const CLIENT_BUNDLES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Server-transport bundles that interact with the live MJAPI instance or seed in-memory/DB
- * fixtures consumed by a client-transport bundle:
+ * Fallback set of server-transport bundles that interact with the live MJAPI instance or seed
+ * in-memory/DB fixtures consumed by a client-transport bundle when `Configuration.requiresSharedServerDatabase`
+ * is not yet set on the Test record:
  * - `realtime-session-guard` (IT111, sequence 49): seeds server-decided session rows in the
  *   database and publishes their IDs in-process for `realtime-session-verification` (IT112,
  *   sequence 50, client transport).
@@ -43,10 +57,7 @@ const CLIENT_BUNDLES: ReadonlySet<string> = new Set([
  *   `GraphQLDataProvider` to MJAPI (`GRAPHQL_PORT`) and verifies rows written via the local
  *   `SQLServerDataProvider` against the same database MJAPI serves.
  *
- * When a suite is split by `--transport=server` vs `--transport=client` across isolated worker
- * databases, these bundles belong with the `'client'` worker (where `SuiteCommand` initializes
- * `SQLServerDataProvider` against MJAPI's database first, runs these sequence-49 server bundles,
- * and then runs the sequence-50+ client bundles).
+ * New tests should prefer setting `"requiresSharedServerDatabase": true` in `Configuration`.
  */
 const WIRE_COMPANION_SERVER_BUNDLES: ReadonlySet<string> = new Set([
     'realtime-session-guard',
@@ -54,18 +65,25 @@ const WIRE_COMPANION_SERVER_BUNDLES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Companion bundle pairs `(leaderBundle, followerBundle)` that MUST be assigned to the same shard
- * when both are present in the candidate list (because the earlier bundle hands in-memory fixture
- * state to the later bundle).
+ * Fallback companion bundle pairs `(bundleA, bundleB)` that MUST be assigned to the same shard
+ * when both are present in the candidate list and `Configuration.coLocateWithBundles` is not set
+ * on the Test record.
+ *
+ * New tests should prefer setting `"coLocateWithBundles": ["<companion-bundle>"]` in `Configuration`.
  */
 const CO_LOCATED_BUNDLE_PAIRS: ReadonlyArray<readonly [string, string]> = [
     ['realtime-session-guard', 'realtime-session-verification'],
 ];
 
 /**
- * Empirical execution weights (in seconds) for heavyweight integration test bundles from CI
- * telemetry (run `41629487844`), used by Longest Processing Time (LPT) shard assignment so no two
- * multi-minute bundles collide in the same worker shard.
+ * Fallback empirical execution weights (in seconds) for heavyweight integration test bundles
+ * when `Configuration.estimatedDurationSeconds` is not set on the Test record. Used by
+ * Longest Processing Time (LPT) shard assignment so no two multi-minute bundles collide in the
+ * same worker shard.
+ *
+ * Note: Under 4-way parallel execution on a 4-vCPU CI runner, per-test wall times scale by roughly
+ * 1.8x-2.0x due to shared CPU and SQL Server I/O contention, while relative test weights remain
+ * proportional. New tests should prefer setting `"estimatedDurationSeconds"` in `Configuration`.
  */
 export const KNOWN_INTEGRATION_TEST_WEIGHTS_SECONDS: Readonly<Record<string, number>> = {
     IT143: 194,
@@ -155,12 +173,15 @@ export function ValidateShardSpec(spec: SuiteShardSpec, rawLabel?: string): Suit
  *
  * - Reads `Configuration.transport` (`'server'` | `'client'`), falling back to bundle-based
  *   inference (`CLIENT_BUNDLES` -> `'client'`, else `'server'`).
- * - Promotes `WIRE_COMPANION_SERVER_BUNDLES` (`realtime-session-guard`, `calendar-event-links`)
- *   to `'client'` so they execute in the worker attached to MJAPI's database ahead of the
- *   client-transport bundles.
+ * - Promotes tests with `Configuration.requiresSharedServerDatabase === true` (or fallback
+ *   `WIRE_COMPANION_SERVER_BUNDLES`) to `'client'` so they execute in the worker attached
+ *   to MJAPI's database ahead of the client-transport bundles.
  */
 export function ResolveTestTransport(test: ShardableTest): 'server' | 'client' {
     const config = parseTestConfig(test.Configuration);
+    if (config?.requiresSharedServerDatabase === true) {
+        return 'client';
+    }
     const bundles = getSelectedBundles(config);
     if (bundles.some(b => WIRE_COMPANION_SERVER_BUNDLES.has(b))) {
         return 'client';
@@ -244,33 +265,57 @@ export function AssignTestsToShard<T extends ShardableTest>(
         originalIndex: number;
         weight: number;
         bundles: string[];
+        coLocateWithBundles: string[];
     }
 
     const indexed: IndexedItem[] = tests.map((test, originalIndex) => {
         const config = parseTestConfig(test.Configuration);
+        const coLocateWithBundles = Array.isArray(config?.coLocateWithBundles)
+            ? config.coLocateWithBundles.filter((b): b is string => typeof b === 'string' && b.length > 0)
+            : [];
         return {
             test,
             originalIndex,
             weight: EstimateTestWeightSeconds(test),
             bundles: getSelectedBundles(config),
+            coLocateWithBundles,
         };
     });
 
-    // Identify co-located companion followers (e.g., realtime-session-guard follows realtime-session-verification)
+    // Identify co-located companion followers (from Configuration.coLocateWithBundles or CO_LOCATED_BUNDLE_PAIRS)
     const companionLeaderByFollowerIdx = new Map<number, number>();
     const companionFollowersByLeaderIdx = new Map<number, IndexedItem[]>();
+    const linkedIndexPairs = new Set<string>();
+    const linkCompanionIndices = (idxA: number, idxB: number): void => {
+        if (idxA === -1 || idxB === -1 || idxA === idxB) {
+            return;
+        }
+        const pairKey = idxA < idxB ? `${idxA}:${idxB}` : `${idxB}:${idxA}`;
+        if (linkedIndexPairs.has(pairKey)) {
+            return;
+        }
+        linkedIndexPairs.add(pairKey);
+        const leaderIdx = indexed[idxB].weight >= indexed[idxA].weight ? idxB : idxA;
+        const followerIdx = leaderIdx === idxB ? idxA : idxB;
+        if (companionLeaderByFollowerIdx.has(followerIdx)) {
+            return;
+        }
+        companionLeaderByFollowerIdx.set(followerIdx, leaderIdx);
+        const list = companionFollowersByLeaderIdx.get(leaderIdx) ?? [];
+        list.push(indexed[followerIdx]);
+        companionFollowersByLeaderIdx.set(leaderIdx, list);
+    };
+
+    for (const item of indexed) {
+        for (const companionBundle of item.coLocateWithBundles) {
+            const companionIdx = indexed.findIndex(other => other.bundles.includes(companionBundle));
+            linkCompanionIndices(item.originalIndex, companionIdx);
+        }
+    }
     for (const [bundleA, bundleB] of CO_LOCATED_BUNDLE_PAIRS) {
         const idxA = indexed.findIndex(item => item.bundles.includes(bundleA));
         const idxB = indexed.findIndex(item => item.bundles.includes(bundleB));
-        if (idxA !== -1 && idxB !== -1 && idxA !== idxB) {
-            // Let the heavier (or earlier) item lead bucket selection, and attach the companion to it
-            const leaderIdx = indexed[idxB].weight >= indexed[idxA].weight ? idxB : idxA;
-            const followerIdx = leaderIdx === idxB ? idxA : idxB;
-            companionLeaderByFollowerIdx.set(followerIdx, leaderIdx);
-            const list = companionFollowersByLeaderIdx.get(leaderIdx) ?? [];
-            list.push(indexed[followerIdx]);
-            companionFollowersByLeaderIdx.set(leaderIdx, list);
-        }
+        linkCompanionIndices(idxA, idxB);
     }
 
     // Sort primary items by descending effective weight, tie-breaking by originalIndex ascending

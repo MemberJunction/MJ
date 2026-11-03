@@ -610,7 +610,7 @@ jobs:
         run: |
           set -uo pipefail
           SUITE_NAME="Integration Tests — Deterministic"
-          rm -f /tmp/integration-shard-*.log /tmp/integration-shard-*.status /tmp/integration.log
+          rm -f /tmp/integration-shard-*.log /tmp/integration-shard-*.status /tmp/integration-shard-*.json /tmp/integration.log
 
           run_shard() {
             local name="$1"
@@ -618,12 +618,13 @@ jobs:
             shift 2
             local log="/tmp/integration-shard-${name}.log"
             local status_file="/tmp/integration-shard-${name}.status"
+            local json_file="/tmp/integration-shard-${name}.json"
             local start_ts
             start_ts=$(date +%s)
             echo "[shard:${name}] Starting on DB=${db} args=($*)..."
             local rc=0
             DB_DATABASE="${db}" MJ_INTEGRATION_TEST=1 \
-              node packages/MJCLI/bin/run.js test suite "${SUITE_NAME}" "$@" > "${log}" 2>&1 || rc=$?
+              node packages/MJCLI/bin/run.js test suite "${SUITE_NAME}" --output "${json_file}" "$@" > "${log}" 2>&1 || rc=$?
             local end_ts
             end_ts=$(date +%s)
             local elapsed=$((end_ts - start_ts))
@@ -684,36 +685,86 @@ jobs:
       - name: Publish suite summary
         if: always()
         run: |
-          {
-            echo '## Integration tier result (4 parallel shards)'
-            echo ''
-            echo '| Shard | Database | Flags | Exit | Wall Time | Suite Summary |'
-            echo '| --- | --- | --- | --- | --- | --- |'
-            for SHARD in server-1 server-2 server-3 client; do
-              STATUS_FILE="/tmp/integration-shard-${SHARD}.status"
-              LOG_FILE="/tmp/integration-shard-${SHARD}.log"
-              if [ -f "${STATUS_FILE}" ]; then
-                DB=$(cut -f2 "${STATUS_FILE}")
-                FLAGS=$(cut -f3 "${STATUS_FILE}")
-                RC=$(cut -f4 "${STATUS_FILE}")
-                ELAPSED=$(cut -f5 "${STATUS_FILE}")
-                SUMMARY_LINE=$(grep -E '\[SUMMARY\]' "${LOG_FILE}" | tail -1 | sed 's/.*\[SUMMARY\] //' || true)
-                [ -z "${SUMMARY_LINE}" ] && SUMMARY_LINE="(no summary line)"
-                echo "| \`${SHARD}\` | \`${DB}\` | \`${FLAGS}\` | \`${RC}\` | ${ELAPSED} | ${SUMMARY_LINE} |"
-              fi
-            done
-            echo ''
-            echo '### Per-shard details'
-            echo '```'
-            for SHARD in server-1 server-2 server-3 client; do
-              LOG_FILE="/tmp/integration-shard-${SHARD}.log"
-              if [ -f "${LOG_FILE}" ]; then
-                echo "=== ${SHARD} ==="
-                grep -E '\[(SUITE_COMPLETE|SUMMARY|DURATION|FAILURES|SKIPPED)\]' "${LOG_FILE}" || echo 'No suite summary found in shard log.'
-              fi
-            done
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          node -e '
+            const fs = require("node:fs");
+            const shards = ["server-1", "server-2", "server-3", "client"];
+            const lines = [
+              "## Integration tier result (4 parallel shards)",
+              "",
+              "| Shard | Database | Flags | Exit | Wall Time | Suite Summary |",
+              "| --- | --- | --- | --- | --- | --- |",
+            ];
+            let totalPassed = 0, totalFailed = 0, totalSkipped = 0, totalTests = 0, haveTotals = false;
+            const detailBlocks = [];
+
+            for (const shard of shards) {
+              const statusPath = `/tmp/integration-shard-${shard}.status`;
+              const jsonPath = `/tmp/integration-shard-${shard}.json`;
+              const logPath = `/tmp/integration-shard-${shard}.log`;
+              if (!fs.existsSync(statusPath)) continue;
+
+              const [, db = "", flags = "", rc = "", elapsed = ""] =
+                fs.readFileSync(statusPath, "utf8").trim().split("\t");
+              const logText = fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf8") : "";
+
+              let parsed = null;
+              if (fs.existsSync(jsonPath)) {
+                try { parsed = JSON.parse(fs.readFileSync(jsonPath, "utf8")); } catch {}
+              }
+              if (!parsed && logText) {
+                const p = /"passedTests":\s*(\d+)/.exec(logText);
+                const f = /"failedTests":\s*(\d+)/.exec(logText);
+                const s = /"skippedTests":\s*(\d+)/.exec(logText);
+                const t = /"totalTests":\s*(\d+)/.exec(logText);
+                if (p && f && t) {
+                  parsed = {
+                    passedTests: Number(p[1]),
+                    failedTests: Number(f[1]),
+                    skippedTests: s ? Number(s[1]) : 0,
+                    totalTests: Number(t[1]),
+                  };
+                }
+              }
+
+              let summaryCell = "(no summary line)";
+              if (parsed && typeof parsed.totalTests === "number") {
+                const p = parsed.passedTests ?? 0;
+                const f = parsed.failedTests ?? 0;
+                const s = parsed.skippedTests ?? 0;
+                const t = parsed.totalTests ?? 0;
+                summaryCell = `${p} passed / ${f} failed / ${s} skipped of ${t}`;
+                totalPassed += p;
+                totalFailed += f;
+                totalSkipped += s;
+                totalTests += t;
+                haveTotals = true;
+              } else if (logText) {
+                const m = /\[SUMMARY\]\s*(.+)/.exec(logText);
+                if (m) summaryCell = m[1].trim();
+              }
+
+              lines.push(`| \`${shard}\` | \`${db}\` | \`${flags}\` | \`${rc}\` | ${elapsed} | ${summaryCell} |`);
+
+              const skipGateMatch = /Skip gate:\s*(.+)/.exec(logText);
+              const detailLines = [`=== ${shard} (${summaryCell}) ===`];
+              if (skipGateMatch) detailLines.push(`Skip gate: ${skipGateMatch[1].trim()}`);
+              if (parsed && Array.isArray(parsed.testResults)) {
+                const failed = parsed.testResults.filter(tr => tr.status !== "Passed" && tr.status !== "Skipped");
+                for (const tr of failed) {
+                  detailLines.push(`  ✗ ${tr.testName} (${tr.status})`);
+                }
+              }
+              detailBlocks.push(detailLines.join("\n"));
+            }
+
+            if (haveTotals) {
+              lines.push(
+                `| **Total** | | | | | **${totalPassed} passed / ${totalFailed} failed / ${totalSkipped} skipped of ${totalTests}** |`
+              );
+            }
+            lines.push("", "### Per-shard details", "```", ...detailBlocks, "```");
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
+          '
 
       - name: Dump MJAPI log on failure
         if: failure()
