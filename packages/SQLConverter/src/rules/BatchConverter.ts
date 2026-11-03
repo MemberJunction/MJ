@@ -9,7 +9,7 @@
  */
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { ClassifyBatch } from './StatementClassifier.js';
+import { ClassifyBatch, SP_REFRESHVIEW_CALL, DescribeRefreshView } from './StatementClassifier.js';
 import { SubSplitCompoundBatch } from './SubSplitter.js';
 import { InlineScalarSelectVariables } from './ScalarVariableInliner.js';
 import { StripComments } from './ExpressionHelpers.js';
@@ -350,6 +350,16 @@ function convertBatch(
       stats.SkippedBatches.push(`${batchType}: ${batch.slice(0, 80)}...`);
     }
     return null;
+  }
+
+  // sp_refreshview: no PostgreSQL equivalent. A named warning, not a gap — the run still passes —
+  // and a comment in the output where the call stood (issue #5649).
+  if (batchType === 'REFRESH_VIEW') {
+    stats.Skipped++;
+    const views = [...batch.matchAll(SP_REFRESHVIEW_CALL)].map(m => m[1]);
+    const lines = views.map(v => DescribeRefreshView(v));
+    stats.Warnings.push(...lines);
+    return lines.map(l => `-- WARNING: ${l}`).join('\n') + '\n';
   }
 
   // Comment-only: pass through

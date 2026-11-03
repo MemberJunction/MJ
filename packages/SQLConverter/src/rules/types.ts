@@ -38,6 +38,7 @@ export type StatementType =
   | 'SKIP_SQLSERVER'
   | 'SKIP_NOCHECK'
   | 'SKIP_PRINT'
+  | 'REFRESH_VIEW'
   | 'UNKNOWN';
 
 /**
@@ -208,6 +209,11 @@ export interface ConversionStats {
   ErrorBatches: string[];
   /** The marker lines themselves, so a caller can print WHICH statements were not converted. */
   GapBatches: string[];
+  /**
+   * Named, non-blocking warnings: work the converter cannot do that a person finishes by hand,
+   * which does not fail the run (today: one per `sp_refreshview`, issue #5649).
+   */
+  Warnings: string[];
 }
 
 /** Groups for ordering the output */
@@ -280,6 +286,7 @@ export function CreateConversionStats(): ConversionStats {
     SkippedBatches: [],
     ErrorBatches: [],
     GapBatches: [],
+    Warnings: [],
   };
 }
 

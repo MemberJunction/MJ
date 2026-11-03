@@ -1276,6 +1276,123 @@ def _transpile_drop_index(txt: str) -> str | None:
     return f'DROP INDEX IF EXISTS {prefix}"{name}"'
 
 
+# CodeGen's core metadata-refresh procs, which an Open App migration calls in its hand region
+# (issue #5919). PostgreSQL has these functions (CodeGen's support objects or the core
+# migrations), but with positional, differently named parameters, and the forms the core
+# migrations install take only an EXCLUDED-schemas list.
+_CORE_REFRESH_PROCS = {
+    "spupdateexistingentitiesfromschema": "spUpdateExistingEntitiesFromSchema",
+    "spupdateexistingentityfieldsfromschema": "spUpdateExistingEntityFieldsFromSchema",
+    "spsetdefaultcolumnwidthwhereneeded": "spSetDefaultColumnWidthWhereNeeded",
+    "spupdateschemainfofromdatabase": "spUpdateSchemaInfoFromDatabase",
+    "spdeleteunneededentityfields": "spDeleteUnneededEntityFields",
+}
+_CORE_EXEC = _re.compile(
+    r"^\s*EXEC(?:UTE)?\s+(?P<schema>\[[^\]]+\]|\"[^\"]+\"|\$\{[\w:]+\}|" + _re.escape(FLYWAY_SENTINEL) + r"|\w+)\s*\.\s*"
+    r"(?P<proc>\[[^\]]+\]|\"[^\"]+\"|\w+)(?P<args>(?:\s+[\s\S]*?)?)\s*;?\s*$",
+    _re.IGNORECASE,
+)
+_NAMED_ARG = _re.compile(r"^\s*@(?P<name>\w+)\s*=\s*(?P<value>N?'(?:[^']|'')*'|NULL)\s*$", _re.IGNORECASE)
+
+
+def _core_schema_ref(tok: str) -> str:
+    """Schema token of a core EXEC → PG: a `${…}` placeholder stays bare (substituted later)."""
+    name = tok.strip().strip('[]"')
+    if name == FLYWAY_SENTINEL:
+        return FLYWAY_MACRO
+    if name.startswith("${"):
+        return name
+    return f'"{name}"'
+
+
+def _split_exec_args(args: str) -> list[str] | None:
+    """Split `@a='x', @b=N'y'` at top-level commas (outside string literals); None if unbalanced."""
+    parts, cur, in_str = [], "", False
+    for ch in args:
+        if ch == "'":
+            in_str = not in_str
+        if ch == "," and not in_str:
+            parts.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    if in_str:
+        return None
+    if cur.strip():
+        parts.append(cur)
+    return parts
+
+
+def _transpile_core_refresh_exec(txt: str) -> str | None:
+    """`EXEC <core>.spUpdateExistingEntitiesFromSchema @ExcludedSchemaNames='…'[, @IncludedSchemaNames='…'][, @EntityIDs='…']`
+    (and the other refresh procs in _CORE_REFRESH_PROCS) → a PG call (issue #5919).
+
+    The PG functions are called with one positional argument, the excluded-schemas list, because
+    that is the only parameter every installed form has. `@IncludedSchemaNames` has no PG
+    counterpart there, so the call runs in a DO block that excludes, at apply time, every schema
+    not named in the included list (decision pg.2). `@EntityIDs` only narrows the refresh within
+    those schemas and is not passed. Returns None when this is not such a call or an argument is
+    not understood; the caller then reports it.
+    """
+    m = _CORE_EXEC.match(_strip_leading_sql_comments(txt))
+    if not m:
+        return None
+    proc = _CORE_REFRESH_PROCS.get(m.group("proc").strip('[]"').lower())
+    if proc is None:
+        return None
+    raw_args = _split_exec_args(m.group("args") or "")
+    if raw_args is None:
+        return None
+    named: dict[str, str | None] = {}
+    for raw in raw_args:
+        a = _NAMED_ARG.match(raw)
+        if not a:
+            return None
+        key = a.group("name").lower()
+        if key not in ("excludedschemanames", "includedschemanames", "entityids"):
+            return None
+        val = a.group("value")
+        named[key] = None if val.upper() == "NULL" else _unquote_tsql_string(val)
+    target = f'{_core_schema_ref(m.group("schema"))}."{proc}"'
+    excluded = named.get("excludedschemanames")
+    included = named.get("includedschemanames")
+    if not included:
+        arg = "NULL" if excluded is None else _pg_string(excluded)
+        return f"SELECT {target}({arg})"
+    given = "''" if excluded is None else _pg_string(excluded)
+    return (
+        "DO $mj_refresh$\n"
+        "DECLARE v_excluded TEXT;\n"
+        "BEGIN\n"
+        "  -- T-SQL passed an included-schemas list; the PG function takes only an excluded list, so\n"
+        "  -- exclude every schema not in the included list, plus the excluded list as given.\n"
+        "  SELECT concat_ws(',', NULLIF(" + given + ", ''), string_agg(nspname, ','))\n"
+        "    INTO v_excluded\n"
+        "    FROM pg_namespace\n"
+        "   WHERE lower(nspname) <> ALL (string_to_array(lower(replace(" + _pg_string(included) + ", ' ', '')), ','));\n"
+        f"  PERFORM {target}(v_excluded);\n"
+        "END $mj_refresh$"
+    )
+
+
+# `EXEC sp_refreshview '<schema>.<view>'` — CodeGen writes one after every column change to a view's
+# table. PostgreSQL has no equivalent (a view's column list is fixed at CREATE), so the converter
+# cannot carry it: it is reported as a named warning so the view is rebuilt by hand (issue #5649,
+# decision pg.5), not dropped without a trace.
+_SP_REFRESHVIEW = _re.compile(
+    r"^\s*EXEC(?:UTE)?\s+(?:\[?sys\]?\.)?\[?sp_refreshview\]?\s+(?:@viewname\s*=\s*)?N?'(?P<view>[^']+)'\s*;?\s*$",
+    _re.IGNORECASE,
+)
+
+
+def _refreshview_target(txt: str) -> str | None:
+    """The view named by `EXEC sp_refreshview '<view>'`, or None for any other statement."""
+    m = _SP_REFRESHVIEW.match(_strip_leading_sql_comments(txt))
+    if not m:
+        return None
+    return m.group("view").replace(FLYWAY_SENTINEL, FLYWAY_MACRO)
+
+
 def _transpile_alter_column(txt: str) -> str | None:
     """`ALTER TABLE t ALTER COLUMN c <type> [NOT NULL|NULL]` → PG TYPE change + nullability.
     Returns None if txt isn't an ALTER COLUMN (or its type can't be parsed)."""
@@ -1673,6 +1790,14 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict], l
             di = _transpile_drop_index(txt)
             if di is not None:
                 out.append(di)
+                continue
+            cr = _transpile_core_refresh_exec(txt)
+            if cr is not None:
+                out.append(cr)
+                continue
+            rv = _refreshview_target(txt)
+            if rv is not None:
+                dropped.append({"kind": "SP-REFRESHVIEW", "snippet": rv})
                 continue
             # SQL Server batch-control noise — not needed on PG, drop silently.
             if _re.match(r"^\s*(BEGIN\s+TRY|END\s+TRY|BEGIN\s+CATCH|END\s+CATCH|SET\s+NOEXEC|GO)\b", txt, _re.IGNORECASE):

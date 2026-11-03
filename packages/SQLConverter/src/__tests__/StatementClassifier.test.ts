@@ -814,3 +814,11 @@ END;`;
     expect(ClassifyBatch(`-- grant access below\nIF OBJECT_ID('[__mj].[spFoo]', 'P') IS NOT NULL DROP PROCEDURE [__mj].[spFoo]`)).toBe('SKIP_SQLSERVER');
   });
 });
+
+describe('StatementClassifier — sp_refreshview (issue #5649)', () => {
+  it('classifies EXEC sp_refreshview as REFRESH_VIEW, not a silent skip', () => {
+    expect(ClassifyBatch("EXEC sp_refreshview '__mj.vwEntities'")).toBe('REFRESH_VIEW');
+    expect(ClassifyBatch("EXECUTE sys.sp_refreshview N'__mj.vwEntities';")).toBe('REFRESH_VIEW');
+    expect(ClassifyBatch("EXEC [__mj].[spDoThing] @x = 1")).toBe('SKIP_SQLSERVER');
+  });
+});

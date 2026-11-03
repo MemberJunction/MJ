@@ -19,6 +19,19 @@ const SQLSERVER_PROC_PATTERNS = [
   'SP_REFRESHVIEW', 'QUOTENAME',
 ];
 
+/** `EXEC sp_refreshview '<view>'` (optionally `sys.`, `@viewname =`, `N'…'`); group 1 is the view. */
+export const SP_REFRESHVIEW_CALL = /\bEXEC(?:UTE)?\s+(?:\[?sys\]?\.)?\[?sp_refreshview\]?\s+(?:@viewname\s*=\s*)?N?'([^']+)'/gi;
+
+/**
+ * The warning for one `sp_refreshview` (issue #5649, decision pg.5). CodeGen writes the call after
+ * every column change to a view's table. PostgreSQL has no equivalent (a view keeps the column list
+ * it was created with), so the view must be rebuilt by hand, or `spDeleteUnneededEntityFields`
+ * later deletes the new fields' EntityField rows. Before, the call was skipped without a trace.
+ */
+export function DescribeRefreshView(view: string): string {
+  return `sp_refreshview '${view}' has no PostgreSQL equivalent; rebuild the view with CREATE OR REPLACE VIEW so it carries the new columns`;
+}
+
 /**
  * Classify a SQL batch into a statement type.
  * Tests patterns in priority order matching the Python classify_batch() logic.
@@ -246,6 +259,9 @@ export function ClassifyBatch(batch: string): StatementType {
   if (/^EXEC\s+\[?\w+\]?\s*\.\s*\[?sp(?:Create|Update|Delete)\w*\]?\s+@ID\s*=\s*N?'[0-9A-F-]{36}'\s*;?\s*$/i.test(upper)) {
     return 'EXEC_BLOCK';
   }
+
+  // sp_refreshview → a named warning, not a silent skip (issue #5649)
+  if (/^EXEC(?:UTE)?\s+(?:\[?SYS\]?\.)?\[?SP_REFRESHVIEW\]?\s/i.test(upper)) return 'REFRESH_VIEW';
 
   // EXEC calls (not sp_addextendedproperty, which is handled above) → skip
   if (/^EXEC\s/i.test(upper)) return 'SKIP_SQLSERVER';

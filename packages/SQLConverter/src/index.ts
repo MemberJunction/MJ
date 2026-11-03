@@ -13,14 +13,16 @@ export type {
   BoundaryMethod,
   FileRouting,
 } from './MigrationSplitter.js';
-export { ConvertMigration, convertMigration, ExtractKeptTSQL, extractKeptTSQL } from './MigrationConverter.js';
-export { IncrementalBaker, StripVolatileHeaders, stripVolatileHeaders, BakeApplyError, SelectBakeableEntities } from './IncrementalBaker.js';
+export { ConvertMigration, convertMigration, ExtractKeptTSQL, extractKeptTSQL, RefreshViewWarnings, ViewsAreHandWritten } from './MigrationConverter.js';
+export { IncrementalBaker, StripVolatileHeaders, stripVolatileHeaders, BakeApplyError, SelectBakeableEntities, DiffFieldDefaults, FieldDefaultUpdatesSQL } from './IncrementalBaker.js';
 export type {
   BakerWorkingDB,
   CapturedEntitySQL,
   IncrementalBakerOptions,
   BakedMigrationResult,
   BakeableEntityCandidate,
+  EntityFieldDefault,
+  FieldDefaultChange,
 } from './IncrementalBaker.js';
 export type {
   MigrationConversionResult,

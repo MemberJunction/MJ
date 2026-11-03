@@ -232,3 +232,14 @@ GO
     expect(result.Stats.Gaps).toBe(0);
   });
 });
+
+describe('issue #5649 — sp_refreshview is a warning on the legacy path', () => {
+  it('records a named warning and a comment, with no gap', () => {
+    const result = convertSQL(`ALTER TABLE __mj.Entity ADD Foo BIT NULL;\nGO\nEXEC sp_refreshview '__mj.vwEntities';\nGO\n`);
+    expect(result.Stats.Gaps).toBe(0);
+    expect(result.Stats.Warnings).toEqual([
+      "sp_refreshview '__mj.vwEntities' has no PostgreSQL equivalent; rebuild the view with CREATE OR REPLACE VIEW so it carries the new columns",
+    ]);
+    expect(result.OutputSQL).toContain("-- WARNING: sp_refreshview '__mj.vwEntities'");
+  });
+});

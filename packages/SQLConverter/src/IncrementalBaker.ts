@@ -72,6 +72,63 @@ export interface BakerWorkingDB {
    * {@link SelectBakeableEntities} implements the selection over the provider's entity list.
    */
   listBakeableEntities(schema: string): Promise<string[]>;
+  /**
+   * Run PostgreSQL's EntityField sync (`spUpdateExistingEntityFieldsFromSchema`, after ensuring
+   * CodeGen's metadata support objects) for the named entities and return the EntityField
+   * `DefaultValue` changes it made (issue #5650). Called after a migration's hand body is applied
+   * and before the capture, so a default the migration added to an existing column reaches the
+   * metadata the baked `spCreate…` is generated from. Optional: a working DB without it bakes as
+   * before.
+   */
+  syncFieldDefaults?(entityDisplayNames: string[]): Promise<FieldDefaultChange[]>;
+}
+
+/** One EntityField row as {@link BakerWorkingDB.syncFieldDefaults} snapshots it. */
+export interface EntityFieldDefault {
+  ID: string;
+  EntityName: string;
+  FieldName: string;
+  DefaultValue: string | null;
+}
+
+/** A `DefaultValue` the field sync changed: the row after the sync, with the value before it. */
+export interface FieldDefaultChange extends EntityFieldDefault {
+  PreviousDefaultValue: string | null;
+}
+
+/**
+ * The `DefaultValue` changes between two EntityField snapshots, matched on ID (case-insensitive),
+ * in `after` order. A row present only after the sync (a new field) is not a change: its
+ * registration already carries the default.
+ */
+export function DiffFieldDefaults(
+  before: ReadonlyArray<EntityFieldDefault>,
+  after: ReadonlyArray<EntityFieldDefault>,
+): FieldDefaultChange[] {
+  const prior = new Map(before.map((f) => [f.ID.toLowerCase(), f]));
+  const changes: FieldDefaultChange[] = [];
+  for (const f of after) {
+    const old = prior.get(f.ID.toLowerCase());
+    if (old && old.DefaultValue !== f.DefaultValue) changes.push({ ...f, PreviousDefaultValue: old.DefaultValue });
+  }
+  return changes;
+}
+
+/**
+ * The EntityField UPDATEs that carry `DefaultValue` changes into a baked migration, so a fresh
+ * install (which never runs the field sync) gets the same metadata the bake used (issue #5650).
+ */
+export function FieldDefaultUpdatesSQL(changes: ReadonlyArray<FieldDefaultChange>, coreSchema: string): string {
+  if (changes.length === 0) return '';
+  const literal = (v: string | null) => (v === null ? 'NULL' : `'${v.replace(/'/g, "''")}'`);
+  return [
+    '-- EntityField DefaultValue changes from the PostgreSQL field sync (a fresh install does not run it)',
+    ...changes.map(
+      (c) =>
+        `-- ${c.EntityName}.${c.FieldName}\n` +
+        `UPDATE ${coreSchema}."EntityField" SET "DefaultValue" = ${literal(c.DefaultValue)} WHERE "ID" = '${c.ID}';`,
+    ),
+  ].join('\n');
 }
 
 /** The entity fields {@link SelectBakeableEntities} reads (a structural subset of `EntityInfo`). */
@@ -130,6 +187,8 @@ export interface BakedMigrationResult {
   unhandled: UnhandledStatement[];
   /** Hand-written procedural routines the migration carries (require human PG authoring). */
   handProcedural: string[];
+  /** Named, non-blocking warnings from the conversion (never a reason not to bake). */
+  warnings: string[];
   /**
    * `'baked'` — native CodeGen captured + assembled into `pgSQL`.
    * `'preserved'` — a transpile gap (unhandled statement / hand-procedural) made an auto-bake
@@ -200,6 +259,7 @@ export class IncrementalBaker {
       affectedEntities: entities,
       unhandled: conv.unhandled,
       handProcedural: conv.handProcedural,
+      warnings: conv.warnings,
     };
 
     // The transpile-only artifact (header + gap comments + transpiled DDL, no CodeGen). Preserved
@@ -240,9 +300,15 @@ export class IncrementalBaker {
       if (handBody) {
         await this.opts.db.apply(this.withSearchPath(handBody));
       }
+      // Field sync between apply and capture (issue #5650): a default added to an existing column
+      // reaches the metadata the capture reads, and the change is baked into the file.
+      const defaults = this.opts.db.syncFieldDefaults && entities.length > 0
+        ? await this.opts.db.syncFieldDefaults(entities)
+        : [];
       await this.opts.db.refreshMetadata();
       const captured = await this.captureEntities(entities);
-      return { ...base, pgSQL: this.assemble(fileName, handBody, captured), mode: 'baked' };
+      const body = [handBody, FieldDefaultUpdatesSQL(defaults, this.coreSchema)].filter((p) => p).join('\n\n');
+      return { ...base, pgSQL: this.assemble(fileName, body, captured), mode: 'baked' };
     });
   }
 

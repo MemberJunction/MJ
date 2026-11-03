@@ -1192,6 +1192,40 @@ def check_exp_attribute_references():
         print(f"ok   exp.* attribute references exist in the running sqlglot ({len(referenced)} names checked)")
 
 
+# --- Core metadata-refresh EXECs in a hand region (issue #5919, decision pg.2) ----------------
+for _proc in ("spUpdateExistingEntitiesFromSchema", "spUpdateExistingEntityFieldsFromSchema",
+              "spSetDefaultColumnWidthWhereNeeded", "spUpdateSchemaInfoFromDatabase",
+              "spDeleteUnneededEntityFields"):
+    check(f"EXEC [core].[{_proc}] @ExcludedSchemaNames → SELECT core.{_proc}(excluded)",
+          f"EXEC [${{mjSchema}}].[{_proc}] @ExcludedSchemaNames='sys,staging';",
+          must_contain=[f'SELECT ${{mjSchema}}."{_proc}"(\'sys,staging\')'])
+    check(f"EXEC core.{_proc} bare, with @IncludedSchemaNames → DO block excluding the rest",
+          f"EXEC ${{mjSchema}}.{_proc} @ExcludedSchemaNames=N'sys,staging', @IncludedSchemaNames=N'${{flyway:defaultSchema}}';",
+          must_contain=["DO $mj_refresh$",
+                        "NULLIF('sys,staging', '')",
+                        "string_to_array(lower(replace('${flyway:defaultSchema}', ' ', '')), ',')",
+                        f'PERFORM ${{mjSchema}}."{_proc}"(v_excluded);'],
+          must_not_contain=["EXEC", "@IncludedSchemaNames"])
+check("core refresh EXEC drops @EntityIDs (narrows within the schemas only)",
+      "EXEC [${mjSchema}].[spDeleteUnneededEntityFields] @ExcludedSchemaNames='sys', @EntityIDs='a,b';",
+      must_contain=['SELECT ${mjSchema}."spDeleteUnneededEntityFields"(\'sys\')'],
+      must_not_contain=["a,b"])
+check("core refresh EXEC with an unknown argument stays a reported gap",
+      "EXEC [${mjSchema}].[spUpdateExistingEntitiesFromSchema] @Mode='x';",
+      expect_unhandled=1)
+check("a non-refresh core EXEC is still a reported gap",
+      "EXEC [${mjSchema}].[spDoSomethingElse] @ExcludedSchemaNames='x';",
+      expect_unhandled=1)
+
+# --- sp_refreshview (issue #5649, decision pg.5): accounted as dropped, never emitted -----------
+_rv = mj_transpile("EXEC sp_refreshview '${flyway:defaultSchema}.vwFoo';")
+if _rv["sql"] or _rv["unhandled"] or [d["kind"] for d in _rv["dropped"]] != ["SP-REFRESHVIEW"] \
+        or _rv["dropped"][0]["snippet"] != "${flyway:defaultSchema}.vwFoo":
+    _failures += 1
+    print(f"FAIL sp_refreshview is accounted as an SP-REFRESHVIEW drop naming the view: {_rv}")
+else:
+    print("ok   sp_refreshview is accounted as an SP-REFRESHVIEW drop naming the view")
+
 check_exp_attribute_references()
 
 
