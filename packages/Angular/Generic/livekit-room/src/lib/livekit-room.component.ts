@@ -637,6 +637,11 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
     await this.controller.Disconnect(true);
   }
 
+  /** True when a hold-music bot participant (`hold-*`) is present in the room. */
+  public get IsRoomOnHold(): boolean {
+    return this.State.Remote.some((p) => p.Identity.startsWith('hold-'));
+  }
+
   // ── Control-bar intent handlers ─────────────────────────────────────────────────
 
   /** Toggles the microphone. */

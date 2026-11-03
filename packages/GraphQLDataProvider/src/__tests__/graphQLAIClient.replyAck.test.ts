@@ -216,3 +216,55 @@ describe('GraphQLAIClient.RunAIAgentFromConversationDetail — the server names 
         expect(variables).not.toHaveProperty('replyBranchId');
     });
 });
+
+describe('GraphQLAIClient.RunAutotagPipeline and MergeTags', () => {
+    it('includes pipelineRunID in RunAutotagPipeline when provided and omits it when absent', async () => {
+        const executeGQL = vi.fn(async () => ({
+            RunAutotagPipeline: { PipelineRunID: 'run-123', Success: true, ErrorMessage: null },
+        }));
+        const provider = { ExecuteGQL: executeGQL } as unknown as GraphQLDataProvider;
+        const client = new GraphQLAIClient(provider);
+
+        const resWithRunID = await client.RunAutotagPipeline({
+            contentSourceIDs: ['src-1'],
+            forceReprocess: true,
+            pipelineRunID: 'run-123',
+        });
+        expect(resWithRunID).toEqual({ PipelineRunID: 'run-123', Success: true, ErrorMessage: null });
+
+        const [docWith, varsWith] = executeGQL.mock.calls[0] as unknown as [string, Record<string, unknown>];
+        const opWith = parse(docWith).definitions[0] as OperationDefinitionNode;
+        const argsWith = ((opWith.selectionSet.selections[0] as FieldNode).arguments ?? []).map((a) => a.name.value);
+        expect(argsWith).toContain('pipelineRunID');
+        expect(varsWith).toMatchObject({ contentSourceIDs: ['src-1'], forceReprocess: true, pipelineRunID: 'run-123' });
+
+        await client.RunAutotagPipeline({ contentSourceIDs: ['src-1'] });
+        const [docWithout, varsWithout] = executeGQL.mock.calls[1] as unknown as [string, Record<string, unknown>];
+        const opWithout = parse(docWithout).definitions[0] as OperationDefinitionNode;
+        const argsWithout = ((opWithout.selectionSet.selections[0] as FieldNode).arguments ?? []).map((a) => a.name.value);
+        expect(argsWithout).not.toContain('pipelineRunID');
+        expect(varsWithout).not.toHaveProperty('pipelineRunID');
+    });
+
+    it('sends MergeTags mutation with sourceTagIDs and survivingTagID', async () => {
+        const executeGQL = vi.fn(async () => ({
+            MergeTags: { Success: true, ItemsMoved: 3, TaggedItemsMoved: 5, ErrorMessage: null },
+        }));
+        const provider = { ExecuteGQL: executeGQL } as unknown as GraphQLDataProvider;
+        const client = new GraphQLAIClient(provider);
+
+        const res = await client.MergeTags({
+            sourceTagIDs: ['src-tag-1'],
+            survivingTagID: 'target-tag-1',
+        });
+
+        expect(res).toEqual({ Success: true, ItemsMoved: 3, TaggedItemsMoved: 5, ErrorMessage: null });
+        const [doc, vars] = executeGQL.mock.calls[0] as unknown as [string, Record<string, unknown>];
+        const op = parse(doc).definitions[0] as OperationDefinitionNode;
+        expect(op.name?.value).toBe('MergeTags');
+        expect(vars).toEqual({
+            sourceTagIDs: ['src-tag-1'],
+            survivingTagID: 'target-tag-1',
+        });
+    });
+});

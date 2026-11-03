@@ -58,6 +58,7 @@ const STANDARD_MENU_LABELS: Record<string, string> = {
   history: 'History',
   list: 'Add to list',
   tags: 'Tags',
+  comments: 'Comments',
   links: 'Links',
   attachments: 'Attachments',
   'ask-ai': 'Ask AI',
@@ -155,6 +156,12 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
   /** Number of linked records for this record */
   @Input() LinkCount = 0;
+
+  /** Whether the comments drawer is currently open */
+  @Input() CommentsOpen = false;
+
+  /** Number of open anchored comments on this record */
+  @Input() CommentCount = 0;
 
   /** Number of active field conflicts requiring review in edit mode */
   @Input() ConflictCount = 0;
@@ -291,6 +298,9 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
   /** Emitted when the Links button is clicked */
   @Output() LinksRequest = new EventEmitter<void>();
+
+  /** Emitted when the Comments button is clicked */
+  @Output() CommentsRequest = new EventEmitter<void>();
 
   /** Emitted when the Ask AI button is clicked */
   @Output() AskAIRequested = new EventEmitter<void>();
@@ -744,6 +754,11 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.LinksRequest.emit();
   }
 
+  OnComments(): void {
+    if (this.dispatchToFormRef('HandleCommentsPanel')) return;
+    this.CommentsRequest.emit();
+  }
+
   OnAskAI(): void {
     if (this.dispatchToFormRef('OnAskAIRequested')) return;
     this.AskAIRequested.emit();
@@ -882,6 +897,20 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
         Disabled: false,
       },
       {
+        Key: 'comments',
+        Text: '',
+        Description: this.CommentCount > 0 ? `${this.CommentCount} open comment${this.CommentCount === 1 ? '' : 's'}` : 'Comments',
+        Icon: 'fa-regular fa-comment-dots',
+        Badge: this.CommentCount > 0 ? this.CommentCount : undefined,
+        Variant: 'default',
+        Mode: 'read',
+        Placement: 'actions',
+        Order: 62,
+        Visible: this.Config.ShowCommentsButton !== false && (this.Record?.IsSaved ?? false) && (this.EntityInfo?.AllowRecordComments !== false),
+        Disabled: false,
+        CssClass: this.CommentsOpen ? 'mj-forms-toolbar__btn--active active' : '',
+      },
+      {
         Key: 'links',
         Text: '',
         Description: this.LinkCount > 0 ? `${this.LinkCount} linked record${this.LinkCount === 1 ? '' : 's'}` : 'Links',
@@ -958,7 +987,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
     // 4. Resolve states, evaluate predicates, apply overrides
     const resolved: ResolvedToolbarItem[] = [];
-    const standardKeys: Set<string> = new Set(['edit', 'delete', 'refresh', 'clone', 'favorite', 'history', 'list', 'tags', 'links', 'attachments', 'ask-ai']);
+    const standardKeys: Set<string> = new Set(['edit', 'delete', 'refresh', 'clone', 'favorite', 'history', 'list', 'tags', 'comments', 'links', 'attachments', 'ask-ai']);
 
     for (const item of rawItems) {
       const overrides = this.ItemOverrides?.get(item.Key);
@@ -1651,6 +1680,11 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
           break;
         case 'tags':
           this.OnTagsPanel();
+          break;
+        case 'comments':
+          if (!item.Config.OnClick) {
+            this.OnComments();
+          }
           break;
         case 'links':
           if (!item.Config.OnClick) {
