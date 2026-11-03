@@ -303,7 +303,7 @@ describe('ManageMetadataBase — Source stamping', () => {
       ];
       await mm.Sync(connection(() => []), 'F1', ['A', 'B'], rows, 'Config');
       expect(logged).toHaveLength(1);
-      expect(logged[0][1]).toBe(`UPDATE [__mj].[EntityFieldValue] SET [Source]='Config' WHERE ID='V1'`);
+      expect(logged[0][1]).toBe(`UPDATE [__mj].[EntityFieldValue] SET [Source]='Config' WHERE ID='V1';`);
    });
 
    it('stamps organic keys written from the file as Config, on insert and on update', async () => {
