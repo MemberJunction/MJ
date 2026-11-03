@@ -20,6 +20,7 @@
  * read-only boundary is restated on each door component; this module never mutates anything.
  */
 
+import { UUIDsEqual } from '@memberjunction/global';
 import type { GateOutcome } from '@memberjunction/predictive-studio-core';
 import { BoundNameList } from '../shared/agent-tool-validation';
 
@@ -48,7 +49,7 @@ export interface PSNamedRecord {
 export function ResolvePSRecord<T extends PSNamedRecord>(input: string, candidates: readonly T[]): T | null {
   const needle = (input ?? '').trim().toLowerCase();
   if (!needle) return null;
-  const byId = candidates.find((c) => c.ID.toLowerCase() === needle);
+  const byId = candidates.find((c) => UUIDsEqual(c.ID, needle));
   if (byId) return byId;
   const byName = candidates.find((c) => c.Name.trim().toLowerCase() === needle);
   if (byName) return byName;

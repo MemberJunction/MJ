@@ -94,4 +94,13 @@ describe('PSProductionComponent (DOM)', () => {
     const operate = query(fixture, '[data-testid="ps-production-operate"]') as HTMLButtonElement | null;
     expect(operate?.disabled).toBe(true);
   });
+
+  it('highlights the selected model when the selection spells its ID in another case', () => {
+    const fixture = render([makeModel({ ID: 'AAAAAAAA-0000-4000-8000-000000000001', Version: 1 }), makeModel({ ID: 'BBBBBBBB-0000-4000-8000-000000000002', Version: 2 })]);
+    fixture.componentInstance.Select('bbbbbbbb-0000-4000-8000-000000000002');
+    // a row click marks the view dirty; a direct call does not
+    fixture.componentRef.changeDetectorRef.markForCheck();
+    fixture.detectChanges();
+    expect(queryAll(fixture, '[data-testid="ps-production-row"].sel').map((r) => r.textContent?.includes('v2'))).toEqual([true]);
+  });
 });

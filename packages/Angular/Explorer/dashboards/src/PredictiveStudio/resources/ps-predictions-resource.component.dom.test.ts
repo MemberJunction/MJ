@@ -11,6 +11,7 @@ import { NavigationService } from '@memberjunction/ng-shared';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { RenderComponentFixture, CreateFakeProvider, Query } from '@memberjunction/ng-test-utils';
 import { AtRiskRules, TRAINING_RUN_RESULTS_SCHEMA, type AtRiskRow, type GateDecision, type StoredGateRecord } from '@memberjunction/predictive-studio-core';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import type { PredictionGridRowsLoadedEvent } from '../components/ps-predictions-grid.component';
 import { PSPredictionsResourceComponent } from './ps-predictions-resource.component';
@@ -202,6 +203,41 @@ const gridStub = (fixture: ComponentFixture<PSPredictionsResourceComponent>): Gr
 
 afterEach(() => vi.restoreAllMocks());
 
+/** A List Detail double: the group it joined, its latest result, and a save that queues it (or refuses it). */
+interface ListDetailDouble { ListID: string; RecordID: string; TransactionGroup: object | null; LatestResult: { CompleteMessage: string }; Save: () => Promise<boolean> }
+
+/**
+ * A provider whose List saves and whose List Details join one transaction group the test controls: `submit` decides the
+ * group's outcome and `queues(i)` whether the i-th detail's save queues it.
+ */
+function listProvider(submit: () => Promise<boolean>, queues: (i: number) => boolean = () => true) {
+  const Details: ListDetailDouble[] = [];
+  const Submit = vi.fn(submit);
+  const Group = { Submit };
+  const base = CreateFakeProvider({ entities: [{ ID: ENTITY_ID, Name: 'Members' }] });
+  const Provider = {
+    ...base,
+    CreateTransactionGroup: vi.fn(async () => Group),
+    GetEntityObject: vi.fn(async (entityName: string) => {
+      if (entityName === 'MJ: Lists') return { ID: 'L1', Name: '', Save: async () => true } as unknown as MJListEntity;
+      const i = Details.length;
+      const d: ListDetailDouble = { ListID: '', RecordID: '', TransactionGroup: null, LatestResult: { CompleteMessage: `detail ${i} refused` }, Save: async () => queues(i) };
+      Details.push(d);
+      return d as unknown as MJListDetailEntity;
+    }),
+  } as unknown as IMetadataProvider;
+  return { Provider, Group, Submit, Details };
+}
+
+/** Loads 250 records at or above the list's risk floor (plus 10 below it) and sends them to a list. */
+async function sendAtRisk(fixture: ComponentFixture<PSPredictionsResourceComponent>, resource: PSPredictionsResourceComponent): Promise<void> {
+  const rows = [...Array.from({ length: 250 }, (_, i) => row(`hi-${i}`, 80)), ...Array.from({ length: 10 }, (_, i) => row(`lo-${i}`, 10))];
+  gridStub(fixture)?.RowsLoaded.emit({ Rows: rows, Capped: false });
+  await settle(fixture);
+  await resource.SendToList();
+  fixture.detectChanges();
+}
+
 describe('PSPredictionsResourceComponent (DOM) — trust renders the stored gate decision', () => {
   it("a shipped model's card shows the outcome title and the comparison with the flat guess, and opens", async () => {
     const { fixture } = await renderCatalog(defaultProvider());
@@ -290,24 +326,44 @@ describe('PSPredictionsResourceComponent (DOM) — at-risk workspace', () => {
   });
 
   it('reports how many of the qualifying records "Send to a list" added', async () => {
-    const saved = { list: 0, details: 0 };
-    const base = CreateFakeProvider({ entities: [{ ID: ENTITY_ID, Name: 'Members' }] });
-    const provider = {
-      ...base,
-      GetEntityObject: vi.fn(async (entityName: string) =>
-        entityName === 'MJ: Lists'
-          ? ({ ID: 'L1', Name: '', Save: async () => ++saved.list > 0 } as unknown as MJListEntity)
-          : ({ Save: async () => ++saved.details > 0 } as unknown as MJListDetailEntity),
-      ),
-    } as unknown as IMetadataProvider;
-    const { fixture, resource } = await renderWorkspace(provider);
-    // 250 records at or above the list's risk floor, plus 10 below it.
-    const rows = [...Array.from({ length: 250 }, (_, i) => row(`hi-${i}`, 80)), ...Array.from({ length: 10 }, (_, i) => row(`lo-${i}`, 10))];
-    gridStub(fixture)?.RowsLoaded.emit({ Rows: rows, Capped: false });
-    await settle(fixture);
-    await resource.SendToList();
-    fixture.detectChanges();
-    expect(saved.details).toBe(200);
+    const lists = listProvider(async () => true);
+    const { fixture, resource } = await renderWorkspace(lists.Provider);
+    await sendAtRisk(fixture, resource);
+    expect(lists.Details.length).toBe(200);
     expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('Added 200 of 250 at-risk records (highest risk first)');
+  });
+
+  it('queues every member on one transaction group and submits it once, so the adds take one round trip', async () => {
+    const lists = listProvider(async () => true);
+    const { fixture, resource } = await renderWorkspace(lists.Provider);
+    await sendAtRisk(fixture, resource);
+    expect([lists.Submit.mock.calls.length, lists.Details.every((d) => d.TransactionGroup === lists.Group)]).toEqual([1, true]);
+  });
+
+  it('counts nothing added when the batch fails, naming the first error', async () => {
+    const lists = listProvider(async () => false);
+    const { fixture, resource } = await renderWorkspace(lists.Provider);
+    await sendAtRisk(fixture, resource);
+    expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('Added 0 of 200 records to “At-Risk: ');
+    expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('200 failed to add (first error: detail 0 refused)');
+  });
+
+  it('counts a member refused before it joined the batch as failed, and the rest as added', async () => {
+    const lists = listProvider(async () => true, (i) => i !== 3);
+    const { fixture, resource } = await renderWorkspace(lists.Provider);
+    await sendAtRisk(fixture, resource);
+    expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('Added 199 of 200 records');
+    expect(Query(fixture, '[data-testid="ps-list-result"]')?.textContent).toContain('1 failed to add (first error: detail 3 refused)');
+  });
+});
+
+describe('PSPredictionsResourceComponent (DOM) — the co-pilot agent lookup', () => {
+  it("loads the AI engine through the workspace's provider", async () => {
+    const provider = defaultProvider();
+    const config = vi.spyOn(AIEngineBase.Instance, 'Config').mockResolvedValue(undefined);
+    const { resource } = await renderCatalog(provider);
+    // the lookup every co-pilot entry point runs; called directly so the chat area (not stubbed here) stays closed
+    await resource['ensureModelDevAgentResolved']();
+    expect(config.mock.calls.map((c) => c[2] === provider)).toEqual([true]);
   });
 });

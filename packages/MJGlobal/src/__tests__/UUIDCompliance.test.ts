@@ -319,7 +319,6 @@ const NESTED_SCAN_BASELINE: Record<string, number> = {
     'Angular/Explorer/dashboards/src/Integration/components/pipelines/pipelines.component.ts': 1,
     'Angular/Explorer/dashboards/src/Lists/components/lists-operations-resource.component.ts': 1,
     'Angular/Explorer/dashboards/src/MCP/mcp-dashboard.component.ts': 6,
-    'Angular/Explorer/dashboards/src/PredictiveStudio/engine/predictive-studio.engine.ts': 1,
     'Angular/Explorer/dashboards/src/QueryBrowser/query-browser-resource.component.ts': 1,
     'Angular/Explorer/dashboards/src/Scheduling/services/scheduling-instrumentation.service.ts': 1,
     'Angular/Explorer/dashboards/src/Testing/components/testing-explorer.component.ts': 1,

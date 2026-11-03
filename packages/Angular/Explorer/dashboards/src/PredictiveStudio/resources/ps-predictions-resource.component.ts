@@ -701,8 +701,8 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   /**
    * P1 #4 — "Send to a list" as a one-click server action (no agent sentence to parse): create an MJ List
    * over the model's target entity and add the at-risk members (risk at least `AT_RISK_LIST_MIN_RISK_PCT`, highest
-   * first, at most {@link AtRiskListLimit}) so a team can act on it immediately; the result line says how many of the
-   * qualifying records were added.
+   * first, at most {@link AtRiskListLimit}, in one transaction group) so a team can act on it immediately; the result
+   * line says how many of the qualifying records were added.
    */
   public async SendToList(): Promise<void> {
     const selected = this.Selected;
@@ -731,21 +731,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       }
       const qualifying = AtRiskRules.SelectAtRiskListMembers(this.AtRiskRows, this.AtRiskRows.length).length;
       const members = AtRiskRules.SelectAtRiskListMembers(this.AtRiskRows, PSPredictionsResourceComponent.AtRiskListLimit);
-      let seq = 0;
-      let added = 0;
-      let firstFailure: string | null = null;
-      for (const r of members) {
-        const ld = await p.GetEntityObject<MJListDetailEntity>('MJ: List Details', user);
-        ld.ListID = list.ID;
-        ld.RecordID = r.RecordID;
-        ld.Sequence = seq++;
-        ld.Status = 'Active';
-        if (await ld.Save()) {
-          added++;
-        } else if (!firstFailure) {
-          firstFailure = ld.LatestResult?.CompleteMessage || 'unknown error';
-        }
-      }
+      const { Added: added, FirstFailure: firstFailure } = await this.addListMembers(list.ID, members);
       const failed = members.length - added;
       this.ListResult =
         failed === 0
@@ -759,6 +745,31 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       this.CreatingList = false;
       this.cdrLocal.detectChanges();
     }
+  }
+
+  /**
+   * Adds the members to the list in one transaction group: one round trip, and all of them or none. A member whose save
+   * is refused before it joins the group is counted failed; when the group's submit fails, nothing was added.
+   */
+  private async addListMembers(listId: string, members: readonly AtRiskRow[]): Promise<{ Added: number; FirstFailure: string | null }> {
+    const p = this.ProviderToUse;
+    const user = p.CurrentUser || undefined;
+    const group = await p.CreateTransactionGroup();
+    const queued: MJListDetailEntity[] = [];
+    let firstFailure: string | null = null;
+    for (const [seq, r] of members.entries()) {
+      const ld = await p.GetEntityObject<MJListDetailEntity>('MJ: List Details', user);
+      ld.ListID = listId;
+      ld.RecordID = r.RecordID;
+      ld.Sequence = seq;
+      ld.Status = 'Active';
+      ld.TransactionGroup = group;
+      // In a transaction group Save() only queues the row: true once queued, false when refused before it joined.
+      if (await ld.Save()) queued.push(ld);
+      else firstFailure = firstFailure || ld.LatestResult?.CompleteMessage || 'unknown error';
+    }
+    if (queued.length === 0 || (await group.Submit())) return { Added: queued.length, FirstFailure: firstFailure };
+    return { Added: 0, FirstFailure: firstFailure || queued[0].LatestResult?.CompleteMessage || 'the batch failed and was rolled back' };
   }
 
   /**
@@ -856,7 +867,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   private async ensureModelDevAgentResolved(): Promise<void> {
     if (this._modelDevAgentId) return;
     try {
-      await AIEngineBase.Instance.Config(false, this.ProviderToUse.CurrentUser || undefined);
+      await AIEngineBase.Instance.Config(false, this.ProviderToUse.CurrentUser || undefined, this.ProviderToUse);
       this._modelDevAgentId =
         AIEngineBase.Instance.Agents?.find((a) => a.Name?.trim().toLowerCase() === MODEL_DEV_AGENT_NAME.toLowerCase())?.ID || null;
       if (!this._modelDevAgentId) LogError(`PSPredictionsResource: '${MODEL_DEV_AGENT_NAME}' not found — chat uses default-agent routing.`);
