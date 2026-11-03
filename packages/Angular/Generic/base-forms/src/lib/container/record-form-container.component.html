@@ -716,7 +716,8 @@
     [Mode]="'drawer'"
     [IsOpen]="ShowRecordComments"
     (Close)="OnRecordCommentsClosed()"
-    (CommentCountChange)="OnCommentCountChanged($event)">
+    (CommentCountChange)="OnCommentCountChanged($event)"
+    (Navigate)="OnNavigate($event)">
   </mj-record-comments>
 }
 
@@ -724,6 +725,7 @@
   <mj-record-comments
     [Provider]="Provider"
     [Record]="EffectiveRecord"
-    [Mode]="'popover'">
+    [Mode]="'popover'"
+    (Navigate)="OnNavigate($event)">
   </mj-record-comments>
 }

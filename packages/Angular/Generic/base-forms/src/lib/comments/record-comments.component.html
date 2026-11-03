@@ -147,6 +147,27 @@
                         </ul>
                     }
                 </div>
+                @let drawerNewDraftMentions = GetDraftMentions('new');
+                @if (drawerNewDraftMentions.length > 0) {
+                    <div class="mj-record-comments__draft-mentions" aria-label="Tagged in this comment">
+                        @for (m of drawerNewDraftMentions; track m.ID) {
+                            <span
+                                class="mj-record-comments__draft-mention-chip"
+                                [class.mj-record-comments__draft-mention-chip--agent]="m.Type === 'agent'">
+                                <i [class]="m.Type === 'agent' ? 'fa-solid fa-robot' : 'fa-solid fa-user'" aria-hidden="true"></i>
+                                <span>&#64;{{ m.Name }}</span>
+                                <button
+                                    type="button"
+                                    class="mj-record-comments__draft-mention-remove"
+                                    [title]="'Remove @' + m.Name"
+                                    [attr.aria-label]="'Remove @' + m.Name"
+                                    (click)="RemoveDraftMention(m, 'new')">
+                                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                                </button>
+                            </span>
+                        }
+                    </div>
+                }
                 <div class="mj-record-comments__composer-footer">
                     <button
                         type="submit"
@@ -261,9 +282,36 @@
                                                         {{ FormatRelativeTime(msg.__mj_CreatedAt) }}
                                                     </span>
                                                 </div>
-                                                <div
-                                                    class="mj-record-comments__message-body"
-                                                    [innerHTML]="FormatMessageHtml(msg.Message)"></div>
+                                                <div class="mj-record-comments__message-body">
+                                                    @for (seg of ParseMessageSegments(msg.Message); track $index) {
+                                                        @if (seg.Kind === 'mention' && seg.ID) {
+                                                            <button
+                                                                type="button"
+                                                                class="mj-record-comments__mention-pill mj-record-comments__mention-pill--clickable"
+                                                                [class.mj-record-comments__mention-pill--agent]="seg.MentionType === 'agent'"
+                                                                [class.mj-record-comments__mention-pill--user]="seg.MentionType === 'user'"
+                                                                mjRecordLink
+                                                                [EntityName]="seg.EntityName"
+                                                                [RecordID]="seg.ID"
+                                                                [DisplayName]="seg.Name"
+                                                                [title]="'Open ' + seg.Name + ' (' + (seg.MentionType === 'agent' ? 'AI Agent' : 'User') + ')'"
+                                                                (Navigate)="OnMentionRecordNavigate($event)">
+                                                                <i [class]="seg.MentionType === 'agent' ? 'fa-solid fa-robot' : 'fa-solid fa-user'" aria-hidden="true"></i>
+                                                                <span>&#64;{{ seg.Name }}</span>
+                                                            </button>
+                                                        } @else if (seg.Kind === 'mention') {
+                                                            <span
+                                                                class="mj-record-comments__mention-pill"
+                                                                [class.mj-record-comments__mention-pill--agent]="seg.MentionType === 'agent'"
+                                                                [class.mj-record-comments__mention-pill--user]="seg.MentionType === 'user'">
+                                                                <i [class]="seg.MentionType === 'agent' ? 'fa-solid fa-robot' : 'fa-solid fa-user'" aria-hidden="true"></i>
+                                                                <span>&#64;{{ seg.Name }}</span>
+                                                            </span>
+                                                        } @else {
+                                                            <span class="mj-record-comments__message-text">{{ seg.Text }}</span>
+                                                        }
+                                                    }
+                                                </div>
                                             </div>
                                         </div>
                                     }
@@ -271,6 +319,27 @@
 
                                 <!-- Reply Composer -->
                                 @if (CanUserPostComments) {
+                                    @let drawerReplyDraftMentions = GetDraftMentions(thread.Conversation.ID);
+                                    @if (drawerReplyDraftMentions.length > 0) {
+                                        <div class="mj-record-comments__draft-mentions" aria-label="Tagged in this reply">
+                                            @for (m of drawerReplyDraftMentions; track m.ID) {
+                                                <span
+                                                    class="mj-record-comments__draft-mention-chip"
+                                                    [class.mj-record-comments__draft-mention-chip--agent]="m.Type === 'agent'">
+                                                    <i [class]="m.Type === 'agent' ? 'fa-solid fa-robot' : 'fa-solid fa-user'" aria-hidden="true"></i>
+                                                    <span>&#64;{{ m.Name }}</span>
+                                                    <button
+                                                        type="button"
+                                                        class="mj-record-comments__draft-mention-remove"
+                                                        [title]="'Remove @' + m.Name"
+                                                        [attr.aria-label]="'Remove @' + m.Name"
+                                                        (click)="RemoveDraftMention(m, thread.Conversation.ID)">
+                                                        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                                                    </button>
+                                                </span>
+                                            }
+                                        </div>
+                                    }
                                     <form
                                         class="mj-record-comments__reply-form"
                                         (submit)="$event.preventDefault(); OnSubmitReply(thread.Conversation.ID)">
@@ -410,15 +479,63 @@
                                             {{ FormatRelativeTime(msg.__mj_CreatedAt) }}
                                         </span>
                                     </div>
-                                    <div
-                                        class="mj-record-comments__message-body"
-                                        [innerHTML]="FormatMessageHtml(msg.Message)"></div>
+                                    <div class="mj-record-comments__message-body">
+                                        @for (seg of ParseMessageSegments(msg.Message); track $index) {
+                                            @if (seg.Kind === 'mention' && seg.ID) {
+                                                <button
+                                                    type="button"
+                                                    class="mj-record-comments__mention-pill mj-record-comments__mention-pill--clickable"
+                                                    [class.mj-record-comments__mention-pill--agent]="seg.MentionType === 'agent'"
+                                                    [class.mj-record-comments__mention-pill--user]="seg.MentionType === 'user'"
+                                                    mjRecordLink
+                                                    [EntityName]="seg.EntityName"
+                                                    [RecordID]="seg.ID"
+                                                    [DisplayName]="seg.Name"
+                                                    [title]="'Open ' + seg.Name + ' (' + (seg.MentionType === 'agent' ? 'AI Agent' : 'User') + ')'"
+                                                    (Navigate)="OnMentionRecordNavigate($event)">
+                                                    <i [class]="seg.MentionType === 'agent' ? 'fa-solid fa-robot' : 'fa-solid fa-user'" aria-hidden="true"></i>
+                                                    <span>&#64;{{ seg.Name }}</span>
+                                                </button>
+                                            } @else if (seg.Kind === 'mention') {
+                                                <span
+                                                    class="mj-record-comments__mention-pill"
+                                                    [class.mj-record-comments__mention-pill--agent]="seg.MentionType === 'agent'"
+                                                    [class.mj-record-comments__mention-pill--user]="seg.MentionType === 'user'">
+                                                    <i [class]="seg.MentionType === 'agent' ? 'fa-solid fa-robot' : 'fa-solid fa-user'" aria-hidden="true"></i>
+                                                    <span>&#64;{{ seg.Name }}</span>
+                                                </span>
+                                            } @else {
+                                                <span class="mj-record-comments__message-text">{{ seg.Text }}</span>
+                                            }
+                                        }
+                                    </div>
                                 </div>
                             </div>
                         }
                     </div>
 
                     @if (CanUserPostComments) {
+                        @let popoverReplyDraftMentions = GetDraftMentions(thread.Conversation.ID);
+                        @if (popoverReplyDraftMentions.length > 0) {
+                            <div class="mj-record-comments__draft-mentions" aria-label="Tagged in this reply">
+                                @for (m of popoverReplyDraftMentions; track m.ID) {
+                                    <span
+                                        class="mj-record-comments__draft-mention-chip"
+                                        [class.mj-record-comments__draft-mention-chip--agent]="m.Type === 'agent'">
+                                        <i [class]="m.Type === 'agent' ? 'fa-solid fa-robot' : 'fa-solid fa-user'" aria-hidden="true"></i>
+                                        <span>&#64;{{ m.Name }}</span>
+                                        <button
+                                            type="button"
+                                            class="mj-record-comments__draft-mention-remove"
+                                            [title]="'Remove @' + m.Name"
+                                            [attr.aria-label]="'Remove @' + m.Name"
+                                            (click)="RemoveDraftMention(m, thread.Conversation.ID)">
+                                            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                                        </button>
+                                    </span>
+                                }
+                            </div>
+                        }
                         <form
                             class="mj-record-comments__reply-form"
                             (submit)="$event.preventDefault(); OnSubmitReply(thread.Conversation.ID)">
@@ -506,6 +623,27 @@
                         </ul>
                     }
                 </div>
+                @let popoverNewDraftMentions = GetDraftMentions('new');
+                @if (popoverNewDraftMentions.length > 0) {
+                    <div class="mj-record-comments__draft-mentions" aria-label="Tagged in this comment">
+                        @for (m of popoverNewDraftMentions; track m.ID) {
+                            <span
+                                class="mj-record-comments__draft-mention-chip"
+                                [class.mj-record-comments__draft-mention-chip--agent]="m.Type === 'agent'">
+                                <i [class]="m.Type === 'agent' ? 'fa-solid fa-robot' : 'fa-solid fa-user'" aria-hidden="true"></i>
+                                <span>&#64;{{ m.Name }}</span>
+                                <button
+                                    type="button"
+                                    class="mj-record-comments__draft-mention-remove"
+                                    [title]="'Remove @' + m.Name"
+                                    [attr.aria-label]="'Remove @' + m.Name"
+                                    (click)="RemoveDraftMention(m, 'new')">
+                                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                                </button>
+                            </span>
+                        }
+                    </div>
+                }
                 <div class="mj-record-comments__composer-footer">
                     <button
                         type="submit"

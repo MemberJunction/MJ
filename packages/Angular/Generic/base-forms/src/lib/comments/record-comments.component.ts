@@ -26,6 +26,7 @@ import {
 import { EscapeHTML, EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Subscription } from 'rxjs';
+import { FormNavigationEvent } from '../types/navigation-events';
 import {
     FormCommentAnchorNavigationRequest,
     FormCommentAnchorTarget,
@@ -41,6 +42,29 @@ export interface CommentMentionCandidate {
     Name: string;
     Subtitle: string | null;
 }
+
+/**
+ * Plain-text segment of a parsed comment message.
+ */
+export interface RecordCommentMessageTextSegment {
+    Kind: 'text';
+    Text: string;
+}
+
+/**
+ * Interactive `@mention` chip segment of a parsed comment message, linked to `MJ: Users` or `MJ: AI Agents`.
+ */
+export interface RecordCommentMessageMentionSegment {
+    Kind: 'mention';
+    MentionType: 'user' | 'agent';
+    ID: string | null;
+    Name: string;
+    EntityName: 'MJ: Users' | 'MJ: AI Agents';
+}
+
+export type RecordCommentMessageSegment =
+    | RecordCommentMessageTextSegment
+    | RecordCommentMessageMentionSegment;
 
 /**
  * View-model for a single anchored comment thread rendered in `<mj-record-comments>`.
@@ -99,6 +123,7 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
     @Output() CommentCountChange = new EventEmitter<number>();
     @Output() RollupChange = new EventEmitter<AnchoredCommentRollup>();
     @Output() NavigateToAnchor = new EventEmitter<FormCommentAnchorNavigationRequest>();
+    @Output() Navigate = new EventEmitter<FormNavigationEvent>();
 
     @ViewChild('newThreadTextarea') private newThreadTextarea?: ElementRef<HTMLTextAreaElement>;
 
@@ -115,6 +140,7 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
     // @Mention autocomplete state
     public MentionCandidates: CommentMentionCandidate[] = [];
     public FilteredMentionCandidates: CommentMentionCandidate[] = [];
+    public SelectedMentionsByContext = new Map<string, Map<string, CommentMentionCandidate>>();
     public ActiveMentionContext: {
         Target: 'new' | string; // 'new' or conversationId
         Query: string;
@@ -457,26 +483,126 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
         const active = this.ActiveMentionContext;
         if (!active) return;
 
-        const token = `@{"type":"${candidate.Type}","id":"${candidate.ID}","name":${JSON.stringify(candidate.Name)}} `;
+        const normKey = contextKey === 'new' ? 'new' : NormalizeUUID(contextKey);
+        let contextMap = this.SelectedMentionsByContext.get(normKey);
+        if (!contextMap) {
+            contextMap = new Map<string, CommentMentionCandidate>();
+            this.SelectedMentionsByContext.set(normKey, contextMap);
+        }
+        contextMap.set(candidate.Name.trim().toLowerCase(), candidate);
+
+        const displayToken = `@${candidate.Name} `;
         const currentText = contextKey === 'new' ? this.NewThreadMessage : this.GetReplyDraft(contextKey);
         const before = currentText.slice(0, active.TriggerIndex);
         const after = currentText.slice(active.TriggerIndex + 1 + active.Query.length);
-        const updated = `${before}${token}${after}`;
+        const updated = `${before}${displayToken}${after}`;
 
         if (contextKey === 'new') {
             this.NewThreadMessage = updated;
         } else {
-            this.ReplyDraftByConversationId.set(NormalizeUUID(contextKey), updated);
+            this.ReplyDraftByConversationId.set(normKey, updated);
         }
         this.ActiveMentionContext = null;
         this.cdr.markForCheck();
     }
 
+    /**
+     * Returns the list of mentioned users/agents currently present in the draft for `contextKey`,
+     * used to render interactive tagged chips right inside the composer.
+     */
+    public GetDraftMentions(contextKey: 'new' | string): CommentMentionCandidate[] {
+        const normKey = contextKey === 'new' ? 'new' : NormalizeUUID(contextKey);
+        const text = (contextKey === 'new' ? this.NewThreadMessage : this.GetReplyDraft(contextKey)).toLowerCase();
+        if (!text.includes('@')) return [];
+
+        const candidatesByName = new Map<string, CommentMentionCandidate>();
+        const contextMap = this.SelectedMentionsByContext.get(normKey);
+        if (contextMap) {
+            for (const [k, v] of contextMap.entries()) {
+                candidatesByName.set(k, v);
+            }
+        }
+        for (const cand of this.MentionCandidates ?? []) {
+            const key = cand.Name.trim().toLowerCase();
+            if (!candidatesByName.has(key)) {
+                candidatesByName.set(key, cand);
+            }
+        }
+
+        const matched: CommentMentionCandidate[] = [];
+        for (const [nameLower, cand] of candidatesByName.entries()) {
+            if (nameLower && text.includes(`@${nameLower}`)) {
+                matched.push(cand);
+            }
+        }
+        return matched;
+    }
+
+    /**
+     * Removes a tagged mention chip from the composer draft.
+     */
+    public RemoveDraftMention(candidate: CommentMentionCandidate, contextKey: 'new' | string): void {
+        const normKey = contextKey === 'new' ? 'new' : NormalizeUUID(contextKey);
+        this.SelectedMentionsByContext.get(normKey)?.delete(candidate.Name.trim().toLowerCase());
+
+        const currentText = contextKey === 'new' ? this.NewThreadMessage : this.GetReplyDraft(contextKey);
+        const escapedName = candidate.Name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const cleaned = currentText.replace(new RegExp(`@${escapedName}\\s?`, 'gi'), '').trimStart();
+
+        if (contextKey === 'new') {
+            this.NewThreadMessage = cleaned;
+        } else {
+            this.ReplyDraftByConversationId.set(normKey, cleaned);
+        }
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Converts human-readable `@Name` mentions in a composer draft into canonical
+     * `@{"type":"user"|"agent","id":"...","name":"..."}` wire tokens before saving.
+     */
+    public SerializeMentionsForWire(rawText: string, contextKey: 'new' | string): string {
+        if (!rawText || !rawText.includes('@')) {
+            return rawText;
+        }
+        const normKey = contextKey === 'new' ? 'new' : NormalizeUUID(contextKey);
+        const candidatesByName = new Map<string, CommentMentionCandidate>();
+        const contextMap = this.SelectedMentionsByContext.get(normKey);
+        if (contextMap) {
+            for (const [k, v] of contextMap.entries()) {
+                candidatesByName.set(k, v);
+            }
+        }
+        for (const cand of this.MentionCandidates ?? []) {
+            const key = cand.Name.trim().toLowerCase();
+            if (!candidatesByName.has(key)) {
+                candidatesByName.set(key, cand);
+            }
+        }
+        if (candidatesByName.size === 0) {
+            return rawText;
+        }
+
+        const sortedCandidates = Array.from(candidatesByName.values()).sort(
+            (a, b) => b.Name.length - a.Name.length
+        );
+
+        let serialized = rawText;
+        for (const cand of sortedCandidates) {
+            const escapedName = cand.Name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const pattern = new RegExp(`@${escapedName}(?=$|[\\s.,!?;:)])`, 'gi');
+            const wireToken = `@{"type":"${cand.Type}","id":"${cand.ID}","name":${JSON.stringify(cand.Name)}}`;
+            serialized = serialized.replace(pattern, wireToken);
+        }
+        return serialized;
+    }
+
     public async OnSubmitNewThread(): Promise<void> {
-        const text = this.NewThreadMessage.trim();
-        if (!text || this.IsSubmittingNewThread || !this.Coordinator) {
+        const rawText = this.NewThreadMessage.trim();
+        if (!rawText || this.IsSubmittingNewThread || !this.Coordinator) {
             return;
         }
+        const text = this.SerializeMentionsForWire(rawText, 'new');
 
         this.IsSubmittingNewThread = true;
         this.ErrorBannerMessage = null;
@@ -504,6 +630,7 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
                 Name: target?.Label ? `${target.Label} Comment` : undefined
             });
             this.NewThreadMessage = '';
+            this.SelectedMentionsByContext.delete('new');
             this.ActiveMentionContext = null;
         } catch (error) {
             this.ErrorBannerMessage = error instanceof Error ? error.message : String(error);
@@ -515,10 +642,11 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
 
     public async OnSubmitReply(conversationId: string): Promise<void> {
         const normId = NormalizeUUID(conversationId);
-        const text = (this.ReplyDraftByConversationId.get(normId) ?? '').trim();
-        if (!text || this.SubmittingReplyConversationId || !this.Coordinator) {
+        const rawText = (this.ReplyDraftByConversationId.get(normId) ?? '').trim();
+        if (!rawText || this.SubmittingReplyConversationId || !this.Coordinator) {
             return;
         }
+        const text = this.SerializeMentionsForWire(rawText, normId);
 
         this.SubmittingReplyConversationId = conversationId;
         this.ErrorBannerMessage = null;
@@ -527,6 +655,7 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
         try {
             await this.Coordinator.PostReply(conversationId, text);
             this.ReplyDraftByConversationId.delete(normId);
+            this.SelectedMentionsByContext.delete(normId);
             this.ActiveMentionContext = null;
         } catch (error) {
             this.ErrorBannerMessage = error instanceof Error ? error.message : String(error);
@@ -556,36 +685,81 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
     }
 
     /**
-     * Renders a message body as safe HTML with `@mention` tokens styled as pill badges.
+     * Relays record navigation events emitted by clickable `@mention` chips (`[mjRecordLink]`)
+     * to the parent `<mj-record-form-container>` and closes the inline popover when active.
      */
-    public FormatMessageHtml(rawMessage: string | null | undefined): string {
+    public OnMentionRecordNavigate(event: FormNavigationEvent): void {
+        this.Navigate.emit(event);
+        if (this.Mode === 'popover') {
+            this.Coordinator?.ClosePopover();
+        }
+    }
+
+    /**
+     * Parses a comment message into strongly-typed text and `@mention` segments so the template
+     * can render interactive `[mjRecordLink]` chips for tagged users (`MJ: Users`) and agents (`MJ: AI Agents`).
+     */
+    public ParseMessageSegments(rawMessage: string | null | undefined): RecordCommentMessageSegment[] {
         const text = (rawMessage ?? '').trim();
-        if (!text) return '';
+        if (!text) return [];
 
         let lastIndex = 0;
-        const parts: string[] = [];
+        const segments: RecordCommentMessageSegment[] = [];
         for (const match of text.matchAll(JSON_MENTION_REGEX)) {
             const matchIdx = match.index ?? 0;
             if (matchIdx > lastIndex) {
-                parts.push(EscapeHTML(text.slice(lastIndex, matchIdx)));
+                segments.push({
+                    Kind: 'text',
+                    Text: text.slice(lastIndex, matchIdx)
+                });
             }
             const token = match[0];
             try {
-                const parsed = JSON.parse(token.slice(1)) as { type?: string; name?: string };
+                const parsed = JSON.parse(token.slice(1)) as { type?: string; id?: string; name?: string };
                 const name = typeof parsed?.name === 'string' && parsed.name.trim() ? parsed.name.trim() : 'User';
                 const kind = parsed?.type === 'agent' ? 'agent' : 'user';
-                parts.push(
-                    `<span class="mj-record-comments__mention-pill mj-record-comments__mention-pill--${kind}">@${EscapeHTML(name)}</span>`
-                );
+                const id = typeof parsed?.id === 'string' && parsed.id.trim() ? parsed.id.trim() : null;
+                segments.push({
+                    Kind: 'mention',
+                    MentionType: kind,
+                    ID: id,
+                    Name: name,
+                    EntityName: kind === 'agent' ? 'MJ: AI Agents' : 'MJ: Users'
+                });
             } catch {
-                parts.push(EscapeHTML(token));
+                segments.push({
+                    Kind: 'text',
+                    Text: token
+                });
             }
             lastIndex = matchIdx + token.length;
         }
         if (lastIndex < text.length) {
-            parts.push(EscapeHTML(text.slice(lastIndex)));
+            segments.push({
+                Kind: 'text',
+                Text: text.slice(lastIndex)
+            });
         }
-        return parts.join('').replace(/\n/g, '<br>');
+        return segments;
+    }
+
+    /**
+     * Renders a message body as safe HTML with `@mention` tokens styled as pill badges.
+     */
+    public FormatMessageHtml(rawMessage: string | null | undefined): string {
+        const segments = this.ParseMessageSegments(rawMessage);
+        if (segments.length === 0) return '';
+
+        return segments
+            .map((seg) => {
+                if (seg.Kind === 'mention') {
+                    const idAttr = seg.ID ? ` data-mention-id="${EscapeHTML(seg.ID)}"` : '';
+                    const entityAttr = ` data-entity-name="${EscapeHTML(seg.EntityName)}"`;
+                    return `<span class="mj-record-comments__mention-pill mj-record-comments__mention-pill--${seg.MentionType}"${idAttr}${entityAttr}>@${EscapeHTML(seg.Name)}</span>`;
+                }
+                return EscapeHTML(seg.Text).replace(/\n/g, '<br>');
+            })
+            .join('');
     }
 
     public FormatAuthorInitials(detail: MJConversationDetailEntity): string {

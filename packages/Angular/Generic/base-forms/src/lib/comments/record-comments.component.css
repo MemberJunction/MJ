@@ -613,19 +613,89 @@
 
 .mj-record-comments__message-body {
   font-size: 13px;
-  line-height: 1.45;
+  line-height: 1.5;
   color: var(--mj-text-primary);
   word-break: break-word;
 }
 
+.mj-record-comments__message-text {
+  white-space: pre-wrap;
+}
+
 .mj-record-comments__mention-pill {
-  display: inline-block;
-  padding: 0 5px;
-  border-radius: var(--mj-radius-sm, 4px);
-  background: var(--mj-bg-surface-sunken);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  margin: 0 1px;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 28%, var(--mj-border-subtle));
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface-sunken));
   color: var(--mj-brand-primary);
+  font-family: inherit;
   font-weight: 600;
   font-size: 12px;
+  line-height: 1.35;
+  vertical-align: baseline;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.mj-record-comments__mention-pill i {
+  font-size: 10px;
+  opacity: 0.85;
+}
+
+.mj-record-comments__mention-pill--clickable {
+  cursor: pointer;
+}
+
+.mj-record-comments__mention-pill--clickable:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 22%, var(--mj-bg-surface-hover));
+  border-color: var(--mj-brand-primary);
+}
+
+.mj-record-comments__draft-mentions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.mj-record-comments__draft-mention-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px 2px 8px;
+  border-radius: var(--mj-radius-full, 9999px);
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-border-subtle));
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface-sunken));
+  color: var(--mj-brand-primary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.mj-record-comments__draft-mention-chip i {
+  font-size: 10px;
+}
+
+.mj-record-comments__draft-mention-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: none;
+  border-radius: var(--mj-radius-full, 9999px);
+  background: transparent;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+.mj-record-comments__draft-mention-remove:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
 }
 
 /* Reply Form */

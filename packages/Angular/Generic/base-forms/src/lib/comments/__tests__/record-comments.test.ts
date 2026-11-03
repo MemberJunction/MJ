@@ -210,6 +210,92 @@ describe('MjRecordCommentsComponent', () => {
         expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
     });
 
+    it('inserts human-readable @Name into composer, tracks draft mention chips, serializes to wire tokens on submit, and parses clickable record-link segments', () => {
+        const comp = Object.assign(Object.create(MjRecordCommentsComponent.prototype), {
+            NewThreadMessage: 'Hey @ad',
+            ReplyDrafts: new Map<string, string>(),
+            SelectedMentionsByContext: new Map(),
+            ActiveMentionContext: {
+                Target: 'new' as const,
+                Query: 'ad',
+                TriggerIndex: 4,
+                SelectedIndex: 0
+            },
+            FilteredMentionCandidates: [],
+            cdr: { markForCheck: vi.fn() }
+        }) as unknown as MjRecordCommentsComponent;
+
+        const adaCandidate = {
+            Type: 'user' as const,
+            ID: 'D2000001-0000-4000-8000-000000000001',
+            Name: 'Ada Owner',
+            Subtitle: 'ada@example.com'
+        };
+        const sageCandidate = {
+            Type: 'agent' as const,
+            ID: 'A2000001-0000-4000-8000-000000000002',
+            Name: 'Sage Agent'
+        };
+
+        // 1. Selecting a candidate inserts clean @Ada Owner instead of raw JSON
+        comp.InsertMentionCandidate(adaCandidate, 'new');
+        expect(comp.NewThreadMessage).toBe('Hey @Ada Owner ');
+        expect(comp.NewThreadMessage).not.toContain('@{"type"');
+
+        // 2. Draft mention chip is returned while @Ada Owner is in the text
+        const draftMentions = comp.GetDraftMentions('new');
+        expect(draftMentions).toHaveLength(1);
+        expect(draftMentions[0].Name).toBe('Ada Owner');
+
+        // Add a second mention
+        comp.NewThreadMessage = 'Hey @Ada Owner and @sa';
+        comp.ActiveMentionContext = {
+            Target: 'new',
+            Query: 'sa',
+            TriggerIndex: 19,
+            SelectedIndex: 0
+        };
+        comp.InsertMentionCandidate(sageCandidate, 'new');
+        expect(comp.NewThreadMessage).toBe('Hey @Ada Owner and @Sage Agent ');
+        expect(comp.GetDraftMentions('new')).toHaveLength(2);
+
+        // 3. SerializeMentionsForWire converts @Name tokens to @{"type":...} wire format
+        const wireText = comp.SerializeMentionsForWire(
+            'Hey @Ada Owner and @Sage Agent please check this',
+            'new'
+        );
+        expect(wireText).toBe(
+            'Hey @{"type":"user","id":"D2000001-0000-4000-8000-000000000001","name":"Ada Owner"} and @{"type":"agent","id":"A2000001-0000-4000-8000-000000000002","name":"Sage Agent"} please check this'
+        );
+
+        // 4. ParseMessageSegments produces clickable mention segments with EntityName + ID for [mjRecordLink]
+        const segments = comp.ParseMessageSegments(wireText);
+        expect(segments).toEqual([
+            { Kind: 'text', Text: 'Hey ' },
+            {
+                Kind: 'mention',
+                MentionType: 'user',
+                ID: 'D2000001-0000-4000-8000-000000000001',
+                Name: 'Ada Owner',
+                EntityName: 'MJ: Users'
+            },
+            { Kind: 'text', Text: ' and ' },
+            {
+                Kind: 'mention',
+                MentionType: 'agent',
+                ID: 'A2000001-0000-4000-8000-000000000002',
+                Name: 'Sage Agent',
+                EntityName: 'MJ: AI Agents'
+            },
+            { Kind: 'text', Text: ' please check this' }
+        ]);
+
+        // 5. Removing a draft mention chip strips @Ada Owner from composer text
+        comp.RemoveDraftMention(adaCandidate, 'new');
+        expect(comp.NewThreadMessage).not.toContain('@Ada Owner');
+        expect(comp.GetDraftMentions('new')).toHaveLength(1);
+    });
+
     it('detects when a field value has changed since the comment quotedValue snapshot', async () => {
         const entityInfo = makeEntityInfo();
         const record = makeRecord(entityInfo, true);
