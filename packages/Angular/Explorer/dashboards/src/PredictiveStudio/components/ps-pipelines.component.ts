@@ -11,7 +11,6 @@ import { PSPipelineWizardComponent } from './ps-pipeline-wizard.component';
 import {
   DOMINANCE_THRESHOLD_DEFAULT,
   parseDenyList,
-  TrainingRunResultsParser,
   type SourceBinding,
   type FeatureStepGraph,
   type FeatureStep,
@@ -22,6 +21,7 @@ import {
   type GateOutcome,
 } from '@memberjunction/predictive-studio-core';
 import { PSPanelKey } from '../predictive-studio.types';
+import { ReadStoredGate } from '../predictive-studio.view-models';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 
 type NodeType = 'src' | 'feat' | 'emb' | 'target' | 'algo' | 'output';
@@ -1223,9 +1223,7 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
   private storedGateOutcome(modelId: string): GateOutcome | null {
     const run = (this.engine?.TrainingRuns ?? []).find((r) => UUIDsEqual(r.ResultingModelID, modelId));
     if (!run) return null;
-    const parsed = TrainingRunResultsParser.ParseTrainingRunResults(run.ValidationResults);
-    if (!parsed.Ok || parsed.Value.status !== 'completed' || parsed.Value.gate === null) return null;
-    return parsed.Value.gate.decision.outcome;
+    return ReadStoredGate(run.ValidationResults)?.Outcome ?? null;
   }
 
   /**

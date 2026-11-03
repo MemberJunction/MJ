@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   DeriveLeaderboard, FormatMetricValue, GroupIterationsToKanban, ParseMetrics, ParseSessionLeaderboard, PrimaryModelScore,
+  ReadStoredGate,
   type PSIterationRow,
 } from './predictive-studio.view-models';
+import { WidgetFixtures } from './components/evaluation-results/widget-fixtures';
 
 /**
  * The model score the Registry and Production show, for the metric keys a trained model stores: its holdout lists the
@@ -85,5 +87,22 @@ describe('the experiment leaderboard over the stored session ranking', () => {
     expect([card('XGBoost')?.Status, card('LightGBM')?.Status, card('GLM')?.Status]).toEqual(['Best', 'Completed', 'Completed']);
     expect([card('LightGBM')?.ScoreMetric, card('LightGBM')?.score, card('LightGBM')?.ScoreDelta]).toEqual(['rmse', 13, 'Δ −0.500']);
     expect([card('GLM')?.ScoreMetric, card('GLM')?.score, card('GLM')?.ScoreDelta]).toEqual(['log-loss', 0.3, 'Δ best on log-loss —']);
+  });
+});
+
+describe('ReadStoredGate', () => {
+  it('reads the stored outcome and the reason text of a completed run', () => {
+    const base = WidgetFixtures.StoredRunEnvelope();
+    if (base.gate === null) throw new Error('the fixture stores a gate');
+    const gate = { ...base.gate, reason: { ...base.gate.reason, text: 'glm within margin' } };
+    const json = JSON.stringify({ ...base, gate });
+    expect(ReadStoredGate(json)).toEqual({ Outcome: 'keep-simple-baseline', Reason: 'glm within margin' });
+  });
+
+  it('is null for no record, an unreadable envelope, a failed run, or a run without a gate', () => {
+    expect(ReadStoredGate(null)).toBeNull();
+    expect(ReadStoredGate('{}')).toBeNull();
+    expect(ReadStoredGate(JSON.stringify({ ...WidgetFixtures.StoredRunEnvelope(), status: 'failed' }))).toBeNull();
+    expect(ReadStoredGate(WidgetFixtures.StoredRunJson({ gate: null }))).toBeNull();
   });
 });

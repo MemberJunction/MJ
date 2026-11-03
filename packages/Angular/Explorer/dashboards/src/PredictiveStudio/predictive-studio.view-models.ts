@@ -18,7 +18,7 @@
  */
 
 import { IndexByUUID, UUIDsEqual } from '@memberjunction/global';
-import { JsonParse, MetricDirections } from '@memberjunction/predictive-studio-core';
+import { JsonParse, MetricDirections, TrainingRunResultsParser, type GateOutcome } from '@memberjunction/predictive-studio-core';
 import { PSFeatureBar, PSIterationCard, PSLeaderboardEntry } from './predictive-studio.types';
 
 // ---------------------------------------------------------------------------
@@ -424,6 +424,21 @@ export function ParseSessionLeaderboard(json: string | null | undefined, success
     if (scoreMetric === null) return [{ IterationID: iterationId, Metric: metric, ScoreMetric: success, OnSuccessMetric: true }];
     return [{ IterationID: iterationId, Metric: metric, ScoreMetric: scoreMetric.trim().toLowerCase(), OnSuccessMetric: JsonParse.JsonBoolean(e, 'OnSuccessMetric') === true }];
   });
+}
+
+/** The gate record a training run stored: its outcome and the reason the gate gave for it. */
+export interface PSStoredGate { Outcome: GateOutcome; Reason: string }
+
+/**
+ * Reads the gate record a run stored in `ValidationResults`, the single source every surface takes a run's outcome from.
+ *
+ * @param validationResults The run's stored `ValidationResults` text.
+ * @returns The stored outcome and reason; null when the envelope is unreadable, the run did not complete, or it stores no gate record.
+ */
+export function ReadStoredGate(validationResults: string | null): PSStoredGate | null {
+  const parsed = TrainingRunResultsParser.ParseTrainingRunResults(validationResults);
+  if (!parsed.Ok || parsed.Value.status !== 'completed' || parsed.Value.gate === null) return null;
+  return { Outcome: parsed.Value.gate.decision.outcome, Reason: parsed.Value.gate.reason.text };
 }
 
 /** The group an entry ranks in: the success metric's, else its fallback metric's (numbers compare only within one). */
