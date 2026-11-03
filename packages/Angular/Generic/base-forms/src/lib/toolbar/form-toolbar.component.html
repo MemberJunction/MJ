@@ -8,11 +8,11 @@
       <span class="mj-forms-edit-banner-dirty">
         <strong>{{ DirtyFieldDisplayNames.length }}</strong>
         field{{ DirtyFieldDisplayNames.length === 1 ? '' : 's' }} modified
-        &mdash; {{ DirtyFieldDisplayNames.join(', ') }}
+        <span class="mj-forms-dirty-chips">&mdash; {{ DirtyFieldDisplayNames.join(', ') }}</span>
       </span>
     } @else {
       <i class="fa-solid fa-pen-to-square"></i>
-      <span class="mj-forms-edit-banner-text">Editing: {{ RecordDisplayName }}</span>
+      <span class="mj-forms-edit-banner-text">Editing<span class="mj-forms-edit-banner-record-name">: {{ RecordDisplayName }}</span></span>
     }
     @if (EffectiveConflictCount > 0) {
       <span class="mj-forms-edit-banner-conflicts" role="status">
@@ -90,6 +90,30 @@
      chooses, the configured defaults (Favorite and History) are pinned.
      ============================================ -->
 @if (!EditMode) {
+  @if (!IsToolbarExpanded) {
+    <div class="mj-forms-toolbar-collapsed-pill"
+         [class.mj-forms-toolbar-collapsed-pill--rail]="ChromeLayout === 'left-nav'"
+         role="toolbar"
+         aria-label="Form actions">
+      @if (EditActionItem; as editItem) {
+        <button type="button"
+          class="mj-forms-collapsed-btn mj-forms-collapsed-btn--edit"
+          [disabled]="editItem.Disabled || editItem.IsLoading"
+          [title]="editItem.Description"
+          (click)="OnToolbarItemClick(editItem, $event)">
+          <i class="fa-solid fa-pen"></i>
+          <span>Edit</span>
+        </button>
+      }
+      <button type="button"
+        class="mj-forms-collapsed-btn mj-forms-collapsed-btn--expand"
+        (click)="ExpandToolbarForSession()"
+        aria-label="Show form toolbar"
+        title="Show toolbar actions and view options">
+        <i class="fa-solid fa-ellipsis"></i>
+      </button>
+    </div>
+  } @else {
   <div class="mj-forms-toolbar" [class.mj-forms-toolbar--sticky]="Config.StickyToolbar">
 
     <div class="mj-forms-toolbar-group">
@@ -108,14 +132,30 @@
             <i class="fa-solid fa-ellipsis"></i>
             <span class="mj-forms-btn-text">More</span>
           </button>
-          @if (MoreMenuOpen) {
+          @if (MoreMenuOpen && !IsAutoHideViewport) {
             <div class="mj-forms-menu mj-forms-menu--left" [id]="MenuIdPrefix + '-more'" role="group" aria-label="More actions">
+              <ng-container [ngTemplateOutlet]="moreMenuContent"></ng-container>
+            </div>
+          }
+          @if (IsAutoHideViewport) {
+            <!-- Phone: the same rows, as a bottom sheet. A dropdown hanging off a 32px button
+                 is the wrong container when the thumb is the pointer. -->
+            <mj-bottom-sheet [Visible]="MoreMenuOpen"
+                             (VisibleChange)="OnMenuSheetVisibleChange('more', $event)"
+                             Title="More actions">
+              <div class="mj-forms-menu mj-forms-menu--sheet" [id]="MenuIdPrefix + '-more'" role="group" aria-label="More actions">
+                <ng-container [ngTemplateOutlet]="moreMenuContent"></ng-container>
+              </div>
+            </mj-bottom-sheet>
+          }
+          <ng-template #moreMenuContent>
               @for (item of MoreMenuItems; track item.Key) {
                 <div class="mj-forms-menu-row" [class.disabled]="item.Disabled">
                   <button class="mj-forms-menu-item" type="button"
+                    [class.mj-forms-btn--comments]="item.Key === 'comments'"
                     [class.mj-forms-btn--links]="item.Key === 'links'"
                     [class.mj-forms-btn--ask-ai]="item.Key === 'ask-ai'"
-                    [class.mj-forms-toolbar__btn--active]="item.Key === 'links' && LinksOpen"
+                    [class.mj-forms-toolbar__btn--active]="(item.Key === 'links' && LinksOpen) || (item.Key === 'comments' && CommentsOpen)"
                     [disabled]="item.Disabled || item.IsLoading" [title]="item.Description"
                     (click)="OnMenuItemClick(item, $event)">
                     <span class="mj-forms-menu-icon">
@@ -145,8 +185,7 @@
                   <span class="mj-forms-menu-label">{{ del.MenuLabel }}</span>
                 </button>
               }
-            </div>
-          }
+          </ng-template>
         </div>
       }
     </div>
@@ -213,8 +252,21 @@
             <span class="mj-forms-variant-tag">{{ CurrentVariantLabel }}</span>
           }
         </button>
-        @if (ViewMenuOpen) {
+        @if (ViewMenuOpen && !IsAutoHideViewport) {
           <div class="mj-forms-menu mj-forms-menu--right" [id]="MenuIdPrefix + '-view'" role="group" aria-label="Sections and layout">
+            <ng-container [ngTemplateOutlet]="viewMenuContent"></ng-container>
+          </div>
+        }
+        @if (IsAutoHideViewport) {
+          <mj-bottom-sheet [Visible]="ViewMenuOpen"
+                           (VisibleChange)="OnMenuSheetVisibleChange('view', $event)"
+                           Title="Sections and layout">
+            <div class="mj-forms-menu mj-forms-menu--sheet" [id]="MenuIdPrefix + '-view'" role="group" aria-label="Sections and layout">
+              <ng-container [ngTemplateOutlet]="viewMenuContent"></ng-container>
+            </div>
+          </mj-bottom-sheet>
+        }
+        <ng-template #viewMenuContent>
             @if (Config.ShowSectionControls) {
               @if (Config.ShowSectionFilter) {
                 <div class="mj-forms-menu-search">
@@ -299,8 +351,47 @@
                 </button>
               }
             }
-          </div>
-        }
+            @if (IsAutoHideViewport && FormModeSwitch) {
+              <div class="mj-forms-menu-heading">Form</div>
+              <button class="mj-forms-menu-item" type="button" (click)="OnFormModeSwitchClick()">
+                <span class="mj-forms-menu-icon">
+                  <i class="fa-solid" [class.fa-table-list]="FormModeSwitch.Mode === 'default'" [class.fa-wand-magic-sparkles]="FormModeSwitch.Mode === 'standard'"></i>
+                </span>
+                <span class="mj-forms-menu-label">{{ FormModeSwitch.Mode === 'standard' ? 'Back to custom view' : 'Open standard form' }}</span>
+              </button>
+            }
+            @if (IsAutoHideViewport) {
+            <div class="mj-forms-menu-heading">Toolbar</div>
+            @if (CurrentEntityName) {
+              <button class="mj-forms-menu-item" type="button"
+                data-toolbar-pin="entity"
+                [attr.aria-pressed]="IsToolbarPinnedOpen"
+                (click)="ToggleEntityToolbarPin()">
+                <span class="mj-forms-menu-icon"><i class="fa-solid fa-thumbtack"></i></span>
+                <span class="mj-forms-menu-label">{{ IsToolbarPinnedOpen ? 'Unpin toolbar for ' + CurrentEntityDisplayName : 'Pin toolbar for ' + CurrentEntityDisplayName }}</span>
+                @if (EntityToolbarPinState !== undefined) {
+                  <span class="mj-forms-menu-badge">{{ EntityToolbarPinState ? 'Pinned' : 'Auto-hide' }}</span>
+                }
+              </button>
+            }
+            <button class="mj-forms-menu-item" type="button"
+              data-toolbar-pin="global"
+              [attr.aria-pressed]="IsGlobalToolbarPinned"
+              (click)="ToggleGlobalToolbarPin()">
+              <span class="mj-forms-menu-icon"><i class="fa-solid fa-globe"></i></span>
+              <span class="mj-forms-menu-label">{{ IsGlobalToolbarPinned ? 'Unpin toolbar on all forms' : 'Pin toolbar on all forms' }}</span>
+              @if (IsGlobalToolbarPinned) {
+                <span class="mj-forms-menu-badge">Pinned</span>
+              }
+            </button>
+            <button class="mj-forms-menu-item" type="button"
+              data-toolbar-collapse="menu"
+              (click)="CollapseToolbarForSession()">
+              <span class="mj-forms-menu-icon"><i class="fa-solid fa-eye-slash"></i></span>
+              <span class="mj-forms-menu-label">Hide toolbar now</span>
+            </button>
+            }
+        </ng-template>
       </div>
     }
 
@@ -309,7 +400,18 @@
       <ng-container [ngTemplateOutlet]="AdditionalActionsTemplate"></ng-container>
     }
     <ng-content select="[toolbar-additional-controls]"></ng-content>
+
+    @if (IsAutoHideViewport) {
+      <button class="mj-forms-btn mj-forms-btn--icon-only mj-forms-toolbar-collapse-btn"
+        type="button"
+        aria-label="Hide form toolbar"
+        title="Hide toolbar"
+        (click)="CollapseToolbarForSession()">
+        <i class="fa-solid fa-chevron-up"></i>
+      </button>
+    }
   </div>
+  }
 
   <!-- IS-A Entity Hierarchy Breadcrumb: its own row, only for entities in a hierarchy -->
   @if (Config.ShowEntityHierarchy && IsInHierarchy) {
@@ -345,9 +447,10 @@
     [class.mj-forms-btn--history]="item.Key === 'history'"
     [class.mj-forms-btn--list]="item.Key === 'list'"
     [class.mj-forms-btn--tags]="item.Key === 'tags'"
+    [class.mj-forms-btn--comments]="item.Key === 'comments'"
     [class.mj-forms-btn--links]="item.Key === 'links'"
     [class.mj-forms-btn--ask-ai]="item.Key === 'ask-ai'"
-    [class.mj-forms-toolbar__btn--active]="item.Key === 'links' && LinksOpen"
+    [class.mj-forms-toolbar__btn--active]="(item.Key === 'links' && LinksOpen) || (item.Key === 'comments' && CommentsOpen)"
     [class.mj-forms-btn--attachments]="item.Key === 'attachments'"
     [class]="item.CssClass"
     [disabled]="item.Disabled || item.IsLoading"

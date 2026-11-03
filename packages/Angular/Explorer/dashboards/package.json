@@ -166,6 +166,7 @@
     "@memberjunction/ng-explorer-settings": "6.2.0-edge.7",
     "@memberjunction/ng-export-service": "6.2.0-edge.7",
     "@memberjunction/ng-filter-builder": "6.2.0-edge.7",
+    "@memberjunction/ng-graph-view": "6.2.0-edge.7",
     "@memberjunction/ng-list-management": "6.2.0-edge.7",
     "@memberjunction/ng-map-view": "6.2.0-edge.7",
     "@memberjunction/ng-markdown": "6.2.0-edge.7",
