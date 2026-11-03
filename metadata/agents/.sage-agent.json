@@ -504,6 +504,26 @@
             "delete": true,
             "deletedAt": "2026-09-22T18:53:11.631Z"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Render Architecture Diagram",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E924A91D-4C8B-4E15-9A3E-71D82C9B4011"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Architecture Diagram Reference",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B418C72E-5D9A-4F26-8B4F-82E93DAC5122"
+          }
         }
       ],
       "MJ: AI Agent Configurations": [
