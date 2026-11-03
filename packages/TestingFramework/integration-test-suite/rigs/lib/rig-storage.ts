@@ -1,33 +1,27 @@
 /**
  * rig-storage.ts — the File Storage Provider a training rig stores its artifacts through.
  *
- * Training stores its artifacts through the active File Storage Provider. When none is active (a private test database
- * keeps them off), the first by priority is switched on through the entity layer for the run and switched back off
- * afterwards.
+ * Training stores its artifacts through the active File Storage Provider. A rig makes one available exactly as the gate
+ * harness does, by calling the harness's own helper (`HarnessFileStorage`): when none is active it switches the first
+ * by priority on — only on a private truth-suite database (`MJ_PS_PR<n>_<agent>` or CI's `test`), and refuses on any
+ * other database with no active provider — and the rig puts it back to its earlier `IsActive` afterwards.
  */
-import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type { MJFileStorageProviderEntity } from '@memberjunction/core-entities';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { HarnessFileStorage, type FileStorageActivation } from '@memberjunction/predictive-studio-truth-suite';
 
-/** Switching a File Storage Provider on for a rig's run and back off afterwards. */
+/** Making a File Storage Provider available for a rig's run, and putting it back afterwards. */
 export class RigStorage {
-  /** Switches the first provider by priority on when none is active; returns the provider switched on, or null. */
-  public static async Activate(provider: IMetadataProvider, user: UserInfo): Promise<MJFileStorageProviderEntity | null> {
-    const rows = await RunView.FromMetadataProvider(provider).RunView<MJFileStorageProviderEntity>(
-      { EntityName: 'MJ: File Storage Providers', OrderBy: 'Priority ASC, ID ASC', ResultType: 'entity_object', BypassCache: true }, user);
-    if (!rows.Success) throw new Error(rows.ErrorMessage);
-    if (rows.Results.some((r) => r.IsActive)) return null;
-    const first = rows.Results[0];
-    if (first === undefined) throw new Error('no MJ: File Storage Providers rows exist');
-    first.IsActive = true;
-    if (!(await first.Save())) throw new Error(`activating ${first.Name}: ${first.LatestResult?.CompleteMessage}`);
-    return first;
+  /** Makes sure a provider is active; returns the activation to undo, or null when one already was. */
+  public static async Activate(provider: IMetadataProvider, user: UserInfo): Promise<FileStorageActivation | null> {
+    const activation = await HarnessFileStorage.EnsureActive(provider, user);
+    console.log(JSON.stringify({ storage: activation === null ? 'a File Storage Provider was already active' : `switched provider ${activation.ProviderID} on for the run` }));
+    return activation;
   }
 
-  /** Switches back off the provider {@link Activate} switched on (nothing when it returned null). */
-  public static async Restore(row: MJFileStorageProviderEntity | null): Promise<void> {
-    if (row === null) return;
-    row.IsActive = false;
-    if (!(await row.Save())) throw new Error(`deactivating ${row.Name}: ${row.LatestResult?.CompleteMessage}`);
-    console.log(JSON.stringify({ storage: `switched ${row.Name} back off` }));
+  /** Puts back the provider {@link Activate} switched on (nothing when it returned null). */
+  public static async Restore(provider: IMetadataProvider, user: UserInfo, activation: FileStorageActivation | null): Promise<void> {
+    if (activation === null) return;
+    await HarnessFileStorage.Restore(provider, user, activation);
+    console.log(JSON.stringify({ storage: `put provider ${activation.ProviderID} back to IsActive=${activation.PriorIsActive}` }));
   }
 }

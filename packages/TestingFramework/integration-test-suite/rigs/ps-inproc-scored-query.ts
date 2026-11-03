@@ -42,6 +42,8 @@
  * Exit code: 0 = passed (or cleanly skipped), 1 = failures, 2 = bootstrap error.
  */
 import { BootstrapAI } from './lib/ai-bootstrap';
+import { RigStorage } from './lib/rig-storage';
+import type { FileStorageActivation } from '@memberjunction/predictive-studio-truth-suite';
 import { PromoteToPublished } from './lib/ps-promote';
 import { DeleteRecordedRows, DeleteRow, EnsureDriverAlgorithm, ReportCleanup, TrainBoundPipeline, type RigAlgorithm } from './lib/ps-rig-lifecycle';
 import {
@@ -294,8 +296,11 @@ async function main(): Promise<void> {
   const t0 = Date.now();
   const { user, provider } = await BootstrapAI();
   const state: RigState = { Records: new RunRecords() };
+  let storage: FileStorageActivation | null = null;
   try {
     const source = resolveQuerySourceOrSkip(provider);
+    // Training stores its artifacts through an active File Storage Provider, made available as the gate harness does.
+    storage = await RigStorage.Activate(provider, user);
     const modelId = await trainAndPromote(provider, user, state);
     if (modelId !== null) {
       banner('3. CREATE SAVED QUERY (MJ: Queries)');
@@ -309,6 +314,11 @@ async function main(): Promise<void> {
     console.log(`  Total wall-clock: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
   } finally {
     await cleanup(provider, user, state);
+    try {
+      await RigStorage.Restore(provider, user, storage);
+    } catch (e) {
+      check(false, `the File Storage Provider is put back after the run (${e instanceof Error ? e.message : String(e)})`);
+    }
   }
   process.exit(failures > 0 ? 1 : 0);
 }

@@ -58,6 +58,8 @@
  * USAGE (from the repo root, with MJAPI already up on :4000):
  *   npx tsx packages/MJServer/integration-test-scripts/ps-live-multimodel-lifecycle.ts
  */
+import { RigStorage } from './lib/rig-storage';
+import type { FileStorageActivation } from '@memberjunction/predictive-studio-truth-suite';
 import { LoadEnv, LoadClientConfig } from './lib/harness';
 import { Metadata, RunView, UserInfo, BaseEntity, IMetadataProvider, CompositeKey } from '@memberjunction/core';
 import { GraphQLProviderConfigData, setupGraphQLClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -466,8 +468,11 @@ async function main(): Promise<void> {
 
   let algorithm: { id: string; created: boolean } | undefined;
   const results: ModelResult[] = [];
+  let storage: FileStorageActivation | null = null;
 
   try {
+    // Training stores its artifacts through an active File Storage Provider, made available as the gate harness does.
+    storage = await RigStorage.Activate(route, user);
     banner('RESOLVE SHARED ALGORITHM');
     algorithm = await ensureDriverNamedAlgorithm(md, user);
     console.log(`  Algorithm row: ${algorithm.id} (Name='${DRIVER_KEY}', ${algorithm.created ? 'created' : 'reused'})`);
@@ -483,6 +488,7 @@ async function main(): Promise<void> {
       await cleanupAlgorithm(md, user, algorithm);
     }
     printSummary(results, (Date.now() - t0) / 1000);
+    await RigStorage.Restore(route, user, storage);
   }
   process.exit(0);
 }

@@ -1,6 +1,5 @@
 import { LoadDbConfig } from '@memberjunction/testing-integration';
-import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { RunView, type UserInfo } from '@memberjunction/core';
+import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJFileStorageProviderEntity } from '@memberjunction/core-entities';
 import { PrivateTruthDatabase } from '../db/private-database';
 
@@ -13,14 +12,15 @@ export interface FileStorageActivation {
 /**
  * The File Storage Provider training needs for model artifacts. When none is active the harness switches one on, but
  * only on a private truth-suite database: switching on a provider changes configuration every user of the database
- * shares. The activation is recorded and undone by `RunFixtures.CleanupRun`.
+ * shares. The activation is recorded and undone by `RunFixtures.CleanupRun`. The in-process and client rigs that train
+ * reach the same helper through their own provider (any `IMetadataProvider`), so the rule and its undo are one mechanism.
  */
 export class HarnessFileStorage {
   /**
    * Make sure an active `MJ: File Storage Providers` row exists (through `BaseEntity.Save()`, never raw SQL). Returns
    * the activation to undo, or null when a provider was already active. Throws on a database outside the private rule.
    */
-  public static async EnsureActive(provider: GraphQLDataProvider, user: UserInfo): Promise<FileStorageActivation | null> {
+  public static async EnsureActive(provider: IMetadataProvider, user: UserInfo): Promise<FileStorageActivation | null> {
     const rv = RunView.FromMetadataProvider(provider);
     const active = await rv.RunView<{ ID: string }>(
       { EntityName: 'MJ: File Storage Providers', ExtraFilter: 'IsActive = 1', Fields: ['ID'], MaxRows: 1, SkipTotalRowCount: true, BypassCache: true },
@@ -50,7 +50,7 @@ export class HarnessFileStorage {
   }
 
   /** Put the provider's `IsActive` back to what it was before `EnsureActive` switched it on. */
-  public static async Restore(provider: GraphQLDataProvider, user: UserInfo, activation: FileStorageActivation): Promise<void> {
+  public static async Restore(provider: IMetadataProvider, user: UserInfo, activation: FileStorageActivation): Promise<void> {
     const row = await provider.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', user);
     if (!(await row.Load(activation.ProviderID))) {
       throw new Error(`HarnessFileStorage: MJ: File Storage Providers ${activation.ProviderID} not found to restore`);
@@ -64,7 +64,7 @@ export class HarnessFileStorage {
   }
 
   /** The first `MJ: File Storage Providers` row by priority; throws when there is none. */
-  private static async firstByPriority(provider: GraphQLDataProvider, user: UserInfo): Promise<MJFileStorageProviderEntity> {
+  private static async firstByPriority(provider: IMetadataProvider, user: UserInfo): Promise<MJFileStorageProviderEntity> {
     const all = await RunView.FromMetadataProvider(provider).RunView<MJFileStorageProviderEntity>(
       { EntityName: 'MJ: File Storage Providers', OrderBy: 'Priority ASC, ID ASC', MaxRows: 1, SkipTotalRowCount: true, ResultType: 'entity_object', BypassCache: true },
       user,

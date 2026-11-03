@@ -18,6 +18,8 @@
  * Exit: 0 = passed/skipped, 1 = failures, 2 = bootstrap error.
  */
 import { BootstrapAI } from './lib/ai-bootstrap';
+import { RigStorage } from './lib/rig-storage';
+import type { FileStorageActivation } from '@memberjunction/predictive-studio-truth-suite';
 import { DeleteRecordedRows, EnsureDriverAlgorithm, RecordPipelineBindings, ReportCleanup, type RigAlgorithm } from './lib/ps-rig-lifecycle';
 import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import '@memberjunction/core-entities';
@@ -92,7 +94,10 @@ async function main(): Promise<void> {
 
   const records = new RunRecords();
   let algorithm: RigAlgorithm | undefined;
+  let storage: FileStorageActivation | null = null;
   try {
+    // Training stores its artifacts through an active File Storage Provider, made available as the gate harness does.
+    storage = await RigStorage.Activate(provider, user);
     algorithm = await EnsureDriverAlgorithm(provider, user, DRIVER_KEY, TAG);
     banner('RUN: AgentRunner.RunAgent(Pipeline Builder, payload=approved ModelingPlanSpec)');
     const t0 = Date.now();
@@ -134,6 +139,11 @@ async function main(): Promise<void> {
     banner(failures === 0 ? 'AGENT-RUN PROOF COMPLETE — ALL CHECKS PASSED' : `AGENT-RUN PROOF — ${failures} CHECK(S) FAILED`);
   } finally {
     await cleanup(provider, user, records, algorithm);
+    try {
+      await RigStorage.Restore(provider, user, storage);
+    } catch (e) {
+      check(false, `the File Storage Provider is put back after the run (${e instanceof Error ? e.message : String(e)})`);
+    }
   }
   process.exit(failures === 0 ? 0 : 1);
 }

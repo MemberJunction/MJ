@@ -195,7 +195,7 @@ async function main(): Promise<void> {
     try {
       await step4(deps, copies);
     } finally {
-      await RigStorage.Restore(storage);
+      await RigStorage.Restore(provider, user, storage);
     }
     await step5(deps);
   } finally {

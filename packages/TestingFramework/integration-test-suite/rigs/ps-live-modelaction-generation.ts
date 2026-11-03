@@ -52,6 +52,8 @@
  * USAGE (from the repo root, with MJAPI already up on :4000):
  *   npx tsx packages/MJServer/integration-test-scripts/ps-live-modelaction-generation.ts
  */
+import { RigStorage } from './lib/rig-storage';
+import type { FileStorageActivation } from '@memberjunction/predictive-studio-truth-suite';
 import { LoadEnv, LoadClientConfig } from './lib/harness';
 import { PromoteModel } from './lib/ps-promote';
 import { Metadata, RunView, UserInfo, BaseEntity, CompositeKey, IMetadataProvider } from '@memberjunction/core';
@@ -339,6 +341,7 @@ async function main(): Promise<void> {
   let modelId: string | undefined;
   let algorithm: { id: string; created: boolean } | undefined;
 
+  let storage: FileStorageActivation | null = null;
   try {
     // ── 1. Resolve entities + algorithm (graceful SKIP if AssociationDemo / ML metadata absent) ──
     banner('1. RESOLVE ENTITIES + ALGORITHM');
@@ -363,6 +366,8 @@ async function main(): Promise<void> {
     }
 
     // ── 2. Create the renewal pipeline ───────────────────────────────────────
+    // Training stores its artifacts through an active File Storage Provider, made available as the gate harness does.
+    storage = await RigStorage.Activate(route, user);
     banner('2. CREATE ML TRAINING PIPELINE');
     const pipeline = await createPipeline(md, user, algorithm.id);
     pipelineId = pipeline.ID;
@@ -473,6 +478,7 @@ async function main(): Promise<void> {
       actionId, pipelineId, modelId,
       algorithmId: algorithm?.id, algorithmCreated: algorithm?.created,
     });
+    await RigStorage.Restore(route, user, storage);
   }
   process.exit(failures > 0 ? 1 : 0);
 }

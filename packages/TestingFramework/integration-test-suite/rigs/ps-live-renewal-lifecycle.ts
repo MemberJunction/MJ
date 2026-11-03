@@ -23,6 +23,8 @@
  * USAGE (from the repo root, with MJAPI already up on :4000):
  *   npx tsx packages/MJServer/integration-test-scripts/ps-live-renewal-lifecycle.ts
  */
+import { RigStorage } from './lib/rig-storage';
+import type { FileStorageActivation } from '@memberjunction/predictive-studio-truth-suite';
 import { LoadEnv, LoadClientConfig } from './lib/harness';
 import { Metadata, RunView, UserInfo, BaseEntity, IMetadataProvider, CompositeKey } from '@memberjunction/core';
 import { GraphQLProviderConfigData, setupGraphQLClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -210,6 +212,7 @@ async function main(): Promise<void> {
   let modelId: string | undefined;
   let algorithm: { id: string; created: boolean } | undefined;
 
+  let storage: FileStorageActivation | null = null;
   try {
     // ── 1. Resolve entities + algorithm ──────────────────────────────────────
     banner('1. RESOLVE ENTITIES + ALGORITHM');
@@ -227,6 +230,8 @@ async function main(): Promise<void> {
     console.log(`  Algorithm row: ${algorithm.id} (Name='${DRIVER_KEY}', ${algorithm.created ? 'created' : 'reused'})`);
 
     // ── 2. Create the renewal pipeline ───────────────────────────────────────
+    // Training stores its artifacts through an active File Storage Provider, made available as the gate harness does.
+    storage = await RigStorage.Activate(route, user);
     banner('2. CREATE ML TRAINING PIPELINE');
     const pipeline = await createPipeline(md, user, algorithm.id);
     pipelineId = pipeline.ID;
@@ -301,6 +306,7 @@ async function main(): Promise<void> {
       pipelineId, modelId,
       algorithmId: algorithm?.id, algorithmCreated: algorithm?.created,
     });
+    await RigStorage.Restore(route, user, storage);
   }
   process.exit(0);
 }
