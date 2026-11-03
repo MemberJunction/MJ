@@ -1,5 +1,5 @@
 import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { BaseSingleton, MJGlobal } from '@memberjunction/global';
+import { BaseSingleton, MJGlobal, SharedLoad } from '@memberjunction/global';
 import {
     MJSignatureRequestDocumentEntity,
     MJSignatureRequestEntity,
@@ -93,8 +93,8 @@ export interface DownloadSignedResult {
  */
 export class SignatureEngine extends BaseSingleton<SignatureEngine> {
     private _loaded = false;
-    private _loading = false;
-    private _loadingPromise: Promise<void> | null = null;
+    /** One Config load at a time; a forced reload never joins one already running (#5644). */
+    private readonly _load = new SharedLoad();
     private _contextUser: UserInfo | undefined;
 
     /** Initialized drivers keyed by account ID. */
@@ -127,17 +127,7 @@ export class SignatureEngine extends BaseSingleton<SignatureEngine> {
         if (this._loaded && !forceRefresh) {
             return;
         }
-        if (this._loading && this._loadingPromise) {
-            return this._loadingPromise;
-        }
-        this._loading = true;
-        this._loadingPromise = this.innerLoad(forceRefresh, contextUser, provider);
-        try {
-            await this._loadingPromise;
-        } finally {
-            this._loading = false;
-            this._loadingPromise = null;
-        }
+        return this._load.Run(forceRefresh === true, () => this.innerLoad(forceRefresh, contextUser, provider));
     }
 
     private async innerLoad(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {

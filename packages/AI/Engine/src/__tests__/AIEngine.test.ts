@@ -121,7 +121,7 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
-    const { ToEpochMs, Float32VectorToBase64, Base64ToFloat32Vector } = await importOriginal<typeof import('@memberjunction/global')>();
+    const { ToEpochMs, Float32VectorToBase64, Base64ToFloat32Vector, SharedLoad } = await importOriginal<typeof import('@memberjunction/global')>();
     // Minimal in-memory LRU stand-in — the real MJLruCache is in @memberjunction/global
     // but the mock above replaces the entire module export, so we re-implement just
     // the surface AIEngine uses.
@@ -156,6 +156,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     };
 
     return {
+        SharedLoad,
         BaseSingleton: class BaseSingleton<T> {
             protected static getInstance<T>(): T {
                 return new (this as unknown as new () => T)();

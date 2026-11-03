@@ -10,7 +10,9 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@memberjunction/global', () => ({
+vi.mock('@memberjunction/global', async (importOriginal) => ({
+    // Real load gate: Config runs through it.
+    SharedLoad: (await importOriginal<typeof import('@memberjunction/global')>()).SharedLoad,
     BaseSingleton: class BaseSingletonMock<T> {
         protected constructor() {}
         protected static getInstance<U>(this: new () => U): U {
@@ -51,6 +53,7 @@ vi.mock('../util', () => ({
 import { FileStorageEngine } from '../FileStorageEngine';
 import { FileStorageBase } from '../generic/FileStorageBase';
 import { LogError } from '@memberjunction/core';
+import type { UserInfo } from '@memberjunction/core';
 
 /** Minimal disposable fake driver — enough to satisfy the FileStorageBase surface this test touches. */
 function makeFakeDriver(disposeImpl?: () => void): FileStorageBase {
@@ -125,6 +128,44 @@ describe('FileStorageEngine driver-cache disposal', () => {
 
             expect(driver).toBe(newDriver);
             expect(newDriver.Dispose).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('Config while a load is in flight (#5644)', () => {
+        const restrictedUser = { ID: 'restricted-user' } as UserInfo;
+        const systemUser = { ID: 'system-user' } as UserInfo;
+
+        it('a forced load waits for the running load, then runs as its own user', async () => {
+            let releaseFirst: () => void = () => undefined;
+            const loadedAs: string[] = [];
+            mockBase.Config.mockImplementation(async (_force: boolean, user: UserInfo) => {
+                loadedAs.push(user.ID);
+                if (loadedAs.length === 1) {
+                    await new Promise<void>(resolve => { releaseFirst = resolve; });
+                }
+            });
+
+            const first = engine.Config(false, restrictedUser);
+            const forced = engine.Config(true, systemUser);
+            await Promise.resolve();
+            expect(loadedAs).toEqual(['restricted-user']);
+
+            releaseFirst();
+            await Promise.all([first, forced]);
+            expect(loadedAs).toEqual(['restricted-user', 'system-user']);
+            expect(mockBase.Config).toHaveBeenLastCalledWith(true, systemUser, undefined);
+            expect((engine as unknown as { _contextUser: UserInfo })._contextUser).toBe(systemUser);
+        });
+
+        it('a non-forced call joins the running load instead of starting another', async () => {
+            let releaseFirst: () => void = () => undefined;
+            mockBase.Config.mockImplementation(() => new Promise<void>(resolve => { releaseFirst = resolve; }));
+
+            const first = engine.Config(false, restrictedUser);
+            const second = engine.Config(false, systemUser);
+            releaseFirst();
+            await Promise.all([first, second]);
+            expect(mockBase.Config).toHaveBeenCalledTimes(1);
         });
     });
 });

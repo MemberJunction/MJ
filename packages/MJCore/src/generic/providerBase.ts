@@ -3201,6 +3201,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
          * projection eligible to populate the Fields-agnostic cache slot in PostRunView.
          */
         populateCache?: boolean;
+        /**
+         * {@link LocalCacheManager.CaptureReadFence} taken as PreRunView began. PostRunView
+         * passes it with the cache write, so rows from a read that a save overtook are not
+         * stored (#3059).
+         */
+        readFence?: number;
     };
 
     /**
@@ -3240,6 +3246,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
          * already-parsed results for 'current' items without a second IndexedDB read.
          */
         preResolvedCache?: Map<string, CachedRunViewResult | null>;
+        /**
+         * {@link LocalCacheManager.CaptureReadFence} taken as PreRunViews began; passed with
+         * every cache write the batch makes. See `_preRunViewResultType.readFence`.
+         */
+        readFence?: number;
         /**
          * Views the field-security predicate gate refused, keyed by their index in the caller's
          * batch, each with its `Success: false` result. Present only when at least one view was
@@ -3825,6 +3836,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     protected async PreRunView(params: RunViewParams, contextUser?: UserInfo): Promise<typeof this._preRunViewResultType> {
         const preViewStart = performance.now();
+        // Before anything that awaits: a save from here on keeps this read's rows out of the cache.
+        const readFence = LocalCacheManager.Instance.CaptureReadFence();
 
         // Resolve any PlatformSQL values to plain strings for the active platform
         this.ResolvePlatformSQLInParams(params);
@@ -3996,6 +4009,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // PostRunView to project cache-miss DB results back to the caller's shape
             callerRequestedFields: callerRequestedFieldsForPost,
             populateCache: willPopulateCache,
+            readFence,
         };
     }
 
@@ -4009,6 +4023,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns Pre-processing result with cache status for each admitted view
      */
     protected async PreRunViews(params: RunViewParams[], contextUser?: UserInfo): Promise<typeof this._preRunViewsResultType> {
+        // Before anything that awaits: a save from here on keeps this batch's rows out of the cache.
+        const readFence = LocalCacheManager.Instance.CaptureReadFence();
+
         // Resolve any PlatformSQL values to plain strings for the active platform
         for (const p of params) {
             this.ResolvePlatformSQLInParams(p);
@@ -4062,7 +4079,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // A refused view never reaches a cache lookup, the smart cache check or the database.
         const admitted = refusedResults ? params.filter((_, i) => !refusedResults.has(i)) : params;
         const preResult = await this.lookUpAdmittedViews(admitted, telemetryEventId, contextUser);
-        return refusedResults ? { ...preResult, refusedResults } : preResult;
+        return refusedResults ? { ...preResult, refusedResults, readFence } : { ...preResult, readFence };
     }
 
     /**
@@ -4404,7 +4421,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Process all results in parallel — 'current' entries now read from the
         // pre-resolved map instead of issuing their own GetRunViewResult calls.
         const processingPromises = params.map((param, i) =>
-            this.processSingleSmartCacheResult<T>(param, i, serverResultsByViewIndex.get(i), preResolvedCache, contextUser)
+            this.processSingleSmartCacheResult<T>(param, i, serverResultsByViewIndex.get(i), preResolvedCache, contextUser, preResult.readFence)
         );
 
         const processedResults = await Promise.all(processingPromises);
@@ -4451,13 +4468,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      *   `GetRunViewResults` call in `executeSmartCacheCheck`. Lookups for
      *   'current' items hit this map instead of issuing per-param IDB reads,
      *   amortizing IndexedDB transaction overhead across the whole batch.
+     * @param readFence - The batch's {@link LocalCacheManager.CaptureReadFence}, passed with the
+     *   cache write for a 'stale' item (#3059).
      */
     private async processSingleSmartCacheResult<T>(
         param: RunViewParams,
         index: number,
         checkResult: RunViewWithCacheCheckResult<T> | undefined,
         preResolvedCache: Map<string, CachedRunViewResult | null>,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        readFence?: number
     ): Promise<{ result: RunViewResult<T>; cacheHit: boolean; cacheMiss: boolean; alreadyTransformed?: boolean }> {
         if (!checkResult) {
             return {
@@ -4606,7 +4626,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     checkResult.maxUpdatedAt,
                     checkResult.aggregateResults, // Include aggregate results in cache
                     checkResult.rowCount,
-                    this
+                    this,
+                    undefined,
+                    { ReadFence: readFence }
                 ).catch(e => LogError(`Failed to update cache: ${e}`));
             }
 
@@ -4755,7 +4777,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 maxUpdatedAt,
                 result.AggregateResults,
                 result.TotalRowCount,
-                this
+                this,
+                undefined,
+                { ReadFence: preResult.readFence }
             );
         } else if (this.shouldAutoCache(params, result, contextUser)) {
             // Server-side auto-cache: small, unfiltered, unsorted results are
@@ -4770,7 +4794,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 maxUpdatedAt,
                 result.AggregateResults,
                 result.TotalRowCount,
-                this
+                this,
+                undefined,
+                { ReadFence: preResult.readFence }
             );
             LogStatusEx({ message: `  📦 [Auto-Cache] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${result.Results.length} rows auto-cached (small + unfiltered)`, verboseOnly: true });
         }
@@ -4879,7 +4905,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     maxUpdatedAt,
                     results[i].AggregateResults,
                     results[i].TotalRowCount,
-                    this
+                    this,
+                    undefined,
+                    { ReadFence: preResult.readFence }
                 ));
             } else if (this.shouldAutoCache(params[i], results[i], contextUser)) {
                 const maxUpdatedAt = this.extractMaxUpdatedAt(results[i].Results);
@@ -4890,7 +4918,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     maxUpdatedAt,
                     results[i].AggregateResults,
                     results[i].TotalRowCount,
-                    this
+                    this,
+                    undefined,
+                    { ReadFence: preResult.readFence }
                 ));
                 LogStatusEx({ message: `    📦 [Auto-Cache] RunViews "${params[i].EntityName || params[i].ViewName || 'unknown'}" — ${results[i].Results.length} rows auto-cached (small + unfiltered)`, verboseOnly: true });
             }

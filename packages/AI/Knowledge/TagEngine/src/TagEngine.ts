@@ -1,4 +1,4 @@
-import { BaseSingleton, Float32VectorToBase64, MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { BaseSingleton, Float32VectorToBase64, MJGlobal, UUIDsEqual, NormalizeUUID, SharedLoad } from '@memberjunction/global';
 import { UserInfo, LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { MJTagEntity, MJTaggedItemEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
 import { TagEngineBase, TagTreeNode, TagScopeContext } from '@memberjunction/tag-engine-base';
@@ -117,8 +117,8 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      */
     private _tagEmbeddingModel: EmbeddingModelInfo | null = null;
     private _loaded = false;
-    private _loading = false;
-    private _loadingPromise: Promise<void> | null = null;
+    /** One Config load at a time; a forced reload never joins one already running (#5644). */
+    private readonly _load = new SharedLoad();
     private _contextUser: UserInfo | undefined;
 
     /**
@@ -243,16 +243,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      */
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo): Promise<void> {
         if (this._loaded && !forceRefresh) return;
-        if (this._loading && this._loadingPromise) return this._loadingPromise;
-
-        this._loading = true;
-        this._loadingPromise = this.innerLoad(forceRefresh, contextUser);
-        try {
-            await this._loadingPromise;
-        } finally {
-            this._loading = false;
-            this._loadingPromise = null;
-        }
+        return this._load.Run(forceRefresh === true, () => this.innerLoad(forceRefresh, contextUser));
     }
 
     /**

@@ -73,6 +73,7 @@ export * from "./generic/databaseProviderBase";
 export * from "./generic/baseEngineRegistry";
 export * from "./generic/baseEngineSweeper";
 export * from "./generic/localCacheManager";
+export * from "./generic/entityWriteFence";
 export * from "./generic/RegisterForStartup";
 export * from "./generic/telemetryManager";
 export * from "./generic/InMemoryLocalStorageProvider";

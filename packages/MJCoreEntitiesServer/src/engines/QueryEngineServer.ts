@@ -1,4 +1,4 @@
-import { BaseSingleton } from '@memberjunction/global';
+import { BaseSingleton, SharedLoad } from '@memberjunction/global';
 import { LogError, LogStatus, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
 import { QueryEngine } from '@memberjunction/core-entities';
@@ -45,8 +45,8 @@ export class QueryEngineServer extends BaseSingleton<QueryEngineServer> {
     // --- Server-specific state ---
     private _queryVectorService: SimpleVectorService<QueryEmbeddingMetadata> | null = null;
     private _loaded = false;
-    private _loading = false;
-    private _loadingPromise: Promise<void> | null = null;
+    /** One Config load at a time; a forced reload never joins one already running (#5644). */
+    private readonly _load = new SharedLoad();
     private _contextUser: UserInfo | undefined;
     private _dataChangeSubscription: Subscription | null = null;
 
@@ -150,16 +150,7 @@ export class QueryEngineServer extends BaseSingleton<QueryEngineServer> {
         provider?: IMetadataProvider
     ): Promise<void> {
         if (this._loaded && !forceRefresh) return;
-        if (this._loading && this._loadingPromise) return this._loadingPromise;
-
-        this._loading = true;
-        this._loadingPromise = this.innerLoad(forceRefresh, contextUser, provider);
-        try {
-            await this._loadingPromise;
-        } finally {
-            this._loading = false;
-            this._loadingPromise = null;
-        }
+        return this._load.Run(forceRefresh === true, () => this.innerLoad(forceRefresh, contextUser, provider));
     }
 
     private async innerLoad(

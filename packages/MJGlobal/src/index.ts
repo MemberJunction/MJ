@@ -28,6 +28,7 @@ export * from './warningManager'
 export * from './EncryptionUtils'
 export * from './TokenEndpointErrors'
 export * from './KeyedSerialTaskQueue'
+export * from './SharedLoad'
 export * from './hashing/canonicalize'
 export * from './hashing/content-hash'
 

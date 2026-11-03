@@ -15,7 +15,9 @@ const {
     mockGetEntityObject: vi.fn(),
 }));
 
-vi.mock('@memberjunction/global', () => ({
+vi.mock('@memberjunction/global', async (importOriginal) => ({
+    // Real load gate: TagEngine.Config runs through it.
+    SharedLoad: (await importOriginal<typeof import('@memberjunction/global')>()).SharedLoad,
     BaseSingleton: class BaseSingleton<T> {
         public static getInstance<T>(): T { return new (this as unknown as new () => T)(); }
     },

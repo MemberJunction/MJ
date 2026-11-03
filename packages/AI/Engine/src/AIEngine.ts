@@ -13,7 +13,7 @@ import { AIModelConfiguration } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, LogWarning, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup } from "@memberjunction/core";
-import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
+import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, ToEpochMs, SharedLoad, UUIDsEqual } from "@memberjunction/global";
 import { createHash } from "crypto";
 import { MJAIActionEntity, MJActionEntity,
          MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
@@ -135,8 +135,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
     // Loading state management
     private _loaded: boolean = false;
-    private _loading: boolean = false;
-    private _loadingPromise: Promise<void> | null = null;
+    /** One Config load at a time; a forced reload never joins one already running (#5644). */
+    private readonly _load = new SharedLoad();
     private _contextUser: UserInfo | undefined;
 
     // ========================================================================
@@ -560,8 +560,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      * Configures the AIEngine by first ensuring AIEngineBase is configured,
      * then loading server-specific capabilities (embeddings, actions, etc.).
      *
-     * This method is safe to call from multiple places concurrently - it will
-     * return the same promise to all callers during loading.
+     * This method is safe to call from multiple places concurrently - callers that do not
+     * force a refresh share the load in progress. A forced call waits for that load and then
+     * runs its own, with its own user and provider.
      *
      * @param forceRefresh - If true, forces a full reload even if already loaded
      * @param contextUser - User context for server-side operations (required)
@@ -573,21 +574,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
             return;
         }
 
-        // If currently loading, return the existing promise so all callers wait together
-        if (this._loading && this._loadingPromise) {
-            return this._loadingPromise;
-        }
-
-        // Start loading
-        this._loading = true;
-        this._loadingPromise = this.innerLoad(forceRefresh, contextUser, provider);
-
-        try {
-            await this._loadingPromise;
-        } finally {
-            this._loading = false;
-            this._loadingPromise = null;
-        }
+        // A non-forced call joins a load already running; a forced one waits for it, then runs its own.
+        return this._load.Run(forceRefresh === true, () => this.innerLoad(forceRefresh, contextUser, provider));
     }
 
     /**

@@ -21,6 +21,8 @@ const {
 vi.mock('@memberjunction/global', async (importOriginal) => ({
     // Real codec: TagEngine persists fresh vectors in both JSON and binary (base64 float32) form.
     Float32VectorToBase64: (await importOriginal<typeof import('@memberjunction/global')>()).Float32VectorToBase64,
+    // Real load gate: TagEngine.Config runs through it.
+    SharedLoad: (await importOriginal<typeof import('@memberjunction/global')>()).SharedLoad,
     BaseSingleton: class BaseSingleton<T> {
         public static getInstance<T>(): T { return new (this as unknown as new () => T)(); }
     },
@@ -199,7 +201,6 @@ describe('TagEngine', () => {
         engine = TagEngine.Instance;
         // Reset internal state for each test
         (engine as unknown as { _loaded: boolean })._loaded = false;
-        (engine as unknown as { _loading: boolean })._loading = false;
         (engine as unknown as { _tagVectorService: null })._tagVectorService = null;
 
         // Set up embedding instance creation
