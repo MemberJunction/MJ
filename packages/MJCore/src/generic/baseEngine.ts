@@ -377,6 +377,11 @@ interface ExternalChangeReload {
 export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartupSink {
     private _loaded: boolean = false;
     private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
+    /**
+     * The forced reload queued behind the load that is running, shared by every `Load(…, true)`
+     * call that arrives before it starts. Null when none is queued. See {@link Load}.
+     */
+    private _forcedReloadAfterCurrent: Promise<void> | null = null;
     private _contextUser: UserInfo;
     /**
      * True once {@link ResolveContextUser} has put this engine on the MJ system user. Makes the
@@ -434,22 +439,25 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     private _isPermissionConstrained: boolean = false;
     private _deniedEntityNames: string[] = [];
     /**
-     * Per-property monotonic full-refresh initiation counter. Used with
-     * {@link _committedConfigRefreshGeneration} to prevent overlapping full refreshes from
-     * applying out of initiation order while ensuring a completed refresh is never dropped
-     * merely because a later refresh is still in flight. Keyed by config PropertyName.
-     * See {@link beginConfigRefresh} and {@link commitConfigRefresh}.
+     * Per-property monotonic full-refresh counter. Guards {@link LoadSingleEntityConfig}
+     * against overlapping full refreshes clobbering each other: when several full-refresh
+     * RunViews for the same property are in flight at once (e.g. a burst of saves each
+     * landing in its own debounce window because the round-trip exceeds the DebounceTime),
+     * an earlier-INITIATED refresh may never commit over a later one. Without this, whichever
+     * RunView happens to RESOLVE last wins — which can be an earlier-initiated request that
+     * read a staler snapshot, leaving the cache "one operation behind" until a full reload
+     * reconciles it. Keyed by config PropertyName. See {@link beginConfigRefresh} and
+     * {@link mayCommitConfigRefresh}.
      */
     private _configRefreshGeneration: Map<string, number> = new Map();
 
     /**
-     * Per-property highest refresh generation that has already committed its results via
-     * {@link HandleSingleViewResult}. An in-flight refresh with `generation < committed` was
-     * initiated before a refresh that has already landed, so it drops its staler snapshot;
-     * a refresh with `generation >= committed` commits immediately (even if an even newer
-     * refresh has started and is still awaiting I/O) and advances this watermark.
+     * Per-property generation of the newest full refresh that has committed rows. A failed read
+     * commits none, so it never counts. A refresh that is no longer the latest started may still
+     * commit while nothing newer has, so a caller awaiting it never gets back rows older than its
+     * own read. See {@link mayCommitConfigRefresh}.
      */
-    private _committedConfigRefreshGeneration: Map<string, number> = new Map();
+    private _configCommittedGeneration: Map<string, number> = new Map();
 
     /**
      * Reloads started by {@link OnExternalCacheChange} and by the no-row fallback of
@@ -765,6 +773,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     /**
      * This method should be called by sub-classes to load up their specific metadata requirements. For more complex metadata
      * loading or for post-processing of metadata loading done here, overide the AdditionalLoading method to add your logic.
+     *
+     * When a load is already running, a call without `forceRefresh` waits for it and returns. A call
+     * with `forceRefresh` waits for it and then reads again, because the running load may have read
+     * before the caller's own writes. Forced calls that arrive while that reload is still queued share
+     * it, so a burst of `Config(true)` calls costs at most one extra read.
      * @param configs
      * @param contextUser
      * @returns
@@ -772,18 +785,15 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     protected async Load(configs: Partial<BaseEnginePropertyConfig>[], provider: IMetadataProvider, forceRefresh: boolean = false, contextUser?: UserInfo): Promise<void> {
         if (this.ProviderToUse?.ProviderType === ProviderType.Database && !contextUser)
             throw new Error('For server-side use of all engine classes, you must provide the contextUser parameter')
-        while (this._loadingSubject.value) {
-            await new Promise<void>((resolve) => {
-                const subscription = this._loadingSubject.subscribe((loading) => {
-                    if (!loading) {
-                        subscription.unsubscribe();
-                        resolve();
-                    }
-                });
-            });
-            if (!forceRefresh && this._loaded) {
-                return;
+        if (this._loadingSubject.value) {
+            if (!forceRefresh) {
+                return this.waitForCurrentLoad();
             }
+            this._forcedReloadAfterCurrent ??= this.waitForCurrentLoad().then(() => {
+                this._forcedReloadAfterCurrent = null;
+                return this.Load(configs, provider, true, contextUser);
+            });
+            return this._forcedReloadAfterCurrent;
         }
 
         if (!this._loaded || forceRefresh) {
@@ -850,6 +860,18 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 TelemetryManager.Instance.EndEvent(eventId);
             }
         }
+    }
+
+    /** Resolves when the load that is running finishes. */
+    private waitForCurrentLoad(): Promise<void> {
+        return new Promise<void>((resolve) => {
+            const subscription = this._loadingSubject.subscribe((loading) => {
+                if (!loading) {
+                    subscription.unsubscribe();
+                    resolve();
+                }
+            });
+        });
     }
 
     /**
@@ -2277,29 +2299,36 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     /**
      * True when `generation` is still the most recent token handed out by
      * {@link beginConfigRefresh} for `propertyName` — i.e. no newer full refresh for this
-     * property has started since.
+     * property has started since. A refresh whose token is stale must NOT commit its results:
+     * a newer refresh was initiated afterward and read a more-recent state.
      */
     protected isLatestConfigRefresh(propertyName: string, generation: number): boolean {
         return this._configRefreshGeneration.get(propertyName) === generation;
     }
 
     /**
-     * Attempts to commit a completed refresh of `propertyName` at `generation`.
-     * Returns `true` and advances the committed watermark when no newer refresh (`> generation`)
-     * has already committed its results. Returns `false` when a newer refresh has already
-     * landed, preventing an earlier-initiated refresh that resolved late from clobbering the
-     * newer state — while still allowing an earlier refresh that resolves FIRST (e.g. an
-     * explicit `Config(true)` batch finishing while a 1.5s debounced single-entity refresh is
-     * still awaiting its SQL query) to commit immediately so callers awaiting `Config(true)`
-     * never observe pre-refresh data.
+     * True when a refresh holding `generation` may apply its result: it is the latest started, or
+     * its read succeeded and nothing newer has committed rows yet. A superseded refresh that
+     * commits first is overwritten when the newer one lands, so the property never goes
+     * backwards, and the superseded refresh's caller (a forced `Load`, `RefreshItem`) still
+     * returns with rows at least as new as its read. Dropping them instead would leave the
+     * property on its previous rows until the newer refresh landed, which can be after that
+     * caller has returned, or never when that refresh fails. A superseded refresh whose read
+     * failed applies nothing: the newer one owns the property's load state.
      */
-    protected commitConfigRefresh(propertyName: string, generation: number): boolean {
-        const committed = this._committedConfigRefreshGeneration.get(propertyName) ?? 0;
-        if (generation < committed) {
-            return false;
+    protected mayCommitConfigRefresh(propertyName: string, generation: number, succeeded: boolean): boolean {
+        return this.isLatestConfigRefresh(propertyName, generation)
+            || (succeeded && (this._configCommittedGeneration.get(propertyName) ?? 0) < generation);
+    }
+
+    /**
+     * Records that the refresh holding `generation` committed `propertyName`'s rows. Call it only
+     * for a successful read: a failed one leaves the held rows as they were.
+     */
+    protected markConfigRefreshCommitted(propertyName: string, generation: number): void {
+        if ((this._configCommittedGeneration.get(propertyName) ?? 0) < generation) {
+            this._configCommittedGeneration.set(propertyName, generation);
         }
-        this._committedConfigRefreshGeneration.set(propertyName, generation);
-        return true;
     }
 
     /**
@@ -2365,14 +2394,19 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             this.decrementInFlightFullRefresh(config.PropertyName);
         }
 
-        // If a newer full refresh already finished and committed while we awaited, drop this
-        // (staler) snapshot rather than clobber the newer one. If a newer refresh has only
-        // started and is still awaiting its RunView, commit our result now (advancing the
-        // watermark to `generation`) and let the newer refresh overwrite when it resolves.
-        if (!this.commitConfigRefresh(config.PropertyName, generation)) {
+        // A newer full refresh superseded us while we awaited. When it has already committed rows,
+        // or our read failed, drop this result rather than clobber the newer one: the newer
+        // refresh owns the assignment, the observer notification, and (on failure) the retry, so
+        // bailing here leaves no observer un-notified. When our read succeeded and the newer one
+        // hasn't committed yet, ours commits and the newer one overwrites it when it lands (see
+        // mayCommitConfigRefresh).
+        if (!this.mayCommitConfigRefresh(config.PropertyName, generation, result.Success)) {
             return;
         }
 
+        if (result.Success) {
+            this.markConfigRefreshCommitted(config.PropertyName, generation);
+        }
         this.HandleSingleViewResult(config, result, contextUser);
         if (!suppressEmit) {
             // A caller that rebuilds derived state afterwards emits itself, once, AFTER the
@@ -2540,8 +2574,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             // Process results and record entity loads for redundancy detection
             const entityNames: string[] = [];
             for (let i = 0; i < configs.length; i++) {
-                if (!this.commitConfigRefresh(configs[i].PropertyName, generations[i])) {
-                    continue; // a newer refresh of this property already committed while we awaited
+                if (!this.mayCommitConfigRefresh(configs[i].PropertyName, generations[i], results[i]?.Success === true)) {
+                    continue; // a newer refresh of this property owns it
+                }
+                if (results[i]?.Success === true) {
+                    this.markConfigRefreshCommitted(configs[i].PropertyName, generations[i]);
                 }
                 this.HandleSingleViewResult(configs[i], results[i], contextUser);
                 this.emitPropertyChange(configs[i].PropertyName);
@@ -2836,10 +2873,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     } finally {
                         this.decrementInFlightFullRefresh(config.PropertyName);
                     }
-                    if (!this.commitConfigRefresh(config.PropertyName, generation)) {
-                        return; // superseded while materializing — a newer refresh already committed
+                    if (!this.isLatestConfigRefresh(config.PropertyName, generation)) {
+                        return; // superseded while materializing — the newer refresh owns the property
                     }
                     if (rows) {
+                        this.markConfigRefreshCommitted(config.PropertyName, generation);
                         this.HandleSingleViewResult(config, {
                             Success: true,
                             Results: rows,
