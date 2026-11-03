@@ -57,6 +57,8 @@ const stubEngine = (conversations: MJConversationEntity[], projects: MJProjectEn
   Projects: projects,
   GetSharedByInfo: () => null,
   CanEditConversation: ConversationEngine.prototype.CanEditConversation,
+  CanMoveConversation: ConversationEngine.prototype.CanMoveConversation,
+  GetProjectVisibilityTier: (): 'Private' | 'Shared' | 'Public' => 'Private',
   GetConversation: (id: string) => conversations.find(c => c.ID === id)
 });
 

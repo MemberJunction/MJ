@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (460 classes)
+// @memberjunction/core-entities (477 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -163,6 +163,8 @@ import {
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJBrandKitAssetEntity,
+    MJBrandKitEntity,
     MJCalendarEventLinkEntity,
     MJCalendarSyncStateEntity,
     MJClusterAnalysisClusterEntity,
@@ -240,6 +242,10 @@ import {
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
+    MJDiagnosticBundleEntity,
+    MJDiagnosticSenderRegistrationEntity,
+    MJDiagnosticSessionChunkEntity,
+    MJDiagnosticSessionEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -300,6 +306,15 @@ import {
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJGraphAuthorityTierEntity,
+    MJGraphConceptEntity,
+    MJGraphConceptTypeEntity,
+    MJGraphEdgeEntity,
+    MJGraphEdgeProviderEntity,
+    MJGraphEdgeTypeEndpointEntity,
+    MJGraphEdgeTypeEntity,
+    MJGraphEntity,
+    MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -361,6 +376,7 @@ import {
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
+    MJProjectEntityExtended,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
     MJQueryDependencyEntity,
@@ -486,6 +502,7 @@ import {
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
+    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -546,7 +563,7 @@ import {
     MJRecordProcessEntityExtended,
 } from '@memberjunction/feature-pipelines';
 
-// @memberjunction/ng-artifacts (14 classes)
+// @memberjunction/ng-artifacts (15 classes)
 import {
     AudioArtifactViewerComponent,
     CodeArtifactViewerComponent,
@@ -561,6 +578,7 @@ import {
     PdfArtifactViewerComponent,
     SvgArtifactViewerComponent,
     VideoArtifactViewerComponent,
+    VideoProductionViewerComponent,
     XlsxArtifactViewerComponent,
 } from '@memberjunction/ng-artifacts';
 
@@ -645,13 +663,15 @@ import {
     RubricEngineBase,
 } from '@memberjunction/rubrics-base';
 
-// @memberjunction/ng-core-entity-forms (72 classes)
+// @memberjunction/ng-core-entity-forms (74 classes)
 import {
     AIAgentCategoryHeaderPanel,
     AIAgentCategoryHierarchyPanel,
     AIAgentCategoryOverviewPanel,
     AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,
+    BrandKitAssetsPanelComponent,
+    BrandKitGenerationPolicyPanelComponent,
     CompanyHeaderPanel,
     CompanyOverviewPanel,
     ContentItemHierarchyPanel,
@@ -726,7 +746,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (111 classes)
+// @memberjunction/ng-dashboards (116 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -747,7 +767,9 @@ import {
     ArchiveConfigResourceComponent,
     ArchiveRunsResourceComponent,
     AutotaggingPipelineResourceComponent,
-    ChiefOfStaffDashboardComponent,
+    ChiefOfStaffApprovalsComponent,
+    ChiefOfStaffGovernanceComponent,
+    ChiefOfStaffOverviewComponent,
     ClassRegistryInspectorComponent,
     ClusterVisualizationResourceComponent,
     CodeManagementComponent,
@@ -834,6 +856,9 @@ import {
     VersionHistoryGraphResourceComponent,
     VersionHistoryLabelsResourceComponent,
     VersionHistoryRestoreResourceComponent,
+    VideoStudioArchetypesResourceComponent,
+    VideoStudioBrandKitsResourceComponent,
+    VideoStudioProductionsResourceComponent,
     VisualizeResourceComponent,
     WorkQueueDashboardComponent,
     WorkflowRunsResourceComponent,
@@ -1006,6 +1031,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJBrandKitAssetEntity,
+    MJBrandKitEntity,
     MJCalendarEventLinkEntity,
     MJCalendarSyncStateEntity,
     MJClusterAnalysisClusterEntity,
@@ -1066,12 +1093,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJConversationSkillEntity,
     MJConversationWidgetInstanceEntity,
     MJCountryEntity,
-    MJCredentialCategoryEntity,
-    MJCredentialEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCredentialCategoryEntity,
+    MJCredentialEntity,
     MJCredentialTypeEntity,
     MJDashboardCategoryEntity,
     MJDashboardCategoryLinkEntity,
@@ -1087,6 +1114,10 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
+    MJDiagnosticBundleEntity,
+    MJDiagnosticSenderRegistrationEntity,
+    MJDiagnosticSessionChunkEntity,
+    MJDiagnosticSessionEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -1147,6 +1178,15 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJGraphAuthorityTierEntity,
+    MJGraphConceptEntity,
+    MJGraphConceptTypeEntity,
+    MJGraphEdgeEntity,
+    MJGraphEdgeProviderEntity,
+    MJGraphEdgeTypeEndpointEntity,
+    MJGraphEdgeTypeEntity,
+    MJGraphEntity,
+    MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -1208,6 +1248,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
+    MJProjectEntityExtended,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
     MJQueryDependencyEntity,
@@ -1256,6 +1297,10 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRubricScaleLevelEntity,
     MJRubricVersionEntity,
     MJSQLDialectEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJScheduledJobEntity,
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
@@ -1272,10 +1317,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
     MJSearchScopeTestQueryEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJSignatureAccountEntity,
     MJSignatureProviderEntity,
     MJSignatureRequestDocumentEntity,
@@ -1337,6 +1378,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
+    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -1384,6 +1426,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     PdfArtifactViewerComponent,
     SvgArtifactViewerComponent,
     VideoArtifactViewerComponent,
+    VideoProductionViewerComponent,
     XlsxArtifactViewerComponent,
     MJAuth0Provider,
     MJCognitoProvider,
@@ -1435,6 +1478,8 @@ const CLASS_REGISTRATIONS_2: any[] = [
     AIAgentCategoryOverviewPanel,
     AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,
+    BrandKitAssetsPanelComponent,
+    BrandKitGenerationPolicyPanelComponent,
     CompanyHeaderPanel,
     CompanyOverviewPanel,
     ContentItemHierarchyPanel,
@@ -1456,6 +1501,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJActionExecutionLogFormComponentExtended,
     MJActionFormComponentExtended,
     MJEntityActionFormComponentExtended,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     MJEntityFormComponentExtended,
     MJFileFormComponentExtended,
     MJListFormComponentExtended,
@@ -1477,10 +1526,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJTestSuiteFormComponentExtended,
     MJTestSuiteRunFormComponentExtended,
     MLModelFormComponentExtended,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     MLModelFormPolicy,
     ProjectHierarchyPanel,
     QueryCategoryHierarchyPanel,
@@ -1526,7 +1571,9 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ArchiveConfigResourceComponent,
     ArchiveRunsResourceComponent,
     AutotaggingPipelineResourceComponent,
-    ChiefOfStaffDashboardComponent,
+    ChiefOfStaffApprovalsComponent,
+    ChiefOfStaffGovernanceComponent,
+    ChiefOfStaffOverviewComponent,
     ClassRegistryInspectorComponent,
     ClusterVisualizationResourceComponent,
     CodeManagementComponent,
@@ -1613,6 +1660,9 @@ const CLASS_REGISTRATIONS_3: any[] = [
     VersionHistoryGraphResourceComponent,
     VersionHistoryLabelsResourceComponent,
     VersionHistoryRestoreResourceComponent,
+    VideoStudioArchetypesResourceComponent,
+    VideoStudioBrandKitsResourceComponent,
+    VideoStudioProductionsResourceComponent,
     VisualizeResourceComponent,
     WorkQueueDashboardComponent,
     WorkflowRunsResourceComponent,
@@ -1646,7 +1696,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 752;
+export const CLASS_REGISTRATIONS_COUNT = 777;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

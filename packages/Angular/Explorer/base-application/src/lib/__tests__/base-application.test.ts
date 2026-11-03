@@ -3,11 +3,15 @@
  * - WorkspaceConfiguration defaults
  * - WorkspaceStateManager (tab management)
  * - BaseApplication.CreateDefaultTab (isDefault nav-item resolution)
+ * - BaseApplication.GetNavItems (NavItem.* application settings)
  * - ApplicationManager.GetDefaultLandingApp (declared-default landing pick)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BehaviorSubject } from 'rxjs';
 import type { TabRequest } from '../interfaces/tab-request.interface';
+
+/** Rows the mocked ApplicationSettingEngine returns; tests replace it. */
+const appSettings = vi.hoisted(() => ({ rows: [] as { ApplicationID: string | null; Name: string; Value: string }[] }));
 
 // Mock Angular
 vi.mock('@angular/core', () => ({
@@ -21,6 +25,7 @@ vi.mock('@angular/core', () => ({
 
 vi.mock('@memberjunction/core', () => ({
   Metadata: class {
+    static Provider = { CurrentUser: { ID: 'user-123', Name: 'Test User' } };
     CurrentUser = { ID: 'user-123', Name: 'Test User' };
     Applications = [];
   },
@@ -46,6 +51,13 @@ vi.mock('@memberjunction/core-entities', () => ({
       EnableApplication: vi.fn(),
       DisableApplication: vi.fn(),
       UninstallApplication: vi.fn(),
+    }
+  },
+  ApplicationSettingEngine: {
+    Instance: {
+      Config: vi.fn().mockResolvedValue(undefined),
+      GetAllForApplication: (applicationId?: string) =>
+        appSettings.rows.filter((r) => r.ApplicationID === (applicationId ?? null)),
     }
   },
   MJWorkspaceEntity: class {},
@@ -424,6 +436,53 @@ describe('BaseApplication.CreateDefaultTab', () => {
 
     expect(tab).not.toBeNull();
     expect(tab!.Title).toBe('First');
+  });
+});
+
+describe('BaseApplication.GetNavItems', () => {
+  beforeEach(() => {
+    appSettings.rows = [];
+  });
+
+  const ownItems = JSON.stringify([
+    { Label: 'Overview', ResourceType: 'Custom', DriverClass: 'OverviewResource', isDefault: true },
+    { Label: 'Settings', ResourceType: 'Custom', DriverClass: 'SettingsResource' },
+  ]);
+
+  it('returns the application items when no setting adds one', async () => {
+    const { BaseApplication } = await import('../base-application');
+    const app = new BaseApplication({ ID: 'app-1', Name: 'Test App', DefaultNavItems: ownItems });
+
+    const items = await app.GetNavItems();
+
+    expect(items.map((i) => i.Label)).toEqual(['Overview', 'Settings']);
+  });
+
+  it('adds the items from this application\'s NavItem.* settings in Sequence order', async () => {
+    appSettings.rows = [
+      { ApplicationID: 'app-1', Name: 'NavItem.other-app.tasks', Value: JSON.stringify({ Label: 'Tasks', ResourceType: 'Custom', DriverClass: 'TasksResource', Sequence: 15 }) },
+      { ApplicationID: 'app-1', Name: 'unrelated.setting', Value: 'true' },
+      { ApplicationID: 'app-2', Name: 'NavItem.other-app.elsewhere', Value: JSON.stringify({ Label: 'Elsewhere', ResourceType: 'Custom' }) },
+      { ApplicationID: null, Name: 'NavItem.global', Value: JSON.stringify({ Label: 'Global', ResourceType: 'Custom' }) },
+    ];
+    const { BaseApplication } = await import('../base-application');
+    const app = new BaseApplication({ ID: 'app-1', Name: 'Test App', DefaultNavItems: ownItems });
+
+    const items = await app.GetNavItems();
+
+    expect(items.map((i) => i.Label)).toEqual(['Overview', 'Tasks', 'Settings']);
+  });
+
+  it('keeps the application default tab when an extension claims isDefault', async () => {
+    appSettings.rows = [
+      { ApplicationID: 'app-1', Name: 'NavItem.other-app.tasks', Value: JSON.stringify({ Label: 'Tasks', ResourceType: 'Custom', DriverClass: 'TasksResource', Sequence: 1, isDefault: true }) },
+    ];
+    const { BaseApplication } = await import('../base-application');
+    const app = new BaseApplication({ ID: 'app-1', Name: 'Test App', DefaultNavItems: ownItems });
+
+    const tab = await app.CreateDefaultTab();
+
+    expect(tab!.Title).toBe('Overview');
   });
 });
 

@@ -305,9 +305,8 @@ export class IntegrationDataService {
     return IntegrationEngineBase.Instance.GetEntityMapsForCompanyIntegration(companyIntegrationID);
   }
 
-  async LoadFieldMaps(entityMapID: string, _provider?: IRunViewProvider | null): Promise<MJCompanyIntegrationFieldMapEntity[]> {
-    await IntegrationEngineBase.Instance.Config(false);
-    return IntegrationEngineBase.Instance.GetFieldMapsForEntityMap(entityMapID);
+  async LoadFieldMaps(entityMapID: string, provider?: IRunViewProvider | null): Promise<MJCompanyIntegrationFieldMapEntity[]> {
+    return IntegrationEngineBase.Instance.LoadFieldMapsForEntityMap(entityMapID, undefined, provider);
   }
 
   async LoadRunHistory(companyIntegrationID: string, limit: number = 10, provider?: IRunViewProvider | null): Promise<IntegrationRunRow[]> {
@@ -817,6 +816,7 @@ export class IntegrationDataService {
         EntityName: 'MJ: Company Integration Run Details',
         ExtraFilter: `CompanyIntegrationRunID='${run.ID}' AND EntityID='${entityID}'`,
         MaxRows: 1,
+        SkipTotalRowCount: true,
         Fields: ['EntityID'],
         ResultType: 'simple'
       });
@@ -1002,6 +1002,7 @@ export class IntegrationDataService {
       ExtraFilter: `Name='${actionName}'`,
       Fields: ['ID'],
       MaxRows: 1,
+      SkipTotalRowCount: true,
       ResultType: 'simple'
     });
     return result.Results.length > 0 ? result.Results[0].ID : null;

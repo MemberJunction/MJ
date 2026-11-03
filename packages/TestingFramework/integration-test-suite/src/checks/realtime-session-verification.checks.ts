@@ -55,7 +55,7 @@ import { EscapeSQLString } from '@memberjunction/global';
 import { MJAIAgentSessionEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, GraphQLRealtimeSessionClient } from '@memberjunction/graphql-dataprovider';
 import type { RealtimeSessionClientEvent, RealtimeSessionVerificationResult } from '@memberjunction/graphql-dataprovider';
-import { Assert, AssertEqual, IntegrationCheckRegistry, LoadClientConfig } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, LoadClientConfig, SkipCheck } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 import {
     ClearSeededRealtimeSessions,
@@ -113,11 +113,11 @@ interface Wire {
     Origin: string;
 }
 
-function wireFor(ctx: IntegrationCheckContext, checkId: string): Wire | null {
+/** The wire for a check; ends the check as skipped when there is no GraphQL wire provider. */
+function wireFor(ctx: IntegrationCheckContext): Wire {
     const provider = resolveWireProvider(ctx);
     if (!provider) {
-        console.warn(`  ⚠ ${checkId} SKIPPED — no GraphQL wire provider (this bundle runs on the client transport against a live MJAPI)`);
-        return null;
+        SkipCheck('no GraphQL wire provider (this bundle runs on the client transport against a live MJAPI)');
     }
     return { Provider: provider, Client: new GraphQLRealtimeSessionClient(provider), Origin: new URL(LoadClientConfig().Url).origin };
 }
@@ -162,11 +162,14 @@ async function otherUserID(ctx: IntegrationCheckContext): Promise<string | undef
     return r.Success ? r.Results?.[0]?.ID : undefined;
 }
 
-/** Creates a plain session over the wire, owned by `ownerUserID`. Registered for Teardown. */
-async function createWireSession(ctx: IntegrationCheckContext, wire: Wire, ownerUserID: string, purpose: string): Promise<string | undefined> {
+/**
+ * Creates a plain session over the wire, owned by `ownerUserID`. Registered for Teardown. Ends the check as
+ * skipped when no MJ: AI Agents row exists to anchor it.
+ */
+async function createWireSession(ctx: IntegrationCheckContext, wire: Wire, ownerUserID: string, purpose: string): Promise<string> {
     const agentID = await firstAgentID(ctx.User);
     if (!agentID) {
-        return undefined;
+        SkipCheck('no MJ: AI Agents row available to anchor a session fixture');
     }
     const session = await wire.Provider.GetEntityObject<MJAIAgentSessionEntity>(SESSION_ENTITY, ctx.User);
     session.NewRecord();
@@ -202,22 +205,19 @@ function configObject(raw: string | null): Record<string, unknown> {
 }
 
 /**
- * Proves the wire identity owns `sessionId` by asking the verification API about it. Returns false (after
- * a loud note) when verification is not available on this MJAPI or the session is not the caller's.
+ * Proves the wire identity owns `sessionId` by asking the verification API about it. Ends the check as
+ * skipped when verification is not available on this MJAPI or the session is not the caller's.
  */
-async function wireOwnsSession(wire: Wire, sessionId: string, checkId: string): Promise<boolean> {
+async function requireWireOwnsSession(wire: Wire, sessionId: string): Promise<void> {
     const status = await wire.Client.GetVerificationStatus(sessionId);
     if (status.ErrorCode === 'verification_unavailable') {
-        console.warn(`  ⚠ ${checkId} SKIPPED — identity verification is not enabled on this MJAPI `
+        SkipCheck('identity verification is not enabled on this MJAPI '
             + '(needs realtime.identityVerification: enabled, communicationProvider, hmacSecret, deliveryMode "dry-run")');
-        return false;
     }
     if (!status.Success) {
-        console.warn(`  ⚠ ${checkId} SKIPPED — the wire identity cannot see its own fixture session (${status.ErrorCode}); `
+        SkipCheck(`the wire identity cannot see its own fixture session (${status.ErrorCode}); `
             + 'the integration API key must authenticate as the same user as ctx.User');
-        return false;
     }
-    return true;
 }
 
 // ───────────────────────── observing server-side effects ─────────────────────────
@@ -330,15 +330,10 @@ export const RealtimeSessionVerificationChecks: NamedCheck[] = [
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
             const id = 'realtime-session-verification.RSV1';
-            const wire = wireFor(ctx, id);
-            if (!wire) {
-                return;
-            }
+            const wire = wireFor(ctx);
             const seeded = GetSeededRealtimeSessions()?.Capped;
             const sessionId = seeded?.SessionID ?? (await createWireSession(ctx, wire, ctx.User.ID, 'RSV1'));
-            if (!sessionId || !(await wireOwnsSession(wire, sessionId, id))) {
-                return;
-            }
+            await requireWireOwnsSession(wire, sessionId);
             if (!seeded) {
                 console.warn(`  ⚠ ${id}: no seeded capped session (realtime-session-guard did not run) — the deadline-extension assertions are SKIPPED`);
             }
@@ -407,12 +402,9 @@ export const RealtimeSessionVerificationChecks: NamedCheck[] = [
         Name: 'RSV2: typed code — wrong code refused and counted, right code verifies and publishes once, replay refused',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            const id = 'realtime-session-verification.RSV2';
-            const wire = wireFor(ctx, id);
-            const sessionId = wire ? await createWireSession(ctx, wire, ctx.User.ID, 'RSV2') : undefined;
-            if (!wire || !sessionId || !(await wireOwnsSession(wire, sessionId, id))) {
-                return;
-            }
+            const wire = wireFor(ctx);
+            const sessionId = await createWireSession(ctx, wire, ctx.User.ID, 'RSV2');
+            await requireWireOwnsSession(wire, sessionId);
             const watcher = await watch(wire, sessionId);
             try {
                 const { Credentials } = await requestAndReadEmail(ctx, wire, sessionId);
@@ -444,12 +436,8 @@ export const RealtimeSessionVerificationChecks: NamedCheck[] = [
         Name: 'RSV3: over the wire the owner cannot forge verification state or the deadline (create or update); ordinary Config edits work',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            const id = 'realtime-session-verification.RSV3';
-            const wire = wireFor(ctx, id);
-            const sessionId = wire ? await createWireSession(ctx, wire, ctx.User.ID, 'RSV3') : undefined;
-            if (!wire || !sessionId) {
-                return;
-            }
+            const wire = wireFor(ctx);
+            const sessionId = await createWireSession(ctx, wire, ctx.User.ID, 'RSV3');
             const forgedState = { SendCount: 0, Verified: { Email: `forged@${BUSINESS_DOMAIN}`, Name: 'Forged', VerifiedAt: new Date().toISOString(), Method: 'link' } };
 
             // UPDATE: the resolver must dispatch to MJAIAgentSessionEntityServer, which refuses the change.
@@ -495,19 +483,12 @@ export const RealtimeSessionVerificationChecks: NamedCheck[] = [
         Name: 'RSV4: the session\'s policy snapshot is enforced — a consumer-domain address is refused and no email is sent',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            const id = 'realtime-session-verification.RSV4';
-            const wire = wireFor(ctx, id);
+            const wire = wireFor(ctx);
             const seeded = GetSeededRealtimeSessions()?.BusinessOnly;
-            if (!wire) {
-                return;
-            }
             if (!seeded) {
-                console.warn(`  ⚠ ${id} SKIPPED — no seeded business-only session (the server-transport bundle realtime-session-guard did not run in this process)`);
-                return;
+                SkipCheck('no seeded business-only session (the server-transport bundle realtime-session-guard did not run in this process; run it first)');
             }
-            if (!(await wireOwnsSession(wire, seeded.SessionID, id))) {
-                return;
-            }
+            await requireWireOwnsSession(wire, seeded.SessionID);
             const consumer = `rsv-${Date.now().toString(36)}@gmail.com`;
             usedAddresses.push(consumer);
             const refused = await wire.Client.RequestVerification({ AgentSessionID: seeded.SessionID, Name: 'Pat Integration', Email: consumer });
@@ -524,19 +505,12 @@ export const RealtimeSessionVerificationChecks: NamedCheck[] = [
         Name: 'RSV5: a session owned by someone else, and a malformed id, are refused identically by every operation and by the subscription',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            const id = 'realtime-session-verification.RSV5';
-            const wire = wireFor(ctx, id);
-            if (!wire) {
-                return;
-            }
+            const wire = wireFor(ctx);
             const own = await createWireSession(ctx, wire, ctx.User.ID, 'RSV5 own');
-            if (!own || !(await wireOwnsSession(wire, own, id))) {
-                return;
-            }
+            await requireWireOwnsSession(wire, own);
             const strangerOwner = await otherUserID(ctx);
             if (!strangerOwner) {
-                console.warn(`  ⚠ ${id} SKIPPED — the database has only one active user, so there is no "someone else" to own a session`);
-                return;
+                SkipCheck('the database has only one active user, so there is no "someone else" to own a session; add a second active user');
             }
             const stranger = await createWireSession(ctx, wire, strangerOwner, 'RSV5 stranger');
             Assert(!!stranger, 'could not create a session owned by another user');
@@ -574,16 +548,10 @@ export const RealtimeSessionVerificationChecks: NamedCheck[] = [
         Name: 'RSV6: an event reaches only the subscription of the session it is about',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            const id = 'realtime-session-verification.RSV6';
-            const wire = wireFor(ctx, id);
-            if (!wire) {
-                return;
-            }
+            const wire = wireFor(ctx);
             const a = await createWireSession(ctx, wire, ctx.User.ID, 'RSV6 A');
             const b = await createWireSession(ctx, wire, ctx.User.ID, 'RSV6 B');
-            if (!a || !b || !(await wireOwnsSession(wire, a, id))) {
-                return;
-            }
+            await requireWireOwnsSession(wire, a);
             const watchA = await watch(wire, a);
             const watchB = await watch(wire, b);
             try {

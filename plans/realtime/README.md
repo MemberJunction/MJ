@@ -41,6 +41,7 @@ The realtime co-agent stack (1:1 voice + server-bridged meetings) is shipped and
 - `native-bridge-buildout-plan.md` — LiveKit native media buildout (code-complete + live-tested).
 - `livekit-live-test-plan.md`, `livekit-room-testing.md`, `bridge-and-screenshare-testing-audit.md` — test plans/runbooks (executed).
 - `computer-use-remote-browser-blend.md` — goal-driven browser control (implemented).
+- `whiteboard-agent-widget-interaction.md` — realtime agents inspect, operate and persist live whiteboard HTML widgets (as-built record; original plan #5716).
 
 ## Reference guides (not plans)
 

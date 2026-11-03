@@ -93,6 +93,69 @@ describe('BaseEngineRegistry.FindCachedEntity', () => {
         expect(matches[0].config).toBe(engine.Configs[0]);
         expect(matches[0].records).toBe(engine.ProductTypes);
     });
+
+    it('filters out filtered or alternate-view configs when unfilteredOnly is true', () => {
+        const filteredEngine = register({
+            Loaded: true,
+            Configs: [
+                { Type: 'entity', EntityName: 'Product Types', PropertyName: 'Filtered', Filter: 'IsActive = 1' },
+                { Type: 'entity', EntityName: 'Product Types', PropertyName: 'AltView', AlternateBaseView: 'vwActiveProductTypes' },
+                { Type: 'entity', EntityName: 'Product Types', PropertyName: 'UnfilteredSimple', ResultType: 'simple' },
+            ],
+            Filtered: [{ ID: '1' }],
+            AltView: [{ ID: '2' }],
+            UnfilteredSimple: [{ ID: 'A0000000-0000-0000-0000-000000000099', Name: 'Full Row' }],
+        });
+
+        const allMatches = BaseEngineRegistry.Instance.FindCachedEntity('Product Types');
+        expect(allMatches).toHaveLength(3);
+
+        const unfilteredMatches = BaseEngineRegistry.Instance.FindCachedEntity('Product Types', { unfilteredOnly: true });
+        expect(unfilteredMatches).toHaveLength(1);
+        expect(unfilteredMatches[0].config.PropertyName).toBe('UnfilteredSimple');
+        expect(unfilteredMatches[0].records).toBe(filteredEngine.UnfilteredSimple);
+    });
+
+    it('returns an already-loaded property via IsPropertyLoaded while the engine is still mid-Config (Loaded === false)', async () => {
+        class MidConfigEngine extends CacheDonorEngine {
+            public ReadyTypes = [{ ID: 'pt-1', Name: 'Webinar' }] as unknown as BaseEntity[];
+            public PendingItems: BaseEntity[] = [];
+            public ReadDeniedItems: BaseEntity[] = [];
+            public PermDeniedItems: BaseEntity[] = [];
+
+            public override get Loaded(): boolean {
+                return false;
+            }
+        }
+        const midConfigEngine = new MidConfigEngine();
+        await midConfigEngine.Declare([
+            { Type: 'entity', EntityName: 'Product Types', PropertyName: 'ReadyTypes' },
+            { Type: 'entity', EntityName: 'Pending Items', PropertyName: 'PendingItems' },
+            { Type: 'entity', EntityName: 'Read Denied Items', PropertyName: 'ReadDeniedItems' },
+            { Type: 'entity', EntityName: 'Perm Denied Items', PropertyName: 'PermDeniedItems' },
+        ]);
+        const dataMap = (midConfigEngine as unknown as {
+            _dataMap: Map<string, { loadedSuccessfully: boolean; readDenied?: boolean; permissionDenied?: boolean; data: unknown[] }>;
+        })._dataMap;
+        dataMap.set('ReadyTypes', { loadedSuccessfully: true, data: midConfigEngine.ReadyTypes });
+        dataMap.set('PendingItems', { loadedSuccessfully: false, data: [] });
+        dataMap.set('ReadDeniedItems', { loadedSuccessfully: true, readDenied: true, data: [] });
+        dataMap.set('PermDeniedItems', { loadedSuccessfully: true, permissionDenied: true, data: [] });
+        register(midConfigEngine);
+
+        expect(midConfigEngine.IsPropertyLoaded('ReadyTypes')).toBe(true);
+        expect(midConfigEngine.IsPropertyLoaded('PendingItems')).toBe(false);
+        expect(midConfigEngine.IsPropertyLoaded('ReadDeniedItems')).toBe(false);
+        expect(midConfigEngine.IsPropertyLoaded('PermDeniedItems')).toBe(false);
+
+        const readyMatch = BaseEngineRegistry.Instance.FindCachedEntity('Product Types', { unfilteredOnly: true });
+        expect(readyMatch).toHaveLength(1);
+        expect(readyMatch[0].records).toBe(midConfigEngine.ReadyTypes);
+
+        expect(BaseEngineRegistry.Instance.FindCachedEntity('Pending Items')).toHaveLength(0);
+        expect(BaseEngineRegistry.Instance.FindCachedEntity('Read Denied Items')).toHaveLength(0);
+        expect(BaseEngineRegistry.Instance.FindCachedEntity('Perm Denied Items')).toHaveLength(0);
+    });
 });
 
 describe('BaseEngine.ReadonlyConfigs', () => {

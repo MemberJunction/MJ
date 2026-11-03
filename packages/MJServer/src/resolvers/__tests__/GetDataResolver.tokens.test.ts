@@ -23,6 +23,8 @@ vi.mock('../../auth/index.js', () => ({ GetSystemUser: vi.fn(),
 vi.mock('mssql', () => ({ default: { Request: vi.fn() } }));
 
 import {
+  GetDataResolver,
+  GetDataInputType,
   RegisterAccessToken,
   DeleteAccessToken,
   TokenExists,
@@ -31,6 +33,7 @@ import {
   PruneExpiredTokens,
   GetAccessTokenCount,
 } from '../GetDataResolver.js';
+import type { AppContext } from '../../types.js';
 
 // ---------------------------------------------------------------------------
 // Regression coverage for a memory leak (Memory Leak Audit Round 7, Critical):
@@ -136,5 +139,54 @@ describe('GetDataResolver access-token lifecycle', () => {
     // than accumulating every registration for the life of the process.
     expect(GetAccessTokenCount()).toBeLessThan(before + 51);
     expect(TokenExists(survivorToken)).toBe(true);
+  });
+
+  it('never leaks raw secret token values in thrown or returned error messages', async () => {
+    const duplicateSecret = `secret-dup-${uniqueToken()}`;
+    RegisterAccessToken(duplicateSecret, 60_000);
+
+    try {
+      RegisterAccessToken(duplicateSecret, 60_000);
+      expect.unreachable('Expected duplicate registration to throw');
+    } catch (err) {
+      expect((err as Error).message).not.toContain(duplicateSecret);
+    }
+
+    const missingSecret = `secret-missing-${uniqueToken()}`;
+    try {
+      DeleteAccessToken(missingSecret);
+      expect.unreachable('Expected deleting unknown token to throw');
+    } catch (err) {
+      expect((err as Error).message).not.toContain(missingSecret);
+    }
+
+    try {
+      RecordTokenUse(missingSecret, {});
+      expect.unreachable('Expected recording unknown token use to throw');
+    } catch (err) {
+      expect((err as Error).message).not.toContain(missingSecret);
+    }
+
+    const resolver = new GetDataResolver();
+    const input = new GetDataInputType();
+    input.Token = missingSecret;
+    input.Queries = ['SELECT 1'];
+    const output = await resolver.GetData(input, { dataSources: [] } as Partial<AppContext> as AppContext);
+    expect(output.Success).toBe(false);
+    expect(JSON.stringify(output.ErrorMessages)).not.toContain(missingSecret);
+  });
+
+  it('rejects empty tokens and near-miss prefix tokens across multiple active slots', () => {
+    const first = `slot-a-${uniqueToken()}`;
+    const second = `slot-b-${uniqueToken()}`;
+    RegisterAccessToken(first, 60_000);
+    RegisterAccessToken(second, 60_000);
+
+    expect(IsTokenValid('')).toBe(false);
+    expect(TokenExists('')).toBe(false);
+    expect(IsTokenValid(first.slice(0, -1))).toBe(false);
+    expect(IsTokenValid(`${second}-extra`)).toBe(false);
+    expect(IsTokenValid(first)).toBe(true);
+    expect(IsTokenValid(second)).toBe(true);
   });
 });

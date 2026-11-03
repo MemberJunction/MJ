@@ -25,7 +25,7 @@
  * TARGETS: `NATIVE_TOOLS_IT_MODELS` ("Model Name@DriverClass", comma-separated) or the defaults
  * below. A target is run only when the runner itself finds a credential for it (an MJ credential
  * binding, the vendor's default credential, or `AI_VENDOR_API_KEY__<DRIVER>`); others are logged as
- * skipped, and a check with nothing callable skips loudly. A run that fails because the vendor no
+ * skipped, and a check with nothing callable records a SKIP. A run that fails because the vendor no
  * longer serves the model (404) or the account has no balance or quota is logged and not counted.
  * A model listed in KNOWN_NATIVE_GAPS is run and logged, not counted, in the native checks.
  *
@@ -46,7 +46,7 @@ import type {
     MJActionEntity, MJActionParamEntity, MJAIAgentActionEntity, MJAIAgentEntity, MJAIAgentPromptEntity,
     MJAIModelVendorEntity, MJAIPromptEntity
 } from '@memberjunction/core-entities';
-import { Assert, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
+import { Assert, IntegrationCheckRegistry, SkipCheck } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck, NativeToolCallingLiveFixture } from '@memberjunction/testing-integration';
 import { AGENT_LIVE_FIXTURE_TAG, AGENT_LIVE_SETTLE_MS, DeleteById, PurgeAgentRun, ResolvePromptRunIdsForAgentRuns, Sleep } from './agent-live-shared';
 import {
@@ -499,8 +499,7 @@ function judge(target: NativeTarget, outcome: RunOutcome, expected: Expectation)
 
 async function runTargets(check: string, targets: NativeTarget[], run: (t: NativeTarget) => Promise<string[]>): Promise<void> {
     if (targets.length === 0) {
-        console.warn(`  ⚠ ${check} SKIPPED — no target in scope has a credential in this environment.`);
-        return;
+        SkipCheck('no target in scope has a credential in this environment (MJ credential binding, vendor default credential, or AI_VENDOR_API_KEY__<DRIVER>)');
     }
     const failures: string[] = [];
     for (const target of targets) failures.push(...await run(target));
