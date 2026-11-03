@@ -371,13 +371,6 @@ const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayloa
     jwt.verify(token, GetSigningKeys(issuer), verifyOptions, (err, jwt) => {
       if (jwt && typeof jwt !== 'string' && !err) {
         const payload = jwt.payload ?? jwt;
-
-        // Per-request token confirmation — debug-only (one of the worst
-        // "constantly on" offenders on an authenticated server).
-        if (isDebugLogLevel()) {
-          const userInfo = ExtractUserInfoFromPayload(payload);
-          console.log(`Valid token: ${userInfo.fullName || 'Unknown'} (${userInfo.email || userInfo.preferredUsername || 'Unknown'})`);
-        }
         resolve(payload);
       } else {
         console.warn('Invalid token');
@@ -577,6 +570,11 @@ export const GetUserPayload = async (
     // the session enforces exactly the link's granted scope (no DB accretion). No-op
     // for everything else.
     const sessionUser = BuildMagicLinkSessionUser(userRecord, payload);
+
+    // Debug-only confirmation of a freshly verified token. It names the user by ID only.
+    if (!cachedAuth && isDebugLogLevel()) {
+      console.log(`Valid token: user ${sessionUser.ID}`);
+    }
 
     // Session-established audit — once per issued token (deduped), fire-and-forget so
     // it never adds latency to the request. The dedup mark is set synchronously here.
