@@ -7290,9 +7290,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         return compositeKey.KeyValuePairs.map(val => {
             const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
             if (!pk) throw new Error(`Primary key ${val.FieldName} not found in entity ${entityInfo.Name}`);
-            const quotes = pk.NeedsQuotes ? "'" : '';
-            const safeVal = quotes ? String(val.Value).replace(/'/g, "''") : val.Value;
-            return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${safeVal}${quotes}`;
+            if (pk.NeedsQuotes) {
+                // N'' for an nchar/nvarchar key (empty on PostgreSQL), so non-ASCII keys match on
+                // SQL Server and the comparison can seek the key's index (#5664).
+                return `${this.QuoteIdentifier(pk.CodeName)}=${pk.UnicodePrefix}'${String(val.Value).replace(/'/g, "''")}'`;
+            }
+            // An unquoted value is spliced in bare, so it must be a plain number.
+            const raw = String(val.Value);
+            if (!/^-?\d+(\.\d+)?$/.test(raw))
+                throw new Error(`Invalid non-numeric value provided for numeric key field ${pk.Name} on entity ${entityInfo.Name}`);
+            return `${this.QuoteIdentifier(pk.CodeName)}=${raw}`;
         }).join(' AND ');
     }
 

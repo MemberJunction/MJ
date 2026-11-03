@@ -70,6 +70,9 @@ class PrimaryKeyShapeTestProvider extends GenericDatabaseProviderTestBase {
         return this.BuildUserViewRunExclusionSQL(entityInfo, scope);
     }
     public override get MJCoreSchemaName(): string { return '__mj'; }
+    public pkWhere(entityInfo: EntityInfo, key: CompositeKey): string {
+        return this.BuildPrimaryKeyWhereClause(entityInfo, key);
+    }
 
     // --- Abstract-member implementations (just enough to satisfy the type system) ---
     protected get UUIDFunctionPattern(): RegExp { return PrimaryKeyShapeTestProvider._uuidPattern; }
@@ -217,5 +220,44 @@ describe('BuildUserViewRunExclusionSQL — prior view-run exclusion runs on both
     it('rejects a view ID that is not a GUID', () => {
         expect(() => provider.exclusion(keyedEntity('ID', 'uuid'), { UserViewID: 'not-a-guid' }))
             .toThrow(/requires a saved view with a GUID ID/);
+    });
+});
+
+describe('BuildPrimaryKeyWhereClause — key literals follow the key column type (#5664)', () => {
+    const provider = new PrimaryKeyShapeTestProvider();
+
+    function entityWithKeys(keys: Array<{ Name: string; NeedsQuotes: boolean; UnicodePrefix: string }>): EntityInfo {
+        const pks = keys.map(k => ({ ...k, CodeName: k.Name } as unknown as EntityFieldInfo));
+        return { Name: 'Codes', PrimaryKeys: pks, FirstPrimaryKey: pks[0] } as unknown as EntityInfo;
+    }
+
+    it('writes N\'…\' for an nvarchar key', () => {
+        const entity = entityWithKeys([{ Name: 'Code', NeedsQuotes: true, UnicodePrefix: 'N' }]);
+        expect(provider.pkWhere(entity, CompositeKey.FromKeyValuePair('Code', "日本-'01"))).toBe("[Code]=N'日本-''01'");
+    });
+
+    it('keeps a plain literal for a varchar or uuid key (UnicodePrefix is empty on PostgreSQL types too)', () => {
+        const entity = entityWithKeys([{ Name: 'ID', NeedsQuotes: true, UnicodePrefix: '' }]);
+        expect(provider.pkWhere(entity, CompositeKey.FromKeyValuePair('ID', 'K12345'))).toBe("[ID]='K12345'");
+    });
+
+    it('leaves a numeric key bare', () => {
+        const entity = entityWithKeys([{ Name: 'OrderID', NeedsQuotes: false, UnicodePrefix: '' }]);
+        expect(provider.pkWhere(entity, CompositeKey.FromKeyValuePair('OrderID', 42))).toBe('[OrderID]=42');
+    });
+
+    it('refuses a non-numeric value for a numeric key instead of splicing it bare', () => {
+        const entity = entityWithKeys([{ Name: 'OrderID', NeedsQuotes: false, UnicodePrefix: '' }]);
+        expect(() => provider.pkWhere(entity, CompositeKey.FromKeyValuePair('OrderID', '1 OR 1=1')))
+            .toThrow(/Invalid non-numeric value provided for numeric key field OrderID on entity Codes/);
+    });
+
+    it('ANDs a composite key, prefixing only its nvarchar column', () => {
+        const entity = entityWithKeys([
+            { Name: 'OrderID', NeedsQuotes: false, UnicodePrefix: '' },
+            { Name: 'LineCode', NeedsQuotes: true, UnicodePrefix: 'N' },
+        ]);
+        const key = new CompositeKey([{ FieldName: 'OrderID', Value: 7 }, { FieldName: 'LineCode', Value: 'Ä-3' }]);
+        expect(provider.pkWhere(entity, key)).toBe("[OrderID]=7 AND [LineCode]=N'Ä-3'");
     });
 });
