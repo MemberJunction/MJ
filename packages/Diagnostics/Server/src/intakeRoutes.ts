@@ -1,7 +1,6 @@
 import * as crypto from 'node:crypto';
 import { LogError } from '@memberjunction/core';
 import { SanitizeForLog } from '@memberjunction/global';
-import { ParseSenderAuthorizationHeader } from '@memberjunction/diagnostics';
 import type { BaseServerMiddleware } from '@memberjunction/server/middleware/BaseServerMiddleware';
 import {
   COMPLETE_EXPIRED_REASON,
@@ -171,9 +170,9 @@ async function authenticate(
 const jsonBodyLimit = (): number => MAX_JSON_BODY_BYTES;
 
 /**
- * Wraps a handler: 404 when intake is disabled; 429 before any work when the IP is over its
- * failure budget and the request has no well-formed sender header (a request with one is still
- * authenticated, so signed traffic is never IP-limited); generic 500 (logged) on an unexpected error.
+ * Wraps a handler: 404 when intake is disabled; 429 before any work (no sender lookup, no
+ * signature check) when the IP is over its failure budget, whatever the request carries;
+ * generic 500 (logged) on an unexpected error.
  */
 function intakeHandler(name: string, handler: (req: ExpressReq, res: ExpressRes) => Promise<void>): MiddlewareHandler {
   return (req: ExpressReq, res: ExpressRes) => {
@@ -182,7 +181,7 @@ function intakeHandler(name: string, handler: (req: ExpressReq, res: ExpressRes)
       res.status(404).json({ error: 'Diagnostic intake is disabled on this instance.' });
       return;
     }
-    if (!ParseSenderAuthorizationHeader(authorizationHeader(req)) && intake.IpFailureLimitReached(clientIp(req))) {
+    if (intake.IpFailureLimitReached(clientIp(req))) {
       res.status(429).json(RATE_LIMITED);
       return;
     }
@@ -223,7 +222,8 @@ async function handleCreate(req: ExpressReq, res: ExpressRes): Promise<void> {
   const auth = await authenticate(req, res, jsonBodyLimit);
   if (!auth) return;
   const intake = DiagnosticIntakeService.Instance;
-  if (!(await intake.SenderWithinDailyQuota(auth.identity))) {
+  const reservation = await intake.ReserveDailyQuota(auth.identity);
+  if (!reservation) {
     res.status(429).json({ error: 'Daily diagnostic bundle quota exceeded.' });
     return;
   }
@@ -232,6 +232,8 @@ async function handleCreate(req: ExpressReq, res: ExpressRes): Promise<void> {
     res.status(201).json({ ...intake.InitiateBundleIntake(body as IntakeCreateBundleRequest, auth.identity) });
   } catch (err) {
     res.status(err instanceof IntakeCapacityError ? 429 : 400).json({ error: err instanceof Error ? err.message : String(err) });
+  } finally {
+    reservation.Release();
   }
 }
 
@@ -241,7 +243,7 @@ async function handlePayload(req: ExpressReq, res: ExpressRes): Promise<void> {
   const declared = intake.DeclaredPayloadSize(referenceId);
   const auth = await authenticate(req, res, () => Math.min(declared ?? MAX_JSON_BODY_BYTES, MAX_INTAKE_BUNDLE_BYTES));
   if (!auth) return;
-  if (!(await intake.SenderWithinDailyQuota(auth.identity))) {
+  if (!(await intake.SenderWithinDailyQuota(auth.identity, referenceId))) {
     res.status(429).json({ error: 'Daily diagnostic bundle quota exceeded.' });
     return;
   }

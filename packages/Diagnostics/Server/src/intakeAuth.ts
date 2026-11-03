@@ -1,5 +1,5 @@
 import { LogError } from '@memberjunction/core';
-import { SanitizeForLog, TrimTrailingSlashes } from '@memberjunction/global';
+import { SanitizeForLog, TrimTrailingSlashes, UUIDMap } from '@memberjunction/global';
 import {
   MJDIAG_MAX_CLOCK_SKEW_SECONDS,
   MJDiagSenderAssertion,
@@ -116,6 +116,50 @@ export class ReplayCache {
   }
 }
 
+/**
+ * Remembers install IDs that have no registration, for `ttlMs` (default 60 s). It holds at most
+ * `maxEntries` IDs (default 1,000) and drops the oldest when full. Only a miss is cached.
+ */
+export class UnknownInstallCache {
+  private readonly entries = new UUIDMap<number>();
+
+  public constructor(
+    private readonly ttlMs = 60_000,
+    private readonly maxEntries = 1_000,
+  ) {}
+
+  /** True when `installId` was recorded as unknown less than the TTL ago. */
+  public Has(installId: string, nowMs = Date.now()): boolean {
+    const expiresAt = this.entries.Get(installId);
+    if (expiresAt === undefined) return false;
+    if (expiresAt > nowMs) return true;
+    this.entries.Delete(installId);
+    return false;
+  }
+
+  public Remember(installId: string, nowMs = Date.now()): void {
+    this.entries.Delete(installId);
+    while (this.entries.Size >= this.maxEntries) {
+      const oldest = this.entries.Keys().next().value;
+      if (oldest === undefined) break;
+      this.entries.Delete(oldest);
+    }
+    this.entries.Set(installId, nowMs + this.ttlMs);
+  }
+
+  public Forget(installId: string): void {
+    this.entries.Delete(installId);
+  }
+
+  public Clear(): void {
+    this.entries.Clear();
+  }
+
+  public get Size(): number {
+    return this.entries.Size;
+  }
+}
+
 /** This collector's audience: the public URL of the intake base path, without a trailing slash. */
 export function IntakeAudience(): string {
   return TrimTrailingSlashes(GetDiagnosticsApiRoute()(INTAKE_BASE_SUBPATH, { absolute: true }));
@@ -138,17 +182,21 @@ function registrationFailure(registration: SenderRegistration | null, keyId: str
 /**
  * First step of authentication, done before the body is read: parses the `MJDiag-Ed25519` header,
  * finds the Active registration for the install and requires the header `keyId` to be the
- * registered key. Failures are logged with their reason.
+ * registered key. With `unknownInstalls`, an install in that cache is refused without a lookup,
+ * and an install with no registration is added to it. Failures are logged with their reason.
  */
 export async function ResolveSender(
   authorizationHeader: string | undefined,
   registry: ISenderRegistry,
-  data: IntakeDataContext | null
+  data: IntakeDataContext | null,
+  unknownInstalls?: UnknownInstallCache
 ): Promise<ResolvedSender | SenderAuthFailure> {
   if (!authorizationHeader) return fail('missing');
   const assertion = ParseSenderAuthorizationHeader(authorizationHeader);
   if (!assertion) return fail('malformed');
+  if (unknownInstalls?.Has(assertion.InstallID)) return fail('unknown-install', assertion.InstallID);
   const registration = await registry.Find(assertion.InstallID, data);
+  if (!registration) unknownInstalls?.Remember(assertion.InstallID);
   const regFailure = registrationFailure(registration, assertion.KeyID);
   if (regFailure || !registration) return fail(regFailure ?? 'unknown-install', assertion.InstallID);
   return { Ok: true, Assertion: assertion, Registration: registration };
@@ -196,10 +244,11 @@ export async function AuthenticateSender(
 
 /**
  * Returns true when the sender may start another bundle: `MaxBundlesPerDay` is 0 (no limit), or
- * fewer `Received` bundle rows than that exist for the sender in the last 24 hours. A sender with
- * a limit and no data context, or a failed count, is refused (fail closed).
+ * the `Received` bundle rows of the sender in the last 24 hours plus `pending` (bundles held in
+ * this process that have no row yet) are fewer than that. A sender with a limit and no data
+ * context, or a failed count, is refused (fail closed).
  */
-export async function SenderWithinDailyQuota(identity: SenderIdentity, data: IntakeDataContext | null): Promise<boolean> {
+export async function SenderWithinDailyQuota(identity: SenderIdentity, data: IntakeDataContext | null, pending = 0): Promise<boolean> {
   const limit = identity.Registration.MaxBundlesPerDay;
   if (!limit || limit <= 0) {
     return true;
@@ -208,7 +257,7 @@ export async function SenderWithinDailyQuota(identity: SenderIdentity, data: Int
     return false;
   }
   const count = await CountReceivedBundlesLastDay(identity.InstallID, data);
-  return count !== null && count < limit;
+  return count !== null && count + pending < limit;
 }
 
 /** Fixed-window counter per key. It holds at most `maxKeys` keys and drops the oldest when full. */

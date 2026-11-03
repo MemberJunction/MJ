@@ -1,5 +1,5 @@
 import * as crypto from 'node:crypto';
-import { BaseSingleton, SanitizeForLog, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, SanitizeForLog, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, LogError, Metadata, RunDetachedFromDiagnosticContext, UserInfo, WithoutDiagnosticCapture } from '@memberjunction/core';
 import { MJDiagnosticBundleEntity } from '@memberjunction/core-entities';
 import {
@@ -31,6 +31,7 @@ import {
   SenderWithinDailyQuota,
   SignedIntakeRequest,
   SignedRequestParts,
+  UnknownInstallCache,
   VerifyResolvedSender
 } from './intakeAuth.js';
 import { IntakeDataContext, SenderRegistry, TouchSenderLastSeen } from './senderRegistry.js';
@@ -100,6 +101,12 @@ export interface IntakeCompleteResponse {
   malwareScan?: MalwareScanResult;
   reasonCode?: string;
   reason?: string;
+}
+
+/** One daily-quota slot held while a create request runs. */
+export interface DailyQuotaReservation {
+  /** Gives the slot back. Calling it more than once has no effect. */
+  Release(): void;
 }
 
 /** The authenticated `(installId, keyId)` an intake record is bound to. */
@@ -224,6 +231,8 @@ export class DiagnosticIntakeService extends BaseSingleton<DiagnosticIntakeServi
   private _dataContext: IntakeDataContext | null = null;
   private _senderRegistry = new SenderRegistry();
   private _replayCache = new ReplayCache();
+  private _unknownInstalls = new UnknownInstallCache();
+  private _quotaHolds = new UUIDMap<number>();
   private _senderRequests = new RateCounter(60_000, 30);
   private _ipFailures = new RateCounter(60_000, 60);
   private _maxRecordsInMemory = 200;
@@ -261,6 +270,8 @@ export class DiagnosticIntakeService extends BaseSingleton<DiagnosticIntakeServi
     this._dataContext = null;
     this._senderRegistry.Clear();
     this._replayCache.Clear();
+    this._unknownInstalls.Clear();
+    this._quotaHolds.Clear();
     this._senderRequests.Clear();
     this._ipFailures.Clear();
     this._maxRecordsInMemory = 200;
@@ -352,6 +363,7 @@ export class DiagnosticIntakeService extends BaseSingleton<DiagnosticIntakeServi
    */
   public RegisterSenderPublicKey(installId: string, keyId: string, publicKeyBase64: string, maxBundlesPerDay = 0): void {
     this._senderRegistry.RegisterInMemory(installId, keyId, publicKeyBase64, maxBundlesPerDay);
+    this._unknownInstalls.Forget(installId);
   }
 
   public async EnsureDefaultKeyPair(keyId: string = 'mj-intake-default-v1'): Promise<DiagnosticKeyPair> {
@@ -390,9 +402,12 @@ export class DiagnosticIntakeService extends BaseSingleton<DiagnosticIntakeServi
     return AuthenticateSender(req, this._senderRegistry, this._replayCache, this._dataContext);
   }
 
-  /** Parses the Authorization header and finds the sender's registration, before any body is read. */
+  /**
+   * Parses the Authorization header and finds the sender's registration, before any body is read.
+   * An install found unknown is refused without a lookup for the next 60 s.
+   */
   public async ResolveSender(authorizationHeader: string | undefined): Promise<ResolvedSender | SenderAuthFailure> {
-    return ResolveSender(authorizationHeader, this._senderRegistry, this._dataContext);
+    return ResolveSender(authorizationHeader, this._senderRegistry, this._dataContext, this._unknownInstalls);
   }
 
   /** Verifies a resolved sender's signature over the request once the body is read. */
@@ -405,9 +420,59 @@ export class DiagnosticIntakeService extends BaseSingleton<DiagnosticIntakeServi
     return this._records.get(referenceId)?.request.sizeBytes;
   }
 
-  /** True when the sender has not used up its `MaxBundlesPerDay`. */
-  public async SenderWithinDailyQuota(identity: SenderIdentity): Promise<boolean> {
-    return SenderWithinDailyQuota(identity, this._dataContext);
+  /**
+   * True when the sender has not used up its `MaxBundlesPerDay`. Open records of the sender that
+   * have no bundle row yet count as used, except the record `referenceId`.
+   */
+  public async SenderWithinDailyQuota(identity: SenderIdentity, referenceId?: string): Promise<boolean> {
+    return SenderWithinDailyQuota(identity, this._dataContext, this.pendingBundleCount(identity.InstallID, referenceId));
+  }
+
+  /**
+   * Holds one daily-quota slot for the sender before the bundle count is read, so concurrent
+   * creates in this process cannot all pass the check. Open records without a bundle row and
+   * other held slots count as used. Returns null (and holds nothing) when the quota is used up.
+   * The caller releases the slot once the intake record exists or the request has failed.
+   * Creates on other collector processes are not counted.
+   */
+  public async ReserveDailyQuota(identity: SenderIdentity): Promise<DailyQuotaReservation | null> {
+    const installId = identity.InstallID;
+    const pending = this.pendingBundleCount(installId) + (this._quotaHolds.Get(installId) ?? 0);
+    this._quotaHolds.Set(installId, (this._quotaHolds.Get(installId) ?? 0) + 1);
+    const reservation = this.quotaReservation(installId);
+    try {
+      if (await SenderWithinDailyQuota(identity, this._dataContext, pending)) return reservation;
+    } catch (err) {
+      reservation.Release();
+      throw err;
+    }
+    reservation.Release();
+    return null;
+  }
+
+  private quotaReservation(installId: string): DailyQuotaReservation {
+    let released = false;
+    return {
+      Release: () => {
+        if (released) return;
+        released = true;
+        const left = (this._quotaHolds.Get(installId) ?? 1) - 1;
+        if (left > 0) this._quotaHolds.Set(installId, left);
+        else this._quotaHolds.Delete(installId);
+      }
+    };
+  }
+
+  /** Open (`Receiving` or `Quarantined`) records of the install that have no bundle row yet. */
+  private pendingBundleCount(installId: string, excludeReferenceId?: string): number {
+    let pending = 0;
+    for (const rec of this._records.values()) {
+      const open = rec.status === 'Receiving' || rec.status === 'Quarantined';
+      if (open && !rec.row && rec.referenceId !== excludeReferenceId && UUIDsEqual(rec.sender?.InstallID ?? rec.request.installId, installId)) {
+        pending++;
+      }
+    }
+    return pending;
   }
 
   /** Enrols a sender with a registration code. Refused when there is no data context or signing key. */
@@ -417,12 +482,14 @@ export class DiagnosticIntakeService extends BaseSingleton<DiagnosticIntakeServi
       return { Ok: false, Status: 401, Reason: 'enrolment is not configured' };
     }
     const descriptor = await this.GetPublicKeyDescriptor();
-    return EnrolSenderAtCollector(
+    const outcome = await EnrolSenderAtCollector(
       body,
       IntakeAudience(),
       { PublicKeyBase64: descriptor.publicKey, SigningPublicKeyBase64: this._signingKey.publicKeyBase64 },
       this._dataContext
     );
+    if (outcome.Ok) this._unknownInstalls.Forget(body.installId);
+    return outcome;
   }
 
   /** Counts one authenticated request for `callerKey`. Returns false when over the per-sender limit. */
