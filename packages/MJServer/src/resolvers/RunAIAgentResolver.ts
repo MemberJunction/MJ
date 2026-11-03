@@ -4,7 +4,7 @@ import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo,
 import { MJConversationDetailEntity, MJConversationDetailEntityExtended, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { RouteArtifact } from './artifact-routing.js';
 import { AgentRunner, ArtifactToolManager, CanAgentOwnSubAgentConsults, LoadOpenSubAgentConsults, HostAllowedAgentIDs } from '@memberjunction/ai-agents';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData, ContinuationAnnouncementText } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData, ContinuationAnnouncementText, BuildTaskGraphStartDebug } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -2000,10 +2000,11 @@ function parseAgentHistoryFrom(raw?: string | null): Date | undefined {
     return parsed;
 }
 
-function parseTaskGraphDebug(raw?: string): { paused?: boolean } | undefined {
+function parseTaskGraphDebug(raw?: string): { paused?: boolean; breakpointStepIDs?: string[] } | undefined {
     if (!raw) return undefined;
     const parsed: unknown = SafeJSONParse(raw);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
-    const paused = (parsed as { paused?: unknown }).paused;
-    return paused === true ? { paused: true } : undefined;
+    const request = parsed as { paused?: unknown; breakpointStepIDs?: unknown };
+    // Remembered breakpoints (#3798) travel as stable step IDs; Submit maps them to this run's task IDs.
+    return BuildTaskGraphStartDebug({ paused: request.paused === true, breakpointStepIDs: request.breakpointStepIDs });
 }

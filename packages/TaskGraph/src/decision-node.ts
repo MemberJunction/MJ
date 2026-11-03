@@ -45,6 +45,8 @@ export type TaskDecisionStepConfiguration = TaskGraphNodeConfigMap['Decision'] &
 export type TaskStepConfiguration = MJTaskEntity_ITaskStepConfiguration & {
     /** Pre-resolved ActionIDs by action name for multi-step loop bodies (`steps[]`), stamped at submit time. */
     stepActionIds?: Record<string, string>;
+    /** The step's spec `tempId`: stable across runs of the same workflow, unlike the task ID (#3798). */
+    stepId?: string;
     /** Settings for a Decision step. The decision prompt itself is `Task.PromptID`. */
     decision?: TaskDecisionStepConfiguration;
     /** Settings for an Agent step, extended with optional configuration preset name. */

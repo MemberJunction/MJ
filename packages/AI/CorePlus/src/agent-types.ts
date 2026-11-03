@@ -1680,7 +1680,7 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * `paused: true` is start-paused — nothing is claimed until Resume/Step.
      * Must travel with the submit; Pause-after-submit races the first dispatcher poll.
      */
-    taskGraphDebug?: { paused?: boolean };
+    taskGraphDebug?: { paused?: boolean; breakpointStepIDs?: string[] };
 
     /**
      * Skills the caller (typically an end user via a `/skill-name` mention in the composer)
