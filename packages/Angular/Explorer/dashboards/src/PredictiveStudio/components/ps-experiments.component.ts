@@ -18,6 +18,7 @@ import {
   DeriveLeaderboard,
   GroupIterationsToKanban,
   ParseSessionLeaderboard,
+  SessionSuccessMetric,
   type PSRankedScore,
   type PSStoredGate,
   ReadStoredGate,
@@ -454,7 +455,7 @@ export class PSExperimentsComponent implements OnInit {
   private storedRanking(): PSRankedScore[] {
     const session = this.Session;
     if (!session) return [];
-    return ParseSessionLeaderboard(session.Leaderboard, this.parsePlanSpec(session.PlanSpec)?.TargetDefinition?.SuccessMetric || '');
+    return ParseSessionLeaderboard(session.Leaderboard, SessionSuccessMetric(session.PlanSpec));
   }
 
   private parsePlanSpec(raw: string | null): ModelingPlanSpec | null {

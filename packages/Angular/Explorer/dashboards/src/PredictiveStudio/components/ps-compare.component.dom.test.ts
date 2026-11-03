@@ -36,11 +36,15 @@ const scoredRow = (id: string, score: number, algo: string): Row =>
     AlgorithmName: algo,
   } as unknown as Row);
 
-const makeEngine = (rowsBySession: Record<string, Row[]>) =>
+const makeEngine = (rowsBySession: Record<string, Row[]>, leaderboard: string | null = null, planSpec: string | null = null) =>
   ({
-    Sessions: Object.keys(rowsBySession).map((id) => ({ ID: id, Name: `Session ${id}` })),
+    Sessions: Object.keys(rowsBySession).map((id) => ({ ID: id, Name: `Session ${id}`, Leaderboard: leaderboard, PlanSpec: planSpec })),
     IterationRowsForSession: (id: string) => rowsBySession[id] ?? [],
   } as unknown as PredictiveStudioEngine);
+
+const rankingOf = (...ids: string[]) =>
+  JSON.stringify(ids.map((id, i) => ({ IterationID: id, Metric: -(2.5 + i), ScoreMetric: 'rmse', OnSuccessMetric: true })));
+const rmsePlan = JSON.stringify({ TargetDefinition: { SuccessMetric: 'RMSE' } });
 
 const render = (engine: PredictiveStudioEngine) => renderComponentFixture(PSCompareComponent, { inputs: { engine } });
 
@@ -53,14 +57,14 @@ describe('PSCompareComponent (DOM)', () => {
   });
 
   it('renders the session picker when a comparable session exists', () => {
-    const fixture = render(makeEngine({ s1: [scoredRow('i1', 0.9, 'XGBoost'), scoredRow('i2', 0.8, 'Ridge')] }));
+    const fixture = render(makeEngine({ s1: [scoredRow('i1', 0.9, 'XGBoost'), scoredRow('i2', 0.8, 'Ridge')] }, rankingOf('i1', 'i2'), rmsePlan));
     expect(query(fixture, '[data-testid="ps-compare-empty"]')).toBeNull();
     expect(query(fixture, '[data-testid="ps-compare-session"]')).not.toBeNull();
     expect(queryAll(fixture, '[data-testid="ps-compare-session"] option').length).toBe(1);
   });
 
   it('renders the side-by-side layout with a column per top run', () => {
-    const fixture = render(makeEngine({ s1: [scoredRow('i1', 0.9, 'XGBoost'), scoredRow('i2', 0.8, 'Ridge')] }));
+    const fixture = render(makeEngine({ s1: [scoredRow('i1', 0.9, 'XGBoost'), scoredRow('i2', 0.8, 'Ridge')] }, rankingOf('i1', 'i2'), rmsePlan));
     const layout = query(fixture, '[data-testid="ps-compare-layout-side"]');
     expect(layout).not.toBeNull();
     expect(layout?.textContent).toContain('XGBoost');
@@ -75,5 +79,18 @@ describe('PSCompareComponent (DOM)', () => {
       }),
     );
     expect(queryAll(fixture, '[data-testid="ps-compare-session"] option').length).toBe(1);
+  });
+
+  it('shows an RMSE run on its own scale, never as a negated score', () => {
+    const fixture = render(makeEngine({ s1: [scoredRow('i1', -2.5, 'XGBoost'), scoredRow('i2', -3.5, 'Ridge')] }, rankingOf('i1', 'i2'), rmsePlan));
+    const text = query(fixture, '[data-testid="ps-compare-layout-side"]')?.textContent ?? '';
+    expect(text).toContain('rmse 2.500');
+    expect(text).not.toContain('-2.500');
+    expect(fixture.nativeElement.textContent).toContain('leads on rmse at 2.500');
+  });
+
+  it('has no columns when the session has no stored ranking', () => {
+    const fixture = render(makeEngine({ s1: [scoredRow('i1', 0.9, 'XGBoost'), scoredRow('i2', 0.8, 'Ridge')] }));
+    expect(query(fixture, '[data-testid="ps-compare-layout-side"]')).toBeNull();
   });
 });

@@ -22,6 +22,7 @@ import {
   RelativeTime,
   ToDate,
   PSIterationRow,
+  PSRankedScore,
   PSModelRow,
   PSModelEventSource,
   PSProcessRunRow,
@@ -395,22 +396,25 @@ describe('relativeTime', () => {
 // compare
 // ---------------------------------------------------------------------------
 
+const rankedOn = (...entries: [string, number][]): PSRankedScore[] =>
+  entries.map(([IterationID, Metric]) => ({ IterationID, Metric, ScoreMetric: 'auc', OnSuccessMetric: true }));
+
 describe('deriveCompareColumns', () => {
-  it('ranks scored iterations desc, caps at maxRuns, flags best', () => {
+  it('follows the stored ranking order, caps at maxRuns, flags best', () => {
     const rows = [
       iteration({ ID: 'a', Status: 'Completed', Score: 0.8, AlgorithmName: 'XGBoost', ComputeCost: 10 }),
       iteration({ ID: 'b', Status: 'Completed', Score: 0.86, AlgorithmName: 'LightGBM', ComputeCost: 5 }),
       iteration({ ID: 'c', Status: 'Completed', Score: 0.7, AlgorithmName: 'RF', ComputeCost: 2 }),
       iteration({ ID: 'd', Status: 'Running', Score: null }),
     ];
-    const cols = DeriveCompareColumns(rows, 2);
+    const cols = DeriveCompareColumns(rows, rankedOn(['b', 0.86], ['a', 0.8], ['c', 0.7]), 2);
     expect(cols.length).toBe(2);
     expect(cols[0].holdoutAuc).toBe(0.86);
     expect(cols[0].isBest).toBe(true);
     expect(cols[0].label).toBe('Run 1');
   });
-  it('returns [] when nothing scored', () => {
-    expect(DeriveCompareColumns([iteration({ Status: 'Running', Score: null })])).toEqual([]);
+  it('returns [] when nothing is ranked', () => {
+    expect(DeriveCompareColumns([iteration({ Status: 'Running', Score: null })], [])).toEqual([]);
   });
 });
 
@@ -419,17 +423,17 @@ describe('buildCompareMetricRows', () => {
     const cols = DeriveCompareColumns([
       iteration({ ID: 'a', Status: 'Completed', Score: 0.86, ComputeCost: 10 }),
       iteration({ ID: 'b', Status: 'Completed', Score: 0.8, ComputeCost: 3 }),
-    ]);
+    ], rankedOn(['a', 0.86], ['b', 0.8]));
     const rows = BuildCompareMetricRows(cols);
     const auc = rows.find((r) => r.label === 'Holdout score')!;
     const cost = rows.find((r) => r.label === 'Compute cost')!;
-    expect(auc.Values).toEqual(['0.860', '0.800']);
-    expect(auc.BestIndex).toBe(0); // higher AUC
+    expect(auc.Values).toEqual(['auc 0.860', 'auc 0.800']);
+    expect(auc.BestIndex).toBe(0); // first column is on the success metric
     expect(cost.BestIndex).toBe(1); // lower cost
   });
 
   it('formats missing values as — and yields no best index', () => {
-    const cols = DeriveCompareColumns([iteration({ ID: 'a', Status: 'Completed', Score: 0.8, ComputeCost: null })]);
+    const cols = DeriveCompareColumns([iteration({ ID: 'a', Status: 'Completed', Score: 0.8, ComputeCost: null })], rankedOn(['a', 0.8]));
     const rows = BuildCompareMetricRows(cols);
     expect(rows.find((r) => r.label === 'Compute cost')!.Values).toEqual(['—']);
     expect(rows.find((r) => r.label === 'Compute cost')!.BestIndex).toBe(-1);

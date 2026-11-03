@@ -1,12 +1,15 @@
 import { Component, Input, OnInit, ViewEncapsulation } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { UUIDsEqual } from '@memberjunction/global';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import {
   PSCompareColumn,
   PSCompareMetricRow,
   BuildCompareMetricRows,
   DeriveCompareColumns,
+  ParseSessionLeaderboard,
+  SessionSuccessMetric,
 } from '../predictive-studio.view-models';
 
 /** A selectable session option for the compare picker. */
@@ -166,8 +169,10 @@ export class PSCompareComponent implements OnInit {
       this.MetricRows = [];
       return;
     }
+    const session = this.engine.Sessions.find((s) => UUIDsEqual(s.ID, this.SelectedSessionId));
+    const ranked = session ? ParseSessionLeaderboard(session.Leaderboard, SessionSuccessMetric(session.PlanSpec)) : [];
     const rows = this.engine.IterationRowsForSession(this.SelectedSessionId);
-    this.Runs = DeriveCompareColumns(rows, 3);
+    this.Runs = DeriveCompareColumns(rows, ranked, 3);
     this.MetricRows = BuildCompareMetricRows(this.Runs);
   }
 
@@ -189,8 +194,8 @@ export class PSCompareComponent implements OnInit {
   /** A plain-language verdict naming the best run by holdout score. */
   public get Verdict(): string {
     const best = this.Runs.find((r) => r.isBest);
-    if (!best || best.holdoutAuc == null) return 'Pick the run that wins on the holdout score — the honest out-of-sample number.';
-    return `${best.label} (${best.algorithm}) leads on the holdout score at ${best.holdoutAuc.toFixed(3)} — prefer the holdout number over training metrics when promoting.`;
+    if (!best || best.holdoutAuc == null) return 'Compare the runs on the holdout score — the honest out-of-sample number.';
+    return `${best.label} (${best.algorithm}) leads on ${best.ScoreMetric} at ${best.holdoutAuc.toFixed(3)} — prefer the holdout number over training metrics when promoting.`;
   }
 
   /** @deprecated Use {@link Verdict}. */

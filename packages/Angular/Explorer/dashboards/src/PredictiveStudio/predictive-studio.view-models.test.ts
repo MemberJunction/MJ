@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  DeriveLeaderboard, FormatMetricValue, GroupIterationsToKanban, ParseMetrics, ParseSessionLeaderboard, PrimaryModelScore,
+  BuildCompareMetricRows, DeriveCompareColumns, SessionSuccessMetric, DeriveLeaderboard, FormatMetricValue, GroupIterationsToKanban, ParseMetrics, ParseSessionLeaderboard, PrimaryModelScore,
   ReadStoredGate, ScoreOnMetric,
   type PSIterationRow,
 } from './predictive-studio.view-models';
@@ -116,5 +116,57 @@ describe('ScoreOnMetric', () => {
   });
   it('keeps a higher-is-better metric as stored', () => {
     expect(ScoreOnMetric({ IterationID: 'i', Metric: 0.81, ScoreMetric: 'auc', OnSuccessMetric: true })).toEqual({ Value: 0.81, Label: 'auc' });
+  });
+});
+
+/**
+ * The Compare panel columns follow the session's stored ranking and show each run on its own metric's scale: never a raw
+ * negated score, and a fallback-metric run is never ranked against a primary-metric run.
+ */
+describe('the compare columns over the stored session ranking', () => {
+  const row = (ID: string, Score: number | null, AlgorithmName: string, Sequence = 1): PSIterationRow =>
+    ({ ID, ExperimentSessionID: 's1', Sequence, Label: null, Status: 'Completed', Score, ComputeCost: 1, TokensUsed: null, Rationale: null, AlgorithmName });
+  const entry = (IterationID: string, Metric: number, ScoreMetric: string, OnSuccessMetric: boolean) => ({ IterationID, Metric, ScoreMetric, OnSuccessMetric });
+
+  it('shows a lower-is-better run un-negated, labelled with its metric', () => {
+    const cols = DeriveCompareColumns([row('a', -2.5, 'XGBoost'), row('b', -3, 'Ridge')], [entry('a', -2.5, 'rmse', true), entry('b', -3, 'rmse', true)]);
+    expect(cols[0].holdoutAuc).toBe(2.5);
+    expect(cols[0].ScoreMetric).toBe('rmse');
+    expect(BuildCompareMetricRows(cols)[0].Values[0]).toBe('rmse 2.500');
+  });
+
+  it('keeps a fallback-metric run after every primary-metric run and never crowns it', () => {
+    const rows = [row('a', -0.2, 'GLM'), row('b', -0.3, 'XGBoost')];
+    const cols = DeriveCompareColumns(rows, [entry('b', -0.3, 'r2', true), entry('a', -0.2, 'rmse', false)]);
+    expect(cols.map((c) => c.key)).toEqual(['b', 'a']);
+    expect(cols.map((c) => c.isBest)).toEqual([true, false]);
+    expect(BuildCompareMetricRows(cols)[0].BestIndex).toBe(0);
+  });
+
+  it('labels a closer-to-one metric by its distance from 1', () => {
+    const cols = DeriveCompareColumns([row('a', -0.1, 'GLM')], [entry('a', -0.1, 'calibration-slope', true)]);
+    expect(cols[0].ScoreMetric.endsWith('distance from 1')).toBe(true);
+  });
+
+  it('has no columns without a stored ranking, even when iterations carry a raw score', () => {
+    expect(DeriveCompareColumns([row('a', 0.9, 'XGBoost'), row('b', 0.8, 'Ridge')], [])).toEqual([]);
+  });
+
+  it('leaves out an iteration the ranking does not name, and caps at maxRuns', () => {
+    const cols = DeriveCompareColumns([row('a', 0.9, 'X'), row('b', 0.8, 'Y'), row('c', 0.7, 'Z')], [entry('c', 0.7, 'auc', true), entry('a', 0.9, 'auc', true)], 1);
+    expect(cols.map((c) => c.key)).toEqual(['c']);
+  });
+
+  it('has no best index when no column is on the success metric', () => {
+    const cols = DeriveCompareColumns([row('a', -0.2, 'GLM')], [entry('a', -0.2, 'rmse', false)]);
+    expect(cols[0].isBest).toBe(false);
+    expect(BuildCompareMetricRows(cols)[0].BestIndex).toBe(-1);
+  });
+});
+
+describe('SessionSuccessMetric', () => {
+  it('reads the plan success metric, or an empty string when the plan is absent or unreadable', () => {
+    expect(SessionSuccessMetric(JSON.stringify({ TargetDefinition: { SuccessMetric: 'RMSE' } }))).toBe('RMSE');
+    expect([SessionSuccessMetric(null), SessionSuccessMetric('not json'), SessionSuccessMetric('{}')]).toEqual(['', '', '']);
   });
 });

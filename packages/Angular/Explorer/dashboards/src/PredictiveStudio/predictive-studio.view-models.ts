@@ -18,7 +18,7 @@
  */
 
 import { IndexByUUID, UUIDsEqual } from '@memberjunction/global';
-import { JsonParse, MetricDirections, TrainingRunResultsParser, type GateOutcome } from '@memberjunction/predictive-studio-core';
+import { JsonParse, MetricDirections, TrainingRunResultsParser, type GateOutcome, type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import { PSFeatureBar, PSIterationCard, PSLeaderboardEntry } from './predictive-studio.types';
 
 // ---------------------------------------------------------------------------
@@ -782,35 +782,60 @@ export interface PSCompareColumn {
   computeCost: number | null;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
   status: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   isBest: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  /** The metric `holdoutAuc` is on, labelled as `ScoreOnMetric` labels it. */
+  ScoreMetric: string;
+  /** True when the run is scored on the plan's success metric; only such a run can be the best. */
+  OnSuccessMetric: boolean;
+}
+
+/** The plan's success metric from a session's `PlanSpec` JSON, or an empty string when the plan is absent or unreadable. */
+export function SessionSuccessMetric(planSpecJson: string | null): string {
+  if (!planSpecJson) return '';
+  try {
+    const plan = JSON.parse(planSpecJson) as ModelingPlanSpec | null;
+    return plan?.TargetDefinition?.SuccessMetric || '';
+  } catch {
+    return '';
+  }
 }
 
 /**
- * Derive Compare-panel run columns from a session's iterations: the scored iterations ranked by score
- * descending, capped at `maxRuns`, each carrying its holdout score, compute cost, and algorithm chip.
- * The top scorer is flagged `isBest`. Returns `[]` when nothing scored — the panel shows its prompt
- * state.
+ * Derive Compare-panel run columns from the session's stored ranking (see {@link ParseSessionLeaderboard}): the ranked
+ * iterations in ranking order, capped at `maxRuns`, each carrying its score on its own metric's scale, compute cost and
+ * algorithm chip. Primary-metric entries come before fallback entries, and only a primary-metric top run is flagged
+ * `isBest`. An iteration the ranking does not name is left out; with no stored ranking the result is `[]` and the panel
+ * shows its prompt state.
  *
  * @param iterations The session's iterations.
+ * @param ranked The session's stored ranking, best first.
  * @param maxRuns Maximum run columns to compare (default 3).
  */
-export function DeriveCompareColumns(iterations: PSIterationRow[], maxRuns = 3): PSCompareColumn[] {
-  const scored = iterations.filter((it) => it.Score != null);
-  scored.sort((a, b) => (b.Score as number) - (a.Score as number));
-  return scored.slice(0, maxRuns).map((it, idx) => {
-    const algo = it.AlgorithmName ?? 'Unknown';
-    const style = algoStyle(algo);
-    return {
-      key: it.ID,
-      label: `Run ${idx + 1}`,
-      algorithm: algo,
-      descriptor: it.Label ?? `iteration ${it.Sequence}`,
-      color: style.color,
-      holdoutAuc: it.Score,
-      computeCost: it.ComputeCost,
-      status: it.Status,
-      isBest: idx === 0,
-    };
-  });
+export function DeriveCompareColumns(iterations: PSIterationRow[], ranked: readonly PSRankedScore[], maxRuns = 3): PSCompareColumn[] {
+  const byId = IndexByUUID(iterations, (it) => it.ID);
+  return ranked
+    .flatMap((entry) => {
+      const it = byId.Get(entry.IterationID);
+      return it === undefined ? [] : [{ it, entry }];
+    })
+    .slice(0, maxRuns)
+    .map(({ it, entry }, idx): PSCompareColumn => {
+      const algo = it.AlgorithmName ?? 'Unknown';
+      const style = algoStyle(algo);
+      const score = ScoreOnMetric(entry);
+      return {
+        key: it.ID,
+        label: `Run ${idx + 1}`,
+        algorithm: algo,
+        descriptor: it.Label ?? `iteration ${it.Sequence}`,
+        color: style.color,
+        holdoutAuc: score.Value,
+        computeCost: it.ComputeCost,
+        status: it.Status,
+        isBest: idx === 0 && entry.OnSuccessMetric,
+        ScoreMetric: score.Label,
+        OnSuccessMetric: entry.OnSuccessMetric,
+      };
+    });
 }
 
 /** A compare metric row (label + per-run formatted values + which column is best). */
@@ -828,14 +853,13 @@ export interface PSCompareMetricRow {
  */
 export function BuildCompareMetricRows(columns: PSCompareColumn[]): PSCompareMetricRow[] {
   if (columns.length === 0) return [];
-  const aucs = columns.map((c) => c.holdoutAuc);
   const costs = columns.map((c) => c.computeCost);
   return [
     {
       label: 'Holdout score',
-      Qualifier: 'the honest number · higher is better',
-      Values: aucs.map((v) => (v == null ? '—' : v.toFixed(3))),
-      BestIndex: indexOfExtreme(aucs, 'max'),
+      Qualifier: 'the honest number · on each run\'s own metric',
+      Values: columns.map((c) => (c.holdoutAuc == null ? '—' : `${c.ScoreMetric} ${c.holdoutAuc.toFixed(3)}`)),
+      BestIndex: columns.findIndex((c) => c.OnSuccessMetric),
     },
     {
       label: 'Compute cost',
