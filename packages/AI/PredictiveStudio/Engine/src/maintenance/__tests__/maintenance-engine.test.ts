@@ -530,6 +530,17 @@ describe('MaintenanceEngine.TriggerRetrainIfStale + CompareChallenger', () => {
     ]);
   });
 
+  it('ranks a pinned roc_auc, a stored higher-is-better spelling, instead of holding on it', () => {
+    const policy: RetrainingPolicy = { ...DEFAULT_RETRAINING_POLICY, comparisonMetric: 'roc_auc', promotionMargin: 0.01 };
+    const model = (id: string, value: number) => {
+      const m = new FakeModel(id);
+      m.HoldoutMetrics = JSON.stringify({ roc_auc: value });
+      return asModel(m);
+    };
+    expect([engine.CompareChallenger(model('m1', 0.8), model('m2', 0.85), policy).recommendation, engine.CompareChallenger(model('m3', 0.85), model('m4', 0.8), policy).recommendation])
+      .toEqual(['promote', 'hold']);
+  });
+
   it('compareChallenger never mutates the models / performs no promotion (pure recommendation)', () => {
     const incumbent = new FakeModel('m1');
     incumbent.HoldoutMetrics = JSON.stringify({ roc_auc: 0.7 });
@@ -670,9 +681,9 @@ describe('maintenance metric helpers', () => {
 
   it('ResolveComparisonMetric auto skips closer-to-one and unknown keys', () => {
     const inc = new FakeModel('m1');
-    inc.HoldoutMetrics = JSON.stringify({ 'calibration-slope': 0.9, explained_variance: 0.5, brier: 0.2 });
+    inc.HoldoutMetrics = JSON.stringify({ 'calibration-slope': 0.9, mystery: 0.5, brier: 0.2 });
     const ch = new FakeModel('m2');
-    ch.HoldoutMetrics = JSON.stringify({ 'calibration-slope': 1.0, explained_variance: 0.6, brier: 0.18 });
+    ch.HoldoutMetrics = JSON.stringify({ 'calibration-slope': 1.0, mystery: 0.6, brier: 0.18 });
     expect(ResolveComparisonMetric('auto', asModel(inc), asModel(ch))).toBe('brier');
   });
 

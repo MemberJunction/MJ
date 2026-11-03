@@ -7,7 +7,7 @@
  *
  * Direction matters in two places that must agree: the experiment leaderboard normalisation and the maintenance
  * challenger-vs-incumbent comparison. Deriving the lower-is-better set from `METRIC_DIRECTION` (plus the legacy
- * spellings stored by the earlier trainer) keeps them from drifting, so a Brier score or a deviance can never be
+ * spellings stored by the earlier trainer, lower- and higher-is-better) keeps them from drifting, so a Brier score or a deviance can never be
  * ranked backwards.
  */
 import { METRIC_DIRECTION, type MetricDirection, type MetricKey } from './evaluation-protocol';
@@ -17,6 +17,16 @@ const LEGACY_LOWER_IS_BETTER: readonly string[] = [
   'mse', 'loss', 'logloss', 'log_loss', 'brier_score', 'brier_score_loss', 'multiclass_log_loss',
   'poisson_deviance', 'tweedie_deviance', 'mape', 'smape', 'pinball', 'pinball_loss',
 ];
+
+/**
+ * Higher-is-better spellings stored results carry beside the canonical keys: the maintenance comparison's 'auto'
+ * defaults (`roc_auc`, `explained_variance`) and the aliases the dashboards and the TruthSuite read from HoldoutMetrics.
+ * Not listed, so of unknown direction: values that are not a model's score (`n`, `n_positive`, `predicted_classes`,
+ * `baseline_accuracy`, the majority guess's accuracy).
+ */
+const LEGACY_HIGHER_IS_BETTER: readonly string[] = ['roc_auc', 'rocauc', 'explained_variance', 'acc', 'f1_score', 'f1score', 'r_squared'];
+
+const HIGHER_IS_BETTER_SPELLINGS: ReadonlySet<string> = new Set(LEGACY_HIGHER_IS_BETTER);
 
 function isMetricKey(k: string): k is MetricKey {
   return Object.prototype.hasOwnProperty.call(METRIC_DIRECTION, k);
@@ -85,6 +95,7 @@ export class MetricDirections {
   public static MetricDirectionOf(metricKey: string): MetricDirection | null {
     const k = metricKey.trim().toLowerCase();
     if (isMetricKey(k)) return METRIC_DIRECTION[k];
-    return ERROR_METRIC_KEYS.has(k) ? 'lower-is-better' : null;
+    if (ERROR_METRIC_KEYS.has(k)) return 'lower-is-better';
+    return HIGHER_IS_BETTER_SPELLINGS.has(k) ? 'higher-is-better' : null;
   }
 }

@@ -363,11 +363,9 @@ export class MaintenanceEngine {
    * The difference of the two normalized scores (`MetricDirections.NormalizedScore`,
    * the leaderboard's orientation): for error metrics incumbent − challenger, for
    * higher-is-better metrics challenger − incumbent, for a closer-to-one metric
-   * (calibration slope) |1 − incumbent| − |1 − challenger|. A metric whose direction
-   * is not declared reads as higher-is-better here; only 'auto' reaches this with one,
-   * and only for its declared higher-is-better defaults (the earlier sidecar's
-   * `roc_auc`, `explained_variance`). A pinned metric of unknown direction never
-   * gets here: CompareChallenger holds on it.
+   * (calibration slope) |1 − incumbent| − |1 − challenger|. Null too for a metric of
+   * unknown direction, which is never ranked (CompareChallenger holds on a pinned one,
+   * and 'auto' picks only keys of known direction).
    */
   private metricImprovement(metric: string, incumbentValue: number | null, challengerValue: number | null): number | null {
     if ((incumbentValue === null || incumbentValue === undefined) || (challengerValue === null || challengerValue === undefined)) {
@@ -375,7 +373,7 @@ export class MaintenanceEngine {
     }
     const challenger = MetricDirections.NormalizedScore(challengerValue, metric);
     const incumbent = MetricDirections.NormalizedScore(incumbentValue, metric);
-    return challenger === null || incumbent === null ? challengerValue - incumbentValue : challenger - incumbent;
+    return challenger === null || incumbent === null ? null : challenger - incumbent;
   }
 
   /** Decide promote-vs-hold from the directional improvement + margin (hold when unknown). */

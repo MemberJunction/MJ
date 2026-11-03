@@ -28,8 +28,17 @@ describe('metric direction', () => {
     expect(MetricDirections.MetricDirectionOf(' Calibration-Slope ')).toBe('closer-to-one');
   });
 
-  it('returns null for an unknown key rather than guessing', () => {
-    expect(MetricDirections.MetricDirectionOf('explained_variance')).toBeNull();
+  it('treats the stored higher-is-better spellings as higher-is-better: roc_auc, explained_variance and the aliases results carry', () => {
+    const keys = ['roc_auc', 'rocauc', 'explained_variance', 'acc', 'f1_score', 'f1score', 'r_squared'];
+    expect(keys.map((m) => [m, MetricDirections.MetricDirectionOf(m), MetricDirections.NormalizedScore(0.8, m)]))
+      .toEqual(keys.map((m) => [m, 'higher-is-better', 0.8]));
+  });
+
+  it('returns null for a key that is not a model score, or not known, rather than guessing', () => {
+    // The earlier sidecar stored label counts and the majority-guess rate beside the scores (n, n_positive,
+    // predicted_classes, baseline_accuracy): none ranks one model against another.
+    expect(['n', 'n_positive', 'predicted_classes', 'baseline_accuracy', 'rmsle'].map((m) => MetricDirections.MetricDirectionOf(m)))
+      .toEqual([null, null, null, null, null]);
   });
 });
 
