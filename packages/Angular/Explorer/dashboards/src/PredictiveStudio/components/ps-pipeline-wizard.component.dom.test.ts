@@ -24,7 +24,11 @@ try {
  * so no unit or protocol is written.
  */
 
-const field = (Name: string, Type: string): EntityFieldInfo => Object.assign(Object.create(null), { Name, Type, AllowsNull: true });
+/** The TS type MJ metadata gives each SQL type the fixtures use (EntityFieldInfo.TSType). */
+const TS_TYPES: Record<string, 'string' | 'number' | 'boolean'> = { int: 'number', decimal: 'number', real: 'number', bit: 'boolean' };
+
+const field = (Name: string, Type: string, IsPrimaryKey = false): EntityFieldInfo =>
+  Object.assign(Object.create(null), { Name, Type, TSType: TS_TYPES[Type] || 'string', IsPrimaryKey, AllowsNull: true });
 
 const ENTITY: EntityInfo = Object.assign(Object.create(null), {
   ID: 'E1', Name: 'Members', BaseView: 'vwMembers', VirtualEntity: false, AllowUserSearchAPI: true,
@@ -261,6 +265,21 @@ describe('PSPipelineWizardComponent (DOM) — every control round-trips', () => 
     if (age) age.selected = false;
     await c.SaveDraft();
     expect(steps(captured.Saved[0]).filter((st) => st.Kind === 'impute').map((st) => st.Kind === 'impute' ? [st.Column, st.Strategy] : null)).toEqual([['Tenure', 'median'], ['Spend', 'median']]);
+  });
+
+  it('imputes the columns the trainer types as numeric (TSType number, not a primary key): a real column yes, a numeric key no', async () => {
+    vi.spyOn(PipelineWizardBindings, 'ReadClassLabels').mockResolvedValue(['A', 'B', 'C']);
+    const captured = captureSave();
+    const scored: EntityInfo = Object.assign(Object.create(null), {
+      ID: 'S1', Name: 'Scored Members', BaseView: 'vwScored', VirtualEntity: false, AllowUserSearchAPI: true,
+      Fields: [field('MemberNo', 'int', true), field('Score', 'real'), field('Tenure', 'int'), field('Segment', 'nvarchar')],
+    });
+    const fixture = saveable();
+    const provider = fixture.componentInstance.provider;
+    if (provider) Object.assign(provider, { Entities: [scored] });
+    await goalStep(fixture, 'Segment', 'S1');
+    await fixture.componentInstance.SaveDraft();
+    expect(steps(captured.Saved[0]).filter((st) => st.Kind === 'impute').map((st) => st.Kind === 'impute' ? st.Column : null)).toEqual(['Score', 'Tenure']);
   });
 
   it('offers no encoding or scaling choice, and says the trainer standardizes numerics and one-hot encodes text every time', async () => {

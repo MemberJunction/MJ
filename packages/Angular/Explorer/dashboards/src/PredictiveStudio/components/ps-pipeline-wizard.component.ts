@@ -930,14 +930,13 @@ export class PSPipelineWizardComponent implements OnInit {
     if (typeof threshold === 'number') this.DominanceThreshold = threshold;
   }
 
-  /** The selected feature columns the trainer treats as numeric. */
+  /**
+   * The selected feature columns the trainer encodes as numeric, by its own rule (Engine `FeatureResolver.EncodingFor`
+   * with no declared encoding): `TSType` number and not a primary key. The wizard declares no encodings.
+   */
   private selectedNumericColumns(): string[] {
     return this.FieldItems
-      .filter((i) => i.selected && !i.isDenyList && !i.isTarget)
-      .filter((i) => {
-        const t = i.field.Type?.toLowerCase() ?? '';
-        return t.includes('int') || t.includes('decimal') || t.includes('float') || t.includes('money') || t.includes('numeric');
-      })
+      .filter((i) => i.selected && !i.isDenyList && !i.isTarget && i.field.TSType === 'number' && !i.field.IsPrimaryKey)
       .map((i) => i.field.Name);
   }
 
