@@ -24,7 +24,8 @@ import type {
     GraphNodeCategory,
     GraphCategoryConfig,
     GraphViewportTransform,
-    GraphPhysicsConfig
+    GraphPhysicsConfig,
+    GraphGroundingItem
 } from '../models/graph-models';
 import {
     BeforeNodeSelectEventArgs,
@@ -37,16 +38,27 @@ import {
     LayoutChangedEventArgs,
     BeforeNodeNavigateEventArgs,
     NodeNavigatedEventArgs,
-    ViewportTransformEventArgs
+    ViewportTransformEventArgs,
+    BeforeNodeActionEventArgs,
+    NodeActionEventArgs,
+    GraphNodeActionKind
 } from '../events/graph-events';
 
 export const DEFAULT_GRAPH_CATEGORIES: GraphCategoryConfig[] = [
+    { Category: 'Policy', Label: 'Policy', Color: '#f43f5e', IconClass: 'fa-solid fa-gavel', Rank: 10 },
+    { Category: 'Metric', Label: 'Metric', Color: '#10b981', IconClass: 'fa-solid fa-chart-line', Rank: 20 },
+    { Category: 'Process', Label: 'Process', Color: '#8b5cf6', IconClass: 'fa-solid fa-gears', Rank: 30 },
+    { Category: 'Role', Label: 'Role', Color: '#f59e0b', IconClass: 'fa-solid fa-user-shield', Rank: 40 },
+    { Category: 'Domain', Label: 'Domain', Color: '#3b82f6', IconClass: 'fa-solid fa-layer-group', Rank: 50 },
+    { Category: 'Term', Label: 'Term', Color: '#06b6d4', IconClass: 'fa-solid fa-book-bookmark', Rank: 60 },
     { Category: 'person', Label: 'Person', Color: '#10b981', IconClass: 'fa-solid fa-user' },
     { Category: 'organization', Label: 'Organization', Color: '#38bdf8', IconClass: 'fa-solid fa-building' },
     { Category: 'committee', Label: 'Committee', Color: '#8b5cf6', IconClass: 'fa-solid fa-landmark' },
     { Category: 'account', Label: 'Holding / Account', Color: '#f59e0b', IconClass: 'fa-solid fa-building-flag' },
     { Category: 'asset', Label: 'Asset', Color: '#ec4899', IconClass: 'fa-solid fa-gem' },
     { Category: 'group', Label: 'Group', Color: '#06b6d4', IconClass: 'fa-solid fa-users' },
+    { Category: 'grounding', Label: 'Grounded Primitive', Color: '#14b8a6', IconClass: 'fa-solid fa-bolt' },
+    { Category: 'chunk', Label: 'Source Chunk', Color: '#64748b', IconClass: 'fa-solid fa-file-lines' },
     { Category: 'custom', Label: 'Custom', Color: '#64748b', IconClass: 'fa-solid fa-circle-nodes' }
 ];
 
@@ -174,12 +186,37 @@ const GRAPH_VIEW_CSS = `
     display: flex;
     align-items: center;
     gap: 6px;
+    cursor: pointer;
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+    background: transparent;
+    color: var(--mj-text-secondary, #94a3b8);
+    font-size: 11.5px;
+}
+
+.mj-graph-legend-item:hover {
+    background: var(--mj-bg-surface-elevated, #1a2744);
+    color: var(--mj-text-primary, #f8fafc);
+}
+
+.mj-graph-legend-item.is-active-filter {
+    background: var(--mj-bg-surface-elevated, #1a2744);
+    border-color: var(--mj-brand-primary, #38bdf8);
+    color: var(--mj-text-primary, #f8fafc);
+    font-weight: 600;
+}
+
+.mj-graph-legend-item.is-dimmed {
+    opacity: 0.42;
 }
 
 .mj-graph-legend-dot {
     width: 10px;
     height: 10px;
     border-radius: 50%;
+    flex-shrink: 0;
 }
 
 /* Inspector Drawer */
@@ -187,9 +224,9 @@ const GRAPH_VIEW_CSS = `
     position: absolute;
     top: 14px;
     right: 14px;
-    width: 300px;
+    width: 340px;
     max-height: calc(100% - 28px);
-    background: rgba(20, 31, 54, 0.95);
+    background: rgba(20, 31, 54, 0.96);
     backdrop-filter: blur(14px);
     border: 1px solid var(--mj-border-default, #223254);
     border-radius: var(--mj-radius-lg, 12px);
@@ -248,6 +285,55 @@ const GRAPH_VIEW_CSS = `
     flex-shrink: 0;
 }
 
+.mj-graph-inspector-section {
+    background: var(--mj-bg-surface, #111a2e);
+    border: 1px solid var(--mj-border-default, #223254);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 11.5px;
+    color: var(--mj-text-primary, #f8fafc);
+}
+
+.mj-graph-inspector-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--mj-text-muted, #64748b);
+    margin-bottom: 6px;
+    display: block;
+}
+
+.mj-graph-conflict-box {
+    background: rgba(244, 63, 94, 0.12);
+    border: 1px solid rgba(244, 63, 94, 0.4);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 11.5px;
+    color: var(--mj-text-primary, #f8fafc);
+}
+
+.mj-graph-grounding-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: var(--mj-bg-surface-sunken, #090e1a);
+    border: 1px solid var(--mj-border-default, #223254);
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+    width: 100%;
+    text-align: left;
+    color: var(--mj-text-primary, #f8fafc);
+    font-size: 11px;
+}
+
+.mj-graph-grounding-item:hover {
+    border-color: #10b981;
+}
+
 .mj-graph-inspector-actions {
     display: flex;
     flex-direction: column;
@@ -266,6 +352,14 @@ const GRAPH_VIEW_CSS = `
 .mj-edge-path.is-highlighted {
     stroke: var(--mj-brand-primary, #38bdf8);
     stroke-width: 3;
+}
+
+@keyframes mjEdgeDashFlow {
+    to { stroke-dashoffset: -24; }
+}
+
+.mj-edge-animated {
+    animation: mjEdgeDashFlow 1.2s linear infinite;
 }
 
 .mj-edge-text {
@@ -294,6 +388,15 @@ const GRAPH_VIEW_CSS = `
     transition: all 0.2s ease;
 }
 
+.mj-node-glyph {
+    font-size: 11px;
+    font-weight: 700;
+    fill: #ffffff;
+    text-anchor: middle;
+    dominant-baseline: central;
+    pointer-events: none;
+}
+
 .mj-node-label {
     font-size: 11px;
     font-weight: 700;
@@ -317,10 +420,11 @@ const GRAPH_VIEW_CSS = `
 `;
 
 /**
- * `<mj-graph-view>` — Interactive network and entity relationship graph visualization.
+ * `<mj-graph-view>` — Interactive network, entity relationship, and Semantic/Canon graph visualization.
  *
- * Supports force-directed dynamic layout, multi-category entity badges, hop-expansion,
- * zoom/pan controls, inspector drawer, search filters, and cancelable Before/After event pairs.
+ * Supports force-directed, hierarchical, circular, and grid layouts, ranked concept categories,
+ * hop-expansion, zoom/pan controls, Canon & Provenance inspector drawer, search filters,
+ * and cancelable Before/After event pairs.
  */
 @Component({
     selector: 'mj-graph-view',
@@ -334,7 +438,7 @@ const GRAPH_VIEW_CSS = `
                 <div class="mj-graph-toolbar">
                     <span style="font-size: 12px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 6px;">
                         <i class="fa-solid fa-circle-nodes" style="color: var(--mj-brand-primary);"></i>
-                        Network Graph
+                        {{ Title || 'Network Graph' }}
                     </span>
 
                     <div class="mj-graph-separator"></div>
@@ -347,6 +451,14 @@ const GRAPH_VIEW_CSS = `
                         (click)="SetLayoutMode('force')"
                         title="Force-Directed Physics">
                         <i class="fa-solid fa-atom"></i> Force
+                    </button>
+                    <button
+                        type="button"
+                        class="mj-graph-tool-btn"
+                        [class.active]="LayoutMode === 'hierarchy'"
+                        (click)="SetLayoutMode('hierarchy')"
+                        title="Hierarchical Concept Tree">
+                        <i class="fa-solid fa-sitemap"></i> Hierarchy
                     </button>
                     <button
                         type="button"
@@ -373,6 +485,21 @@ const GRAPH_VIEW_CSS = `
                         <i class="fa-solid fa-arrows-rotate"></i>
                     </button>
 
+                    @if (ConflictCount > 0 || ProposedCount > 0) {
+                        <div class="mj-graph-separator"></div>
+                        @if (ConflictCount > 0) {
+                            <span style="font-size: 11px; font-weight: 600; color: #fb7185; display: flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 9999px; background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.35);">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                                {{ ConflictCount }} {{ ConflictCount === 1 ? 'Conflict' : 'Conflicts' }}
+                            </span>
+                        }
+                        @if (ProposedCount > 0) {
+                            <span style="font-size: 11px; font-weight: 600; color: #fbbf24; display: flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 9999px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35);">
+                                ● {{ ProposedCount }} Proposed
+                            </span>
+                        }
+                    }
+
                     @if (Searchable) {
                         <div class="mj-graph-separator"></div>
                         <div style="position: relative;">
@@ -387,14 +514,32 @@ const GRAPH_VIEW_CSS = `
                 </div>
             }
 
-            <!-- 2. Floating Dynamic Category Legend -->
+            <!-- 2. Floating Dynamic Category Legend (Interactive Filter Pills) -->
             @if (ShowLegend && ActiveCategories.length > 0) {
                 <div class="mj-graph-legend">
                     @for (cat of ActiveCategories; track cat.Category) {
-                        <div class="mj-graph-legend-item">
+                        <button
+                            type="button"
+                            class="mj-graph-legend-item"
+                            [class.is-active-filter]="IsCategoryFilterActive(cat.Category)"
+                            [class.is-dimmed]="ActiveCategoryFilter && !IsCategoryFilterActive(cat.Category)"
+                            (click)="ToggleCategoryFilter(cat.Category)"
+                            [title]="'Filter by ' + cat.Label">
                             <div class="mj-graph-legend-dot" [style.background]="cat.Color"></div>
-                            {{ cat.Label }}
-                        </div>
+                            <span>{{ cat.Label }}</span>
+                            @if (cat.Rank !== undefined) {
+                                <span style="font-size: 10px; opacity: 0.7;">#{{ cat.Rank }}</span>
+                            }
+                        </button>
+                    }
+                    @if (ActiveCategoryFilter) {
+                        <button
+                            type="button"
+                            class="mj-graph-legend-item"
+                            style="color: var(--mj-brand-primary);"
+                            (click)="ToggleCategoryFilter(null)">
+                            Reset
+                        </button>
                     }
                 </div>
             }
@@ -417,10 +562,28 @@ const GRAPH_VIEW_CSS = `
                             <div style="font-size: 13px; font-weight: 700; color: #fff; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
                                 {{ SelectedNode.Label }}
                             </div>
-                            <div style="display: flex; align-items: center; gap: 6px; margin-top: 3px;">
+                            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px;">
                                 <span style="font-size: 11px; color: var(--mj-text-secondary);">
-                                    {{ SelectedNode.Sublabel || SelectedNode.Category }}
+                                    {{ SelectedNode.Sublabel || GetCategoryLabel(SelectedNode.Category) }}
                                 </span>
+                                @if (SelectedNode.Rank !== undefined) {
+                                    <span style="font-size: 10px; padding: 1px 6px; border-radius: 9999px; background: rgba(148, 163, 184, 0.15); color: #cbd5e1; font-weight: 600;">
+                                        Rank #{{ SelectedNode.Rank }}
+                                    </span>
+                                }
+                                @if (SelectedNode.Status) {
+                                    <span
+                                        style="font-size: 10px; padding: 1px 6px; border-radius: 9999px; font-weight: 600;"
+                                        [style.background]="SelectedNode.Status === 'Proposed' ? 'rgba(245, 158, 11, 0.18)' : 'rgba(16, 185, 129, 0.18)'"
+                                        [style.color]="SelectedNode.Status === 'Proposed' ? '#fbbf24' : '#34d399'">
+                                        {{ SelectedNode.Status }}
+                                    </span>
+                                }
+                                @if (SelectedNode.AuthorityTier) {
+                                    <span style="font-size: 10px; padding: 1px 6px; border-radius: 9999px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; font-weight: 600;">
+                                        {{ SelectedNode.AuthorityTier }}
+                                    </span>
+                                }
                                 @if (IsFocalNode(SelectedNode)) {
                                     <span style="font-size: 10px; padding: 1px 6px; border-radius: 9999px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.3);">Current Record</span>
                                 }
@@ -428,11 +591,90 @@ const GRAPH_VIEW_CSS = `
                         </div>
                     </div>
 
+                    @if (SelectedNode.Description) {
+                        <div style="font-size: 12px; color: var(--mj-text-secondary); line-height: 1.45;">
+                            {{ SelectedNode.Description }}
+                        </div>
+                    }
+
+                    @if (SelectedNode.Specification) {
+                        <div class="mj-graph-inspector-section">
+                            <span class="mj-graph-inspector-section-label">Specification</span>
+                            <pre style="margin: 0; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 1.45; color: var(--mj-text-primary);">{{ SelectedNode.Specification }}</pre>
+                        </div>
+                    }
+
+                    @if (SelectedNode.Conflicts && SelectedNode.Conflicts.length > 0) {
+                        <div class="mj-graph-conflict-box">
+                            <div style="font-size: 11px; font-weight: 700; color: #fb7185; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                                Authority Conflict (Contradicts Edge)
+                            </div>
+                            @for (conflict of SelectedNode.Conflicts; track conflict.HigherAuthoritySummary) {
+                                <div style="display: flex; flex-direction: column; gap: 4px; font-size: 11px;">
+                                    <div><strong>Higher Tier:</strong> {{ conflict.HigherAuthoritySummary }}</div>
+                                    <div><strong>Conflicting:</strong> {{ conflict.ConflictingSummary }}</div>
+                                    @if (conflict.ResolutionNote) {
+                                        <div style="color: var(--mj-text-secondary); margin-top: 2px;">{{ conflict.ResolutionNote }}</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    @if (SelectedNode.Groundings && SelectedNode.Groundings.length > 0) {
+                        <div class="mj-graph-inspector-section">
+                            <span class="mj-graph-inspector-section-label">Grounded MJ Primitives ({{ SelectedNode.Groundings.length }})</span>
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                @for (g of SelectedNode.Groundings; track g.TargetRecordID + g.EdgeLabel) {
+                                    <button
+                                        type="button"
+                                        class="mj-graph-grounding-item"
+                                        (click)="NavigateToGrounding(SelectedNode, g)">
+                                        <span style="color: #34d399; font-weight: 700;">{{ g.EdgeLabel }}</span>
+                                        <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right;">
+                                            {{ g.TargetDisplayName }}
+                                        </span>
+                                        <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 10px; opacity: 0.7;"></i>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @if (SelectedNode.ProvenanceChunks && SelectedNode.ProvenanceChunks.length > 0) {
+                        <div class="mj-graph-inspector-section">
+                            <span class="mj-graph-inspector-section-label">SourcedFrom Chunks ({{ SelectedNode.ProvenanceChunks.length }})</span>
+                            <div style="display: flex; flex-direction: column; gap: 6px;">
+                                @for (chunk of SelectedNode.ProvenanceChunks; track chunk.ChunkID) {
+                                    <div style="padding: 6px 8px; border-radius: 6px; background: var(--mj-bg-surface-sunken, #090e1a); border: 1px solid var(--mj-border-default, #223254); font-size: 11px;">
+                                        <div style="display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin-bottom: 3px;">
+                                            <span>{{ chunk.SourceName }}{{ chunk.Locator ? ' · ' + chunk.Locator : '' }}</span>
+                                            @if (chunk.AuthorityTier) {
+                                                <span style="color: #fbbf24; font-size: 10px;">{{ chunk.AuthorityTier }}</span>
+                                            }
+                                        </div>
+                                        <div style="color: var(--mj-text-secondary); line-height: 1.4;">{{ chunk.Snippet }}</div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+
                     <div style="font-size: 11.5px; color: var(--mj-text-secondary); line-height: 1.45;">
                         Direct Connected Edges: <strong>{{ GetNodeEdgeCount(SelectedNode.ID) }}</strong>
                     </div>
 
                     <div class="mj-graph-inspector-actions">
+                        @if (SelectedNode.Status === 'Proposed') {
+                            <button
+                                type="button"
+                                class="mj-graph-tool-btn"
+                                style="justify-content: center; width: 100%; background: #059669; border-color: #10b981; color: #ffffff;"
+                                (click)="TriggerNodeAction(SelectedNode, 'approve')">
+                                <i class="fa-solid fa-check"></i> Approve into Canon
+                            </button>
+                        }
                         @if (!IsFocalNode(SelectedNode)) {
                             <button
                                 type="button"
@@ -464,21 +706,42 @@ const GRAPH_VIEW_CSS = `
                 (mouseleave)="OnCanvasMouseUp($event)"
                 (wheel)="OnCanvasWheel($event)">
 
+                <defs>
+                    <marker id="mj-arrow-default" viewBox="0 -5 10 10" refX="30" refY="0" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M0,-4L10,0L0,4" fill="#64748b" />
+                    </marker>
+                    <marker id="mj-arrow-highlight" viewBox="0 -5 10 10" refX="30" refY="0" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M0,-4L10,0L0,4" fill="#38bdf8" />
+                    </marker>
+                    <marker id="mj-arrow-conflict" viewBox="0 -5 10 10" refX="30" refY="0" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M0,-4L10,0L0,4" fill="#f43f5e" />
+                    </marker>
+                    <marker id="mj-arrow-grounding" viewBox="0 -5 10 10" refX="30" refY="0" markerWidth="6" markerHeight="6" orient="auto">
+                        <path d="M0,-4L10,0L0,4" fill="#10b981" />
+                    </marker>
+                </defs>
+
                 <g [attr.transform]="'translate(' + PanX + ',' + PanY + ') scale(' + Scale + ')'">
                     <!-- Edges Layer -->
-                    @for (edge of Edges; track edge.ID) {
+                    @for (edge of VisibleEdges; track edge.ID) {
                         <g>
                             <line
                                 class="mj-edge-path"
                                 [class.is-highlighted]="IsEdgeHighlighted(edge)"
+                                [class.mj-edge-animated]="edge.Animated"
                                 [attr.x1]="GetNodeX(edge.SourceID)"
                                 [attr.y1]="GetNodeY(edge.SourceID)"
                                 [attr.x2]="GetNodeX(edge.TargetID)"
                                 [attr.y2]="GetNodeY(edge.TargetID)"
+                                [attr.stroke]="GetEdgeStroke(edge)"
+                                [attr.stroke-width]="GetEdgeStrokeWidth(edge)"
+                                [attr.stroke-dasharray]="GetEdgeDashArray(edge)"
+                                [attr.marker-end]="GetEdgeMarkerEnd(edge)"
                                 (click)="OnEdgeClick(edge, $event)">
                             </line>
                             <text
                                 class="mj-edge-text"
+                                [style.fill]="edge.Color || (edge.Animated ? '#fb7185' : '')"
                                 [attr.x]="(GetNodeX(edge.SourceID) + GetNodeX(edge.TargetID)) / 2"
                                 [attr.y]="(GetNodeY(edge.SourceID) + GetNodeY(edge.TargetID)) / 2 - 4">
                                 {{ edge.Label }}
@@ -495,11 +758,13 @@ const GRAPH_VIEW_CSS = `
                             (click)="OnNodeClick(node, $event)"
                             (dblclick)="NavigateToEntity(node)">
 
-                            <!-- Outer Selection / Focal Halo -->
+                            <!-- Outer Selection / Focal / Proposed Halo -->
                             @if (IsNodeSelected(node)) {
-                                <circle r="36" fill="rgba(56, 189, 248, 0.2)" stroke="#38bdf8" stroke-width="2"></circle>
+                                <circle [attr.r]="(node.Radius || 26) + 10" fill="rgba(56, 189, 248, 0.2)" stroke="#38bdf8" stroke-width="2"></circle>
                             } @else if (IsFocalNode(node)) {
-                                <circle r="34" fill="none" stroke="rgba(56, 189, 248, 0.45)" stroke-width="2" stroke-dasharray="4 3"></circle>
+                                <circle [attr.r]="(node.Radius || 26) + 8" fill="none" stroke="rgba(56, 189, 248, 0.45)" stroke-width="2" stroke-dasharray="4 3"></circle>
+                            } @else if (node.Status === 'Proposed' || node.Status === 'Draft') {
+                                <circle [attr.r]="(node.Radius || 26) + 6" fill="none" stroke="#f59e0b" stroke-width="1.8" stroke-dasharray="4 3"></circle>
                             }
 
                             <!-- Node Body Circle -->
@@ -508,19 +773,39 @@ const GRAPH_VIEW_CSS = `
                                 [attr.r]="node.Radius || 26"
                                 fill="#141f36"
                                 [attr.stroke]="GetNodeColor(node)"
+                                [attr.stroke-dasharray]="node.Status === 'Proposed' ? '5 3' : null"
                                 stroke-width="3">
                             </circle>
 
-                            <!-- Node Icon Center -->
-                            <circle [attr.r]="(node.Radius || 26) - 8" [attr.fill]="GetNodeColor(node)"></circle>
+                            <!-- Node Icon / Glyph Center -->
+                            <circle
+                                [attr.r]="(node.Radius || 26) - 8"
+                                [attr.fill]="GetNodeColor(node)"
+                                [attr.fill-opacity]="node.Status === 'Proposed' ? '0.35' : '0.9'">
+                            </circle>
+                            <text class="mj-node-glyph">
+                                {{ GetNodeGlyphText(node) }}
+                            </text>
+
+                            <!-- Conflict Badge Indicator (Top-Right) -->
+                            @if (node.Conflicts && node.Conflicts.length > 0) {
+                                <circle
+                                    [attr.cx]="(node.Radius || 26) * 0.72"
+                                    [attr.cy]="-(node.Radius || 26) * 0.72"
+                                    r="7"
+                                    fill="#f43f5e"
+                                    stroke="#0b1220"
+                                    stroke-width="2">
+                                </circle>
+                            }
 
                             <!-- Labels -->
                             <text class="mj-node-label" [attr.y]="(node.Radius || 26) + 16">
-                                {{ TruncateLabel(node.Label, 18) }}
+                                {{ TruncateLabel(node.Label, 22) }}
                             </text>
                             @if (node.Sublabel) {
                                 <text class="mj-node-sublabel" [attr.y]="(node.Radius || 26) + 28">
-                                    {{ TruncateLabel(node.Sublabel, 20) }}
+                                    {{ TruncateLabel(node.Sublabel, 24) }}
                                 </text>
                             }
                         </g>
@@ -538,6 +823,7 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     @ViewChild('svgCanvas', { static: true }) public CanvasRef!: ElementRef<SVGSVGElement>;
 
     // ── Inputs ────────────────────────────────────────────────────────
+    @Input() public Title = 'Network Graph';
     @Input() public Nodes: GraphNode[] = [];
     @Input() public Edges: GraphEdge[] = [];
     @Input() public Categories: GraphCategoryConfig[] = DEFAULT_GRAPH_CATEGORIES;
@@ -545,6 +831,7 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     @Input() public MaxHopDistance = 2;
     @Input() public SelectedNodeId?: string;
     @Input() public FocalNodeId?: string;
+    @Input() public ActiveCategoryFilter: string | null = null;
     @Input() public AutoOpenInspector = false;
     @Input() public ShowToolbar = true;
     @Input() public ShowLegend = true;
@@ -575,6 +862,11 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     @Output() public BeforeNodeNavigate = new EventEmitter<BeforeNodeNavigateEventArgs>();
     @Output() public NodeNavigated = new EventEmitter<NodeNavigatedEventArgs>();
 
+    @Output() public BeforeNodeAction = new EventEmitter<BeforeNodeActionEventArgs>();
+    @Output() public NodeAction = new EventEmitter<NodeActionEventArgs>();
+
+    @Output() public CategoryFilterChanged = new EventEmitter<string | null>();
+
     @Output() public ViewportTransform = new EventEmitter<ViewportTransformEventArgs>();
 
     // ── Internal State ────────────────────────────────────────────────
@@ -604,6 +896,9 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
             this.initializePositions();
             this.ApplyFilters();
             this.SimulatePhysics();
+        }
+        if (changes['ActiveCategoryFilter']) {
+            this.ApplyFilters();
         }
         if (changes['SelectedNodeId'] && this.SelectedNodeId) {
             const found = this.Nodes.find(n => UUIDsEqual(n.ID, this.SelectedNodeId));
@@ -648,6 +943,11 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     public SimulatePhysics(): void {
+        if (this.simulation) {
+            this.simulation.stop();
+            this.simulation = null;
+        }
+
         if (this.LayoutMode === 'circular') {
             this.applyCircularLayout();
             if (this.AutoFitOnLoad) {
@@ -657,9 +957,22 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
             return;
         }
 
-        if (this.simulation) {
-            this.simulation.stop();
-            this.simulation = null;
+        if (this.LayoutMode === 'hierarchy') {
+            this.applyHierarchyLayout();
+            if (this.AutoFitOnLoad) {
+                this.AutoFitToView();
+            }
+            this.cdr.markForCheck();
+            return;
+        }
+
+        if (this.LayoutMode === 'grid') {
+            this.applyGridLayout();
+            if (this.AutoFitOnLoad) {
+                this.AutoFitToView();
+            }
+            this.cdr.markForCheck();
+            return;
         }
 
         const cx = this.getContainerWidth() / 2 || 400;
@@ -735,6 +1048,79 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
             const angle = (idx / count) * 2 * Math.PI;
             node.x = cx + r * Math.cos(angle);
             node.y = cy + r * Math.sin(angle);
+            node.X = node.x;
+            node.Y = node.y;
+        });
+    }
+
+    /**
+     * Arranges nodes in top-to-bottom horizontal tiers based on ParentID hierarchy,
+     * HopDistance, or ConceptType Rank.
+     */
+    private applyHierarchyLayout(): void {
+        const width = this.getContainerWidth() || 800;
+        const nodeById = new Map<string, GraphNode>();
+        for (const n of this.Nodes) {
+            nodeById.set(NormalizeUUID(n.ID), n);
+        }
+
+        const levels = new Map<number, GraphNode[]>();
+        for (const n of this.Nodes) {
+            let depth = 0;
+            if (n.HopDistance !== undefined) {
+                depth = n.HopDistance;
+            } else if (n.ParentID) {
+                let curr: GraphNode | undefined = n;
+                const visited = new Set<string>();
+                while (curr?.ParentID) {
+                    const pid = NormalizeUUID(curr.ParentID);
+                    if (!pid || visited.has(pid)) break;
+                    visited.add(pid);
+                    depth++;
+                    curr = nodeById.get(pid);
+                }
+            } else if (n.Category === 'Domain') {
+                depth = 0;
+            } else if (n.Category === 'grounding' || n.Category === 'chunk') {
+                depth = 2;
+            } else {
+                depth = 1;
+            }
+            const bucket = levels.get(depth) ?? [];
+            bucket.push(n);
+            levels.set(depth, bucket);
+        }
+
+        const sortedDepths = Array.from(levels.keys()).sort((a, b) => a - b);
+        const verticalSpacing = 140;
+        sortedDepths.forEach((depth, rowIdx) => {
+            const row = levels.get(depth) ?? [];
+            const rowWidth = Math.max(width - 120, row.length * 140);
+            const startX = (width - rowWidth) / 2;
+            row.forEach((node, colIdx) => {
+                const x = row.length === 1
+                    ? width / 2
+                    : startX + (colIdx / Math.max(row.length - 1, 1)) * rowWidth;
+                const y = 80 + rowIdx * verticalSpacing;
+                node.x = x;
+                node.y = y;
+                node.X = x;
+                node.Y = y;
+            });
+        });
+    }
+
+    private applyGridLayout(): void {
+        const count = this.Nodes.length || 1;
+        const cols = Math.max(Math.ceil(Math.sqrt(count)), 1);
+        const cellW = 160;
+        const cellH = 130;
+
+        this.Nodes.forEach((node, idx) => {
+            const col = idx % cols;
+            const row = Math.floor(idx / cols);
+            node.x = 100 + col * cellW;
+            node.y = 90 + row * cellH;
             node.X = node.x;
             node.Y = node.y;
         });
@@ -879,6 +1265,34 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
         this.NodeNavigated.emit(new NodeNavigatedEventArgs(node, entityName, rawId));
     }
 
+    public NavigateToGrounding(node: GraphNode, grounding: GraphGroundingItem): void {
+        const beforeEvent = new BeforeNodeNavigateEventArgs(node, grounding.TargetEntityName, grounding.TargetRecordID);
+        this.BeforeNodeNavigate.emit(beforeEvent);
+        if (beforeEvent.Cancel) return;
+        this.NodeNavigated.emit(new NodeNavigatedEventArgs(node, grounding.TargetEntityName, grounding.TargetRecordID));
+    }
+
+    public TriggerNodeAction(node: GraphNode, action: GraphNodeActionKind, payload?: Record<string, unknown>): void {
+        const beforeEvent = new BeforeNodeActionEventArgs(node, action, payload);
+        this.BeforeNodeAction.emit(beforeEvent);
+        if (beforeEvent.Cancel) return;
+        this.NodeAction.emit(new NodeActionEventArgs(node, action, payload));
+    }
+
+    public ToggleCategoryFilter(category: string | null): void {
+        if (!category || (this.ActiveCategoryFilter && this.ActiveCategoryFilter.toLowerCase() === category.toLowerCase())) {
+            this.ActiveCategoryFilter = null;
+        } else {
+            this.ActiveCategoryFilter = category;
+        }
+        this.ApplyFilters();
+        this.CategoryFilterChanged.emit(this.ActiveCategoryFilter);
+    }
+
+    public IsCategoryFilterActive(category: string): boolean {
+        return Boolean(this.ActiveCategoryFilter && this.ActiveCategoryFilter.toLowerCase() === category.toLowerCase());
+    }
+
     // ── Mouse Drag & Pan Handlers ─────────────────────────────────────
     public OnCanvasMouseDown(event: MouseEvent): void {
         if (event.target === this.CanvasRef.nativeElement || (event.target as HTMLElement).tagName === 'svg') {
@@ -969,10 +1383,53 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     // ── Helpers ───────────────────────────────────────────────────────
     public ApplyFilters(): void {
         const q = this.SearchQuery.trim().toLowerCase();
+        const catFilter = this.ActiveCategoryFilter ? this.ActiveCategoryFilter.trim().toLowerCase() : null;
         this.FilteredNodes = this.Nodes.filter(n => {
-            return !q || n.Label.toLowerCase().includes(q) || (n.Sublabel && n.Sublabel.toLowerCase().includes(q));
+            const matchesQuery = !q ||
+                n.Label.toLowerCase().includes(q) ||
+                Boolean(n.Sublabel && n.Sublabel.toLowerCase().includes(q)) ||
+                Boolean(n.Description && n.Description.toLowerCase().includes(q));
+            const matchesCat = !catFilter || (n.Category && n.Category.toLowerCase() === catFilter);
+            return matchesQuery && matchesCat;
         });
         this.cdr.markForCheck();
+    }
+
+    public get VisibleEdges(): GraphEdge[] {
+        if (this.FilteredNodes.length === this.Nodes.length) {
+            return this.Edges;
+        }
+        const visibleIds = new Set(this.FilteredNodes.map(n => NormalizeUUID(n.ID)));
+        return this.Edges.filter(
+            e => visibleIds.has(NormalizeUUID(e.SourceID)) && visibleIds.has(NormalizeUUID(e.TargetID)),
+        );
+    }
+
+    public get ConflictCount(): number {
+        let count = 0;
+        for (const e of this.Edges) {
+            if (e.Label.toLowerCase().includes('contradict')) {
+                count++;
+            }
+        }
+        if (count === 0) {
+            for (const n of this.Nodes) {
+                if (n.Conflicts && n.Conflicts.length > 0) {
+                    count += n.Conflicts.length;
+                }
+            }
+        }
+        return count;
+    }
+
+    public get ProposedCount(): number {
+        let count = 0;
+        for (const n of this.Nodes) {
+            if (n.Status === 'Proposed') {
+                count++;
+            }
+        }
+        return count;
     }
 
     public GetNodeX(id: string): number {
@@ -1014,7 +1471,7 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
         for (const catKey of present) {
             result.push(this.GetCategoryConfig(catKey));
         }
-        return result;
+        return result.sort((a, b) => (a.Rank ?? 999) - (b.Rank ?? 999));
     }
 
     public GetCategoryLabel(category?: string): string {
@@ -1027,6 +1484,45 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
 
     public GetNodeIcon(node: GraphNode): string {
         return node.IconClass ?? this.GetCategoryConfig(node.Category).IconClass ?? 'fa-solid fa-circle-dot';
+    }
+
+    public GetNodeGlyphText(node: GraphNode): string {
+        if (node.Badge) return node.Badge;
+        if (node.Rank !== undefined) return `#${node.Rank}`;
+        if (node.Category === 'chunk') return '§';
+        if (node.Category === 'grounding') return '⚡';
+        return node.Label ? node.Label.slice(0, 2).toUpperCase() : '•';
+    }
+
+    public GetEdgeStroke(edge: GraphEdge): string {
+        if (this.IsEdgeHighlighted(edge)) return '#38bdf8';
+        if (edge.Color) return edge.Color;
+        const lbl = edge.Label.toLowerCase();
+        if (lbl.includes('contradict')) return '#f43f5e';
+        if (lbl === 'defines' || lbl === 'measures' || lbl === 'implements' || lbl === 'describes') return '#10b981';
+        return '#475569';
+    }
+
+    public GetEdgeStrokeWidth(edge: GraphEdge): number {
+        if (this.IsEdgeHighlighted(edge)) return 3;
+        if (edge.Weight !== undefined) return Math.max(1.5, Math.min(edge.Weight * 2.5, 3.5));
+        if (edge.Label.toLowerCase().includes('contradict')) return 2.5;
+        return 1.8;
+    }
+
+    public GetEdgeDashArray(edge: GraphEdge): string | null {
+        if (edge.Style === 'dashed' || edge.Label.toLowerCase().includes('contradict')) return '6,4';
+        if (edge.Style === 'dotted' || edge.Label === 'SourcedFrom' || edge.Label === 'Mentions') return '3,3';
+        return null;
+    }
+
+    public GetEdgeMarkerEnd(edge: GraphEdge): string | null {
+        if (edge.Direction === 'undirected') return null;
+        if (this.IsEdgeHighlighted(edge)) return 'url(#mj-arrow-highlight)';
+        const lbl = edge.Label.toLowerCase();
+        if (lbl.includes('contradict')) return 'url(#mj-arrow-conflict)';
+        if (lbl === 'defines' || lbl === 'measures' || lbl === 'implements' || lbl === 'describes') return 'url(#mj-arrow-grounding)';
+        return 'url(#mj-arrow-default)';
     }
 
     public GetNodeEdgeCount(id: string): number {

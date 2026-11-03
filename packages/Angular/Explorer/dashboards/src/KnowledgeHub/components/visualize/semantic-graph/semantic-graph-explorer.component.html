@@ -1,0 +1,154 @@
+<div class="semantic-graph-studio">
+  <!-- Left Rail: MJ: Graphs Selector, Ranked MJ: Graph Concept Types, Overlays & Connected Sources -->
+  <aside class="semantic-graph-rail">
+    <div class="rail-scroll">
+      <!-- 1. MJ: Graphs Partition Selector -->
+      <section class="rail-section">
+        <div class="rail-section-header">
+          <span class="rail-section-title">MJ: Graphs</span>
+          <button
+            type="button"
+            class="canon-filter-toggle"
+            [class.active]="OnlyCanonGraphs"
+            (click)="ToggleCanonFilter()"
+            title="Filter to Graph Types with IsCanon = true">
+            <i class="fa-solid fa-star"></i>
+            Canon Only
+          </button>
+        </div>
+
+        <div class="graph-list">
+          @for (g of VisibleGraphOptions; track g.ID) {
+            <button
+              type="button"
+              class="graph-card"
+              [class.selected]="SelectedGraph?.ID === g.ID"
+              (click)="SelectGraph(g.ID)">
+              <div class="graph-card-top">
+                <span class="graph-card-name">
+                  <i [class]="g.IconClass" class="graph-card-icon"></i>
+                  {{ g.Name }}
+                </span>
+                <span class="graph-type-badge" [class.is-canon]="g.IsCanon">
+                  @if (g.IsCanon) { ★ } {{ g.GraphTypeName }} · #{{ g.GraphTypeRank }}
+                </span>
+              </div>
+              <div class="graph-card-meta">
+                <span>{{ g.ConceptCount }} concepts</span>
+                @if (g.ConflictCount > 0) {
+                  <span class="conflict-pill">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    {{ g.ConflictCount }} {{ g.ConflictCount === 1 ? 'conflict' : 'conflicts' }}
+                  </span>
+                }
+              </div>
+            </button>
+          }
+        </div>
+      </section>
+
+      <!-- 2. Ranked MJ: Graph Concept Types Filter -->
+      <section class="rail-section">
+        <div class="rail-section-header">
+          <span class="rail-section-title">Concept Types (By Rank)</span>
+          @if (ActiveConceptTypeFilter) {
+            <button type="button" class="rail-reset-btn" (click)="ToggleConceptTypeFilter(null)">
+              All
+            </button>
+          }
+        </div>
+
+        <div class="concept-type-list">
+          @for (ct of ConceptTypeOptions; track ct.ID) {
+            <button
+              type="button"
+              class="concept-type-pill"
+              [class.active]="ActiveConceptTypeFilter?.toLowerCase() === ct.Name.toLowerCase()"
+              [class.dimmed]="ActiveConceptTypeFilter && ActiveConceptTypeFilter.toLowerCase() !== ct.Name.toLowerCase()"
+              (click)="ToggleConceptTypeFilter(ct.Name)">
+              <span class="concept-type-left">
+                <span class="concept-type-dot" [style.background]="ct.Color"></span>
+                <i [class]="ct.IconClass" class="concept-type-icon"></i>
+                <span class="concept-type-name">{{ ct.Name }}</span>
+              </span>
+              <span class="concept-type-right">
+                Rank #{{ ct.Rank }} · <strong>{{ ct.Count }}</strong>
+              </span>
+            </button>
+          }
+        </div>
+      </section>
+
+      <!-- 3. Edge & Node Overlay Toggles -->
+      <section class="rail-section">
+        <span class="rail-section-title">Graph Overlays</span>
+        <div class="overlay-toggle-list">
+          <label class="overlay-toggle-row">
+            <span>Grounded MJ Primitives</span>
+            <input
+              type="checkbox"
+              [(ngModel)]="ShowGroundedPrimitives"
+              (ngModelChange)="OnOverlayToggleChanged()" />
+          </label>
+          <label class="overlay-toggle-row">
+            <span>Source Chunks (SourcedFrom)</span>
+            <input
+              type="checkbox"
+              [(ngModel)]="ShowSourceChunks"
+              (ngModelChange)="OnOverlayToggleChanged()" />
+          </label>
+          <label class="overlay-toggle-row conflict-toggle">
+            <span>Highlight Contradicts Edges</span>
+            <input
+              type="checkbox"
+              [(ngModel)]="HighlightConflicts"
+              (ngModelChange)="OnOverlayToggleChanged()" />
+          </label>
+        </div>
+      </section>
+
+      <!-- 4. Connected Content Sources -->
+      @if (SelectedGraph && SelectedGraph.SourceNames.length > 0) {
+        <section class="rail-section">
+          <span class="rail-section-title">Connected Content Sources</span>
+          <div class="connected-source-list">
+            @for (srcName of SelectedGraph.SourceNames; track srcName) {
+              <div class="connected-source-row">
+                <i class="fa-solid fa-database"></i>
+                <span>{{ srcName }}</span>
+              </div>
+            }
+          </div>
+        </section>
+      }
+    </div>
+  </aside>
+
+  <!-- Main Canvas: <mj-graph-view> with Force/Hierarchy/Circular Layouts & Built-In Canon Inspector -->
+  <main class="semantic-graph-canvas">
+    @if (IsLoading) {
+      <div class="semantic-graph-loading">
+        <mj-loading text="Loading Semantic Graph &amp; Canon concepts..."></mj-loading>
+      </div>
+    } @else {
+      <mj-graph-view
+        [Title]="SelectedGraph?.Name || 'Semantic Graph'"
+        [Nodes]="Nodes"
+        [Edges]="Edges"
+        [Categories]="Categories"
+        [LayoutMode]="LayoutMode"
+        [SelectedNodeId]="SelectedNodeId"
+        [ActiveCategoryFilter]="ActiveConceptTypeFilter"
+        [AutoOpenInspector]="true"
+        [ShowToolbar]="true"
+        [ShowLegend]="true"
+        [ShowInspector]="true"
+        [Searchable]="true"
+        (NodeSelected)="OnNodeSelected($event)"
+        (NodeNavigated)="OnNodeNavigated($event)"
+        (NodeAction)="OnNodeAction($event)"
+        (CategoryFilterChanged)="OnCategoryFilterChangedFromCanvas($event)">
+      </mj-graph-view>
+    }
+  </main>
+</div>
