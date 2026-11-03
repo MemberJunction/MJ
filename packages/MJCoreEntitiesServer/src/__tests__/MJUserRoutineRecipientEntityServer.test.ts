@@ -7,8 +7,8 @@
  * `Validate()` returns a passing `ValidationResult`, so the test exercises ONLY the
  * exclusivity gate the subclass adds. `@RegisterClass` is neutralized.
  */
-import { describe, it, expect, vi } from 'vitest';
-import { ValidationErrorType, ValidationResult } from '@memberjunction/global';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/global';
 
 // Neutralize the class-factory registration decorator.
 vi.mock('@memberjunction/global', async (importOriginal) => {
@@ -83,5 +83,36 @@ describe('MJUserRoutineRecipientEntityServer.Validate — recipient exclusivity'
         const result = makeEntity({ Email: 'someone@example.com' }).Validate();
         expect(result.Success).toBe(true);
         expect(result.Errors.some((e) => e.Source === 'UserID/Email')).toBe(false);
+    });
+});
+
+/** Makes the generated base's Validate() return a warning, closed out with the old length-check idiom (Success false). */
+function baseReturnsWarning(serverClass: { prototype: object }): void {
+    const base = Object.getPrototypeOf(serverClass.prototype) as { Validate(): ValidationResult };
+    vi.spyOn(base, 'Validate').mockImplementation(() => {
+        const r = new ValidationResult();
+        r.Success = true;
+        r.Errors.push(new ValidationErrorInfo('Rank', 'Rank is unusually high', 900, ValidationErrorType.Warning));
+        r.Success = r.Success && r.Errors.length === 0;
+        return r;
+    });
+}
+
+describe('MJUserRoutineRecipientEntityServer.Validate — warnings from super.Validate() (#4241)', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('a warning from the base does not block an otherwise valid save', () => {
+        baseReturnsWarning(MJUserRoutineRecipientEntityServer);
+        const result = makeEntity({ UserID: 'USER-1' }).Validate();
+        expect(result.Success).toBe(true);
+        expect(result.Errors.some(e => e.Type === ValidationErrorType.Warning)).toBe(true);
+    });
+
+    it('a failure still blocks when the base also returned a warning', () => {
+        baseReturnsWarning(MJUserRoutineRecipientEntityServer);
+        const result = makeEntity({ UserID: null, Email: null }).Validate();
+        expect(result.Success).toBe(false);
     });
 });

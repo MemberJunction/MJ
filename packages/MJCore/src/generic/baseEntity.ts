@@ -1,4 +1,4 @@
-import { Base64DecodedByteLength, ClassFactory, ClassRegistration, DeserializeValidationErrors, Float32VectorToBase64, IsValidBase64, IsMemberOverridden, MJEventType, MJGlobal, NormalizeUUID, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, UserCacheKeySegment, WarningManager, ComputeContentHashAsync, EscapeSQLString } from '@memberjunction/global';
+import { AddValidationError, Base64DecodedByteLength, ClassFactory, ClassRegistration, DeserializeValidationErrors, Float32VectorToBase64, IsValidBase64, IsMemberOverridden, MJEventType, MJGlobal, NormalizeUUID, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, UserCacheKeySegment, WarningManager, ComputeContentHashAsync, EscapeSQLString } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityError, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntitySubtypeResolver } from './entitySubtypeResolver';
@@ -1209,6 +1209,22 @@ type UnitOfWorkPart = {
     snapshots: RecordSnapshot[];
     deletedMark: number;
 };
+
+/**
+ * Result of {@link BaseEntity.ValidationReadOne}. `ok: false` means the read itself failed (connection,
+ * permission, bad filter), which is not the same as "no row": `ok: true, row: null` is the only
+ * answer that means the row does not exist.
+ */
+export type EntityValidationRead<R> = { ok: true; row: R | null } | { ok: false; error: string };
+
+/** Result of {@link BaseEntity.ValidationReadMany}. `ok: false` means the read failed. */
+export type EntityValidationReadList<R> = { ok: true; rows: R[] } | { ok: false; error: string };
+
+/** Result of {@link BaseEntity.ValidationCount}. `ok: false` means the count could not be read. */
+export type EntityValidationCount = { ok: true; count: number } | { ok: false; error: string };
+
+/** Default row cap for {@link BaseEntity.ValidationReadMany}. */
+export const VALIDATION_READ_MANY_DEFAULT_MAX_ROWS = 100;
 
 /**
  * Base class used for all entity objects. This class is abstract and is sub-classes for each particular entity using the CodeGen tool. This class provides the basic functionality for loading, saving, and validating entity objects.
@@ -8034,6 +8050,100 @@ export abstract class BaseEntity<T = unknown> {
         const result = new ValidationResult();
         result.Success = true;
         return result;
+    }
+
+    /**
+     * True when the record is new, or when any of the named fields is dirty. The guard a rule opens
+     * with so it runs only when its inputs changed. Unlike {@link Dirty}, an edit to an unrelated
+     * field does not re-run the rule. With no field names it falls back to {@link Dirty}.
+     *
+     * @param fieldNames - The fields the rule reads. Unknown names count as not dirty.
+     */
+    public IsNewOrDirty(...fieldNames: string[]): boolean {
+        if (!this.IsSaved) return true;
+        if (fieldNames.length === 0) return this.Dirty;
+        return fieldNames.some(name => this.GetFieldByName(name)?.Dirty === true);
+    }
+
+    /**
+     * Reads at most one row for a validation rule, using this record's provider and context user.
+     * A failed read returns `{ ok: false }` so the caller cannot mistake it for "no such row"; pair it
+     * with {@link MarkUnverified} to block the save instead of skipping the rule.
+     *
+     * @param entityName - Entity to read, e.g. `'MJ: Users'`.
+     * @param filter - `ExtraFilter` SQL. Escape any values interpolated into it.
+     * @param fields - Columns to return.
+     */
+    protected async ValidationReadOne<R>(entityName: string, filter: string, fields: string[]): Promise<EntityValidationRead<R>> {
+        const read = await this.runValidationView<R>({ EntityName: entityName, ExtraFilter: filter, Fields: fields, ResultType: 'simple', MaxRows: 1, SkipTotalRowCount: true });
+        if (read.ok === false) return { ok: false, error: read.error };
+        return { ok: true, row: read.results[0] ?? null };
+    }
+
+    /**
+     * Reads up to `maxRows` rows for a validation rule, for when the rule needs the rows themselves
+     * (for example to name the offending records in its message). Use {@link ValidationCount} when only
+     * the number matters. A failed read returns `{ ok: false }`.
+     *
+     * @param entityName - Entity to read.
+     * @param filter - `ExtraFilter` SQL. Escape any values interpolated into it.
+     * @param fields - Columns to return.
+     * @param maxRows - Row cap; defaults to {@link VALIDATION_READ_MANY_DEFAULT_MAX_ROWS}.
+     */
+    protected async ValidationReadMany<R>(entityName: string, filter: string, fields: string[], maxRows: number = VALIDATION_READ_MANY_DEFAULT_MAX_ROWS): Promise<EntityValidationReadList<R>> {
+        const read = await this.runValidationView<R>({ EntityName: entityName, ExtraFilter: filter, Fields: fields, ResultType: 'simple', MaxRows: maxRows, SkipTotalRowCount: true });
+        if (read.ok === false) return { ok: false, error: read.error };
+        return { ok: true, rows: read.results };
+    }
+
+    /**
+     * Counts matching rows for a validation rule without fetching them (`ResultType: 'count_only'`).
+     * A failed count returns `{ ok: false }`.
+     *
+     * @param entityName - Entity to count.
+     * @param filter - `ExtraFilter` SQL. Escape any values interpolated into it.
+     */
+    protected async ValidationCount(entityName: string, filter: string): Promise<EntityValidationCount> {
+        const read = await this.runValidationView<Record<string, never>>({ EntityName: entityName, ExtraFilter: filter, ResultType: 'count_only' });
+        if (read.ok === false) return { ok: false, error: read.error };
+        if (typeof read.totalRowCount !== 'number') {
+            return { ok: false, error: `count of ${entityName} returned no total` };
+        }
+        return { ok: true, count: read.totalRowCount };
+    }
+
+    /**
+     * Fails the save because a rule could not be evaluated (its read failed). Blocking a valid save is
+     * recoverable, since the user retries and sees why; writing an invalid row is not.
+     *
+     * @param result - The result being built.
+     * @param field - Field the rule guards; forms show the message on that control.
+     * @param what - What could not be checked, e.g. `'the unit's capacity'`.
+     */
+    protected MarkUnverified(result: ValidationResult, field: string, what: string): void {
+        AddValidationError(result, field, `Could not verify ${what}. The record was not saved; try again.`);
+    }
+
+    /**
+     * Shared RunView call for the validation read helpers: uses {@link RunViewProviderToUse} (not
+     * `ProviderToUse`, which is not a RunView provider) and the context user, and turns an
+     * unsuccessful result or a thrown error into `ok: false`.
+     */
+    private async runValidationView<R>(params: RunViewParams): Promise<{ ok: true; results: R[]; totalRowCount: number | undefined } | { ok: false; error: string }> {
+        try {
+            const rv = new RunView(this.RunViewProviderToUse);
+            const result = await rv.RunView<R>(params, this.ContextCurrentUser);
+            if (!result?.Success) {
+                const error = result?.ErrorMessage || 'unknown error';
+                LogError(`${this.EntityInfo?.Name ?? 'BaseEntity'} validation read of ${params.EntityName} failed (filter: ${params.ExtraFilter}): ${error}`);
+                return { ok: false, error };
+            }
+            return { ok: true, results: result.Results ?? [], totalRowCount: result.TotalRowCount };
+        } catch (e) {
+            const error = e instanceof Error ? e.message : String(e);
+            LogError(`${this.EntityInfo?.Name ?? 'BaseEntity'} validation read of ${params.EntityName} threw (filter: ${params.ExtraFilter}): ${error}`);
+            return { ok: false, error };
+        }
     }
 
     /**
