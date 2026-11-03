@@ -407,8 +407,10 @@ export class TagCoOccurrenceEngine extends BaseSingleton<TagCoOccurrenceEngine> 
         for (const [pairKey, count] of pairCounts.entries()) {
             const existing = existingPairs.get(pairKey);
             if (existing) {
-                const updated = await this.updateExistingPair(existing.ID, count, contextUser);
-                if (updated) pairsUpdated++;
+                if (existing.CoOccurrenceCount !== count) {
+                    const updated = await this.updateExistingPair(existing.ID, count, contextUser);
+                    if (updated) pairsUpdated++;
+                }
             } else {
                 const created = await this.createNewPair(pairKey, count, contextUser);
                 if (created) pairsUpdated++;

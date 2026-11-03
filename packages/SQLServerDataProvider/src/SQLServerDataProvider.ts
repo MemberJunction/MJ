@@ -59,13 +59,27 @@ import {
   RecordChangeSource,
   RecordChangePayload,
   EntityDeleteOptions,
+  GetDiagnosticContext,
 } from '@memberjunction/core';
 import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
 import { EntityAIActionParams } from '@memberjunction/aiengine';
 import { QueueManager } from '@memberjunction/queue';
-import { GenericDatabaseProvider, ExecuteSQLBatchOptions, SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext, IsTypedQueryParameterList, IsNamedQueryParameterList, TypedQueryParameter, DescribeStatementFailure } from '@memberjunction/generic-database-provider';
-import type { DescribeStatementResult } from '@memberjunction/generic-database-provider';
+import {
+  GenericDatabaseProvider,
+  ExecuteSQLBatchOptions,
+  SaveCoercedValue,
+  SaveCallBinding,
+  SaveSQLFragment,
+  SaveReturnContext,
+  IsTypedQueryParameterList,
+  IsNamedQueryParameterList,
+  TypedQueryParameter,
+  DescribeStatementFailure,
+  SummarizeSqlParameters,
+  FormatSqlParameterTypesForError,
+} from '@memberjunction/generic-database-provider';
+import type { DatabasePoolStats, DescribeStatementResult } from '@memberjunction/generic-database-provider';
 import { BindTypedParameters } from './typedParameters';
 import { MapSQLServerDescribeRows, SQLSERVER_DESCRIBE_SQL, type SQLServerDescribeRow } from './statementDescription';
 import { MJQueryEntityExtended } from '@memberjunction/core-entities';
@@ -272,15 +286,20 @@ async function executeSQLCore(
     throw error;
   }
 
+  const startTs = Date.now();
+  const startHr = typeof performance !== 'undefined' && performance.now ? performance.now() : startTs;
+  const diagCtx = options?.diagnosticContext ?? GetDiagnosticContext();
+
   try {
     const { request, processedQuery } = buildRequest(connectionSource, query, parameters);
     const queryPromise = options?.timeoutMs
       ? QueryWithTimeout<SQLCoreResult>(request, processedQuery, options.timeoutMs)
       : request.query(processedQuery);
 
+    let result: sql.IResult<any>;
     if (options && !options.ignoreLogging && context.logSqlStatement) {
       const literalSQL = options.literalSQL;
-      const [result] = await Promise.all([
+      [result] = await Promise.all([
         queryPromise,
         context.logSqlStatement(
           literalSQL ?? query,
@@ -292,10 +311,35 @@ async function executeSQLCore(
           options.contextUser
         )
       ]);
-      return result;
+    } else {
+      result = await queryPromise;
     }
 
-    return await queryPromise;
+    if (!options?.ignoreLogging && GenericDatabaseProvider.HasSqlObservers()) {
+      const endHr = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+      const durationMs = Math.round((endHr - startHr) * 100) / 100;
+      const rowCount =
+        Array.isArray(result?.rowsAffected) && result.rowsAffected.length > 0
+          ? result.rowsAffected.reduce((a: number, b: number) => a + b, 0)
+          : Array.isArray(result?.recordset)
+            ? result.recordset.length
+            : 0;
+      GenericDatabaseProvider.NotifySqlObservers({
+        ts: startTs,
+        durationMs,
+        sql: query,
+        description: options?.description,
+        isMutation: !!options?.isMutation,
+        rowCount,
+        parameterSummaries: SummarizeSqlParameters(parameters, !options?.isMutation),
+        sessionId: diagCtx?.sessionId,
+        traceId: diagCtx?.traceId,
+        spanId: diagCtx?.spanId,
+        ignoreLogging: options?.ignoreLogging,
+      });
+    }
+
+    return result;
   } catch (error: any) {
     // Retry once for stale connection errors on non-transactional queries.
     // Transactions cannot be retried because the connection state is already
@@ -308,7 +352,29 @@ async function executeSQLCore(
       return executeSQLCore(query, parameters, context, options, true);
     }
 
-    // Build detailed error message with query and parameters.
+    if (!options?.ignoreLogging && GenericDatabaseProvider.HasSqlObservers()) {
+      const endHr = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+      const durationMs = Math.round((endHr - startHr) * 100) / 100;
+      GenericDatabaseProvider.NotifySqlObservers({
+        ts: startTs,
+        durationMs,
+        sql: query,
+        description: options?.description,
+        isMutation: !!options?.isMutation,
+        parameterSummaries: SummarizeSqlParameters(parameters, false),
+        error: {
+          name: error?.name ? String(error.name) : 'Error',
+          message: error?.message ? String(error.message) : String(error),
+          code: error?.code ? String(error.code) : undefined,
+        },
+        sessionId: diagCtx?.sessionId,
+        traceId: diagCtx?.traceId,
+        spanId: diagCtx?.spanId,
+        ignoreLogging: options?.ignoreLogging,
+      });
+    }
+
+    // Build detailed error message with query and parameter types/lengths (never raw parameter values).
     // mssql RequestError has a precedingErrors array with the actual root-cause
     // SQL Server messages (e.g. "object already exists") that precede the
     // generic "Could not create constraint" wrapper. Always include them.
@@ -322,7 +388,7 @@ async function executeSQLCore(
     const errorMessage = `Error executing SQL
     Error: ${error?.message ? error.message : error}${precedingMsgs}
     Query: ${literalSQL ?? query}
-    Parameters: ${literalSQL || !parameters ? 'None' : JSON.stringify(parameters)}`;
+    Parameters: ${literalSQL || !parameters ? 'None' : FormatSqlParameterTypesForError(parameters)}`;
 
     // Preserve the original error type (ConnectionError vs RequestError) so callers
     // can structurally distinguish infrastructure failures from query-level errors.
@@ -889,6 +955,20 @@ export class SQLServerDataProvider
    */
   public get DatabaseConnection(): any {
     return this._pool;
+  }
+
+  /** Reads the live counts from the mssql connection pool, or `null` before the pool is set. */
+  public override GetPoolStats(): DatabasePoolStats | null {
+    const pool = this._pool;
+    if (!pool) {
+      return null;
+    }
+    return {
+      TotalConnections: pool.size,
+      ActiveConnections: pool.borrowed,
+      IdleConnections: pool.available,
+      WaitingRequests: pool.pending,
+    };
   }
 
   /**
@@ -1661,25 +1741,48 @@ export class SQLServerDataProvider
     const execParams: string[] = [];
     let simpleParams = '';
     let bFirst = true;
+    const needsSimpleParams =
+      this.HasActiveSqlLoggingSessions ||
+      !!entity.TransactionGroup ||
+      Object.prototype.hasOwnProperty.call(this, '_logSqlStatement') ||
+      Object.getPrototypeOf(this) !== SQLServerDataProvider.prototype;
 
     for (const [f, value] of fieldValues) {
       const varName = `@${f.CodeName}${uniqueSuffix}`;
       declarations.push(`${varName} ${f.SQLFullType.toUpperCase()}`);
 
-      // A binary value is rendered to its hex literal ONCE and reused below: the literal is twice
-      // the size of the bytes, and the SET block and the simple-params form both carry it.
       const hasValue = value !== null && value !== undefined;
-      const binaryLiteral = hasValue && f.IsBinaryFieldType ? this.FormatBinaryLiteral(f, value) : undefined;
-      if (hasValue) {
-        setStatements.push(`SET ${varName} = ${params.AddField(f, binaryLiteral ?? this.generateSetStatementValue(f, value))}`);
+      if (hasValue && f.IsBinaryFieldType) {
+        const binaryBytes = this.decodeBinaryFieldBytes(f, value);
+        let cachedHexLiteral: string | undefined;
+        const getHexLiteral = (): string => {
+          if (cachedHexLiteral === undefined) {
+            cachedHexLiteral = this.FormatBinaryLiteral(f, binaryBytes);
+          }
+          return cachedHexLiteral;
+        };
+        setStatements.push(`SET ${varName} = ${params.AddBinaryField(f, binaryBytes, getHexLiteral)}`);
+        execParams.push(`@${f.CodeName}=${varName}`);
+        if (needsSimpleParams) {
+          simpleParams += this.generateSingleSPParam(f, value as string, bFirst, getHexLiteral());
+        }
+        bFirst = false;
+      } else {
+        if (hasValue) {
+          setStatements.push(`SET ${varName} = ${params.AddField(f, this.generateSetStatementValue(f, value))}`);
+        }
+        execParams.push(`@${f.CodeName}=${varName}`);
+        if (needsSimpleParams) {
+          simpleParams += this.generateSingleSPParam(f, value as string, bFirst);
+        }
+        bFirst = false;
       }
-      execParams.push(`@${f.CodeName}=${varName}`);
-      simpleParams += this.generateSingleSPParam(f, value as string, bFirst, binaryLiteral);
-      bFirst = false;
 
       if ((value === null || value === undefined) && f.NeedsClearCompanion) {
         execParams.push(`@${f.CodeName}_Clear=1`);
-        simpleParams += `, @${f.CodeName}_Clear=1`;
+        if (needsSimpleParams) {
+          simpleParams += `, @${f.CodeName}_Clear=1`;
+        }
       }
     }
 
@@ -2068,7 +2171,7 @@ export class SQLServerDataProvider
    */
   public static MaxInlineBinaryBytes: number = 32 * 1024 * 1024;
 
-  protected FormatBinaryLiteral(field: EntityFieldInfo, value: unknown): string {
+  private decodeBinaryFieldBytes(field: EntityFieldInfo, value: unknown): Buffer {
     const bytes = IsByteArray(value) ? value : TryBase64ToBytes(typeof value === 'string' ? value : null);
     if (!bytes) {
       throw new Error(`Field "${field.Name}" is binary (${field.Type}); its value must be a base64 string, but it is not valid base64`);
@@ -2080,7 +2183,11 @@ export class SQLServerDataProvider
         `or raise the limit if the batch size and Record Changes cost are acceptable.`,
       );
     }
-    return `0x${Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('hex').toUpperCase()}`;
+    return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  }
+
+  protected FormatBinaryLiteral(field: EntityFieldInfo, value: unknown): string {
+    return `0x${this.decodeBinaryFieldBytes(field, value).toString('hex').toUpperCase()}`;
   }
 
   /**
@@ -2504,13 +2611,17 @@ export class SQLServerDataProvider
     // This prevents EREQINPROG errors when multiple queries try to use the same transaction
     this.initializeQueueProcessor();
     const queue = this.ensureSqlQueue();
+    const enqueuedDiagnosticContext = options?.diagnosticContext ?? GetDiagnosticContext();
+    const effectiveOptions: InternalSQLOptions | undefined = enqueuedDiagnosticContext
+      ? { ...options, diagnosticContext: enqueuedDiagnosticContext }
+      : options;
     return new Promise<sql.IResult<any>>((resolve, reject) => {
       queue.next({
         kind: 'query',
         query,
         parameters,
         context,
-        options,
+        options: effectiveOptions,
         // Ours if it is the ambient handle now, or was one that has since ended: a caller holding
         // the old handle after its commit must be told so, not sent to mssql for ENOTBEGUN.
         ambient: context.transaction === this._transaction || (!!context.transaction && this._endedHandles.has(context.transaction)),
