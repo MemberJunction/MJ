@@ -296,6 +296,24 @@
             "lastModified": "2026-07-01T23:25:37.480Z",
             "checksum": "34614b6405af9d1018b02d5180c95146f7ae26f4c5f3427f330e2efd5ef3d06c"
           }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Render Architecture Diagram"
+          },
+          "primaryKey": {
+            "ID": "8F3585AB-218A-43EE-9E32-A8517DA923D0"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Architecture Diagram Reference"
+          },
+          "primaryKey": {
+            "ID": "07C72F8C-9EF5-43C1-A759-C168D20805A3"
+          }
         }
       ],
       "MJ: AI Skill Sub Agents": [

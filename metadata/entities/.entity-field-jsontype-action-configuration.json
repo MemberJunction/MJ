@@ -1,0 +1,31 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on Action.Config (Config_ in TypeScript) so CodeGen emits a typed",
+      "Config_Object accessor with IActionConfiguration. The interface is authored in",
+      "JSONType-interfaces/IActionConfiguration.ts and inlined into the generated entity by CodeGen.",
+      "It carries the integration routing keys IntegrationActionGenerator already writes, plus",
+      "outputTrustLevel, the per-action trust setting the agent runtime reads (PR #6268)."
+    ],
+    "fields": {
+      "Name": "MJ: Actions"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IActionConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IActionConfiguration.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Actions&Name=Config"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Actions"
+    }
+  }
+]

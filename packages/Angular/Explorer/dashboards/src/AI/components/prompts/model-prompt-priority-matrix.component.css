@@ -245,7 +245,7 @@
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .priority-badge.priority-3 {
   background: var(--mj-status-warning);
-  color: black;
+  color: var(--mj-status-on-warning);
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .priority-badge.priority-4 {
   background: var(--mj-status-warning);
@@ -277,7 +277,7 @@
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .change-indicator.modified {
   background: var(--mj-status-warning);
-  color: black;
+  color: var(--mj-status-on-warning);
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .performance-overlay {
   position: absolute;
@@ -412,7 +412,7 @@
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .priority-badge.priority-3 {
   background: var(--mj-status-warning);
-  color: black;
+  color: var(--mj-status-on-warning);
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .priority-badge.priority-4 {
   background: var(--mj-status-warning);

@@ -48,6 +48,7 @@ vi.mock('../install/package-manager.js', () => ({
     RemoveAppPackages: vi.fn(),
     RunPackageInstallAsync: vi.fn(),
     BumpPrefixedDependencies: vi.fn(),
+    PreflightAppPackages: vi.fn(async () => ({ Success: true, Checks: [], Warnings: [] })),
 }));
 vi.mock('../install/config-manager.js', () => ({
     AddServerDynamicPackages: vi.fn(),
@@ -62,20 +63,10 @@ vi.mock('../install/config-manager.js', () => ({
     AddExcludeSchema: vi.fn(() => ({ Success: true })),
     RemoveExcludeSchema: vi.fn(() => ({ Success: true })),
 }));
-vi.mock('../install/history-recorder.js', () => ({
-    RecordAppInstallation: vi.fn(),
-    RecordInstallHistoryEntry: vi.fn(),
-    RecordAppDependencies: vi.fn(),
-    DeleteAppDependencies: vi.fn(),
-    ReplaceAppDependenciesAtomically: vi.fn(),
-    SetAppStatus: vi.fn(),
-    SetAppStep: vi.fn(),
-    FindInstalledApp: vi.fn(),
-    FindDependentApps: vi.fn(),
-    ListInstalledApps: vi.fn(),
-    UpdateAppRecord: vi.fn(),
-    CheckSchemaSharedByOtherApps: vi.fn(),
-}));
+vi.mock('../install/history-recorder.js', async (importOriginal) => {
+    const { MockHistoryRecorder } = await import('./helpers/history-recorder-mock.js');
+    return MockHistoryRecorder(await importOriginal());
+});
 vi.mock('@memberjunction/core', () => ({
     Metadata: class { async CreateTransactionGroup() { return { Submit: async () => true }; } },
     RunView: class {},

@@ -3,6 +3,9 @@
        Consuming apps that added their own skip link should remove it on upgrade. -->
   <a class="mj-skip-link" href="#mj-main-content" (click)="skipToMainContent($event)">Skip to main content</a>
 
+  <!-- Diagnostic Recording Banner — inside the clipped shell container so its Stop control is visible -->
+  <mj-diagnostic-recording-banner></mj-diagnostic-recording-banner>
+
   <!-- Header -->
   <header class="shell-header">
     <!-- MJ Logo -->
@@ -373,6 +376,10 @@
         <p class="loading-reset-hint">
           This can happen after updates or due to cached data issues.
         </p>
+        <button class="loading-reset-btn" (click)="DownloadPreResetDiagnostics()" style="margin-right: 8px;">
+          <i class="fa-solid fa-box-archive"></i>
+          Download Diagnostic Bundle
+        </button>
         <button class="loading-reset-btn" (click)="ResetApplication()">
           <i class="fa-solid fa-arrows-rotate"></i>
           Reset
@@ -430,3 +437,9 @@
     </div>
   </div>
 }
+
+<!-- Report Problem Dialog -->
+<mj-diagnostic-report-problem-dialog
+  [IsVisible]="DiagnosticDialogOpen"
+  (Closed)="DiagnosticDialogOpen = false">
+</mj-diagnostic-report-problem-dialog>

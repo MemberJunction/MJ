@@ -1,0 +1,52 @@
+{
+  "name": "@memberjunction/diagnostics-server",
+  "type": "module",
+  "version": "6.2.0-edge.7",
+  "description": "MemberJunction Server Diagnostics: AsyncLocalStorage session manager, 3-stage HTTP/GraphQL/SQL capture middleware, chunk writer, .mjdiag bundle assembler, outbound MJC/collector sender, standard MJAPI intake (/diagnostics/intake/v1) with Quarantine-then-Promote MJStorage & malware scanning, Remote Operations, and retention purge job.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "/dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "@apollo/server": "^5.4.0",
+    "@memberjunction/actions": "6.2.0-edge.7",
+    "@memberjunction/actions-base": "6.2.0-edge.7",
+    "@memberjunction/core": "6.2.0-edge.7",
+    "@memberjunction/core-entities": "6.2.0-edge.7",
+    "@memberjunction/credentials": "6.2.0-edge.7",
+    "@memberjunction/diagnostics": "6.2.0-edge.7",
+    "@memberjunction/generic-database-provider": "6.2.0-edge.7",
+    "@memberjunction/global": "6.2.0-edge.7",
+    "@memberjunction/scheduling-base-types": "6.2.0-edge.7",
+    "@memberjunction/scheduling-engine": "6.2.0-edge.7",
+    "@memberjunction/server": "6.2.0-edge.7",
+    "@memberjunction/storage": "6.2.0-edge.7",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

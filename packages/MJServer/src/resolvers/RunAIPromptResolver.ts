@@ -571,25 +571,18 @@ export class RunAIPromptResolver extends ResolverBase {
     }
     
     /**
-     * Helper method to select an embedding model by size
+     * Selects a local embedding model by size: `'small'` is the lowest-PowerRank active local model;
+     * `'medium'` and anything else is the platform default (`AIEngine.DefaultLocalEmbeddingModel`).
+     * Picking by position in the list would shift whenever a model is added.
      * @private
      */
     private selectEmbeddingModelBySize(modelSize: string): MJAIModelEntityExtended {
-        const localModels = AIEngine.Instance.LocalEmbeddingModels;
-        
-        if (!localModels || localModels.length === 0) {
+        const engine = AIEngine.Instance;
+        const model = modelSize === 'small' ? engine.LowestPowerLocalEmbeddingModel : engine.DefaultLocalEmbeddingModel;
+        if (!model) {
             throw new Error('No local embedding models available');
         }
-        
-        // Models are already sorted by PowerRank (highest first)
-        switch (modelSize) {
-            case 'small':
-                return localModels[localModels.length - 1]; // Lowest power
-            case 'medium':
-            default:
-                const midIndex = Math.floor(localModels.length / 2);
-                return localModels[midIndex] || localModels[0];
-        }
+        return model;
     }
     
     /**
@@ -825,7 +818,8 @@ export class RunAIPromptResolver extends ResolverBase {
     async EmbedText(
         @Arg('textToEmbed', () => [String]) textToEmbed: string[],
         @Arg('modelSize') modelSize: string,
-        @Ctx() { userPayload }: { userPayload: UserPayload }
+        @Ctx() { userPayload }: { userPayload: UserPayload },
+        @Arg('inputType', { nullable: true, description: "'query' for search text, 'document' (default) for text that is stored and compared" }) inputType?: string
     ): Promise<EmbedTextResult> {
         // Check API key scope authorization for embedding generation
         await this.CheckAPIKeyScopeAuthorization('embedding:generate', '*', userPayload);
@@ -847,6 +841,11 @@ export class RunAIPromptResolver extends ResolverBase {
             // Ensure AI Engine is configured
             await AIEngine.Instance.Config(false, currentUser);
             
+            const role = inputType === 'query' || inputType === 'document' ? inputType : undefined;
+            if (inputType != null && !role) {
+                return { embeddings: [], modelName: 'Unknown', vectorDimensions: 0, error: `inputType must be 'query' or 'document'` };
+            }
+
             // Select embedding model by size
             const model = this.selectEmbeddingModelBySize(modelSize);
             
@@ -863,7 +862,7 @@ export class RunAIPromptResolver extends ResolverBase {
                 }
                 
                 // Use AIEngine's EmbedText method
-                const result = await AIEngine.Instance.EmbedText(model, text);
+                const result = await AIEngine.Instance.EmbedText(model, text, undefined, { inputType: role });
                 
                 if (result && result.vector && result.vector.length > 0) {
                     embeddings.push(result.vector);
@@ -904,9 +903,10 @@ export class RunAIPromptResolver extends ResolverBase {
     async EmbedTextSystemUser(
         @Arg('textToEmbed', () => [String]) textToEmbed: string[],
         @Arg('modelSize') modelSize: string,
-        @Ctx() { userPayload }: { userPayload: UserPayload }
+        @Ctx() { userPayload }: { userPayload: UserPayload },
+        @Arg('inputType', { nullable: true, description: "'query' for search text, 'document' (default) for text that is stored and compared" }) inputType?: string
     ): Promise<EmbedTextResult> {
         // Reuse the same logic as the regular mutation
-        return this.EmbedText(textToEmbed, modelSize, { userPayload });
+        return this.EmbedText(textToEmbed, modelSize, { userPayload }, inputType);
     }
 }

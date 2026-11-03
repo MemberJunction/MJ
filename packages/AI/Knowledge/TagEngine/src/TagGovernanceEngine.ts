@@ -1,4 +1,4 @@
-import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
 import { UserInfo, Metadata, RunView, LogError, LogStatus, IMetadataProvider } from '@memberjunction/core';
 import { MJTagEntity, MJTagAuditLogEntity, MJContentItemTagEntity, MJTaggedItemEntity, MJTagSynonymEntity, MJTagSuggestionEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
 import { TagEngine } from './TagEngine';
@@ -136,6 +136,7 @@ export class TagGovernanceEngine extends BaseSingleton<TagGovernanceEngine> {
 
             const itemsMoved = await this.repointContentItemTags(sourceID, survivingTagID, contextUser);
             const taggedItemsMoved = await this.repointTaggedItems(sourceID, survivingTagID, contextUser);
+            await this.reparentChildTags(sourceID, survivingTagID, contextUser);
 
             // Carry source's synonyms (and source's own name) onto surviving tag.
             if (sourceName) {
@@ -217,6 +218,33 @@ export class TagGovernanceEngine extends BaseSingleton<TagGovernanceEngine> {
             }
         }
         return moved;
+    }
+
+    /**
+     * Re-parent direct child tags of a merged source tag onto the surviving tag
+     * so children do not remain attached to an inactive ('Merged') parent.
+     */
+    private async reparentChildTags(sourceTagID: string, survivingTagID: string, contextUser: UserInfo): Promise<void> {
+        const rv = new RunView();
+        const result = await rv.RunView<MJTagEntity>({
+            EntityName: 'MJ: Tags',
+            ExtraFilter: `ParentID='${EscapeSQLString(sourceTagID)}'`,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        if (!result.Success) {
+            LogError(`TagGovernanceEngine: Failed to load child tags for source tag ${sourceTagID}: ${result.ErrorMessage}`);
+            return;
+        }
+
+        for (const child of result.Results) {
+            if (UUIDsEqual(child.ID, survivingTagID)) continue;
+            child.ParentID = survivingTagID;
+            const saved = await child.Save();
+            if (!saved) {
+                LogError(`TagGovernanceEngine: Failed to re-parent child tag ${child.ID}: ${child.LatestResult?.Message ?? 'Unknown error'}`);
+            }
+        }
     }
 
     /**
@@ -586,6 +614,11 @@ export class TagGovernanceEngine extends BaseSingleton<TagGovernanceEngine> {
         let resolvedTag: MJTagEntity;
         if (strategy.kind === 'merge-into-existing') {
             resolvedTag = await this.loadTag(strategy.targetTagID, contextUser);
+            await TagEngine.Instance.Config(false, contextUser);
+            const existingTag = TagEngine.Instance.GetTagByName(suggestion.ProposedName);
+            if (existingTag && !UUIDsEqual(existingTag.ID, resolvedTag.ID) && existingTag.Status !== 'Merged') {
+                await this.MergeTags([existingTag.ID], resolvedTag.ID, contextUser);
+            }
             const moved = await this.repointContentItemTagsByName(suggestion.ProposedName, resolvedTag.ID, contextUser);
             suggestion.Status = 'Merged';
             suggestion.ResolvedTagID = resolvedTag.ID;

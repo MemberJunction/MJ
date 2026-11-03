@@ -17,8 +17,10 @@ import { EscapeHTML, HighlightSearchMatches, type ValidationErrorInfo } from '@m
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
 import { FormSectionIndicatorCoordinator, type FormSectionIndicatorSource } from '../section-indicators/form-section-indicator-coordinator.service';
 import { FORM_SECTION_FIELD_HOST, type FormSectionFieldHost } from '../section-indicators/form-section-field-host';
+import { FormRecordCommentsCoordinatorService } from '../comments/form-record-comments-coordinator.service';
 import {
   ClaimedCollectionErrors,
+  DescribeSectionComments,
   DescribeSectionDirty,
   DescribeSectionErrors,
   DescribeSectionWarnings,
@@ -92,6 +94,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   private ngZone = inject(NgZone);
   private chrome = inject(FormChromeCoordinator, { optional: true });
   private indicators = inject(FormSectionIndicatorCoordinator, { optional: true });
+  private commentsCoordinator = inject(FormRecordCommentsCoordinatorService, { optional: true });
 
   /** Unique key for state persistence */
   @Input() SectionKey = '';
@@ -518,10 +521,12 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
    * the coordinator). Pure and cheap: one pass over the field list.
    */
   public get SectionIndicators(): FormSectionIndicators {
+    const commentCount = this.SectionCommentCount;
     return SumSectionIndicators(
       this.fieldIndicators(),
       TallyValidationErrors(this.claimedGraphErrors()),
       this.Indicators,
+      commentCount > 0 ? { CommentCount: commentCount } : null,
     );
   }
 
@@ -537,6 +542,10 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     return this.SectionIndicators.WarningCount;
   }
 
+  public get SectionCommentCount(): number {
+    return this.commentsCoordinator?.GetSectionOpenCommentCount(this.SectionKey, this.renderedFieldNames()) ?? 0;
+  }
+
   public get SectionDirtyTitle(): string {
     return DescribeSectionDirty(this.SectionDirtyCount);
   }
@@ -547,6 +556,45 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
 
   public get SectionWarningTitle(): string {
     return DescribeSectionWarnings(this.SectionWarningCount);
+  }
+
+  public get SectionCommentTitle(): string {
+    return DescribeSectionComments(this.SectionCommentCount);
+  }
+
+  public get CanCommentOnSection(): boolean {
+    return Boolean(
+      this.commentsCoordinator &&
+      this.FieldPanelForm?.record?.IsSaved &&
+      this.FieldPanelForm?.record?.EntityInfo?.AllowRecordComments !== false &&
+      this.SectionKey
+    );
+  }
+
+  public OnOpenSectionComments(event: MouseEvent): void {
+    event.stopPropagation();
+    event.preventDefault();
+    if (!this.commentsCoordinator || !this.SectionKey) return;
+
+    const btn = event.currentTarget as HTMLElement | null;
+    const rect = btn?.getBoundingClientRect();
+    this.commentsCoordinator.OpenPopoverForTarget({
+      AnchorType: 'Section',
+      AnchorKey: this.SectionKey,
+      Label: this.SectionName || this.SectionKey,
+      SectionKey: this.SectionKey,
+      SectionDisplayName: this.SectionName || this.SectionKey,
+      AnchorRect: rect
+        ? {
+            top: rect.top,
+            left: rect.left,
+            right: rect.right,
+            bottom: rect.bottom,
+            width: rect.width,
+            height: rect.height
+          }
+        : undefined
+    });
   }
 
   /** {@link FormSectionIndicatorSource} — the rail reads this through the coordinator. */
@@ -630,6 +678,11 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     this.DisplayName = this.SectionName;
     this.chrome?.Changes.pipe(takeUntil(this.destroy$)).subscribe(() => {
       this.updateVisibilityAndHighlighting();
+    });
+    this.commentsCoordinator?.Changed$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.updateVisibilityAndHighlighting();
+      this.cdr.markForCheck();
+      this.indicators?.NotifyChanged();
     });
     this.registerIndicatorSource();
     // A section that mounts after the rail was worked out (a slot panel that draws
@@ -859,6 +912,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
 
   private hasRenderableContent(): boolean {
     if (this.Variant === 'related-entity') return true;
+    if (this.SectionCommentCount > 0) return true;
     const fields = this.allFields();
     if (fields.length === 0) return true;
     return fields.some((field) => !field.ShouldHideField);

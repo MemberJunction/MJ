@@ -1,5 +1,58 @@
 # @memberjunction/ai-reranker
 
+## 6.2.0-edge.7
+
+### Minor Changes
+
+- 8f370b3: Add Cohere Rerank 5 (`rerank-v5.0-pro`, `rerank-v5.0-fast`) and its Context Focus spans.
+  - `@memberjunction/ai-cohere`: `CohereReranker` always calls Cohere's `/v2/rerank`, sends the query as written for every Cohere model (the instruction wrapper is gone; Rerank 5 does not take relevance instructions), and defaults to `rerank-v5.0-fast`. The `RelevantSpans` option (`true` or `{ Threshold, MaxSpans }`) asks for Context Focus spans, returned on `document.metadata.RelevantSpans` as `CohereRelevantSpan[]` with text sliced by Unicode code points, as Cohere counts offsets. Only `true` or an object turns it on; `Threshold` is clamped to 0-1 and a non-positive `MaxSpans` is ignored. It sends `max_tokens_per_doc` when the call carries a token limit.
+  - `@memberjunction/ai` and `@memberjunction/ai-reranker`: `RerankParams.MaxTokensPerDocument` carries the model's per-document token limit, and `AIRerankerRunner` fills it from the selected model-vendor row's `MaxInputTokens`, so a 32K Cohere model is no longer truncated at Cohere's 4096 default.
+  - `@memberjunction/search-engine`: `CohereReRanker` uses that `CohereReranker` through the ClassFactory instead of its own Cohere client, and no longer declares `cohere-ai`. It defaults to `rerank-v5.0-fast`; scope config `relevantSpans` sets `SearchResultItem.RelevantSpans` and, unless `focusSnippet` is false, narrows `Snippet` to the spans, in document order, from where the snippet starts in the text sent for reranking. `minRelevanceThreshold` drops weak results but never empties the list.
+  - Metadata: Rerank 5 models, with `Default Rerank` preferring `rerank-v5.0-fast`, so callers that don't pin a model, and search scopes with no `model`, switch to it. Sage and Chief of Staff memory reranking moves to `rerank-v5.0-fast` with `minRelevanceThreshold` 0.02.
+
+### Patch Changes
+
+- c018cb9: Run conversation naming in parallel with `RunAgent` on new conversations (the generated name is saved after the run's own writes, also when the run fails, unless the conversation was renamed meanwhile), and skip new-conversation artifact scans and redundant `ConversationDetail` reloads in `AgentRunner.RunAgentInConversation`. On `Default` and fallback model selection, an `AIPromptModel` row's `VendorID` now picks which vendor serves its model when that vendor has credentials (a runtime vendor override still wins), without changing which model the ranking selects; its `EffortLevel` and `PromptConfigurationObject` go to the candidates the row describes. Every runner (prompt, decision, embedding, image, media, reranker) selects this way, so the vendor no longer depends on whether failover is on. Failover follows the same rule: on reaching a model it starts on the row's vendor and then tries that model's other vendors, so within the default 3-call budget it more often stays on the same model across vendors; with every vendor keyed, the 2nd call's model differs from before on 3 of 22 shipped Default-strategy prompts and the 3rd call's on 11. A model with two prompt-model rows naming two vendors can spend the whole budget on that model, which helps a vendor outage but not a model-level failure, and a budget spread over several driver classes skips the last-resort cross-provider call. `GeminiLLM` merges `modelSpecificResponseFormat` options alongside the `JSON` response format, and a rejected `thinkingConfig` carried that way is replaced on later calls like an effort-level one.
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [91cba84]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [8f370b3]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [953086f]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [6779eed]
+- Updated dependencies [0b406e8]
+- Updated dependencies [c018cb9]
+- Updated dependencies [397ae9a]
+- Updated dependencies [89a5b59]
+- Updated dependencies [6b0de38]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/ai-core-plus@6.2.0-edge.7
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/ai@6.2.0-edge.7
+  - @memberjunction/aiengine@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/ai-prompts@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes

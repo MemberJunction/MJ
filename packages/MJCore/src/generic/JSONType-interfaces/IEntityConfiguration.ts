@@ -55,12 +55,48 @@ export interface IEntityConfiguration {
     Clone?: IEntityCloneConfiguration;
 
     /**
+     * Optional anchored record commenting configuration for this entity.
+     * Controls whether anchored conversations (`MJ: Conversations` with `AnchorType` set)
+     * are permitted on records of this entity and which permissions/roles may post or resolve comments.
+     */
+    Comments?: IEntityCommentsConfiguration;
+
+    /**
      * Controls which columns a save operation (`spCreate` / `spUpdate`) returns from the database.
      * - `'full'` (default when omitted): Re-queries `SELECT * FROM <BaseView>` after `INSERT`/`UPDATE`.
      * - `'datestamps_only'`: Selects only the primary key(s) and `__mj_CreatedAt`/`__mj_UpdatedAt`
      *   directly from `<BaseTable>`, preserving in-memory field values on the saved entity.
      */
     SaveReturnMode?: EntitySaveReturnMode;
+}
+
+/**
+ * Configuration for entity-level anchored record comments (`MJ: Conversations`).
+ */
+export interface IEntityCommentsConfiguration {
+    /**
+     * Master switch for anchored record commenting on this entity.
+     * Defaults to `true` when omitted. Set to `false` to disable record, field, and section
+     * commenting on this entity in both the form UI and server-side validation.
+     */
+    Enabled?: boolean;
+
+    /**
+     * Minimum entity permission required on this entity to create, reply to, or resolve
+     * anchored comments on its records:
+     * - `'Read'` (default): Any user who can read the record (including RLS) can participate
+     *   in anchored discussions on it without needing column-level `Update` rights.
+     * - `'Update'`: Only users with `Update` permission on the entity can post or resolve
+     *   comments; users with `Read`-only permission can still view existing comments.
+     */
+    RequiredPermission?: 'Read' | 'Update';
+
+    /**
+     * Optional list of role names (`MJ: Roles.Name`, case-insensitive) allowed to post or
+     * resolve comments on this entity. When omitted or empty, any user meeting
+     * {@link RequiredPermission} may comment.
+     */
+    AllowedRoles?: string[];
 }
 
 /**

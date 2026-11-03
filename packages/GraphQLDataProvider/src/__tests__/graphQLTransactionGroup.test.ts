@@ -60,12 +60,18 @@ import { GraphQLTransactionGroup } from '../graphQLTransactionGroup';
 import { SafeJSONParse } from '@memberjunction/global';
 
 describe('GraphQLTransactionGroup', () => {
-  let mockProvider: { ExecuteGQL: ReturnType<typeof vi.fn> };
+  let mockProvider: {
+    ExecuteGQL: ReturnType<typeof vi.fn>;
+    IsFieldDirtyOnChain: ReturnType<typeof vi.fn>;
+    ClearISAParentPreSaveSnapshots: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
     mockProvider = {
       ExecuteGQL: vi.fn(),
+      IsFieldDirtyOnChain: vi.fn((_entity: unknown, field: { Dirty: boolean }) => field.Dirty),
+      ClearISAParentPreSaveSnapshots: vi.fn(),
     };
   });
 

@@ -109,7 +109,21 @@ container, no network.
 ### `WorkspacePath` means "as the harness sees it"
 
 A host path under the local provider; a **container-internal** path under Docker. Pass it to harness
-processes — do **not** open it with `fs` unless you know you are on the local provider.
+processes — do **not** open it with `fs` unless you know you are on the local provider. When host-side
+code needs to stage request files or read output artifacts from the bind mount, use
+`SandboxHandle.HostWorkspacePath`.
+
+### Container limits and hardening (`SandboxConfig`)
+
+`DockerSandboxProvider` maps optional `SandboxConfig` fields onto `docker run` flags before the image (`LocalDirectorySandboxProvider` ignores them):
+
+- `Cpus`: CPU quota in cores (`--cpus <n>`).
+- `MemoryMb`: hard memory limit in megabytes (`--memory <n>m`).
+- `PidsLimit`: maximum process/thread count inside the container (`--pids-limit <n>`).
+- `ShmSizeMb`: `/dev/shm` size in megabytes (`--shm-size <n>m`).
+- `ReadOnlyRoot`: read-only root filesystem with writable `/tmp` (`--read-only --tmpfs /tmp:rw,size=256m`).
+- `User`: container process UID/GID (`--user <uid:gid>`) for bind-mount ownership parity.
+- `DropCapabilities`: drop all Linux capabilities and block privilege escalation (`--cap-drop ALL --security-opt no-new-privileges`).
 
 ---
 

@@ -19,6 +19,8 @@ function summary(over: Partial<SchemaRefreshSummaryLike> = {}): SchemaRefreshSum
         Succeeded: true,
         ObjectsCreated: 12,
         ObjectsUpdated: 3,
+        FieldsCreated: 69,
+        FieldsUpdated: 487,
         UnresolvedObjects: ['Widgets'],
         ...over,
     };
@@ -28,7 +30,7 @@ describe('BuildReactivateMessage', () => {
     it('leads with the reactivation on every path', () => {
         const paths = [
             BuildReactivateMessage(undefined),
-            BuildReactivateMessage(summary({ InProgress: true, ObjectsCreated: 0, ObjectsUpdated: 0, UnresolvedObjects: [] })),
+            BuildReactivateMessage(summary({ InProgress: true, ObjectsCreated: 0, ObjectsUpdated: 0, FieldsCreated: 0, FieldsUpdated: 0, UnresolvedObjects: [] })),
             BuildReactivateMessage(summary()),
             BuildReactivateMessage(summary({ Succeeded: false, FailureMessage: 'boom' })),
         ];
@@ -40,6 +42,8 @@ describe('BuildReactivateMessage', () => {
             InProgress: true,
             ObjectsCreated: 0,
             ObjectsUpdated: 0,
+            FieldsCreated: 0,
+            FieldsUpdated: 0,
             UnresolvedObjects: [],
         }));
 
@@ -50,10 +54,11 @@ describe('BuildReactivateMessage', () => {
         expect(msg).not.toMatch(/PK-unresolved/);
     });
 
-    it('reports real counts when the caller asked to block', () => {
+    it('reports real counts when the caller asked to block — fields included', () => {
         const msg = BuildReactivateMessage(summary());
-        expect(msg).toContain('12 created');
+        expect(msg).toContain('12 objects created');
         expect(msg).toContain('3 updated');
+        expect(msg).toContain('69 fields created');
         expect(msg).toContain('1 PK-unresolved');
         expect(msg).not.toMatch(/running/i);
     });
@@ -67,6 +72,8 @@ describe('BuildReactivateMessage', () => {
             FailureMessage: 'ConnectionTest failed: No Totara credentials found',
             ObjectsCreated: 0,
             ObjectsUpdated: 0,
+            FieldsCreated: 0,
+            FieldsUpdated: 0,
             UnresolvedObjects: [],
         }));
 
