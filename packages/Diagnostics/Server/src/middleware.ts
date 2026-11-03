@@ -96,6 +96,15 @@ export function CreateDiagnosticsApolloPlugin(): ApolloServerPlugin {
   };
 }
 
+/** The archive bytes of a bundle built here or received by intake, or undefined when this instance holds none. */
+function findBundleBytes(bundleId: string): Uint8Array | undefined {
+  const local = GetInMemoryDiagnosticBundle(bundleId);
+  if (local?.archiveBytes) {
+    return local.archiveBytes;
+  }
+  return DiagnosticIntakeService.Instance.GetReceivedBundle(bundleId)?.decryptedZipBytes ?? undefined;
+}
+
 @RegisterClass(BaseServerMiddleware, 'DiagnosticsServerMiddleware')
 export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
   public get Label(): string {
@@ -228,14 +237,27 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
     if (context) {
       SetDiagnosticsApiRoute(context.ApiRoute);
     }
-    // 1. Single-use signed bundle download route
+    // 1. Single-use signed bundle download route. The token is used up only when the bytes are sent.
     app.get(
       this.route('/diagnostics/bundles/:bundleId/download'),
       (req: ExpressReq, res: ExpressRes) => {
         const rawBundleId = req.params['bundleId'];
         const bundleId = Array.isArray(rawBundleId) ? rawBundleId[0] ?? '' : rawBundleId ?? '';
         const token = typeof req.query['token'] === 'string' ? req.query['token'] : '';
-        const redemption = DiagnosticSessionManager.Instance.RedeemDownloadToken(token, bundleId);
+        const mgr = DiagnosticSessionManager.Instance;
+        const check = mgr.VerifyDownloadToken(token, bundleId);
+        if (!check.valid) {
+          res.status(403).json({ error: check.reason ?? 'Forbidden' });
+          return;
+        }
+        const bytes = findBundleBytes(bundleId);
+        if (!bytes) {
+          res.status(410).json({
+            error: 'The bundle bytes are no longer available on this instance; rebuild the bundle.'
+          });
+          return;
+        }
+        const redemption = mgr.RedeemDownloadToken(token, bundleId);
         if (!redemption.valid) {
           res.status(403).json({ error: redemption.reason ?? 'Forbidden' });
           return;
@@ -247,23 +269,8 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
           'Content-Disposition',
           `attachment; filename="${bundleId.replace(/[^a-zA-Z0-9_-]/g, '')}.mjdiag"`
         );
-
-        const localBundle = GetInMemoryDiagnosticBundle(bundleId);
-        if (localBundle?.archiveBytes) {
-          res.setHeader('Content-Type', 'application/zip');
-          res.status(200).send(Buffer.from(localBundle.archiveBytes));
-          return;
-        }
-
-        const received = DiagnosticIntakeService.Instance.GetReceivedBundle(bundleId);
-        if (received?.decryptedZipBytes) {
-          res.setHeader('Content-Type', 'application/zip');
-          res.status(200).send(Buffer.from(received.decryptedZipBytes));
-          return;
-        }
-        res.status(410).json({
-          error: 'The bundle bytes are no longer available on this instance; rebuild the bundle.'
-        });
+        res.setHeader('Content-Type', 'application/zip');
+        res.status(200).send(Buffer.from(bytes));
       }
     );
 

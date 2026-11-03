@@ -103,6 +103,13 @@ interface PendingChunkBuffer {
   lastEntryAt: Date;
 }
 
+/** The result of checking or redeeming a download token. */
+export interface DownloadTokenCheck {
+  valid: boolean;
+  userId?: string;
+  reason?: string;
+}
+
 interface DownloadTokenClaims {
   bundleId: string;
   userId: string;
@@ -1463,45 +1470,65 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     return `${payloadB64}.${sig}`;
   }
 
-  public RedeemDownloadToken(token: string, expectedBundleId: string): { valid: boolean; userId?: string; reason?: string } {
+  /**
+   * Checks a download token without using it up: signature, bundle ID, expiry, and that it was not
+   * redeemed yet. Use {@link RedeemDownloadToken} to use it up.
+   */
+  public VerifyDownloadToken(token: string, expectedBundleId: string): DownloadTokenCheck {
+    const checked = this.checkDownloadToken(token, expectedBundleId);
+    return 'reason' in checked ? { valid: false, reason: checked.reason } : { valid: true, userId: checked.userId };
+  }
+
+  /**
+   * Checks a download token and uses it up (single use). A token already redeemed is refused, so of
+   * two requests racing on one token only one succeeds.
+   */
+  public RedeemDownloadToken(token: string, expectedBundleId: string): DownloadTokenCheck {
+    const checked = this.checkDownloadToken(token, expectedBundleId);
+    if ('reason' in checked) {
+      return { valid: false, reason: checked.reason };
+    }
+    const now = Date.now();
+    for (const [nonce, exp] of this._redeemedDownloadNonces.entries()) {
+      if (now > exp) this._redeemedDownloadNonces.delete(nonce);
+    }
+    this._redeemedDownloadNonces.set(checked.nonce, checked.expiresAtMs + 60_000);
+    return { valid: true, userId: checked.userId };
+  }
+
+  /** Returns a token's claims when it is valid for the bundle and not redeemed yet, otherwise the reason. */
+  private checkDownloadToken(token: string, expectedBundleId: string): DownloadTokenClaims | { reason: string } {
     const parts = token.split('.');
     if (parts.length !== 2) {
-      return { valid: false, reason: 'Malformed token' };
+      return { reason: 'Malformed token' };
     }
     const [payloadB64, sig] = parts;
     const expectedSig = crypto.createHmac('sha256', this._hmacSecret).update(payloadB64).digest('base64url');
     const sigBuf = Buffer.from(sig);
     const expBuf = Buffer.from(expectedSig);
     if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
-      return { valid: false, reason: 'Invalid token signature' };
+      return { reason: 'Invalid token signature' };
     }
 
     let claims: DownloadTokenClaims;
     try {
       claims = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as DownloadTokenClaims;
     } catch {
-      return { valid: false, reason: 'Invalid token claims' };
+      return { reason: 'Invalid token claims' };
     }
 
     if (claims.bundleId !== expectedBundleId) {
-      return { valid: false, reason: 'Bundle ID mismatch' };
+      return { reason: 'Bundle ID mismatch' };
     }
     if (Date.now() > claims.expiresAtMs) {
-      return { valid: false, reason: 'Token expired' };
+      return { reason: 'Token expired' };
     }
     if (this._redeemedDownloadNonces.has(claims.nonce)) {
-      return { valid: false, reason: 'Token already redeemed (single-use)' };
+      return { reason: 'Token already redeemed (single-use)' };
     }
-
-    // Prune expired nonces and record this one
-    const now = Date.now();
-    for (const [nonce, exp] of this._redeemedDownloadNonces.entries()) {
-      if (now > exp) this._redeemedDownloadNonces.delete(nonce);
-    }
-    this._redeemedDownloadNonces.set(claims.nonce, claims.expiresAtMs + 60_000);
-
-    return { valid: true, userId: claims.userId };
+    return claims;
   }
+
 
   /** Sends an archive to an enrolled collector. See `collectorClient.ts`. */
   public async SendBundleToCollector(params: SendBundleToCollectorParams): Promise<CollectorSendResult> {
