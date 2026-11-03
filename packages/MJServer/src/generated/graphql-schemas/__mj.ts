@@ -6041,7 +6041,7 @@ export class MJAIAgentRunStep_ {
     @Field({nullable: true, description: "JSON array of skill-invocation records (AgentSkillInvocation[]) associating this step with the skills involved in it, or NULL when no skills are in play. Each record carries SkillID, SkillName, ActivationType (requested = user /skill mention; auto = agent self-activation), Provenance of authority (the gate values that admitted the skill: AcceptsSkills, both ActivationMode dials, and who requested it), and an optional agent-stated Reason when self-activated. Population: Skill steps record the activation(s) they performed; Prompt steps record the full set of skills in effect for that turn; Actions and Sub-Agent steps record the skill(s) through which the executed tool became available (NULL means the tool was a native grant)."}) 
     Skills?: string;
         
-    @Field({nullable: true, description: "Which tool-calling path this step's model call took: Native (Actions as tools, envelope control flow), NativeImplicit (Actions, sub-agents, payload changes and ask_user as tools; plain text ends the turn), Envelope (prose action catalog + JSON envelope), or NativeFallback (a native attempt failed in a tools-specific way and completed via an envelope retry). NULL for steps that never reached a model call, and for rows predating the feature."}) 
+    @Field({nullable: true, description: "Which tool-calling path this step's model call took: Native (Actions as tools, envelope control flow), NativeImplicit (Actions, sub-agents, payload changes and ask_user as tools; plain text ends the turn), NativeRecovered (a Native call the provider rejected for its arguments, read back out of the rejection and dispatched), Envelope (prose action catalog + JSON envelope), or NativeFallback (a native attempt failed in a tools-specific way and completed via an envelope retry). NULL for steps that never reached a model call, and for rows predating the feature."}) 
     @MaxLength(25)
     ToolCallingMode?: string;
         
@@ -16577,7 +16577,7 @@ export class MJAIPromptRun_ {
     @MaxLength(36)
     UsageTypeID?: string;
         
-    @Field({nullable: true, description: "Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call."}) 
+    @Field({nullable: true, description: "Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'NativeRecovered' = a hybrid native call the provider rejected for its arguments (Groq tool_use_failed) whose tool call the driver read back out of the rejection; the arguments then go through the usual coercion. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call."}) 
     @MaxLength(25)
     ToolCallingMode?: string;
         
@@ -17625,7 +17625,7 @@ export class MJAIPrompt_ {
     @Field(() => Int, {nullable: true, description: "Default number of top log probabilities to include when IncludeLogProbs is true. Can be overridden at runtime."}) 
     TopLogProbs?: number;
         
-    @Field({nullable: true, description: "Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None"}) 
+    @Field({nullable: true, description: "Whether a failed model call fails over to other candidates. None: the selected model is called once, with no failover. Any other value (SameModelDifferentVendor, NextBestModel, PowerRank): after a failover-eligible error, the remaining candidates from model selection are tried in priority order, and they can include other models; the chat prompt runner does not tell these values apart. Only the embedding runner narrows by strategy: SameModelDifferentVendor keeps it on the selected model, so vectors stay in one space."}) 
     @MaxLength(50)
     FailoverStrategy?: string;
         

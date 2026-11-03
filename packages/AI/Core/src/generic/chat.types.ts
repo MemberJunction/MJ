@@ -633,6 +633,15 @@ export class ChatResult extends BaseResult {
      * Structure varies by AI provider.
      */
     modelSpecificResponseDetails?: Record<string, any>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+    /**
+     * True when the provider REJECTED the model's tool call and the driver read the call back out
+     * of the rejection instead of failing — Groq's `tool_use_failed`, whose `failed_generation`
+     * holds the call its schema check refused. The choice then carries `toolCalls` as usual; the
+     * arguments are the model's own, not yet coerced. The prompt runner records the turn as
+     * `'NativeRecovered'` rather than `'Native'`. Undefined on every ordinary result.
+     */
+    ToolCallsRecovered?: boolean;
 }
 
 // =============================================================================

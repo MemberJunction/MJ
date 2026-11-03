@@ -172,6 +172,24 @@ export function ResolveToolChoiceForRequest(
     return catalogConfiguration?.LLM?.SupportsForcedToolChoice === false ? 'auto' : choice;
 }
 
+/**
+ * The decision to record on a result whose tool calls the driver read back out of a provider
+ * rejection ({@link ChatResult.ToolCallsRecovered}, Groq's `tool_use_failed` — #5847).
+ *
+ * Only a hybrid `'Native'` turn becomes `'NativeRecovered'`. A `'NativeImplicit'` turn keeps its mode,
+ * because the agent loop reads that mode to know control tools are dispatchable and that plain text
+ * ends the turn; one column cannot carry both facts. Every other result keeps the gate's decision.
+ *
+ * @param decision The gate's decision for the request
+ * @param result The result the model call returned
+ * @returns The decision to record on the result
+ */
+export function RecoveredToolCallingDecision(decision: NativeToolCallingDecision, result: ChatResult): NativeToolCallingDecision {
+    return result.ToolCallsRecovered === true && decision.mode === 'Native'
+        ? { ...decision, mode: 'NativeRecovered' }
+        : decision;
+}
+
 // =============================================================================
 // Mode recording — carrying the decision from the model call to the prompt run
 // =============================================================================

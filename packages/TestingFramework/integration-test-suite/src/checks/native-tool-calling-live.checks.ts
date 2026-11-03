@@ -82,16 +82,14 @@ const KNOWN_NATIVE_GAPS: Record<string, string> = {
 };
 
 /**
- * Gaps that apply to the stock chart Action only, keyed by API name. Groq validates tool arguments
- * against the declared schema on its side; Qwen 3.6 27B sends `ShowGrid` as the string "true", which
- * the backfilled boolean schema now refuses, so Groq rejects the call before MJ's coercion can run and
- * the turn falls back. The same model passes NTC1, so the gap is scoped to NTC3.
+ * Gaps that apply to the stock chart Action only, keyed by API name. Empty today: Qwen 3.6 27B on
+ * Groq sends `ShowGrid` as the string "true" and Groq refuses it against the boolean schema, but the
+ * Groq driver now reads the call back out of that `tool_use_failed` rejection and MJ's coercion fixes
+ * the type, so the turn records `NativeRecovered` instead of falling back (#5847).
  */
-const KNOWN_CHART_NATIVE_GAPS: Record<string, string> = {
-    'qwen/qwen3.6-27b': 'Groq refuses ShowGrid sent as a string against the boolean schema before MJ can coerce it'
-};
+const KNOWN_CHART_NATIVE_GAPS: Record<string, string> = {};
 
-const NATIVE_MODES = new Set(['Native', 'NativeImplicit']);
+const NATIVE_MODES = new Set(['Native', 'NativeImplicit', 'NativeRecovered']);
 
 // ─── Fixture Action ────────────────────────────────────────────────────────────
 

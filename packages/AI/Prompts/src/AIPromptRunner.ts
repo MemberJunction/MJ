@@ -6,7 +6,7 @@ import {
   type FailoverConfiguration,
   type FailoverAttempt,
 } from './BaseModelRunner';
-import { GetToolCallingDecision, GetToolCallingMode, NativeToolCallingDecision, RecordToolCallingDecision, RecordToolCallingMode, ResolveNativeToolCalling, ResolveToolChoiceForRequest } from './nativeToolCallingGate';
+import { GetToolCallingDecision, GetToolCallingMode, NativeToolCallingDecision, RecordToolCallingDecision, RecordToolCallingMode, RecoveredToolCallingDecision, ResolveNativeToolCalling, ResolveToolChoiceForRequest } from './nativeToolCallingGate';
 import { AIModelRunner } from './AIModelRunner';
 import { RecordSentPrefixFingerprint, ReplayedReasoningPrefixFingerprint, WithoutReplayedReasoning } from './replayedReasoningPrefix';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo, PickPromptExecutionScope } from '@memberjunction/ai-core-plus';
@@ -2595,10 +2595,11 @@ export class AIPromptRunner extends BaseModelRunner {
       // to the prompt run (mode) and to the agent loop (`toolResults` — the loop answers native
       // calls as tool turns only when the result says so). Copying the mode alone resets `toolResults`
       // to false on the fresh result object, which leaves native tool results inert.
-      // A fallback below overwrites the mode with 'NativeFallback'.
+      // A fallback below overwrites the mode with 'NativeFallback'; a tool call the driver read back
+      // out of a provider rejection records 'NativeRecovered' (#5847).
       const gatedDecision = GetToolCallingDecision(chatParams);
       if (gatedDecision) {
-        RecordToolCallingDecision(chatResult, gatedDecision);
+        RecordToolCallingDecision(chatResult, RecoveredToolCallingDecision(gatedDecision, chatResult));
       }
 
       // Layer 4 fallback, part two: a native-mode call that came back as a failed result for a

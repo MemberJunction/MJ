@@ -2515,7 +2515,7 @@ detailed information about what validation rules failed.`),
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: Array<MJAIAgentRunStepEntity_AgentSkillInvocation>
         * * Description: JSON array of skill-invocation records (AgentSkillInvocation[]) associating this step with the skills involved in it, or NULL when no skills are in play. Each record carries SkillID, SkillName, ActivationType (requested = user /skill mention; auto = agent self-activation), Provenance of authority (the gate values that admitted the skill: AcceptsSkills, both ActivationMode dials, and who requested it), and an optional agent-stated Reason when self-activated. Population: Skill steps record the activation(s) they performed; Prompt steps record the full set of skills in effect for that turn; Actions and Sub-Agent steps record the skill(s) through which the executed tool became available (NULL means the tool was a native grant).`),
-    ToolCallingMode: z.union([z.literal('Envelope'), z.literal('Native'), z.literal('NativeFallback'), z.literal('NativeImplicit')]).nullable().describe(`
+    ToolCallingMode: z.union([z.literal('Envelope'), z.literal('Native'), z.literal('NativeFallback'), z.literal('NativeImplicit'), z.literal('NativeRecovered')]).nullable().describe(`
         * * Field Name: ToolCallingMode
         * * Display Name: Tool Calling Mode
         * * SQL Data Type: nvarchar(25)
@@ -2525,7 +2525,8 @@ detailed information about what validation rules failed.`),
     *   * Native
     *   * NativeFallback
     *   * NativeImplicit
-        * * Description: Which tool-calling path this step's model call took: Native (Actions as tools, envelope control flow), NativeImplicit (Actions, sub-agents, payload changes and ask_user as tools; plain text ends the turn), Envelope (prose action catalog + JSON envelope), or NativeFallback (a native attempt failed in a tools-specific way and completed via an envelope retry). NULL for steps that never reached a model call, and for rows predating the feature.`),
+    *   * NativeRecovered
+        * * Description: Which tool-calling path this step's model call took: Native (Actions as tools, envelope control flow), NativeImplicit (Actions, sub-agents, payload changes and ask_user as tools; plain text ends the turn), NativeRecovered (a Native call the provider rejected for its arguments, read back out of the rejection and dispatched), Envelope (prose action catalog + JSON envelope), or NativeFallback (a native attempt failed in a tools-specific way and completed via an envelope retry). NULL for steps that never reached a model call, and for rows predating the feature.`),
     NativeToolCallCount: z.number().nullable().describe(`
         * * Field Name: NativeToolCallCount
         * * Display Name: Native Tool Call Count
@@ -7299,7 +7300,7 @@ export const MJAIPromptRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Usage Types (vwAIUsageTypes.ID)
         * * Description: The base measure this run's quantities are counted in. Defaults to Tokens, where the Tokens* columns carry the quantity and the units columns are unused; a continuous-media run sets it to Seconds, Characters or Images and populates InputUnitsUsed / OutputUnitsUsed. Always the base measure, never the billing measure: audio billed per hour is still recorded as Seconds, and the price unit type converts. NULL means token-billed, which is what every row predating this column is; it is read as Tokens at one seam in MJAIPromptRunEntityServer, and becomes NOT NULL in the release after the AI Usage Types seed ships.`),
-    ToolCallingMode: z.union([z.literal('Envelope'), z.literal('Native'), z.literal('NativeFallback'), z.literal('NativeImplicit')]).nullable().describe(`
+    ToolCallingMode: z.union([z.literal('Envelope'), z.literal('Native'), z.literal('NativeFallback'), z.literal('NativeImplicit'), z.literal('NativeRecovered')]).nullable().describe(`
         * * Field Name: ToolCallingMode
         * * Display Name: Tool Calling Mode
         * * SQL Data Type: nvarchar(25)
@@ -7309,7 +7310,8 @@ export const MJAIPromptRunSchema = z.object({
     *   * Native
     *   * NativeFallback
     *   * NativeImplicit
-        * * Description: Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.`),
+    *   * NativeRecovered
+        * * Description: Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'NativeRecovered' = a hybrid native call the provider rejected for its arguments (Groq tool_use_failed) whose tool call the driver read back out of the rejection; the arguments then go through the usual coercion. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.`),
     UserID: z.string().nullable().describe(`
         * * Field Name: UserID
         * * Display Name: User ID
@@ -7747,7 +7749,7 @@ export const MJAIPromptSchema = z.object({
     *   * PowerRank
     *   * SameModelDifferentVendor
     *   * SameModelDifferentVendor
-        * * Description: Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None`),
+        * * Description: Whether a failed model call fails over to other candidates. None: the selected model is called once, with no failover. Any other value (SameModelDifferentVendor, NextBestModel, PowerRank): after a failover-eligible error, the remaining candidates from model selection are tried in priority order, and they can include other models; the chat prompt runner does not tell these values apart. Only the embedding runner narrows by strategy: SameModelDifferentVendor keeps it on the selected model, so vectors stay in one space.`),
     FailoverMaxAttempts: z.number().nullable().describe(`
         * * Field Name: FailoverMaxAttempts
         * * Display Name: Failover Max Attempts
@@ -48878,12 +48880,13 @@ detailed information about what validation rules failed.
     *   * Native
     *   * NativeFallback
     *   * NativeImplicit
-    * * Description: Which tool-calling path this step's model call took: Native (Actions as tools, envelope control flow), NativeImplicit (Actions, sub-agents, payload changes and ask_user as tools; plain text ends the turn), Envelope (prose action catalog + JSON envelope), or NativeFallback (a native attempt failed in a tools-specific way and completed via an envelope retry). NULL for steps that never reached a model call, and for rows predating the feature.
+    *   * NativeRecovered
+    * * Description: Which tool-calling path this step's model call took: Native (Actions as tools, envelope control flow), NativeImplicit (Actions, sub-agents, payload changes and ask_user as tools; plain text ends the turn), NativeRecovered (a Native call the provider rejected for its arguments, read back out of the rejection and dispatched), Envelope (prose action catalog + JSON envelope), or NativeFallback (a native attempt failed in a tools-specific way and completed via an envelope retry). NULL for steps that never reached a model call, and for rows predating the feature.
     */
-    get ToolCallingMode(): 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | null {
+    get ToolCallingMode(): 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | 'NativeRecovered' | null {
         return this.Get('ToolCallingMode');
     }
-    set ToolCallingMode(value: 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | null) {
+    set ToolCallingMode(value: 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | 'NativeRecovered' | null) {
         this.Set('ToolCallingMode', value);
     }
 
@@ -64292,12 +64295,13 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     *   * Native
     *   * NativeFallback
     *   * NativeImplicit
-    * * Description: Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.
+    *   * NativeRecovered
+    * * Description: Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'NativeRecovered' = a hybrid native call the provider rejected for its arguments (Groq tool_use_failed) whose tool call the driver read back out of the rejection; the arguments then go through the usual coercion. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.
     */
-    get ToolCallingMode(): 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | null {
+    get ToolCallingMode(): 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | 'NativeRecovered' | null {
         return this.Get('ToolCallingMode');
     }
-    set ToolCallingMode(value: 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | null) {
+    set ToolCallingMode(value: 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | 'NativeRecovered' | null) {
         this.Set('ToolCallingMode', value);
     }
 
@@ -65965,7 +65969,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     *   * PowerRank
     *   * SameModelDifferentVendor
     *   * SameModelDifferentVendor
-    * * Description: Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None
+    * * Description: Whether a failed model call fails over to other candidates. None: the selected model is called once, with no failover. Any other value (SameModelDifferentVendor, NextBestModel, PowerRank): after a failover-eligible error, the remaining candidates from model selection are tried in priority order, and they can include other models; the chat prompt runner does not tell these values apart. Only the embedding runner narrows by strategy: SameModelDifferentVendor keeps it on the selected model, so vectors stay in one space.
     */
     get FailoverStrategy(): 'NextBestModel' | 'NextBestModel' | 'None' | 'None' | 'PowerRank' | 'PowerRank' | 'SameModelDifferentVendor' | 'SameModelDifferentVendor' {
         return this.Get('FailoverStrategy');

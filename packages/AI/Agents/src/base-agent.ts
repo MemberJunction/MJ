@@ -5771,7 +5771,7 @@ export class BaseAgent {
             }
             // Counted only on the native path: null means "envelope", which is different from a
             // native turn where the model chose not to call anything (0).
-            if (mode === 'Native' || mode === 'NativeFallback' || mode === 'NativeImplicit') {
+            if (mode === 'Native' || mode === 'NativeFallback' || mode === 'NativeImplicit' || mode === 'NativeRecovered') {
                 const message = promptResult?.chatResult?.data?.choices?.[0]?.message;
                 const callCount = message?.toolCalls?.length ?? 0;
                 stepEntity.NativeToolCallCount = callCount;
