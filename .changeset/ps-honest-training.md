@@ -9,6 +9,7 @@
 "@memberjunction/integration-test-suite": minor
 "@memberjunction/core-entities-server": minor
 "@memberjunction/storage": minor
+"@memberjunction/global": minor
 "@memberjunction/ng-artifacts": minor
 "@memberjunction/ng-bootstrap": minor
 "@memberjunction/ng-bootstrap-lite": minor
@@ -108,3 +109,11 @@ version 1 of each, and the training path without them is removed.
   pipeline through its unit; six containment checks are re-pinned to the unit path; the pipeline-migration rig.
   `RunRecords.PipelineIDs` / `ModelIDs` are `RecordIDSet`s (iteration yields IDs as recorded, not lower-cased).
 - `@memberjunction/core`: listed for the Migrate Pipelines Action and the Train ML Model parameter metadata.
+
+Holds no sign-off overrides: a binary or multiclass model whose holdout calibration slope is outside 0.8–1.2, or could
+not be measured, is held in Draft (Lineage `calibrationHold`, a `CALIBRATION HOLD` run note) and the Promote ML Model
+action refuses it with `CALIBRATION_HOLD`; a forecast's series forecaster, which `/predict` does not serve, is refused
+with `MODEL_NOT_SERVABLE` and never scored. A kept simple baseline carries its run's leakage audit
+(`trainingLeakageAudit`), so it needs the same leakage sign-off as the finalist. The Pipeline Builder agent publishes
+through the promotion gate. Binding a binary or multiclass unit to a protocol whose calibration is `not-applicable` is
+refused.
