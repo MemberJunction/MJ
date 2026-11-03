@@ -132,6 +132,26 @@ describe('DiagnosticsRevokeSenderToolbarAction', () => {
         expect(mocks.notify).toHaveBeenCalledWith(expect.any(String), 'success', expect.any(Number));
     });
 
+    it('reloads without the form\'s own "Record refreshed" notification', async () => {
+        mocks.revokeExecute.mockResolvedValue({ Success: true, Output: { Status: 'Revoked' } });
+        const { ctx, refreshRecord } = makeContext();
+
+        await new DiagnosticsRevokeSenderToolbarAction().OnExecute(ctx);
+
+        expect(refreshRecord).toHaveBeenCalledWith({ ShowSuccessNotification: false });
+    });
+
+    it('warns that the record must be reloaded when the reload fails after a revoke', async () => {
+        mocks.revokeExecute.mockResolvedValue({ Success: true, Output: { Status: 'Revoked' } });
+        const { ctx, refreshRecord } = makeContext();
+        refreshRecord.mockResolvedValue(false);
+
+        await new DiagnosticsRevokeSenderToolbarAction().OnExecute(ctx);
+
+        expect(mocks.notify).toHaveBeenCalledTimes(1);
+        expect(mocks.notify).toHaveBeenCalledWith(expect.stringMatching(/reload the record/i), 'warning', expect.any(Number));
+    });
+
     it('makes no call when the confirmation is cancelled', async () => {
         mocks.confirm.mockResolvedValue(false);
         const { ctx, refreshRecord } = makeContext();

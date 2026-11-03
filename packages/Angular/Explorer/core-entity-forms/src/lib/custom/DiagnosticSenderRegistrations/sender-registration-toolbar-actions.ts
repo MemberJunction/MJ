@@ -25,7 +25,8 @@ abstract class SenderRegistrationStatusAction extends BaseFormToolbarAction {
 
     /**
      * Runs `call` with the button in its loading state. On success, reloads the record and shows
-     * `successMessage`. On failure, shows the server's error and leaves the record unchanged.
+     * `successMessage`, or a warning to reload when the reload fails. On failure, shows the
+     * server's error and leaves the record unchanged.
      */
     protected async RunOperation(
         ctx: FormToolbarActionLifecycleContext,
@@ -41,8 +42,11 @@ abstract class SenderRegistrationStatusAction extends BaseFormToolbarAction {
                 notify(result.ErrorMessage || failureMessage, 'error', ERROR_DURATION_MS);
                 return;
             }
-            await reloadRecord(ctx);
-            notify(successMessage, 'success', SUCCESS_DURATION_MS);
+            if (await reloadRecord(ctx)) {
+                notify(successMessage, 'success', SUCCESS_DURATION_MS);
+            } else {
+                notify(`${successMessage} Reload the record to see the new status.`, 'warning', ERROR_DURATION_MS);
+            }
         } catch (e) {
             notify(e instanceof Error && e.message ? e.message : failureMessage, 'error', ERROR_DURATION_MS);
         } finally {
@@ -61,17 +65,19 @@ function confirmServiceOf(ctx: FormToolbarActionLifecycleContext): MJConfirmServ
     }
 }
 
-function notify(message: string, style: 'success' | 'error', duration: number): void {
+function notify(message: string, style: 'success' | 'warning' | 'error', duration: number): void {
     MJNotificationService.Instance.CreateSimpleNotification(message, style, duration);
 }
 
-/** Reloads the record through the form, so the form and its toolbar show the new status. */
-async function reloadRecord(ctx: FormToolbarActionLifecycleContext): Promise<void> {
+/**
+ * Reloads the record through the form, so the form and its toolbar show the new status. The
+ * form's own "Record refreshed" notification is skipped. Returns false when the reload fails.
+ */
+async function reloadRecord(ctx: FormToolbarActionLifecycleContext): Promise<boolean> {
     if (ctx.FormComponent) {
-        await ctx.FormComponent.RefreshRecord();
-    } else {
-        await ctx.Record.Refresh();
+        return ctx.FormComponent.RefreshRecord({ ShowSuccessNotification: false });
     }
+    return ctx.Record.Refresh();
 }
 
 /**
