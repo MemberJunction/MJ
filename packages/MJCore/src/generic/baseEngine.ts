@@ -251,8 +251,9 @@ export interface EngineDataMapEntry {
     permissionDenied?: boolean;
     /**
      * True when a load of this config failed and the permission classifier said the user cannot
-     * read the entity, so the config was loaded empty. Cache events never fill it; `Config(true)`
-     * re-evaluates it.
+     * read the entity, or when the config was skipped because an entity the engine caches is not
+     * installed in metadata, so the config was loaded empty. Cache events never fill it;
+     * `Config(true)` re-evaluates it.
      */
     readDenied?: boolean;
 }
@@ -2118,12 +2119,16 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 category: 'Cache',
             });
 
+            // Loaded (so EnsureLoaded doesn't retry-loop) but readDenied: the installed entities'
+            // configs were skipped too, and their [] is not their table. IsPropertyLoaded (and so
+            // BaseEngineRegistry.FindCachedEntity) must not serve it as one.
             for (const config of configs) {
                 this.initializeSkippedConfigProperty(config);
                 this._dataMap.set(config.PropertyName, {
                     ...(config.Type === 'dataset' ? { datasetName: config.DatasetName } : { entityName: config.EntityName }),
                     data: [],
                     loadedSuccessfully: true,
+                    readDenied: true,
                 });
             }
 
