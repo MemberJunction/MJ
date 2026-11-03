@@ -318,32 +318,7 @@
   border-bottom: 1px solid var(--mj-border-default);
   background: var(--mj-bg-surface-sunken);
   flex-shrink: 0;
-}
-
-.tab {
-  padding: 12px 24px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--mj-text-muted);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.2s ease;
-  border-bottom: 3px solid transparent;
-}
-
-.tab:hover {
-  color: var(--mj-text-secondary);
-  background: color-mix(in srgb, var(--mj-text-primary) 2%, var(--mj-bg-surface));
-}
-
-.tab.active {
-  color: var(--mj-brand-primary);
-  border-bottom-color: var(--mj-brand-primary);
-  background: var(--mj-bg-surface);
+  padding: 8px 12px;
 }
 
 /* Content Area */
