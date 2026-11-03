@@ -39,6 +39,32 @@ export interface LintOptions {
   debugMode?: boolean;
 }
 
+/**
+ * Structured context for a violation where a component reads a field that its entity
+ * or query does not have. The message only previews a few valid fields; this carries
+ * the complete list so a consumer (for example an automated fixer) can use it without
+ * parsing message text.
+ */
+export interface FieldAccessViolationDetails {
+  Kind: 'field-access';
+  /** The field the component tried to read. */
+  Field: string;
+  /** Whether the row came from an entity (RunView) or a saved query (RunQuery). */
+  TargetType: 'entity' | 'query';
+  /** The entity or query name. */
+  TargetName: string;
+  /**
+   * Up to three existing fields that resemble {@link Field} — names containing it or close
+   * to it in spelling — best first. Empty when nothing resembles it.
+   */
+  SimilarFields: string[];
+  /** Every field that does exist on the target. */
+  AvailableFields: string[];
+}
+
+/** Structured, rule-specific context attached to a {@link Violation}. */
+export type ViolationDetails = FieldAccessViolationDetails;
+
 export interface Violation {
   rule: string;
   severity: 'critical' | 'high' | 'medium' | 'low';
@@ -51,6 +77,7 @@ export interface Violation {
     text: string;
     example?: string;
   };
+  Details?: ViolationDetails;
 }
 
 export class ComponentLinter {

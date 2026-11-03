@@ -22,8 +22,37 @@ import {
   StandardTypes,
   mapSQLTypeToJSType,
   areTypesCompatible,
-  describeType
+  describeType,
+  CarriesRowType,
+  HaveSameRowTarget,
+  FunctionScopeName
 } from './type-context';
+
+/** React hooks the engine understands when called as `React.useX(...)` as well as bare. */
+const REACT_HOOKS = new Set(['useState', 'useMemo', 'useCallback']);
+
+/**
+ * The name a call is made by: `fn(...)` gives `fn`, and `React.useMemo(...)` gives `useMemo`
+ * so a hook reads the same either way. Undefined for any other callee.
+ */
+function calledFunctionName(callee: t.Expression | t.V8IntrinsicIdentifier): string | undefined {
+  if (t.isIdentifier(callee)) return callee.name;
+  if (t.isMemberExpression(callee) && t.isIdentifier(callee.object) && callee.object.name === 'React' &&
+      t.isIdentifier(callee.property) && REACT_HOOKS.has(callee.property.name)) {
+    return callee.property.name;
+  }
+  return undefined;
+}
+
+/** Lodash collection functions that call their iteratee with each element: `_.fn(collection, iteratee)`. */
+const LODASH_ELEMENT_ITERATEES = new Set([
+  'map', 'filter', 'reject', 'find', 'findLast', 'some', 'every', 'forEach', 'each', 'flatMap',
+  'sumBy', 'meanBy', 'maxBy', 'minBy', 'groupBy', 'countBy', 'keyBy', 'sortBy', 'uniqBy', 'partition',
+]);
+/** Lodash functions that return a subset or reordering of their collection's elements. */
+const LODASH_SAME_ELEMENTS = new Set(['filter', 'reject', 'sortBy', 'orderBy', 'uniqBy', 'uniq', 'take', 'takeRight', 'drop', 'dropRight', 'slice', 'compact', 'shuffle']);
+/** Lodash functions that return one of their collection's elements. */
+const LODASH_ONE_ELEMENT = new Set(['find', 'findLast', 'maxBy', 'minBy', 'head', 'first', 'last', 'sample']);
 
 /**
  * Result of type inference analysis
@@ -99,7 +128,6 @@ export class TypeInferenceEngine {
    */
   private async collectVariableTypes(ast: t.File): Promise<void> {
     const self = this;
-    let functionCounter = 0; // Counter for anonymous functions
 
     traverse(ast, {
       // Track variable declarations
@@ -127,9 +155,11 @@ export class TypeInferenceEngine {
           const stateVarName = self.stateSetterMap.get(setterName);
           if (stateVarName && path.node.arguments.length > 0) {
             const argType = self.inferExpressionType(path.node.arguments[0], path);
-            // Only update if we inferred a meaningful type (not unknown)
-            if (argType.type !== 'unknown') {
-              self.typeContext.setVariableType(stateVarName, argType);
+            const current = self.typeContext.getVariableType(stateVarName);
+            // Only update if we inferred a meaningful type (not unknown), and never replace
+            // rows with something vaguer: a later setRows([]) must not erase what setRows(result.Results) established.
+            if (argType.type !== 'unknown' && !(CarriesRowType(current) && !CarriesRowType(argType))) {
+              self.typeContext.UpdateVariableType(stateVarName, argType);
             }
           }
         }
@@ -138,7 +168,7 @@ export class TypeInferenceEngine {
       // Track function parameters and return types with scoping
       FunctionDeclaration: {
         enter(path: NodePath<t.FunctionDeclaration>) {
-          const functionName = path.node.id?.name || `anon_func_${functionCounter++}`;
+          const functionName = FunctionScopeName(path.node, path.parent);
           self.typeContext.enterScope(functionName);
           self.inferFunctionParameterTypes(path);
 
@@ -155,14 +185,8 @@ export class TypeInferenceEngine {
       // Track arrow function scoping
       ArrowFunctionExpression: {
         enter(path: NodePath<t.ArrowFunctionExpression>) {
-          // Find the function name from parent if it's a variable declarator
-          let functionName = `anon_arrow_${functionCounter++}`;
-          const parent = path.parent;
-          if (t.isVariableDeclarator(parent) && t.isIdentifier(parent.id)) {
-            functionName = parent.id.name;
-          }
-
-          self.typeContext.enterScope(functionName);
+          // Named after the variable it is assigned to, or its position when anonymous
+          self.typeContext.enterScope(FunctionScopeName(path.node, path.parent));
           // Try to infer callback parameter types from array method context first
           const inferredFromCallback = self.inferCallbackParameterTypes(path);
           if (!inferredFromCallback) {
@@ -177,8 +201,7 @@ export class TypeInferenceEngine {
       // Track function expression scoping
       FunctionExpression: {
         enter(path: NodePath<t.FunctionExpression>) {
-          const functionName = path.node.id?.name || `anon_func_expr_${functionCounter++}`;
-          self.typeContext.enterScope(functionName);
+          self.typeContext.enterScope(FunctionScopeName(path.node, path.parent));
         },
         exit(path: NodePath<t.FunctionExpression>) {
           self.typeContext.exitScope();
@@ -244,6 +267,56 @@ export class TypeInferenceEngine {
   }
 
   /**
+   * `_.sumBy(rows, r => r.Amount)` and the other lodash collection functions call the
+   * iteratee (their second argument) with each element of the collection (their first).
+   * Returns true if this arrow function is such an iteratee and its first parameter was typed.
+   */
+  private inferLodashIterateeTypes(
+    path: NodePath<t.ArrowFunctionExpression>,
+    call: t.CallExpression | t.OptionalCallExpression,
+    callee: t.MemberExpression | t.OptionalMemberExpression
+  ): boolean {
+    if (!this.isLodashCall(callee) || call.arguments[1] !== path.node) return false;
+    const methodName = (callee.property as t.Identifier).name;
+    if (!LODASH_ELEMENT_ITERATEES.has(methodName)) return false;
+
+    const collection = call.arguments[0];
+    if (!collection || t.isArgumentPlaceholder(collection) || t.isJSXNamespacedName(collection)) return false;
+    const collectionType = this.inferExpressionType(collection, path.parentPath ?? undefined);
+    const firstParam = path.node.params[0];
+    if (collectionType.type !== 'array' || !collectionType.arrayElementType || !t.isIdentifier(firstParam)) return false;
+
+    this.typeContext.setVariableType(firstParam.name, collectionType.arrayElementType);
+    return true;
+  }
+
+  /** Whether `callee` is `_.something`, lodash's conventional global. */
+  private isLodashCall(callee: t.Expression | t.V8IntrinsicIdentifier): callee is t.MemberExpression | t.OptionalMemberExpression {
+    return (t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)) &&
+      t.isIdentifier(callee.object) && callee.object.name === '_' && t.isIdentifier(callee.property);
+  }
+
+  /**
+   * The type a lodash collection function returns, when it is made of the collection's own
+   * elements: a subset or reordering (`_.filter`, `_.sortBy`), one element (`_.maxBy`), or
+   * groups of them (`_.groupBy`). Undefined for anything else.
+   */
+  private inferLodashResultType(node: t.CallExpression | t.OptionalCallExpression, path?: NodePath): TypeInfo | undefined {
+    if (!this.isLodashCall(node.callee)) return undefined;
+    const methodName = (node.callee.property as t.Identifier).name;
+    const collection = node.arguments[0];
+    if (!collection || t.isArgumentPlaceholder(collection) || t.isJSXNamespacedName(collection)) return undefined;
+
+    const collectionType = this.inferExpressionType(collection, path);
+    if (collectionType.type !== 'array' || !collectionType.arrayElementType) return undefined;
+
+    if (LODASH_SAME_ELEMENTS.has(methodName)) return collectionType;
+    if (LODASH_ONE_ELEMENT.has(methodName)) return { ...collectionType.arrayElementType, nullable: true };
+    if (methodName === 'groupBy') return { type: 'object', objectValueType: collectionType };
+    return undefined;
+  }
+
+  /**
    * Infer callback parameter types from array method context.
    * When an arrow function is a callback to .map(), .filter(), .reduce(), etc.,
    * the first parameter inherits the array's element type.
@@ -263,6 +336,8 @@ export class TypeInferenceEngine {
 
     const callee = parent.callee;
     if ((!t.isMemberExpression(callee) && !t.isOptionalMemberExpression(callee)) || !t.isIdentifier(callee.property)) return false;
+
+    if (this.inferLodashIterateeTypes(path, parent, callee)) return true;
 
     const methodName = callee.property.name;
     const arrayIterMethods = ['map', 'filter', 'forEach', 'find', 'some', 'every', 'flatMap', 'sort'];
@@ -562,8 +637,7 @@ export class TypeInferenceEngine {
     const sourceType = this.inferExpressionType(init, path);
 
     // Detect useState pattern: const [state, setState] = useState(initialValue)
-    const isUseState = t.isCallExpression(init) &&
-      t.isIdentifier(init.callee) && init.callee.name === 'useState';
+    const isUseState = t.isCallExpression(init) && calledFunctionName(init.callee) === 'useState';
 
     for (let i = 0; i < pattern.elements.length; i++) {
       const element = pattern.elements[i];
@@ -660,6 +734,10 @@ export class TypeInferenceEngine {
       const consequentType = this.inferExpressionType(node.consequent, path);
       const alternateType = this.inferExpressionType(node.alternate, path);
 
+      // Rows of two different entities or queries: the result could be either, so claim neither.
+      if ((CarriesRowType(consequentType) || CarriesRowType(alternateType)) && !HaveSameRowTarget(consequentType, alternateType)) {
+        return StandardTypes.unknown;
+      }
       if (areTypesCompatible(consequentType, alternateType)) {
         return consequentType;
       }
@@ -671,6 +749,11 @@ export class TypeInferenceEngine {
       // For ||, the result is the first truthy value
       // For &&, the result is the first falsy or last value
       // For ??, the result is the first non-nullish value
+      // A fallback such as `result.Results || []` holds the left side's rows whenever there are any.
+      if (node.operator !== '&&') {
+        const leftType = this.inferExpressionType(node.left, path);
+        if (CarriesRowType(leftType)) return leftType;
+      }
       return this.inferExpressionType(node.right, path);
     }
 
@@ -690,6 +773,10 @@ export class TypeInferenceEngine {
       return { type: 'array', arrayElementType: StandardTypes.unknown };
     }
 
+    // A copy made by spreading rows (`[...result.Results]`, often before sorting) holds the same rows
+    const spreadCopyType = this.inferSpreadCopyType(node, path);
+    if (spreadCopyType) return spreadCopyType;
+
     // Try to infer element type from first element
     const firstElement = node.elements[0];
     if (firstElement && !t.isSpreadElement(firstElement)) {
@@ -698,6 +785,22 @@ export class TypeInferenceEngine {
     }
 
     return { type: 'array', arrayElementType: StandardTypes.unknown };
+  }
+
+  /**
+   * The row type of an array literal made only of spread rows of one entity or query, such
+   * as `[...rows]` or `[...a, ...b]`. Undefined for anything else.
+   */
+  private inferSpreadCopyType(node: t.ArrayExpression, path?: NodePath): TypeInfo | undefined {
+    let rowsType: TypeInfo | undefined;
+    for (const element of node.elements) {
+      if (!t.isSpreadElement(element)) return undefined;
+      const spreadType = this.inferExpressionType(element.argument, path);
+      if (!CarriesRowType(spreadType) || spreadType.type !== 'array') return undefined;
+      if (rowsType && !HaveSameRowTarget(rowsType, spreadType)) return undefined;
+      rowsType = rowsType ?? spreadType;
+    }
+    return rowsType;
   }
 
   /**
@@ -740,9 +843,9 @@ export class TypeInferenceEngine {
    * Infer type for call expressions
    */
   private inferCallExpressionType(node: t.CallExpression | t.OptionalCallExpression, path?: NodePath): TypeInfo {
-    // Check for user-defined function calls
-    if (t.isIdentifier(node.callee)) {
-      const functionName = node.callee.name;
+    // Check for user-defined function calls, and hooks called bare or as React.useX
+    const functionName = calledFunctionName(node.callee);
+    if (functionName) {
 
       // Check if we've tracked this function's return type
       const returnType = this.functionReturnTypes.get(functionName);
@@ -797,6 +900,9 @@ export class TypeInferenceEngine {
         return { type: 'array', arrayElementType: { ...StandardTypes.unknown, nullable: true } };
       }
     }
+
+    const lodashResult = this.inferLodashResultType(node, path);
+    if (lodashResult) return lodashResult;
 
     // Check for RunView/RunQuery calls
     if (t.isMemberExpression(node.callee) || t.isOptionalMemberExpression(node.callee)) {
