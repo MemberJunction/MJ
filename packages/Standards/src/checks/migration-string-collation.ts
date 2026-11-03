@@ -191,6 +191,6 @@ export const MigrationStringCollationCheck: StandardCheck = {
         'baseline column. Temporary tables and table variables are not read. The expected collation is the Collation ' +
         `option (default SQL_Latin1_General_CP1_CI_AS). Reviewed exception: "${STRING_COLLATION_MARKER}" on the line or the one above.`,
     DefaultRoots: ['migrations'],
-    DefaultOptions: { FromVersion: '202611022200', Collation: 'SQL_Latin1_General_CP1_CI_AS' },
+    DefaultOptions: { FromVersion: '202611031700', Collation: 'SQL_Latin1_General_CP1_CI_AS' },
     Run: run,
 };
