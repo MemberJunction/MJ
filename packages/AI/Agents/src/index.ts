@@ -70,6 +70,7 @@ export * from './AgentWakeTriggerService';
 export * from './KnowledgeAgent';
 export * from './DuplicateReasoningAgentProvider';
 export * from './ClientToolRequestManager';
+export * from './client-tool-results';
 export * from './realtime/realtime-session-runner';
 export * from './realtime/bridge-realtime-session-factory';
 export * from './realtime/bridge-room-transcript-sink';
@@ -83,6 +84,7 @@ export { RealtimeToolBroker, RealtimeToolBrokerDeps, ExecutedToolCall, Delegated
 export * from './realtime/realtime-client-session-service';
 export * from './realtime/realtime-coagent-config';
 export * from './realtime/realtime-vendor-resolution';
+export * from './realtime/realtime-platform-credentials';
 export * from './realtime/realtime-video-output-gate';
 export * from './realtime/realtime-narration';
 export * from './realtime/realtime-delegation-narrator';

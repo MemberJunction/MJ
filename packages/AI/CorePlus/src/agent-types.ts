@@ -19,7 +19,7 @@ import { AgentScratchpad } from './agent-scratchpad';
 import { AgentDecisionRequest, AgentDecisionResult, AgentFinishIf } from './agent-decisions';
 import { AIAPIKey, AICredentialScope } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
-import { ActionParam } from '@memberjunction/actions-base';
+import { ActionParam, type ActionOutputTrustLevel } from '@memberjunction/actions-base';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
 import { AgentRequestAssignmentStrategy } from './assignment-strategy';
 import { MJAIAgentRunEntityExtended } from './MJAIAgentRunEntityExtended';
@@ -319,6 +319,20 @@ export type AgentAction = {
  * or a dedicated entity. The LLM sees Name + Description + InputSchema
  * in its system prompt to know how to invoke the tool.
  */
+/**
+ * One external or semi-trusted source a run ingested: which step, what produced it, and how far it is
+ * trusted. A run with any of these is tainted — its memory writes land `Pending`, and a parent run
+ * absorbs its sub-agents' sources so delegation cannot launder external content.
+ */
+export interface AgentTaintedSource {
+    /** The step that ingested the source, numbered as the run's steps are. */
+    stepNumber: number;
+    /** `action:<name>`, `client-tool:<name>`, or `sub-agent:<name>/<the child's source>`. */
+    sourceName: string;
+    /** How far the source is trusted; `'Trusted'` sources are not recorded. */
+    trustLevel: Exclude<ActionOutputTrustLevel, 'Trusted'>;
+}
+
 export interface ClientToolMetadata {
     /** Unique identifier for this tool */
     Name: string;
@@ -332,6 +346,8 @@ export interface ClientToolMetadata {
     Category?: string;
     /** Default timeout in ms for this specific tool (overrides agent default) */
     DefaultTimeoutMs?: number;
+    /** Optional output trust classification; when 'Untrusted' or 'SemiTrusted', tool output is wrapped in <untrusted_external_data> */
+    TrustLevel?: ActionOutputTrustLevel;
 }
 
 /**
@@ -411,6 +427,8 @@ export interface ClientToolResultSummary {
     Media?: ClientToolMediaItem[];
     /** Error message if the tool failed */
     ErrorMessage?: string;
+    /** Optional output trust classification; when 'Untrusted' or 'SemiTrusted', tool output is wrapped in <untrusted_external_data> */
+    TrustLevel?: ActionOutputTrustLevel;
 }
 
 /**
@@ -1020,6 +1038,13 @@ export type ExecuteAgentResult<P = any> = {
      * @since 5.12.0
      */
     feedbackRequestId?: string;
+
+    /**
+     * The untrusted and semi-trusted sources this run ingested, when there were any. A parent run
+     * folds these into its own taint when the sub-agent step completes, so a run that delegated web
+     * search is as tainted as one that searched itself.
+     */
+    taintedSources?: AgentTaintedSource[];
 
     /**
      * Populated when the run concluded with a `'Handoff'` step. Carries the resolved target agent

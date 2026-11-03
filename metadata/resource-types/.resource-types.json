@@ -178,5 +178,19 @@
       "lastModified": "2026-06-09T06:31:50.129Z",
       "checksum": "8c7c2243e7df7cfe7c5a4fd6c933265eb34634006bef2eaaf8a154f39ab4012c"
     }
+  },
+  {
+    "fields": {
+      "Name": "Projects",
+      "DisplayName": "Conversation Folders",
+      "Description": "Conversation folders that organize conversations and support folder-level sharing",
+      "Icon": "fa-solid fa-folder",
+      "DriverClass": null,
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Projects",
+      "CategoryEntityID": null
+    },
+    "primaryKey": {
+      "ID": "88D0DF27-AF8F-43AC-9EC4-2AC314F49355"
+    }
   }
 ]
