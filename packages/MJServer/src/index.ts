@@ -114,7 +114,8 @@ import {
   GetCorsOwningServerExtensionRoots,
 } from '@memberjunction/server-extensions-core';
 import { CreateIsolatedProvider } from './isolatedProvider.js';
-import { ResolveConfiguredPrincipal } from './auth/principals.js';
+import { ResolveConfiguredPrincipal, ResolveServerPrincipal, ValidateProvisioningPrincipals } from './auth/principals.js';
+import type { ProvisioningPrincipalSetting } from './auth/principals.js';
 import { CreateExtensionOwnedPreflightFallback, CreateGlobalCorsMiddleware } from './globalCors.js';
 import { CoreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
 import { ApiRoute, ApiRootPath, ConfiguredPublicUrl } from './apiRoot.js';
@@ -191,7 +192,7 @@ export * from './auth/actingContextResolver.js';
 // `ReportedMisconfigurationCount` / `MAX_REPORTED_MISCONFIGURATIONS` are deliberately NOT here:
 // they exist so the LRU's bound is assertable, the tests import them from the module directly, and
 // a published export is a maintenance commitment no caller asked for.
-export { ResolveConfiguredPrincipal, resolvePrincipalFrom } from './auth/principals.js';
+export { ResolveConfiguredPrincipal, resolvePrincipalFrom, ResolveServerPrincipal } from './auth/principals.js';
 export type { ResolvablePrincipal, PrincipalResolution, PrincipalResolutionReason } from './auth/principals.js';
 export { CloneUserForSessionContext } from './auth/sessionUserClone.js';
 
@@ -576,14 +577,14 @@ const setupComplete$ = new ReplaySubject(1);
     await UserCache.Instance.Refresh(provider);
 
     // Run startup actions — same 'full' entry-point default as the SQL Server path
-    const sysUser = UserCache.Instance.GetSystemUser();
-    const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
+    const startupUser = ResolveServerPrincipal('PostgreSQL startup') ?? undefined;
     const pgStartupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
-    await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: pgStartupMode.mode, cacheManagerConfig, warmupLeaseMs });
+    await StartupManagerImport.Instance.Startup(false, startupUser, provider, { mode: pgStartupMode.mode, cacheManagerConfig, warmupLeaseMs });
 
     // Both provider sources have now had their turn — config/env at module load, metadata via
     // AuthProviderEngine's startup hook — so "no providers at all" is finally a meaningful check.
     validateAuthProvidersRegistered();
+    validateProvisioningPrincipals();
 
     // Monkey-patch SQLServerDataProvider.ExecuteSQLWithPool to support PostgreSQL
     // Generated resolvers call this static method with bracket-quoted SQL.
@@ -653,7 +654,10 @@ const setupComplete$ = new ReplaySubject(1);
           const { RunCodeGenBase, PostgreSQLCodeGenConnection } = await import('@memberjunction/codegen-lib');
 
           const codegenConnection = new PostgreSQLCodeGenConnection(codegenPgPool);
-          const codegenCurrentUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
+          const codegenCurrentUser = ResolveServerPrincipal('RSU CodeGen (PostgreSQL)');
+          if (!codegenCurrentUser) {
+            throw new Error('no active system user or Owner to run in-process CodeGen as');
+          }
 
           const codegenDataSource = {
             provider: codegenPgProvider,
@@ -759,6 +763,7 @@ const setupComplete$ = new ReplaySubject(1);
     // See the note on the PostgreSQL path above: this is the first point at which both the
     // config/env providers and the metadata catalog have been registered.
     validateAuthProvidersRegistered();
+    validateProvisioningPrincipals();
     lap('Metadata + Provider Setup', tPhase);
     startupLog.BeginPhase('Initializing data provider');
     const md = new Metadata(); // global-provider-ok: bootstrap
@@ -811,7 +816,10 @@ const setupComplete$ = new ReplaySubject(1);
           const { RunCodeGenBase, SQLServerCodeGenConnection } = await import('@memberjunction/codegen-lib');
 
           const codegenConnection = new SQLServerCodeGenConnection(codegenPool);
-          const codegenCurrentUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
+          const codegenCurrentUser = ResolveServerPrincipal('RSU CodeGen (SQL Server)');
+          if (!codegenCurrentUser) {
+            throw new Error('no active system user or Owner to run in-process CodeGen as');
+          }
 
           const codegenDataSource = {
             provider: codegenProvider,
@@ -1957,15 +1965,31 @@ async function ProcessPromoteColumnsPendingWork(
   }
 }
 
+/**
+ * Logs an error at startup for each provisioning setting that resolves to a non-Owner user, so the
+ * misconfiguration surfaces at boot rather than at the first new user's login.
+ */
+function validateProvisioningPrincipals(): void {
+  const settings: ProvisioningPrincipalSetting[] = [
+    { Setting: 'userHandling.contextUserForNewUserCreation', Candidate: configInfo.userHandling?.contextUserForNewUserCreation },
+  ];
+  // Unset, the magic-link setting falls back to the one above, already checked.
+  const magicLinkCandidate = configInfo.magicLink?.contextUserForProvisioning;
+  if (magicLinkCandidate) {
+    settings.push({ Setting: 'magicLink.contextUserForProvisioning', Candidate: magicLinkCandidate });
+  }
+  ValidateProvisioningPrincipals(settings);
+}
+
 async function processRSUPendingWork(): Promise<void> {
   // Dynamic import — schema-engine is not yet published to npm, only exists as a workspace package
   const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
   const rsm = RuntimeSchemaManager.Instance;
 
   // Get system user for server-side operations — needed to read the queue itself
-  const systemUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
+  const systemUser = ResolveServerPrincipal('RSU pending work');
   if (!systemUser) {
-    console.warn(`[RSU] No system user found — cannot process pending work`);
+    console.warn(`[RSU] No active system user or Owner — cannot process pending work`);
     return;
   }
 

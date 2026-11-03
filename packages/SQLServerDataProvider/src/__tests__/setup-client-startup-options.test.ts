@@ -18,14 +18,14 @@ function makeConfig(): SQLServerProviderConfigData {
 }
 
 describe('setupSQLServerClient startup-options threading', () => {
-    const fakeUser = { ID: 'user-1', Name: 'System' } as unknown as UserInfo;
+    // The startup principal is the active system user, resolved from the cache by its well-known ID.
+    const fakeUser = { ID: UserCache.Instance.SYSTEM_USER_ID, Name: 'System', Type: 'Owner          ', IsActive: true } as unknown as UserInfo;
     let startupSpy: MockInstance<StartupManager['Startup']>;
 
     beforeEach(() => {
         vi.spyOn(SQLServerDataProvider.prototype, 'Config').mockResolvedValue(true);
         vi.spyOn(UserCache.Instance, 'Refresh').mockResolvedValue(undefined);
-        vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(fakeUser);
-        vi.spyOn(UserCache.Instance, 'Users', 'get').mockReturnValue([]);
+        vi.spyOn(UserCache.Instance, 'Users', 'get').mockReturnValue([fakeUser]);
         startupSpy = vi.spyOn(StartupManager.Instance, 'Startup').mockResolvedValue({
             success: true,
             results: [],
@@ -55,5 +55,15 @@ describe('setupSQLServerClient startup-options threading', () => {
 
         expect(startupSpy).toHaveBeenCalledTimes(1);
         expect(startupSpy.mock.calls[0][3]).toBeUndefined();
+    });
+
+    it('falls back to an active Owner whose Type is space-padded when the system user is missing', async () => {
+        const owner = { ID: 'AAAA0000-0000-0000-0000-000000000001', Name: 'admin', Type: 'Owner          ', IsActive: true } as unknown as UserInfo;
+        const plain = { ID: '00000000-0000-0000-0000-000000000001', Name: 'guest', Type: 'User           ', IsActive: true } as unknown as UserInfo;
+        vi.spyOn(UserCache.Instance, 'Users', 'get').mockReturnValue([plain, owner]);
+
+        await SetupSQLServerClient(makeConfig());
+
+        expect(startupSpy.mock.calls[0][1]).toBe(owner);
     });
 });
