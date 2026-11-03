@@ -8,7 +8,7 @@
  *
  * @module install/file-snapshot
  */
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 
 /** One file's content at snapshot time; `null` when it did not exist. */
 export interface FileSnapshotEntry {
@@ -32,8 +32,21 @@ export interface FileRestoreResult {
 /** Reads every given file into memory. A missing file is recorded as absent. */
 export function SnapshotFiles(paths: readonly string[]): FileSnapshot {
   return {
-    Entries: paths.map((path) => ({ Path: path, Content: existsSync(path) ? readFileSync(path) : null })),
+    Entries: paths.map((path) => ({ Path: path, Content: readFileIfPresent(path) })),
   };
+}
+
+/**
+ * Reads a file, or returns null when it does not exist. Reading directly instead of checking
+ * `existsSync` first leaves no window between the check and the use.
+ */
+function readFileIfPresent(path: string): Buffer | null {
+  try {
+    return readFileSync(path);
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return null;
+    throw error;
+  }
 }
 
 /**
@@ -55,13 +68,13 @@ export function RestoreFileSnapshot(snapshot: FileSnapshot): FileRestoreResult {
 
 /** Restores one entry; returns whether anything had to change. */
 function restoreEntry(entry: FileSnapshotEntry): boolean {
-  const exists = existsSync(entry.Path);
+  const current = readFileIfPresent(entry.Path);
   if (entry.Content === null) {
-    if (!exists) return false;
+    if (current === null) return false;
     rmSync(entry.Path, { force: true });
     return true;
   }
-  if (exists && readFileSync(entry.Path).equals(entry.Content)) return false;
+  if (current !== null && current.equals(entry.Content)) return false;
   writeFileSync(entry.Path, entry.Content);
   return true;
 }
