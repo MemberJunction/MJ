@@ -1359,6 +1359,11 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     }
   }
 
+  /** Enables or disables the local user's microphone (e.g., when placing a contact-center call on hold). */
+  public async SetMicrophoneEnabled(enabled: boolean): Promise<void> {
+    await this.roomComponent?.Controller?.SetMicrophoneEnabled(enabled);
+  }
+
   /**
    * Builds the shareable invite URL for THIS room: the current page URL with a `room=<roomName>` query
    * param. Opening it lands the invitee on the Live Room in join mode for the same room.

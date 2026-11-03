@@ -57,7 +57,8 @@ import {
     RealtimeCoAgentConfig,
     ResolveEffectiveRealtimeConfig
 } from './realtime/realtime-coagent-config';
-import { ListRealtimeVendorsForModel, RealtimeVendorSelection, SelectRealtimeVendorForModel } from './realtime/realtime-vendor-resolution';
+import { ListRealtimeVendorsForModel, RealtimeKeyFixHint, RealtimeVendorSelection, SelectRealtimeVendorForModel } from './realtime/realtime-vendor-resolution';
+import { RealtimePlatformCredentials, ResolveRealtimePlatformCredentials } from './realtime/realtime-platform-credentials';
 import { ChooseRealtimeVendorForAvatar, RealtimeModelShowsAvatar } from './realtime/realtime-video-output-gate';
 import { RealtimeSessionCanShowAvatar } from './realtime/realtime-avatar-resolution';
 import { RealtimeClientSessionService, PrepareClientSessionInput, WarnOnUnmatchedProviderVoice } from './realtime/realtime-client-session-service';
@@ -151,8 +152,8 @@ import {
     type TaskGraphSpecNode
 } from '@memberjunction/ai-core-plus';
 import {
-    MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams, AUDIENCE_UNSUPPORTED_RESULT_CODE,
-    ActionRunScopeIsBounded, type ActionRunScope
+    ActionEngineBase, MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams, AUDIENCE_UNSUPPORTED_RESULT_CODE,
+    ActionRunScopeIsBounded, type ActionRunScope, type ActionOutputTrustLevel, type ActionErrorRecovery
 } from '@memberjunction/actions-base';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { AgentAudienceAddsReader, AgentAudienceProblem, AgentAudienceReaderIDs, MatchAudienceUsers } from './agent-audience';
@@ -242,12 +243,13 @@ import {
     summarizePipelineStages,
 } from './pipeline';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
+import type { AgentTaintedSource } from '@memberjunction/ai-core-plus';
 // The ONE payload-mapping dialect. Loop agents and the task-graph dispatcher read the same authored
 // mapping strings, so these must be the same functions rather than two copies that agree today.
 import { GetValueFromPath, SetMappedValue } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
 import { ClientToolRequestManager } from './ClientToolRequestManager';
-import { BuildClientToolResultMessage, ResolveClientToolResultMaxChars, ReplaceMediaBlocksWithStubs, IsMediaBlock, IMAGE_BLOCK_TOKEN_ESTIMATE } from './client-tool-results';
+import { BuildClientToolResultMessage, ResolveClientToolResultMaxChars, ReplaceMediaBlocksWithStubs, IsMediaBlock, IMAGE_BLOCK_TOKEN_ESTIMATE, WrapUntrustedExternalData } from './client-tool-results';
 import {
     CanAgentOwnSubAgentConsults,
     DEFAULT_MAX_SUB_AGENT_CONSULT_ROUNDS,
@@ -338,7 +340,7 @@ interface StoppedRunContinuation {
     Steps: StoppedRunStackStepRecord[];
 }
 
-interface ActionResultSummary {
+export interface ActionResultSummary {
     actionName: string;
     success: boolean;
     params: ActionParam[];
@@ -347,6 +349,10 @@ interface ActionResultSummary {
     aiDirectives?: AIDirective[];
     /** Set when the circuit breaker blocked the call without dispatching it. */
     breakerReason?: ActionCircuitBreakerReason;
+    /** Trust classification of the action's output ('Trusted' | 'SemiTrusted' | 'Untrusted'). */
+    trustLevel?: ActionOutputTrustLevel;
+    /** Structured recovery hints returned on action failure. */
+    errorRecovery?: ActionErrorRecovery;
 }
 
 /**
@@ -562,7 +568,13 @@ export type ActionCircuitBreakerReason = 'fatal' | 'audience' | 'identical-argum
  * the user's agent policy (`'policy'` — governance, not a parameter error, so the guidance must not tell the model
  * to adjust its arguments and retry), or a plain `'warning'`.
  */
-export type ActionFailureClass = ActionCircuitBreakerReason | 'policy' | 'warning';
+export type ActionFailureClass = ActionCircuitBreakerReason | 'policy' | 'non-retryable' | 'warning';
+
+/** Result codes that are structurally non-retryable (permission or run-scope refusals). */
+export const NON_RETRYABLE_RESULT_CODES: ReadonlySet<string> = new Set([
+    'PERMISSION_DENIED',
+    'RUN_SCOPE_UNSUPPORTED',
+]);
 
 /** Result code of a call the user's agent policy denies outright (`checkUserActionPolicy`). */
 export const POLICY_DENIED_RESULT_CODE = 'POLICY_DENIED';
@@ -839,6 +851,29 @@ export class BaseAgent {
      * @private
      */
     private _runScope: ActionRunScope | undefined;
+
+    /**
+     * External/untrusted data sources ingested during the current agent run (Primitive 2).
+     * Once non-empty, {@link IsRunTainted} is true for the remainder of the run and any memory
+     * notes written by the run land as `Status = 'Pending'` with taint provenance in `Comments`.
+     * @protected
+     */
+    protected _taintedSources: AgentTaintedSource[] = [];
+
+    /**
+     * True when the current agent run has ingested at least one `'Untrusted'` or `'SemiTrusted'`
+     * action or client-tool result.
+     */
+    public get IsRunTainted(): boolean {
+        return this._taintedSources.length > 0;
+    }
+
+    /**
+     * Read-only view of all `'Untrusted'` and `'SemiTrusted'` sources ingested during the current run.
+     */
+    public get TaintedSources(): ReadonlyArray<AgentTaintedSource> {
+        return this._taintedSources;
+    }
 
     /**
      * Parameter-aware failure tracking per action name for the current agent run.
@@ -1280,6 +1315,9 @@ export class BaseAgent {
         if (POLICY_REFUSAL_RESULT_CODES.has(summary.resultCode)) {
             return 'policy';
         }
+        if (NON_RETRYABLE_RESULT_CODES.has(summary.resultCode) || summary.errorRecovery?.Retryable === false) {
+            return 'non-retryable';
+        }
         if (record && record.identicalFailures >= IDENTICAL_FAILURE_THRESHOLD) {
             return 'identical-arguments';
         }
@@ -1316,6 +1354,15 @@ export class BaseAgent {
         switch (this.classifyActionFailure(summary)) {
             case 'policy':
                 return this.formatPolicyRefusalDirective(summary);
+            case 'non-retryable': {
+                const suggestion = summary.errorRecovery?.RecoverySuggestion
+                    ? ` ${summary.errorRecovery.RecoverySuggestion}`
+                    : '';
+                const nextActions = summary.errorRecovery?.SuggestedNextActions?.length
+                    ? ` Suggested alternative actions: ${summary.errorRecovery.SuggestedNextActions.map(a => `\`${a}\``).join(', ')}.`
+                    : '';
+                return `[CRITICAL/NON_RETRYABLE_FAILURE] Action '${name}' failed with non-retryable error (${summary.resultCode}): "${summary.message}".${suggestion}${nextActions} DO NOT retry '${name}' against the same target or with the same parameters; pivot to an alternative tool, a different target, or inform the user.`;
+            }
             case 'audience':
                 return `[CRITICAL/NOT_AVAILABLE_IN_SHARED_CONVERSATION] Action '${name}' is not available in this shared conversation: what it ` +
                     `returns could not be limited to what everyone in it may see ("${summary.message}"). It is not broken or misconfigured. ` +
@@ -1326,8 +1373,99 @@ export class BaseAgent {
                 return `[CRITICAL/ATTEMPTS_EXHAUSTED] Action '${name}' has failed ${record?.totalConsecutiveFailures ?? ACTION_FAILURE_BUDGET} consecutive times: "${summary.message}". Retries for this action are exhausted. You MUST pivot to an alternative tool or continue with available data.`;
             case 'identical-arguments':
                 return `[CRITICAL/REPEATED_IDENTICAL_CALL] Action '${name}' failed again with the EXACT SAME arguments: "${summary.message}". Calling '${name}' with these parameters will not work. You MUST either adjust your parameters or pivot to an alternative tool.`;
-            default:
-                return `[WARNING/ACTION_FAILURE] Action '${name}' failed: "${summary.message}". Review the error and adjust your input parameters (attempt ${record?.totalConsecutiveFailures ?? 1} of ${ACTION_FAILURE_BUDGET}). DO NOT retry calling '${name}' with identical arguments.`;
+            default: {
+                const suggestion = summary.errorRecovery?.RecoverySuggestion
+                    ? ` ${summary.errorRecovery.RecoverySuggestion}`
+                    : '';
+                const suggestedValues = summary.errorRecovery?.SuggestedValues?.length
+                    ? ` Valid alternatives: ${summary.errorRecovery.SuggestedValues.join(', ')}.`
+                    : '';
+                return `[WARNING/ACTION_FAILURE] Action '${name}' failed: "${summary.message}".${suggestion}${suggestedValues} Review the error and adjust your input parameters (attempt ${record?.totalConsecutiveFailures ?? 1} of ${ACTION_FAILURE_BUDGET}). DO NOT retry calling '${name}' with identical arguments.`;
+            }
+        }
+    }
+
+    /**
+     * Resolves the output trust classification for an action from its `MJ: Actions` metadata
+     * (`actionEntity.Config_Object?.outputTrustLevel`), with per-agent or per-run overrides via
+     * `AgentTypePromptParams`.
+     *
+     * Precedence:
+     * 1. An explicit per-action `actionTrustLevels` entry in `AgentTypePromptParams` — the operator's last word
+     * 2. The `trustedActionNames` / `untrustedActionNames` lists in `AgentTypePromptParams`
+     * 3. The action's metadata catalog setting (`Action.Config_Object?.outputTrustLevel`, looking up the
+     *    action by name in `ActionEngineBase.Instance.Actions` when `actionEntity` is omitted)
+     * 4. `'Trusted'`
+     * @protected
+     */
+    protected resolveActionTrustLevel(
+        actionName: string,
+        actionEntity?: MJActionEntityExtended,
+        params?: ExecuteAgentParams
+    ): ActionOutputTrustLevel {
+        const normalizedName = actionName.trim().toLowerCase();
+        const entity = actionEntity ?? ActionEngineBase.Instance.Actions?.find(
+            a => a.Name?.trim().toLowerCase() === normalizedName
+        );
+        const entityName = entity?.Name?.trim().toLowerCase();
+        const namesAction = (candidate: string): boolean => {
+            const n = candidate.trim().toLowerCase();
+            return n === normalizedName || (entityName !== undefined && n === entityName);
+        };
+        const isLevel = (v: unknown): v is ActionOutputTrustLevel => v === 'Trusted' || v === 'SemiTrusted' || v === 'Untrusted';
+        const promptParams = (params?.data?.__agentTypePromptParams ?? this._agentTypePromptParams) as Partial<LoopAgentTypePromptParams> | undefined;
+
+        // 1. Explicit per-action override
+        if (promptParams?.actionTrustLevels && typeof promptParams.actionTrustLevels === 'object') {
+            for (const [key, level] of Object.entries(promptParams.actionTrustLevels)) {
+                if (namesAction(key) && isLevel(level)) {
+                    return level;
+                }
+            }
+        }
+
+        // 2. Per-agent / per-run name lists
+        if (Array.isArray(promptParams?.trustedActionNames) && promptParams.trustedActionNames.some(namesAction)) {
+            return 'Trusted';
+        }
+        if (Array.isArray(promptParams?.untrustedActionNames) && promptParams.untrustedActionNames.some(namesAction)) {
+            return 'Untrusted';
+        }
+
+        // 3. Action metadata catalog setting (Action.Config_Object?.outputTrustLevel)
+        const metadataLevel = entity?.Config_Object?.outputTrustLevel;
+        if (isLevel(metadataLevel)) {
+            return metadataLevel;
+        }
+        if (typeof entity?.Config_ === 'string' && entity.Config_.trim().length > 0) {
+            const parsed = CleanAndParseJSON<Record<string, unknown>>(entity.Config_, false);
+            if (parsed && isLevel(parsed.outputTrustLevel)) {
+                return parsed.outputTrustLevel;
+            }
+        }
+
+        return 'Trusted';
+    }
+
+    /**
+     * Records a tainted source ingested during the current agent run.
+     * @protected
+     */
+    protected recordTaintedSource(stepNumber: number, sourceName: string, trustLevel: AgentTaintedSource['trustLevel']): void {
+        if (!this._taintedSources.some(s => s.stepNumber === stepNumber && s.sourceName === sourceName && s.trustLevel === trustLevel)) {
+            this._taintedSources.push({ stepNumber, sourceName, trustLevel });
+        }
+    }
+
+    /**
+     * Folds a finished sub-agent's tainted sources into this run's, attributed to the sub-agent step,
+     * so delegating a web search taints the parent exactly as searching itself would. Runs whether or
+     * not the child succeeded: a failed child may still have read external content.
+     * @protected
+     */
+    protected absorbSubAgentTaint(subAgentName: string, subAgentResult: Pick<ExecuteAgentResult, 'taintedSources'>, stepNumber: number): void {
+        for (const source of subAgentResult.taintedSources ?? []) {
+            this.recordTaintedSource(stepNumber, `sub-agent:${subAgentName}/${source.sourceName}`, source.trustLevel);
         }
     }
 
@@ -2771,6 +2909,7 @@ export class BaseAgent {
             this._handoffResult = null;
             this._resolvedHandoffTarget = null;
             this._lastSubAgentArtifactDirective = undefined;
+            this._taintedSources = [];
             this._messageLifecycleCallback = params.onMessageLifecycle;
             this._catalogNarrowing = undefined;
             this._openingRequest = OpeningRequestText(params.conversationMessages);
@@ -2833,6 +2972,12 @@ export class BaseAgent {
             // resumed stopped run can be spliced in ahead of it once the parallel phase settles.
             const continuationMessage = wrappedParams.conversationMessages[wrappedParams.conversationMessages.length - 1];
 
+            // Stage Phase 2 system message injections in isolated arrays so their prefix order is
+            // 100% deterministic regardless of Promise.all completion timing (Lesson 1 Vector 5).
+            const memoryStagedMessages: ChatMessage[] = [];
+            const ragStagedMessages: ChatMessage[] = [];
+            const discoveryStagedMessages: ChatMessage[] = [];
+
             // Positions matter: [0] is the config, [5] the stopped-run continuation, and [7] open sub-agent consults.
             const [config, , , , , stoppedRunContinuation, , openConsults] = await Promise.all([
                 this.loadAgentConfiguration(params.agent),
@@ -2843,7 +2988,7 @@ export class BaseAgent {
                     userId,
                     companyId,
                     params.contextUser,
-                    wrappedParams.conversationMessages,
+                    memoryStagedMessages,
                     runScope.EntityID,
                     runScope.RecordID,
                     runScope.Secondary,
@@ -2855,7 +3000,7 @@ export class BaseAgent {
                     typeof inputText === 'string' ? inputText : '',
                     params.agent,
                     params.contextUser,
-                    wrappedParams.conversationMessages,
+                    ragStagedMessages,
                     params.conversationMessages,
                     runScope.EntityID,
                     runScope.RecordID,
@@ -2875,11 +3020,19 @@ export class BaseAgent {
                 this.loadStoppedRunContinuation(wrappedParams),
                 // Decision discovery (plan Task 3.1), off unless the decisionsEnabled and decisionDiscovery prompt
                 // params are true: may add a <suggested_agent> system message, within DECISION_DISCOVERY_TIMEOUT_MS.
-                this.InjectDecisionDiscovery(params.agent, params.contextUser, wrappedParams.conversationMessages, params.data),
+                this.InjectDecisionDiscovery(params.agent, params.contextUser, discoveryStagedMessages, params.data),
                 // If this run resumes a prior run that paused with FinalStep === 'Chat', reload any unanswered
                 // sub-agent consults so the caller's answer can be relayed back to the waiting sub-agent.
                 this.loadOpenConsults(wrappedParams)
             ]);
+
+            if (memoryStagedMessages.length > 0 || ragStagedMessages.length > 0 || discoveryStagedMessages.length > 0) {
+                wrappedParams.conversationMessages.unshift(
+                    ...memoryStagedMessages,
+                    ...ragStagedMessages,
+                    ...discoveryStagedMessages
+                );
+            }
 
             // Resume (or summarize) a run the user stopped, now that nothing else is writing the list.
             this.applyStoppedRunContinuation(wrappedParams, stoppedRunContinuation, continuationMessage);
@@ -3387,9 +3540,8 @@ export class BaseAgent {
         if (!modelResolution) {
             const message =
                 `Agent '${params.agent.Name}' is session-driven (Realtime) but no usable Realtime model could be ` +
-                `resolved. Configure a model of AIModelType 'Realtime' with an active vendor DriverClass and a ` +
-                `valid API key (e.g. AI_VENDOR_API_KEY__<driver>). This is expected until the realtime drivers ` +
-                `and model metadata are provisioned.`;
+                `resolved: no active vendor of an active model of AIModelType 'Realtime' has a usable key and ` +
+                `driver. ${RealtimeKeyFixHint(params.CredentialScope)}`;
             this.logError(message, { agent: params.agent, category: 'RealtimeSession' });
             return await this.createFailureResult(message, params.contextUser) as ExecuteAgentResult<R>;
         }
@@ -3518,9 +3670,9 @@ export class BaseAgent {
             HostFraming: ReadTrimmedString(params.data?.realtimeHostFraming, 'realtimeHostFraming'),
             PriorTranscript: ReadTrimmedString(params.data?.realtimePriorTranscript, 'realtimePriorTranscript'),
             ConversationID: ReadTrimmedString(params.data?.conversationId, 'conversationId'),
-            // The run's runtime API keys, so the bridged voice session mints on the caller's key when
-            // the run carries one for the realtime driver (the same run-key → platform order as
-            // GetAIAPIKey; realtime does not consult MJ Credentials). Absent ⇒ platform keys, as before.
+            // The run's runtime API keys. The session service resolves each vendor's key in a prompt's
+            // order: the platform's MJ Credential for the vendor, then these keys, then the environment
+            // ('RuntimeOnly' scope: these keys alone). Absent ⇒ platform credentials, then the environment.
             // CreateBridgeRealtimeSession (the LiveKit / telephony factory) passes no apiKeys today.
             APIKeys: params.apiKeys,
             CredentialScope: params.CredentialScope,
@@ -3572,21 +3724,25 @@ export class BaseAgent {
         // would dead-end whenever the top model lacked a key — e.g. a power-11 model with no env key
         // (Inworld/AssemblyAI) outranking GPT Realtime — and surface "No usable Realtime model" even though
         // a usable model exists. This mirrors the same fix in RealtimeClientSessionService.
-        // The run's runtime API keys, in GetAIAPIKey's order: the run's key for a driver class, else
-        // the platform's. That is the legacy tier of prompt key resolution — a prompt consults MJ
-        // Credentials / AICredentialBindings first, and realtime does not consult them at all.
+        // Keys resolve per vendor in the order a prompt's do: the platform's MJ Credential for the vendor
+        // (AICredentialBindings on the model-vendor row, then the vendor, then the vendor's default
+        // credential), then the run's key for the driver class, then the environment. A run whose
+        // CredentialScope is 'RuntimeOnly' skips the platform credential and the environment.
         //
         // This also affects WHICH vendor runs the session, deliberately. Vendor selection walks
-        // candidates by priority and takes the first whose key resolves, so an organization that
-        // brings its own credential for a vendor we hold no platform key for now reaches that
-        // vendor — which is the point of bringing your own key, not a side effect of it.
-        const resolveAPIKey = MakeAIAPIKeyResolver(params.apiKeys, undefined, params.CredentialScope);
+        // candidates by priority and takes the first whose key resolves, so a vendor reachable only
+        // through a bound credential or the run's own key is still reached.
+        const runThenEnvironment = MakeAIAPIKeyResolver(params.apiKeys, undefined, params.CredentialScope);
         // The vendor follows whether the run will show an avatar, by the co-agent session prep's rule: a vendor that
         // renders avatars (Vertex AI for Gemini 3.8 Live) only when it will, or when it is the only keyed vendor.
         const showsAvatar = this.realtimeRunShowsAvatar(params);
         const candidates = this.selectRealtimeModelCandidates(params.agent, overrideModelID);
+        // Credential resolution is async and vendor selection is not, so every candidate's credentials
+        // are resolved first; selection and the mint then read the same answer.
+        const platform = await this.resolveRealtimePlatformCredentials(candidates.map(m => m.ID), params);
         for (const model of candidates) {
-            const vendor = SelectRealtimeVendorForModel(model.ID, resolveAPIKey);
+            const resolveAPIKey = platform.ResolverFor(model.ID, runThenEnvironment);
+            const vendor = SelectRealtimeVendorForModel(model.ID, resolveAPIKey, params.CredentialScope);
             const first = vendor ? this.instantiateRealtimeRunVendor(model.ID, vendor, resolveAPIKey) : null;
             if (!vendor || !first) {
                 continue;
@@ -3616,6 +3772,18 @@ export class BaseAgent {
             AvatarDelivery: params.data?.realtimeAvatarDelivery === 'room' ? 'room' : undefined,
             PhoneCall: params.data?.realtimePhoneCall === true,
         });
+    }
+
+    /**
+     * The platform MJ Credentials of the candidate realtime models' vendors, read as the run's user.
+     * **Overridable seam** so tests can supply credentials without a credential store. Under a
+     * `'RuntimeOnly'` scope it resolves none.
+     *
+     * @param modelIDs The candidate `MJ: AI Models` row ids.
+     * @param params The execution parameters (context user and credential scope).
+     */
+    protected async resolveRealtimePlatformCredentials(modelIDs: string[], params: ExecuteAgentParams): Promise<RealtimePlatformCredentials> {
+        return ResolveRealtimePlatformCredentials(modelIDs, params.contextUser, params.CredentialScope);
     }
 
     /**
@@ -4534,7 +4702,11 @@ export class BaseAgent {
             // Prune and compact expired messages before executing the next step.
             // Uses _promptTurnCount (not stepCount) so expiration is measured in prompt
             // executions, not all steps (which include actions, loops, sub-agents, etc.)
-            await this.pruneAndCompactExpiredMessages(params, this._promptTurnCount);
+            // Rewriting an earlier turn costs the cached prefix, so unless the caller asked for it
+            // (messageExpirationOverride) it waits until the window reaches the compaction trigger.
+            if (params.messageExpirationOverride || this.isMidLoopCompactionThresholdReached(params)) {
+                await this.pruneAndCompactExpiredMessages(params, this._promptTurnCount);
+            }
 
             // Execute the current step based on previous decision or initial prompt
             this.logStatus(`🔄 Executing step ${stepCount + 1} for agent '${params.agent.Name}'`, true, params);
@@ -6267,9 +6439,12 @@ export class BaseAgent {
         // Last gate before the history goes back to the model: no tool call may be left dangling.
         this.reconcileUnansweredToolCalls(params);
         if (this.GetNativeControlConfig(params).CompactToolArguments) {
-            const compacted = CompactAnsweredToolCallArguments(params.conversationMessages as AgentChatMessage[]);
-            if (compacted > 0) {
-                this.logStatus(`[NativeTools] Compacted the large arguments of ${compacted} older tool call(s)`, true, params);
+            const compactionBudget = this.resolveCompactionBudget(params, config);
+            if (compactionBudget.BoundedBy === 'Default' || this.isMidLoopCompactionThresholdReached(params)) {
+                const compacted = CompactAnsweredToolCallArguments(params.conversationMessages as AgentChatMessage[]);
+                if (compacted > 0) {
+                    this.logStatus(`[NativeTools] Compacted the large arguments of ${compacted} older tool call(s)`, true, params);
+                }
             }
         }
         promptParams.conversationMessages = params.conversationMessages;
@@ -11392,6 +11567,8 @@ The context is now within limits. Please retry your request with the recovered c
             companyId: params.companyId,
             verbose: params.verbose,
             provider: this.ProviderToUse,
+            isRunTainted: this.IsRunTainted,
+            taintedSources: this._taintedSources,
         };
     }
 
@@ -14483,6 +14660,40 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * The client tools in force for a run: the agent's static metadata tools under the session, app
+     * and override tiers, merged by {@link ResolveClientTools} with its fixed precedence. The prompt
+     * section and the client-tool step both resolve through here, so the tools the model is offered
+     * and the metadata its results are classified against are one list.
+     *
+     * @param data - The run's data bag: `sessionID` selects the session tier, `appContext` the app
+     *   tier, `clientTools` the override tier.
+     */
+    private resolveClientToolsForRun(agent: MJAIAgentEntityExtended, data: Record<string, unknown> | undefined): ClientToolMetadata[] {
+        // Static tier — agent's metadata tools from the AI Agent Client Tools junction.
+        const staticTools: ClientToolMetadata[] = AIEngine.Instance.GetClientToolsForAgent(agent.ID).map(tool => ({
+            Name: tool.Name,
+            Description: tool.Description,
+            InputSchema: tool.InputSchemaJSON ? JSON.parse(tool.InputSchemaJSON) : {},
+            OutputSchema: tool.OutputSchemaJSON ? JSON.parse(tool.OutputSchemaJSON) : undefined,
+            Category: tool.Category || undefined,
+            DefaultTimeoutMs: tool.DefaultTimeoutMs || undefined
+        }));
+
+        // Dynamic (session) tier — client-SDK enriched tools for this session.
+        const sessionID = data?.sessionID as string | undefined;
+        const sessionTools = sessionID ? ClientToolRequestManager.Instance.GetSessionTools(sessionID) : [];
+
+        // App tier — tools the active surface published in the app-context capability manifest.
+        const appContext = data?.appContext as { Capabilities?: { Tools?: ClientToolMetadata[] } } | undefined;
+        const appTools = appContext?.Capabilities?.Tools ?? [];
+
+        // Override tier — tools passed directly in the run's data.
+        const overrideTools = (data?.clientTools as ClientToolMetadata[] | undefined) ?? [];
+
+        return ResolveClientTools({ agentId: agent.ID, staticTools, sessionTools, appTools, overrideTools });
+    }
+
+    /**
      * Build the client tool prompt section for system prompt injection.
      *
      * Resolution is delegated to the shared, tier-agnostic {@link ResolveClientTools}
@@ -14501,29 +14712,7 @@ The context is now within limits. Please retry your request with the recovered c
      * static metadata tool of the same name. Collisions are rare in practice.
      */
     private buildClientToolPromptSection(agent: MJAIAgentEntityExtended, extraData?: Record<string, unknown>): string {
-        // Static tier — agent's metadata tools from the AI Agent Client Tools junction.
-        const engine = AIEngine.Instance;
-        const staticTools: ClientToolMetadata[] = engine.GetClientToolsForAgent(agent.ID).map(tool => ({
-            Name: tool.Name,
-            Description: tool.Description,
-            InputSchema: tool.InputSchemaJSON ? JSON.parse(tool.InputSchemaJSON) : {},
-            OutputSchema: tool.OutputSchemaJSON ? JSON.parse(tool.OutputSchemaJSON) : undefined,
-            Category: tool.Category || undefined,
-            DefaultTimeoutMs: tool.DefaultTimeoutMs || undefined
-        }));
-
-        // Dynamic (session) tier — client-SDK enriched tools for this session.
-        const sessionID = extraData?.sessionID as string | undefined;
-        const sessionTools = sessionID ? ClientToolRequestManager.Instance.GetSessionTools(sessionID) : [];
-
-        // App tier — tools the active surface published in the app-context capability manifest.
-        const appContext = extraData?.appContext as { Capabilities?: { Tools?: ClientToolMetadata[] } } | undefined;
-        const appTools = appContext?.Capabilities?.Tools ?? [];
-
-        // Override tier — tools passed directly in the run's data.
-        const overrideTools = (extraData?.clientTools as ClientToolMetadata[] | undefined) ?? [];
-
-        const tools = ResolveClientTools({ agentId: agent.ID, staticTools, sessionTools, appTools, overrideTools });
+        const tools = this.resolveClientToolsForRun(agent, extraData);
 
         if (tools.length === 0) {
             return ''; // No client tools available
@@ -14711,15 +14900,40 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * @param actionSummaries - The action summary objects built by executeActionStep
      * @returns Compact markdown string
-     * @private
+     * @protected
      */
-    private formatActionResultsAsMarkdown(actionSummaries: ActionResultSummary[]): string {
+    protected formatActionResultsAsMarkdown(actionSummaries: ActionResultSummary[]): string {
         return actionSummaries.map(a => {
             const marker = a.success ? '✓' : '✗';
             const lines: string[] = [];
 
             lines.push(`## ${a.actionName} ${marker}`);
             lines.push(`**Result:** ${a.resultCode} — ${a.message || '(no message)'}`);
+
+            if (!a.success && a.errorRecovery) {
+                const er = a.errorRecovery;
+                if (er.Retryable !== undefined) {
+                    lines.push(`**Retryable:** ${er.Retryable ? 'Yes (adjust parameters before retrying)' : 'No (do not retry this action with the same goal)'}`);
+                }
+                if (er.RecoverySuggestion) {
+                    lines.push(`**How to Recover:** ${er.RecoverySuggestion}`);
+                }
+                if (er.SuggestedValues && er.SuggestedValues.length > 0) {
+                    lines.push(`**Did You Mean:** ${er.SuggestedValues.map(v => `\`${v}\``).join(', ')}`);
+                }
+                if (er.InvalidParams && er.InvalidParams.length > 0) {
+                    lines.push('**Invalid Parameters:**');
+                    for (const ip of er.InvalidParams) {
+                        lines.push(`• \`${ip.ParamName}\`: ${ip.Reason}`);
+                    }
+                }
+                if (er.ValidParameterExample) {
+                    lines.push(`**Valid Example:** \`${JSON.stringify(er.ValidParameterExample)}\``);
+                }
+                if (er.SuggestedNextActions && er.SuggestedNextActions.length > 0) {
+                    lines.push(`**Suggested Next Actions:** ${er.SuggestedNextActions.map(v => `\`${v}\``).join(', ')}`);
+                }
+            }
 
             // Format output params as bullet list. An exempt action's values go out verbatim.
             if (a.params && a.params.length > 0) {
@@ -14730,7 +14944,11 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
-            return lines.join('\n');
+            const formatted = lines.join('\n');
+            if (a.trustLevel === 'Untrusted' || a.trustLevel === 'SemiTrusted') {
+                return WrapUntrustedExternalData(formatted, `action:${a.actionName}`, a.trustLevel);
+            }
+            return formatted;
         }).join('\n\n');
     }
 
@@ -15192,6 +15410,7 @@ The context is now within limits. Please retry your request with the recovered c
         this._templateEngineConfiguredForRun = false;
         this._heldDecisions = undefined;
         this._awaitingWorkflowTaskID = null;
+        this._taintedSources = [];
 
         // Resolve action-result compression config for this run (default on; opt out via
         // crushActionResults: false in the agent-type prompt params).
@@ -17383,6 +17602,8 @@ The context is now within limits. Please retry your request with the recovered c
                 stepCount
             );
             
+            this.absorbSubAgentTaint(subAgentRequest.name, subAgentResult, stepEntity?.StepNumber ?? (stepCount + 1));
+
             let mergedPayload = previousDecision.newPayload; // Start with the original payload
             let currentStepPayloadChangeResult: PayloadChangeResultSummary | undefined = undefined;
             if (subAgentResult.success) {
@@ -19422,6 +19643,15 @@ The context is now within limits. Please retry your request with the recovered c
                 const fileOutputs = this.detectFileOutputs(outputParams);
                 this._fileOutputs.push(...fileOutputs);
 
+                const trustLevel = this.resolveActionTrustLevel(result.action.name, result.actionEntity, params);
+                if (trustLevel === 'Untrusted' || trustLevel === 'SemiTrusted') {
+                    this.recordTaintedSource(
+                        result.stepEntity?.StepNumber ?? (stepCount + 1),
+                        `action:${result.action.name}`,
+                        trustLevel
+                    );
+                }
+
                 return {
                     actionName: result.action.name,
                     success: isActionSuccess,
@@ -19432,8 +19662,11 @@ The context is now within limits. Please retry your request with the recovered c
                     resultCode: actionResult?.Result?.ResultCode || actionResult?.ResultCode || (isActionSuccess ? 'SUCCESS' : 'ERROR'),
                     message: actionResult?.Message || (isActionSuccess ? 'Action completed' : result.error || 'Unknown error'),
                     // Kept on failure too: an action's recovery guidance is most useful when it failed.
-                    aiDirectives: actionResult?.AIDirectives,
-                    breakerReason: actionResult instanceof CircuitBreakerActionResult ? actionResult.Reason : undefined
+                    // Stripped on Untrusted actions (Primitive 2) so external payloads cannot inject high-priority AI directives.
+                    aiDirectives: trustLevel === 'Untrusted' ? undefined : actionResult?.AIDirectives,
+                    breakerReason: actionResult instanceof CircuitBreakerActionResult ? actionResult.Reason : undefined,
+                    trustLevel,
+                    errorRecovery: actionResult?.ErrorRecovery,
                 };
             });
             
@@ -19706,6 +19939,12 @@ The context is now within limits. Please retry your request with the recovered c
 
         const results: ClientToolResultSummary[] = [];
         const agentRunID = this._agentRun?.ID ?? 'unknown';
+        // Resolved once: the same tiers and precedence the prompt offered the model, keyed by name so each
+        // result can read the tool's declared TrustLevel.
+        const toolsByName = new Map(
+            this.resolveClientToolsForRun(params.agent, { ...(params.data ?? {}), sessionID: params.sessionID })
+                .map(t => [t.Name.trim().toLowerCase(), t] as const)
+        );
 
         // Execute tools sequentially (client may not support parallel UI operations)
         for (const tool of clientTools) {
@@ -19740,12 +19979,27 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             );
 
+            const matchedClientToolMeta = toolsByName.get(tool.Name.trim().toLowerCase());
+            const resolvedActionTrust = this.resolveActionTrustLevel(tool.Name, undefined, params);
+            const clientToolTrustLevel: ActionOutputTrustLevel =
+                resolvedActionTrust !== 'Trusted'
+                    ? resolvedActionTrust
+                    : (matchedClientToolMeta?.TrustLevel ?? 'Trusted');
+            if (clientToolTrustLevel === 'Untrusted' || clientToolTrustLevel === 'SemiTrusted') {
+                this.recordTaintedSource(
+                    stepEntity?.StepNumber ?? (stepCount + 1),
+                    `client-tool:${tool.Name}`,
+                    clientToolTrustLevel
+                );
+            }
+
             results.push({
                 ToolName: tool.Name,
                 Success: response.Success,
                 Result: response.Result,
                 Media: response.Media,
-                ErrorMessage: response.ErrorMessage
+                ErrorMessage: response.ErrorMessage,
+                TrustLevel: clientToolTrustLevel,
             });
         }
 
@@ -22283,6 +22537,7 @@ The context is now within limits. Please retry your request with the recovered c
 
         return {
             success: false,
+            taintedSources: this._taintedSources.length > 0 ? [...this._taintedSources] : undefined,
             agentRun: this._agentRun!
         };
     }
@@ -22335,6 +22590,7 @@ The context is now within limits. Please retry your request with the recovered c
         
         return {
             success: false,
+            taintedSources: this._taintedSources.length > 0 ? [...this._taintedSources] : undefined,
             agentRun: this._agentRun!
         };
     }
@@ -22563,6 +22819,7 @@ The context is now within limits. Please retry your request with the recovered c
             mediaOutputs: this._mediaOutputs.length > 0 ? this._mediaOutputs : undefined,
             fileOutputs: this._fileOutputs.length > 0 ? this._fileOutputs : undefined,
             feedbackRequestId: this._feedbackRequestId || undefined,
+            taintedSources: this._taintedSources.length > 0 ? [...this._taintedSources] : undefined,
             handoff: this._handoffResult || undefined,
             resolvedStorageAccountId: this._resolvedStorageAccountId || undefined
         };
@@ -22720,6 +22977,41 @@ The context is now within limits. Please retry your request with the recovered c
         }
         
         return violations;
+    }
+
+    /**
+     * Whether the window has reached the compaction trigger the operator configured — the same
+     * `CompactionTriggerPercent` (agent, then agent type, then the default) that drives cross-turn
+     * compaction, resolved by {@link resolveCompactionBudget} into `TriggerTokens`. Below it, the
+     * mid-loop rewrites of earlier turns (shortening replayed tool-call arguments, expiring old action
+     * results) are deferred, so routine tool loops keep the provider's byte-exact prompt-cache prefix.
+     * One knob governs both kinds of compaction on purpose: a second number would be one more thing
+     * to tune, and an in-run rewrite is only worth a cache miss once the window is actually filling up.
+     * @protected
+     */
+    protected isMidLoopCompactionThresholdReached(params: ExecuteAgentParams): boolean {
+        const messages = params?.conversationMessages;
+        if (!Array.isArray(messages) || messages.length === 0) {
+            return false;
+        }
+        const budget = this.resolveCompactionBudget(params, this._agentConfig);
+        if (!budget.TriggerTokens || budget.TriggerTokens <= 0) {
+            return false;
+        }
+        // estimateConversationTokens counts message content only. The arguments of replayed tool calls
+        // travel on every turn too, so they are added here; nothing is counted twice.
+        let estimatedTokens = this.estimateConversationTokens(messages);
+        for (const msg of messages) {
+            const toolCalls = (msg as AgentChatMessage).toolCalls;
+            if (Array.isArray(toolCalls) && toolCalls.length > 0) {
+                for (const call of toolCalls) {
+                    if (call?.arguments !== undefined) {
+                        estimatedTokens += this.estimateTokens(JSON.stringify(call.arguments));
+                    }
+                }
+            }
+        }
+        return estimatedTokens >= budget.TriggerTokens;
     }
 
     /**
