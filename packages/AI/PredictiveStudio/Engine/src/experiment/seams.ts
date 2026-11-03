@@ -17,13 +17,13 @@ import {
   type UserInfo,
   type IMetadataProvider,
 } from '@memberjunction/core';
-import { JsonParse, MetricDirections } from '@memberjunction/predictive-studio-core';
 
 import type { MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 import { TrainingEngine } from '../training';
 import type { TrainingDeps, TrainModelInput, TrainModelResult } from '../training';
 import { RunViewTrainingSnapshotStore } from '../snapshot/training-snapshot-store';
 import { TrainingAttemptFailedError } from './budget';
+import { ExperimentScores } from './scores';
 import type {
   IClock,
   IExperimentEntityFactory,
@@ -91,8 +91,9 @@ export interface IPipelineResolver {
  * iteration it resolves the pipeline (via an injected {@link IPipelineResolver}),
  * trains it through the engine (producing an immutable Draft `MJ: ML Models` +
  * its `MJ: ML Training Runs` leaf linked to the iteration via
- * `experimentSessionIterationId`), and extracts the normalized holdout Score for
- * the plan's `SuccessMetric` to drive the leaderboard (null when the holdout did not measure it).
+ * `experimentSessionIterationId`), and extracts the normalized holdout Score that
+ * drives the leaderboard: on the plan's `SuccessMetric`, or on the model's primary
+ * proper score when its holdout gave none on it ({@link ExperimentScores.ExtractNormalizedScore}).
  */
 export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
   /**
@@ -120,12 +121,14 @@ export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
       experimentSessionIterationId: input.iterationId,
       ...(input.timeoutSeconds === null ? {} : { timeoutSeconds: input.timeoutSeconds }),
     }, input.iterationId);
+    // A run whose gate decision shipped no artifact has no model to score: the iteration completes with no score
+    // (its run's stored gate record says why) and the session continues.
+    const scored = model === null ? null : ExperimentScores.ExtractNormalizedScore(model.HoldoutMetrics, input.plan.TargetDefinition.SuccessMetric);
     return {
       model,
       run,
-      // A run whose gate decision shipped no artifact has no model to score: the iteration completes with no score
-      // (its run's stored gate record says why) and the session continues.
-      Score: model === null ? null : ExperimentScores.ExtractNormalizedScore(model.HoldoutMetrics, input.plan.TargetDefinition.SuccessMetric),
+      Score: scored === null ? null : scored.Score,
+      ScoreMetric: scored === null ? null : scored.Metric,
       // A NULL run ComputeCost (no PS_COMPUTE_USD_PER_SECOND rate configured) is unbudgeted: it adds 0 to the
       // session's MaxComputeCost sum.
       ComputeCost: run.ComputeCost ?? 0,
@@ -163,41 +166,5 @@ export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
       LogError(`TrainingEngineExperimentTrainer: reading the run of failed iteration ${iterationId} failed: ${readErr instanceof Error ? readErr.message : String(readErr)}`);
       return null;
     }
-  }
-}
-
-/** The leaderboard scores of an experiment's models. */
-export class ExperimentScores {
-  /**
-   * The **normalized** leaderboard score of a model: the plan's success metric read from its holdout metrics only, so
-   * that higher is always better (a lower-is-better metric is negated, a closer-to-one metric is minus its distance from
-   * one). Null when the holdout metrics do not hold the metric, or when the metric's direction is not known: a missing
-   * score is never a stand-in number, and an unmeasured model never takes a place on the leaderboard.
-   *
-   * @param holdoutMetricsJson the model's `HoldoutMetrics` JSON
-   * @param successMetric the plan's `SuccessMetric` (e.g. `AUC`, `RMSE`)
-   */
-  public static ExtractNormalizedScore(holdoutMetricsJson: string | null, successMetric: string): number | null {
-    const key = successMetric.trim().toLowerCase();
-    const raw = ExperimentScores.parseMetrics(holdoutMetricsJson)?.get(key);
-    if (raw === undefined || !Number.isFinite(raw)) return null;
-    switch (MetricDirections.MetricDirectionOf(key)) {
-      case 'higher-is-better': return raw;
-      case 'lower-is-better': return -raw;
-      case 'closer-to-one': return -Math.abs(1 - raw);
-      case null: return null;
-    }
-  }
-
-  /** A metrics JSON column as its numeric members by lower-cased key; null when the column is empty or not a JSON object. */
-  private static parseMetrics(json: string | null): ReadonlyMap<string, number> | null {
-    if (json === null || json.trim().length === 0) return null;
-    const parsed = JsonParse.ParseJsonText(json, 'HoldoutMetrics');
-    if (parsed.Ok === false || !JsonParse.IsJsonObject(parsed.Value)) return null;
-    const out = new Map<string, number>();
-    for (const [k, v] of Object.entries(parsed.Value)) {
-      if (typeof v === 'number') out.set(k.toLowerCase(), v);
-    }
-    return out;
   }
 }

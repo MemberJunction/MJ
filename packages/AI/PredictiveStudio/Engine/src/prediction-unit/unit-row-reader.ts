@@ -4,8 +4,9 @@
  * Reads a Prediction Unit's rows: one per grain record, or one per grain record × period. Each row gets its
  * decision date, outcome window end, group key, period and label. Rows are excluded — and counted — in this order:
  * censored (window ends after the cutoff), label known at the decision (next-period rule: the outcome was recorded
- * on or before the decision date), outcome inside the gap (the next period or a child event falls after the decision
- * date and on or before the window start, so it was settled before the window opened), empty label. Exact duplicates
+ * on or before the decision date), outcome inside the gap (the next period, or for a child-event `exists` label a child
+ * event, falls after the decision date and on or before the window start, so it was settled before the window opened;
+ * a child-event `count` or `sum` label does not count gap events and keeps the row), empty label. Exact duplicates
  * of (entity key, decision date, period) are removed and counted. A next-period label reads only the rows the unit's
  * filter keeps, and two kept rows at one (grain key, period index) refuse the read. The source is read completely or
  * the read is refused.
@@ -39,8 +40,10 @@ export interface UnitReadDeps {
   readonly Now: Date;
   /**
    * True only for a read whose rows become a series history at scoring: rows whose outcome window has not closed by the
-   * cutoff are kept instead of censored, because a lag reads the period's recorded value, not a resolved label, and
-   * training read every earlier period's value. A read that trains or labels never sets it.
+   * cutoff are kept instead of censored. A period's value is its resolved outcome, and a lag reads it only once its
+   * outcome window has closed by the row's decision day and the scoring day (`SeriesFeatures.ComputeSeriesFeature`), so
+   * a period whose window closed after the unit's cutoff but before the scoring day is read, and one still open is kept
+   * in the history but never read. A read that trains or labels never sets it.
    */
   readonly KeepOpenWindows?: boolean;
 }
@@ -322,8 +325,11 @@ export class PredictionUnitRowReader {
   }
 
   /**
-   * child-event: exists / count / sum of the owner's child events inside the window. A row with an event inside the
-   * gap (after the decision, on or before the window start) is excluded: its outcome happened before the window opened.
+   * child-event: exists / count / sum of the owner's child events inside the window. The gap (after the decision, on or
+   * before the window start) is treated by what the aggregate measures. For `exists` a row with an event in the gap is
+   * excluded: the event may be a terminal outcome that already happened (a cancellation), so labelling the window 0
+   * would mislabel the row. For `count` and `sum` the label is the volume inside the window: an event in the gap is
+   * simply not counted and the row is kept, since excluding it would drop most rows of an owner whose events recur.
    */
   private async childEventLabeler(rule: Extract<LabelRule, { kind: 'child-event' }>, task: TaskType, deps: UnitReadDeps): Promise<Labeler | UnitRowReadResult> {
     const child = deps.Metadata.Entity(rule.childEntity);
@@ -346,9 +352,11 @@ export class PredictionUnitRowReader {
     return (row, entityKey, decision, windowStart, windowEnd) => {
       const owner = rule.ownerKeyField ? PredictionUnitRowReader.keyOf(row[rule.ownerKeyField]) : entityKey.toLowerCase();
       const ownerEvents = events.get(owner) || [];
-      if (ownerEvents.some((e) => e.Day.getTime() > decision.getTime() && e.Day.getTime() <= windowStart.getTime())) return { Kind: 'outcome-in-gap' };
       const hits = ownerEvents.filter((e) => e.Day.getTime() > windowStart.getTime() && e.Day.getTime() <= windowEnd.getTime());
-      if (rule.aggregate === 'exists') return { Kind: 'label', Label: PredictionUnitRowReader.CanonicalLabel(hits.length > 0 ? '1' : '0', task) };
+      if (rule.aggregate === 'exists') {
+        if (ownerEvents.some((e) => e.Day.getTime() > decision.getTime() && e.Day.getTime() <= windowStart.getTime())) return { Kind: 'outcome-in-gap' };
+        return { Kind: 'label', Label: PredictionUnitRowReader.CanonicalLabel(hits.length > 0 ? '1' : '0', task) };
+      }
       if (rule.aggregate === 'count') return { Kind: 'label', Label: hits.length };
       return { Kind: 'label', Label: hits.reduce((s, e) => s + e.Value, 0) };
     };

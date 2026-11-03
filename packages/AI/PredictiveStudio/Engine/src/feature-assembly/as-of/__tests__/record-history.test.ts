@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import type { EntityInfo, IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 import type { MJRecordChangeEntity } from '@memberjunction/core-entities';
-import { RecordHistory, RunViewRecordHistoryReader, type RecordChangeRow } from '../record-history';
+import { RecordHistory, RunViewRecordHistoryReader, type HistoryEntity, type RecordChangeRow } from '../record-history';
 import { AssemblyRefused } from '../refusal';
 import type { FetchRowsParams, FetchRowsResult, SourceRow } from '../../data-access';
 import type { AssemblyEntityInfo } from '../../assembly-metadata';
 import { TableDataAccess } from '../../../__tests__/fakes/table-data-access';
 
-const rc = (id: string, key: string, type: RecordChangeRow['Type'], at: string, full: Record<string, string | null>, changed: string[] = [], source: RecordChangeRow['Source'] = 'Internal'): RecordChangeRow =>
+const rc = (id: string, key: string, type: RecordChangeRow['Type'], at: string, full: Record<string, string | number | boolean | null>, changed: string[] = [], source: RecordChangeRow['Source'] = 'Internal'): RecordChangeRow =>
   ({ ID: id, RecordID: `ID|${key}`, Type: type, Source: source, ChangedAt: new Date(at), ChangesJSON: JSON.stringify(Object.fromEntries(changed.map((f) => [f, { field: f, oldValue: null, newValue: full[f] }]))), FullRecordJSON: JSON.stringify(full) });
 
 const changes: RecordChangeRow[] = [
@@ -16,10 +16,18 @@ const changes: RecordChangeRow[] = [
   rc('c3', 'P2', 'Snapshot', '2022-06-01T00:00:00Z', { Status: 'Active' }),
 ];
 
+/** The People entity as the history sees it: its name and the type of every field the tests compare. */
+const field = (Name: string, TSType: HistoryEntity['Fields'][number]['TSType']): HistoryEntity['Fields'][number] =>
+  ({ Name, SqlType: 'nvarchar', TSType, AllowUpdateAPI: Name !== 'ID', IsPrimaryKey: Name === 'ID', RelatedEntity: null, IsVirtual: false });
+const PEOPLE: HistoryEntity = {
+  Name: 'People',
+  Fields: [field('ID', 'string'), field('Status', 'string'), field('Code', 'string'), field('JoinDate', 'Date'), field('IsMember', 'boolean'), field('Visits', 'number')],
+};
+
 describe('BuildEntityHistory', () => {
   const now = new Date('2026-10-12T00:00:00Z');
   const current = new Map([['p1', { Status: 'Lapsed' }], ['p2', { Status: 'Lapsed' }], ['p3', { Status: 'Active' }]]);
-  const h = RecordHistory.BuildEntityHistory('People', changes, current, ['Status'], { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' }, now);
+  const h = RecordHistory.BuildEntityHistory(PEOPLE, changes, current, ['Status'], { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' }, now);
 
   it('replays the value in force before the as-of instant', () => {
     expect(h.ValueAt('P1', 'Status', new Date('2022-12-01T00:00:00Z'))).toMatchObject({ Status: 'value', Value: 'Active', ChangeID: 'c1' });
@@ -30,7 +38,7 @@ describe('BuildEntityHistory', () => {
     expect(h.ValueAt('P3', 'Status', new Date('2025-01-01T00:00:00Z'))).toEqual({ Status: 'uncovered', Reason: 'no-history' });
   });
   it('has no history for a record whose change rows hold no Create or Snapshot row to start from', () => {
-    const updatesOnly = RecordHistory.BuildEntityHistory('People', [rc('u1', 'P4', 'Update', '2022-01-01T00:00:00Z', { Status: 'Lapsed' }, ['Status'])],
+    const updatesOnly = RecordHistory.BuildEntityHistory(PEOPLE, [rc('u1', 'P4', 'Update', '2022-01-01T00:00:00Z', { Status: 'Lapsed' }, ['Status'])],
       new Map([['p4', { Status: 'Lapsed' }]]), ['Status'], { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' }, now);
     expect(updatesOnly.ValueAt('P4', 'Status', new Date('2023-01-01T00:00:00Z'))).toEqual({ Status: 'uncovered', Reason: 'no-history' });
   });
@@ -143,7 +151,7 @@ describe('RunViewRecordHistoryReader', () => {
 describe('BuildEntityHistory — values shaped like timestamps', () => {
   const policy = { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' } as const;
   const build = (value: string) => () =>
-    RecordHistory.BuildEntityHistory('People', [rc('c', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Code: value })], new Map([['p1', { ID: 'P1', Code: value }]]), ['Code'], policy, new Date('2026-10-12T00:00:00Z'));
+    RecordHistory.BuildEntityHistory(PEOPLE, [rc('c', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Code: value })], new Map([['p1', { ID: 'P1', Code: value }]]), ['Code'], policy, new Date('2026-10-12T00:00:00Z'));
 
   it('compares a text value that only starts like a timestamp as text', () => {
     expect(build('2025-01-15T-BATCH-1')().Coverage.continuity.recordsMismatched).toBe(0);
@@ -156,5 +164,45 @@ describe('BuildEntityHistory — values shaped like timestamps', () => {
       refusal = e instanceof AssemblyRefused ? e.Refusal : e;
     }
     expect(refusal).toEqual({ kind: 'invalid-date-in-history', entity: 'People', field: 'Code', value: '2025-99-99T00:00' });
+  });
+  it('refuses a timestamp value whose date names no calendar day, which a Date would roll into the next month', () => {
+    expect(build('2025-02-30T00:00')).toThrow(AssemblyRefused);
+  });
+});
+
+describe('BuildEntityHistory — one value written in two formats is one value', () => {
+  const policy = { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' } as const;
+  const now = new Date('2026-10-12T00:00:00Z');
+  /** Mismatched records when the history recorded `recorded` for `field` and the row now stores `stored`. */
+  const mismatches = (field: string, recorded: string | number | boolean, stored: string | number | boolean | Date): number =>
+    RecordHistory.BuildEntityHistory(PEOPLE, [rc('c', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', [field]: recorded })], new Map([['p1', { ID: 'P1', [field]: stored }]]), [field], policy, now)
+      .Coverage.continuity.recordsMismatched;
+
+  it('reads a date-only text as that day at UTC midnight, against a Date or a timestamp text', () => {
+    expect(mismatches('JoinDate', '2025-01-15', new Date('2025-01-15T00:00:00Z'))).toBe(0);
+    expect(mismatches('JoinDate', '2025-01-15', '2025-01-15T00:00:00.000Z')).toBe(0);
+    expect(mismatches('JoinDate', '2025-01-15T00:00:00Z', '2025-01-15')).toBe(0);
+  });
+  it('still reports a date that moved, and never reads a date-only text that names no day as the day a Date rolls it to', () => {
+    expect(mismatches('JoinDate', '2025-01-15', new Date('2025-01-16T00:00:00Z'))).toBe(1);
+    // 2025-02-30 is no day (a Date would roll it to 2025-03-02), so it never equals that day.
+    expect(mismatches('JoinDate', '2025-02-30', new Date('2025-03-02T00:00:00Z'))).toBe(1);
+  });
+  it('compares 1/0 and true/false equal on a field the metadata declares boolean (a bit column)', () => {
+    expect(mismatches('IsMember', 1, true)).toBe(0);
+    expect(mismatches('IsMember', 0, false)).toBe(0);
+    expect(mismatches('IsMember', true, 1)).toBe(0);
+    expect(mismatches('IsMember', 1, false)).toBe(1);
+  });
+  it('never compares 1 and true equal on a numeric field, where 1 is a quantity', () => {
+    expect(mismatches('Visits', 1, true)).toBe(1);
+    expect(mismatches('Visits', 1, 1)).toBe(0);
+  });
+  it('does not count a later row that re-records a boolean field in the other format as a change', () => {
+    const h = RecordHistory.BuildEntityHistory(PEOPLE, [
+      rc('c1', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', IsMember: 1 }),
+      rc('c2', 'P1', 'Snapshot', '2023-01-01T00:00:00Z', { ID: 'P1', IsMember: true }),
+    ], new Map([['p1', { ID: 'P1', IsMember: true }]]), ['IsMember'], policy, now);
+    expect(h.ChangesAfter('P1', 'IsMember', new Date('2022-01-01T00:00:00Z'))).toBe(0);
   });
 });

@@ -182,7 +182,7 @@ describe('PredictionUnitRowReader — outcomes in the gap, the row filter and du
     expect(out.Counts.labelKnownRowsExcluded).toBe(0);
   });
 
-  it('excludes and counts a row whose child event falls inside the gap', async () => {
+  it('excludes and counts a row whose child event falls inside the gap under an exists label', async () => {
     const childUnit: PredictionUnitSpec = {
       ...gapUnit,
       rows: { kind: 'grain', grainEntity: 'Grain', decisionDate: { kind: 'column', column: 'D' }, filter: [] },
@@ -197,6 +197,46 @@ describe('PredictionUnitRowReader — outcomes in the gap, the row filter and du
     if (out.Status !== 'read') return;
     expect(out.Rows.map((r) => [r.RowID, r.Label])).toEqual([['g2', '1'], ['g3', '0']]);
     expect(out.Counts.gapOutcomeRowsExcluded).toBe(1);
+  });
+
+  describe('a count or sum label measures the window only: events inside the gap are not counted and the row is kept', () => {
+    const amounts: Record<string, AssemblyEntityInfo> = {
+      ...periodEntities,
+      Gifts: { ID: 'E-GF', Name: 'Gifts', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), field('OwnerID'), field('At', 'Date'), field('Amount', 'number')] },
+    };
+    const volumeUnit = (aggregate: 'count' | 'sum'): PredictionUnitSpec => ({
+      ...gapUnit,
+      rows: { kind: 'grain', grainEntity: 'Grain', decisionDate: { kind: 'column', column: 'D' }, filter: [] },
+      label: {
+        ...gapUnit.label,
+        rule: { kind: 'child-event', childEntity: 'Gifts', foreignKey: 'OwnerID', dateField: 'At', aggregate, valueField: aggregate === 'sum' ? 'Amount' : null, ownerKeyField: null, filter: [] },
+        windowDays: 30, outcome: aggregate === 'count' ? { kind: 'count' } : { kind: 'continuous' },
+      },
+    });
+    // Decided 2025-01-01 with a 14-day gap: the window is (2025-01-15, 2025-02-14]. h1 recurs in the gap and the window;
+    // h2 has events in the gap only (one exactly on the window start); h3 has one in the window only.
+    const data: Record<string, SourceRow[]> = {
+      Grain: [{ ID: 'h1', D: '2025-01-01' }, { ID: 'h2', D: '2025-01-01' }, { ID: 'h3', D: '2025-01-01' }],
+      Gifts: [
+        { ID: 'e1', OwnerID: 'h1', At: '2025-01-05', Amount: 7 }, { ID: 'e2', OwnerID: 'h1', At: '2025-01-20', Amount: 10 }, { ID: 'e3', OwnerID: 'h1', At: '2025-02-10', Amount: 5 },
+        { ID: 'e4', OwnerID: 'h2', At: '2025-01-06', Amount: 4 }, { ID: 'e5', OwnerID: 'h2', At: '2025-01-15', Amount: 3 },
+        { ID: 'e6', OwnerID: 'h3', At: '2025-02-01', Amount: 9 },
+      ],
+    };
+    const read = (u: PredictionUnitSpec) =>
+      new PredictionUnitRowReader().Read(u, { DataAccess: new TableDataAccess(data), Metadata: { Entity: (n) => amounts[n] || null }, Read: { mode: 'complete' }, Now: new Date('2026-06-01T00:00:00Z') });
+
+    it('counts the window\'s events only and keeps every row', async () => {
+      const out = await read(volumeUnit('count'));
+      expect(out.Status === 'read' && out.Rows.map((r) => [r.RowID, r.Label])).toEqual([['h1', 2], ['h2', 0], ['h3', 1]]);
+      expect(out.Status === 'read' && out.Counts.gapOutcomeRowsExcluded).toBe(0);
+    });
+
+    it('sums the window\'s events only and keeps every row', async () => {
+      const out = await read(volumeUnit('sum'));
+      expect(out.Status === 'read' && out.Rows.map((r) => [r.RowID, r.Label])).toEqual([['h1', 15], ['h2', 0], ['h3', 9]]);
+      expect(out.Status === 'read' && out.Counts.gapOutcomeRowsExcluded).toBe(0);
+    });
   });
 
   it('labels from the rows the unit\'s filter keeps: a filtered-out next period is not a renewal', async () => {

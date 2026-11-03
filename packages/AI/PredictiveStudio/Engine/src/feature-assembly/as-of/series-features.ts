@@ -4,8 +4,9 @@
  * Series features declared once in the unit's Temporal Spec: lag k reads the value k periods back; rolling windows
  * aggregate periods [t − endLag − periods + 1, t − endLag]. Every lag and endLag is >= the horizon (the parser
  * refuses otherwise), so nothing inside the horizon is ever read. A period's value is its resolved outcome, so a row
- * reads it only when that period's outcome window had closed by the row's own decision day; training and scoring
- * both compute every lag here, so they null exactly the same cells.
+ * reads it only when that period's outcome window had closed by the row's own decision day and by the assembly day (a
+ * row scored ahead of its decision date never reads a window still open at scoring); training and scoring both compute
+ * every lag here, so they null exactly the same cells.
  */
 import { MS_PER_DAY, UtcDay, type DatedSource, type TemporalSpec } from '@memberjunction/predictive-studio-core';
 
@@ -53,21 +54,27 @@ export class SeriesFeatures {
   }
 
   /**
-   * One lag or rolling-window value for an entity at `period`, for a row decided on `decision`; null when any period it
-   * reads is missing or its outcome window had not closed by the decision day (its window end is after that day).
+   * One lag or rolling-window value for an entity at `period`, for a row decided on `decision` and assembled at
+   * `assembledAt`; null when any period it reads is missing or its outcome window had not closed by the earlier of the
+   * decision day and the assembly day (its window end is after that day).
+   *
+   * The assembly day matters only for a row decided after it, which only scoring builds (a row scored ahead of its
+   * decision date): its history keeps periods whose window is still open, and such a period's value is not yet its
+   * resolved outcome, so it is never read before its window has closed. A row decided on or before the assembly day,
+   * every row training reads included, keeps the decision-day rule, so training and scoring agree on it.
    */
   public static ComputeSeriesFeature(
-    history: SeriesHistory, entityKey: string, period: Date, spec: TemporalSpec, feature: SeriesFeatureRef, decision: Date,
+    history: SeriesHistory, entityKey: string, period: Date, spec: TemporalSpec, feature: SeriesFeatureRef, decision: Date, assembledAt: Date,
   ): { readonly Value: number | null; readonly SourceRowIDs: readonly string[] } {
     const declared = feature.kind === 'lag' ? spec.lags.length : spec.rollingWindows.length;
     if (!Number.isInteger(feature.index) || feature.index < 0 || feature.index >= declared) throw SeriesFeatures.indexError(feature, declared);
     const series = history.ByEntity.get(entityKey.toLowerCase());
     const t = SeriesFeatures.PeriodIndex(period, spec.period);
     if (!series) return { Value: null, SourceRowIDs: [] };
-    const decisionDay = SeriesFeatures.requireDay(decision);
+    const knownBy = Math.min(SeriesFeatures.requireDay(decision, 'decision date').getTime(), SeriesFeatures.requireDay(assembledAt, 'assembly instant').getTime());
     const known = (i: number): SeriesPoint | null => {
       const p = series.get(i);
-      return p && p.WindowEnd.getTime() <= decisionDay.getTime() ? p : null;
+      return p && p.WindowEnd.getTime() <= knownBy ? p : null;
     };
     if (feature.kind === 'lag') {
       const p = known(t - spec.lags[feature.index]);
@@ -87,10 +94,14 @@ export class SeriesFeatures {
     return { Value: value, SourceRowIDs: pts.map((p) => p.RowID) };
   }
 
-  /** A row's decision as its UTC day; the assembly validates decision dates before any feature is read. */
-  private static requireDay(decision: Date): Date {
-    const day = UtcDay.ToUtcDay(decision);
-    if (day === null) throw new Error('Series features: a row has an invalid decision date');
+  /**
+   * An instant as its UTC day: a row's decision (the assembly validates decision dates before any feature is read) or the
+   * assembly's own clock. A window end is a UTC day too, so a window ending on that day counts as closed, exactly as the
+   * unit reader's cutoff keeps a row whose window ends on the cutoff day.
+   */
+  private static requireDay(instant: Date, what: 'decision date' | 'assembly instant'): Date {
+    const day = UtcDay.ToUtcDay(instant);
+    if (day === null) throw new Error(`Series features: a row has an invalid ${what}`);
     return day;
   }
 

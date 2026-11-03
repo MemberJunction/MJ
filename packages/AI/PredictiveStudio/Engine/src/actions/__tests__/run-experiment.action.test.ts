@@ -102,7 +102,7 @@ function sessionResult(over: Partial<ExperimentSessionResult> = {}): ExperimentS
     experiment: { ID: 'exp-1' } as unknown as MJExperimentEntity,
     session: { ID: 'sess-1' } as unknown as MJExperimentSessionEntity,
     iterations: [],
-    leaderboard: [{ IterationID: 'it-1', Metric: 0.8, ModelID: 'model-9' }],
+    leaderboard: [{ IterationID: 'it-1', Metric: 0.8, ModelID: 'model-9', ScoreMetric: 'AUC', OnSuccessMetric: true }],
     bestModel: { ID: 'model-9' } as unknown as MJMLModelEntity,
     stopReason: 'completed',
     ...over,
@@ -184,7 +184,7 @@ describe('PredictiveStudioRunExperimentAction — happy path', () => {
     expect(out(p, 'BestModelID')).toBe('model-9');
     expect(out(p, 'StopReason')).toBe('completed');
     const leaderboard = JSON.parse(out(p, 'Leaderboard') as string);
-    expect(leaderboard).toEqual([{ IterationID: 'it-1', Metric: 0.8, ModelID: 'model-9' }]);
+    expect(leaderboard).toEqual([{ IterationID: 'it-1', Metric: 0.8, ModelID: 'model-9', ScoreMetric: 'AUC', OnSuccessMetric: true }]);
   });
 
   it('maps a budget-paused session with no best model', async () => {

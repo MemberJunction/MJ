@@ -897,13 +897,13 @@ export class AsOfFeatureAssembler {
     return [...new Set([source.foreignKey, source.dateField, source.valueField, ...source.filter.map((f) => f.field)].filter((f): f is string => !!f))];
   }
 
-  /** A declared lag or rolling window of the unit's own series. */
+  /** A declared lag or rolling window of the unit's own series, read as of the row's decision day and the assembly day ({@link SeriesFeatures.ComputeSeriesFeature}). */
   private seriesReader(spec: FeatureColumnSpec, source: SeriesSource, input: AsOfAssemblyInput): FeatureReader {
     const t = input.Unit.temporal;
     const history = input.SeriesHistory;
     if (!t || !history) throw new AssemblyRefused({ kind: 'unresolved-column', entity: input.RowEntity.Name, field: `TemporalSpec.${source.feature.kind}[${source.feature.index}]` });
     return (row) => {
-      const s = SeriesFeatures.ComputeSeriesFeature(history, row.EntityKey, row.Period || row.DecisionDate, t, source.feature, row.DecisionDate);
+      const s = SeriesFeatures.ComputeSeriesFeature(history, row.EntityKey, row.Period || row.DecisionDate, t, source.feature, row.DecisionDate, input.AssembledAt);
       return {
         Value: s.Value,
         Provenance: { column: spec.name, source: 'series', sourceRef: `${input.RowEntity.Name}/label/${s.SourceRowIDs.join('+')}`, sourceVersion: `labelVersion:${input.Unit.label.labelVersion}`, computedAt: input.AssembledAt.toISOString() },

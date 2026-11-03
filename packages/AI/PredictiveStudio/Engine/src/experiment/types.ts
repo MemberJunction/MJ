@@ -37,6 +37,32 @@ import type {
  */
 export type ProposedExperiment = ModelingPlanSpec['ProposedExperiments'][number];
 
+/** A model's normalized leaderboard score and the holdout metric it was read from. */
+export interface ExperimentScore {
+  /** The normalized score: higher is always better (a lower-is-better metric is negated). */
+  readonly Score: number;
+  /** The holdout metric the score was read from, lower-cased as the model's `HoldoutMetrics` key. */
+  readonly Metric: string;
+}
+
+/**
+ * An experiment session's leaderboard entry: the Core entry plus the holdout metric its normalized `Metric` was read
+ * from, so the leaderboard (the session's snapshot and the run's result) states each entry's metric.
+ */
+export interface ExperimentLeaderboardEntry extends LeaderboardEntry {
+  /**
+   * The holdout metric `Metric` was read from: the plan's success metric, or the model's primary proper score when its
+   * holdout gave no score on the success metric (a kept simple baseline stores its primary score alone).
+   */
+  readonly ScoreMetric: string;
+  /**
+   * True when `ScoreMetric` is the plan's success metric. Numbers of two metrics are not comparable, so an entry on the
+   * success metric ranks above every entry on a fallback metric: a kept simple baseline is the model a shipped
+   * finalist of the same unit and protocol beat at its own gate.
+   */
+  readonly OnSuccessMetric: boolean;
+}
+
 /**
  * Factory seam for creating strongly-typed entity objects. Wraps
  * `Metadata.GetEntityObject` in production; tests inject a fake returning
@@ -122,8 +148,14 @@ export interface TrainExperimentResult {
   model: MJMLModelEntity | null;
   /** The `MJ: ML Training Runs` leaf recording the attempt (linked to the iteration). */
   run: MJMLTrainingRunEntity;
-  /** Normalized holdout metric for the plan's `SuccessMetric` — drives the leaderboard; null when the holdout did not measure it. */
+  /**
+   * Normalized holdout score (higher is better) — drives the leaderboard: on the plan's `SuccessMetric`, or on the model's
+   * primary proper score when its holdout gave no score on the success metric; null when neither gives one (or no model
+   * shipped).
+   */
   Score: number | null;
+  /** The holdout metric `Score` was read from ({@link ExperimentScore.Metric}); null exactly when `Score` is null. */
+  ScoreMetric: string | null;
   /** Compute cost attributed to this attempt, in USD (defaults to 0 when unknown). */
   ComputeCost?: number;
   /** Compute seconds the attempt spent (defaults to 0 when unknown); the session's compute-seconds bound sums these. */
@@ -162,7 +194,7 @@ export interface WaveStrategistContext {
   /** Experiments NOT yet dispatched (deterministic default draws from here, priority-ordered). */
   remaining: ProposedExperiment[];
   /** The current leaderboard, best-first, across all completed iterations so far. */
-  leaderboard: LeaderboardEntry[];
+  leaderboard: ExperimentLeaderboardEntry[];
   /** Index of the wave about to be produced (0-based). */
   waveIndex: number;
   /** The max iterations this wave may contain (the configured concurrency). */
@@ -188,8 +220,10 @@ export interface ExperimentRunOptions {
   /**
    * Prune any completed iteration whose Score is below
    * `bestScore * relativePruneThreshold` (a fraction in [0,1]). E.g. `0.8`
-   * prunes anything scoring under 80% of the current best. When omitted, no
-   * relative prune is applied.
+   * prunes anything scoring under 80% of the current best. A negative best (a
+   * negated loss) is bounded the other way: `0.8` prunes a loss more than
+   * `bestLoss / 0.8`. Only scores on the best's own metric are compared. When
+   * omitted, no relative prune is applied.
    */
   relativePruneThreshold?: number;
   /**
@@ -258,7 +292,7 @@ export interface ExperimentSessionResult {
   /** All `MJ: Experiment Session Iterations` created during the run. */
   iterations: MJExperimentSessionIterationEntity[];
   /** The final leaderboard, best-first. */
-  leaderboard: LeaderboardEntry[];
+  leaderboard: ExperimentLeaderboardEntry[];
   /** The best (winning) model surfaced, if any iteration produced one. */
   bestModel: MJMLModelEntity | null;
   /** Why the session stopped (completed vs. a clean budget pause). */

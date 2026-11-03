@@ -80,7 +80,7 @@ const historyOver = (data: Record<string, SourceRow[]>, rowChanges: Record<strin
     const current = new Map((data[entity.Name] || [])
       .filter((r) => wanted.has(String(r[entity.PrimaryKey]).toLowerCase()))
       .map((r) => [String(r[entity.PrimaryKey]).toLowerCase(), r] as const));
-    return RecordHistory.BuildEntityHistory(entity.Name, rowChanges[entity.Name] || [], current, fields, policy, now);
+    return RecordHistory.BuildEntityHistory(entity, rowChanges[entity.Name] || [], current, fields, policy, now);
   },
 });
 

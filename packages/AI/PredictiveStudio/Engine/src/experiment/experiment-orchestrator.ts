@@ -43,7 +43,6 @@ import { UUIDsEqual } from '@memberjunction/global';
 import type {
   ModelingPlanSpec,
   Budget,
-  LeaderboardEntry,
 } from '@memberjunction/predictive-studio-core';
 import type {
   MJExperimentEntity,
@@ -53,12 +52,14 @@ import type {
 } from '@memberjunction/core-entities';
 
 import {
+  type ExperimentLeaderboardEntry,
   type ExperimentDeps,
   type ExperimentRunOptions,
   type ExperimentSessionResult,
   type ProposedExperiment,
   type SessionStopReason,
   type IWaveStrategist,
+  type TrainExperimentResult,
   type WaveStrategistContext,
   DEFAULT_WAVE_CONCURRENCY,
 } from './types';
@@ -66,6 +67,7 @@ import { RankLeaderboard, BestEntry, SelectPrunedIterationIds } from './leaderbo
 import { RunBounded } from './concurrency';
 import { PlanOrderWaveStrategist } from './wave-strategist';
 import { ExperimentBudget, TrainingAttemptFailedError } from './budget';
+import { ExperimentScores } from './scores';
 
 /**
  * A budget check result — whether the session may continue and, if not, why.
@@ -78,8 +80,10 @@ interface BudgetGateResult {
 /** One trained (or failed) iteration, folded into the leaderboard and the budget. */
 interface IterationOutcome {
   iterationId: string;
-  /** The normalized holdout score; null when the train failed or its holdout did not measure the success metric (never on the leaderboard). */
+  /** The normalized holdout score; null when the train failed or its holdout gave no score (never on the leaderboard). */
   score: number | null;
+  /** The holdout metric `score` was read from; null exactly when `score` is null. */
+  scoreMetric: string | null;
   /** USD the attempt spent. */
   computeCost: number;
   /** Compute seconds the attempt spent, failed or completed. */
@@ -139,7 +143,7 @@ export class ExperimentOrchestrator {
     const strategist = deps.waveStrategist ?? new PlanOrderWaveStrategist();
 
     const iterations: MJExperimentSessionIterationEntity[] = [];
-    const leaderboard: LeaderboardEntry[] = [];
+    const leaderboard: ExperimentLeaderboardEntry[] = [];
     const modelsByIteration = new Map<string, MJMLModelEntity>();
     const remaining = [...plan.ProposedExperiments];
     const budgetState: BudgetState = { runs: 0, computeCost: 0, computeSeconds: 0, reservedSeconds: 0, startedAtMs: deps.clock.now() };
@@ -297,7 +301,7 @@ export class ExperimentOrchestrator {
     budgetState: BudgetState,
     concurrency: number,
     iterations: MJExperimentSessionIterationEntity[],
-    leaderboard: LeaderboardEntry[],
+    leaderboard: ExperimentLeaderboardEntry[],
     modelsByIteration: Map<string, MJMLModelEntity>,
   ): Promise<{ stopReason: SessionStopReason }> {
     // Create all iteration rows up front (Pending) so sequence numbers are stable
@@ -323,8 +327,11 @@ export class ExperimentOrchestrator {
       budgetState.runs += 1;
       budgetState.computeCost += outcome.computeCost;
       budgetState.computeSeconds += outcome.computeSeconds;
-      if (outcome.score !== null) {
-        leaderboard.push({ IterationID: outcome.iterationId, Metric: outcome.score, ModelID: outcome.model?.ID });
+      if (outcome.score !== null && outcome.scoreMetric !== null) {
+        leaderboard.push({
+          IterationID: outcome.iterationId, Metric: outcome.score, ModelID: outcome.model?.ID,
+          ScoreMetric: outcome.scoreMetric, OnSuccessMetric: ExperimentScores.IsSuccessMetric(outcome.scoreMetric, plan.TargetDefinition.SuccessMetric),
+        });
       }
       const gate = this.checkBudget(budget, budgetState, deps);
       if (gate.exceeded) {
@@ -431,18 +438,40 @@ export class ExperimentOrchestrator {
       });
 
       const computeCost = result.ComputeCost ?? 0;
+      const scoreMetric = ExperimentOrchestrator.requireScoreMetric(result);
       iteration.Score = result.Score;
+      iteration.Rationale = ExperimentOrchestrator.withScoreMetricNote(iteration.Rationale, scoreMetric, plan.TargetDefinition.SuccessMetric);
       iteration.ComputeCost = computeCost;
       iteration.TokensUsed = result.TokensUsed ?? 0;
       iteration.Status = 'Completed';
       await this.saveOrThrow(iteration, 'finalize iteration');
-      return { iterationId: iteration.ID, score: result.Score, computeCost, computeSeconds: result.ComputeSeconds || 0, model: result.model };
+      return { iterationId: iteration.ID, score: result.Score, scoreMetric, computeCost, computeSeconds: result.ComputeSeconds || 0, model: result.model };
     } catch (err) {
       const spent = err instanceof TrainingAttemptFailedError ? { Seconds: err.ComputeSeconds, Cost: err.ComputeCost } : { Seconds: 0, Cost: 0 };
       iteration.ComputeCost = spent.Cost;
       await this.failIteration(iteration, err);
-      return { iterationId: iteration.ID, score: null, computeCost: spent.Cost, computeSeconds: spent.Seconds, model: null };
+      return { iterationId: iteration.ID, score: null, scoreMetric: null, computeCost: spent.Cost, computeSeconds: spent.Seconds, model: null };
     }
+  }
+
+  /**
+   * The metric a trainer's score was read from. A score without its metric breaks the trainer contract
+   * ({@link TrainExperimentResult.ScoreMetric}): it could not be ranked against the others, so the iteration fails.
+   */
+  private static requireScoreMetric(result: TrainExperimentResult): string | null {
+    if (result.Score === null) return null;
+    if (!result.ScoreMetric) throw new Error('the trainer returned a score without the holdout metric it was read from');
+    return result.ScoreMetric;
+  }
+
+  /**
+   * The iteration's rationale, saying which metric its Score is on when that is not the plan's success metric (a kept
+   * simple baseline is scored on its primary proper score), so a reader of the iteration row never takes the number for
+   * the success metric.
+   */
+  private static withScoreMetricNote(rationale: string | null, scoreMetric: string | null, successMetric: string): string | null {
+    if (scoreMetric === null || ExperimentScores.IsSuccessMetric(scoreMetric, successMetric)) return rationale;
+    return `${rationale || ''}\nScored on ${scoreMetric}: its holdout gave no ${successMetric} score.`.trim();
   }
 
   /** Record a failed iteration (best-effort — never masks the loop's progress). */
@@ -470,7 +499,7 @@ export class ExperimentOrchestrator {
    * surfaced as winners.
    */
   private async applyPruning(
-    leaderboard: LeaderboardEntry[],
+    leaderboard: ExperimentLeaderboardEntry[],
     iterations: MJExperimentSessionIterationEntity[],
     options: ExperimentRunOptions,
     deps: ExperimentDeps,
@@ -513,7 +542,7 @@ export class ExperimentOrchestrator {
    */
   private async markPruned(
     iteration: MJExperimentSessionIterationEntity,
-    best: LeaderboardEntry | null,
+    best: ExperimentLeaderboardEntry | null,
     _deps: ExperimentDeps,
   ): Promise<boolean> {
     iteration.Status = 'Pruned';
@@ -577,7 +606,7 @@ export class ExperimentOrchestrator {
   /** Persist the ranked leaderboard JSON snapshot onto the session (§9.2). */
   private async snapshotLeaderboard(
     session: MJExperimentSessionEntity,
-    leaderboard: LeaderboardEntry[],
+    leaderboard: ExperimentLeaderboardEntry[],
     _deps: ExperimentDeps,
   ): Promise<void> {
     session.Leaderboard = JSON.stringify(RankLeaderboard(leaderboard));
@@ -594,7 +623,7 @@ export class ExperimentOrchestrator {
    */
   private async finalizeSession(
     session: MJExperimentSessionEntity,
-    leaderboard: LeaderboardEntry[],
+    leaderboard: ExperimentLeaderboardEntry[],
     modelsByIteration: Map<string, MJMLModelEntity>,
     stopReason: SessionStopReason,
     deps: ExperimentDeps,

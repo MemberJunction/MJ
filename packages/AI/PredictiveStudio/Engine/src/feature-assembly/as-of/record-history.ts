@@ -70,6 +70,14 @@ const SNAPSHOT_SAVE_BATCH = 50;
 
 /** Text written as an ISO timestamp: a date, `T`, hours and minutes, optional seconds and fraction, optional zone. */
 const TIMESTAMP_TEXT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/;
+/** Text written as an ISO calendar date alone (how a SQL `date` column can serialize): `YYYY-MM-DD`. */
+const DATE_ONLY_TEXT = /^\d{4}-\d{2}-\d{2}$/;
+
+/** The entity a history is built for: its name, and its fields, whose declared types decide how values compare. */
+export type HistoryEntity = Pick<AssemblyEntityInfo, 'Name' | 'Fields'>;
+
+/** What a comparison needs to know about the entity: its name (for a refusal) and its boolean (bit) fields. */
+interface ComparisonScope { readonly EntityName: string; readonly BooleanFields: ReadonlySet<string> }
 
 /** Replay of `MJ: Record Changes` rows, and the snapshots that start a record's history. */
 export class RecordHistory {
@@ -84,32 +92,34 @@ export class RecordHistory {
 
   /**
    * Pure: index the change rows, run the continuity check against the current values, and expose replay.
-   * `current` is keyed by the lower-cased record key, as `KeyedReader.ReadByKeys` produces it.
+   * `current` is keyed by the lower-cased record key, as `KeyedReader.ReadByKeys` produces it. The entity's field types
+   * decide how two values of a field compare (see {@link comparable}).
    */
   public static BuildEntityHistory(
-    entityName: string,
+    entity: HistoryEntity,
     changes: readonly RecordChangeRow[],
     current: ReadonlyMap<string, Readonly<Record<string, CellValue>>>,
     fields: readonly string[],
     policy: ChangeHistoryPolicy,
     now: Date,
   ): EntityHistory {
+    const scope: ComparisonScope = { EntityName: entity.Name, BooleanFields: new Set(entity.Fields.filter((f) => f.TSType === 'boolean').map((f) => f.Name)) };
     const byKey = RecordHistory.indexByKey(changes);
     const start = RecordHistory.historyStarts(byKey);
     const created = RecordHistory.creationInstants(byKey);
-    const continuity = RecordHistory.checkContinuity(entityName, byKey, start, current, fields);
+    const continuity = RecordHistory.checkContinuity(scope, byKey, start, current, fields);
     const allCovered = [...current.keys()].every((k) => start.has(k));
     const historyStart = allCovered && start.size > 0 ? new Date(Math.max(...[...start.values()].map((d) => d.getTime()))).toISOString() : null;
     return {
       Coverage: {
-        entity: entityName,
+        entity: entity.Name,
         historyStart,
         continuity: { checkedAt: now.toISOString(), recordsReplayed: continuity.Replayed, recordsMismatched: continuity.RecordsMismatched },
         externalSourceRows: policy.externalSourceRows,
         onUncoveredRow: policy.onUncoveredRow,
       },
       ValueAt: (recordKey, field, before) => RecordHistory.valueAt(byKey, start, continuity.Mismatched, policy, recordKey, field, before),
-      ChangesAfter: (recordKey, field, after) => RecordHistory.changesAfter(entityName, byKey.get(recordKey.toLowerCase()) || [], field, after),
+      ChangesAfter: (recordKey, field, after) => RecordHistory.changesAfter(scope, byKey.get(recordKey.toLowerCase()) || [], field, after),
       RowsBefore: (recordKey, before) => RecordHistory.rowsBefore(byKey.get(recordKey.toLowerCase()) || [], before),
       CreatedAt: (recordKey) => created.get(recordKey.toLowerCase()) || null,
     };
@@ -233,7 +243,7 @@ export class RecordHistory {
 
   /** Replays every covered record to now and compares it with the stored value; a mismatch marks that record-field. */
   private static checkContinuity(
-    entityName: string, byKey: ReadonlyMap<string, readonly RecordChangeRow[]>, start: ReadonlyMap<string, Date>,
+    scope: ComparisonScope, byKey: ReadonlyMap<string, readonly RecordChangeRow[]>, start: ReadonlyMap<string, Date>,
     current: ReadonlyMap<string, Readonly<Record<string, CellValue>>>, fields: readonly string[],
   ): { readonly Mismatched: ReadonlySet<string>; readonly Replayed: number; readonly RecordsMismatched: number } {
     const mismatched = new Set<string>();
@@ -244,20 +254,20 @@ export class RecordHistory {
       replayed++;
       const last = list[list.length - 1];
       for (const f of fields) {
-        if (RecordHistory.comparable(RecordHistory.fieldOf(last.FullRecordJSON, f), entityName, f) !== RecordHistory.comparable(row[f], entityName, f)) mismatched.add(`${k}|${f}`);
+        if (RecordHistory.comparable(RecordHistory.fieldOf(last.FullRecordJSON, f), scope, f) !== RecordHistory.comparable(row[f], scope, f)) mismatched.add(`${k}|${f}`);
       }
     }
     return { Mismatched: mismatched, Replayed: replayed, RecordsMismatched: new Set([...mismatched].map((x) => x.split('|')[0])).size };
   }
 
   /** See {@link EntityHistory.ChangesAfter}; `list` is one record's rows in ChangedAt order. */
-  private static changesAfter(entityName: string, list: readonly RecordChangeRow[], field: string, after: Date): number {
+  private static changesAfter(scope: ComparisonScope, list: readonly RecordChangeRow[], field: string, after: Date): number {
     let n = 0;
     list.forEach((c, i) => {
       if (c.ChangedAt.getTime() < after.getTime()) return;
       const listsField = c.Type === 'Update' && RecordHistory.changedFields(c.ChangesJSON).has(field);
       const valueMoved = i > 0
-        && RecordHistory.comparable(RecordHistory.fieldOf(c.FullRecordJSON, field), entityName, field) !== RecordHistory.comparable(RecordHistory.fieldOf(list[i - 1].FullRecordJSON, field), entityName, field);
+        && RecordHistory.comparable(RecordHistory.fieldOf(c.FullRecordJSON, field), scope, field) !== RecordHistory.comparable(RecordHistory.fieldOf(list[i - 1].FullRecordJSON, field), scope, field);
       if (listsField || c.Type === 'Delete' || valueMoved) n++;
     });
     return n;
@@ -311,20 +321,43 @@ export class RecordHistory {
   }
 
   /**
-   * A value in the form both sides of a comparison use: blank as '', dates and timestamp text as ISO instants, anything
-   * else as text. Text that only starts like a timestamp (a code such as `2025-01-15T-BATCH-1`) stays text.
+   * A value in the form both sides of a comparison use, so one value written by two serializers (the Record Changes
+   * snapshot and the driver's current row, or two change rows) is one value: blank as '', dates and timestamp text as ISO
+   * instants, a date-only text (`2025-01-15`, how a SQL `date` column can serialize) as that day's UTC-midnight instant,
+   * 1/0 and true/false as one boolean on a field the metadata declares boolean, anything else as text. Text that only
+   * starts like a timestamp (a code such as `2025-01-15T-BATCH-1`) stays text. The midnight instant is written from the
+   * date text itself, never through a Date, which would roll a text that names no day (`2025-02-30`) into another day
+   * (2025-03-02) and equal it; written out, such a text can only equal itself.
    *
-   * @throws AssemblyRefused `invalid-date-in-history` for timestamp text that names no valid instant (`2025-99-99T00:00`)
+   * The boolean rule is scoped to boolean (bit) fields because only there is it safe: a bit column's serializers write
+   * it as 1/0 or as true/false, so the two are one value. On a numeric field 1 is a quantity, and a value that moved
+   * from 1 to `true` there was written by something other than the column's own type; equating them would hide that
+   * change, so a numeric field compares numbers and booleans as written.
+   *
+   * @throws AssemblyRefused `invalid-date-in-history` for timestamp text that names no valid instant (`2025-99-99T00:00`,
+   * or `2025-02-30T00:00`, whose date is no calendar day)
    */
-  private static comparable(v: CellValue, entityName: string, field: string): string {
+  private static comparable(v: CellValue, scope: ComparisonScope, field: string): string {
     if (v === null || v === undefined || v === '') return '';
     if (v instanceof Date) return v.toISOString();
+    if (scope.BooleanFields.has(field) && (typeof v === 'boolean' || v === 1 || v === 0)) return v === true || v === 1 ? 'true' : 'false';
     if (typeof v === 'string' && TIMESTAMP_TEXT.test(v)) {
       const instant = new Date(v);
-      if (Number.isNaN(instant.getTime())) throw new AssemblyRefused({ kind: 'invalid-date-in-history', entity: entityName, field, value: v });
+      if (Number.isNaN(instant.getTime()) || !RecordHistory.isCalendarDay(v)) throw new AssemblyRefused({ kind: 'invalid-date-in-history', entity: scope.EntityName, field, value: v });
       return instant.toISOString();
     }
+    if (typeof v === 'string' && DATE_ONLY_TEXT.test(v)) return `${v}T00:00:00.000Z`;
     return String(v);
+  }
+
+  /**
+   * Whether the `YYYY-MM-DD` a timestamp text starts with is a calendar day. A Date does not reject `2025-02-30`: it
+   * rolls it to 2025-03-02, so the day is checked by reading it back.
+   */
+  private static isCalendarDay(text: string): boolean {
+    const date = text.slice(0, 10);
+    const day = new Date(`${date}T00:00:00.000Z`);
+    return !Number.isNaN(day.getTime()) && day.toISOString().slice(0, 10) === date;
   }
 }
 
@@ -346,7 +379,7 @@ export class RunViewRecordHistoryReader implements IRecordHistoryReader {
     const changes = await this.changeRowsOf(entity);
     const current = await KeyedReader.ReadByKeys(this.dataAccess, entity.Name, entity.PrimaryKey, keys, fields);
     if (current.Status === 'refused') throw new AssemblyRefused(current.Refusal);
-    return RecordHistory.BuildEntityHistory(entity.Name, changes, current.Rows, fields, policy, now);
+    return RecordHistory.BuildEntityHistory(entity, changes, current.Rows, fields, policy, now);
   }
 
   /** The entity's complete change rows, read on the first load of the entity and shared by every later one. */

@@ -4,7 +4,8 @@ import type { ModelingPlanSpec, LeaderboardEntry, TrainerCompleted, TrainerReque
 import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 
 import { ExperimentOrchestrator } from '../experiment-orchestrator';
-import { ExperimentScores, TrainingEngineExperimentTrainer } from '../seams';
+import { TrainingEngineExperimentTrainer } from '../seams';
+import { ExperimentScores } from '../scores';
 import { ExperimentBudget, TrainingAttemptFailedError } from '../budget';
 import { RankLeaderboard, SelectPrunedIterationIds } from '../leaderboard';
 import { RunBounded } from '../concurrency';
@@ -18,6 +19,7 @@ import type {
   ProposedExperiment,
   TrainExperimentInput,
   TrainExperimentResult,
+  ExperimentLeaderboardEntry,
 } from '../types';
 import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 import { FakeEvaluationProtocolStore, FakeTrainer as FakeProtocolTrainer, TrainingHarness } from '../../__tests__/fakes/training-fakes';
@@ -177,6 +179,8 @@ class FakeTrainer implements IExperimentTrainer {
     private readonly failLabels: Set<string> = new Set(),
     /** Compute seconds each completed train spends (the protocol's budget unit); `computeCostPerTrain` is USD. */
     private readonly computeSecondsPerTrain = 0,
+    /** The holdout metric a label's score was read from; absent, the plan's success metric. */
+    private readonly metricByLabel: Record<string, string> = {},
   ) {}
 
   async train(input: TrainExperimentInput): Promise<TrainExperimentResult> {
@@ -198,6 +202,7 @@ class FakeTrainer implements IExperimentTrainer {
       model: model as unknown as MJMLModelEntity,
       run: run as unknown as MJMLTrainingRunEntity,
       Score: score,
+      ScoreMetric: score === null ? null : this.metricByLabel[label] || input.plan.TargetDefinition.SuccessMetric,
       ComputeCost: this.computeCostPerTrain,
       ComputeSeconds: this.computeSecondsPerTrain,
       TokensUsed: 0,
@@ -314,7 +319,7 @@ class TimeoutSpendingTrainer implements IExperimentTrainer {
     this.SpentSeconds += seconds;
     const run = new FakeRun();
     run.ComputeSeconds = seconds;
-    return { model: new FakeModel() as unknown as MJMLModelEntity, run: run as unknown as MJMLTrainingRunEntity, Score: 0.5, ComputeCost: 0, ComputeSeconds: seconds, TokensUsed: 0 };
+    return { model: new FakeModel() as unknown as MJMLModelEntity, run: run as unknown as MJMLTrainingRunEntity, Score: 0.5, ScoreMetric: 'AUC', ComputeCost: 0, ComputeSeconds: seconds, TokensUsed: 0 };
   }
 }
 
@@ -525,6 +530,38 @@ describe('ExperimentOrchestrator.runSession', () => {
     expect(result.leaderboard.length).toBe(1);
     expect(result.leaderboard[0].Metric).toBe(0.8);
     expect(result.stopReason).toBe('completed');
+  });
+
+  it('ranks an entry scored on the success metric above one scored on a model\'s primary score, and names each entry\'s metric', async () => {
+    // R2 is the success metric. B is a kept baseline whose holdout stored its primary rmse only: its score -0.1 is a
+    // negated rmse, not an R2, so it must not outrank A's R2 of -0.5 by number.
+    const factory = new FakeFactory();
+    const trainer = new FakeTrainer({ A: -0.5, B: -0.1 }, undefined, 0, 1, new Set(), 0, { B: 'rmse' });
+    const r2Plan: ModelingPlanSpec = { ...plan([experiment('A', 1), experiment('B', 2)]), TargetDefinition: { EntityName: 'Members', TargetVariable: 'Y', ProblemType: 'regression', SuccessMetric: 'R2' } };
+    const result = await new ExperimentOrchestrator().runSession(r2Plan, deps(factory, trainer, new FakeClock()), { concurrency: 1 });
+    const byLabel = new Map(factory.Iterations.map((it) => [it.Label, it]));
+    expect(result.leaderboard.map((e) => [e.IterationID, e.Metric, e.ScoreMetric, e.OnSuccessMetric])).toEqual([
+      [byLabel.get('A')!.ID, -0.5, 'R2', true],
+      [byLabel.get('B')!.ID, -0.1, 'rmse', false],
+    ]);
+    expect(result.bestModel).not.toBeNull();
+    const snapshot: ExperimentLeaderboardEntry[] = JSON.parse(result.session.Leaderboard!);
+    expect(snapshot.map((e) => e.ScoreMetric)).toEqual(['R2', 'rmse']);
+    // The iteration row says which metric its Score is.
+    expect(byLabel.get('B')!.Rationale).toContain('Scored on rmse');
+    expect(byLabel.get('A')!.Rationale).not.toContain('Scored on');
+  });
+
+  it('fails an iteration whose trainer returned a score without the metric it was read from, keeping it off the leaderboard', async () => {
+    const factory = new FakeFactory();
+    const scoreless: IExperimentTrainer = {
+      train: async (input) => ({ ...(await new FakeTrainer({ A: 0.7 }).train(input)), ScoreMetric: null }),
+    };
+    const result = await new ExperimentOrchestrator().runSession(plan([experiment('A', 1)]), deps(factory, scoreless, new FakeClock()), { concurrency: 1 });
+    const a = factory.Iterations.find((it) => it.Label === 'A')!;
+    expect(a.Status).toBe('Failed');
+    expect(a.Rationale).toContain('without the holdout metric');
+    expect(result.leaderboard).toEqual([]);
   });
 
   it('completes an iteration whose holdout did not measure the success metric with a null Score, off the leaderboard but counted against the budget', async () => {
@@ -854,6 +891,14 @@ describe('TrainingEngineExperimentTrainer', () => {
     expect([result.model, result.Score, result.run.Status, result.ComputeSeconds]).toEqual([null, null, 'Completed', 12.5]);
   });
 
+  it('scores a kept simple baseline on the primary proper score its model row stores, naming that metric, since its holdout has no AUC', async () => {
+    const { trainer } = unitTrainer((r) => canned(r));
+    const result = await trainer.train(input(null));
+    const stored: Record<string, number> = JSON.parse(result.model?.HoldoutMetrics || '{}');
+    expect(Object.keys(stored)).toEqual(['log-loss']);
+    expect([result.ScoreMetric, result.Score]).toEqual(['log-loss', -stored['log-loss']]);
+  });
+
   it("leaves the protocol's timeout when the session has no seconds bound, and reports the run's compute seconds", async () => {
     const { trainer, protocolTrainer } = unitTrainer((r) => canned(r));
     const result = await trainer.train(input(null));
@@ -868,11 +913,8 @@ describe('TrainingEngineExperimentTrainer', () => {
 // ---------------------------------------------------------------------------
 
 describe('leaderboard helpers', () => {
-  const entries: LeaderboardEntry[] = [
-    { IterationID: 'i1', Metric: 0.5 },
-    { IterationID: 'i2', Metric: 0.9 },
-    { IterationID: 'i3', Metric: 0.7 },
-  ];
+  const entry = (IterationID: string, Metric: number, ScoreMetric = 'auc', OnSuccessMetric = true): ExperimentLeaderboardEntry => ({ IterationID, Metric, ScoreMetric, OnSuccessMetric });
+  const entries: ExperimentLeaderboardEntry[] = [entry('i1', 0.5), entry('i2', 0.9), entry('i3', 0.7)];
 
   it('rankLeaderboard orders best-first deterministically', () => {
     expect(RankLeaderboard(entries).map((e) => e.IterationID)).toEqual(['i2', 'i3', 'i1']);
@@ -890,7 +932,23 @@ describe('leaderboard helpers', () => {
   });
 
   it('never prunes a single-entry leaderboard', () => {
-    expect(SelectPrunedIterationIds([{ IterationID: 'x', Metric: 0.1 }], { keepTopK: 0 }).size).toBe(0);
+    expect(SelectPrunedIterationIds([entry('x', 0.1)], { keepTopK: 0 }).size).toBe(0);
+  });
+
+  it('ranks every entry on the success metric above every entry on a fallback metric, whatever their numbers', () => {
+    const mixed = [entry('f1', -0.1, 'rmse', false), entry('s1', -0.5, 'r2'), entry('s2', -0.2, 'r2'), entry('f2', -0.3, 'rmse', false)];
+    expect(RankLeaderboard(mixed).map((e) => e.IterationID)).toEqual(['s2', 's1', 'f1', 'f2']);
+  });
+
+  it('applies the relative threshold to a negated loss as a bound on how much worse the loss may be', () => {
+    // Best loss 0.4: at 0.8 a loss up to 0.4 / 0.8 = 0.5 is kept; 0.45 stays, 0.9 is pruned.
+    const losses = [entry('l1', -0.4, 'rmse'), entry('l2', -0.45, 'rmse'), entry('l3', -0.9, 'rmse')];
+    expect([...SelectPrunedIterationIds(losses, { relativePruneThreshold: 0.8 })]).toEqual(['l3']);
+  });
+
+  it('compares a number under the relative threshold only with numbers of the same metric', () => {
+    const mixed = [entry('s1', 0.9), entry('s2', 0.5), entry('f1', -0.48, 'log-loss', false)];
+    expect([...SelectPrunedIterationIds(mixed, { relativePruneThreshold: 0.8 })]).toEqual(['s2']);
   });
 });
 
@@ -952,8 +1010,19 @@ describe('runBounded', () => {
 });
 
 describe('ExperimentScores.ExtractNormalizedScore', () => {
-  it('reads the holdout metrics and passes a higher-is-better metric through', () => {
-    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ auc: 0.81 }), 'AUC')).toBe(0.81);
+  it('reads the holdout metrics and passes a higher-is-better metric through, naming the metric as the model stored it', () => {
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ 'log-loss': 0.4, auc: 0.81 }), 'AUC')).toEqual({ Score: 0.81, Metric: 'auc' });
+  });
+
+  it('scores a model whose holdout did not measure the success metric on its primary proper score, oriented so higher is better', () => {
+    // A kept simple baseline stores its primary proper score alone.
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ 'log-loss': 0.48 }), 'AUC')).toEqual({ Score: -0.48, Metric: 'log-loss' });
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ rmse: 12, r2: 0.2 }), 'mase')).toEqual({ Score: -12, Metric: 'rmse' });
+  });
+
+  it('has no fallback when the holdout holds no proper score, or more than one so the primary cannot be told', () => {
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ auc: 0.8, accuracy: 0.7 }), 'F1')).toBeNull();
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ rmse: 2, mae: 1 }), 'R2')).toBeNull();
   });
 
   it('never falls back to the training metrics: no holdout metric is no score', () => {
@@ -962,8 +1031,8 @@ describe('ExperimentScores.ExtractNormalizedScore', () => {
   });
 
   it('negates a lower-is-better metric and scores a closer-to-one metric by its distance from one, so higher is always better', () => {
-    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ rmse: 2.5 }), 'RMSE')).toBe(-2.5);
-    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ 'calibration-slope': 0.8 }), 'calibration-slope')).toBeCloseTo(-0.2, 12);
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ rmse: 2.5 }), 'RMSE')).toEqual({ Score: -2.5, Metric: 'rmse' });
+    expect(ExperimentScores.ExtractNormalizedScore(JSON.stringify({ 'calibration-slope': 0.8 }), 'calibration-slope')?.Score).toBeCloseTo(-0.2, 12);
   });
 
   it('returns null, never 0, when the metric is missing, not a number, or of no known direction', () => {
