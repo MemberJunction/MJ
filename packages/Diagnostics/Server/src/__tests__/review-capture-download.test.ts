@@ -10,10 +10,11 @@ interface FakeResponse {
     StatusCode: number;
     Body: { error?: string } | undefined;
     Sent: Buffer | undefined;
+    Headers: Record<string, string>;
     status: (code: number) => FakeResponse;
     json: (body: { error?: string }) => FakeResponse;
     send: (bytes: Buffer) => FakeResponse;
-    setHeader: () => void;
+    setHeader: (name: string, value: string) => void;
 }
 type DownloadHandler = (req: { params: Record<string, string>; query: Record<string, string>; headers: Record<string, string> }, res: FakeResponse) => void;
 
@@ -22,6 +23,7 @@ function fakeResponse(): FakeResponse {
         StatusCode: 200,
         Body: undefined,
         Sent: undefined,
+        Headers: {},
         status: (code) => {
             res.StatusCode = code;
             return res;
@@ -34,7 +36,9 @@ function fakeResponse(): FakeResponse {
             res.Sent = bytes;
             return res;
         },
-        setHeader: () => undefined,
+        setHeader: (name, value) => {
+            res.Headers[name.toLowerCase()] = value;
+        },
     };
     return res;
 }
@@ -80,5 +84,17 @@ describe('bundle download token (review fixes)', () => {
         const replay = fakeResponse();
         download({ params: { bundleId }, query: { token }, headers: {} }, replay);
         expect(replay.StatusCode).toBe(403);
+    });
+
+    it('marks a 410 answer no-store', () => {
+        const download = downloadHandler();
+        const token = manager.MintDownloadToken(bundleId, 'user-1');
+        vi.spyOn(DiagnosticIntakeService.Instance, 'GetReceivedBundle').mockReturnValue(undefined);
+
+        const missing = fakeResponse();
+        download({ params: { bundleId }, query: { token }, headers: {} }, missing);
+
+        expect(missing.StatusCode).toBe(410);
+        expect(missing.Headers['cache-control']).toContain('no-store');
     });
 });

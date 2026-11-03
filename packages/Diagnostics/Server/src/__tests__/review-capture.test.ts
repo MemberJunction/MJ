@@ -426,4 +426,34 @@ describe('diagnostics server capture (review fixes)', () => {
             expect(fake.Rows(CHUNK_ENTITY)).toHaveLength(2);
         });
     });
+    describe('fix round 3', () => {
+        it('keeps the unheld clock of a session whose kept chunks are mid-save when a sweep tick runs', async () => {
+            vi.useFakeTimers();
+            const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+            let gate = false;
+            let release: (ok: boolean) => void = () => {};
+            const provider = {
+                GetEntityObject: async () => ({
+                    LatestResult: { CompleteMessage: 'chunk save rejected' },
+                    Save: () => (gate ? new Promise<boolean>((resolve) => (release = resolve)) : Promise.resolve(false)),
+                }),
+                EntityByName: (entity: string) => ({ Name: entity }),
+            } as unknown as IMetadataProvider;
+            const t0 = Date.now();
+            manager.AppendToChunkBuffer('session-ttl-clock', 'Client', 'Logs', { message: 'kept' });
+            await manager.SaveSessionChunks('session-ttl-clock', ownerUser, provider);
+            await vi.advanceTimersByTimeAsync(60_000);
+
+            gate = true;
+            const saving = manager.SaveSessionChunks('session-ttl-clock', ownerUser, provider);
+            await vi.advanceTimersByTimeAsync(60_000);
+            release(false);
+            await saving;
+
+            await vi.advanceTimersByTimeAsync(t0 + 16 * 60_000 + 1_000 - Date.now());
+
+            expect(manager.DrainPendingBuffersForSession('session-ttl-clock')).toHaveLength(0);
+            expect(logged.mock.calls.some((c) => c.join(' ').includes('session-ttl-clock') && c.join(' ').includes('dropped'))).toBe(true);
+        });
+    });
 });

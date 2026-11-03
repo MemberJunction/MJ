@@ -322,8 +322,13 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
   private _sessionWorkTails = new Map<string, Promise<void>>();
   private _queuedSaves = new Map<string, Set<Promise<SavedSessionChunks>>>();
   private _backgroundRetryAfterMs = new Map<string, number>();
-  /** When the unsaved-chunk sweep first saw each session with kept chunks and no longer held. */
+  /**
+   * When the unsaved-chunk sweep first saw each session with kept chunks and no longer held. An entry
+   * is removed only when the session's entries are dropped, a save of it succeeds, or it is held again.
+   */
   private _unheldSinceMs = new Map<string, number>();
+  /** Sessions with a drop of their unsaved entries queued. */
+  private _dropsQueued = new Set<string>();
   private _unsavedSweepTimer: ReturnType<typeof setInterval> | null = null;
   private _backgroundSave: BackgroundSaveContext | null = null;
 
@@ -355,6 +360,7 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     this._queuedSaves.clear();
     this._backgroundRetryAfterMs.clear();
     this._unheldSinceMs.clear();
+    this._dropsQueued.clear();
     this.stopUnsavedChunkSweep();
     this.SyncCaptureHooks();
   }
@@ -578,13 +584,23 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     this.queueDropUnsavedEntries(sessionId, 'ended with no user to save its entries');
   }
 
-  /** Drops a session's unsaved entries now, or after its queued saves and builds finish when any are queued. */
+  /**
+   * Drops a session's unsaved entries now, or after its queued saves and builds finish when any are
+   * queued. A session gets at most one queued drop.
+   */
   private queueDropUnsavedEntries(sessionId: string, reason: string): void {
     if (!this._sessionWorkTails.has(sessionId)) {
       this.dropUnsavedEntries(sessionId, reason);
       return;
     }
-    void this.runSessionWork(sessionId, async () => this.dropUnsavedEntries(sessionId, reason));
+    if (this._dropsQueued.has(sessionId)) {
+      return;
+    }
+    this._dropsQueued.add(sessionId);
+    void this.runSessionWork(sessionId, async () => {
+      this._dropsQueued.delete(sessionId);
+      this.dropUnsavedEntries(sessionId, reason);
+    });
   }
 
   /** Drops a session's kept chunks and buffers, and logs the number of entries dropped. */
@@ -627,12 +643,12 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     }
   }
 
+  /** Stops the unsaved-chunk sweep. The unheld clocks are kept, so a save that fails later resumes them. */
   private stopUnsavedChunkSweep(): void {
     if (this._unsavedSweepTimer) {
       clearInterval(this._unsavedSweepTimer);
       this._unsavedSweepTimer = null;
     }
-    this._unheldSinceMs.clear();
   }
 
   /**
@@ -1528,7 +1544,6 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     }
     return claims;
   }
-
 
   /** Sends an archive to an enrolled collector. See `collectorClient.ts`. */
   public async SendBundleToCollector(params: SendBundleToCollectorParams): Promise<CollectorSendResult> {

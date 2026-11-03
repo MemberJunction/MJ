@@ -252,6 +252,7 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
         }
         const bytes = findBundleBytes(bundleId);
         if (!bytes) {
+          res.setHeader('Cache-Control', 'no-store, private');
           res.status(410).json({
             error: 'The bundle bytes are no longer available on this instance; rebuild the bundle.'
           });
