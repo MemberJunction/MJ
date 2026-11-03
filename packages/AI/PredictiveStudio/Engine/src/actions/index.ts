@@ -17,6 +17,7 @@
  *   - {@link PredictiveStudioScoreRecordSetAction}   → `PredictiveStudioScoreRecordSetAction`
  *   - {@link PredictiveStudioRunExperimentAction}    → `PredictiveStudioRunExperimentAction`
  *   - {@link PredictiveStudioPromoteModelAction}     → `PredictiveStudioPromoteModelAction`
+ *   - {@link PredictiveStudioScheduleModelScoringAction} → `PredictiveStudioScheduleModelScoringAction`
  */
 
 export * from './base-predictive-studio.action';

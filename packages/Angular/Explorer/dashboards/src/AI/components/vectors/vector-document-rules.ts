@@ -184,3 +184,28 @@ export function IsVectorizableEntity(
     }
     return !entity.Name.startsWith('MJ:');
 }
+
+/** Match thresholds an Entity Document stores, as fractions of 1. */
+export interface DocumentMatchThresholds {
+    Potential: number;
+    Absolute: number;
+}
+
+/**
+ * The thresholds a model suggestion can put on the document it becomes. The suggestion panel
+ * shows the model's potential and absolute thresholds, and Save used to drop them, so the
+ * document kept the defaults the user never saw. Returns null when the suggestion's values are
+ * not usable as stored: each must be a number above 0 and at most 1 (the same fraction-of-1
+ * scale the document uses), and potential may not exceed absolute.
+ */
+export function SuggestedMatchThresholds(
+    potential: number | null | undefined,
+    absolute: number | null | undefined
+): DocumentMatchThresholds | null {
+    const usable = (v: number | null | undefined): v is number =>
+        typeof v === 'number' && Number.isFinite(v) && v > 0 && v <= 1;
+    if (!usable(potential) || !usable(absolute) || potential > absolute) {
+        return null;
+    }
+    return { Potential: potential, Absolute: absolute };
+}

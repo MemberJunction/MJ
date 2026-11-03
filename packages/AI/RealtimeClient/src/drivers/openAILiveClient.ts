@@ -269,11 +269,24 @@ export class OpenAILiveClient extends BaseRealtimeClient {
      * Requests a brief interim narration utterance during delegated background work.
      */
     public RequestSpokenUpdate(instructions: string): void {
+        this.requestInstructedResponse(instructions, 'narration');
+    }
+
+    /** A spoken TURN: the same commentary trigger as the update, with the reply kept `normal` (MJ#4591). */
+    public RequestSpokenTurn(instructions: string): void {
+        this.requestInstructedResponse(instructions, 'normal');
+    }
+
+    /**
+     * The one trigger behind both spoken requests, so the two cannot drift: the instructions ride a
+     * commentary frame and a `response.create` follows unless a tool batch holds it. Skipped while a
+     * response is in flight (the collision rule); `kind` decides only how the reply is tagged.
+     */
+    private requestInstructedResponse(instructions: string, kind: 'normal' | 'narration'): void {
         if (this.responseActive || this.audioPlaying) {
-            // Collision rule: narration is disposable; skip when response is in flight
             return;
         }
-        this.pendingNarration = true;
+        this.pendingNarration = kind === 'narration';
         this.sendDataChannelFrame({
             type: 'session.commentary.append',
             content: instructions,

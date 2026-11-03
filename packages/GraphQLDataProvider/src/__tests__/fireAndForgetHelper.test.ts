@@ -64,6 +64,69 @@ describe('FireAndForgetHelper.Execute', () => {
         await expect(p).resolves.toEqual({ ok: true, via: 'completion' });
     });
 
+    it('routes a message that beats the ack as it arrives, by default', async () => {
+        const stream = new Subject<string>();
+        const dp = makeDataProvider(stream);
+        let release: () => void = () => undefined;
+        (dp.ExecuteGQL as ReturnType<typeof vi.fn>).mockImplementation(
+            () => new Promise((resolve) => { release = () => resolve({ [FIELD]: { success: true } }); })
+        );
+        const seen: string[] = [];
+        const p = FireAndForgetHelper.Execute(baseConfig(dp, { onMessage: (m) => seen.push(String(m.type)) }));
+
+        await flush();
+        stream.next(JSON.stringify({ type: 'progress' }));
+        expect(seen).toEqual(['progress']);
+
+        release();
+        await flush();
+        stream.next(JSON.stringify({ type: 'complete' }));
+        await expect(p).resolves.toEqual({ ok: true, via: 'completion' });
+    });
+
+    it('with deferMessagesUntilAck, holds messages until the ack is accepted, then routes them in order', async () => {
+        const stream = new Subject<string>();
+        const dp = makeDataProvider(stream);
+        let release: () => void = () => undefined;
+        (dp.ExecuteGQL as ReturnType<typeof vi.fn>).mockImplementation(
+            () => new Promise((resolve) => { release = () => resolve({ [FIELD]: { success: true } }); })
+        );
+        const seen: string[] = [];
+        let acked = false;
+        const p = FireAndForgetHelper.Execute(baseConfig(dp, {
+            deferMessagesUntilAck: true,
+            validateAck: (ack) => { acked = ack?.success === true; return acked; },
+            onMessage: (m) => seen.push(`${String(m.type)}:${acked ? 'after' : 'before'}`),
+        }));
+
+        await flush();
+        stream.next(JSON.stringify({ type: 'progress' }));
+        stream.next(JSON.stringify({ type: 'complete' }));
+        expect(seen).toEqual([]);
+
+        release();
+        await expect(p).resolves.toEqual({ ok: true, via: 'completion' });
+        expect(seen).toEqual(['progress:after', 'complete:after']);
+    });
+
+    it('with deferMessagesUntilAck, drops held messages when the ack is refused', async () => {
+        const stream = new Subject<string>();
+        const dp = makeDataProvider(stream, { success: false, errorMessage: 'nope' });
+        let release: () => void = () => undefined;
+        (dp.ExecuteGQL as ReturnType<typeof vi.fn>).mockImplementation(
+            () => new Promise((resolve) => { release = () => resolve({ [FIELD]: { success: false, errorMessage: 'nope' } }); })
+        );
+        const onMessage = vi.fn();
+        const p = FireAndForgetHelper.Execute(baseConfig(dp, { deferMessagesUntilAck: true, onMessage }));
+
+        await flush();
+        stream.next(JSON.stringify({ type: 'complete' }));
+        release();
+
+        await expect(p).resolves.toEqual({ ok: false, via: 'nope' });
+        expect(onMessage).not.toHaveBeenCalled();
+    });
+
     it('returns an error result when the server rejects the ack', async () => {
         const stream = new Subject<string>();
         const dp = makeDataProvider(stream, { success: false, errorMessage: 'nope' });

@@ -40,7 +40,8 @@ import {
 } from '../scheduling/scheduled-model-scoring';
 
 /** The driver-class key this action registers under (matches the metadata row). */
-export const SCHEDULE_MODEL_SCORING_DRIVER_CLASS = 'PredictiveStudioScheduleModelScoringAction';
+export { SCHEDULE_MODEL_SCORING_DRIVER_CLASS } from './driver-classes';
+import { SCHEDULE_MODEL_SCORING_DRIVER_CLASS } from './driver-classes';
 
 /**
  * The scheduling seam this action depends on — "create + save a scheduled scoring

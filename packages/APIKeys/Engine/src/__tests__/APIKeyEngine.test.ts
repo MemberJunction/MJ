@@ -45,7 +45,9 @@ import {
     MJAPIScopeEntity,
     MJAPIApplicationScopeEntity,
     MJAPIKeyScopeEntity,
+    MJUserEntity,
 } from '../__mocks__/core-entities';
+import { MJGlobal, MJEventType } from '@memberjunction/global';
 import {
     SetMockBaseScopes,
     SetMockBaseApplications,
@@ -966,6 +968,80 @@ describe('row filters', () => {
             SetMockBaseLoaded(false);
             const engine = new APIKeyEngine();
             expect(() => engine.GetRowFilterBindingsForKey('key-1')).toThrow(/before APIKeysEngineBase loaded/);
+        });
+    });
+
+    describe('validation cache & LastUsedAt throttling', () => {
+        it('caches ValidateKeyByHash results within scopeCacheTTLMs and avoids repeated RunView lookups', async () => {
+            const keyEntity = new MJAPIKeyEntity({ ID: 'key-cache-1', UserID: 'user-1', Status: 'Active' });
+            SetMockRunViewResult('MJ: API Keys', {
+                Success: true,
+                Results: [keyEntity],
+            });
+
+            const engine = new APIKeyEngine({ scopeCacheTTLMs: 60_000 });
+            const first = await engine.ValidateKeyByHash(HASH, systemUser as never);
+            expect(first.Valid).toBe(true);
+            expect(engine.CachedKeyValidationCount).toBe(1);
+
+            // Clear the mock RunView so a second DB lookup would fail if executed
+            ClearMockRunViewResults();
+
+            const second = await engine.ValidateKeyByHash(HASH, systemUser as never);
+            expect(second.Valid).toBe(true);
+            expect(second.APIKey?.ID).toBe('key-cache-1');
+            engine.ClearCache();
+        });
+
+        it('throttles LastUsedAt Save() calls across rapid ValidateAPIKey requests', async () => {
+            const engine = new APIKeyEngine({ scopeCacheTTLMs: 60_000, loggingEnabled: false });
+            const { Raw } = engine.GenerateAPIKey();
+            const keyEntity = new MJAPIKeyEntity({ ID: 'key-throttle-1', UserID: 'user-1', Status: 'Active' });
+            const saveSpy = vi.spyOn(keyEntity, 'Save');
+            const userEntity = new MJUserEntity({ ID: 'user-1', Name: 'Test User', Email: 't@example.com', IsActive: true });
+
+            SetMockRunViewResult('MJ: API Keys', { Success: true, Results: [keyEntity] });
+            SetMockRunViewResult('MJ: Users', { Success: true, Results: [userEntity] });
+
+            const first = await engine.ValidateAPIKey({ RawKey: Raw }, systemUser as never);
+            expect(first.IsValid).toBe(true);
+            expect(saveSpy).toHaveBeenCalledTimes(1);
+
+            // Second and third rapid calls hit cache and skip redundant LastUsedAt DB Save()
+            ClearMockRunViewResults();
+            const second = await engine.ValidateAPIKey({ RawKey: Raw }, systemUser as never);
+            const third = await engine.ValidateAPIKey({ RawKey: Raw }, systemUser as never);
+            expect(second.IsValid).toBe(true);
+            expect(third.IsValid).toBe(true);
+            expect(saveSpy).toHaveBeenCalledTimes(1);
+            engine.ClearCache();
+        });
+
+        it('evicts cached key immediately on MJGlobal BaseEntity save/delete/remote-invalidate events', async () => {
+            const keyEntity = new MJAPIKeyEntity({ ID: 'key-evict-1', UserID: 'user-1', Status: 'Active' });
+            SetMockRunViewResult('MJ: API Keys', {
+                Success: true,
+                Results: [keyEntity],
+            });
+
+            const engine = new APIKeyEngine({ scopeCacheTTLMs: 60_000 });
+            const first = await engine.ValidateKeyByHash(HASH, systemUser as never);
+            expect(first.Valid).toBe(true);
+            expect(engine.CachedKeyValidationCount).toBe(1);
+
+            MJGlobal.Instance.RaiseEvent({
+                component: engine,
+                event: MJEventType.ComponentEvent,
+                eventCode: 'BaseEntityEvent',
+                args: {
+                    type: 'remote-invalidate',
+                    entityName: 'MJ: API Keys',
+                    baseEntity: null,
+                },
+            });
+
+            expect(engine.CachedKeyValidationCount).toBe(0);
+            engine.ClearCache();
         });
     });
 });

@@ -1,5 +1,87 @@
 # @memberjunction/redis-provider
 
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- 397ae9a: Performance and memory optimizations across cache invalidation, entity save/hydration, narrow `RunView` SQL projections, and multi-pool metadata startup:
+  - **Row-delta (`row_delta`) cross-replica cache invalidation & $O(\Delta)$ `BaseEngine` updates**: `LocalCacheManager.ApplyRowChanges` and `RedisLocalStorageProvider` now broadcast compact `row_delta` pub/sub payloads (`upsertedRows`, `deletedPrimaryKeys`, `rowCount`, `maxUpdatedAt`, `schemaHash`) instead of re-serializing the full `CachedRunViewData` array, and `BaseEngine.OnExternalCacheChange` updates in-memory arrays in $O(\Delta)$ while preserving untouched `BaseEntity` object references (falling back safely on `rowCount` drift, `schemaHash` mismatch, or custom `OrderBy`).
+  - **In-place `BaseEntity.finalizeSave()` / `Hydrate()` & batched IS-A discovery/hydration**: Reuses hydrated `EntityField` instances and field-name lookup maps across saves (`0` `EntityField` reallocations), adds `FindISAChildEntitiesBatch` (`UNION ALL` `WHERE pk IN (...)`) to `DatabaseProviderBase` / SQL Server / PostgreSQL, batches `TransformSimpleObjectToEntityObject` IS-A child hydration from $2N$ queries to $1\text{–}2$ queries per level, and collapses `CheckForChildRecords()` / `ResolveLeafEntity()` to 1 `UNION ALL` probe.
+  - **Narrow `Fields` server `RunView` / `RunViews`: cache-first read and an explicit opt-out**: On the server (`TrustLocalCacheCompletely`), a narrow `Fields` request first consults a warm superset cache slot (0-SQL hit projected to `Fields ∪ PK`). On a miss, cache-allowed entities still widen to the full entity superset and populate the shared slot (so later `Fields` subsets hit); `CacheLocal: false` or `BypassCache: true` now opts out end-to-end, preserving the narrow SQL `SELECT` without writing partial rows to the cache. Batched `RunViews` project each miss to its own param's `Fields`.
+  - **Test harness**: `InstrumentedLocalStorageProvider` records each write's options (`Writes` / `RowDeltaWrites`) so integration checks can assert what a distributed provider would broadcast.
+  - **Shared read-only metadata catalog & multi-pool `ViewColumnOrderCache` deduplication**: `MJServer` CodeGen DDL providers adopt the global `Metadata.Provider` catalog on boot (`ignoreExistingMetadata: false`), `SQLServerDataProvider` keys view-column-order `sys.columns` scans by database target and login (same-login pools share one scan; the read-only and CodeGen logins never stand in for the read-write one) with cross-pool invalidation, and `MJServer/src/context.ts` replaces dynamic PostgreSQL provider imports with a static import.
+
+- Updated dependencies [1419ba7]
+- Updated dependencies [29b16ee]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [397ae9a]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+
+## 6.2.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [f2248d5]
+- Updated dependencies [0ff7523]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [dae1d31]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [0a348e2]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+
+## 6.2.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [39b35f1]
+- Updated dependencies [c159e2f]
+- Updated dependencies [db39145]
+- Updated dependencies [5e4205c]
+- Updated dependencies [81aea34]
+- Updated dependencies [5465489]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [2274f42]
+- Updated dependencies [db39145]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [7e72c86]
+- Updated dependencies [8c120db]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [5f707d1]
+- Updated dependencies [dc38250]
+  - @memberjunction/core@6.2.0-edge.5
+  - @memberjunction/global@6.2.0-edge.5
+
 ## 6.2.0-edge.4
 
 ### Minor Changes

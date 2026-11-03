@@ -7,10 +7,14 @@
  * (or told to), and never touch the live history.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import type { ExecuteAgentParams, AIPromptParams, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import type { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import type { UserInfo } from '@memberjunction/core';
-import type { ChatMessage } from '@memberjunction/ai';
+import { BaseLLM, type ChatMessage } from '@memberjunction/ai';
+import { MJGlobal } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 
 const templates = vi.hoisted(() => ({ byId: new Map<string, string>() }));
@@ -22,7 +26,7 @@ const templates = vi.hoisted(() => ({ byId: new Map<string, string>() }));
  */
 interface CatalogModel { ID: string; Name: string; ModelConfiguration?: string }
 interface CatalogVendor { ID: string; Name: string; Configuration?: string }
-interface CatalogModelVendor { ID: string; VendorID: string; TypeID: 'inference' | 'developer'; ModelConfiguration?: string }
+interface CatalogModelVendor { ID: string; VendorID: string; TypeID: 'inference' | 'developer'; ModelConfiguration?: string; DriverClass?: string }
 const catalog = vi.hoisted(() => ({
     models: new Map<string, { ID: string; Name: string; ModelConfiguration?: string }>(),
     vendors: new Map<string, { ID: string; Name: string; Configuration?: string }>(),
@@ -181,6 +185,23 @@ describe('BaseAgent.buildVolatileStateMessage', () => {
         const msg = await a.buildVolatileStateMessage(params, promptParams, { step: 1 }, CHILD, AGENT_TYPE, syncedSystemPrompt);
         expect(msg).not.toBeNull();
         expect(msg!.metadata?.volatileState).toBe(true);
+    });
+
+    it('shipped Flow Agent system prompt template resolves to trailing <mj-runtime-state> delivery (not embedded)', async () => {
+        const here = dirname(fileURLToPath(import.meta.url));
+        const flowTemplatePath = join(here, '../../../../../metadata/prompts/templates/system/flow-agent-type-system-prompt.template.md');
+        const flowTemplateText = readFileSync(flowTemplatePath, 'utf8');
+        templates.byId.set('tmpl-flow-system', flowTemplateText);
+        const flowSystemPrompt = { ID: 'flow-sys-1', Name: 'Flow Agent System Prompt', TemplateID: 'tmpl-flow-system' } as unknown as MJAIPromptEntityExtended;
+
+        const a = agentUnderTest();
+        const { params, promptParams } = makeInputs(TRAILING);
+        const msg = await a.buildVolatileStateMessage(params, promptParams, { orderTotal: 1250 }, CHILD, AGENT_TYPE, flowSystemPrompt);
+        expect(msg).not.toBeNull();
+        expect(msg!.metadata?.volatileState).toBe(true);
+        const content = String(msg!.content);
+        expect(content.startsWith(`<${RUNTIME_STATE_TAG}>`)).toBe(true);
+        expect(content).toContain('{"orderTotal":1250}');
     });
 
     it('template sync guard: the markers are an overridable extension point, defaulting to VOLATILE_TEMPLATE_MARKERS', async () => {
@@ -821,5 +842,74 @@ describe('BaseAgent context recovery under append-only retention', () => {
         expect(fragmentsIn(params.conversationMessages)).toBe(1);
         // Nothing else was removed, stubbed or trimmed.
         expect(JSON.stringify(params.conversationMessages.filter(m => (m as VolatileMessage).metadata?.volatileState !== true))).toBe(before);
+    });
+});
+
+/**
+ * A driver whose replayed reasoning is accepted only while the history before it is unchanged
+ * (Anthropic on Claude 5.x) must get the append-only layout whenever the run declares native tools:
+ * in replace mode each request drops the previous runtime-state fragment, and the thinking produced
+ * after it would be replayed behind a changed history and rejected.
+ */
+describe('BaseAgent.shouldUseAppendOnlyTrailingState — replayed reasoning bound to the history before it', () => {
+    class BindingTestLLM extends BaseLLM {
+        public static override readonly ReplayedReasoningRequiresStablePrefix: boolean = true;
+    }
+    class FreeTestLLM extends BaseLLM {}
+    MJGlobal.Instance.ClassFactory.Register(BaseLLM, BindingTestLLM, 'ITBindingTestLLM');
+    MJGlobal.Instance.ClassFactory.Register(BaseLLM, FreeTestLLM, 'ITFreeTestLLM');
+
+    beforeEach(() => catalog.reset());
+
+    function serve(driverClass: string): { model: CatalogModel; vendor: CatalogVendor } {
+        const model: CatalogModel = { ID: `m-${driverClass.toLowerCase()}`, Name: 'Claude' };
+        const vendor: CatalogVendor = { ID: `v-${driverClass.toLowerCase()}`, Name: 'Anthropic' };
+        catalog.models.set(model.ID, model);
+        catalog.vendors.set(vendor.ID, vendor);
+        catalog.modelVendors.set(model.ID, [
+            { ID: `${model.ID}:inference`, VendorID: vendor.ID, TypeID: 'inference', DriverClass: driverClass }
+        ]);
+        return { model, vendor };
+    }
+
+    function decide(driverClass: string, nativeTools: boolean, trailingStateMode?: string): boolean {
+        const a = agentUnderTest() as Internals & { _nativeToolBindings?: Map<string, unknown> };
+        const { promptParams } = makeInputs(trailingStateMode ? { trailingStateMode } : {});
+        const { model, vendor } = serve(driverClass);
+        a._lastModelSelectionInfo = { ModelSelected: model, vendorSelected: vendor };
+        a._nativeToolBindings = nativeTools ? new Map() : undefined;
+        return a.shouldUseAppendOnlyTrailingState(promptParams);
+    }
+
+    it('keeps the fragments (append-only) for a native run on such a driver', () => {
+        expect(decide('ITBindingTestLLM', true)).toBe(true);
+    });
+
+    it('leaves an envelope run on that driver in replace mode: it replays no reasoning', () => {
+        expect(decide('ITBindingTestLLM', false)).toBe(false);
+    });
+
+    it('leaves a native run on any other driver in replace mode', () => {
+        expect(decide('ITFreeTestLLM', true)).toBe(false);
+    });
+
+    it('waits for the first selection when a model override names no vendor, then keeps the fragments', () => {
+        const a = agentUnderTest() as Internals & { _nativeToolBindings?: Map<string, unknown> };
+        const { promptParams } = makeInputs({});
+        const { model, vendor } = serve('ITBindingTestLLM');
+        promptParams.override = { modelId: model.ID };
+        a._nativeToolBindings = new Map();
+        // Turn 1: no selection yet, so the vendor is unknown — replace for now, not settled.
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
+        a._lastModelSelectionInfo = { ModelSelected: model, vendorSelected: vendor };
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
+    });
+
+    it('still honours an explicit replace', () => {
+        expect(decide('ITBindingTestLLM', true, 'replace')).toBe(false);
+    });
+
+    it('is off on the base driver class', () => {
+        expect(BaseLLM.ReplayedReasoningRequiresStablePrefix).toBe(false);
     });
 });

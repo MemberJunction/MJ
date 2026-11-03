@@ -66,7 +66,27 @@ describe('ConversationChatArea — the send slot as the stop control', () => {
     expect(createHarness({ readOnly: true }).component.SendSlotMode).toBe('send');
     expect(createHarness({ allow: false }).component.SendSlotMode).toBe('send');
     expect(createHarness({ inFlight: [] }).component.StatusText).toBeNull();
+    expect(createHarness({ inFlight: [] }).component.StatusElapsed).toBeNull();
     expect(createHarness({ inFlight: [] }).component.StopCount).toBe(0);
+  });
+
+  it('the status line is information, not a control: it shows for a reply in flight even when the slot is Send', () => {
+    const readOnly = createHarness({ readOnly: true });
+    expect(readOnly.component.SendSlotMode).toBe('send');
+    expect(readOnly.component.StatusText).toBe('Sage is working');
+    expect(readOnly.component.StatusElapsed).toBe('0:41');
+    const rows: Row[] = [{ ID: 'a1', Role: 'AI', Agent: 'Sage' }, { ID: 'a2', Role: 'AI', Agent: 'Research Agent' }];
+    const two = createHarness({ rows, inFlight: ['a1', 'a2'], readOnly: true, runs: [['a1', { ID: 'run-1', Agent: 'Sage' }], ['a2', { ID: 'run-2', Agent: 'Research Agent' }]] });
+    expect(two.component.StatusText).toBe('2 agents working');
+    expect(two.component.StatusElapsed).toBeNull();
+  });
+
+  it('the stopping text reads the stopping state, not the slot: a viewer whose slot is Send still sees it', () => {
+    const readOnly = createHarness({ readOnly: true });
+    readOnly.component.StoppingDetailIds.add('a1');
+    expect(readOnly.component.SendSlotMode).toBe('send');
+    expect(readOnly.component.StatusText).toBe('Stopping Sage…');
+    expect(readOnly.component.StatusElapsed).toBeNull();
   });
 
   it('with one run: Stop, named for the agent, with a status line and the elapsed time', () => {
@@ -113,6 +133,7 @@ describe('ConversationChatArea — the send slot as the stop control', () => {
     await h.component.OnComposerStopClicked();
     expect(h.component.SendSlotMode).toBe('stopping');
     expect(h.component.StatusText).toBe('Stopping Sage…');
+    expect(h.component.StatusElapsed).toBeNull();
     h.component.InProgressMessageIds = [];
     expect(h.component.SendSlotMode).toBe('send');
     expect(h.component.StoppingDetailIds.size).toBe(0);
@@ -140,9 +161,46 @@ describe('ConversationChatArea — the send slot as the stop control', () => {
     expect(h.component.ComposerPlaceholderFor('other-conv')).toBe('Type a message... (Ctrl+Enter to send)');
   });
 
+  it('keeps the plain placeholder after a stopped reply when the host turns stopping off', () => {
+    const off = createHarness({ inFlight: [], allow: false, runs: [['a1', { ID: 'run-1', Agent: 'Sage', WasStoppedByUser: true }]] });
+    expect(off.component.ComposerPlaceholderFor('conv-1')).toBe('Type a message... (Ctrl+Enter to send)');
+  });
+
+  it('with stopping off, a reply in flight leaves the slot as Send and nothing to stop, but the status line still shows', async () => {
+    const off = createHarness({ allow: false });
+    expect(off.component.SendSlotMode).toBe('send');
+    expect(off.component.StatusText).toBe('Sage is working');
+    expect(off.component.StatusElapsed).toBe('0:41');
+    expect(off.component.StopCount).toBe(0);
+    await off.component.OnComposerStopClicked();
+    expect(off.cancelAgent).not.toHaveBeenCalled();
+  });
+
   it('formats elapsed time like the reply\'s time pill', () => {
     expect(ConversationChatAreaComponent.FormatElapsed(41_000)).toBe('0:41');
     expect(ConversationChatAreaComponent.FormatElapsed(5 * 60_000 + 3_000)).toBe('5:03');
     expect(ConversationChatAreaComponent.FormatElapsed(3_600_000 + 7_000)).toBe('1:00:07');
+  });
+
+  it('uses a video-specific placeholder only when CurrentOwnerAgent is Video Studio, and a neutral placeholder for other specialist agents', () => {
+    const videoStudio = createHarness({ inFlight: [] });
+    Object.defineProperty(videoStudio.open, 'CurrentOwnerAgent', {
+      get: () => ({ ID: 'vs-agent-id', Name: 'Video Studio', IsConversationManager: false }),
+      configurable: true,
+    });
+    expect(videoStudio.component.ComposerPlaceholderFor('conv-1')).toBe(
+      'Ask Video Studio for changes, like "make the opening faster"',
+    );
+    expect(videoStudio.component.ModePickerTargetAgentId).toBe('vs-agent-id');
+
+    const formBuilder = createHarness({ inFlight: [] });
+    Object.defineProperty(formBuilder.open, 'CurrentOwnerAgent', {
+      get: () => ({ ID: 'fb-agent-id', Name: 'Form Builder', IsConversationManager: false }),
+      configurable: true,
+    });
+    expect(formBuilder.component.ComposerPlaceholderFor('conv-1')).toBe(
+      'Ask Form Builder for changes or a follow-up...',
+    );
+    expect(formBuilder.component.ModePickerTargetAgentId).toBe('fb-agent-id');
   });
 });

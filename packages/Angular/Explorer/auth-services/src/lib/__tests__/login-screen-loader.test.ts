@@ -6,8 +6,10 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
-vi.mock('@memberjunction/core', () => ({
-  LogError: vi.fn()
+vi.mock('@memberjunction/core', async () => ({
+  LogError: vi.fn(),
+  // The real URL resolver: a configured MJAPI_URI must be used as given (MJ #5674).
+  ResolveMJAPIURL: (await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core')).ResolveMJAPIURL,
 }));
 
 import { DefaultLoginDesign } from '@memberjunction/theme-engine';
@@ -28,6 +30,8 @@ describe('LoginScreenLoader', () => {
 
   it('builds the route next to the GraphQL endpoint', () => {
     expect(LoginScreenLoader.BuildURL('https://api.example.org/graphql')).toBe('https://api.example.org/auth/login-screen');
+    // MJ #5674: a configured MJAPI_URI is used as given.
+    expect(LoginScreenLoader.BuildURL('https://example.org/api/graphql', 'https://example.org/api/')).toBe('https://example.org/api/auth/login-screen');
   });
 
   it('sanitizes what the server sent before anything is drawn', async () => {

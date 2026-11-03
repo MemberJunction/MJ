@@ -1085,8 +1085,9 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         this.cdr.detectChanges();
 
         // Tags dashboard's default landing is the Tag Library — load that data
-        // (and the entity-record-document cache used by drill-down) up front.
-        await Promise.all([this.loadTagLibraryData(), this.loadEntityRecordDocCache()]);
+        // first, then populate the entity-record-document cache for referenced items.
+        await this.loadTagLibraryData();
+        await this.loadEntityRecordDocCache();
         this.tabDataLoaded.add('tags');
 
         // If preferences/config set a non-default initial tab, load it eagerly.
@@ -1438,8 +1439,8 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             const [sourcesResult, itemsResult, runsResult, tagsResult, sourceTypesResult, contentTypesResult] = await rv.RunViews([
                 { EntityName: 'MJ: Content Sources', OrderBy: 'Name', ResultType: 'simple' },
                 { EntityName: 'MJ: Content Items', OrderBy: '__mj_UpdatedAt DESC', MaxRows: 200, ResultType: 'simple', Fields: ['ID', 'Name', 'ContentSourceID', 'ContentSourceTypeID', 'ContentSource', 'ContentSourceType', 'ContentType', 'ContentFileType', 'URL', 'Text', 'Checksum', 'EntityRecordDocumentID', '__mj_CreatedAt', '__mj_UpdatedAt'] },
-                { EntityName: 'MJ: Content Process Runs', OrderBy: 'StartTime DESC', MaxRows: 100, ResultType: 'simple' },
-                { EntityName: 'MJ: Content Item Tags', ResultType: 'simple', Fields: ['ID', 'ItemID', 'Item', 'Tag', 'TagID', 'Weight', '__mj_CreatedAt'] },
+                { EntityName: 'MJ: Content Process Runs', OrderBy: 'StartTime DESC', MaxRows: 100, ResultType: 'simple', Fields: ['ID', 'SourceID', 'Source', 'Status', 'StartTime', 'EndTime', 'ProcessedItems', 'ErrorCount'] },
+                { EntityName: 'MJ: Content Item Tags', MaxRows: 2000, ResultType: 'simple', Fields: ['ID', 'ItemID', 'Item', 'Tag', 'TagID', 'Weight', '__mj_CreatedAt'] },
                 { EntityName: 'MJ: Content Source Types', ResultType: 'simple' },
                 { EntityName: 'MJ: Content Types', ResultType: 'simple' }
             ]);
@@ -1453,8 +1454,8 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
 
             // Use TotalRowCount for accurate KPI/badge counts (the Results arrays are
             // capped by MaxRows for feed display, but TotalRowCount reflects the full DB count)
-            this.totalContentItemCount = itemsResult.Success ? itemsResult.TotalRowCount : 0;
-            this.totalContentTagCount = tagsResult.Success ? tagsResult.TotalRowCount : 0;
+            this.totalContentItemCount = itemsResult.Success ? itemsResult.TotalRowCount ?? 0 : 0;
+            this.totalContentTagCount = tagsResult.Success ? tagsResult.TotalRowCount ?? 0 : 0;
 
             // Load Scheduled Job entities referenced by sources so cron descriptions are available
             await this.loadScheduledJobsForSources();
@@ -2403,6 +2404,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
             Fields: ['ID'],
             ResultType: 'simple',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         });
         if (result.Success && result.Results.length > 0) {
             return result.Results[0].ID;
@@ -3236,12 +3238,23 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     /** Cache: EntityRecordDocument ID → RecordID */
     private entityRecordDocCache = new Map<string, string>();
 
-    /** Load ERD RecordIDs for entity-sourced content items */
+    /** Load ERD RecordIDs for entity-sourced content items referenced by loaded items */
     private async loadEntityRecordDocCache(): Promise<void> {
-        if (this.entityRecordDocCache.size > 0) return;
+        const erdIds = Array.from(
+            new Set(
+                this.contentItemsRaw
+                    .map(item => item['EntityRecordDocumentID'] as string | null)
+                    .filter((id): id is string => !!id)
+                    .map(id => NormalizeUUID(id))
+                    .filter(id => !this.entityRecordDocCache.has(id))
+            )
+        );
+        if (erdIds.length === 0) return;
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const filter = erdIds.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
         const result = await rv.RunView<{ ID: string; RecordID: string }>({
             EntityName: 'MJ: Entity Record Documents',
+            ExtraFilter: `ID IN (${filter})`,
             ResultType: 'simple',
             Fields: ['ID', 'RecordID'],
         });
@@ -3546,7 +3559,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
 
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [taggedItemsResult, auditResult] = await rv.RunViews([
-                { EntityName: 'MJ: Tagged Items', ResultType: 'simple' },
+                { EntityName: 'MJ: Tagged Items', Fields: ['ID', 'TagID'], MaxRows: 5000, ResultType: 'simple' },
                 { EntityName: 'MJ: Tag Audit Logs', OrderBy: '__mj_CreatedAt DESC', MaxRows: 200, ResultType: 'simple' }
             ]);
 

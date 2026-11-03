@@ -7,7 +7,10 @@
 
 SELECT
     av.ID as VersionID,
+    av.ArtifactID as ArtifactID,
+    av.VersionNumber as VersionNumber,
     av.Name as VersionName,
+    av.Description as VersionDescription,
     av.ContentMode,
     av.FileID,
     av.Content,
@@ -15,6 +18,7 @@ SELECT
     av.ForceToolsOnly,
 
     a.Name as ArtifactName,
+    a.Description as ArtifactDescription,
     a.Type as TypeName,
 
     at.ToolLibraryClass,
@@ -25,3 +29,4 @@ INNER JOIN [__mj].[vwArtifacts] a ON av.ArtifactID = a.ID
 INNER JOIN [__mj].[vwArtifactTypes] at ON a.TypeID = at.ID
 
 WHERE av.ID IN {{ versionIds | sqlIn }}
+ORDER BY av.__mj_CreatedAt ASC, av.VersionNumber ASC

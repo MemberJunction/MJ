@@ -200,14 +200,16 @@ export interface PredictiveStudioRunFeaturePipelineInput {
     dryRun?: boolean;
     /** Runtime scope override (selected rows / a view / list / filter), used instead of the stored scope. */
     scope?: PredictiveStudioFeaturePipelineScope;
+    /** Overwrite values a person entered on the pipeline's write-back targets, and retire their Human values (default false: they are kept). */
+    overwriteHumanValues?: boolean;
 }
 
 /** Output of `PredictiveStudio.RunFeaturePipeline` — the underlying Record Process run summary. */
 export interface PredictiveStudioRunFeaturePipelineOutput {
     /** Id of the persisted `MJ: Process Runs` row produced by the underlying Record Process. */
     processRunID?: string;
-    /** Run-level status (`Completed` / `Failed` / `Cancelled` / …). */
-    status: string;
+    /** Run-level status, as `MJ: Process Runs.Status` holds it. A refused run (e.g. a Feature Pipeline version not activated) is `Failed`, with `errorMessage` saying why. */
+    status: 'Pending' | 'Running' | 'Paused' | 'Completed' | 'Failed' | 'Cancelled';
     /** Records the run touched. */
     processed: number;
     /** Records whose features were written back (0 in dry-run). */
@@ -218,6 +220,8 @@ export interface PredictiveStudioRunFeaturePipelineOutput {
     error: number;
     /** Run-level error detail when `status` is not `Completed`. */
     errorMessage?: string;
+    /** A Feature Pipeline dry run only: why a real run would be refused (e.g. its version is not activated). Absent when the real run would go ahead. */
+    wouldRefuse?: string;
 }
 
 /**
@@ -403,6 +407,66 @@ export interface PredictiveStudioTrainModelOutput {
     leakageFlagged: boolean;
     /** Lifecycle status of the produced model (always `Draft` immediately after training). */
     status: string;
+}
+
+/** Input for `Query.RefreshExtraction`. Selectors combine as a union; give at least one. */
+export interface QueryRefreshExtractionInput {
+    /** Query IDs to refresh. With exactly one ID and no other selector, a query that does not exist or that the caller may not refresh is reported as unavailable. */
+    queryIDs?: string[];
+    /** Query names, or full paths (`Category/Sub/Name`); a bare name selects every query with that name. */
+    queryNames?: string[];
+    /** A category path (`Category/Sub`): the queries in that category and every category below it. */
+    categoryPath?: string;
+    /** Entity names: the queries that read any of these entities. */
+    entityNames?: string[];
+    /** Every query the caller can read. */
+    all?: boolean;
+    /** Work out and report the changes without writing anything. */
+    dryRun?: boolean;
+    /** Queue the LLM description pass for rows still without a description (default false). */
+    withAI?: boolean;
+}
+
+/** One child row a refresh adds, updates or removes. */
+export interface QueryRefreshRowChange {
+    /** The child collection: Fields, Parameters, Entities or Dependencies. */
+    collection: 'Fields' | 'Parameters' | 'Entities' | 'Dependencies';
+    /** The field or parameter name, the entity name, or the dependency's reference path. */
+    name: string;
+    /** For an update, the columns that change. */
+    changedColumns: string[];
+}
+
+/** One query's refresh. */
+export interface QueryRefreshQueryReport {
+    /** The query's ID; for `Unavailable`, the identifier the caller supplied. */
+    queryID: string;
+    /** The query's name; empty for `Unavailable`. */
+    queryName: string;
+    /** Refreshed (with dryRun: would change), Unchanged, NotPermitted (skipped, no reason given), Unavailable (does not exist or may not be refreshed) or Failed (nothing written). */
+    outcome: 'Refreshed' | 'Unchanged' | 'NotPermitted' | 'Unavailable' | 'Failed';
+    /** The extraction status the run records (with dryRun: would record); absent when it did not run. */
+    extractionStatus?: 'OK' | 'Warning' | 'Error' | 'Skipped';
+    /** The columns of the query row itself the run changes (UsesTemplate and the Extraction columns). */
+    queryColumns: string[];
+    added: QueryRefreshRowChange[];
+    updated: QueryRefreshRowChange[];
+    removed: QueryRefreshRowChange[];
+    /** Authored parameters the SQL no longer uses: kept, and flagged on the query. */
+    flagged: string[];
+    /** The run's diagnostics, or why it was not completed. */
+    diagnostics: string[];
+}
+
+/** Output of `Query.RefreshExtraction`. */
+export interface QueryRefreshExtractionOutput {
+    dryRun: boolean;
+    /** One report per query, in the order refreshed (the queries a composition depends on first). */
+    reports: QueryRefreshQueryReport[];
+    /** Queries that compose each other in a cycle, by name; each was refreshed once. */
+    cycles: string[][];
+    /** A one-line summary of the run. */
+    summary: string;
 }
 
 /** A single primary-key field/value pair identifying a record. */
@@ -852,18 +916,24 @@ export interface RecordProcessRunNowInput {
     recordProcessID: string;
     /** When set, processes just this single record instead of the configured scope. */
     singleRecordID?: string;
-    /** Compute the per-record changes WITHOUT writing (FieldRules work type) — powers the preview. */
+    /**
+     * Compute the per-record changes WITHOUT writing, for every work type: Infer, FieldRules and every write-back
+     * persist nothing, while an Action or Agent still runs and only its write-back is previewed. An Infer dry run over
+     * the stored scope previews the first 25 records. Powers the preview.
+     */
     dryRun?: boolean;
     /** Runtime scope override (selected rows / a view / list / filter), used instead of the stored Scope. */
     scope?: RecordProcessScopeOverride;
+    /** Overwrite values a person entered on the process's write-back targets, and retire their Human values (default false: they are kept). */
+    overwriteHumanValues?: boolean;
 }
 
 /** Output of `RecordProcess.RunNow` — the run summary. */
 export interface RecordProcessRunNowOutput {
     /** ID of the persisted `MJ: Process Runs` row. */
     processRunID?: string;
-    /** Run-level status (`Completed` / `Failed` / `Cancelled` / …). */
-    status: string;
+    /** Run-level status, as `MJ: Process Runs.Status` holds it. A refused run (e.g. a Feature Pipeline version not activated) is `Failed`, with `errorMessage` saying why. */
+    status: 'Pending' | 'Running' | 'Paused' | 'Completed' | 'Failed' | 'Cancelled';
     /** Records the run touched. */
     processed: number;
     /** Records that succeeded (in dry-run, records with a computed preview). */
@@ -874,6 +944,8 @@ export interface RecordProcessRunNowOutput {
     skipped: number;
     /** Run-level error detail when `status` is not `Completed`. */
     errorMessage?: string;
+    /** A Feature Pipeline dry run only: why a real run would be refused (e.g. its version is not activated). Absent when the real run would go ahead. */
+    wouldRefuse?: string;
 }
 
 /** Input for the task-graph control operations. */
@@ -1033,6 +1105,42 @@ export interface TemplateRunOutput {
     output: string;
     /** Wall-clock render time in milliseconds. */
     executionTimeMs?: number;
+}
+
+/** Input for `VideoStudio.SetupHealth`. */
+export interface VideoStudioSetupHealthInput {
+    /** Optional timeout in milliseconds for the render worker health probe (default 10000, clamped to 1000..30000). */
+    RenderTimeoutMs?: number;
+}
+
+/** Subsystem checked by `VideoStudio.SetupHealth`. */
+export type VideoStudioSetupHealthCheckKey = 'Storage' | 'Render' | 'Models';
+
+/** Severity of one setup health check in `VideoStudio.SetupHealth`. */
+export type VideoStudioSetupHealthCheckStatus = 'OK' | 'Warning' | 'Error';
+
+/** One subsystem check returned by `VideoStudio.SetupHealth`. */
+export interface VideoStudioSetupHealthCheck {
+    /** Subsystem identifier (`Storage`, `Render`, or `Models`). */
+    Key: VideoStudioSetupHealthCheckKey;
+    /** Check severity (`OK`, `Warning`, or `Error`). */
+    Status: VideoStudioSetupHealthCheckStatus;
+    /** Short human-readable heading for the subsystem check. */
+    Title: string;
+    /** Summary of the check finding. */
+    Message: string;
+    /** Actionable remediation step when the check is not `OK`. */
+    Action?: string;
+    /** Optional supplementary diagnostic lines (such as tool versions, error strings, or per-preset details). */
+    Details?: string[];
+}
+
+/** Output of `VideoStudio.SetupHealth`. */
+export interface VideoStudioSetupHealthOutput {
+    /** True when no check reported `Status === 'Error'`. */
+    Healthy: boolean;
+    /** Ordered check results for Storage, Render, and Models. */
+    Checks: VideoStudioSetupHealthCheck[];
 }
 
 /**
@@ -1455,6 +1563,7 @@ export class AISkillExportMarkdownOperation extends BaseRemotableOperation<AISki
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "aiskill:manage";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_776576c5db57123a";
 }
 
 // ============================================================
@@ -1471,6 +1580,7 @@ export class AISkillImportMarkdownOperation extends BaseRemotableOperation<AISki
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "aiskill:manage";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_7b52950236da4223";
 }
 
 // ============================================================
@@ -1487,6 +1597,7 @@ export class AuthorizationCheckOperation extends BaseRemotableOperation<Authoriz
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "authorization:check";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_5938f2b945c46737";
 }
 
 // ============================================================
@@ -1503,6 +1614,7 @@ export class PredictiveStudioControlExperimentSessionOperation extends BaseRemot
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_789562f77b97a9d7";
 }
 
 // ============================================================
@@ -1519,6 +1631,7 @@ export class PredictiveStudioCreateScoringProcessOperation extends BaseRemotable
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_0a4217c595837dc0";
 }
 
 // ============================================================
@@ -1535,6 +1648,7 @@ export class PredictiveStudioPromoteModelOperation extends BaseRemotableOperatio
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_4e292361ad1e1c4d";
 }
 
 // ============================================================
@@ -1551,6 +1665,7 @@ export class PredictiveStudioRunFeaturePipelineOperation extends BaseRemotableOp
     public readonly ExecutionMode = 'LongRunning' as const;
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_86183f935f9f16a3";
 }
 
 // ============================================================
@@ -1567,6 +1682,7 @@ export class PredictiveStudioScoreRecordSetOperation extends BaseRemotableOperat
     public readonly ExecutionMode = 'LongRunning' as const;
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_30d16c7f220f7b3a";
 }
 
 // ============================================================
@@ -1583,6 +1699,7 @@ export class PredictiveStudioStartExperimentSessionOperation extends BaseRemotab
     public readonly ExecutionMode = 'LongRunning' as const;
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_6a24af7901f8dd8b";
 }
 
 // ============================================================
@@ -1599,6 +1716,24 @@ export class PredictiveStudioTrainModelOperation extends BaseRemotableOperation<
     public readonly ExecutionMode = 'LongRunning' as const;
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_470d23334fcd4964";
+}
+
+// ============================================================
+// Query.RefreshExtraction — Refresh Query Extraction
+// ============================================================
+/**
+ * Refresh Query Extraction
+ * Re-establish saved queries' parameters, fields, entities and dependencies from their SQL and the database server, without changing the SQL: one query, or a selection by ID, name, category, entity read, or all. Optionally a dry run that reports the changes without writing. Requires Update on MJ: Queries and Create/Update/Delete on its child entities, and read access to every entity a query reads. Long-running, with per-query progress. Implemented by QueryRefreshExtractionServerOperation in @memberjunction/core-entities-server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Query.RefreshExtraction'. This generated base provides the typed contract only (client-safe).
+ */
+export class QueryRefreshExtractionOperation extends BaseRemotableOperation<QueryRefreshExtractionInput, QueryRefreshExtractionOutput> {
+    public readonly OperationKey = "Query.RefreshExtraction";
+    public readonly ExecutionMode = 'LongRunning' as const;
+    public readonly RequiredScope = "query:refresh";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_3db4b7e8e79d83f6";
 }
 
 // ============================================================
@@ -1615,6 +1750,7 @@ export class RecordCloneDescribeOperation extends BaseRemotableOperation<RecordC
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "recordclone:read";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_abe46862798b130d";
 }
 
 // ============================================================
@@ -1631,6 +1767,7 @@ export class RecordCloneExecuteOperation extends BaseRemotableOperation<RecordCl
     public readonly ExecutionMode = 'LongRunning' as const;
     public readonly RequiredScope = "recordclone:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_ddae06b5b35951f9";
 }
 
 // ============================================================
@@ -1647,6 +1784,7 @@ export class RecordCloneGetLineageOperation extends BaseRemotableOperation<Recor
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "recordclone:read";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_e2cc67428d190688";
 }
 
 // ============================================================
@@ -1663,6 +1801,7 @@ export class RecordClonePlanOperation extends BaseRemotableOperation<RecordClone
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "recordclone:read";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_d559dc4bffd0b542";
 }
 
 // ============================================================
@@ -1678,6 +1817,7 @@ export class RecordComparisonCompareOperation extends BaseRemotableOperation<Rec
     public readonly OperationKey = "RecordComparison.Compare";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_ee4ddea0ffcfba7f";
 }
 
 // ============================================================
@@ -1694,6 +1834,7 @@ export class RecordProcessCancelRunOperation extends BaseRemotableOperation<Proc
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "recordprocess:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_5df5404e0c684f08";
 }
 
 // ============================================================
@@ -1710,6 +1851,7 @@ export class RecordProcessGetRunStatusOperation extends BaseRemotableOperation<R
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "recordprocess:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_dcb1affa242f6d2a";
 }
 
 // ============================================================
@@ -1726,6 +1868,7 @@ export class RecordProcessPauseRunOperation extends BaseRemotableOperation<Proce
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "recordprocess:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_a5572aa0ccc17c6f";
 }
 
 // ============================================================
@@ -1742,6 +1885,7 @@ export class RecordProcessResumeRunOperation extends BaseRemotableOperation<Proc
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "recordprocess:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_5342fc8790151ef3";
 }
 
 // ============================================================
@@ -1758,6 +1902,7 @@ export class RecordProcessRunNowOperation extends BaseRemotableOperation<RecordP
     public readonly ExecutionMode = 'LongRunning' as const;
     public readonly RequiredScope = "recordprocess:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_1ebfa28687d57d2d";
 }
 
 // ============================================================
@@ -1774,6 +1919,7 @@ export class TaskGraphCancelOperation extends BaseRemotableOperation<TaskGraphCo
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "taskgraph:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_12998137c10d95d6";
 }
 
 // ============================================================
@@ -1790,6 +1936,7 @@ export class TaskGraphForceCompleteTaskOperation extends BaseRemotableOperation<
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "taskgraph:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_be65501c625e1882";
 }
 
 // ============================================================
@@ -1806,6 +1953,7 @@ export class TaskGraphGetStatusOperation extends BaseRemotableOperation<TaskGrap
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "taskgraph:read";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_a777e1618e9e7b15";
 }
 
 // ============================================================
@@ -1822,6 +1970,7 @@ export class TaskGraphOverrideEdgeOperation extends BaseRemotableOperation<TaskG
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "taskgraph:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_2615b4dc8d72bb57";
 }
 
 // ============================================================
@@ -1838,6 +1987,7 @@ export class TaskGraphPauseOperation extends BaseRemotableOperation<TaskGraphPau
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "taskgraph:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_5b244295683c085b";
 }
 
 // ============================================================
@@ -1854,6 +2004,7 @@ export class TaskGraphResumeOperation extends BaseRemotableOperation<TaskGraphPa
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "taskgraph:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_b2b67206f431d084";
 }
 
 // ============================================================
@@ -1870,6 +2021,7 @@ export class TaskGraphRetryTaskOperation extends BaseRemotableOperation<TaskGrap
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "taskgraph:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_6da13e319592a093";
 }
 
 // ============================================================
@@ -1886,6 +2038,7 @@ export class TaskGraphSetBreakpointsOperation extends BaseRemotableOperation<Tas
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "taskgraph:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_f04e269969058834";
 }
 
 // ============================================================
@@ -1902,6 +2055,7 @@ export class TaskGraphSkipTaskOperation extends BaseRemotableOperation<TaskGraph
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "taskgraph:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_3631d003d73283cf";
 }
 
 // ============================================================
@@ -1918,6 +2072,7 @@ export class TaskGraphStepOperation extends BaseRemotableOperation<TaskGraphStep
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "taskgraph:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_617bc30620f7c379";
 }
 
 // ============================================================
@@ -1934,6 +2089,7 @@ export class TaskGraphSubmitOperation extends BaseRemotableOperation<TaskGraphSu
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "taskgraph:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_08cd68d5cfacf880";
 }
 
 // ============================================================
@@ -1950,6 +2106,7 @@ export class TaskGraphUpdateTaskInputOperation extends BaseRemotableOperation<Ta
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "taskgraph:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_f58b441dd7e1d28a";
 }
 
 // ============================================================
@@ -1966,6 +2123,23 @@ export class TemplateRunOperation extends BaseRemotableOperation<TemplateRunInpu
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "template:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_d32222acd1f0921a";
+}
+
+// ============================================================
+// VideoStudio.SetupHealth — Video Studio Setup Health
+// ============================================================
+/**
+ * Video Studio Setup Health
+ * Checks Video Studio setup readiness across file storage, the render worker, and stage prompt model credentials. Implemented by VideoStudioSetupHealthServerOperation in @memberjunction/video-studio.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'VideoStudio.SetupHealth'. This generated base provides the typed contract only (client-safe).
+ */
+export class VideoStudioSetupHealthOperation extends BaseRemotableOperation<VideoStudioSetupHealthInput, VideoStudioSetupHealthOutput> {
+    public readonly OperationKey = "VideoStudio.SetupHealth";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_92bd2b71364dfcae";
 }
 
 // ============================================================
@@ -1982,6 +2156,7 @@ export class WebSearchQueryOperation extends BaseRemotableOperation<WebSearchQue
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "websearch:execute";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_8eb6c31e5d5a0ef9";
 }
 
 // ============================================================
@@ -1998,6 +2173,7 @@ export class WorkQueueDiscardDeliveryOperation extends BaseRemotableOperation<Wo
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workqueue:operate";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_6d0cbd4e83f1fbb7";
 }
 
 // ============================================================
@@ -2014,6 +2190,7 @@ export class WorkQueueGetBacklogOperation extends BaseRemotableOperation<WorkQue
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workqueue:read";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_e561f94498866507";
 }
 
 // ============================================================
@@ -2030,6 +2207,7 @@ export class WorkQueueGetSubscriptionStatsOperation extends BaseRemotableOperati
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workqueue:read";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_7c80fc5cb2a4e7ef";
 }
 
 // ============================================================
@@ -2046,6 +2224,7 @@ export class WorkQueueListDeadLettersOperation extends BaseRemotableOperation<Wo
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workqueue:read";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_8055279ea754410d";
 }
 
 // ============================================================
@@ -2062,6 +2241,7 @@ export class WorkQueueListPartitionsOperation extends BaseRemotableOperation<Wor
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workqueue:read";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_386b20d152324064";
 }
 
 // ============================================================
@@ -2078,6 +2258,7 @@ export class WorkQueueReplayDeadLetterOperation extends BaseRemotableOperation<W
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workqueue:operate";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_3c0985435843c9bc";
 }
 
 // ============================================================
@@ -2094,6 +2275,7 @@ export class WorkQueueValidateBindingsOperation extends BaseRemotableOperation<W
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workqueue:read";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_4d4b80966637507d";
 }
 
 // ============================================================
@@ -2110,6 +2292,7 @@ export class WorkflowDraftOperation extends BaseRemotableOperation<WorkflowDraft
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workflow:read";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_7a54f25b89c43fef";
 }
 
 // ============================================================
@@ -2126,6 +2309,7 @@ export class WorkflowSaveOperation extends BaseRemotableOperation<WorkflowSaveIn
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workflow:write";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_f8c19b5a79876f33";
 }
 
 // ============================================================
@@ -2142,5 +2326,6 @@ export class WorkflowValidateOperation extends BaseRemotableOperation<WorkflowSa
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workflow:read";
     public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_2ebd29835c1d8b0c";
 }
 

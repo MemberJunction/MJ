@@ -29,7 +29,8 @@ import { EscapeSQLString, IndexByUUID, UUIDsEqual } from '@memberjunction/global
 /** The slice of an `MJ: Duplicate Runs` row the board needs to choose which run it shows. */
 export interface DuplicateRunCandidate {
     ID: string;
-    EntityID: string;
+    /** The entity document the run used. */
+    EntityDocumentID: string;
     ProcessingStatus: string;
     StartedAt: Date | string | null;
     /** Set when the run covered one list's records rather than the whole entity. */
@@ -55,37 +56,37 @@ const DETAIL_COMPLETE = 'Complete';
 /** The slice of an entity-document picker option needed to choose a default. */
 export interface EntityDocumentCandidate {
     ID: string;
-    EntityID: string;
 }
 
 /**
- * Pick the run the board should display for an entity: the newest run that did not fail and covered
- * the whole entity, or, when there is none, the newest run of any kind.
+ * Pick the run the board should display for an entity document: the newest run of that document
+ * that did not fail and covered the whole entity, or, when there is none, the newest run of any kind.
  *
  * Not "most recent Complete run": a run the user cancels keeps `ProcessingStatus = 'In Progress'`
  * (the detector marks it for resumption), and the board's own idle timer can finish a detection
  * before the server does; both end with a reload while a newer run exists, and preferring an older
  * Complete run there would hide the rows the user just watched being produced. Not plain "newest"
  * either: a Failed run usually has no details, and a list-scoped run holds a small subset, so each
- * would hide a good entity-wide run behind an empty or partial board. Runs for other entities are
- * never candidates. Returns null when there is no entity or no run for it.
+ * would hide a good entity-wide run behind an empty or partial board. Runs of other documents are
+ * never candidates, including other documents for the same entity: their template and thresholds
+ * produced different matches. Returns null when there is no document or no run for it.
  */
-export function SelectCurrentRunForEntity<T extends DuplicateRunCandidate>(
+export function SelectCurrentRunForDocument<T extends DuplicateRunCandidate>(
     runs: readonly T[],
-    entityID: string | null | undefined
+    entityDocumentID: string | null | undefined
 ): T | null {
-    if (!entityID) {
+    if (!entityDocumentID) {
         return null;
     }
-    const forEntity = newestFirst(runs.filter(r => UUIDsEqual(r.EntityID, entityID)));
-    return forEntity.find(isPreferredRun) ?? forEntity[0] ?? null;
+    const forDocument = newestFirst(runs.filter(r => UUIDsEqual(r.EntityDocumentID, entityDocumentID)));
+    return forDocument.find(isPreferredRun) ?? forDocument[0] ?? null;
 }
 
 /**
- * The entity document the board should show before the user picks one: the document for the entity
- * of the newest run worth showing (see {@link SelectCurrentRunForEntity}), so a first visit lands on
- * results that exist. Falls back to the first document when no run matches any document, and to
- * null when there are no documents at all.
+ * The entity document the board should show before the user picks one: the document of the newest
+ * run worth showing (see {@link SelectCurrentRunForDocument}), so a first visit lands on results
+ * that exist. Falls back to the first document when no run matches any listed document, and to null
+ * when there are no documents at all.
  */
 export function PickDefaultEntityDocument<D extends EntityDocumentCandidate>(
     documents: readonly D[],
@@ -94,11 +95,10 @@ export function PickDefaultEntityDocument<D extends EntityDocumentCandidate>(
     if (documents.length === 0) {
         return null;
     }
-    // First document per entity wins, as documents.find() would.
-    const documentsByEntity = IndexByUUID(documents, d => d.EntityID);
+    const documentsByID = IndexByUUID(documents, d => d.ID);
     const ordered = [...newestFirst(runs.filter(isPreferredRun)), ...newestFirst(runs)];
     for (const run of ordered) {
-        const match = documentsByEntity.Get(run.EntityID);
+        const match = documentsByID.Get(run.EntityDocumentID);
         if (match) {
             return match;
         }

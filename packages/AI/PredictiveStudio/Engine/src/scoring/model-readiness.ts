@@ -13,6 +13,8 @@
  * processor's run-level preflight and the promotion gate.
  */
 
+import type { MJMLModelEntity } from '@memberjunction/core-entities';
+
 /** The minimal model shape the readiness check reads. */
 export interface ModelArtifactRef {
   /** The model's id (for the message). */
@@ -68,5 +70,26 @@ export class ModelNeedsTrainingError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'ModelNeedsTrainingError';
+  }
+}
+
+/**
+ * Thrown when a model's lifecycle status forbids scoring. Distinct from "needs training" so auto-train never reacts
+ * to it. Only Validated (preview) and Published models score (containment of F-SCO-1; the lifecycle gate's
+ * publish rules own the final rule).
+ */
+export class ModelNotScorableError extends Error {
+  constructor(public readonly ModelID: string, public readonly Status: MJMLModelEntity['Status']) {
+    super(`MLModelInferenceProcessor: ${ModelNotScorableError.Message(ModelID, Status)}`);
+    this.name = 'ModelNotScorableError';
+  }
+
+  /** The refusal message for a model whose status may not score. */
+  public static Message(modelId: string, status: MJMLModelEntity['Status']): string {
+    const next =
+      status === 'Draft'
+        ? 'Move it to Validated through the promotion gate first.'
+        : 'Score with a Published version of the pipeline, or un-archive this model through the promotion gate.';
+    return `ML Model '${modelId}' is ${status} and cannot score records: only Validated or Published models score. ${next}`;
   }
 }

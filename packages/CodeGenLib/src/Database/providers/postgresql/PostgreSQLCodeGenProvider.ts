@@ -1,5 +1,5 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, ResolveStartupMode, SetProvider, StartupManager } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, IsValidSQLIdentifier, ResolveStartupMode, SetProvider, StartupManager } from '@memberjunction/core';
+import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     CodeGenDatabaseProvider,
     CRUDType,
@@ -9,6 +9,8 @@ import {
     MaterializedColumnSpec,
     PhasedExecutionResult,
     DataSourceResult,
+    ExcludedBaseViewFieldNames,
+    OrderAlternateBaseViewsTopologically,
 } from '../../codeGenDatabaseProvider';
 import { configInfo, MjCoreSchema } from '../../../Config/config';
 import { logError, logStatus, LogWarning, StartSpinner, SucceedSpinner } from '../../../Misc/status_logging';
@@ -665,14 +667,18 @@ $do$;
             (pk) => `${pgDialect.QuoteIdentifier(pk.Name)} = v_${this.toSnakeCase(pk.CodeName)}`
         ).join(' AND ');
 
+        const returnType = this.buildCRUDReturnType(entity, viewName);
+        const variableConflictDirective = entity.SaveReturnMode === 'datestamps_only' ? '\n#variable_conflict use_column' : '';
+        const returnSelect = this.buildCRUDReturnSelect(entity, viewName, whereClause);
+
         return `
 ------------------------------------------------------------
 ----- UPDATE FUNCTION FOR ${entity.BaseTable} (JSON-arg shape)
 ------------------------------------------------------------
 ${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
 CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(p_data JSONB)
-RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
-AS $$
+RETURNS ${returnType}
+AS $$${variableConflictDirective}
 DECLARE
 ${pkExtractions}
     v_updated_count INTEGER;
@@ -696,8 +702,7 @@ BEGIN
 
     -- Return the updated record from the base view
     RETURN QUERY
-    SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
-    WHERE ${whereClause};
+    ${returnSelect};
 END;
 $$ LANGUAGE plpgsql;
 ${permissions}
@@ -786,14 +791,18 @@ ${trigger}
     END IF;
     ${v.varName} := (p_data->>'${v.field.Name}')::${v.pgType};`).join('\n');
 
+        const returnType = this.buildCRUDReturnType(entity, viewName);
+        const variableConflictDirective = entity.SaveReturnMode === 'datestamps_only' ? '\n#variable_conflict use_column' : '';
+        const returnSelect = this.buildCRUDReturnSelect(entity, viewName, pkWhere);
+
         return `
 ------------------------------------------------------------
 ----- CREATE FUNCTION FOR ${entity.BaseTable} (JSON-arg shape)
 ------------------------------------------------------------
 ${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
 CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(p_data JSONB)
-RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
-AS $$
+RETURNS ${returnType}
+AS $$${variableConflictDirective}
 DECLARE
 ${pkDeclarations}
     v_field_name TEXT;
@@ -831,8 +840,7 @@ ${fieldCastEntries}
     EXECUTE v_sql USING p_data;
 
     RETURN QUERY
-    SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
-    WHERE ${pkWhere};
+    ${returnSelect};
 END;
 $$ LANGUAGE plpgsql;
 ${permissions}
@@ -889,6 +897,8 @@ ${permissions}
         const strategy = this.buildCreateInsertStrategy(
             entity, firstKey, insertColumns, insertValues
         );
+        const returnType = this.buildCRUDReturnType(entity, viewName);
+        const variableConflictDirective = entity.SaveReturnMode === 'datestamps_only' ? '\n#variable_conflict use_column' : '';
 
         return `
 ------------------------------------------------------------
@@ -897,7 +907,7 @@ ${permissions}
 ${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
 CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
     ${paramString}
-) RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)} AS $$
+) RETURNS ${returnType} AS $$${variableConflictDirective}
 DECLARE
     v_new_id ${this.mapSQLType(generatedKey.SQLFullType)};
 BEGIN
@@ -919,15 +929,50 @@ ${permissions}
 `;
     }
 
+    /**
+     * Builds the `RETURNS` clause type for a PostgreSQL CRUD create/update function.
+     *
+     * - When `entity.SaveReturnMode` is `'full'` (default), returns `SETOF "schema"."vwBaseView"`.
+     * - When `entity.SaveReturnMode` is `'datestamps_only'`, returns `TABLE(...)` listing only the
+     *   primary key column(s) plus `__mj_CreatedAt` and `__mj_UpdatedAt` (via {@link EntityInfo.DatestampReturnFields}).
+     */
+    protected buildCRUDReturnType(entity: EntityInfo, viewName: string): string {
+        if (entity.SaveReturnMode === 'datestamps_only') {
+            const cols = entity.DatestampReturnFields
+                .map((f: EntityFieldInfo) => `${pgDialect.QuoteIdentifier(f.Name)} ${this.mapSQLType(f.SQLFullType)}`)
+                .join(', ');
+            return `TABLE(${cols})`;
+        }
+        return `SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}`;
+    }
+
+    /**
+     * Builds the post-insert / post-update `SELECT` statement returned by a PostgreSQL CRUD function.
+     *
+     * - When `entity.SaveReturnMode` is `'full'` (default), queries `SELECT * FROM "schema"."vwBaseView"`.
+     * - When `entity.SaveReturnMode` is `'datestamps_only'`, queries only the primary key column(s)
+     *   plus `__mj_CreatedAt` and `__mj_UpdatedAt` (via {@link EntityInfo.DatestampReturnFields})
+     *   directly from `"schema"."BaseTable"`, avoiding the post-write `BaseView` joins and large
+     *   payload columns while still returning DB-generated key and timestamp values.
+     */
+    protected buildCRUDReturnSelect(entity: EntityInfo, viewName: string, whereClause: string): string {
+        if (entity.SaveReturnMode === 'datestamps_only') {
+            const cols = entity.DatestampReturnFields.map((f: EntityFieldInfo) => pgDialect.QuoteIdentifier(f.Name)).join(', ');
+            return `SELECT ${cols} FROM ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}\n    WHERE ${whereClause}`;
+        }
+        return `SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}\n    WHERE ${whereClause}`;
+    }
+
     // ─── CRUD UPDATE ─────────────────────────────────────────────────────
 
     /**
      * Generates a PostgreSQL `CREATE OR REPLACE FUNCTION` for updating an existing record.
      * The function accepts typed parameters for all updatable fields plus primary key(s),
      * performs an `UPDATE ... SET ... WHERE PK = param`, checks `ROW_COUNT` to detect
-     * missing rows, and returns the updated record from the base view via `RETURN QUERY
-     * SELECT`. Also generates the `__mj_UpdatedAt` timestamp trigger for the entity
-     * and emits `GRANT EXECUTE` permissions.
+     * missing rows, and returns the updated record from the base view (or PK + datestamp
+     * columns from the base table when `entity.SaveReturnMode === 'datestamps_only'`) via
+     * `RETURN QUERY SELECT`. Also generates the `__mj_UpdatedAt` timestamp trigger for the
+     * entity and emits `GRANT EXECUTE` permissions.
      */
     generateCRUDUpdate(entity: EntityInfo): string {
         if (this.shouldUseJsonArgShape(entity, 'update')) {
@@ -941,6 +986,9 @@ ${permissions}
         const updateFields = this.generateUpdateFieldString(entity.Fields);
         const whereClause = this.buildPrimaryKeyWhereClause(entity);
         const selectWhereClause = this.buildPrimaryKeyWhereClause(entity);
+        const returnType = this.buildCRUDReturnType(entity, viewName);
+        const variableConflictDirective = entity.SaveReturnMode === 'datestamps_only' ? '\n#variable_conflict use_column' : '';
+        const returnSelect = this.buildCRUDReturnSelect(entity, viewName, selectWhereClause);
 
         const trigger = this.generateTimestampTrigger(entity);
 
@@ -965,12 +1013,10 @@ ${permissions}
 
     -- Return the updated record from the base view
     RETURN QUERY
-    SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
-    WHERE ${selectWhereClause};`
+    ${returnSelect};`
             : `    -- No updatable fields (PK-only entity, e.g. junction table). Return the existing row.
     RETURN QUERY
-    SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
-    WHERE ${selectWhereClause};`;
+    ${returnSelect};`;
 
         // Only declare v_updated_count when we actually perform an UPDATE.
         const declareBlock = hasUpdatableFields ? '\n    v_updated_count INTEGER;' : '';
@@ -982,7 +1028,7 @@ ${permissions}
 ${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
 CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
     ${paramString}
-) RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)} AS $$
+) RETURNS ${returnType} AS $$${variableConflictDirective}
 DECLARE${declareBlock}
 BEGIN
 ${fnBody}
@@ -1146,6 +1192,25 @@ EXECUTE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, trigFnName)}();
      *
      * @returns A {@link FullTextSearchResult} with the generated SQL and the search function name.
      */
+    /**
+     * PostgreSQL charges full-text search on the WRITE path, not the read path: the emitted objects
+     * include a row-level `BEFORE INSERT OR UPDATE OF <fields>` trigger that recomputes
+     * `to_tsvector` for the row, a GIN index that is maintained on every one of those writes, and a
+     * one-off backfill `UPDATE` across the existing table at apply time. None of that is reversed by
+     * clearing the entity's full-text flags later — the column, trigger and index stay until someone
+     * drops them.
+     */
+    FullTextSearchCostDisclosure(entity: EntityInfo, searchFields: EntityFieldInfo[]): string | null {
+        const trigName = `trg_fts_${this.toSnakeCase(entity.BaseTable)}`;
+        const indexName = `idx_fts_${this.toSnakeCase(entity.BaseTable)}`;
+        const fields = searchFields.map((f: EntityFieldInfo) => f.Name).join(', ');
+        return `Full-text search on ${entity.SchemaName}.${entity.BaseTable} adds a PERMANENT per-write cost: `
+            + `trigger ${trigName} recomputes to_tsvector on every INSERT and on every UPDATE of (${fields}), `
+            + `GIN index ${indexName} is maintained on each of those writes, and a one-off backfill UPDATE `
+            + `rewrites every existing row when this script is applied. Clearing the entity's full-text flags `
+            + `later does not drop the column, trigger or index.`;
+    }
+
     generateFullTextSearch(entity: EntityInfo, searchFields: EntityFieldInfo[], _primaryKeyIndexName: string): FullTextSearchResult {
         const ftsColName = '__mj_fts_vector';
         const trigName = `trg_fts_${this.toSnakeCase(entity.BaseTable)}`;
@@ -1550,13 +1615,35 @@ $$ LANGUAGE sql STABLE;
     // ─── PERMISSIONS ─────────────────────────────────────────────────────
 
     /** @inheritdoc */
-    generateViewPermissions(entity: EntityInfo): string {
-        const viewName = this.getBaseViewName(entity);
+    override GenerateViewPermissionsForTarget(
+        entity: EntityInfo,
+        targetSchemaName: string,
+        targetViewName: string,
+    ): string {
         const roles = this.collectPermissionRoles(entity.Permissions);
         if (roles.length === 0) return '';
         return roles.map((role: string) =>
-            `GRANT SELECT ON ${pgDialect.QuoteSchema(entity.SchemaName, viewName)} TO ${pgDialect.QuoteIdentifier(role)};`
+            `GRANT SELECT ON ${pgDialect.QuoteSchema(targetSchemaName, targetViewName)} TO ${pgDialect.QuoteIdentifier(role)};`
         ).join('\n');
+    }
+
+    /** @inheritdoc */
+    override GenerateDisabledViewRevokePermissionsForTarget(
+        entity: EntityInfo,
+        targetSchemaName: string,
+        targetViewName: string,
+    ): string {
+        const roles = this.collectPermissionRoles(entity.Permissions);
+        if (roles.length === 0) return '';
+        return roles.map((role: string) =>
+            `REVOKE SELECT ON ${pgDialect.QuoteSchema(targetSchemaName, targetViewName)} FROM ${pgDialect.QuoteIdentifier(role)};`
+        ).join('\n');
+    }
+
+    /** @inheritdoc */
+    generateViewPermissions(entity: EntityInfo): string {
+        const viewName = this.getBaseViewName(entity);
+        return this.GenerateViewPermissionsForTarget(entity, entity.SchemaName, viewName);
     }
 
     /**
@@ -1589,8 +1676,28 @@ $$ LANGUAGE sql STABLE;
     generateFullTextSearchPermissions(entity: EntityInfo, functionName: string): string {
         const roles = this.collectPermissionRoles(entity.Permissions);
         if (roles.length === 0) return '';
+        // Each GRANT is guarded by an existence check rather than issued bare.
+        // The permissions file is replayed for EVERY full-text-enabled entity,
+        // including entities whose DDL phase did not run in this pass, and the
+        // 42P16 view-recovery fallback's `DROP ... CASCADE` can take the search
+        // function with it. A GRANT on a function that is not there raises 42883,
+        // which aborts the ENTIRE CodeGen run — an absent function now logs a
+        // NOTICE and the run carries on.
+        const schemaLiteral = entity.SchemaName.replace(/'/g, "''");
+        const functionLiteral = functionName.replace(/'/g, "''");
         return roles.map((role: string) =>
-            `GRANT EXECUTE ON FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, functionName)} TO ${pgDialect.QuoteIdentifier(role)};`
+            `DO $mjfts$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_proc p
+        JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = '${schemaLiteral}' AND p.proname = '${functionLiteral}'
+    ) THEN
+        GRANT EXECUTE ON FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, functionName)} TO ${pgDialect.QuoteIdentifier(role)};
+    ELSE
+        RAISE NOTICE 'Skipping GRANT on missing full-text search function %.%', '${schemaLiteral}', '${functionLiteral}';
+    END IF;
+END $mjfts$;`
         ).join('\n');
     }
 
@@ -2051,16 +2158,51 @@ ORDER BY ordinal_position`;
         if (!entity.HasLayeredBaseView) {
             return '';
         }
+        return this.GenerateAlternateBaseViewRebindSQL(
+            entity,
+            entity.SchemaName,
+            entity.BaseView,
+            entity.GeneratedViewName,
+        );
+    }
+
+    /** @inheritdoc */
+    override GenerateAlternateBaseViewRebindSQL(
+        _entity: EntityInfo,
+        altViewSchema: string,
+        altViewName: string,
+        innerViewName: string,
+    ): string {
         let core = '__mj';
         try {
             core = (MjCoreSchema() || '__mj').replace(/"/g, '""');
         } catch {
             core = '__mj';
         }
-        const schema = entity.SchemaName.replace(/'/g, "''");
-        const outer = entity.BaseView.replace(/'/g, "''");
-        const inner = entity.GeneratedViewName.replace(/'/g, "''");
+        const schema = altViewSchema.replace(/'/g, "''");
+        const outer = altViewName.replace(/'/g, "''");
+        const inner = innerViewName.replace(/'/g, "''");
         return `SELECT "${core}"."spRebindLayeredOuterView"('${schema}', '${outer}', '${inner}');`;
+    }
+
+    /** @inheritdoc */
+    override getViewDependenciesSQL(schema: string, viewName: string): string {
+        const escapedSchema = EscapeSQLString(schema);
+        const escapedView = EscapeSQLString(viewName);
+        return `SELECT DISTINCT
+    ns.nspname AS "ReferencedSchema",
+    cl.relname AS "ReferencedObject",
+    cl.relkind AS "ReferencedType"
+FROM pg_depend d
+JOIN pg_rewrite r ON r.oid = d.objid
+JOIN pg_class v ON v.oid = r.ev_class
+JOIN pg_namespace vns ON vns.oid = v.relnamespace
+JOIN pg_class cl ON cl.oid = d.refobjid
+JOIN pg_namespace ns ON ns.oid = cl.relnamespace
+WHERE vns.nspname = '${escapedSchema}'
+  AND v.relname = '${escapedView}'
+  AND cl.oid <> v.oid
+  AND cl.relkind IN ('r', 'v', 'm', 'f', 'p')`;
     }
 
     /**
@@ -2076,21 +2218,86 @@ ORDER BY ordinal_position`;
         if (!entity.HasLayeredBaseView) {
             return;
         }
-        const schemaLit = entity.SchemaName.replace(/'/g, "''").replace(/"/g, '""');
-        const outerLit = entity.BaseView.replace(/'/g, "''").replace(/"/g, '""');
-        const innerLit = entity.GeneratedViewName.replace(/'/g, "''").replace(/"/g, '""');
+        await this.rebindOuterViewAgainstInnerIfPresent(
+            client,
+            entity.SchemaName,
+            entity.BaseView,
+            entity.SchemaName,
+            entity.GeneratedViewName,
+            willRegenerate,
+        );
+    }
+
+    /**
+     * Rebinds each registered alternate base view on `entity` in topological
+     * `ParentID` order so `SELECT *` / `alias.*` re-expands after the entity's
+     * `BaseView` (or parent alternate view) is regenerated. Wrapped per-view in
+     * `try/catch` so a single broken alternate view logs a warning without
+     * failing the owning entity's view phase.
+     */
+    private async rebindAlternateBaseViewsIfPresent(
+        client: PGQueryable,
+        entity: EntityInfo,
+        willRegenerate?: Set<string>,
+    ): Promise<void> {
+        const orderedAltViews = OrderAlternateBaseViewsTopologically(entity.AlternateBaseViews ?? []);
+        if (orderedAltViews.length === 0) {
+            return;
+        }
+        const defaultInnerName = this.getBaseViewName(entity);
+        for (const altView of orderedAltViews) {
+            if (!IsValidSQLIdentifier(altView.EffectiveSchemaName) || !IsValidSQLIdentifier(altView.ViewName)) {
+                logError(
+                    `[AlternateBaseView] Skipping rebind for alternate view '${altView.Name}' on '${entity.Name}': invalid SQL identifier '${altView.EffectiveSchemaName}.${altView.ViewName}'.`
+                );
+                continue;
+            }
+            const parentView = altView.ParentView;
+            const innerSchema = parentView ? parentView.EffectiveSchemaName : entity.SchemaName;
+            const innerName = parentView ? parentView.ViewName : defaultInnerName;
+            try {
+                await this.rebindOuterViewAgainstInnerIfPresent(
+                    client,
+                    altView.EffectiveSchemaName,
+                    altView.ViewName,
+                    innerSchema,
+                    innerName,
+                    willRegenerate,
+                );
+            } catch (e) {
+                LogWarning(
+                    `   ⚠️  [AlternateBaseView] Failed to rebind alternate view '${altView.Name}' (${altView.EffectiveSchemaName}.${altView.ViewName}) on '${entity.Name}': ${
+                        e instanceof Error ? e.message : String(e)
+                    }`,
+                );
+            }
+        }
+    }
+
+    private async rebindOuterViewAgainstInnerIfPresent(
+        client: PGQueryable,
+        outerSchema: string,
+        outerViewName: string,
+        innerSchema: string,
+        innerViewName: string,
+        willRegenerate?: Set<string>,
+    ): Promise<void> {
+        const outerSchemaLit = outerSchema.replace(/'/g, "''").replace(/"/g, '""');
+        const outerLit = outerViewName.replace(/'/g, "''").replace(/"/g, '""');
+        const innerSchemaLit = innerSchema.replace(/'/g, "''").replace(/"/g, '""');
+        const innerLit = innerViewName.replace(/'/g, "''").replace(/"/g, '""');
         const existsResult = await client.query(
-            `SELECT to_regclass('"${schemaLit}"."${outerLit}"') IS NOT NULL AS present`,
+            `SELECT to_regclass('"${outerSchemaLit}"."${outerLit}"') IS NOT NULL AS present`,
         );
         if (!existsResult.rows?.[0]?.['present']) {
             return;
         }
 
-        const defResult = await client.query(this.getViewDefinitionSQL(entity.SchemaName, entity.BaseView));
+        const defResult = await client.query(this.getViewDefinitionSQL(outerSchema, outerViewName));
         const viewDefinition = String(defResult.rows?.[0]?.['ViewDefinition'] ?? defResult.rows?.[0]?.['viewdefinition'] ?? '');
         if (!viewDefinition) {
             throw new LayeredOuterRestarError(
-                `Could not read pg_get_viewdef for layered outer view ${entity.SchemaName}.${entity.BaseView}`,
+                `Could not read pg_get_viewdef for layered outer view ${outerSchema}.${outerViewName}`,
             );
         }
 
@@ -2099,7 +2306,7 @@ ORDER BY ordinal_position`;
              FROM pg_attribute a
              JOIN pg_class c ON c.oid = a.attrelid
              JOIN pg_namespace n ON n.oid = c.relnamespace
-             WHERE n.nspname = '${schemaLit}'
+             WHERE n.nspname = '${innerSchemaLit}'
                AND c.relname = '${innerLit}'
                AND a.attnum > 0
                AND NOT a.attisdropped
@@ -2108,14 +2315,14 @@ ORDER BY ordinal_position`;
         const innerColumns = (colResult.rows ?? []).map((r) => String(r['Name'] ?? r['name'] ?? ''));
         const restarred = restarLayeredOuterView({
             viewDefinition,
-            innerViewName: entity.GeneratedViewName,
+            innerViewName,
             innerColumns,
         });
-        const createSQL = buildCreateOrReplaceLayeredOuterViewSQL(entity.SchemaName, entity.BaseView, restarred);
+        const createSQL = buildCreateOrReplaceLayeredOuterViewSQL(outerSchema, outerViewName, restarred);
         await ExecuteWithFallback({
             Client: client,
-            schema: entity.SchemaName,
-            ViewName: entity.BaseView,
+            schema: outerSchema,
+            ViewName: outerViewName,
             CreateOrReplaceSQL: createSQL,
             WillRegenerate: willRegenerate,
         });
@@ -2370,23 +2577,26 @@ WHERE p.prokind IN ('f', 'p')
                 BaseTableQualified: pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable),
             });
             await this.rebindLayeredOuterIfPresent(client, entity, willRegenerate);
+            await this.rebindAlternateBaseViewsIfPresent(client, entity, willRegenerate);
         } finally {
             client.release();
         }
     }
 
     /**
-     * Phased per-entity execution for PG. Runs view → CRUD functions → view
-     * permissions against the target DB, guaranteeing phase 2 is skipped if
-     * phase 1 failed (so we never leave `fn_create_*` functions pointing at
-     * a missing or stale view's rowtype).
+     * Phased per-entity execution for PG. Runs view → CRUD functions →
+     * full-text search → view permissions against the target DB, guaranteeing
+     * phase 2 is skipped if phase 1 failed (so we never leave `fn_create_*`
+     * functions pointing at a missing or stale view's rowtype).
      *
      * Phase 1 routes through `executeWithFallback` so a 42P16 triggers the
      * capture/drop/recreate/restore flow rather than blowing up. Phase 2 runs
      * each CRUD function's CREATE individually — we do NOT concatenate them
      * because node-pg's simple query protocol would then abort the whole
      * batch on the first failure; running them separately gives a per-routine
-     * error signal. Phase 3 applies view-level GRANTs.
+     * error signal. Phase 3 installs the full-text objects, whose search
+     * function returns the base view's rowtype and so depends on phase 1.
+     * Phase 4 applies view-level GRANTs.
      */
     override async executeEntityPhased(opts: {
         entity: EntityInfo;
@@ -2395,6 +2605,7 @@ WHERE p.prokind IN ('f', 'p')
         crudCreateSQL: string;
         crudUpdateSQL: string;
         crudDeleteSQL: string;
+        ftsSQL: string;
         viewPermSQL: string;
         willRegenerate?: Set<string>;
     }): Promise<PhasedExecutionResult> {
@@ -2431,6 +2642,7 @@ WHERE p.prokind IN ('f', 'p')
                         BaseTableQualified: pgDialect.QuoteSchema(opts.entity.SchemaName, opts.entity.BaseTable),
                     });
                     await this.rebindLayeredOuterIfPresent(client, opts.entity, opts.willRegenerate);
+                    await this.rebindAlternateBaseViewsIfPresent(client, opts.entity, opts.willRegenerate);
                 } catch (e) {
                     return {
                         success: false,
@@ -2456,7 +2668,25 @@ WHERE p.prokind IN ('f', 'p')
                 }
             }
 
-            // ── Phase 3: view permissions ────────────────────────────────
+            // ── Phase 3: full-text search DDL ────────────────────────────
+            // The search function is declared `RETURNS SETOF <baseview>`, so it
+            // can only be created once phase 1 has put the view in place — and it
+            // must be created before the permissions replay, which GRANTs EXECUTE
+            // on it. Before this phase existed the generated full-text SQL was
+            // written to a file and never executed on PostgreSQL at all.
+            if (opts.ftsSQL && opts.ftsSQL.trim()) {
+                try {
+                    await client.query(opts.ftsSQL);
+                } catch (e) {
+                    return {
+                        success: false,
+                        phase: 'fulltext',
+                        error: e instanceof Error ? e : new Error(String(e)),
+                    };
+                }
+            }
+
+            // ── Phase 4: view permissions ────────────────────────────────
             if (opts.viewPermSQL && opts.viewPermSQL.trim()) {
                 try {
                     await client.query(opts.viewPermSQL);
@@ -2556,7 +2786,13 @@ WHERE p.prokind IN ('f', 'p')
     private buildBaseViewSelectParts(context: BaseViewGenerationContext, alias: string): string {
         // parentFieldsSelect and rootFieldsSelect have leading commas (e.g. ",\n    Field AS Alias").
         // relatedFieldsSelect does NOT have a leading comma for the first field (starts with "\n    Field...").
-        let select = `${alias}.*`;
+        // `alias.*` unless this entity has a configured base-view column exclusion, in which case the
+        // base-table columns are enumerated instead. See baseTableSelectList / ExcludedBaseViewFieldNames.
+        let select = this.baseTableSelectList(
+            context.entity,
+            alias,
+            ExcludedBaseViewFieldNames(context.entity.Name, configInfo?.baseViewExcludedFields ?? [])
+        );
         if (context.parentFieldsSelect) select += context.parentFieldsSelect;
         if (context.relatedFieldsSelect) select += `,${context.relatedFieldsSelect}`;
         if (context.rootFieldsSelect) select += context.rootFieldsSelect;
@@ -2626,7 +2862,7 @@ WHERE p.prokind IN ('f', 'p')
             return {
                 preInsert: '',
                 returningClause: `RETURNING ${identityCol} INTO v_new_id`,
-                selectClause: `SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}\n    WHERE ${identityCol} = v_new_id${keyPredicates}`,
+                selectClause: this.buildCRUDReturnSelect(entity, viewName, `${identityCol} = v_new_id${keyPredicates}`),
                 finalColumns: callerSuppliedKeys.length === 0 ? insertColumns : (hasNonPkColumns ? `${keyColumns},\n            ${insertColumns}` : keyColumns),
                 finalValues: callerSuppliedKeys.length === 0 ? insertValues : (hasNonPkColumns ? `${keyValues},\n            ${insertValues}` : keyValues),
             };
@@ -2638,7 +2874,7 @@ WHERE p.prokind IN ('f', 'p')
             return {
                 preInsert: `v_new_id := COALESCE(${paramName}, gen_random_uuid());\n    `,
                 returningClause: '',
-                selectClause: `SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}\n    WHERE ${pkCol} = v_new_id`,
+                selectClause: this.buildCRUDReturnSelect(entity, viewName, `${pkCol} = v_new_id`),
                 // Include the PK column in the INSERT so caller-provided IDs are respected.
                 // When there are no non-PK columns, omit the trailing comma.
                 finalColumns: hasNonPkFields ? `${pkCol},\n            ${insertColumns}` : pkCol,
@@ -2673,7 +2909,7 @@ WHERE p.prokind IN ('f', 'p')
         return {
             preInsert: '',
             returningClause: '',
-            selectClause: `SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}\n    WHERE ${selectWhere}`,
+            selectClause: this.buildCRUDReturnSelect(entity, viewName, selectWhere),
             finalColumns,
             finalValues,
         };
@@ -2865,6 +3101,28 @@ WHERE p.prokind IN ('f', 'p')
             AND a.attname = '${columnName}'
       )
       AND array_length(ix.indkey, 1) > 1`;
+    }
+
+    /**
+     * @inheritdoc
+     * `indkey` lists the key columns first, then the INCLUDE columns; `indnkeyatts` is how many are keys.
+     */
+    public override GetUniqueIndexMembershipSQL(schema: string, tableName: string, columnName: string): string | null {
+        return `SELECT
+        NOT EXISTS (
+            SELECT 1 FROM generate_series(0, ix.indnkeyatts - 1) AS k(pos)
+            WHERE ix.indkey[k.pos] = a.attnum
+        ) AS "IsIncludedColumn",
+        ix.indnkeyatts AS "KeyColumnCount"
+    FROM pg_catalog.pg_index ix
+    INNER JOIN pg_catalog.pg_class t ON t.oid = ix.indrelid
+    INNER JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
+    INNER JOIN pg_catalog.pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
+    WHERE ix.indisunique
+      AND NOT ix.indisprimary
+      AND n.nspname = '${EscapeSQLString(schema)}'
+      AND t.relname = '${EscapeSQLString(tableName)}'
+      AND a.attname = '${EscapeSQLString(columnName)}'`;
     }
 
     /** @inheritdoc */

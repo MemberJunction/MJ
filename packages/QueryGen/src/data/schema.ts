@@ -20,6 +20,18 @@ export interface EntityGroup {
 }
 
 /**
+ * Alternate base view metadata formatted for AI prompts
+ */
+export interface EntityAlternateBaseViewMetadata {
+  name: string;
+  displayName: string;
+  schemaName: string;
+  viewName: string;
+  description: string;
+  parentName?: string;
+}
+
+/**
  * Entity metadata formatted for AI prompts
  */
 export interface EntityMetadataForPrompt {
@@ -28,6 +40,7 @@ export interface EntityMetadataForPrompt {
   schemaName: string;
   baseTable: string;
   baseView: string;
+  alternateBaseViews?: EntityAlternateBaseViewMetadata[];
   fields: EntityFieldMetadata[];
   relationships: EntityRelationshipMetadata[];
 }

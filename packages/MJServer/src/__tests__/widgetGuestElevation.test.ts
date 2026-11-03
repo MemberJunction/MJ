@@ -155,6 +155,8 @@ describe('widgetGuestElevation — elevateUserPayload', () => {
     expect(elevated.isSystemUser).toBe(true);
     // The session id MUST be preserved so progress/streaming still routes to the guest's websocket.
     expect(elevated.sessionId).toBe('sess-123');
+    // The guest it stands in for, so conversation writes can stay the guest's (MJ#4791).
+    expect(elevated.ElevatedFrom).toBe(guestPayload.userRecord);
   });
 
   it('does not mutate the original guest payload', () => {

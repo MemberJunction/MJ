@@ -1,16 +1,21 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { By } from '@angular/platform-browser';
-import { CompositeKey, type BaseEntity } from '@memberjunction/core';
+import { CompositeKey, type BaseEntity, type EntityInfo } from '@memberjunction/core';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
 import { MjRecordFormContainerComponent } from './record-form-container.component';
+import {
+  RegisterFormToolbarAction,
+  ResolveFormToolbarActionsForEntity,
+} from '../toolbar/base-form-toolbar-action';
+import { RecordLinksToolbarAction } from '../toolbar/actions/record-links-toolbar-action';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
 import { FormCompositionRegistry } from '../chrome/form-composition-registry';
 import type { FormCompositionSnapshot } from '../chrome/form-composition-snapshot';
 import { DETAILS_SECTION_KEY } from '../chrome/form-chrome';
 import type { FormChromeSpec } from '../chrome/form-chrome';
 import type { BaseFormComponent } from '../base-form-component';
-import { UserInfoEngine } from '@memberjunction/core-entities';
+import { UserInfoEngine, type MJRecordChangeEntity } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { FORM_PLACEMENT_PREVIEW, FormPlacementPreview, PLACEMENT_PREVIEW_KEY } from '../panel-slot/placement-preview';
 import { ForgetHiddenPanelsSettings } from '../panel-slot/panel-hides';
@@ -56,10 +61,10 @@ vi.mock('../panel-slot/collect-form-contribution-registrations', async (importOr
 class ToolbarStub {
   @Input() Record: unknown; @Input() EditMode = false; @Input() UserCanEdit = false; @Input() UserCanDelete = false;
   @Input() IsFavorite = false; @Input() FavoriteInitDone = false; @Input() IsDirty = false; @Input() DirtyFieldNames: unknown;
-  @Input() ListCount = 0; @Input() TagCount = 0; @Input() AttachmentCount = 0; @Input() AttachmentsAvailable = false; @Input() IsAttachmentsPanelOpen = false; @Input() VersionCount = 0; @Input() EntityInfo: unknown; @Input() Config: unknown;
+  @Input() ListCount = 0; @Input() TagCount = 0; @Input() LinksOpen = false; @Input() LinkCount = 0; @Input() CommentsOpen = false; @Input() CommentCount = 0; @Input() ConflictCount = 0; @Input() AttachmentCount = 0; @Input() AttachmentsAvailable = false; @Input() IsAttachmentsPanelOpen = false; @Input() VersionCount = 0; @Input() EntityInfo: unknown; @Input() Config: unknown;
   @Input() IsSaving = false; @Input() IsRefreshing = false; @Input() VisibleSectionCount = 0; @Input() TotalSectionCount = 0; @Input() ExpandedSectionCount = 0;
   @Input() SearchFilter = ''; @Input() ShowEmptyFields = false; @Input() WidthMode = ''; @Input() HasCustomSectionOrder = false;
-  @Input() Variants: unknown; @Input() CurrentVariantID: unknown;
+  @Input() Variants: unknown; @Input() CurrentVariantID: unknown; @Input() FormModeSwitch: unknown;
   @Input() RegisteredItems: unknown; @Input() ItemOverrides: unknown; @Input() FormComponent: unknown;
   @Input() ChromeLayout = 'accordion';
   @Output() Navigate = new EventEmitter<unknown>();
@@ -102,9 +107,13 @@ class EmptyStateStub { @Input() Message = ''; }
 @Component({ standalone: true, selector: 'mj-isa-related-panel', template: '' })
 class IsaPanelStub { @Input() Record: unknown; @Input() EditMode = false; @Input() Collapsed = false; }
 @Component({ standalone: true, selector: 'mj-record-changes', template: '' })
-class RecordChangesStub { @Input() record: unknown; @Input() AllowRestore = false; }
+class RecordChangesStub { @Input() record: unknown; @Input() AllowRestore = false; @Input() PreviewedChangeID: unknown = null; }
 @Component({ standalone: true, selector: 'mj-record-tags', template: '' })
 class RecordTagsStub { @Input() Record: unknown; @Input() WidthPx = 0; }
+@Component({ standalone: true, selector: 'mj-record-links', template: '' })
+class RecordLinksStub { @Input() Provider: unknown; @Input() Record: unknown; @Input() Mode = 'drawer'; @Input() IsOpen = false; }
+@Component({ standalone: true, selector: 'mj-record-comments', template: '' })
+class RecordCommentsStub { @Input() Provider: unknown; @Input() Record: unknown; @Input() Mode = 'drawer'; @Input() IsOpen = false; @Input() Coordinator: unknown; @Input() WidthPx = 0; }
 @Component({ standalone: true, selector: 'mj-record-attachments', template: '' })
 class RecordAttachmentsStub { @Input() Record: unknown; @Input() Visible = false; }
 @Component({ standalone: true, selector: 'mj-list-management-dialog', template: '' })
@@ -112,7 +121,10 @@ class ListMgmtStub { @Input() visible = false; @Input() config: unknown; }
 @Component({ standalone: true, selector: 'mj-form-contributions', template: '' })
 class FormContributionsStub { @Input() Record: unknown; @Input() FormComponent: unknown; @Input() FormContext: unknown; @Input() BakedSectionKeys: unknown; @Input() ShowRelatedEntities = true; }
 
-const CHILD_STUBS = [ToolbarStub, SectionManagerStub, PanelManagerStub, PanelSlotStub, EmptyStateStub, IsaPanelStub, RecordChangesStub, RecordTagsStub, RecordAttachmentsStub, ListMgmtStub, FormContributionsStub];
+@Component({ standalone: true, selector: 'mj-bottom-sheet', template: '@if (Visible) { <ng-content></ng-content> }' })
+class BottomSheetStub { @Input() Visible = false; @Input() Title = ''; @Output() VisibleChange = new EventEmitter<boolean>(); @Output() Closed = new EventEmitter<void>(); }
+
+const CHILD_STUBS = [BottomSheetStub, ToolbarStub, SectionManagerStub, PanelManagerStub, PanelSlotStub, EmptyStateStub, IsaPanelStub, RecordChangesStub, RecordTagsStub, RecordLinksStub, RecordCommentsStub, RecordAttachmentsStub, ListMgmtStub, FormContributionsStub];
 
 const RECORD = { EntityInfo: { Name: 'Accounts' } } as unknown as BaseEntity;
 
@@ -145,6 +157,14 @@ describe('MjRecordFormContainerComponent (DOM)', () => {
     expect(t.IsDirty).toBe(true);
     expect(t.IsRefreshing).toBe(true);
     expect(t.Record).toBe(RECORD);
+  });
+
+  it('forwards FormModeSwitch from FormComponent to the toolbar', () => {
+    const sw = { Mode: 'default' as const, Switch: () => true };
+    const f = render();
+    f.componentRef.setInput('FormComponent', { FormModeSwitch: sw } as unknown as BaseFormComponent);
+    f.detectChanges();
+    expect(toolbar(f).FormModeSwitch).toBe(sw);
   });
 
   it('re-emits SaveRequested from the toolbar (no FormComponent → container emits)', () => {
@@ -628,6 +648,33 @@ describe('MjRecordFormContainerComponent (DOM) — the placement preview', () =>
     }
   });
 
+  /**
+   * A panel that draws its section only once its data has loaded (Feature Values, Model
+   * Predictions) mounts after every structural trigger has fired. The section announces
+   * itself through the chrome coordinator, and the rail is worked out again — otherwise
+   * the section belongs to no rail group and a left-nav form never shows it.
+   */
+  it('works out the rail again when a section mounts after the rail was built', () => {
+    vi.useFakeTimers();
+    const resolve = vi.spyOn(MjRecordFormContainerComponent.prototype as unknown as Resolving, 'resolveChrome')
+      .mockImplementation(() => undefined);
+    try {
+      const f = renderComponentFixture(MjRecordFormContainerComponent, {
+        imports: CHILD_STUBS,
+        declarations: [MjRecordFormContainerComponent],
+        inputs: { Record: RECORD, EntityInfo: { Name: 'Accounts' } },
+      });
+      vi.advanceTimersByTime(10);
+      const before = resolve.mock.calls.length;
+      f.componentRef.injector.get(FormChromeCoordinator).NotifySectionsChanged();
+      vi.advanceTimersByTime(10);
+      expect(resolve.mock.calls.length).toBe(before + 1);
+    } finally {
+      resolve.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   function renderPreviewForm(spec: FormChromeSpec) {
     const preview = new FormPlacementPreview();
     const f = renderComponentFixture(MjRecordFormContainerComponent, {
@@ -1039,5 +1086,320 @@ describe('MjRecordFormContainerComponent (DOM) — the drawer changed a panel', 
     f.componentInstance.OnPanelManagerChanged();
     subscription.unsubscribe();
     expect(notified).toBe(1);
+  });
+});
+
+describe('MjRecordFormContainerComponent (DOM) — Time-Travel Form Version Preview', () => {
+  interface MockField {
+    Name: string;
+    CodeName: string;
+    Value: unknown;
+    OldValue: unknown;
+    ReadOnly: boolean;
+    Dirty: boolean;
+    EntityFieldInfo: { IsPrimaryKey: boolean; DisplayNameOrName: string };
+    ResetNeverSetFlag: () => void;
+    ResetOldValue: () => void;
+  }
+
+  function makeField(name: string, val: unknown, opts?: { readOnly?: boolean; isPK?: boolean }): MockField {
+    const fld: MockField = {
+      Name: name,
+      CodeName: name,
+      Value: val,
+      OldValue: val,
+      ReadOnly: opts?.readOnly ?? false,
+      Dirty: false,
+      EntityFieldInfo: {
+        IsPrimaryKey: opts?.isPK ?? false,
+        DisplayNameOrName: name,
+      },
+      ResetNeverSetFlag: () => {
+        /* allow read-only write */
+      },
+      ResetOldValue: () => {
+        fld.OldValue = fld.Value;
+        fld.Dirty = false;
+      },
+    };
+    return fld;
+  }
+
+  it('auto-closes ShowRecordChanges, rehydrates all fields including synthesized DisplayName, renders diff chips, and restores live values on exit', () => {
+    const idField = makeField('ID', 'person-1', { isPK: true });
+    const firstField = makeField('FirstName', 'Janet');
+    const lastField = makeField('LastName', 'Doe');
+    const displayField = makeField('DisplayName', 'Janet Doe', { readOnly: true });
+
+    const personRecord = {
+      EntityInfo: { Name: 'MJ_BizApps_Common: People', DisplayNameOrName: 'People' },
+      Fields: [idField, firstField, lastField, displayField],
+      Dirty: false,
+    } as unknown as BaseEntity;
+
+    const f = render({ Record: personRecord, UserCanEdit: true });
+    f.componentInstance.ShowRecordChanges = true;
+    f.detectChanges();
+
+    // Historical change where FirstName was 'Jane', while FullRecordJSON still held stale 'Janet Doe' DisplayName
+    const histChange = {
+      ID: 'chg-1',
+      Type: 'Update',
+      Source: 'Internal',
+      User: 'Alice Smith',
+      ChangedAt: new Date('2026-10-01T14:00:00.000Z'),
+      ChangesDescription: 'Updated FirstName',
+      FullRecordJSON: JSON.stringify({
+        ID: 'person-1',
+        FirstName: 'Jane',
+        LastName: 'Doe',
+        DisplayName: 'Janet Doe',
+      }),
+      ChangesJSON: '{}',
+    } satisfies Pick<
+      MJRecordChangeEntity,
+      'ID' | 'Type' | 'Source' | 'User' | 'ChangedAt' | 'ChangesDescription' | 'FullRecordJSON' | 'ChangesJSON'
+    >;
+
+    f.componentInstance.OnPreviewVersionSelected({
+      Change: histChange as unknown as MJRecordChangeEntity,
+      Index: 1,
+      TotalCount: 2,
+    });
+    f.detectChanges();
+
+    // 1. Drawer auto-closes so the form is unobstructed
+    expect(f.componentInstance.ShowRecordChanges).toBe(false);
+
+    // 2. Both FirstName and read-only calculated DisplayName are rehydrated to historical values
+    expect(firstField.Value).toBe('Jane');
+    expect(displayField.Value).toBe('Jane Doe');
+    expect(firstField.Dirty).toBe(false);
+    expect(displayField.Dirty).toBe(false);
+
+    // 3. Top scrubber bar renders diff chips and Timeline button
+    expect(query(f, '.mj-forms-version-preview-banner')).not.toBeNull();
+    expect(query(f, '.mj-forms-version-preview-timeline-btn')).not.toBeNull();
+    expect(f.componentInstance.PreviewChangedFieldChips.map((c) => c.FieldName)).toEqual([
+      'FirstName',
+      'DisplayName',
+    ]);
+
+    // 4. Exiting preview restores the stashed live values cleanly
+    f.componentInstance.OnExitVersionPreview();
+    f.detectChanges();
+    expect(f.componentInstance.ActiveVersionPreview).toBeNull();
+    expect(firstField.Value).toBe('Janet');
+    expect(displayField.Value).toBe('Janet Doe');
+  });
+});
+
+describe('BaseFormToolbarAction — subclass override and metadata inheritance', () => {
+  it('allows subclassing a toolbar button plugin to override the superclass and inherit its metadata', () => {
+    @RegisterFormToolbarAction({
+      EntityScope: 'MJ_BizApps_Common: People',
+      MenuLabel: 'Person Graph',
+    })
+    class CustomPersonLinksToolbarAction extends RecordLinksToolbarAction {}
+    void CustomPersonLinksToolbarAction;
+
+    const peopleEntity = {
+      Name: 'MJ_BizApps_Common: People',
+      SchemaName: 'common',
+    } satisfies Pick<EntityInfo, 'Name' | 'SchemaName'>;
+    const peopleActions = ResolveFormToolbarActionsForEntity(peopleEntity as unknown as EntityInfo);
+    const linksForPeople = peopleActions.find((a) => a.Metadata.Key === 'links');
+    expect(linksForPeople).toBeInstanceOf(CustomPersonLinksToolbarAction);
+    expect(linksForPeople?.Metadata.MenuLabel).toBe('Person Graph');
+    // Inherited from RecordLinksToolbarAction without re-declaring
+    expect(linksForPeople?.Metadata.Icon).toBe('fa-solid fa-diagram-project');
+    expect(linksForPeople?.Metadata.Pinnable).toBe(true);
+
+    // Non-matching entity still resolves the base RecordLinksToolbarAction
+    const accountEntity = {
+      Name: 'Accounts',
+      SchemaName: 'crm',
+    } satisfies Pick<EntityInfo, 'Name' | 'SchemaName'>;
+    const accountActions = ResolveFormToolbarActionsForEntity(accountEntity as unknown as EntityInfo);
+    const linksForAccounts = accountActions.find((a) => a.Metadata.Key === 'links');
+    expect(linksForAccounts).toBeInstanceOf(RecordLinksToolbarAction);
+    expect(linksForAccounts).not.toBeInstanceOf(CustomPersonLinksToolbarAction);
+    expect(linksForAccounts?.Metadata.MenuLabel).toBe('Links');
+  });
+});
+
+/**
+ * Phone-width rail (<= 768px): the section rail renders a single full-width section picker
+ * button that opens a "Sections" bottom sheet listing first-class groups and More children.
+ */
+describe('MjRecordFormContainerComponent (DOM) — mobile rail', () => {
+  const MOBILE_SPEC: FormChromeSpec = {
+    Layout: 'left-nav',
+    Groups: [
+      { Key: 'details', Title: 'Details', Icon: 'fa-solid fa-list', SectionKeys: ['identity'], IsMore: false },
+      { Key: 'payments', Title: 'Payments', Icon: 'fa-solid fa-table', SectionKeys: ['payments'], IsMore: false },
+      { Key: '__mj_form_more', Title: 'More', Icon: 'fa-solid fa-folder', SectionKeys: ['audit', 'logs'], IsMore: true },
+    ],
+    RelatedRoles: new Map(),
+    MoreSectionKeys: ['audit', 'logs'],
+  };
+
+  const NO_MORE_SPEC: FormChromeSpec = {
+    Layout: 'left-nav',
+    Groups: [
+      { Key: 'details', Title: 'Details', Icon: 'fa-solid fa-list', SectionKeys: ['identity'], IsMore: false },
+      { Key: 'payments', Title: 'Payments', Icon: 'fa-solid fa-table', SectionKeys: ['payments'], IsMore: false },
+    ],
+    RelatedRoles: new Map(),
+    MoreSectionKeys: [],
+  };
+
+  const useViewport = (mobile: boolean) => {
+    vi.spyOn(window, 'matchMedia').mockImplementation((q: string) => ({
+      matches: mobile && q.includes('768'),
+      media: q, onchange: null,
+      addListener: () => undefined, removeListener: () => undefined,
+      addEventListener: () => undefined, removeEventListener: () => undefined, dispatchEvent: () => false,
+    }) as MediaQueryList);
+  };
+
+  const renderMobile = (opts: { mobile: boolean; moreExpandedPref?: '0' | '1'; activeGroup?: string; spec?: FormChromeSpec }) => {
+    useViewport(opts.mobile);
+    vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) => {
+      if (key === 'mj.formChrome.accounts.moreExpanded') return opts.moreExpandedPref;
+      if (key === 'mj.formChrome.accounts.activeGroup') return opts.activeGroup;
+      return undefined;
+    });
+    return renderComponentFixture(MjRecordFormContainerComponent, {
+      imports: CHILD_STUBS,
+      declarations: [MjRecordFormContainerComponent],
+      inputs: { Record: { ...RECORD, IsSaved: true } as unknown as BaseEntity, EntityInfo: { Name: 'Accounts' } },
+      setup: (_instance, ref) => {
+        ref.injector.get(FormChromeCoordinator).Apply(opts.spec ?? MOBILE_SPEC);
+      },
+    });
+  };
+  const picker = (f: ReturnType<typeof renderMobile>) =>
+    f.nativeElement.querySelector('.mj-forms-section-picker') as HTMLButtonElement | null;
+  const sheetRows = (f: ReturnType<typeof renderMobile>) =>
+    Array.from(f.nativeElement.querySelectorAll('.mj-forms-section-sheet-item')) as HTMLElement[];
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('phone renders the picker with the active group\'s title and no .mj-forms-chrome-rail-item', () => {
+    const f = renderMobile({ mobile: true, activeGroup: 'payments' });
+    const btn = picker(f);
+    expect(btn).not.toBeNull();
+    expect(btn?.getAttribute('aria-haspopup')).toBe('dialog');
+    expect(btn?.getAttribute('aria-label')).toBe('Change section — Payments');
+    expect(btn?.textContent).toContain('Payments');
+    expect(f.nativeElement.querySelectorAll('.mj-forms-chrome-rail-item').length).toBe(0);
+  });
+
+  it('picker click opens the sheet; sheet lists first-class groups then More children under a heading', () => {
+    const f = renderMobile({ mobile: true, activeGroup: 'details' });
+    expect(f.componentInstance.SectionSheetOpen).toBe(false);
+    picker(f)!.click();
+    f.detectChanges();
+    expect(f.componentInstance.SectionSheetOpen).toBe(true);
+    const rows = sheetRows(f);
+    expect(rows.map((r) => r.querySelector('.mj-forms-section-sheet-label')?.textContent?.trim())).toEqual([
+      'Details',
+      'Payments',
+      'audit',
+      'logs',
+    ]);
+    const heading = f.nativeElement.querySelector('.mj-forms-section-sheet-heading') as HTMLElement | null;
+    expect(heading?.textContent?.trim()).toBe('More');
+  });
+
+  it('selecting a first-class row activates it and closes the sheet', () => {
+    const f = renderMobile({ mobile: true, activeGroup: 'details' });
+    picker(f)!.click();
+    f.detectChanges();
+    sheetRows(f)[1].click(); // Payments
+    f.detectChanges();
+    expect(f.componentInstance.ChromeActiveGroupKey).toBe('payments');
+    expect(f.componentInstance.SectionSheetOpen).toBe(false);
+    expect(picker(f)?.textContent).toContain('Payments');
+  });
+
+  it('selecting a More child activates it, closes the sheet, and clears the search', () => {
+    const filters: string[] = [];
+    const f = renderMobile({ mobile: true, activeGroup: 'details' });
+    const form = { searchFilter: '', onFilterChange: (v: string) => { filters.push(v); form.searchFilter = v; } };
+    f.componentInstance.FormComponent = form as unknown as BaseFormComponent;
+    picker(f)!.click();
+    f.detectChanges();
+    const search = f.nativeElement.querySelector('.mj-forms-section-sheet-search') as HTMLInputElement;
+    search.value = 'log';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    f.detectChanges();
+    expect(filters).toEqual(['log']);
+    sheetRows(f)[0].click(); // logs
+    f.detectChanges();
+    expect(f.componentInstance.ChromeActiveGroupKey).toBe('logs');
+    expect(filters).toEqual(['log', '']);
+    expect(f.componentInstance.SectionSheetOpen).toBe(false);
+    expect(picker(f)?.textContent).toContain('logs');
+  });
+
+  it('search filters both first-class and More lists', () => {
+    const f = renderMobile({ mobile: true, activeGroup: 'details' });
+    const form = { searchFilter: '', onFilterChange: (v: string) => { form.searchFilter = v; } };
+    f.componentInstance.FormComponent = form as unknown as BaseFormComponent;
+    picker(f)!.click();
+    f.detectChanges();
+
+    const search = f.nativeElement.querySelector('.mj-forms-section-sheet-search') as HTMLInputElement;
+    search.value = 'pay';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    f.detectChanges();
+    expect(sheetRows(f).map((r) => r.querySelector('.mj-forms-section-sheet-label')?.textContent?.trim())).toEqual(['Payments']);
+    expect(f.nativeElement.querySelector('.mj-forms-section-sheet-heading')).toBeNull();
+
+    search.value = 'aud';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    f.detectChanges();
+    expect(sheetRows(f).map((r) => r.querySelector('.mj-forms-section-sheet-label')?.textContent?.trim())).toEqual(['audit']);
+    expect(f.nativeElement.querySelector('.mj-forms-section-sheet-heading')?.textContent?.trim()).toBe('More');
+  });
+
+  it('closing the sheet from its scrim clears the search instead of leaving a standing filter', () => {
+    const filters: string[] = [];
+    const f = renderMobile({ mobile: true, activeGroup: 'details' });
+    const form = { searchFilter: '', onFilterChange: (v: string) => { filters.push(v); form.searchFilter = v; } };
+    f.componentInstance.FormComponent = form as unknown as BaseFormComponent;
+    picker(f)!.click();
+    f.detectChanges();
+    const search = f.nativeElement.querySelector('.mj-forms-section-sheet-search') as HTMLInputElement;
+    search.value = 'pay';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    f.detectChanges();
+    expect(filters).toEqual(['pay']);
+
+    f.componentInstance.OnSectionSheetVisibleChange(false);
+    f.detectChanges();
+    expect(f.componentInstance.SectionSheetOpen).toBe(false);
+    expect(filters).toEqual(['pay', '']);
+  });
+
+  it('renders no "More" heading when the form has no More folder', () => {
+    const f = renderMobile({ mobile: true, activeGroup: 'details', spec: NO_MORE_SPEC });
+    picker(f)!.click();
+    f.detectChanges();
+    expect(sheetRows(f).map((r) => r.querySelector('.mj-forms-section-sheet-label')?.textContent?.trim())).toEqual([
+      'Details',
+      'Payments',
+    ]);
+    expect(f.nativeElement.querySelector('.mj-forms-section-sheet-heading')).toBeNull();
+  });
+
+  it('desktop still renders the rail items and no picker', () => {
+    const f = renderMobile({ mobile: false, moreExpandedPref: '1', activeGroup: 'details' });
+    expect(picker(f)).toBeNull();
+    expect(f.nativeElement.querySelectorAll('.mj-forms-chrome-rail-item').length).toBeGreaterThan(0);
+    expect(f.nativeElement.querySelectorAll('.mj-forms-chrome-rail-item.is-more-child').length).toBe(2);
   });
 });

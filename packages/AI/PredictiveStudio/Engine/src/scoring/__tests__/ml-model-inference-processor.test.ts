@@ -19,6 +19,7 @@ import {
   MatrixToFeatureRows,
   type MLInferenceResultPayload,
 } from '../ml-model-inference-processor';
+import { ModelNotScorableError, ModelNeedsTrainingError } from '../model-readiness';
 import { InMemoryArtifactLoader } from '../artifact-loader';
 import type { IMLModelLoader, ISidecarPredictor, MLInferenceDeps } from '../types';
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
@@ -54,6 +55,7 @@ const FROZEN_PREPROCESSING = { 'standardize.tenure': { mean: 5, std: 2.5 }, 'one
 /** A model fake exposing exactly the fields the processor reads. */
 class FakeMLModel {
   public ID = 'model-1';
+  public Status: MJMLModelEntity['Status'] = 'Published';
   public ArtifactFileID: string | null = 'file-1';
   public FittedPreprocessing: string | null = JSON.stringify(FROZEN_PREPROCESSING);
   public FeatureSchema = JSON.stringify(FROZEN_SCHEMA);
@@ -93,7 +95,7 @@ class FakeSidecar implements ISidecarPredictor {
 /** In-memory feature data access (the processor passes rows inline, so unused). */
 class InMemoryDataAccess implements IFeatureDataAccess {
   async fetchRows(_params: FetchRowsParams): Promise<FetchRowsResult> {
-    return { Success: true, Rows: [] };
+    return { Success: true, Rows: [], TotalRowCount: 0 };
   }
   async fetchEmbedding(): Promise<number[] | null> {
     return null;
@@ -111,8 +113,8 @@ class TestAssembler extends FeatureAssemblyExecutor {
 }
 
 const CTX: RecordProcessorContext = {
-  contextUser: undefined as unknown as UserInfo,
-  provider: undefined as unknown as IMetadataProvider,
+  ContextUser: undefined as unknown as UserInfo,
+  Provider: undefined as unknown as IMetadataProvider,
 };
 
 /** A member record carrying its data inline (as the engine pre-loads it). */
@@ -264,5 +266,65 @@ describe('MLModelInferenceProcessor — empty feature assembly guardrail', () =>
     const result = await proc.ProcessRecord(memberRecord('m1', 1, 1, 'NYC'), CTX);
     expect(result.Status).toBe('Failed');
     expect(result.ErrorMessage).toMatch(/feature assembly produced 0 columns/);
+  });
+});
+
+describe('MLModelInferenceProcessor — lifecycle status gate (W1 → S7.3, F-SCO-1)', () => {
+  for (const status of ['Draft', 'Archived'] as const) {
+    it(`refuses a ${status} model in Preflight before any record is scored or artifact is downloaded`, async () => {
+      const model = new FakeMLModel();
+      model.Status = status;
+      const { deps, sidecar } = buildDeps(model);
+      let artifactLoads = 0;
+      deps.artifactLoader = {
+        async load(): Promise<Uint8Array | null> {
+          artifactLoads++;
+          return new Uint8Array([1, 2, 3]);
+        },
+      };
+      const processor = buildProcessor(deps);
+      await expect(processor.Preflight(CTX)).rejects.toBeInstanceOf(ModelNotScorableError);
+      await expect(processor.Preflight(CTX)).rejects.toThrow(`is ${status} and cannot score records`);
+      expect(artifactLoads).toBe(0);
+      expect(sidecar.Requests).toHaveLength(0);
+    });
+
+    it(`fails every record of a ${status} model without calling the sidecar`, async () => {
+      const model = new FakeMLModel();
+      model.Status = status;
+      const { deps, sidecar } = buildDeps(model);
+      const results = await buildProcessor(deps).ProcessBatch([memberRecord('a', 3, 1, 'NYC'), memberRecord('b', 5, 2, 'LA')], CTX);
+      expect(results.map((r) => r.Status)).toEqual(['Failed', 'Failed']);
+      expect(results[0].ErrorMessage).toContain('cannot score records');
+      expect(sidecar.Requests).toHaveLength(0);
+    });
+  }
+
+  for (const status of ['Validated', 'Published'] as const) {
+    it(`scores a ${status} model`, async () => {
+      const model = new FakeMLModel();
+      model.Status = status;
+      const { deps } = buildDeps(model);
+      const processor = buildProcessor(deps);
+      await processor.Preflight(CTX);
+      const results = await processor.ProcessBatch([memberRecord('a', 3, 1, 'NYC')], CTX);
+      expect(results[0].Status).toBe('Succeeded');
+    });
+  }
+
+  it('a Draft model with no artifact still reports "needs training" (the status check runs after the artifact checks, D2-C3)', async () => {
+    const model = new FakeMLModel();
+    model.Status = 'Draft';
+    model.ArtifactFileID = null;
+    const { deps } = buildDeps(model);
+    await expect(buildProcessor(deps).Preflight(CTX)).rejects.toBeInstanceOf(ModelNeedsTrainingError);
+  });
+
+  it('refuses an Archived model with ModelNotScorableError even when its artifact was purged (F1)', async () => {
+    const model = new FakeMLModel();
+    model.Status = 'Archived';
+    model.ArtifactFileID = null;
+    const { deps } = buildDeps(model);
+    await expect(buildProcessor(deps).Preflight(CTX)).rejects.toBeInstanceOf(ModelNotScorableError);
   });
 });

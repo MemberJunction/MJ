@@ -1,0 +1,1307 @@
+[
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Access Control Rules: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Access Control Rules"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID",
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Access Control Rules&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:05.982Z",
+            "checksum": "ff5ecf248c9e3560198c584aa46a086fa552df0ce36176ed6d7ce9968f0ac549"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Access Control Rules"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Action Execution Logs: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Action Execution Logs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "TargetEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Action Execution Logs&Name=TargetRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:05.991Z",
+            "checksum": "529ead15d12fd0c2cc5f80ecfec3473c2f88e1232dadc72cf71ce997e2979c5f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Action Execution Logs"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: AI Agent Examples: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Examples"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "PrimaryScopeEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Examples&Name=PrimaryScopeRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.001Z",
+            "checksum": "e03bc81b3e9fede0f2d10da294645978595a48293afb1bcedc0b83582efd0d8b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Examples"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: AI Agent Notes: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Notes"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "PrimaryScopeEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Notes&Name=PrimaryScopeRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.010Z",
+            "checksum": "e03bc81b3e9fede0f2d10da294645978595a48293afb1bcedc0b83582efd0d8b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Notes"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: AI Agent Runs: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Runs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "PrimaryScopeEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Runs&Name=PrimaryScopeRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.020Z",
+            "checksum": "e03bc81b3e9fede0f2d10da294645978595a48293afb1bcedc0b83582efd0d8b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Runs"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: AI Agent Sessions: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Sessions"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "LinkedEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Sessions&Name=LinkedRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.029Z",
+            "checksum": "ed09979be2c6bff484c8d45bb4c8fd4412cb093fc21c5f7f9ca8f1b8adca8769"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Sessions"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Archive Run Details: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Archive Run Details"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID",
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Archive Run Details&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.039Z",
+            "checksum": "ff5ecf248c9e3560198c584aa46a086fa552df0ce36176ed6d7ce9968f0ac549"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Archive Run Details"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Audit Logs: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Audit Logs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Audit Logs&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.047Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Audit Logs"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Calendar Event Links: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Calendar Event Links"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Calendar Event Links&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.066Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Calendar Event Links"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Company Integration Record Maps: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Company Integration Record Maps"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Company Integration Record Maps&Name=EntityRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.075Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Company Integration Record Maps"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Company Integration Run Details: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Company Integration Run Details"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Company Integration Run Details&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.084Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Company Integration Run Details"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Conversations: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Conversations"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "LinkedEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Conversations&Name=LinkedRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.093Z",
+            "checksum": "ed09979be2c6bff484c8d45bb4c8fd4412cb093fc21c5f7f9ca8f1b8adca8769"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Conversations"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Data Context Items: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Data Context Items"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Data Context Items&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.103Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Data Context Items"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Entity Actions: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Entity Actions"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "ScopeEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entity Actions&Name=ScopeRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.112Z",
+            "checksum": "61ec2c3dfd44919591d372ff0c00c860e1b4da9bdc134a5778020da351c9da14"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Entity Actions"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Entity Record Documents: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Entity Record Documents"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entity Record Documents&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.120Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Entity Record Documents"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Feature Values: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Feature Values"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Feature Values&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.129Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Feature Values"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: File Entity Record Links: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: File Entity Record Links"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: File Entity Record Links&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.138Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: File Entity Record Links"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Generated Codes: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Generated Codes"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "LinkedEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Generated Codes&Name=LinkedRecordPrimaryKey"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.146Z",
+            "checksum": "ed09979be2c6bff484c8d45bb4c8fd4412cb093fc21c5f7f9ca8f1b8adca8769"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Generated Codes"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Identity Claims: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Identity Claims"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Identity Claims&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.154Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Identity Claims"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Interaction Links: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Interaction Links"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Interaction Links&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.163Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Interaction Links"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Process Run Details: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Process Run Details"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Process Run Details&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.172Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Process Run Details"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Recommendation Items: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Recommendation Items"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "DestinationEntityID",
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Recommendation Items&Name=DestinationEntityRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.181Z",
+            "checksum": "27f9804ce6cb4dbb01be5e2e0a44d73e822e6ab1fdc35a12fcbaf9220f32c96a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Recommendation Items"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Recommendations: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Recommendations"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "SourceEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Recommendations&Name=SourceEntityRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.190Z",
+            "checksum": "c84b370f28697b2edb7fa5864197b85dd1da7de383ec1512f99c8268aadb081a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Recommendations"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Record Changes: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Record Changes"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Changes&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.198Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Changes"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Record Clone Log Items: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Record Clone Log Items"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Clone Log Items&Name=SourceRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.206Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
+          }
+        },
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Clone Log Items&Name=TargetRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.213Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Clone Log Items"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Record Clone Logs: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Record Clone Logs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "RootEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Clone Logs&Name=RootSourceRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.222Z",
+            "checksum": "96362ba3a970b1596b2fdd6135b21caa6382e9396907bf461bca154b1b38248a"
+          }
+        },
+        {
+          "fields": {
+            "EntityIDFieldName": "RootEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Clone Logs&Name=RootTargetRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.229Z",
+            "checksum": "96362ba3a970b1596b2fdd6135b21caa6382e9396907bf461bca154b1b38248a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Clone Logs"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Record Geo Codes: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Record Geo Codes"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID",
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Geo Codes&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.239Z",
+            "checksum": "ff5ecf248c9e3560198c584aa46a086fa552df0ce36176ed6d7ce9968f0ac549"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Geo Codes"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Record Links: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Record Links"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "SourceEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Links&Name=SourceRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.248Z",
+            "checksum": "c84b370f28697b2edb7fa5864197b85dd1da7de383ec1512f99c8268aadb081a"
+          }
+        },
+        {
+          "fields": {
+            "EntityIDFieldName": "TargetEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Links&Name=TargetRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.254Z",
+            "checksum": "529ead15d12fd0c2cc5f80ecfec3473c2f88e1232dadc72cf71ce997e2979c5f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Links"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Record Merge Logs: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Record Merge Logs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Merge Logs&Name=SurvivingRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.263Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Merge Logs"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Record Process Watermarks: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Record Process Watermarks"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID",
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Process Watermarks&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.271Z",
+            "checksum": "ff5ecf248c9e3560198c584aa46a086fa552df0ce36176ed6d7ce9968f0ac549"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Process Watermarks"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Rubric Evaluations: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Rubric Evaluations"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "SubjectEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Evaluations&Name=SubjectRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.279Z",
+            "checksum": "15aaa4bdde41646a1c6a5c5858776fe8f715273e92596e8b07093ac23d97a628"
+          }
+        },
+        {
+          "fields": {
+            "EntityIDFieldName": "ContextEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Rubric Evaluations&Name=ContextRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.286Z",
+            "checksum": "3fb1d3fd34cd9eadd675db482a770bd6e3ab3ad227e7ae73804ec5ff978b070c"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Rubric Evaluations"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Scoped Notification Configs: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Scoped Notification Configs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "PrimaryScopeEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Scoped Notification Configs&Name=PrimaryScopeRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.296Z",
+            "checksum": "e03bc81b3e9fede0f2d10da294645978595a48293afb1bcedc0b83582efd0d8b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Scoped Notification Configs"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Scoped Prompt Configs: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Scoped Prompt Configs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "PrimaryScopeEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Scoped Prompt Configs&Name=PrimaryScopeRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.305Z",
+            "checksum": "e03bc81b3e9fede0f2d10da294645978595a48293afb1bcedc0b83582efd0d8b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Scoped Prompt Configs"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Scoped Prompt Parts: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Scoped Prompt Parts"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "PrimaryScopeEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Scoped Prompt Parts&Name=PrimaryScopeRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.313Z",
+            "checksum": "e03bc81b3e9fede0f2d10da294645978595a48293afb1bcedc0b83582efd0d8b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Scoped Prompt Parts"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Signature Requests: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Signature Requests"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Signature Requests&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.322Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Signature Requests"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Tag Scopes: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Tag Scopes"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "ScopeEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tag Scopes&Name=ScopeRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.331Z",
+            "checksum": "61ec2c3dfd44919591d372ff0c00c860e1b4da9bdc134a5778020da351c9da14"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tag Scopes"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Tagged Items: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Tagged Items"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tagged Items&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.339Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tagged Items"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Template Params: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Template Params"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Template Params&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.347Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Template Params"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: User Favorites: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: User Favorites"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID",
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: User Favorites&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.355Z",
+            "checksum": "ff5ecf248c9e3560198c584aa46a086fa552df0ce36176ed6d7ce9968f0ac549"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: User Favorites"
+    }
+  },
+  {
+    "_comments": [
+      "Prevent RecordID/MatchRecordID/DeletedRecordID columns from being treated as IsNameField."
+    ],
+    "fields": {
+      "Name": "MJ: Duplicate Run Detail Matches"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Duplicate Run Detail Matches&Name=MatchRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.365Z",
+            "checksum": "687c5d5cddb289a19771ed8721c6d226abed403abe2d7bf8d0bc884685394fbc"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Duplicate Run Detail Matches"
+    }
+  },
+  {
+    "_comments": [
+      "Prevent DeletedRecordID column from being treated as IsNameField."
+    ],
+    "fields": {
+      "Name": "MJ: Record Merge Deletion Logs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Merge Deletion Logs&Name=DeletedRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.373Z",
+            "checksum": "687c5d5cddb289a19771ed8721c6d226abed403abe2d7bf8d0bc884685394fbc"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Merge Deletion Logs"
+    }
+  },
+  {
+    "_comments": [
+      "Prevent RecordID column from being treated as IsNameField."
+    ],
+    "fields": {
+      "Name": "MJ: User View Run Details"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "IsNameField": false,
+            "AutoUpdateIsNameField": false
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: User View Run Details&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.382Z",
+            "checksum": "687c5d5cddb289a19771ed8721c6d226abed403abe2d7bf8d0bc884685394fbc"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: User View Run Details"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: User Record Logs: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: User Record Logs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: User Record Logs&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.389Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: User Record Logs"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Users: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Users"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "LinkedEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Users&Name=LinkedEntityRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.397Z",
+            "checksum": "ed09979be2c6bff484c8d45bb4c8fd4412cb093fc21c5f7f9ca8f1b8adca8769"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Users"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Version Label Items: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Version Label Items"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Version Label Items&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.405Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Version Label Items"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Version Labels: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Version Labels"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "EntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Version Labels&Name=RecordID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:06.413Z",
+            "checksum": "8c1529516623f71e9a9a7d4b0c8c294e92f021530c2a466407618e135135f525"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Version Labels"
+    }
+  }
+]

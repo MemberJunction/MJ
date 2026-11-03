@@ -9,6 +9,7 @@ export * from './lib/module';
 export * from './lib/recent-access.service';
 export * from './lib/recent-resource-type';
 export * from './lib/theme.service';
+export * from './lib/brand-overlay-prepaint';
 
 // DOM helpers
 export * from './lib/dom-utils';

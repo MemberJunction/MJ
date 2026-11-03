@@ -1,6 +1,6 @@
 # Security & Permissions Integration Suite
 
-The security/permissions family of the integration tier: **6 bundles, 34 checks** proving MJ's four permission surfaces against the live database and the real GraphQL wire — Row-Level Security and its cache-fingerprint isolation (`rls-isolation`, 9 checks, plus the client-transport `rls-isolation-client`, 1 check), the unified `PermissionEngine` provider fan-out (`permission-engine`, 14), API-key scope enforcement through the `ScopeEvaluator` two-level model (`scope-enforcement`, 5), GraphQL subscription channel isolation (`subscription-isolation`, 2), and the `APIKeyEngine` seed/authorize contract (`api-keys`, 3). All six are members of the **"Integration Tests — Deterministic"** suite and run with the rest of the tier via `npm run test:integration` from the repo root (which expands to `MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Deterministic"`); a single bundle runs via its metadata record, e.g. `MJ_INTEGRATION_TEST=1 ./node_modules/.bin/mj test run --name "IT28 - Permission Engine and Scope Enforcement"` (always the local workspace `mj`, never a global install). Three checks (PE11–PE13) additionally require `RUN_MUTATION_TESTS=1`. This family is the shipped realization of **test-catalog Domain 3** (see [test-catalog.md](./test-catalog.md), its design ancestor) and cross-references the [bug register](../../../../plans/integration-test-expansion/bug-register.md) throughout — several checks exist specifically to pin, warn about, or loudly document register entries.
+The security/permissions family of the integration tier: **7 bundles, 37 checks** proving MJ's four permission surfaces against the live database and the real GraphQL wire — Row-Level Security and its cache-fingerprint isolation (`rls-isolation`, 9 checks, plus the client-transport `rls-isolation-client`, 1 check), the unified `PermissionEngine` provider fan-out (`permission-engine`, 14), API-key scope enforcement through the `ScopeEvaluator` two-level model (`scope-enforcement`, 5), GraphQL subscription channel isolation (`subscription-isolation`, 2), the `APIKeyEngine` seed/authorize contract (`api-keys`, 3), and Video Studio `CaptureDataSnapshot` RLS/permission isolation (`video-data-snapshot`, 3). All seven are members of the **"Integration Tests — Deterministic"** suite and run with the rest of the tier via `npm run test:integration` from the repo root (which expands to `MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Deterministic"`); a single bundle runs via its metadata record, e.g. `MJ_INTEGRATION_TEST=1 ./node_modules/.bin/mj test run --name "IT28 - Permission Engine and Scope Enforcement"` (always the local workspace `mj`, never a global install). Three checks (PE11–PE13) additionally require `RUN_MUTATION_TESTS=1`. This family is the shipped realization of **test-catalog Domain 3** (see [test-catalog.md](./test-catalog.md), its design ancestor) and cross-references the [bug register](../../../../plans/integration-test-expansion/bug-register.md) throughout — several checks exist specifically to pin, warn about, or loudly document register entries.
 
 Ground truth for every claim below is the check source under `packages/TestingFramework/integration-test-suite/src/checks/`:
 
@@ -12,6 +12,7 @@ Ground truth for every claim below is the check source under `packages/TestingFr
 | `scope-enforcement` | `src/checks/scope-enforcement.checks.ts` | 5 (SE1–SE5) | IT36 | server | deterministic (self-cleaning writes) |
 | `subscription-isolation` | `src/checks/subscription-isolation.checks.ts` | 2 (SI1–SI2) | IT37 | client (GraphQL, needs MJAPI) | deterministic |
 | `api-keys` | `src/checks/api-keys.checks.ts` | 3 (AK1–AK3) | IT13 | server | deterministic (self-cleaning writes) |
+| `video-data-snapshot` | `src/checks/video-data-snapshot.checks.ts` | 3 (VDS1–VDS3) | IT154 | server (in-process SQL provider) | deterministic (self-cleaning writes) |
 
 ---
 
@@ -67,6 +68,16 @@ Discovery-only plus the seeded principals (see above). No lifecycle Setup/Teardo
 | `rls-isolation-client.RLS7` | Client smart-cache no cross-serve | A's `CacheLocal: true` view writes a client slot; A/B clauses produce DIFFERENT client fingerprints (the mechanism); B's request also succeeds | Someone dropping the RLS clause from the *client* fingerprint path — B would revalidate against A's slot |
 
 Every discovery-gated check (RLS1–RLS5) and every seed-gated check (RLS8–RLS10) **skips-as-pass with a loud console warning** naming exactly what was missing and, for the seeded checks, printing the seed command. RLS6 is the deliberate always-asserts backstop.
+
+#### Role filter edits (RF1–RF3, `src/checks/rolerowfilter.checks.ts`)
+
+Registered into `rls-isolation` after the KF checks and **mutation-gated** (`RUN_MUTATION_TESTS=1`). Each check builds its own fixture — a throwaway role, two users whose ONLY role it is, a membership-subquery filter stamped as `ReadRLSFilterID` on `MJ: Query Categories` and `MJ: User Settings`, and one row per user per entity — and removes it in its own `finally`. They pin the save-time validation in `MJRowLevelSecurityFilterEntityServer`: a filter referenced only by role permission rows is compiled against each referencing entity's base view; a filter any API-key or API-application scope rule references keeps the strict API-key rules.
+
+| Check | What it proves | Assertion | Failure it catches |
+|---|---|---|---|
+| `rls-isolation.RF1` | A subquery role filter shared by two entities is editable | Edit succeeds and is stored; both users are genuinely scoped (one role, non-empty clause) and see only their own row on both entities before AND after; the runtime clause is the new text | Role filters that can be created but never edited (#5712) |
+| `rls-isolation.RF2` | Broken role filter edits are still refused for the right reason | A bad column inside the subquery is refused with the database's invalid-column error naming the entity; a system-catalog reference is refused by the SQL screen; stored text unchanged | The role path accepting text that would fail every read |
+| `rls-isolation.RF3` | API-key filters keep the strict rules | With an API-key scope rule AND a role permission referencing the filter, a bad column is refused by the plain-column check and a subquery by the subquery ban | The role path loosening a filter an API key depends on |
 
 ### Known gaps / cross-references
 

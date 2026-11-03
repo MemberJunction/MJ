@@ -367,6 +367,18 @@ async function findScannableFiles(packageDir: string, excludePatterns: string[],
 }
 
 /**
+ * Returns true if the given file path lives inside a `__tests__` or `__mocks__`
+ * directory or carries a `.test.*` / `.spec.*` extension.
+ *
+ * Used both alongside glob ignore patterns and as a post-glob filter so that
+ * test/spec/mock files never leak into generated class-registration manifests
+ * regardless of whether `src/` or `dist/` is scanned.
+ */
+export function IsTestOrMockFilePath(filePath: string): boolean {
+    return /(?:^|[\\/])(?:__tests__|__mocks__)(?:[\\/]|$)|\.(?:test|spec)\.(?:ts|js|mjs|cjs)$/i.test(filePath);
+}
+
+/**
  * Finds all TypeScript source files in a package's src/ directory.
  */
 async function findSourceFiles(srcDir: string, excludePatterns: string[]): Promise<string[]> {
@@ -376,18 +388,20 @@ async function findSourceFiles(srcDir: string, excludePatterns: string[]): Promi
         '**/build/**',
         '**/.git/**',
         '**/__tests__/**',
+        '**/__mocks__/**',
         '**/*.d.ts',
         '**/*.spec.ts',
         '**/*.test.ts',
         ...excludePatterns.map(p => `**/${p}/**`)
     ];
 
-    return glob('**/*.ts', {
+    const files = await glob('**/*.ts', {
         cwd: srcDir,
         absolute: true,
         ignore: defaultExcludes,
         nodir: true
     });
+    return files.filter(f => !IsTestOrMockFilePath(f));
 }
 
 /**
@@ -398,19 +412,24 @@ async function findDistFiles(distDir: string, excludePatterns: string[]): Promis
     const defaultExcludes = [
         '**/node_modules/**',
         '**/.git/**',
+        '**/__tests__/**',
+        '**/__mocks__/**',
         '**/*.d.ts',
         '**/*.d.ts.map',
         '**/*.js.map',
         '**/*.min.js',
+        '**/*.spec.{js,mjs,cjs}',
+        '**/*.test.{js,mjs,cjs}',
         ...excludePatterns.map(p => `**/${p}/**`)
     ];
 
-    return glob('**/*.{js,mjs,cjs}', {
+    const files = await glob('**/*.{js,mjs,cjs}', {
         cwd: distDir,
         absolute: true,
         ignore: defaultExcludes,
         nodir: true
     });
+    return files.filter(f => !IsTestOrMockFilePath(f));
 }
 
 /**
@@ -1667,32 +1686,35 @@ function scanPackagesForDecorators(
  * Synchronous file finder for TypeScript source files.
  */
 function findSourceFilesSync(srcDir: string, excludePatterns: string[]): string[] {
-    return glob.sync('**/*.ts', {
+    const files = glob.sync('**/*.ts', {
         cwd: srcDir,
         absolute: true,
         ignore: [
             '**/node_modules/**', '**/dist/**', '**/build/**', '**/.git/**',
-            '**/__tests__/**', '**/*.d.ts', '**/*.spec.ts', '**/*.test.ts',
+            '**/__tests__/**', '**/__mocks__/**', '**/*.d.ts', '**/*.spec.ts', '**/*.test.ts',
             ...excludePatterns.map(p => `**/${p}/**`)
         ],
         nodir: true
     });
+    return files.filter(f => !IsTestOrMockFilePath(f));
 }
 
 /**
  * Synchronous file finder for compiled JavaScript files.
  */
 function findDistFilesSync(distDir: string, excludePatterns: string[]): string[] {
-    return glob.sync('**/*.{js,mjs,cjs}', {
+    const files = glob.sync('**/*.{js,mjs,cjs}', {
         cwd: distDir,
         absolute: true,
         ignore: [
-            '**/node_modules/**', '**/.git/**', '**/*.d.ts', '**/*.d.ts.map',
-            '**/*.js.map', '**/*.min.js',
+            '**/node_modules/**', '**/.git/**', '**/__tests__/**', '**/__mocks__/**',
+            '**/*.d.ts', '**/*.d.ts.map', '**/*.js.map', '**/*.min.js',
+            '**/*.spec.{js,mjs,cjs}', '**/*.test.{js,mjs,cjs}',
             ...excludePatterns.map(p => `**/${p}/**`)
         ],
         nodir: true
     });
+    return files.filter(f => !IsTestOrMockFilePath(f));
 }
 
 /**

@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "T4 -> S6.5",
+    "Description": "Gate G0.11 (owner PR 2, phase 0, dataset T4, criterion S6.5): with MonthIndex declared as the time index, 0 of 12 rolling origins' lightgbm runs on T4 are graded above Poor or cleared to act, and each stores the withheld verdict with the reason \"not evaluated as a forecast\" (EvaluationLineage.NotEvaluatedAsForecast), 12 of 12.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G0.11\",\"owner:PR2\",\"phase:0\",\"dataset:T4\",\"criterion:S6.5\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "0 of 12 origins above Poor or actionable; 12 of 12 store the withheld verdict."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-t4-s6-5"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "97558642-9CE4-45B4-BF4E-7D7C487D5196"
+  }
+}

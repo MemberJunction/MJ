@@ -1,10 +1,10 @@
-import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad, AgentPipelineRequest, TaskGraphSpec, AgentDecisionRequest, AgentFinishIf } from "@memberjunction/ai-core-plus";
+import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad, AgentPipelineRequest, TaskGraphSpec, AgentDecisionRequest, AgentFinishIf, AgentHandoffRequest, ArtifactDirective } from "@memberjunction/ai-core-plus";
 import { ArtifactToolCall } from "../ArtifactToolManager";
 import { ConversationToolCall } from "../ConversationToolManager";
 import { MemoryWriteRequest } from "../MemoryWriteManager";
 
 // Re-export universal types for backward compatibility
-export type { ForEachOperation, WhileOperation, ArtifactToolCall, ConversationToolCall, MemoryWriteRequest };
+export type { ForEachOperation, WhileOperation, ArtifactToolCall, ConversationToolCall, MemoryWriteRequest, ArtifactDirective };
 
 /**
  * Every value `nextStep.type` may take, in the canonical casing the dispatcher switches on.
@@ -21,7 +21,7 @@ export type { ForEachOperation, WhileOperation, ArtifactToolCall, ConversationTo
  */
 export const LOOP_NEXT_STEP_TYPES = [
     'Actions', 'ClientTools', 'Sub-Agent', 'Chat', 'Retry',
-    'ForEach', 'While', 'Pipeline', 'Skill', 'Plan', 'Tasks'
+    'ForEach', 'While', 'Pipeline', 'Skill', 'Plan', 'Tasks', 'Handoff'
 ] as const;
 
 /** The `nextStep.type` union, derived from the interface rather than restated. */
@@ -74,6 +74,13 @@ export interface LoopAgentResponse<P = any> {
      * Payload changes. Omit if no changes needed
      */
     payloadChangeRequest?: AgentPayloadChangeRequest<P>;
+
+    /**
+     * Optional directive controlling how the agent's payload artifact is created or versioned
+     * when the run completes (`behavior: 'create-new' | 'version-source' | 'suppress'`,
+     * optional `targetArtifactId`, `name`, and `description`).
+     */
+    artifactDirective?: ArtifactDirective;
     
     /**
      * Private working memory — not shared with parent or sub-agents.
@@ -132,9 +139,9 @@ export interface LoopAgentResponse<P = any> {
      */
     nextStep?: {
         /**
-         * Operation type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline' | 'Skill' | 'Plan' | 'Tasks'
+         * Operation type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline' | 'Skill' | 'Plan' | 'Tasks' | 'Handoff'
          */
-        type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline' | 'Skill' | 'Plan' | 'Tasks';
+        type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline' | 'Skill' | 'Plan' | 'Tasks' | 'Handoff';
 
         /**
          * Actions to execute (when type='Actions')
@@ -187,6 +194,19 @@ export interface LoopAgentResponse<P = any> {
              * true=end parent, false=continue
              */
             terminateAfter: boolean;
+
+            /**
+             * The ID of this sub-agent's earlier run that ended with a question to this agent;
+             * set it only to answer that question; the framework resumes that run (its payload,
+             * its question, then your message).
+             */
+            resumeRunId?: string;
+
+            /**
+             * Optional configuration preset of the target sub-agent, by name (or display name).
+             * Overrides the relationship's default `ConfigurationPresetID` and the parent's `configurationId`.
+             */
+            presetName?: string;
         };
 
         /**
@@ -197,6 +217,17 @@ export interface LoopAgentResponse<P = any> {
             message: string;
             templateParameters?: Record<string, any>;
             terminateAfter: boolean;
+            /**
+             * The ID of this sub-agent's earlier run that ended with a question to this agent;
+             * set it only to answer that question; the framework resumes that run (its payload,
+             * its question, then your message).
+             */
+            resumeRunId?: string;
+            /**
+             * Optional configuration preset of the target sub-agent, by name (or display name).
+             * Overrides the relationship's default `ConfigurationPresetID` and the parent's `configurationId`.
+             */
+            presetName?: string;
         }>;
 
         /**
@@ -258,6 +289,16 @@ export interface LoopAgentResponse<P = any> {
          * results into the conversation or starts you a fresh turn with the outcome.
          */
         tasks?: TaskGraphSpec;
+
+        /**
+         * Conversation handoff details (when type='Handoff'). Required for that type.
+         *
+         * Transfers the conversation turn to another agent so that agent answers in this
+         * conversation as itself, with its own settings. Emitting one ends your turn; put
+         * everything the target agent needs in `brief`. Use `Handoff` when another agent
+         * should own the request, and `Sub-Agent` when you need a result back.
+         */
+        handoff?: AgentHandoffRequest;
 
         /**
          * Conditional completion gate for Actions or Sub-Agent steps.

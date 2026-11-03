@@ -211,6 +211,10 @@ Patterns support:
 - `*suffix` -- Match tools ending with suffix
 - `*contains*` -- Match tools containing text
 
+## Compiled Tool & Schema Caching
+
+To avoid rebuilding entity/agent/action/prompt tool definitions and Zod parameter schemas on every SSE or StreamableHTTP session initialization, the MCP server compiles and caches `ToolConfig` entries in memory on first access (`GetOrBuildCompiledToolConfigs`). Each session registers lightweight handler wrappers against the pre-compiled schemas while routing execution to the active request's authenticated `SessionContext`. Use `ClearCompiledToolCache()` when tool configuration or metadata changes at runtime and needs to be recompiled.
+
 ## CLI Options
 
 | Option | Alias | Description |

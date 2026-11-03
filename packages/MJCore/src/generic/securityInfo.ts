@@ -369,6 +369,23 @@ export class UserInfo extends BaseInfo {
         this._isMagicLinkAnonymous = value;
     }
 
+    private _anonymousVisitorID?: string = undefined;
+
+    /**
+     * Per-token identity for an anonymous magic-link or widget guest session, set at request time
+     * from the verified session token's `mj_sid` claim. When the token carries no resource scope
+     * (`MagicLinkScope.ResourceID`), this is what tells one anonymous visitor's realtime sessions and
+     * conversations (`Conversation.ExternalID`) apart from other visitors sharing the Anonymous user row;
+     * a resource scope, when present, takes precedence (see `ResolveSessionScopeIdentity` in `@memberjunction/server`).
+     * Same getter/setter (non-enumerable) rationale as TenantContext/MagicLinkScope — not a database/GraphQL field.
+     */
+    public get AnonymousVisitorID(): string | undefined {
+        return this._anonymousVisitorID;
+    }
+    public set AnonymousVisitorID(value: string | undefined) {
+        this._anonymousVisitorID = value;
+    }
+
     private _UserRoles: UserRoleInfo[] = []  // case-violation-ok-legacy-back-compat: reached by bracket access outside the declaring class, where a same-named key on an unrelated object is indistinguishable
     /**
      * Gets the roles assigned to this user.

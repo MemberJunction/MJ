@@ -89,7 +89,7 @@ export async function PageEntityByFilter(opts: {
         throw new Error(`Record set source failed paging '${entity.Name}': ${result.ErrorMessage}`);
     }
 
-    const rows = (result.Results ?? []) as Record<string, unknown>[];
+    const rows = ((result.Results ?? []) as Record<string, unknown>[]).slice(0, batchSize);
     const records: RecordRef[] = rows.map((row) => ({
         EntityID: entity.ID,
         RecordID: SerializeRecordId(entity, row),

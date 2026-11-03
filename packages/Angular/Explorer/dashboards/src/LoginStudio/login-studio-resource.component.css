@@ -87,12 +87,14 @@
   gap: var(--mj-space-3);
 }
 
-/* A desktop-proportioned page, or a phone. */
+/* A 16:10 desktop screen, no taller than the window has room for, or a phone. */
 .ls__frame {
   position: relative;
   overflow: hidden;
   width: 100%;
-  height: clamp(30rem, 62vh, 44rem);
+  max-width: calc(min(62vh, 44rem) * 1.6);
+  aspect-ratio: 16 / 10;
+  margin-inline: auto;
   border: 1px solid var(--mj-border-default);
   border-radius: var(--mj-radius-lg);
   background: var(--mj-login-panel-bg);
@@ -141,6 +143,15 @@
 .lp {
   display: flex;
   height: 100%;
+}
+/* Desktop: the page laid out at a real screen's size (DESKTOP_WIDTH in the component), then scaled to the
+   frame, so type and spacing shrink in proportion. At 1:1 a frame this narrow would draw a layout no
+   visitor gets at that width. */
+.lp:not(.lp--stacked) {
+  box-sizing: border-box;
+  width: 1440px;
+  height: 900px;
+  transform-origin: top left;
 }
 .lp--reverse { flex-direction: row-reverse; }
 
@@ -245,12 +256,13 @@
   box-shadow: var(--mj-shadow-lg);
 }
 
-/* Stacked (the login screen's 900px layout, where the banner is 35dvh): the banner shortens above the sign-in column. */
+/* Stacked (the phone preview: the login screen at 480px and below, where the banner is 50dvh): the banner
+   shortens above the sign-in column. */
 .lp--stacked { flex-direction: column; }
 .lp--stacked:not(.lp--centered) .lp__banner {
   flex: 0 0 auto;
-  height: 35%;
-  padding: var(--mj-space-5);
+  height: 50%;
+  padding: var(--mj-space-4);
   align-items: center;
 }
 .lp--stacked:not(.lp--centered) .lp__brand { margin-block: auto 0; }

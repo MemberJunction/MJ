@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BuildAnthropicThinking, MapEffortLevelToAnthropicEffort, UsesAdaptiveThinking } from '../models/thinking-config';
+import { BuildAnthropicThinking, MapEffortLevelToAnthropicEffort, RejectsSamplingParams, UsesAdaptiveThinking } from '../models/thinking-config';
 
 describe('UsesAdaptiveThinking — which Claude models take the adaptive form', () => {
     it.each([
@@ -33,6 +33,52 @@ describe('UsesAdaptiveThinking — which Claude models take the adaptive form', 
     it('a trailing 8-digit date is never read as a version', () => {
         // Without the date filter "claude-sonnet-4-20250514" would parse as 4.20250514 → adaptive.
         expect(UsesAdaptiveThinking('claude-sonnet-4-20250514')).toBe(false);
+    });
+});
+
+describe('RejectsSamplingParams — which Claude models reject non-default sampling on every request', () => {
+    // Docs: https://platform.claude.com/docs/en/build-with-claude/thinking#limits-and-feature-compatibility ("Sampling parameters").
+    // The list there: Fable 5.1, Mythos 5.1, Fable 5, Mythos 5, Mythos Preview, Opus 5.5, Opus 5, Opus 4.8, Opus 4.7,
+    // Sonnet 5.5, Sonnet 5, Haiku 5.5. Claude 4.6 is NOT on it, although it takes adaptive thinking.
+    it.each([
+        ['claude-fable-5-1', true],
+        ['claude-mythos-5-1', true],
+        ['claude-opus-5-5', true],
+        ['claude-opus-5', true],
+        ['claude-sonnet-5-5', true],
+        ['claude-sonnet-5', true],
+        ['claude-haiku-5-5', true],
+        ['claude-opus-4-8', true],
+        ['claude-opus-4-7', true],
+        ['claude-opus-4-7-20260401', true],
+        ['claude-mythos-preview', true],
+        ['Claude-Mythos-Preview', true]
+    ])('%s → rejects (%s)', (model, expected) => {
+        expect(RejectsSamplingParams(model)).toBe(expected);
+    });
+
+    it.each([
+        ['claude-opus-4-6', false],
+        ['claude-sonnet-4-6', false],
+        ['claude-opus-4-6-20260210', false],
+        ['claude-opus-4-5', false],
+        ['claude-sonnet-4-5', false],
+        ['claude-haiku-4-5-20251001', false],
+        ['claude-3-7-sonnet-20250219', false],
+        ['claude-unknown', false],
+        ['', false]
+    ])('%s → accepts while thinking is off (%s)', (model, expected) => {
+        expect(RejectsSamplingParams(model)).toBe(expected);
+    });
+
+    it('is a different cutoff from UsesAdaptiveThinking: 4.6 is adaptive but still accepts sampling parameters', () => {
+        expect(UsesAdaptiveThinking('claude-sonnet-4-6')).toBe(true);
+        expect(RejectsSamplingParams('claude-sonnet-4-6')).toBe(false);
+    });
+
+    it('Mythos Preview has no version number: adaptive parse says false, sampling says true', () => {
+        expect(UsesAdaptiveThinking('claude-mythos-preview')).toBe(false);
+        expect(RejectsSamplingParams('claude-mythos-preview')).toBe(true);
     });
 });
 

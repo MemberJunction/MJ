@@ -14,7 +14,14 @@ type Dialect = DatabaseProviderBase['Dialect'];
 export interface AgentRunWatchdogConfig {
     /** How often the owning process stamps a liveness heartbeat for its in-flight runs. */
     heartbeatIntervalMs: number;
-    /** How often this process re-scans for orphaned runs (mid-life, without waiting for a restart). */
+    /**
+     * How often this process re-scans for orphaned runs (mid-life, without waiting for a restart).
+     * Once this process has tracked a run, the sweep keeps running for the life of the process, even
+     * with nothing tracked, so it also closes runs that other, crashed instances left `Running`.
+     * `0` turns the periodic sweep off (for a database that should be able to pause when idle): the
+     * host's one-time startup sweep ({@link AgentRunWatchdog.SweepOrphanedRuns}) still closes runs
+     * orphaned by a crash, on the next restart, and the tracked-set prune moves to the heartbeat.
+     */
     sweepIntervalMs: number;
     /** A Running run whose heartbeat is older than this (or NULL with an older StartedAt) is force-failed. */
     staleThresholdMinutes: number;
@@ -32,6 +39,17 @@ const DEFAULT_CONFIG: AgentRunWatchdogConfig = {
     staleThresholdMinutes: 5,
     cancellationPollIntervalMs: 3_000,
 };
+
+/** Knobs that may be `0` (meaning "off"); every other knob must be greater than zero. */
+const ZERO_ALLOWED_KEYS: ReadonlySet<keyof AgentRunWatchdogConfig> = new Set<keyof AgentRunWatchdogConfig>(['sweepIntervalMs']);
+
+/** Every knob {@link AgentRunWatchdog.Configure} accepts. */
+const CONFIG_KEYS: ReadonlyArray<keyof AgentRunWatchdogConfig> = [
+    'heartbeatIntervalMs',
+    'sweepIntervalMs',
+    'staleThresholdMinutes',
+    'cancellationPollIntervalMs',
+];
 
 /** The row shape the cancellation poll reads back from the AI Agent Runs view. */
 interface CancelledRunRow {
@@ -78,6 +96,12 @@ const SP_CANCEL = 'spCancelAIAgentRun';
  *    the row is the channel, the replica that owns the run is the one that reacts, with no
  *    cross-process messaging.
  *
+ * The heartbeat and the stop-relay poll run only while this process is guarding at least one run:
+ * the last run leaving stops them, and the next {@link Track} starts them again. The periodic
+ * sweep, once started, keeps running so it can close other instances' orphans; set
+ * {@link AgentRunWatchdogConfig.sweepIntervalMs} to `0` and an idle process issues no periodic
+ * statements at all, which lets a serverless database pause.
+ *
  * Every proc filters `Status='Running'` only — `Paused` and `AwaitingFeedback` are
  * legitimately-not-progressing states and are never touched. The watchdog accesses the DB only
  * through these stored procedures (writes) and the base view (reads) — never the base table —
@@ -97,15 +121,17 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
     public static readonly ExternalCancelAbortReason = 'Cancelled externally';
 
     private _config: AgentRunWatchdogConfig = DEFAULT_CONFIG;
-    private _trackedRuns = new Set<string>();
+    /** Guarded runs keyed by lowercased run ID, storing each run's own provider and contextUser for multi-tenant isolation. */
+    private _trackedRuns = new Map<string, { provider: DatabaseProviderBase; contextUser: UserInfo }>();
     /** The abort controller each tracked run registered, keyed by lowercased run ID. */
     private _abortControllers = new Map<string, AbortController>();
-    private _provider: DatabaseProviderBase | null = null;
-    private _contextUser: UserInfo | null = null;
     private _heartbeatTimer: ReturnType<typeof setInterval> | null = null;
     private _sweepTimer: ReturnType<typeof setInterval> | null = null;
     private _cancellationPollTimer: ReturnType<typeof setInterval> | null = null;
     private _cancellationPollInFlight = false;
+    /** The provider and user of the most recently tracked run: the periodic sweep's fallback once nothing is tracked. */
+    private _lastProvider: DatabaseProviderBase | null = null;
+    private _lastContextUser: UserInfo | null = null;
     private _registered = false;
 
     protected constructor() {
@@ -118,15 +144,45 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
 
     public readonly ShutdownName = 'AgentRunWatchdog';
 
-    /** Overrides the default tuning. Safe to call before or after runs start tracking. */
+    /** The tuning currently in effect (a copy). */
+    public get Config(): AgentRunWatchdogConfig {
+        return { ...this._config };
+    }
+
+    /**
+     * Overrides the default tuning. Safe to call before or after runs start tracking: timers that
+     * are already running are restarted on the new intervals. Every value given must be a finite
+     * number greater than zero, except `sweepIntervalMs`, which may also be `0` (periodic sweep off).
+     * All-or-nothing: on an invalid value it throws, naming the field and value, and applies nothing.
+     * `undefined` values are ignored.
+     */
     public Configure(config: Partial<AgentRunWatchdogConfig>): void {
-        this._config = { ...this._config, ...config };
+        const next: AgentRunWatchdogConfig = { ...this._config };
+        for (const key of CONFIG_KEYS) {
+            const value = config[key];
+            if (value === undefined) {
+                continue;
+            }
+            const zeroAllowed = ZERO_ALLOWED_KEYS.has(key);
+            if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || (value === 0 && !zeroAllowed)) {
+                const rule = zeroAllowed ? '0 or greater' : 'greater than 0';
+                throw new Error(`AgentRunWatchdog.Configure: ${key} must be a finite number ${rule}, got ${String(value)}`);
+            }
+            next[key] = value;
+        }
+        this._config = next;
+        if (this.HasActiveRunTimers || this.HasSweepTimer) {
+            // Timers only exist once a run was tracked, so restarting them here never starts a
+            // sweep in a process that has not run an agent; the heartbeat restarts only if runs remain.
+            this.stopTimers();
+            this.ensureStarted();
+        }
     }
 
     /**
      * Begin guarding a run. The owning agent calls this immediately after the run row is saved
-     * (so it has a stable ID). Idempotent per run ID. Capturing the provider/user lets the
-     * central heartbeat + shutdown statements run without each run re-supplying them.
+     * (so it has a stable ID). Idempotent per run ID. Capturing the provider/user per run lets the
+     * central heartbeat + shutdown statements run against each run's own tenant provider and user.
      *
      * @param abortController The run's own abort controller. When supplied, the stop relay aborts
      *   it as soon as the run's row is seen marked `Cancelled` by someone else (the Stop button),
@@ -138,22 +194,28 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
             return;
         }
         const key = runID.toLowerCase();
-        this._provider = provider;
-        this._contextUser = contextUser;
-        this._trackedRuns.add(key);
+        this._lastProvider = provider;
+        this._lastContextUser = contextUser;
+        this._trackedRuns.set(key, { provider, contextUser });
         if (abortController) {
             this._abortControllers.set(key, abortController);
         }
         this.ensureStarted();
     }
 
-    /** Stop guarding a run. Optional — the periodic prune drops terminal runs automatically — but
-     *  callers may invoke it for prompt cleanup right after writing a terminal state. */
+    /**
+     * Stop guarding a run. The owner calls this as soon as the run leaves `Running` (any terminal
+     * or parked state), so it is never heart-beaten again; the last run leaving stops the heartbeat
+     * and the stop-relay poll.
+     * A missed call is healed by the tracked-set prune, which drops runs whose row is no longer
+     * `Running`. That prune is a safety net, not the normal path.
+     */
     public Untrack(runID: string): void {
         if (runID) {
             const key = runID.toLowerCase();
             this._trackedRuns.delete(key);
             this._abortControllers.delete(key);
+            this.stopIdleTimers();
         }
     }
 
@@ -185,29 +247,41 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
     }
 
     /**
+     * Returns true when the heartbeat and cancellation-poll timers are currently active.
+     * Exposed for diagnostics and tests verifying idle-timer suspension.
+     */
+    public get HasActiveRunTimers(): boolean {
+        return this._heartbeatTimer !== null || this._cancellationPollTimer !== null;
+    }
+
+    /** Whether the periodic stale-run sweep timer is currently scheduled (diagnostics and tests). */
+    public get HasSweepTimer(): boolean {
+        return this._sweepTimer !== null;
+    }
+
+    /**
      * IShutdownable: on graceful shutdown, mark every run this process still owns as `Cancelled`
      * (via {@link SP_CANCEL}) so it doesn't linger as a phantom `Running` row until the next sweep.
      * Idempotent and never throws — a failed cancel just falls through to the staleness sweep later.
      */
     public async Shutdown(): Promise<void> {
         this.stopTimers();
-        const ids = this.trackedIds();
+        const groups = this.groupRunsByProvider(this.trackedIds());
         this._trackedRuns.clear();
         this._abortControllers.clear();
-        if (!ids.length || !this._provider) {
-            return;
-        }
-        const schema = AgentRunWatchdog.schemaOf(this._provider);
-        if (!schema) {
-            return;
-        }
-        const d = this._provider.Dialect;
-        // One batched round-trip (one EXEC per id, newline-separated) rather than a call per run.
-        const sql = AgentRunWatchdog.buildProcBatch(d, schema, SP_CANCEL, ids);
-        try {
-            await this._provider.ExecuteSQL(sql, undefined, { isMutation: true, description: 'AgentRunWatchdog graceful-shutdown cancel' }, this._contextUser ?? undefined);
-        } catch (err) {
-            LogError(`AgentRunWatchdog.Shutdown failed to cancel runs [${ids.join(', ')}]: ${err instanceof Error ? err.message : String(err)}`);
+        for (const group of groups) {
+            const schema = AgentRunWatchdog.schemaOf(group.provider);
+            if (!schema) {
+                continue;
+            }
+            const d = group.provider.Dialect;
+            // One batched round-trip per provider (one EXEC per id, newline-separated) rather than a call per run.
+            const sql = AgentRunWatchdog.buildProcBatch(d, schema, SP_CANCEL, group.ids);
+            try {
+                await group.provider.ExecuteSQL(sql, undefined, { isMutation: true, description: 'AgentRunWatchdog graceful-shutdown cancel' }, group.contextUser);
+            } catch (err) {
+                LogError(`AgentRunWatchdog.Shutdown failed to cancel runs [${group.ids.join(', ')}]: ${err instanceof Error ? err.message : String(err)}`);
+            }
         }
     }
 
@@ -249,18 +323,18 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
 
     // ----- internals -------------------------------------------------------------------------
 
-    /** Start the heartbeat + sweep timers and register for graceful shutdown, exactly once. */
+    /** Start whichever timers are not already running, and register for graceful shutdown exactly once. */
     private ensureStarted(): void {
         if (!this._registered) {
             ShutdownRegistry.Instance.Register(this);
             this._registered = true;
         }
-        if (!this._heartbeatTimer) {
+        if (!this._heartbeatTimer && this._trackedRuns.size > 0) {
             this._heartbeatTimer = setInterval(() => void this.heartbeat(), this._config.heartbeatIntervalMs);
             // Don't keep the event loop alive solely for the watchdog.
             this._heartbeatTimer.unref?.();
         }
-        if (!this._sweepTimer) {
+        if (!this._sweepTimer && this._config.sweepIntervalMs > 0) {
             // The periodic sweep is an always-on in-process timer rather than an MJ Scheduled Job
             // (MJ: Scheduled Jobs / SchedulingEngine) on purpose. This is a reliability floor for
             // orphaned runs, and ScheduledJobsService is gated by `scheduledJobs.enabled` in config
@@ -268,12 +342,30 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
             // scheduled jobs off, exactly where the safety net still needs to work. A Scheduled Job
             // could be added on top later as an observability/audit layer (it would call the same
             // idempotent SweepOrphanedRuns), but it must not be the only thing that runs it.
+            // Unlike the heartbeat, it keeps running once nothing is tracked (other instances'
+            // orphans still need closing); sweepIntervalMs = 0 is the opt-out.
             this._sweepTimer = setInterval(() => void this.periodicSweep(), this._config.sweepIntervalMs);
             this._sweepTimer.unref?.();
         }
-        if (!this._cancellationPollTimer) {
+        if (!this._cancellationPollTimer && this._abortControllers.size > 0) {
             this._cancellationPollTimer = setInterval(() => void this.pollCancellations(), this._config.cancellationPollIntervalMs);
             this._cancellationPollTimer.unref?.();
+        }
+    }
+
+    /**
+     * Stop the timers that have nothing left to do: the cancellation poll once no run registered a
+     * controller, and the heartbeat once no run is tracked. Calling `Track()` restarts them. The
+     * periodic sweep is left running (see {@link AgentRunWatchdogConfig.sweepIntervalMs}).
+     */
+    private stopIdleTimers(): void {
+        if (this._abortControllers.size === 0 && this._cancellationPollTimer) {
+            clearInterval(this._cancellationPollTimer);
+            this._cancellationPollTimer = null;
+        }
+        if (this._trackedRuns.size === 0 && this._heartbeatTimer) {
+            clearInterval(this._heartbeatTimer);
+            this._heartbeatTimer = null;
         }
     }
 
@@ -292,66 +384,89 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
         }
     }
 
-    /** Stamp LastHeartbeatAt for every run this process is guarding, via {@link SP_HEARTBEAT}.
-     *  Never throws (runs on a timer); a per-run failure is logged and the rest still beat. */
+    /**
+     * Stamp LastHeartbeatAt for every run this process is guarding, via {@link SP_HEARTBEAT}.
+     * When the periodic sweep is off, the tracked-set prune runs here instead, so a run whose
+     * `Untrack` was missed still leaves within one beat. Never throws (runs on a timer); a
+     * per-run failure is logged and the rest still beat.
+     */
     private async heartbeat(): Promise<void> {
-        if (!this._provider) {
-            return;
+        if (this._config.sweepIntervalMs <= 0) {
+            await this.pruneTerminalRuns();
         }
-        const ids = this.trackedIds();
-        if (!ids.length) {
-            return;
-        }
-        const schema = AgentRunWatchdog.schemaOf(this._provider);
-        if (!schema) {
-            return;
-        }
-        const d = this._provider.Dialect;
-        // One batched round-trip (one EXEC per id, newline-separated) rather than a call per run.
-        const sql = AgentRunWatchdog.buildProcBatch(d, schema, SP_HEARTBEAT, ids);
-        try {
-            await this._provider.ExecuteSQL(sql, undefined, { isMutation: true, ignoreLogging: true, description: 'AgentRunWatchdog heartbeat' }, this._contextUser ?? undefined);
-        } catch (err) {
-            LogError(`AgentRunWatchdog heartbeat failed for runs [${ids.join(', ')}]: ${err instanceof Error ? err.message : String(err)}`);
+        const groups = this.groupRunsByProvider(this.trackedIds());
+        for (const group of groups) {
+            const schema = AgentRunWatchdog.schemaOf(group.provider);
+            if (!schema) {
+                continue;
+            }
+            const d = group.provider.Dialect;
+            // One batched round-trip per provider (one EXEC per id, newline-separated) rather than a call per run.
+            const sql = AgentRunWatchdog.buildProcBatch(d, schema, SP_HEARTBEAT, group.ids);
+            try {
+                await group.provider.ExecuteSQL(sql, undefined, { isMutation: true, ignoreLogging: true, description: 'AgentRunWatchdog heartbeat' }, group.contextUser);
+            } catch (err) {
+                LogError(`AgentRunWatchdog heartbeat failed for runs [${group.ids.join(', ')}]: ${err instanceof Error ? err.message : String(err)}`);
+            }
         }
     }
 
-    /** Periodic tick: force-fail orphans, then prune any terminal runs out of the tracked set. */
+    /**
+     * Periodic tick: force-fail orphans, then prune any terminal runs out of the tracked set. With
+     * nothing tracked it still sweeps, under the last tracked run's provider and user, so runs that
+     * other, crashed instances left `Running` are closed without waiting for their restart.
+     */
     private async periodicSweep(): Promise<void> {
-        if (!this._provider || !this._contextUser) {
-            return;
+        const groups = this.groupRunsByProvider(this.trackedIds());
+        if (groups.length > 0) {
+            for (const group of groups) {
+                await AgentRunWatchdog.SweepOrphanedRuns(group.provider, group.contextUser, this._config);
+            }
+        } else if (this._lastProvider && this._lastContextUser) {
+            await AgentRunWatchdog.SweepOrphanedRuns(this._lastProvider, this._lastContextUser, this._config);
         }
-        await AgentRunWatchdog.SweepOrphanedRuns(this._provider, this._contextUser, this._config);
         await this.pruneTerminalRuns();
     }
 
     /**
-     * The stop relay's read side. One RunView over the AI Agent Runs entity for the tracked runs
-     * that have a registered controller and whose row is now `Cancelled`; each one has its
-     * controller aborted with a reason derived from the row's `CancellationReason`, and leaves the
+     * The stop relay's read side. One RunView per (provider, contextUser) over the AI Agent Runs entity
+     * for the tracked runs that have a registered controller and whose row is now `Cancelled`; each one
+     * has its controller aborted with a reason derived from the row's `CancellationReason`, and leaves the
      * tracked set (the agent's own cancelled-result save follows). Runs without a controller are
      * left to the prune. Never throws (runs on a timer); overlapping ticks are skipped rather than
      * stacked.
      */
     private async pollCancellations(): Promise<void> {
-        if (this._cancellationPollInFlight || !this._provider || this._abortControllers.size === 0) {
+        if (this._cancellationPollInFlight || this._abortControllers.size === 0) {
             return;
         }
-        const ids = AgentRunWatchdog.idList(Array.from(this._abortControllers.keys()));
-        if (!ids) {
+        const groups = this.groupRunsByProviderAndUser(Array.from(this._abortControllers.keys()));
+        if (groups.length === 0) {
             return;
         }
         this._cancellationPollInFlight = true;
         try {
-            const rows = await this.readTrackedRuns<CancelledRunRow>(
-                MJAIAgentRunEntityExtended.CancelledStatus, ids, ['ID', 'CancellationReason'], 'AgentRunWatchdog cancellation poll');
-            for (const row of rows) {
-                if (typeof row?.ID !== 'string') {
+            for (const group of groups) {
+                const ids = AgentRunWatchdog.idList(group.ids);
+                if (!ids) {
                     continue;
                 }
-                const reason = AgentRunWatchdog.abortReasonFor(row.CancellationReason);
-                if (this.RequestCancel(row.ID, reason)) {
-                    LogStatus(`[AgentRunWatchdog] Run ${row.ID} was marked Cancelled (${row.CancellationReason ?? 'no reason'}); aborting the in-flight agent`);
+                const rows = await this.readTrackedRunsForContext<CancelledRunRow>(
+                    group.provider,
+                    group.contextUser,
+                    MJAIAgentRunEntityExtended.CancelledStatus,
+                    ids,
+                    ['ID', 'CancellationReason'],
+                    'AgentRunWatchdog cancellation poll'
+                );
+                for (const row of rows) {
+                    if (typeof row?.ID !== 'string') {
+                        continue;
+                    }
+                    const reason = AgentRunWatchdog.abortReasonFor(row.CancellationReason);
+                    if (this.RequestCancel(row.ID, reason)) {
+                        LogStatus(`[AgentRunWatchdog] Run ${row.ID} was marked Cancelled (${row.CancellationReason ?? 'no reason'}); aborting the in-flight agent`);
+                    }
                 }
             }
         } catch (err) {
@@ -368,11 +483,15 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
      * list from {@link idList}. Reads the database, not the cache: the rows this looks for were
      * written moments ago by a Stop button or by the finishing agent.
      */
-    private async readTrackedRuns<T>(status: string, ids: string, fields: string[], description: string): Promise<T[]> {
-        if (!this._provider || !this._contextUser) {
-            return [];
-        }
-        const rv = RunView.FromMetadataProvider(this._provider);
+    private async readTrackedRunsForContext<T>(
+        provider: DatabaseProviderBase,
+        contextUser: UserInfo,
+        status: string,
+        ids: string,
+        fields: string[],
+        description: string
+    ): Promise<T[]> {
+        const rv = RunView.FromMetadataProvider(provider);
         const result = await rv.RunView<T>({
             EntityName: AGENT_RUN_ENTITY,
             ExtraFilter: `Status='${status}' AND ID IN (${ids})`,
@@ -380,7 +499,7 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
             ResultType: 'simple',
             IgnoreMaxRows: true,
             BypassCache: true,
-        }, this._contextUser);
+        }, contextUser);
         if (!result.Success) {
             throw new Error(result.ErrorMessage || `${description}: RunView failed`);
         }
@@ -394,28 +513,42 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
 
     /**
      * Drop any tracked run that is no longer `Running` so the in-memory set can't grow unbounded
-     * over a long-lived process. One RunView (through the entity, so the view the runtime user
-     * can read) of the still-running subset; the rest are pruned.
+     * over a long-lived process. One RunView per (provider, contextUser) of the still-running subset;
+     * the rest are pruned.
      */
     private async pruneTerminalRuns(): Promise<void> {
-        const ids = this.trackedIdList();
-        if (!ids || !this._provider) {
+        const groups = this.groupRunsByProviderAndUser(this.trackedIds());
+        if (groups.length === 0) {
             return;
         }
         try {
-            const rows = await this.readTrackedRuns<{ ID: string }>('Running', ids, ['ID'], 'AgentRunWatchdog tracked-set prune');
-            const stillRunning = new Set<string>();
-            for (const row of rows) {
-                if (typeof row?.ID === 'string') {
-                    stillRunning.add(row.ID.toLowerCase());
+            for (const group of groups) {
+                const ids = AgentRunWatchdog.idList(group.ids);
+                if (!ids) {
+                    continue;
+                }
+                const rows = await this.readTrackedRunsForContext<{ ID: string }>(
+                    group.provider,
+                    group.contextUser,
+                    'Running',
+                    ids,
+                    ['ID'],
+                    'AgentRunWatchdog tracked-set prune'
+                );
+                const stillRunning = new Set<string>();
+                for (const row of rows) {
+                    if (typeof row?.ID === 'string') {
+                        stillRunning.add(row.ID.toLowerCase());
+                    }
+                }
+                for (const tracked of group.ids) {
+                    if (!stillRunning.has(tracked)) {
+                        this._trackedRuns.delete(tracked);
+                        this._abortControllers.delete(tracked);
+                    }
                 }
             }
-            for (const tracked of Array.from(this._trackedRuns)) {
-                if (!stillRunning.has(tracked)) {
-                    this._trackedRuns.delete(tracked);
-                    this._abortControllers.delete(tracked);
-                }
-            }
+            this.stopIdleTimers();
         } catch (err) {
             LogError(`AgentRunWatchdog prune failed: ${err instanceof Error ? err.message : String(err)}`);
         }
@@ -423,7 +556,39 @@ export class AgentRunWatchdog extends BaseSingleton<AgentRunWatchdog> implements
 
     /** Validated, lowercased UUIDs this process is guarding (for per-run proc calls). */
     private trackedIds(): string[] {
-        return Array.from(this._trackedRuns).filter(id => UUID_RE.test(id));
+        return Array.from(this._trackedRuns.keys()).filter(id => UUID_RE.test(id));
+    }
+
+    /** Groups run IDs by their tracked `DatabaseProviderBase` so per-tenant DB connections stay isolated. */
+    private groupRunsByProvider(runIds: string[]): Array<{ provider: DatabaseProviderBase; contextUser: UserInfo; ids: string[] }> {
+        const groups = new Map<DatabaseProviderBase, { provider: DatabaseProviderBase; contextUser: UserInfo; ids: string[] }>();
+        for (const id of runIds) {
+            const entry = this._trackedRuns.get(id);
+            if (!entry) continue;
+            let group = groups.get(entry.provider);
+            if (!group) {
+                group = { provider: entry.provider, contextUser: entry.contextUser, ids: [] };
+                groups.set(entry.provider, group);
+            }
+            group.ids.push(id);
+        }
+        return Array.from(groups.values());
+    }
+
+    /** Groups run IDs by `(provider, contextUser)` so `RunView` permission checks use each run's own user and provider. */
+    private groupRunsByProviderAndUser(runIds: string[]): Array<{ provider: DatabaseProviderBase; contextUser: UserInfo; ids: string[] }> {
+        const groups: Array<{ provider: DatabaseProviderBase; contextUser: UserInfo; ids: string[] }> = [];
+        for (const id of runIds) {
+            const entry = this._trackedRuns.get(id);
+            if (!entry) continue;
+            let group = groups.find(g => g.provider === entry.provider && g.contextUser === entry.contextUser);
+            if (!group) {
+                group = { provider: entry.provider, contextUser: entry.contextUser, ids: [] };
+                groups.push(group);
+            }
+            group.ids.push(id);
+        }
+        return groups;
     }
 
     /**

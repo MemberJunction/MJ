@@ -13,7 +13,7 @@ For the full architecture, read the **[Predictive Studio Guide](../../../../guid
 ## Install
 
 ```bash
-npm install @memberjunction/predictive-studio
+pnpm add @memberjunction/predictive-studio
 ```
 
 Depends on `@memberjunction/predictive-studio-core` (type contracts), `@memberjunction/predictive-studio-sidecar` (the `MLSidecar` client), `@memberjunction/record-set-processor-base` (the scoring work-type seam), and the MJ core/global/core-entities packages.
@@ -24,8 +24,8 @@ Depends on `@memberjunction/predictive-studio-core` (type contracts), `@memberju
 |---|---|---|
 | **`FeatureAssemblyExecutor`** | `src/feature-assembly/feature-assembly-executor.ts` | `(record set, frozen FeatureSteps) → raw matrix + preprocessing recipe`. The single code path for all three contexts (`'train'` / `'materialize'` / `'on-demand'`), so there's no train/serve skew by construction. Splits the graph into data-assembly steps (built as raw columns in TS) vs. preprocessing steps (emitted as a `PreprocessingOp[]` recipe for the sidecar to fit/apply). Enforces the **as-of** point-in-time cutoff (`as-of.ts`) and the **leakage** deny-list (`leakage-guard.ts`). |
 | **`TrainingEngine`** | `src/training/training-engine.ts` | `trainModel(input, deps)` — resolve pipeline → assemble (fit context) → carve the **locked holdout** first → sidecar `/train` → persist the artifact to MJStorage → create an **immutable, versioned `MJ: ML Models`** row (with `FittedPreprocessing`, `FeatureSchema`, metrics, holdout metrics, importance, lineage) + an `MJ: ML Training Runs` row → run the single-feature-dominance leakage check. Built on injectable seams (`IEntityFactory` / `IRecordLoader` / `ISidecarTrainer` / `IArtifactStore`). |
-| **`MLModelInferenceProcessor`** | `src/scoring/ml-model-inference-processor.ts` | A **Record Set Processing work type** (`@RegisterClass(MLModelInferenceProcessor, 'ML Model')`, alias `'MLModelInference'`) for batch + single-record scoring. Warm-loads the model once per run, assembles features transform-only (frozen — never re-fits), calls the sidecar `/predict`, returns an `MLInferenceResultPayload`. Ephemeral by default; the substrate's `WriteBackProcessor` applies an `OutputMapping` when present. Registers *without* forking the substrate (`src/scoring/register.ts`). |
-| **`ExperimentOrchestrator`** | `src/experiment/experiment-orchestrator.ts` | `runSession(plan, deps, options)` — deterministic execution of an *approved* `ModelingPlanSpec` as **waves through Record Set Processing**: generate wave (`IWaveStrategist`) → train (bounded concurrency) → evaluate → leaderboard → prune → budget-gate → next wave. Wires the generic `MJ: Experiments` / `Experiment Sessions` / `Experiment Session Iterations` primitives. |
+| **`MLModelInferenceProcessor`** | `src/scoring/ml-model-inference-processor.ts` | A **Record Set Processing work type** (`@RegisterClass(MLModelInferenceProcessor, 'ML Model')`, alias `'MLModelInference'`) for batch + single-record scoring. Warm-loads the model once per run, assembles features transform-only (frozen — never re-fits), calls the sidecar `/predict`, returns an `MLInferenceResultPayload`. Ephemeral by default; the substrate's `WriteBackProcessor` applies an `OutputMapping` when present. An untrained model refuses the run in `Preflight` (or, with the opt-in `autoTrain`, is trained first — never in a dry run, which reports `MODEL_NEEDS_TRAINING` instead). Registers *without* forking the substrate (`src/scoring/register.ts`). |
+| **`ExperimentOrchestrator`** | `src/experiment/experiment-orchestrator.ts` | `runSession(plan, deps, options)` — deterministic execution of an *approved* `ModelingPlanSpec` in an in-process pool (production experiment sessions are switched off by `ExperimentSessions.Enabled` in `@memberjunction/predictive-studio-core`, and the Run Experiment Session action and Start Experiment Session operation refuse with `ExperimentSessionsUnavailableError`; see Guide §7): generate wave (`IWaveStrategist`) → train (bounded concurrency) → evaluate → leaderboard → prune → budget-gate → next wave. Wires the generic `MJ: Experiments` / `Experiment Sessions` / `Experiment Session Iterations` primitives. |
 
 > The **`MLSidecar`** client (the self-managing Python sidecar) lives in its own package, [`@memberjunction/predictive-studio-sidecar`](../Sidecar/README.md) — import it directly from there; it is intentionally not re-exported here.
 
@@ -40,10 +40,10 @@ Beyond the four core engines, the package's `src/` is organized into focused fol
 | `scoring/` | `MLModelInferenceProcessor`, `LoadMLModelInferenceProcessor`, the `'ML Model'` work-type `register`, `artifact-loader`, `scoring-binding` | Batch + single-record inference as a Record Set Processing **work type**, registered without forking the substrate | §10 |
 | `experiment/` | `ExperimentOrchestrator` + `leaderboard` / `concurrency` / `wave-strategist` / `seams` | Deterministic, wave-based execution of an approved `ModelingPlanSpec` with leaderboard, pruning, and a budget gate | §8 / §9 |
 | `feature-pipelines/` | `FeaturePipelineEngine` (a `BaseEngine` cache) + projection types | Discover/monitor Feature Pipelines (categorized `MJ: Record Processes` rows) — "what pipelines exist, what each writes to, when each last ran" | §5.4 / SP6 |
-| `maintenance/` | `MaintenanceEngine`, `RetrainingPolicy` + defaults, the honest `RowCountProxyDriftDetector`, seams | Staleness detection, scheduled re-scoring, retraining triggers, and challenger-vs-incumbent promotion recommendation | §12 / SP10 |
+| `maintenance/` | `MaintenanceEngine`, `RetrainingPolicy` + defaults, the honest `RowCountProxyDriftDetector`, seams | Staleness detection, scheduled re-scoring, retraining triggers, and challenger-vs-incumbent promotion recommendation (built, not wired — see Guide §14) | §12 / SP10 |
 | `scheduling/` | `createScheduledModelScoring` (the Phase 2 north-star helper) | One call binds a model to write its prediction into a target column on a recurring cron (auto-creates the owned Scheduled Job) | §15 / PS2-6 |
-| `actions/` | `PredictiveStudio{TrainModel,ScoreRecordSet,RunExperiment,PromoteModel}Action` + `LoadPredictiveStudioActions` | **Invocation surface A** — thin MJ Actions over the engines (see below) | §12 |
-| `operations/` | `PredictiveStudio{TrainModel,ScoreRecordSet,RunFeaturePipeline,StartExperimentSession,ControlExperimentSession,PromoteModel}ServerOperation` + `LoadPredictiveStudioOperations` | **Invocation surface B** — typed Remote Operations over the engines (see below) | §12 |
+| `actions/` | `PredictiveStudio{TrainModel,ScoreRecordSet,RunExperiment,PromoteModel,ScheduleModelScoring}Action` + `LoadPredictiveStudioActions` | **Invocation surface A** — thin MJ Actions over the engines (see below) | §12 |
+| `operations/` | `PredictiveStudio{TrainModel,ScoreRecordSet,RunFeaturePipeline,StartExperimentSession,ControlExperimentSession,PromoteModel,CreateScoringProcess}ServerOperation` + `LoadPredictiveStudioOperations` | **Invocation surface B** — typed Remote Operations over the engines (see below) | §12 |
 
 ## Phase 2 reach — one scorer, many surfaces
 
@@ -66,10 +66,12 @@ The **business-user experience** phase (the conversational north-star made real)
 
 ## Two invocation surfaces: Actions vs. Remote Operations
 
-The engine service classes are the *real* logic; both surfaces are thin and **share one delegation path** (`operations/delegation.ts`), so they train / score / experiment / promote through the same code — never duplicating it.
+The engine service classes are the *real* logic; both surfaces are thin and **share one delegation path** (`operations/delegation.ts`), so they train / score / experiment / promote through the same code — never duplicating it. Concretely: the Train action and the TrainModel operation build their dependencies with `BuildTrainingDeps`; the Score Record Set action and the ScoreRecordSet operation both score with `BuildScoreRecordSetRunner()` (the production model loader, sidecar and `LocalArtifactLoader`); the Promote action and the PromoteModel operation both run `ProductionModelPromotionGate`; and the Run Experiment Session action and the StartExperimentSession operation both refuse first with `EXPERIMENT_SESSIONS_UNAVAILABLE`, before reading any input. Both surfaces return Predictive Studio refusals as typed result codes through `PredictiveStudioRefusals`.
 
-- **Actions** (`actions/`) — discoverable, metadata-driven boundaries for **agents, low-code workflows, and the visual designer**. Four driver-class keys (`PredictiveStudioTrainModelAction`, `…ScoreRecordSetAction`, `…RunExperimentAction`, `…PromoteModelAction`) matching the `metadata/actions/predictive-studio/` rows. Call `LoadPredictiveStudioActions()` from a server bootstrap to keep the `@RegisterClass` registrations from being tree-shaken.
-- **Remote Operations** (`operations/`) — the typed peers, invoked by **stable key** from client or server with framework-applied scope/permission gates. Six keys: `PredictiveStudio.TrainModel`, `.ScoreRecordSet`, `.RunFeaturePipeline`, `.StartExperimentSession`, `.ControlExperimentSession`, `.PromoteModel`. These are the Manual-mode server bodies for the CodeGen-emitted operation bases in `@memberjunction/core-entities`. Call `LoadPredictiveStudioOperations()` from a server bootstrap to anchor them.
+The Score Record Set scope reads are complete or refused: view and list scopes read every row; a `filter` scope with no `maxRows` (or `null`, or `<= 0`) reads every matching row, and an explicit `maxRows` that the scope exceeds is refused with `READ_CAP_EXCEEDED` instead of scoring a sample. A `single` scope must name every primary-key field of the entity, and a `listId` must be a UUID.
+
+- **Actions** (`actions/`) — discoverable, metadata-driven boundaries for **agents, low-code workflows, and the visual designer**. Five driver-class keys (`PredictiveStudioTrainModelAction`, `…ScoreRecordSetAction`, `…RunExperimentAction`, `…PromoteModelAction`, `…ScheduleModelScoringAction`) matching the `metadata/actions/predictive-studio/` rows. Call `LoadPredictiveStudioActions()` from a server bootstrap to keep the `@RegisterClass` registrations from being tree-shaken.
+- **Remote Operations** (`operations/`) — the typed peers, invoked by **stable key** from client or server with framework-applied scope/permission gates. Seven keys: `PredictiveStudio.TrainModel`, `.ScoreRecordSet`, `.RunFeaturePipeline`, `.StartExperimentSession`, `.ControlExperimentSession`, `.PromoteModel`, `.CreateScoringProcess`. These are the Manual-mode server bodies for the CodeGen-emitted operation bases in `@memberjunction/core-entities`. Call `LoadPredictiveStudioOperations()` from a server bootstrap to anchor them.
 
 Which to reach for: **Actions** when an agent/workflow needs to *discover and chain* capabilities; **Remote Operations** when client or server code needs a *typed, gated call by key*. (Internal engine-to-engine calls use neither — they import the service class directly. See the Transport-Layer and Remote Operations guides.)
 
@@ -109,10 +111,12 @@ record-set-processor / -base (substrate)  ─┤
 
 ## Build & test
 
+For one-time setup on a fresh clone (building the workspace and the Python environment), see [Setting up the bundled Python environment](../Sidecar/README.md#setting-up-the-bundled-python-environment).
+
 ```bash
-npm run build              # tsc && tsc-alias -f
-npm run test               # vitest run — unit tests (all seams mocked; no DB, no live sidecar)
-npm run test:integration   # opt-in end-to-end live test (PS_INTEGRATION=1) — spawns the real
-                           # managed Python sidecar; skips gracefully if the venv is missing.
-                           # Prereq: cd ../Sidecar && npm run setup:python
+pnpm run build              # tsc && tsc-alias -f (after the workspace dependencies are built)
+pnpm test                   # vitest run — unit tests (all seams mocked; no DB, no live sidecar)
+pnpm run test:integration   # opt-in end-to-end live test (PS_INTEGRATION=1) — spawns the real
+                            # managed Python sidecar; skips gracefully if the venv is missing.
+                            # Prereq: pnpm --filter @memberjunction/predictive-studio-sidecar run setup:python
 ```

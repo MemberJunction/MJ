@@ -173,6 +173,19 @@ describe('GenerateConversationName (the shared prompt run)', () => {
     expect(save).not.toHaveBeenCalled();
   });
 
+  it('leaves no pending timeout timer behind once the run settles (success or failure)', async () => {
+    vi.useFakeTimers();
+    try {
+      await GenerateConversationName({ MessageText: 'x', Provider: PROVIDER, RunPrompt: vi.fn().mockResolvedValue({ success: true, parsedResult: { name: 'N' } }) });
+      expect(vi.getTimerCount()).toBe(0);
+
+      await GenerateConversationName({ MessageText: 'x', Provider: PROVIDER, RunPrompt: vi.fn().mockRejectedValue(new Error('down')) });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('returns null for a blank name, a failed run and a thrown error', async () => {
     expect(await GenerateConversationName({ MessageText: 'x', Provider: PROVIDER, RunPrompt: vi.fn().mockResolvedValue({ success: true, parsedResult: { name: '   ' } }) })).toBeNull();
     expect(await GenerateConversationName({ MessageText: 'x', Provider: PROVIDER, RunPrompt: vi.fn().mockResolvedValue({ success: false }) })).toBeNull();

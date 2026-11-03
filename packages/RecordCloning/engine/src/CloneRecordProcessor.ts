@@ -31,8 +31,8 @@ export class CloneRecordProcessor implements IRecordProcessor {
         record: RecordRef,
         context: RecordProcessorContext
     ): Promise<RecordResult> {
-        const provider = context.provider;
-        const user = context.contextUser;
+        const provider = context.Provider;
+        const user = context.ContextUser;
         const entityInfo =
             provider.EntityByID(record.EntityID) ||
             (this._config.EntityName ? provider.EntityByName(this._config.EntityName) : null);

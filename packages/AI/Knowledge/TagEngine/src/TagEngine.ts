@@ -188,6 +188,26 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         return this.Base.GetTaxonomyTree(rootID, ctx);
     }
 
+    /**
+     * The taxonomy as markdown headings (`#` root, `##` child, ...), the shape the autotagging prompt
+     * expects so the model can answer with paths like "Root / Child". Empty when there are no tags.
+     */
+    public GetTaxonomyMarkdown(): string {
+        const lines: string[] = [];
+        const render = (node: TagTreeNode, depth: number): void => {
+            lines.push(`${'#'.repeat(Math.min(depth, 6))} ${node.Name}`);
+            for (const child of node.Children ?? []) {
+                render(child, depth + 1);
+            }
+        };
+        if (this.Tags.length > 0) {
+            for (const root of this.GetTaxonomyTree()) {
+                render(root, 1);
+            }
+        }
+        return lines.join('\n');
+    }
+
     /** Create a new Tag entity, save it, and add to local cache */
     public async CreateTag(
         name: string,
@@ -446,6 +466,12 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     public AddOrUpdateSingleTagEmbeddingFromPersisted(tag: MJTagEntity): void {
         if (!this._tagVectorService) return;
         const key = NormalizeUUID(tag.ID);
+        if (!this._tagEmbeddingModel || !UUIDsEqual(tag.EmbeddingModelID, this._tagEmbeddingModel.ModelID)) {
+            // Embedded by another model: it can't share this index (mixed dimensions throw). The
+            // tag rejoins once it is re-embedded with the index's model.
+            this._tagVectorService.RemoveVector(key);
+            return;
+        }
         const vector = ReadStoredVector(tag.EmbeddingVectorBinary, tag.EmbeddingVector);
         if (!vector) {
             if (tag.EmbeddingVector || tag.EmbeddingVectorBinary) {
@@ -961,6 +987,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
                 Texts: [text],
                 PromptID: promptID,
                 ModelID: modelInfo.ModelID,
+                InputType: 'query',
                 ContextUser: this._contextUser,
                 Description: `Tag resolution query: "${text}"`
             });
@@ -1185,12 +1212,16 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     // ========================================================================
 
     /**
-     * The one model tag embeddings use: the "Tag Semantic Matching" prompt's model, else the
-     * smallest embedding model. Tag vectors, query vectors and new-tag vectors are all pinned to it,
-     * and its ID is what gets persisted as `Tag.EmbeddingModelID`.
+     * The one model tag embeddings use: the platform's default local embedding model
+     * (`AIEngine.DefaultLocalEmbeddingModel`), which is also what `MJTagEntityServer` embeds a saved
+     * tag with, so the persisted vector and this index always agree. When no local embedding model
+     * exists it falls back to the "Tag Semantic Matching" prompt's model, then the smallest
+     * embedding model. Tag vectors, query vectors and new-tag vectors are all pinned to it, and its
+     * ID is what gets persisted as `Tag.EmbeddingModelID`.
      */
     private resolveTagEmbeddingModel(): EmbeddingModelInfo | null {
-        return this.getTagPromptModel() ?? this.getSmallestEmbeddingModel();
+        const local = AIEngine.Instance.DefaultLocalEmbeddingModel;
+        return (local ? this.toEmbeddingModelInfo(local) : null) ?? this.getTagPromptModel() ?? this.getSmallestEmbeddingModel();
     }
 
     /**
@@ -1232,8 +1263,8 @@ export class TagEngine extends BaseSingleton<TagEngine> {
             return null;
         }
 
-        // Filter to embedding models only
-        const embeddingModels = aiEngine.Models.filter(m => this.isEmbeddingModel(m));
+        // Filter to active embedding models only
+        const embeddingModels = aiEngine.Models.filter(m => m.IsActive && this.isEmbeddingModel(m));
 
         if (embeddingModels.length === 0) {
             return null;

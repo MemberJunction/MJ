@@ -3,3 +3,5 @@
  */
 
 export { ConfigLoader } from './config-loader.js';
+export * from './index-hints.js';
+export * from './seed-context.js';

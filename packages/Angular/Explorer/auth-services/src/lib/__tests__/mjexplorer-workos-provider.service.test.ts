@@ -53,6 +53,11 @@ vi.mock('@memberjunction/core', () => ({
   AuthProviderConfig: class {},
 }));
 
+// The auth base's logout releases stored call-recording shards; that runtime is out of scope here.
+vi.mock('@memberjunction/realtime-runtime', () => ({
+  ReleaseRecordingShardsAtLogout: async () => ({ Delivered: 0, TimedOut: false }),
+}));
+
 type WorkOSUser = {
   object: 'user';
   id: string;

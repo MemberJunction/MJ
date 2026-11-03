@@ -23,7 +23,7 @@ import { RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentRunner, type PayloadChangeResultSummary } from '@memberjunction/ai-agents';
 import { ResolveContextUserOrThrow, ResolvePromptRunIdsForAgentRuns, RequireRows } from './agent-live-shared';
 import type { MJAIAgentEntity } from '@memberjunction/core-entities';
-import { ApplyResolvedPayloadAtStart } from '@memberjunction/ai-core-plus';
+import { ApplyResolvedPayloadAtStart, ApplyResolvedPayloadAtEnd } from '@memberjunction/ai-core-plus';
 import type { ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 
 /** Shared fixture tag stamped on every row a bundle creates (safe-to-delete sweep anchor). */
@@ -50,6 +50,7 @@ export interface AgentStepRow {
     PayloadAtStart: string | null;
     PayloadAtStartSourceStepID: string | null;
     PayloadAtEnd: string | null;
+    PayloadAtEndSourceStepID: string | null;
     OutputData: string | null;
     ErrorMessage: string | null;
     FinalPayloadValidationMessages: string | null;
@@ -207,18 +208,19 @@ export async function readRun(provider: IMetadataProvider, user: UserInfo, runId
 
 /**
  * Read every step of a run fresh, oldest first. A step that points at an earlier step's end payload
- * (`PayloadAtStartSourceStepID`) gets that payload as its `PayloadAtStart`.
+ * (`PayloadAtStartSourceStepID` / `PayloadAtEndSourceStepID`) gets that payload resolved in place.
  */
 export async function ReadSteps(provider: IMetadataProvider, user: UserInfo, runId: string): Promise<AgentStepRow[]> {
     const r = await RunView.FromMetadataProvider(provider).RunView<AgentStepRow>({
         EntityName: 'MJ: AI Agent Run Steps',
         ExtraFilter: `AgentRunID='${runId}'`,
-        Fields: ['ID', 'StepType', 'Status', 'TargetID', 'TargetLogID', 'PayloadAtStart', 'PayloadAtStartSourceStepID', 'PayloadAtEnd', 'OutputData', 'ErrorMessage', 'FinalPayloadValidationMessages'],
+        Fields: ['ID', 'StepType', 'Status', 'TargetID', 'TargetLogID', 'PayloadAtStart', 'PayloadAtStartSourceStepID', 'PayloadAtEnd', 'PayloadAtEndSourceStepID', 'OutputData', 'ErrorMessage', 'FinalPayloadValidationMessages'],
         OrderBy: '__mj_CreatedAt ASC',
         ResultType: 'simple',
         BypassCache: true
     }, user);
     const steps = RequireRows(r, `step read for run ${runId}`);
+    ApplyResolvedPayloadAtEnd(steps);
     ApplyResolvedPayloadAtStart(steps);
     return steps;
 }

@@ -1,8 +1,8 @@
 /**
  * Pins the reserved-root set passed into prepareServerExtensionConfigs.
- * A new public mount in index.ts / a drifted `*_MOUNT_PATH` constant is a
- * contract failure — this file reads those sources as text so it never loads
- * `config.ts`.
+ * A drifted `*_MOUNT_PATH` constant is a contract failure — this file reads those
+ * sources as text so it never loads `config.ts`. That every core mount is reserved
+ * is checked against the real mounts in apiRootBoot.test.ts.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -26,11 +26,6 @@ function exportedStringConst(relativeFile: string, name: string): string {
     return match[1];
 }
 
-function indexContainsLiteralPath(path: string): boolean {
-    const src = readFileSync(join(SRC, 'index.ts'), 'utf8');
-    return src.includes(`'${path}'`) || src.includes(`\`${path}\``) || src.includes(path.replace(/^\//, ''));
-}
-
 describe('coreReservedServerExtensionRoots', () => {
     it('stays in lockstep with exported *_MOUNT_PATH constants', () => {
         expect(CORE_CONSTANT_RESERVED_SERVER_EXTENSION_ROOTS).toEqual([
@@ -40,93 +35,11 @@ describe('coreReservedServerExtensionRoots', () => {
         ]);
     });
 
-    it('includes the literal pre-auth paths serve() registers without a constant', () => {
-        const indexSrc = readFileSync(join(SRC, 'index.ts'), 'utf8');
-        for (const path of CORE_STATIC_RESERVED_SERVER_EXTENSION_ROOTS) {
-            if (path === '/health') {
-                expect(indexSrc, `${path} missing from serve()`).toContain("'/health/extensions'");
-            } else if (path === '/realtime') {
-                expect(indexSrc, `${path} missing from serve()`).toMatch(/REALTIME_SDP_EXCHANGE_PATH|'\/realtime'/);
-            } else if (path === '/realtime-proxy') {
-                expect(indexSrc, `${path} missing from serve()`).toContain('/realtime-proxy');
-            } else {
-                expect(indexSrc, `${path} missing from serve()`).toContain(`'${path}'`);
-            }
-        }
-        expect(indexContainsLiteralPath('/healthcheck')).toBe(true);
-    });
-
-    it('structurally guarantees every pre-auth app.use / app.get / app.post mount in index.ts is reserved', () => {
-        const indexSrc = readFileSync(join(SRC, 'index.ts'), 'utf8');
-        const authMiddlewareIndex = indexSrc.indexOf('app.use(CreateUnifiedAuthMiddleware');
-        expect(authMiddlewareIndex).toBeGreaterThan(0);
-        const preAuthSrc = indexSrc.substring(0, authMiddlewareIndex);
-
-        const mountRegex = /app\.(?:use|get|post)\s*\(\s*([^,\s)]+)/g;
-        const reservedRoots = CoreReservedServerExtensionRoots('/');
-
-        // Explicit allowlist of known non-path middleware mounts (e.g. app.use(mw), app.use(cors()), app.use(compression(...)))
-        const knownNonPathTokens = [
-            'cors',
-            'CreateGlobalCorsMiddleware',
-            'express.',
-            'compression',
-            'cookieParser',
-            'CreateUnifiedAuthMiddleware',
-            'mw',
-        ];
-        const isKnownNonPath = (t: string): boolean =>
-            knownNonPathTokens.some(k => t === k || t.startsWith(k));
-
-        // Strip single-line and multi-line comments so comments like `app.use(...)` are not treated as code
-        const cleanPreAuthSrc = preAuthSrc.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
-
-        let match: RegExpExecArray | null;
-        const mountedTokens: string[] = [];
-        while ((match = mountRegex.exec(cleanPreAuthSrc)) !== null) {
-            mountedTokens.push(match[1].trim());
-        }
-
-        expect(mountedTokens.length).toBeGreaterThan(0);
-
-        const knownConstants: Record<string, string> = {
-            REALTIME_SDP_EXCHANGE_PATH: '/realtime',
-            // Public verify-link routes for realtime identity verification; under the reserved '/realtime' root.
-            REALTIME_VERIFY_MOUNT_PATH: '/realtime/verify',
-            MAGIC_LINK_MOUNT_PATH: '/magic-link',
-            WIDGET_MOUNT_PATH: '/widget',
-            AUTH_CATALOG_MOUNT_PATH: '/auth',
-        };
-
-        for (const token of mountedTokens) {
-            const isLiteralPath = token.startsWith("'") || token.startsWith('"') || token.startsWith('`');
-            const isPathConstant = /^[A-Z0-9_]+_PATH$/.test(token) || token in knownConstants;
-            if (!isLiteralPath && !isPathConstant) {
-                if (isKnownNonPath(token)) {
-                    continue;
-                }
-                throw new Error(`Unrecognized pre-auth mount argument '${token}' in index.ts. If this is a non-path middleware, add it to knownNonPathTokens; if it is a route, reserve its prefix or map its constant.`);
-            }
-
-            let pathPrefix: string;
-            if (isLiteralPath) {
-                pathPrefix = token.slice(1, -1);
-            } else if (token in knownConstants) {
-                pathPrefix = knownConstants[token];
-            } else {
-                throw new Error(`Unrecognized pre-auth mount constant '${token}' in index.ts. If this is a new pre-auth route, map its constant or reserve its prefix.`);
-            }
-
-            const isCovered = reservedRoots.some(root => pathPrefix === root || pathPrefix.startsWith(`${root}/`));
-            expect(isCovered, `Pre-auth mount '${pathPrefix}' (from token '${token}') must be covered by reserved roots`).toBe(true);
-        }
-    });
-
-    it('includes graphqlRootPath and every core mount', () => {
-        const roots = CoreReservedServerExtensionRoots('/api');
+    it('includes every core mount, and no longer graphqlRootPath', () => {
+        const roots = CoreReservedServerExtensionRoots();
+        expect(roots).not.toContain('/api');
         expect(roots).toEqual(
             expect.arrayContaining([
-                '/api',
                 '/auth',
                 '/magic-link',
                 '/widget',
@@ -142,7 +55,7 @@ describe('coreReservedServerExtensionRoots', () => {
     });
 
     it('closes the F-M2 bypasses: cased /auth and sibling /healthcheck', () => {
-        const extra = CoreReservedServerExtensionRoots('/');
+        const extra = CoreReservedServerExtensionRoots();
         expect(validateServerExtensionRootPath('/Auth', extra)).toMatch(/reserved prefix/);
         expect(validateServerExtensionRootPath('/healthcheck', extra)).toMatch(/reserved prefix/);
         expect(validateServerExtensionRootPath('/Healthcheck', extra)).toMatch(/reserved prefix/);
@@ -158,10 +71,9 @@ describe('coreReservedServerExtensionRoots', () => {
         expect(validateServerExtensionRootPath('/meetings/teams', extra)).toBeNull();
     });
 
-    it('reserves a non-default graphqlRootPath and its nested paths', () => {
-        const extra = CoreReservedServerExtensionRoots('/api');
-        expect(validateServerExtensionRootPath('/api', extra)).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/api/graphql', extra)).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/apiv2', extra)).toBeNull();
+    it('lets extensions sit under the GraphQL path (#5674): RootPaths are relative to MJAPI_BASE_PATH', () => {
+        const extra = CoreReservedServerExtensionRoots();
+        expect(validateServerExtensionRootPath('/api', extra)).toBeNull();
+        expect(validateServerExtensionRootPath('/forms', extra)).toBeNull();
     });
 });

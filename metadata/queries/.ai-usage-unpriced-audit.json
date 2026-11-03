@@ -13,13 +13,382 @@
       "UsesTemplate": true,
       "IsMaterialized": false
     },
-    "relatedEntities": {},
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/ai-usage-unpriced-audit.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "77C592A7-9010-4B99-A3ED-571199C05B8B"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.505Z",
+            "checksum": "ed64f86b49d2038641bb564d3c67e848e57fa6b5c236af57d07eb5a252cc3869"
+          }
+        }
+      ]
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "maxRows",
+            "Type": "number",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "10",
+            "Description": "Optional maximum number of rows to return. Guarded by truthiness check — value of 0 will cause this clause to fall back to the default of 500.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "53FC9F2B-A82D-4F05-A2A8-E3ECB839E1E8"
+          }
+        },
+        {
+          "fields": {
+            "Name": "start",
+            "Type": "date",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "Optional start date/time filter for the RunAt timestamp. Guarded by truthiness check.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "F7D4676E-1244-4080-A758-9946676AD5BE"
+          }
+        },
+        {
+          "fields": {
+            "Name": "end",
+            "Type": "date",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "Optional end date/time filter for the RunAt timestamp. Guarded by truthiness check.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "1E3B7660-8C21-4801-AA94-990064F2FCDE"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "PromptRunID",
+            "Description": "Unique identifier for the prompt run",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "3461DED6-00E5-4FB0-B71B-9E2E867D895F"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AgentRunID",
+            "Description": "Unique identifier for the parent agent run, if applicable",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "68E7EAC5-3C5D-46C6-A4F7-E8BF271AA6A3"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ParentPromptRunID",
+            "Description": "Unique identifier for the parent prompt run, if nested",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "C550E05B-C2D2-4D7A-B432-38547A84AEBD"
+          }
+        },
+        {
+          "fields": {
+            "Name": "RunAt",
+            "Description": "The local timestamp when the prompt run was executed",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "C7953CFB-125C-41B3-972A-F7F8EA5CF9A8"
+          }
+        },
+        {
+          "fields": {
+            "Name": "RunAtUTC",
+            "Description": "The UTC timestamp when the prompt run was executed",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "BB426C58-A9CE-4DE4-8E10-D7E04803F170"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PromptID",
+            "Description": "Unique identifier of the prompt template used",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "8979B2D4-F548-40B5-AF81-886778A49C95"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ModelID",
+            "Description": "Unique identifier of the AI model used",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "436FB7CD-3BA6-4F5B-9569-AAA4CD22E7FE"
+          }
+        },
+        {
+          "fields": {
+            "Name": "VendorID",
+            "Description": "Unique identifier of the AI vendor",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "0E1F908C-D737-4927-B2E6-97E3AFF01510"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AgentID",
+            "Description": "Unique identifier of the executing agent",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "C18DB58B-7592-4091-B3AA-25697A111D6B"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ConfigurationID",
+            "Description": "Unique identifier of the configuration used",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "C15F6066-68CC-4CFB-BF79-0EA4102B41BE"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UserID",
+            "Description": "Unique identifier of the user who initiated the run",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "F08845DE-A71B-464F-82DF-41E49534387D"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ConversationID",
+            "Description": "Unique identifier of the associated conversation",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "A678C3BB-F805-4B89-8749-504C1F78E331"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PrimaryScopeEntityID",
+            "Description": "Unique identifier of the primary scoped entity",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "6CAB579F-EA48-4DCD-AB20-D51DC4A7D708"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PrimaryScopeRecordID",
+            "Description": "Unique identifier of the primary scoped record",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "C068740A-2B17-4961-B694-B1CA3EDF58AA"
+          }
+        },
+        {
+          "fields": {
+            "Name": "RunType",
+            "Description": "The execution type of the run",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E3D1F57C-1771-43F2-903B-FE184A15BEAA"
+          }
+        },
+        {
+          "fields": {
+            "Name": "SourceKind",
+            "Description": "The source type that triggered the run",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "833A47D5-F30C-4299-9832-E8D11980C5C7"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Status",
+            "Description": "The execution status of the run",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "8E8B436E-1F5D-427D-B2ED-1796F9D6AFC6"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Success",
+            "Description": "Indicates if the run completed successfully",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "9F4107D6-240D-4055-A473-9C54F48D8A58"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TokensPrompt",
+            "Description": "The number of tokens used in the prompt input",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "653EB58C-5253-4DB8-A2A6-0840D4C77181"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TokensCompletion",
+            "Description": "The number of tokens generated in the prompt completion",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "9C882440-5B17-4EA8-9134-5DD32A665D0D"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TokensCacheRead",
+            "Description": "The number of prompt tokens read from cache",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "64FC8A68-0B03-48A6-BCE5-9FE7C201464A"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TokensCacheWrite",
+            "Description": "The number of prompt tokens written to cache",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "F36D81B2-E314-4EE9-AAB4-C1A51A55EC84"
+          }
+        },
+        {
+          "fields": {
+            "Name": "InputUnitsUsed",
+            "Description": "The measured input units consumed",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "596A6537-404A-434A-975E-4DFF15319455"
+          }
+        },
+        {
+          "fields": {
+            "Name": "OutputUnitsUsed",
+            "Description": "The measured output units consumed",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "291A19B5-D8BA-473E-8237-C0AA1212DBAD"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ExecutionTimeMS",
+            "Description": "The total execution time in milliseconds",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "DA6F5CC0-2415-49EE-ABD2-F504C5898A88"
+          }
+        },
+        {
+          "fields": {
+            "Name": "IsUnmeasured",
+            "Description": "Flag indicating if the run was unmeasured (no token/unit counts recorded)",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "943B669E-340E-4CCC-9B72-834B69E120EA"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UnpricedReason",
+            "Description": "The reason why the prompt run is unpriced",
+            "IsSummary": false,
+            "ComputationDescription": "CASE expression evaluating IsUnmeasured to output the descriptive reason for missing pricing",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "4CFEBE85-C291-4E08-874D-2AB6EE2059EF"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "226484B9-8178-418A-8CDB-25D2BF234684"
     },
     "sync": {
-      "lastModified": "2026-09-29T19:21:53.346Z",
-      "checksum": "25e899865d61013f3a9b2401ab6fdaf710b75e87c4ca38f4a7197c7d4b625dd3"
+      "lastModified": "2026-10-28T22:14:01.634Z",
+      "checksum": "80b5bb21105cf6703399ff485e37d3e729d2d37e463690cb5d74d65d83f349b8"
     }
   }
 ]

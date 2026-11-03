@@ -7,6 +7,7 @@ import { MJGlobal } from '@memberjunction/global';
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { AutoDocConnectionConfig } from '../types/driver.js';
 import { SchemaDefinition, TableDefinition, ColumnDefinition, ForeignKeyReference } from '../types/state.js';
+import { AttachIndexesToTables } from '../utils/index-hints.js';
 import { SchemaFilterConfig, TableFilterConfig, AnalysisConfig } from '../types/config.js';
 import '../drivers/SQLServerDriver.js'; // Import to ensure registration
 import '../drivers/MySQLDriver.js'; // Import to ensure registration
@@ -127,7 +128,8 @@ export class Introspector {
           schema: fk.referencedSchema,
           table: fk.referencedTable,
           column: fk.columnName,
-          referencedColumn: fk.referencedColumn
+          referencedColumn: fk.referencedColumn,
+          constraintName: fk.constraintName
         }));
 
         // Convert columns
@@ -139,6 +141,7 @@ export class Introspector {
           isForeignKey: col.isForeignKey,
           checkConstraint: col.checkConstraint,
           defaultValue: col.defaultValue,
+          maxLength: col.maxLength,
           descriptionIterations: []
         }));
 
@@ -182,6 +185,22 @@ export class Introspector {
     }
 
     return schemas;
+  }
+
+  /**
+   * Reads each schema's indexes and stores them on its tables (`TableDefinition.indexes`).
+   * A schema whose catalog read fails is left without indexes and reported in the result.
+   */
+  public async LoadIndexes(schemas: SchemaDefinition[]): Promise<{ SchemaName: string; Error: string }[]> {
+    const failed: { SchemaName: string; Error: string }[] = [];
+    for (const schema of schemas) {
+      try {
+        AttachIndexesToTables(schema.tables, await this.driver.GetIndexes(schema.name));
+      } catch (err) {
+        failed.push({ SchemaName: schema.name, Error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    return failed;
   }
 
   /** @deprecated Use {@link GetSchemas}. */
@@ -252,6 +271,9 @@ export class DataSampler {
           nullCount: stats.nullCount,
           nullPercentage: stats.nullPercentage,
           sampleValues: stats.sampleValues,
+          // Every distinct value of a low-cardinality column. The enum candidate gate reads it to know
+          // which values a column holds; without it, the gate falls back to the 20-row random sample.
+          valueDistribution: stats.valueDistribution?.map(v => ({ value: v.value, frequency: v.frequency })),
           min: stats.min,
           max: stats.max,
           avg: stats.avg,

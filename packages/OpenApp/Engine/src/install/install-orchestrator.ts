@@ -4,9 +4,8 @@
  * Sequences the install flow, upgrade flow, and remove flow.
  * Each step is delegated to a specialized handler.
  */
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions, AppHookPayload, AppStatus, InstallAction } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
@@ -15,12 +14,13 @@ import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/versi
 import { ResolveDependencyGraph } from '../dependency/dependency-graph-builder.js';
 import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-builder.js';
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
-import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, DescribeUnresolvedVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
 import semver from 'semver';
 import { CheckCanMigrateAppSchema, CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, MJ_APP_SCHEMA_PREFIX, type SchemaNameValidation } from './schema-manager.js';
 import { RunFkGraphTeardown, BuildRootDoomedPredicate } from './entity-teardown.js';
 import { OfferTemplateUser } from './template-user.js';
 import { ExtractApplicationIds } from './migration-application-ids.js';
+import { CreateAppTempDir } from './temp-dir.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
 import { BuildHookResolutionBases, ResolveHookModule } from './hook-module-resolver.js';
@@ -728,14 +728,16 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
 
     // Step 1: Fetch new manifest
     const explicitUpgradeVersion = options.Version;
-    const targetVersion = explicitUpgradeVersion ?? (await GetLatestVersion(existingApp.RepositoryURL, context.GitHubOptions, existingApp.Subpath ?? undefined));
+    const targetVersion = explicitUpgradeVersion ?? (await GetLatestVersion(existingApp.RepositoryURL, context.GitHubOptions, existingApp.Subpath ?? undefined, existingApp.Name));
     if (!targetVersion) {
-      return BuildFailureResult('Upgrade', options.AppName, '', 'Schema', startTime, 'Could not determine target version');
+      // An empty listing may be a repo this credential cannot see (GitHub 404s it) — say which.
+      const reason = await DescribeUnresolvedVersion(existingApp.RepositoryURL, context.GitHubOptions, existingApp.Subpath ?? undefined);
+      return BuildFailureResult('Upgrade', options.AppName, '', 'Schema', startTime, reason);
     }
 
     // If an explicit version was requested, validate the tag exists on GitHub
     if (explicitUpgradeVersion) {
-      const tagResult = await ValidateGitHubTag(existingApp.RepositoryURL, targetVersion, context.GitHubOptions, existingApp.Subpath ?? undefined);
+      const tagResult = await ValidateGitHubTag(existingApp.RepositoryURL, targetVersion, context.GitHubOptions, existingApp.Subpath ?? undefined, existingApp.Name);
       if (!tagResult.Exists) {
         return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Schema', startTime, tagResult.ErrorMessage ?? `Version ${targetVersion} not found`);
       }
@@ -762,7 +764,7 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     const subpath = existingApp.Subpath ?? undefined;
 
     Callbacks?.OnProgress?.('Fetch', `Fetching manifest for ${options.AppName} v${targetVersion}...`);
-    const fetchResult = await FetchManifestFromGitHub(existingApp.RepositoryURL, targetVersion, context.GitHubOptions, subpath);
+    const fetchResult = await FetchManifestFromGitHub(existingApp.RepositoryURL, targetVersion, context.GitHubOptions, subpath, existingApp.Name);
     if (!fetchResult.Success || !fetchResult.ManifestJSON) {
       return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Schema', startTime, fetchResult.ErrorMessage ?? 'Failed to fetch manifest');
     }
@@ -1332,6 +1334,7 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
         await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
         return BuildFailureResult('Remove', options.AppName, existingApp.Version, 'Schema', startTime, combined);
       }
+      await DeleteAppDependencies(context.ContextUser, existingApp.ID);
       await SetAppStep(context.ContextUser, existingApp.ID, 'DbCleanupDone');
     }
 
@@ -1529,7 +1532,7 @@ interface InternalResult {
   Success: boolean;
   ErrorMessage?: string;
   AppId?: string;
-  DepsToInstall?: Array<{ AppName: string; Repository: string; VersionRange: string; Subpath?: string }>;
+  DepsToInstall?: Array<{ AppName: string; Repository: string; VersionRange: string; Subpath?: string; Version?: string }>;
   /** True when package.json was updated but npm install failed (e.g., auth issue) */
   PackageJsonUpdated?: boolean;
   /** True when a NEW schema was actually created (vs an existing one reused) — for rollback (B18). */
@@ -1576,25 +1579,31 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
     Dependencies: dependencies,
   };
 
-  const result = await ResolveDependencyGraph(root, installedMap, BuildManifestFetcher(context));
+  const result = await ResolveDependencyGraph(
+    root,
+    installedMap,
+    BuildManifestFetcher(context),
+    (repoUrl, versionRange) => ResolveDependencyVersion(repoUrl, versionRange, context.GitHubOptions),
+  );
   if (!result.Success) {
     return { Success: false, ErrorMessage: result.ErrorMessage };
   }
 
   const depsToInstall = (result.InstallOrder ?? [])
     .filter((d) => !d.AlreadyInstalled)
-    .map((d) => ({ AppName: d.AppName, Repository: d.Repository, VersionRange: d.VersionRange, Subpath: d.Subpath }));
+    .map((d) => ({ AppName: d.AppName, Repository: d.Repository, VersionRange: d.VersionRange, Subpath: d.Subpath, Version: d.ResolvedVersion }));
 
   return { Success: true, DepsToInstall: depsToInstall };
 }
 
 /**
  * Builds a {@link ManifestFetcher} that retrieves and validates a dependency's
- * manifest from GitHub. Used by the graph builder to walk transitive deps.
+ * manifest from GitHub (at the resolved version when given). Used by the graph
+ * builder to walk transitive deps.
  */
 function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
-  return async (repoUrl: string, subpath?: string) => {
-    const fetched = await FetchManifestFromGitHub(repoUrl, undefined, context.GitHubOptions, subpath);
+  return async (repoUrl: string, subpath?: string, version?: string) => {
+    const fetched = await FetchManifestFromGitHub(repoUrl, version, context.GitHubOptions, subpath);
     if (!fetched.Success || !fetched.ManifestJSON) {
       return { Success: false, ErrorMessage: fetched.ErrorMessage ?? 'Failed to fetch manifest' };
     }
@@ -1607,6 +1616,7 @@ function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
       Manifest: {
         name: parsed.Manifest.name,
         repository: parsed.Manifest.repository,
+        version: parsed.Manifest.version,
         dependencies: (parsed.Manifest.dependencies ?? {}) as Record<string, DependencyValue>,
       },
     };
@@ -1624,13 +1634,13 @@ function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
  * Inherited options that affect install BEHAVIOR (verbosity, the schema-name
  * override) are forwarded from the parent so a flag set on the top-level call
  * also governs the dependency installs. App-identity options (Source, Version)
- * are NOT forwarded — each dependency has its own source and installs its own
- * latest release rather than inheriting the parent's pin. The forwarded set is
- * explicit so new flags require a deliberate decision about whether they apply
- * to dependencies.
+ * are NOT forwarded — each dependency has its own source and installs at the
+ * version the graph resolution chose for it, rather than inheriting the parent's
+ * pin. The forwarded set is explicit so new flags require a deliberate decision
+ * about whether they apply to dependencies.
  */
 async function InstallDependencies(
-  deps: Array<{ AppName: string; Repository: string; VersionRange: string; Subpath?: string }>,
+  deps: Array<{ AppName: string; Repository: string; VersionRange: string; Subpath?: string; Version?: string }>,
   context: OrchestratorContext,
   inherited: PassthroughInstallOptions,
 ): Promise<InternalResult> {
@@ -1642,21 +1652,15 @@ async function InstallDependencies(
       };
     }
     context.Callbacks?.OnProgress?.('Dependencies', `Installing dependency from ${dep.Repository}...`);
-    // Resolve the highest published version that satisfies the declared range, and pin the
-    // install to it. Previously the dependency installed with no Version → whatever the
-    // default-branch manifest reported, so a `>=1.0 <2.0` requirement could silently pull
-    // 3.0 (B26). A range with no satisfying version now fails loudly rather than installing
-    // the wrong major.
-    const resolved = await ResolveDependencyVersion(dep.Repository, dep.VersionRange, context.GitHubOptions);
-    if (resolved.ErrorMessage) {
-      return { Success: false, ErrorMessage: `Cannot install dependency '${dep.AppName}': ${resolved.ErrorMessage}` };
-    }
+    // The graph resolution already resolved the highest published version satisfying the
+    // declared range, fetched that version's manifest and checked it against every other
+    // parent's range — install exactly that version so the installed app matches the graph.
     const result = await InstallApp(
       {
         Source: dep.Repository,
         Subpath: dep.Subpath,
         // Pinned to satisfy the declared range; undefined ⇒ no constraint ⇒ default-branch latest.
-        Version: resolved.Version,
+        Version: dep.Version,
         _skipDependencyResolution: true,
         AllowDoubleUnderscoreSchema: inherited.AllowDoubleUnderscoreSchema,
         Verbose: inherited.Verbose,
@@ -1898,8 +1902,7 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
   }
 
   context.Callbacks?.OnProgress?.('Migration', 'Downloading migration files...');
-  const tempDir = join(tmpdir(), `mj-app-${manifest.name}-${Date.now()}`);
-  mkdirSync(tempDir, { recursive: true });
+  const tempDir = CreateAppTempDir(manifest.name);
 
   try {
     // Live DB platform — selects the Skyway provider for RunAppMigrations below.
@@ -1965,12 +1968,11 @@ async function HandleTeardown(manifest: MJAppManifest, context: OrchestratorCont
 
   const platform = context.DatabaseProvider.Dialect.PlatformKey;
   const dir = platform === 'postgresql' ? `${teardownDir}-pg` : teardownDir;
-  const tempDir = join(tmpdir(), `mj-app-${manifest.name}-teardown-${Date.now()}`);
-  mkdirSync(tempDir, { recursive: true });
+  const tempDir = CreateAppTempDir(manifest.name, 'teardown');
 
   try {
     context.Callbacks?.OnProgress?.('Metadata', 'Downloading teardown scripts...');
-    const download = await DownloadMigrations(manifest.repository, manifest.version, dir, tempDir, context.GitHubOptions, subpath);
+    const download = await DownloadMigrations(manifest.repository, manifest.version, dir, tempDir, context.GitHubOptions, subpath, manifest.name);
     if (!download.Success) {
       return { Success: false, ErrorMessage: `Failed to download teardown scripts: ${download.ErrorMessage}` };
     }
@@ -2028,17 +2030,26 @@ async function DownloadAppMigrations(
   const isPG = context.DatabaseProvider.Dialect.PlatformKey === 'postgresql';
 
   if (isPG) {
-    const pgDir = `${baseDir.replace(/\/+$/, '')}-pg`;
-    const pgResult = await DownloadMigrations(manifest.repository, manifest.version, pgDir, tempDir, context.GitHubOptions, subpath);
+    let end = baseDir.length;
+    while (end > 0 && baseDir.charCodeAt(end - 1) === 47) {
+      end--;
+    }
+    const pgDir = `${baseDir.slice(0, end)}-pg`;
+    const pgResult = await DownloadMigrations(manifest.repository, manifest.version, pgDir, tempDir, context.GitHubOptions, subpath, manifest.name);
     // Use the PG-specific set only if it exists AND has files; otherwise fall
     // back to the declared directory (a 404 yields Success:false, an empty dir
     // yields Success:true with no files — both mean "no PG variant here").
+    //
+    // `manifest.name` matters MORE here than anywhere else: this probe reads a 404 as "no PG
+    // variant", so a ref that does not exist is indistinguishable from a repo that ships no `-pg`
+    // set. Without the app name, a package-tagged monorepo app's PG migrations are skipped
+    // silently on this line before the declared directory fails loudly on the next one.
     if (pgResult.Success && (pgResult.Files?.length ?? 0) > 0) {
       return pgResult;
     }
   }
 
-  return DownloadMigrations(manifest.repository, manifest.version, baseDir, tempDir, context.GitHubOptions, subpath);
+  return DownloadMigrations(manifest.repository, manifest.version, baseDir, tempDir, context.GitHubOptions, subpath, manifest.name);
 }
 
 /**
@@ -2533,8 +2544,7 @@ async function ExtractDeclaredApplicationIds(
   }
   let tempDir: string | undefined;
   try {
-    tempDir = join(tmpdir(), `mj-app-${manifest.name}-appids-${Date.now()}`);
-    mkdirSync(tempDir, { recursive: true });
+    tempDir = CreateAppTempDir(manifest.name, 'appids');
     const download = await DownloadAppMigrations(manifest, context, tempDir, subpath);
     if (!download.Success) {
       return [];

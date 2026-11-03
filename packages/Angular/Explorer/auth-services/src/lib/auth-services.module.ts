@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { MJAuthBase } from './mjexplorer-auth-base.service';
 import { AngularAuthProviderFactory } from './AngularAuthProviderFactory';
 import { MJMagicLinkProvider } from './providers/mjexplorer-magic-link-provider.service';
+import './providers/mjexplorer-local-dev-provider.service';
 import { MJGlobal } from '@memberjunction/global';
 import type { PublicAuthProviderInfo } from '@memberjunction/core';
 import { AuthProviderCatalog, type AuthProviderResolution } from './auth-provider-catalog';

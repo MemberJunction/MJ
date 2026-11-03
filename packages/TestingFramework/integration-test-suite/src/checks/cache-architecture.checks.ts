@@ -40,7 +40,7 @@ async function makeDispatcherContext(ctx: IntegrationCheckContext): Promise<Sche
     schedule.Name = `User Routine Dispatcher (cache-architecture) ${TAG}`;
     const run = await ctx.Provider.GetEntityObject<MJScheduledJobRunEntity>('MJ: Scheduled Job Runs', ctx.User);
     run.NewRecord();
-    return { Schedule: schedule, Run: run, ContextUser: ctx.User };
+    return { Schedule: schedule, Run: run, ContextUser: ctx.User, Provider: ctx.Provider };
 }
 
 /** Cache keys the storage provider holds for one entity (RunView fingerprints start `<Entity>|`). */
@@ -62,7 +62,7 @@ interface EngineCacheKeyAccess {
 interface ProviderCacheKeyAccess {
     InstanceConnectionString: string;
     ComputeRunViewRLSWhereClause(params: RunViewParams, contextUser?: UserInfo): string;
-    ComputeRunViewFLSFingerprintKey(params: RunViewParams): string | undefined;
+    ComputeRunViewFLSFingerprintKey(params: RunViewParams, contextUser?: UserInfo): string | undefined;
 }
 
 /**
@@ -72,7 +72,7 @@ interface ProviderCacheKeyAccess {
 function providerSlotKey(provider: ProviderCacheKeyAccess, params: RunViewParams, user: UserInfo): string {
     return LocalCacheManager.Instance.GenerateRunViewFingerprint(
         params, provider.InstanceConnectionString, provider.ComputeRunViewRLSWhereClause(params, user), undefined,
-        provider.ComputeRunViewFLSFingerprintKey(params));
+        provider.ComputeRunViewFLSFingerprintKey(params, user));
 }
 
 /** Every engine in this process that has finished loading. */

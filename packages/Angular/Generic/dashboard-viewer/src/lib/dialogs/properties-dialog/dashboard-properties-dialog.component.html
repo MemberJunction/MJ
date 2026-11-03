@@ -1,0 +1,109 @@
+@if (Visible) {
+  <mj-dialog [Visible]="true" Size="lg" Title="Properties and wires" (Close)="Cancel()">
+    <div class="dpd">
+      <section>
+        <div class="dpd__label">Properties</div>
+        <p class="dpd__hint">
+          A property is a value the page hosting the dashboard sets once, such as a chapter. Each part maps it onto its own
+          inputs in Edit part. A property's default is used when nothing sets it.
+        </p>
+        @for (property of EditProperties; track $index; let i = $index) {
+          <div class="dpd__card">
+            <div class="dpd__row">
+              <div class="dpd__field">
+                <label [attr.for]="'dpd-name-' + i">Name</label>
+                <input [id]="'dpd-name-' + i" class="mj-input" type="text" [ngModel]="property.Name" (ngModelChange)="UpdateProperty(i, { Name: $event })">
+              </div>
+              <div class="dpd__field dpd__field--narrow">
+                <label [attr.for]="'dpd-type-' + i">Type</label>
+                <select [id]="'dpd-type-' + i" class="mj-input" [ngModel]="property.Type" (ngModelChange)="SetPropertyType(i, $event)">
+                  @for (type of Types; track type) {
+                    <option [value]="type">{{ type }}</option>
+                  }
+                </select>
+              </div>
+              <button mjButton Variant="icon" Size="sm" type="button" class="dpd__remove" title="Remove property"
+                      [attr.aria-label]="'Remove property ' + property.Name" (click)="RemoveProperty(i)">
+                <i class="fa-solid fa-trash" aria-hidden="true"></i>
+              </button>
+            </div>
+            <div class="dpd__field">
+              <label [attr.for]="'dpd-desc-' + i">Description</label>
+              <input [id]="'dpd-desc-' + i" class="mj-input" type="text" [ngModel]="property.Description ?? ''" (ngModelChange)="UpdateProperty(i, { Description: $event })">
+            </div>
+            <div class="dpd__field">
+              <span class="dpd__field-label">Default</span>
+              <mj-property-default-editor [Default]="property.Default" [Type]="property.Type" [Label]="'Default of ' + property.Name"
+                  (DefaultChange)="SetPropertyDefault(i, $event)"></mj-property-default-editor>
+            </div>
+            <label class="dpd__check">
+              <input type="checkbox" class="mj-checkbox" [ngModel]="property.IsRequired === true" (ngModelChange)="UpdateProperty(i, { IsRequired: $event })">
+              Required
+            </label>
+          </div>
+        } @empty {
+          <p class="dpd__empty">This dashboard has no properties.</p>
+        }
+        <button mjButton Variant="outline" Size="sm" type="button" (click)="AddProperty()">
+          <i class="fa-solid fa-plus" aria-hidden="true"></i> Add property
+        </button>
+      </section>
+
+      <section>
+        <div class="dpd__label">Wires</div>
+        <p class="dpd__hint">A wire sets a property from a part's selection, so selecting a row in one part filters the parts that map that property.</p>
+        @if (IsLoading) {
+          <mj-loading Text="Loading parts..." Size="small"></mj-loading>
+        } @else {
+          @for (wire of EditWires; track $index; let i = $index) {
+            <div class="dpd__wire">
+              <select class="mj-input" [attr.aria-label]="'Part of wire ' + (i + 1)" [ngModel]="wire.Panel" (ngModelChange)="UpdateWire(i, { Panel: $event })">
+                @for (panel of WireSources; track panel.id) {
+                  <option [value]="panel.id">{{ panel.title }}</option>
+                }
+              </select>
+              <select class="mj-input" [attr.aria-label]="'Event of wire ' + (i + 1)" [ngModel]="wire.Event" (ngModelChange)="UpdateWire(i, { Event: $event })">
+                @for (event of EventsOf(wire); track event.Name) {
+                  <option [value]="event.Name">{{ event.Name }}</option>
+                }
+              </select>
+              <select class="mj-input" [attr.aria-label]="'Value of wire ' + (i + 1)" [ngModel]="wire.Value" (ngModelChange)="UpdateWire(i, { Value: $event })">
+                @for (value of ValuesOf(wire); track value.Name) {
+                  <option [value]="value.Name">{{ value.Name }}</option>
+                }
+              </select>
+              <span class="dpd__arrow" aria-hidden="true"><i class="fa-solid fa-arrow-right"></i></span>
+              <select class="mj-input" [attr.aria-label]="'Property of wire ' + (i + 1)" [ngModel]="wire.Property" (ngModelChange)="UpdateWire(i, { Property: $event })">
+                @for (property of EditProperties; track $index) {
+                  <option [value]="property.Name">{{ property.Name }}</option>
+                }
+              </select>
+              <button mjButton Variant="icon" Size="sm" type="button" title="Remove wire" [attr.aria-label]="'Remove wire ' + (i + 1)" (click)="RemoveWire(i)">
+                <i class="fa-solid fa-trash" aria-hidden="true"></i>
+              </button>
+            </div>
+          } @empty {
+            <p class="dpd__empty">No wires.</p>
+          }
+          <button mjButton Variant="outline" Size="sm" type="button" [disabled]="WireSources.length === 0 || EditProperties.length === 0" (click)="AddWire()">
+            <i class="fa-solid fa-plus" aria-hidden="true"></i> Add wire
+          </button>
+        }
+      </section>
+
+      @if (Problems.length > 0) {
+        <ul class="dpd__problems" role="alert">
+          @for (problem of Problems; track problem) {
+            <li>{{ problem }}</li>
+          }
+        </ul>
+      }
+    </div>
+    <mj-dialog-actions>
+      <button mjButton Variant="primary" type="button" [disabled]="!CanApply" (click)="Apply()">
+        <i class="fa-solid fa-check" aria-hidden="true"></i> Apply
+      </button>
+      <button mjButton Variant="secondary" type="button" (click)="Cancel()">Cancel</button>
+    </mj-dialog-actions>
+  </mj-dialog>
+}

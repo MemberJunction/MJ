@@ -1174,4 +1174,59 @@ describe('PostgreSQLCodeGenProvider — composite primary keys are never truncat
             expect(sql).toContain('WHERE "ParentID" = p_id');
         });
     });
+
+    describe("SaveReturnMode ('datestamps_only' vs 'full')", () => {
+        const datestampFields: Record<string, unknown>[] = [
+            {
+                ID: 'pk-field-1', Name: 'ID', CodeName: 'ID', Type: 'uniqueidentifier', Length: 16,
+                IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: 'newsequentialid()',
+            },
+            {
+                ID: 'name-field-1', Name: 'Name', CodeName: 'Name', Type: 'nvarchar', Length: 510,
+                IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '',
+            },
+            {
+                ID: 'created-field', Name: '__mj_CreatedAt', CodeName: '__mj_CreatedAt', Type: 'datetimeoffset', Length: 10,
+                IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: 'getutcdate()',
+            },
+            {
+                ID: 'updated-field', Name: '__mj_UpdatedAt', CodeName: '__mj_UpdatedAt', Type: 'datetimeoffset', Length: 10,
+                IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: 'getutcdate()',
+            },
+        ];
+
+        it('emits RETURNS TABLE and SELECT from BaseTable with #variable_conflict use_column when SaveReturnMode is datestamps_only', () => {
+            const entity = createMockEntity(
+                { Configuration: JSON.stringify({ SaveReturnMode: 'datestamps_only' }) },
+                datestampFields,
+            );
+            const createSQL = provider.generateCRUDCreate(entity);
+            const updateSQL = provider.generateCRUDUpdate(entity);
+
+            expect(createSQL).toContain('RETURNS TABLE("ID" UUID, "__mj_CreatedAt" TIMESTAMPTZ, "__mj_UpdatedAt" TIMESTAMPTZ)');
+            expect(createSQL).toContain('#variable_conflict use_column');
+            expect(createSQL).toContain('SELECT "ID", "__mj_CreatedAt", "__mj_UpdatedAt" FROM "__mj"."TestEntity"');
+            expect(createSQL).not.toContain('vwTestEntities');
+
+            expect(updateSQL).toContain('RETURNS TABLE("ID" UUID, "__mj_CreatedAt" TIMESTAMPTZ, "__mj_UpdatedAt" TIMESTAMPTZ)');
+            expect(updateSQL).toContain('#variable_conflict use_column');
+            expect(updateSQL).toContain('SELECT "ID", "__mj_CreatedAt", "__mj_UpdatedAt" FROM "__mj"."TestEntity"');
+            expect(updateSQL).not.toContain('vwTestEntities');
+        });
+
+        it('keeps RETURNS SETOF BaseView and SELECT * FROM BaseView when SaveReturnMode is full (default)', () => {
+            const entity = createMockEntity({}, datestampFields);
+            const createSQL = provider.generateCRUDCreate(entity);
+            const updateSQL = provider.generateCRUDUpdate(entity);
+
+            expect(createSQL).toContain('RETURNS SETOF "__mj"."vwTestEntities"');
+            expect(createSQL).toContain('SELECT * FROM "__mj"."vwTestEntities"');
+            expect(createSQL).not.toContain('#variable_conflict use_column');
+
+            expect(updateSQL).toContain('RETURNS SETOF "__mj"."vwTestEntities"');
+            expect(updateSQL).toContain('SELECT * FROM "__mj"."vwTestEntities"');
+            expect(updateSQL).not.toContain('#variable_conflict use_column');
+        });
+    });
 });
+

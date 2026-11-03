@@ -6,6 +6,7 @@ import { renderComponentFixture, query, queryAll, text, click, typeInto, capture
 import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
 import { ValidationErrorInfo } from '@memberjunction/global';
 import { MjFormFieldComponent } from './form-field.component';
+import { MjRecordLinkDirective } from '../links/record-link.directive';
 import { FORM_SECTION_FIELD_HOST, type FormSectionFieldHost } from '../section-indicators/form-section-field-host';
 import { FormFieldEditCoordinator, type FormFieldEdit } from '../form-field-edit.coordinator';
 
@@ -110,7 +111,7 @@ function render(
   setup?: (c: MjFormFieldComponent) => void,
 ): ComponentFixture<MjFormFieldComponent> {
   return renderComponentFixture(MjFormFieldComponent, {
-    declarations: [MjFormFieldComponent],
+    declarations: [MjFormFieldComponent, MjRecordLinkDirective],
     imports: [CommonModule, StubMarkdownComponent, StubCodeEditorComponent, StubSafeRichHtmlPipe],
     inputs,
     setup,
@@ -142,6 +143,16 @@ describe('MjFormFieldComponent (DOM)', () => {
       const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', ShowLabel: false });
       expect(query(f, '.mj-forms-field-label')).toBeNull();
       expect(text(f, '.mj-forms-field-value')).toBe('Gadget');
+    });
+
+    it('marks a label-less field so its value takes the whole row, not the label column', () => {
+      const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', ShowLabel: false });
+      expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--no-label')).toBe(true);
+    });
+
+    it('keeps the two-column layout when the label shows', () => {
+      const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox' });
+      expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--no-label')).toBe(false);
     });
 
     it('hides a named field from FormContext even while the form is editing', () => {
@@ -281,6 +292,13 @@ describe('MjFormFieldComponent (DOM)', () => {
   });
 
   describe('edit mode', () => {
+    it('marks a label-less field in edit mode too, so its input takes the whole row', () => {
+      const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true, ShowLabel: false });
+      expect(query(f, '.mj-forms-field-label')).toBeNull();
+      expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--no-label')).toBe(true);
+      expect(query(f, 'input.mj-forms-field-input')).not.toBeNull();
+    });
+
     it('renders a text input for textbox and typing emits ValueChange with Old/New values and writes through to the record', () => {
       const record = makeWidget();
       const f = render({ Record: record, FieldName: 'Name', Type: 'textbox', EditMode: true });
@@ -829,6 +847,55 @@ describe('MjFormFieldComponent — field-level security', () => {
     const f = render({ Record: makeSecuredWidget(null), FieldName: 'Notes', Type: 'textbox', Provider: { CurrentUser: null } });
     expect(f.componentInstance.IsFieldWritableByUser).toBe(true);
   });
+
+  // ---- IS-A: a child whose own flag is off inherits its parent's rules ----
+
+  /**
+   * An IS-A child of the secured widget, with field security switched OFF on the child itself.
+   * Each parent field is mirrored on the child, read from the same row, so the parent's rules
+   * still apply to it — the same rule `BaseEntity.Get()` enforces.
+   */
+  function makeIsAChildWidget(user: UserInfo): BaseEntity {
+    const parent = makeSecuredEntityInfo();
+    const child = new EntityInfo({
+      ID: 'E0000002-0000-0000-0000-000000000002',
+      Name: 'Test Special Widgets',
+      Status: 'Active',
+      BaseTable: 'TestSpecialWidget',
+      BaseView: 'vwTestSpecialWidgets',
+      EnableFieldLevelSecurity: false,
+      ParentID: parent.ID,
+      Fields: parent.Fields.map((f) => ({ ID: `C-${f.ID}`, Name: f.Name, Type: f.Type, Length: f.Length, AllowsNull: f.AllowsNull, IsPrimaryKey: f.IsPrimaryKey, AllowUpdateAPI: f.AllowUpdateAPI })),
+    });
+    Object.defineProperty(child, 'ParentEntityInfo', { get: () => parent });
+    const entity = new TestWidgetEntity(child);
+    entity.SetMany({ ID: WIDGET_ID, Name: 'Gadget', Description: 'secret', Notes: 'jotting' }, true, true);
+    entity.ContextCurrentUser = user;
+    return entity;
+  }
+
+  function renderIsAChildAs(fieldName: string, roleIds: string[]): ComponentFixture<MjFormFieldComponent> {
+    const user = userWithRoles(roleIds);
+    return render({ Record: makeIsAChildWidget(user), FieldName: fieldName, Type: 'textbox', Provider: { CurrentUser: user } });
+  }
+
+  it("REGRESSION: hides an IS-A child's field that its parent denies, though the child's own flag is off", () => {
+    const f = renderIsAChildAs('Description', [INTERN_ROLE_ID]);
+    expect(f.componentInstance.IsFieldReadableByUser).toBe(false);
+    expect(query(f, '.mj-forms-field')).toBeNull();
+  });
+
+  it("REGRESSION: marks an IS-A child's field read-only when its parent denies the update", () => {
+    const f = renderIsAChildAs('Notes', [INTERN_ROLE_ID]);
+    expect(f.componentInstance.IsFieldReadableByUser).toBe(true);
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(false);
+  });
+
+  it("renders an IS-A child's field normally for a role the parent allows", () => {
+    const f = renderIsAChildAs('Description', [HR_ROLE_ID]);
+    expect(text(f, '.mj-forms-field-value')).toBe('secret');
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(true);
+  });
 });
 
 describe('a server-reported validation error paints the field the way a local one does', () => {
@@ -1073,3 +1140,19 @@ describe('MjFormFieldComponent — reporting edits to the form', () => {
     expect(edits).toEqual([]);
   });
 });
+
+describe('MjFormFieldComponent — deprecated and disabled fields', () => {
+  it('hides a Deprecated field and does not read its value via Record.Get()', () => {
+    const record = makeWidget();
+    const fieldInfo = record.EntityInfo.Fields.find(f => f.Name === 'Description')!;
+    Object.defineProperty(fieldInfo, 'Status', { value: 'Deprecated', configurable: true });
+    const getSpy = vi.spyOn(record, 'Get');
+
+    const f = render({ Record: record, FieldName: 'Description', Type: 'textbox' });
+    expect(f.componentInstance.IsFieldDeprecatedOrDisabled).toBe(true);
+    expect(f.componentInstance.ShouldHideField).toBe(true);
+    expect(query(f, '.mj-forms-field')).toBeNull();
+    expect(getSpy).not.toHaveBeenCalledWith('Description');
+  });
+});
+

@@ -257,8 +257,21 @@
    ============================================ */
 .mj-markdown-container img {
   max-width: 100%;
+  /* A host caps tall images by setting this, a chat column for one; unset, there is no cap. */
+  max-height: var(--mj-markdown-image-max-height, none);
   height: auto;
+  object-fit: contain;
   border-radius: 4px;
+}
+
+/* Images a host shows full size (ImageClicked is bound) */
+.mj-markdown-container img.mj-markdown-image-clickable {
+  cursor: zoom-in;
+}
+
+.mj-markdown-container img.mj-markdown-image-clickable:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: 2px;
 }
 
 /* ============================================

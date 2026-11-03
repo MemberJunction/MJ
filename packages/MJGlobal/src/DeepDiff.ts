@@ -248,6 +248,18 @@ export class DeepDiffer {
         return this.UpdateConfig(config);
     }
     
+    private isEffectivelyUndefined(value: any): boolean {
+        return value === undefined || (this.config.treatNullAsUndefined && value === null);
+    }
+
+    private areEffectivelyEqual(val1: any, val2: any): boolean {
+        if (val1 === val2) return true;
+        if (this.config.treatNullAsUndefined && this.isEffectivelyUndefined(val1) && this.isEffectivelyUndefined(val2)) {
+            return true;
+        }
+        return false;
+    }
+
     /**
      * Recursively generate diff between two values
      * @private
@@ -264,43 +276,27 @@ export class DeepDiffer {
             return;
         }
         
-        const pathStr = path.join('.');
-        
-        // Helper to check if a value is effectively undefined (includes null if treatNullAsUndefined is true)
-        const isEffectivelyUndefined = (value: any): boolean => {
-            return value === undefined || (this.config.treatNullAsUndefined && value === null);
-        };
-        
-        // Helper to check if values are effectively equal
-        const areEffectivelyEqual = (val1: any, val2: any): boolean => {
-            if (val1 === val2) return true;
-            if (this.config.treatNullAsUndefined && isEffectivelyUndefined(val1) && isEffectivelyUndefined(val2)) {
-                return true;
-            }
-            return false;
-        };
-        
         // Handle different cases
-        if (areEffectivelyEqual(oldValue, newValue)) {
+        if (this.areEffectivelyEqual(oldValue, newValue)) {
             if (this.config.includeUnchanged) {
                 changes.push({
-                    path: pathStr || 'root',
+                    path: path.join('.') || 'root',
                     type: DiffChangeType.Unchanged,
                     oldValue,
                     newValue,
                     description: 'No change'
                 });
             }
-        } else if (isEffectivelyUndefined(oldValue) && !isEffectivelyUndefined(newValue)) {
+        } else if (this.isEffectivelyUndefined(oldValue) && !this.isEffectivelyUndefined(newValue)) {
             changes.push({
-                path: pathStr || 'root',
+                path: path.join('.') || 'root',
                 type: DiffChangeType.Added,
                 newValue,
                 description: this.describeValue(newValue, 'Added')
             });
-        } else if (!isEffectivelyUndefined(oldValue) && isEffectivelyUndefined(newValue)) {
+        } else if (!this.isEffectivelyUndefined(oldValue) && this.isEffectivelyUndefined(newValue)) {
             changes.push({
-                path: pathStr || 'root',
+                path: path.join('.') || 'root',
                 type: DiffChangeType.Removed,
                 oldValue,
                 description: this.describeValue(oldValue, 'Removed')
@@ -312,7 +308,7 @@ export class DeepDiffer {
         } else {
             // Values are different types or primitives
             changes.push({
-                path: pathStr || 'root',
+                path: path.join('.') || 'root',
                 type: DiffChangeType.Modified,
                 oldValue,
                 newValue,
@@ -332,12 +328,10 @@ export class DeepDiffer {
         changes: DiffChange[],
         depth: number
     ): void {
-        const pathStr = path.join('.');
-        
         // Check if array lengths are different
         if (oldArray.length !== newArray.length) {
             changes.push({
-                path: pathStr || 'root',
+                path: path.join('.') || 'root',
                 type: DiffChangeType.Modified,
                 oldValue: `Array[${oldArray.length}]`,
                 newValue: `Array[${newArray.length}]`,
@@ -347,18 +341,17 @@ export class DeepDiffer {
         
         // Compare array elements
         const maxLength = Math.max(oldArray.length, newArray.length);
+        const includeIndices = this.config.includeArrayIndices;
         for (let i = 0; i < maxLength; i++) {
-            const elementPath = this.config.includeArrayIndices 
-                ? [...path, `[${i}]`]
-                : [...path, `[]`];
+            path.push(includeIndices ? `[${i}]` : `[]`);
             
             if (i < oldArray.length && i < newArray.length) {
                 // Element exists in both arrays
-                this.generateDiff(oldArray[i], newArray[i], elementPath, changes, depth + 1);
+                this.generateDiff(oldArray[i], newArray[i], path, changes, depth + 1);
             } else if (i < oldArray.length) {
                 // Element was removed
                 changes.push({
-                    path: elementPath.join('.'),
+                    path: path.join('.'),
                     type: DiffChangeType.Removed,
                     oldValue: oldArray[i],
                     description: this.describeValue(oldArray[i], 'Removed')
@@ -366,12 +359,13 @@ export class DeepDiffer {
             } else {
                 // Element was added
                 changes.push({
-                    path: elementPath.join('.'),
+                    path: path.join('.'),
                     type: DiffChangeType.Added,
                     newValue: newArray[i],
                     description: this.describeValue(newArray[i], 'Added')
                 });
             }
+            path.pop();
         }
     }
     
@@ -386,22 +380,34 @@ export class DeepDiffer {
         changes: DiffChange[],
         depth: number
     ): void {
-        // Get all unique keys from both objects
-        const allKeys = new Set([
-            ...Object.keys(oldObj),
-            ...Object.keys(newObj)
-        ]);
-        
-        // Compare each key
-        for (const key of allKeys) {
-            const keyPath = [...path, key];
+        const oldKeys = Object.keys(oldObj);
+        for (let i = 0; i < oldKeys.length; i++) {
+            const key = oldKeys[i];
+            path.push(key);
             this.generateDiff(
                 oldObj[key],
                 newObj[key],
-                keyPath,
+                path,
                 changes,
                 depth + 1
             );
+            path.pop();
+        }
+
+        const newKeys = Object.keys(newObj);
+        for (let i = 0; i < newKeys.length; i++) {
+            const key = newKeys[i];
+            if (!Object.prototype.hasOwnProperty.call(oldObj, key)) {
+                path.push(key);
+                this.generateDiff(
+                    undefined,
+                    newObj[key],
+                    path,
+                    changes,
+                    depth + 1
+                );
+                path.pop();
+            }
         }
     }
     

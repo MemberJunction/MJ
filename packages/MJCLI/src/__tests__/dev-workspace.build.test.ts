@@ -25,8 +25,8 @@ import {
   FALLBACK_PNPM_PIN,
   NPMRC_BASE_LINES,
   ONLY_BUILT_DEPENDENCIES,
+  PARENT_BUILD_SCRIPT,
   PEER_INSTALL_SETTINGS,
-  PickTurboJson,
   ResolveDevDependencyUnion,
   ResolveDuplicateProviderLinks,
   ResolveMemberPnpmBlocks,
@@ -48,7 +48,6 @@ function repo(name: string, overrides?: Partial<CandidateRepo>): CandidateRepo {
     Packages: [],
     UnsupportedGlobs: [],
     Lockfile: null,
-    TurboJson: null,
     MjAppJson: null,
     MjAppJsonError: null,
     WorkspaceGlobs: ['packages/*'],
@@ -506,10 +505,12 @@ describe('CollectOpenAppClientPackages', () => {
 
   // The set mirrors the HOST's own rule, which is the only thing that decides what the shell
   // imports: GetClientPackagesFromManifest (OpenApp/Engine config-manager.ts) builds the client
-  // dynamic-package list as [...client, ...shared] with NO role filter — "every client/shared
-  // package is emitted regardless of startupExport". Anything narrower here is unlinked at the
-  // parent while the shell's generated manifest still imports it (#4401 review, F6/F7).
-  it('collects every client entry regardless of role — the host applies no role filter', () => {
+  // dynamic-package list as [...client, ...shared], filtered only by platform (#4428) — role
+  // itself decides nothing beyond supplying 'actions' as that filter's Node-only default.
+  // Anything narrower here is unlinked at the parent while the shell's generated manifest still
+  // imports it (#4401 review, F6/F7). None of bootstrap/library/components trips the platform
+  // default away from 'both', so all three still collect.
+  it('collects every client entry regardless of role — the host applies no role-specific filter', () => {
     const mixed = repo('bizapps-mixed', {
       MjAppJson: {
         packages: {
@@ -544,6 +545,50 @@ describe('CollectOpenAppClientPackages', () => {
     ]);
   });
 
+  // Mirrors ResolvePackagePlatform in packages/OpenApp/Engine/src/manifest/package-platform.ts —
+  // keep the two in lockstep. A Node-only actions package declared `shared` was imported into the
+  // Angular bundle before this filter existed, and the host could not build (#4428).
+  it('omits a node-only shared package from the shell import set (#4428)', () => {
+    const mixed = repo('bizapps-common', {
+      MjAppJson: {
+        packages: {
+          client: [{ name: '@mj-biz-apps/common-ng', role: 'bootstrap' }],
+          shared: [
+            { name: '@mj-biz-apps/common-entities', role: 'library' },
+            { name: '@mj-biz-apps/common-actions', role: 'library', platform: 'node' },
+          ],
+        },
+      },
+      Packages: [
+        pkg('packages/Angular', '@mj-biz-apps/common-ng'),
+        pkg('packages/Entities', '@mj-biz-apps/common-entities'),
+        pkg('packages/Actions', '@mj-biz-apps/common-actions'),
+      ],
+    });
+    const names = CollectOpenAppClientPackages([mixed], IndexWorkspacePackages([mixed])).Packages.map((c) => c.Package);
+    expect(names).toContain('@mj-biz-apps/common-ng');
+    expect(names).toContain('@mj-biz-apps/common-entities');
+    expect(names).not.toContain('@mj-biz-apps/common-actions');
+  });
+
+  it('omits a role:actions shared package with no explicit platform (#4428)', () => {
+    const acme = repo('acme', {
+      MjAppJson: { packages: { shared: [{ name: '@acme/acme-actions', role: 'actions' }] } },
+      Packages: [pkg('packages/Actions', '@acme/acme-actions')],
+    });
+    const names = CollectOpenAppClientPackages([acme], IndexWorkspacePackages([acme])).Packages.map((c) => c.Package);
+    expect(names).not.toContain('@acme/acme-actions');
+  });
+
+  it('still collects a shared library with no platform declared', () => {
+    const acme = repo('acme', {
+      MjAppJson: { packages: { shared: [{ name: '@acme/acme-entities', role: 'library' }] } },
+      Packages: [pkg('packages/Entities', '@acme/acme-entities')],
+    });
+    const names = CollectOpenAppClientPackages([acme], IndexWorkspacePackages([acme])).Packages.map((c) => c.Package);
+    expect(names).toContain('@acme/acme-entities');
+  });
+
   // server[] goes to dynamicPackages.SERVER, a Node process that resolves importer-relative —
   // not the vite root. It is not part of the shell's resolution problem.
   it('never collects a server entry', () => {
@@ -573,6 +618,20 @@ describe('CollectOpenAppClientPackages', () => {
     });
     expect(() => CollectOpenAppClientPackages([broken], IndexWorkspacePackages([broken]))).toThrow(
       /bizapps-broken[\s\S]*packages\.shared/
+    );
+  });
+
+  // MjAppPackageEntry.platform is a closed three-literal union ('node' | 'browser' | 'both'), and
+  // readDeclaredEntries' final `declared as MjAppPackageEntry[]` cast is only true if this guard
+  // enforces it. An unvalidated typo like "Node" would satisfy the cast, then silently fail every
+  // comparison in runsInBrowser and drop the package from the shell import set with no error
+  // (#4428) — so an invalid platform must throw here, the same way an invalid/missing name does.
+  it('rejects an invalid platform value, naming the offending value', () => {
+    const broken = repo('bizapps-broken-platform', {
+      MjAppJson: JSON.parse('{"packages":{"shared":[{"name":"@acme/x","role":"library","platform":"Node"}]}}') as CandidateRepo['MjAppJson'],
+    });
+    expect(() => CollectOpenAppClientPackages([broken], IndexWorkspacePackages([broken]))).toThrow(
+      /bizapps-broken-platform[\s\S]*packages\.shared\[0\][\s\S]*"Node"/
     );
   });
 
@@ -854,6 +913,39 @@ describe('BuildRootPackageJson', () => {
     expect(result.Content.endsWith('\n')).toBe(true);
   });
 
+  // #4913: the quickstart's `pnpm run build` at the parent needs a script there.
+  it('writes a parent build script that recurses with pnpm, one package at a time', () => {
+    const manifest = JSON.parse(BuildRootPackageJson('ws', [repo('a')]).Content) as { scripts: Record<string, string> };
+    expect(manifest.scripts).toEqual({ build: 'pnpm -r --workspace-concurrency=1 run build' });
+    expect(PARENT_BUILD_SCRIPT).toBe(manifest.scripts.build);
+  });
+
+  // #4129: an importer the generated workspace drops (an app shell outside packages/) must not vote.
+  it('derives lockfile pins only from the root and the importers the member contributes to the workspace', () => {
+    const member = repo('bizapps-x', {
+      Packages: [pkg('packages/core', '@mj-biz-apps/x-core')],
+      Lockfile: {
+        Kind: 'npm',
+        Direct: [
+          { Name: 'chalk', Version: '5.6.2', Importer: '.' },
+          { Name: 'zod', Version: '3.24.1', Importer: 'packages/core' },
+          { Name: '@azure/msal-browser', Version: '5.20.0', Importer: 'apps/MJExplorer' },
+        ],
+        Types: [],
+        Resolutions: [],
+        Skipped: [],
+      },
+    });
+    const overrides = (BuildRootPackageJson('ws', [member]).PnpmSettings as { overrides: Record<string, string> }).overrides;
+    expect(overrides.chalk).toBe('5.6.2');
+    expect(overrides.zod).toBe('3.24.1');
+    expect(overrides['@azure/msal-browser']).toBeUndefined();
+    // admitting the shell with --apps puts it in Packages, and then it votes
+    const admitted = { ...member, AppGlobs: ['apps/*'], Packages: [...member.Packages, pkg('apps/MJExplorer', 'x-explorer')] };
+    const admittedOverrides = (BuildRootPackageJson('ws', [admitted]).PnpmSettings as { overrides: Record<string, string> }).overrides;
+    expect(admittedOverrides['@azure/msal-browser']).toBe('5.20.0');
+  });
+
   it('sanitizes the parent directory name into a valid npm name', () => {
     const result = BuildRootPackageJson('Blue Cypress Code!', [repo('a')]);
     const manifest = JSON.parse(result.Content) as { name: string };
@@ -886,8 +978,8 @@ describe('BuildRootPackageJson', () => {
       Lockfile: {
         Kind: 'pnpm',
         Direct: [
-          { Name: 'axios', Version: '1.13.6' },
-          { Name: '@memberjunction/core', Version: '6.1.0' }, // family — excluded from pins
+          { Name: 'axios', Version: '1.13.6', Importer: '.' },
+          { Name: '@memberjunction/core', Version: '6.1.0', Importer: 'packages/MJCore' }, // family — excluded from pins
         ],
         Types: [{ Name: '@types/express', Version: '5.1.1' }],
         Resolutions: [{ Name: 'axios', Version: '1.13.6' }, { Name: '@types/express', Version: '5.1.1' }],
@@ -1152,25 +1244,5 @@ describe('BuildSentinel', () => {
   it('throws on an empty file list or an empty member list', () => {
     expect(() => BuildSentinel([], ['repo-1'])).toThrow(/at least one generated file/);
     expect(() => BuildSentinel(['a.json'], [])).toThrow(/at least one member/);
-  });
-});
-
-describe('PickTurboJson', () => {
-  it('copies the first member turbo.json (sorted by repo name) verbatim', () => {
-    const content = '{\n  "tasks": { "build": {} }\n}\n';
-    const result = PickTurboJson([
-      repo('z-repo', { TurboJson: '{"other": true}' }),
-      repo('a-repo', { TurboJson: content }),
-    ]);
-    expect(result.Content).toBe(content);
-    expect(result.Source).toBe('a-repo');
-  });
-
-  it('falls back to a minimal dependency-ordered build config when no member carries one', () => {
-    const result = PickTurboJson([repo('a'), repo('b')]);
-    expect(result.Source).toBe('generator fallback');
-    const parsed = JSON.parse(result.Content) as { tasks: { build: { dependsOn: string[]; outputs: string[] } } };
-    expect(parsed.tasks.build.dependsOn).toEqual(['^build']);
-    expect(parsed.tasks.build.outputs).toContain('dist/**');
   });
 });

@@ -1,0 +1,4 @@
+# Truth-suite judge (holdout_rebuild) and its tests. Product pins come first so the judge computes with the sidecar's libraries.
+-r ../../Sidecar/src/python/requirements.txt
+mypy==1.17.1
+pandas-stubs==2.2.2.240807

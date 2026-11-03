@@ -149,7 +149,7 @@ export class CustomUserMenu extends BaseUserMenu {
 
 ### Shell Chrome Policy
 
-Instance Config decides the platform-wide chrome (`Shell.SearchBar.Enabled`, `Shell.Notifications.Enabled`, `Shell.AppSwitcher.*`, `Shell.AppNav.Enabled`) and is the ceiling. A host that needs a narrower answer for some users — a white-label product hiding the search bar for organizations whose plan does not include browsing the knowledge base, say — registers a `BaseShellChromePolicy` subclass. The shell consults it every time it resolves its flags and re-resolves when the policy fires `Changed`.
+Instance Config decides the platform-wide chrome (`Shell.SearchBar.Enabled`, `Shell.Notifications.Enabled`, `Shell.AppSwitcher.*`, `Shell.AppNav.Enabled`, `Shell.ChatOverlay.Enabled`) and is the ceiling. A host that needs a narrower answer for some users — a white-label product hiding the search bar for organizations whose plan does not include browsing the knowledge base, say — registers a `BaseShellChromePolicy` subclass. The shell consults it every time it resolves its flags and re-resolves when the policy fires `Changed`. Booleans can only be narrowed: a `true` from the policy never re-enables something Instance Config turned off. The resolved set is readable on `ShellComponent.ChromeFlags`; explorer-app reads `chatOverlay` from there to gate the floating chat bubble.
 
 ```typescript
 import { BaseShellChromePolicy, ShellChromeFlags } from '@memberjunction/ng-explorer-core';
@@ -157,7 +157,12 @@ import { BaseShellChromePolicy, ShellChromeFlags } from '@memberjunction/ng-expl
 @RegisterClass(BaseShellChromePolicy)
 export class PlanChromePolicy extends BaseShellChromePolicy {
   public override Resolve(flags: ShellChromeFlags): ShellChromeFlags {
-    return { ...flags, searchBar: flags.searchBar && this.currentOrgHasKnowledgePlus() };
+    return {
+      ...flags,
+      searchBar: flags.searchBar && this.currentOrgHasKnowledgePlus(),
+      // the floating chat bubble, for an audience whose app owns its own AI surface
+      chatOverlay: flags.chatOverlay && !this.currentUserIsLearnerOnly(),
+    };
   }
   // call this.Changed.next() when the organization or plan switches
 }

@@ -22,7 +22,13 @@ type ResourceType =
     | 'Dashboard'  // Dashboard view
     | 'Report'  // Report view
     | 'Form'  // Form view
-    | 'View';  // Saved view
+    | 'View'  // Saved or dynamic view
+    | 'App'  // Application (e.g., "data-explorer", "Data Explorer")
+    | 'NavItem'  // Application navigation item (e.g., "Queries", "Conversations")
+    | 'Artifact'  // Conversation or standalone artifact
+    | 'File'  // File or document artifact
+    | 'Query'  // Saved query
+    | 'Search';  // Universal search
 
 interface OpenURLCommand {
     type: 'open:url';  // Command type identifier

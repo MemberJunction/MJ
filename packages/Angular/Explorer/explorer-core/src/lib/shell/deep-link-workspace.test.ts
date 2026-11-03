@@ -114,4 +114,41 @@ describe('ShellComponent.applyStartupDeepLink — the PrepareConfiguration hook'
         const saved = config([ballots], 'Ballots');
         expect(await shellMatching(ballots).applyStartupDeepLink(saved, '/app/Voting/Ballots')).toBe(saved);
     });
+
+    it('findTabForUrl resolves an app-only deep link (/app/data-explorer?entity=...&abv=...) to the app default nav item tab', async () => {
+        const shell = Object.create(ShellComponent.prototype) as ShellComponent;
+        const dataTab: WorkspaceTab = {
+            id: 'tab-data',
+            applicationId: 'app-de',
+            title: 'Data',
+            resourceTypeId: '',
+            resourceRecordId: '',
+            isPinned: false,
+            sequence: 0,
+            lastAccessedAt: NOW,
+            configuration: { resourceType: 'Custom', appName: 'Data Explorer', navItemName: 'Data' }
+        };
+        (shell as unknown as Record<string, unknown>)['appManager'] = {
+            GetAppByPath: (p: string) => p === 'data-explorer' ? {
+                ID: 'app-de',
+                Name: 'Data Explorer',
+                Path: 'data-explorer',
+                GetNavItems: async () => [
+                    { Label: 'Data', ResourceType: 'Custom', DriverClass: 'DataExplorerResource', isDefault: true },
+                    { Label: 'Queries', ResourceType: 'Custom', DriverClass: 'QueryBrowserResource', isDefault: false }
+                ]
+            } : null,
+            GetAppByName: () => null,
+            WhenReady: () => Promise.resolve()
+        };
+
+        const out = await (shell as unknown as Hook).applyStartupDeepLink(
+            config([dataTab], 'tab-data'),
+            '/app/data-explorer?entity=MJ%3A%20Scheduled%20Jobs&abv=DueNow'
+        );
+        expect(out.tabs[0].configuration['queryParams']).toEqual({
+            entity: 'MJ: Scheduled Jobs',
+            abv: 'DueNow'
+        });
+    });
 });

@@ -15,7 +15,9 @@ export * from './agent-types/base-agent-type';
 export * from './agent-types/loop-agent-response-type';
 export * from './agent-types/loop-agent-prompt-params';
 export * from './base-agent';
+export * from './bound-action-params';
 export * from './decision-discovery';
+export * from './handoff-target';
 // The opening request, as discovery and catalog narrowing read it: the Decision Eval harness builds its state the same way.
 export { OpeningRequestText, CATALOG_NARROWING_REQUEST_MAX_CHARS } from './catalog-narrowing';
 export * from './prior-turn-tool-result-cache';
@@ -30,6 +32,7 @@ export * from './PayloadManager';
 export * from './ScratchpadManager';
 export * from './constants';
 export * from './runtime-state-fragment';
+export * from './sub-agent-consult';
 export * from './volatile-child-prompt';
 export * from './ArtifactToolManager';
 export * from './ConversationCompactionManager';
@@ -63,9 +66,11 @@ export * from './memory-manager-agent';
 export * from './memory-note-gate';
 export * from './query-builder-agent';
 export * from './MJAIAgentRequestEntityServer';
+export * from './AgentWakeTriggerService';
 export * from './KnowledgeAgent';
 export * from './DuplicateReasoningAgentProvider';
 export * from './ClientToolRequestManager';
+export * from './client-tool-results';
 export * from './realtime/realtime-session-runner';
 export * from './realtime/bridge-realtime-session-factory';
 export * from './realtime/bridge-room-transcript-sink';
@@ -98,6 +103,8 @@ export * from './realtime/realtime-channel-server-data-context';
 export * from './realtime/agent-media-library';
 export * from './realtime/realtime-recording-capture';
 export * from './realtime/realtime-recording-store';
+export * from './realtime/realtime-recording-ledger';
+export * from './realtime/realtime-recording-opus-assembly';
 
 // Re-export from ai-reranker for backward compatibility
 export {
@@ -109,6 +116,10 @@ export {
   LLMReranker,
 } from '@memberjunction/ai-reranker';
 export * from './native-tools/action-tool-builder';
+export * from './native-tools/action-param-schema';
 export * from './native-tools/dual-channel';
 export * from './native-tools/control-tools';
+export * from './native-tools/native-control-config';
+export * from './native-tools/agent-tools';
+export * from './native-tools/framework-tools';
 export * from './native-tools/tool-result-turns';

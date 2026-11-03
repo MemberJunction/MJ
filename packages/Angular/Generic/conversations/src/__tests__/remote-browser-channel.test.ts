@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { EventEmitter } from '@angular/core';
 import { JSONValue, RealtimeTrack } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
+import { ToSafeGraphQLError } from '@memberjunction/graphql-dataprovider';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '@memberjunction/realtime-runtime';
 import {
   LoadRealtimeRemoteBrowserChannel, RemoteBrowserChannel
@@ -16,6 +17,8 @@ import {
   MapToolToAction, REMOTE_BROWSER_TOOL_DEFINITIONS, REMOTE_BROWSER_TOOL_NAMES,
   REMOTE_BROWSER_TOOL_PREFIX, RemoteBrowserToolArgError
 } from '../lib/components/realtime/remote-browser/remote-browser-tools';
+import type { AgentClientService } from '@memberjunction/ng-agent-client';
+import { ConversationRemoteBrowserController } from '../lib/components/conversation/conversation-remote-browser-controller';
 
 LoadRealtimeRemoteBrowserChannel();
 
@@ -1301,5 +1304,254 @@ describe('RemoteBrowserChannel — page changes the agent did not cause (#3496)'
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('Remote Browser — inspect, fill and ref/text click tools', () => {
+  it('maps browser_Inspect, and browser_Fill only from a non-empty values object', () => {
+    expect(MapToolToAction(REMOTE_BROWSER_TOOL_NAMES.Inspect, {})).toEqual({ Kind: 'inspect' });
+    expect(MapToolToAction(REMOTE_BROWSER_TOOL_NAMES.Fill, { values: { f1: 'Ada Lovelace', f2: true } }))
+      .toEqual({ Kind: 'fill', ValuesJson: JSON.stringify({ f1: 'Ada Lovelace', f2: true }) });
+    const refused: Array<Parameters<typeof MapToolToAction>[1]> = [{}, { values: {} }, { values: [{ ref: 'f1', value: 'x' }] }, { values: '{"f1":"x"}' }];
+    for (const args of refused) {
+      expect(() => MapToolToAction(REMOTE_BROWSER_TOOL_NAMES.Fill, args)).toThrow(RemoteBrowserToolArgError);
+    }
+  });
+
+  it('maps browser_Click by ref or text', () => {
+    expect(MapToolToAction(REMOTE_BROWSER_TOOL_NAMES.Click, { ref: 'a1' }))
+      .toEqual({ Kind: 'click', Selector: undefined, X: undefined, Y: undefined, Ref: 'a1' });
+    expect(MapToolToAction(REMOTE_BROWSER_TOOL_NAMES.Click, { text: 'Continue' }))
+      .toEqual({ Kind: 'click', Selector: undefined, X: undefined, Y: undefined, Text: 'Continue' });
+  });
+
+  it("runs each description's own example through the real parser, in the ref format inspect stamps (f1, a1)", () => {
+    const def = (name: string) => REMOTE_BROWSER_TOOL_DEFINITIONS.find((d) => d.Name === name)!;
+    const props = (name: string) => (def(name).ParametersSchema as { properties: Record<string, { description: string }> }).properties;
+
+    const fillExample = JSON.parse(/\{".*?\}/.exec(props(REMOTE_BROWSER_TOOL_NAMES.Fill)['values'].description)![0]);
+    expect(Object.keys(fillExample).every((ref) => /^f\d+$/.test(ref))).toBe(true);
+    expect(MapToolToAction(REMOTE_BROWSER_TOOL_NAMES.Fill, { values: fillExample })).toEqual({ Kind: 'fill', ValuesJson: JSON.stringify(fillExample) });
+
+    const clickRef = /"(a\d+)"/.exec(props(REMOTE_BROWSER_TOOL_NAMES.Click)['ref'].description)![1];
+    expect(MapToolToAction(REMOTE_BROWSER_TOOL_NAMES.Click, { ref: clickRef })).toMatchObject({ Kind: 'click', Ref: clickRef });
+
+    // Inspect promises exactly the two ref kinds the page script stamps, and nothing it does not return.
+    const inspect = def(REMOTE_BROWSER_TOOL_NAMES.Inspect).Description;
+    expect(inspect).toContain('(f1, f2, …)');
+    expect(inspect).toContain('(a1, a2, …)');
+    expect(inspect).not.toMatch(/headings|l1/);
+  });
+});
+
+/** The slice of the app-wide AgentClientService registry the controller uses. */
+class FakeAgentClient {
+  public readonly Tools = new Map<string, { Name: string; Handler: (params: Record<string, unknown>) => unknown }>();
+  public IsActive = true;
+  public SessionId: string | null = 'push-1';
+  public RegisterTool(tool: { Name: string; Handler: (params: Record<string, unknown>) => unknown }): void {
+    this.Tools.set(tool.Name, tool);
+  }
+  public UnregisterTool(name: string): void {
+    this.Tools.delete(name);
+  }
+  public GetRegisteredTools() {
+    return Array.from(this.Tools.values());
+  }
+  public StartSession(id: string): void {
+    this.SessionId = id;
+  }
+}
+
+describe('ConversationRemoteBrowserController', () => {
+  const TEXT_TOOL_COUNT = REMOTE_BROWSER_TOOL_DEFINITIONS.length - 1; // every tool but AchieveGoal
+  let agentClient: FakeAgentClient;
+  let calls: ServerCall[];
+
+  function controller(options: { OnStateChange?: () => void } = {}): ConversationRemoteBrowserController {
+    const c = new ConversationRemoteBrowserController({
+      ...options,
+      ExecuteServerAction: async <T>(query: string, variables: Record<string, JSONValue>): Promise<T | null> => {
+        calls.push({ Query: query, Variables: variables });
+        return { ExecuteRemoteBrowserAction: { Success: true, CurrentUrl: 'https://example.com/form', Detail: 'ok' } } as T;
+      },
+    });
+    c.Initialize(agentClient as unknown as AgentClientService, null);
+    return c;
+  }
+  const ended = () => calls.filter((c) => c.Query.includes('EndRemoteBrowserSession')).map((c) => c.Variables['agentSessionID']);
+
+  beforeEach(() => {
+    agentClient = new FakeAgentClient();
+    calls = [];
+  });
+
+  it('drives the browser of the conversation that opened it, and has no tools or browser before that', async () => {
+    const c = controller();
+    expect(agentClient.Tools.size).toBe(0);
+    expect((await c.ExecuteBrowserTool(REMOTE_BROWSER_TOOL_NAMES.Inspect, {})).Success).toBe(false);
+
+    c.Open('conv-1');
+    expect(agentClient.Tools.has(REMOTE_BROWSER_TOOL_NAMES.Fill)).toBe(true);
+    await c.ExecuteBrowserTool(REMOTE_BROWSER_TOOL_NAMES.Fill, { values: { f1: 'Ada' } });
+    expect(calls[0].Variables).toMatchObject({ agentSessionID: 'conv-1', kind: 'fill', valuesJson: JSON.stringify({ f1: 'Ada' }) });
+    expect(c.GetAppContextSnapshot()).toEqual({ Open: true, CurrentUrl: 'https://example.com/form' });
+  });
+
+  it('ends the old conversation\'s browser when another conversation opens one, and on Close', async () => {
+    const c = controller();
+    c.Open('conv-1');
+    c.Open('conv-2');
+    await Promise.resolve();
+    expect(ended()).toEqual(['conv-1']);
+    expect(c.ConversationId).toBe('conv-2');
+
+    await c.Close();
+    expect(ended()).toEqual(['conv-1', 'conv-2']);
+    expect(agentClient.Tools.size).toBe(0);
+    expect(c.GetAppContextSnapshot()).toEqual({ Open: false, CurrentUrl: null });
+  });
+
+  it('a chat area that opens a browser later owns the tools; the earlier one closing leaves them in place', async () => {
+    const first = controller();
+    const second = controller();
+    first.Open('conv-1');
+    second.Open('conv-2');
+    expect(first.OwnsTools).toBe(false);
+    expect(second.OwnsTools).toBe(true);
+
+    await first.Close();
+    expect(second.OwnsTools).toBe(true);
+    expect(agentClient.Tools.size).toBe(TEXT_TOOL_COUNT);
+
+    // Only the owner advertises the tools to its conversation's agent runs.
+    first.Open('conv-1');
+    second.Open('conv-2');
+    const tools = (c: ConversationRemoteBrowserController) => (c.WithBrowserContext(null)?.['Capabilities'] as { Tools?: unknown[] } | undefined)?.Tools;
+    expect(tools(first)).toBeUndefined();
+    expect(tools(second)).toHaveLength(TEXT_TOOL_COUNT);
+  });
+
+  it('never gives a text conversation AchieveGoal, whose goal loop would click past the guard', () => {
+    const c = controller();
+    c.Open('conv-1');
+    expect(agentClient.Tools.has(REMOTE_BROWSER_TOOL_NAMES.AchieveGoal)).toBe(false);
+    const advertised = (c.WithBrowserContext(null)?.['Capabilities'] as { Tools: Array<{ Name: string }> }).Tools.map((t) => t.Name);
+    expect(advertised).not.toContain(REMOTE_BROWSER_TOOL_NAMES.AchieveGoal);
+    expect(advertised).toContain(REMOTE_BROWSER_TOOL_NAMES.Fill);
+  });
+
+  it('adds only Open and CurrentUrl to the app context, keeping what the host already sent', () => {
+    const c = controller();
+    const base = { App: { Name: 'Chat' }, AdditionalContext: { Tab: 'x' }, Capabilities: { Tools: [{ Name: 'NavigateToRecord' }] } };
+    expect(c.WithBrowserContext(base)).toBe(base);
+
+    c.Open('conv-1');
+    const ctx = c.WithBrowserContext(base)!;
+    expect(ctx['AdditionalContext']).toEqual({ Tab: 'x', RemoteBrowser: { Open: true, CurrentUrl: null } });
+    const names = (ctx['Capabilities'] as { Tools: Array<{ Name: string }> }).Tools.map((t) => t.Name);
+    expect(names[0]).toBe('NavigateToRecord');
+    expect(names).toContain(REMOTE_BROWSER_TOOL_NAMES.Inspect);
+  });
+
+  it('takes pushed frames for its own conversation only, and notifies once per URL, not per frame', () => {
+    let changes = 0;
+    const c = controller({ OnStateChange: () => changes++ });
+    c.Open('conv-2');
+    changes = 0;
+    const frame = (agentSessionID: string, currentUrl: string) =>
+      c.HandlePushMessage(JSON.stringify({ resolver: 'RemoteBrowserActionResolver', type: 'RemoteBrowserScreencastFrame', agentSessionID, currentUrl, dataBase64: 'f' }));
+
+    frame('conv-1', 'https://wrong.example.com');
+    expect(c.CurrentUrl).toBeNull();
+
+    for (let i = 0; i < 5; i++) {
+      frame('conv-2', 'https://right.example.com');
+    }
+    expect(c.CurrentUrl).toBe('https://right.example.com');
+    expect(changes).toBe(1);
+  });
+
+  it('returns a refused navigation to the caller, so the drawer can show it', async () => {
+    const c = new ConversationRemoteBrowserController({
+      ExecuteServerAction: async <T>(): Promise<T | null> =>
+        ({ ExecuteRemoteBrowserAction: { Success: false, Detail: 'Navigation to "http://10.0.0.5/" was blocked.' } }) as T,
+    });
+    c.Initialize(agentClient as unknown as AgentClientService, null);
+    c.Open('conv-1');
+
+    expect(await c.Navigate('http://10.0.0.5/')).toEqual({ Success: false, ErrorMessage: 'Navigation to "http://10.0.0.5/" was blocked.' });
+  });
+
+  describe('a session the server refuses', () => {
+    const REASON = 'You already have 2 conversation browser(s) open, the most this server allows. Close one first.';
+    // What ExecuteGQL throws for a GraphQL error: the server's first error, with its code.
+    const graphQLError = (code: string) =>
+      ToSafeGraphQLError({ name: 'ClientError', response: { status: 200, errors: [{ message: REASON, extensions: { code } }] }, request: { query: 'mutation X' } });
+
+    function refusing(code: string, refused: string[]): ConversationRemoteBrowserController {
+      const c = new ConversationRemoteBrowserController({
+        OnSessionRefused: (message) => refused.push(message),
+        ExecuteServerAction: async <T>(query: string, variables: Record<string, JSONValue>): Promise<T | null> => {
+          calls.push({ Query: query, Variables: variables });
+          if (query.includes('EndRemoteBrowserSession')) {
+            return null;
+          }
+          throw graphQLError(code);
+        },
+      });
+      c.Initialize(agentClient as unknown as AgentClientService, null);
+      return c;
+    }
+
+    it('closes the browser and reports the reason once, however many calls it refused', async () => {
+      const refused: string[] = [];
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const c = refusing('REMOTE_BROWSER_REFUSED', refused);
+      c.Open('conv-1');
+
+      await Promise.all([
+        c.ExecuteBrowserTool(REMOTE_BROWSER_TOOL_NAMES.Inspect, {}),
+        c.ExecuteBrowserTool(REMOTE_BROWSER_TOOL_NAMES.GetPageText, {}),
+      ]);
+      await Promise.resolve();
+
+      expect(c.ConversationId).toBeNull();
+      expect(agentClient.Tools.size).toBe(0);
+      expect(refused).toEqual([REASON]);
+      expect(ended()).toEqual(['conv-1']);
+    });
+
+    it('ignores a refused End of a conversation it has left, and keeps the new one open', async () => {
+      const refused: string[] = [];
+      const c = new ConversationRemoteBrowserController({
+        OnSessionRefused: (message) => refused.push(message),
+        // conv-A's browser was already reaped, so ending it is refused as not found.
+        ExecuteServerAction: async <T>(query: string): Promise<T | null> => {
+          if (query.includes('EndRemoteBrowserSession')) {
+            throw graphQLError('REMOTE_BROWSER_REFUSED');
+          }
+          return null;
+        },
+      });
+      c.Initialize(agentClient as unknown as AgentClientService, null);
+      c.Open('conv-A');
+      c.Open('conv-B');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(c.ConversationId).toBe('conv-B');
+      expect(c.OwnsTools).toBe(true);
+      expect(refused).toEqual([]);
+    });
+
+    it('keeps the browser through any other error, whatever its message says', async () => {
+      const refused: string[] = [];
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const c = refusing('INTERNAL_SERVER_ERROR', refused);
+      c.Open('conv-1');
+      await c.ExecuteBrowserTool(REMOTE_BROWSER_TOOL_NAMES.Inspect, {});
+      expect(c.ConversationId).toBe('conv-1');
+      expect(refused).toEqual([]);
+    });
   });
 });

@@ -8,13 +8,18 @@
  * row that recorded the attempt.
  *
  * ## Flow ({@link TrainingEngine.trainModel})
- * 1. Resolve the pipeline (parse its JSON columns via the core type contracts).
+ * 1. Resolve the pipeline (parse its JSON columns via the core type contracts),
+ *    then refuse — before any row is written — an as-of mode training would ignore
+ *    ({@link AsOfSettingHasNoEffectError}) and an unknown `MajorityBaselineRule`
+ *    (`InvalidMajorityBaselineRuleError`).
  * 2. Create the training-run row (`Status='Running'`, `StartedAt`).
  * 3. Assemble the raw matrix + schema + preprocessing ops via FeatureAssembly
- *    (context `'train'`), carrying the label column.
- * 4. **Carve the locked holdout FIRST** (§8.2 — never trained/tuned on), then the
- *    remaining `train_test_split`/`kfold`/`holdout` validation is delegated to
- *    the sidecar. Build the sidecar `ValidationConfig`.
+ *    (context `'train'`), carrying the label column. The target read is ordered by
+ *    the entity's primary key, so the same data always arrives in the same order.
+ * 4. **Carve the locked holdout FIRST** (§8.2 — never trained/tuned on) with the
+ *    seeded, stratified {@link LockedHoldoutSplitter}; the remaining
+ *    `train_test_split`/`kfold`/`holdout` validation is delegated to the sidecar
+ *    with the same seed. Build the sidecar `ValidationConfig`.
  * 5. Build the `TrainRequest` and call the sidecar → `TrainResponse`; the locked
  *    holdout is scored exactly once → `HoldoutMetrics`.
  * 6. Persist the artifact to `MJ: Files` via the injected store → `ArtifactFileID`.
@@ -45,11 +50,15 @@ import {
   type FeatureStepGraph,
   type OutcomeConfig,
   resolveOutcomeConfig,
+  EvaluationLineage,
+  type EvaluationRecord,
 } from '@memberjunction/predictive-studio-core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 
 import { FeatureAssemblyExecutor, type FeatureAssemblyResult, detectSingleFeatureDominance, type DominanceResult } from '../feature-assembly';
-import type { TrainModelInput, TrainModelResult, TrainingDeps } from './types';
+import { AsOfSettingHasNoEffectError } from './as-of-refusal';
+import { LockedHoldoutSplitter, DEFAULT_SPLIT_SEED, type LockedHoldoutSplit } from './locked-holdout';
+import type { TrainModelInput, TrainModelResult, TrainingDeps, ModelTrainingLineage } from './types';
 
 /** Parsed JSON config columns pulled off a `MJ: ML Training Pipelines` row. */
 interface ResolvedPipeline {
@@ -65,14 +74,6 @@ interface ResolvedPipeline {
   leakageGuard: LeakageGuard;
   validation: ValidationStrategy;
   outcomeConfig: OutcomeConfig;
-}
-
-/** The result of carving a matrix into a training portion + a locked holdout. */
-interface HoldoutSplit {
-  training: MatrixData;
-  lockedHoldout: MatrixData;
-  holdoutRowCount: number;
-  trainingRowCount: number;
 }
 
 /**
@@ -98,6 +99,11 @@ export class TrainingEngine {
    */
   public async trainModel(input: TrainModelInput, deps: TrainingDeps): Promise<TrainModelResult> {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
     const resolved = await this.resolvePipeline(input.pipelineId, deps);
+    if (AsOfSettingHasNoEffectError.WouldBeIgnored(resolved.asOf)) {
+      throw new AsOfSettingHasNoEffectError('pipeline', resolved.asOf.Mode, resolved.pipeline.ID);
+    }
+    // Validates the evaluation settings (D2-C5d: an unknown MajorityBaselineRule is refused) before any row is written.
+    const majorityBaselineRule = EvaluationLineage.ParseMajorityBaselineRule(resolved.validation.MajorityBaselineRule);
     const run = await this.createRunRow(resolved, input, deps);
 
     try {
@@ -107,15 +113,20 @@ export class TrainingEngine {
         ? assembly.matrix.rows.filter((r) => r[targetIdx] !== null && r[targetIdx] !== undefined)
         : assembly.matrix.rows;
       const cleanMatrix: MatrixData = { columns: assembly.matrix.columns, rows: cleanRows };
-      const split = this.carveLockedHoldout(cleanMatrix, resolved.validation, resolved.targetVariable);
+      const split = this.carveLockedHoldout(cleanMatrix, resolved, DEFAULT_SPLIT_SEED);
       const validation = this.buildValidationConfig(resolved.validation);
-      const trainRequest = this.buildTrainRequest(resolved, assembly, split.training, validation);
+      const trainRequest = this.buildTrainRequest(resolved, assembly, split.Training, validation);
 
-      const response = await deps.sidecar.train(trainRequest, split.lockedHoldout);
+      const response = await deps.sidecar.train(trainRequest, split.LockedHoldout);
+      const evaluation = EvaluationLineage.Build(resolved.validation, {
+        ValidationOutOfSample: response.validation_out_of_sample === true,
+        ImportanceKind: response.feature_importance_kind || null,
+        MajorityBaselineRule: majorityBaselineRule,
+      });
 
       const dominance = this.checkLeakage(response, resolved.leakageGuard);
-      const model = await this.createModelRow(resolved, input, assembly, split, response, deps);
-      await this.finalizeRunSuccess(run, model, assembly, resolved, response, dominance, deps);
+      const model = await this.createModelRow(resolved, input, assembly, split, response, evaluation, deps);
+      await this.finalizeRunSuccess(run, model, assembly, resolved, response, dominance, evaluation, deps);
       return { model, run };
     } catch (err) {
       await this.finalizeRunFailure(run, err, deps);
@@ -152,7 +163,7 @@ export class TrainingEngine {
       hyperparameters: parseJson<Record<string, unknown>>(pipeline.Hyperparameters, {}),
       sourceBindings: parseJson<SourceBinding[]>(pipeline.SourceBindings, []),
       featureSteps: parseJson<FeatureStepGraph>(pipeline.FeatureSteps, { Steps: [] }),
-      asOf: parseJson<AsOfStrategy>(pipeline.AsOfStrategy, { Mode: 'none' }),
+      asOf: parseAsOf(pipeline.AsOfStrategy),
       leakageGuard: parseJson<LeakageGuard>(pipeline.LeakageGuard, { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT }),
       validation: parseJson<ValidationStrategy>(pipeline.ValidationStrategy, { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.1 }),
       outcomeConfig,
@@ -184,6 +195,7 @@ export class TrainingEngine {
     resolved: ResolvedPipeline,
     response: TrainResponse,
     dominance: DominanceResult,
+    evaluation: EvaluationRecord,
     deps: TrainingDeps,
   ): Promise<void> {
     run.ResultingModelID = model.ID;
@@ -197,7 +209,7 @@ export class TrainingEngine {
     run.Status = 'Completed';
     run.CompletedAt = new Date();
     run.ComputeCost = 0;
-    run.Notes = this.buildRunNotes(dominance);
+    run.Notes = this.buildRunNotes(dominance, evaluation);
     await this.saveOrThrow(run, 'finalize ML Training Run');
   }
 
@@ -214,17 +226,20 @@ export class TrainingEngine {
   }
 
   /** Compose the plain-language run note, surfacing leakage suspicion loudly (§6.4). */
-  private buildRunNotes(dominance: DominanceResult): string {
-    if (dominance.Dominant) {
-      const share = ((dominance.TopShare ?? 0) * 100).toFixed(1);
-      return (
-        `LEAKAGE WARNING: one field ("${dominance.TopFeature}") is doing almost all the predicting ` +
-        `(${share}% of total importance, over the ${(dominance.Threshold * 100).toFixed(0)}% threshold). ` +
-        `This often means we are accidentally peeking at the answer. A human should confirm this is legitimate ` +
-        `before this model is trusted — the model is kept in Draft and will NOT be auto-promoted.`
-      );
+  private buildRunNotes(dominance: DominanceResult, evaluation: EvaluationRecord): string {
+    const base = dominance.Dominant
+      ? `LEAKAGE WARNING: one field ("${dominance.TopFeature}") is doing almost all the predicting ` +
+        `(${((dominance.TopShare ?? 0) * 100).toFixed(1)}% of total importance, over the ${(dominance.Threshold * 100).toFixed(0)}% threshold). ` +
+        `This often means we are accidentally peeking at the answer. The model is kept in Draft and will NOT be ` +
+        `auto-promoted: the promotion gate refuses it unless a promote request records a sign-off with a reason.`
+      : 'Training completed. No single-feature dominance detected.';
+    if (!evaluation.WithheldReason) {
+      return base;
     }
-    return 'Training completed. No single-feature dominance detected.';
+    return (
+      `${base} Trust withheld — ${evaluation.WithheldReason}: the pipeline declares '${evaluation.TimeIndexColumn}' as its time index, ` +
+      'but the model was scored on rows from its own training period, not on later periods.'
+    );
   }
 
   // region: assembly ------------------------------------------------------------
@@ -233,7 +248,7 @@ export class TrainingEngine {
   private async assemble(resolved: ResolvedPipeline, input: TrainModelInput, deps: TrainingDeps): Promise<FeatureAssemblyResult> {
     return this.assembler.assemble({
       targetEntityName: resolved.targetEntityName,
-      recordSet: { EntityName: resolved.targetEntityName, MaxRows: input.maxRows },
+      recordSet: { EntityName: resolved.targetEntityName, OrderBy: this.primaryKeyOrder(resolved.targetEntityName, deps), MaxRows: input.maxRows },
       sources: resolved.sourceBindings,
       steps: resolved.featureSteps,
       asOf: resolved.asOf,
@@ -247,35 +262,40 @@ export class TrainingEngine {
     });
   }
 
+  /**
+   * The ORDER BY for the training read: the target entity's primary-key columns. Without it an uncapped read (the
+   * default) has no ORDER BY at all, so the database may return rows in any order and the seeded holdout carve would
+   * pick different rows between runs.
+   */
+  private primaryKeyOrder(targetEntityName: string, deps: TrainingDeps): string {
+    const entity = deps.provider.EntityByName(targetEntityName);
+    if (!entity || entity.PrimaryKeys.length === 0) {
+      throw new Error(`TrainingEngine: target entity '${targetEntityName}' has no primary key in metadata, so its rows cannot be read in a fixed order.`);
+    }
+    return entity.PrimaryKeys.map((pk) => pk.Name).join(', ');
+  }
+
   // region: validation + holdout ------------------------------------------------
 
   /**
-   * Carve the locked holdout off the TOP of the assembled matrix FIRST (§8.2),
-   * before any train/test split. The holdout is the trailing
-   * `LockedHoldoutFraction` of rows; it is never sent in the training `data`.
+   * Carve the locked holdout FIRST (§8.2), before any train/test split: a seeded sample of
+   * `LockedHoldoutFraction` of the rows, stratified on the label for classification. The holdout
+   * rows are never sent in the training `data`.
    */
-  private carveLockedHoldout(matrix: MatrixData, validation: ValidationStrategy, _targetVariable: string): HoldoutSplit {
-    const fraction = clamp01(validation.LockedHoldoutFraction);
-    const total = matrix.rows.length;
-    const holdoutCount = total > 1 ? Math.min(Math.max(Math.floor(total * fraction), fraction > 0 ? 1 : 0), total - 1) : 0;
-    const cut = total - holdoutCount;
-
-    const trainingRows = matrix.rows.slice(0, cut);
-    const holdoutRows = matrix.rows.slice(cut);
-    return {
-      training: { columns: matrix.columns, rows: trainingRows },
-      lockedHoldout: { columns: matrix.columns, rows: holdoutRows },
-      holdoutRowCount: holdoutRows.length,
-      trainingRowCount: trainingRows.length,
-    };
+  private carveLockedHoldout(matrix: MatrixData, resolved: ResolvedPipeline, seed: number): LockedHoldoutSplit {
+    return LockedHoldoutSplitter.Carve(matrix, resolved.validation.LockedHoldoutFraction, resolved.targetVariable, resolved.problemType, seed);
   }
 
-  /** Translate the pipeline's {@link ValidationStrategy} into a sidecar {@link ValidationConfig}. */
+  /**
+   * Translate the pipeline's {@link ValidationStrategy} into a sidecar {@link ValidationConfig}. The seed is sent
+   * explicitly so the sidecar's splits use the same seed as the locked-holdout carve.
+   */
   private buildValidationConfig(validation: ValidationStrategy): ValidationConfig {
     return {
       strategy: validation.Strategy,
       test_size: validation.TestSize,
       k: validation.K,
+      random_state: DEFAULT_SPLIT_SEED,
     };
   }
 
@@ -318,8 +338,9 @@ export class TrainingEngine {
     resolved: ResolvedPipeline,
     input: TrainModelInput,
     assembly: FeatureAssemblyResult,
-    split: HoldoutSplit,
+    split: LockedHoldoutSplit,
     response: TrainResponse,
+    evaluation: EvaluationRecord,
     deps: TrainingDeps,
   ): Promise<MJMLModelEntity> {
     const version = await deps.recordLoader.nextModelVersion(resolved.pipeline.ID, deps.contextUser, deps.provider);
@@ -340,10 +361,10 @@ export class TrainingEngine {
       model.HoldoutMetrics = JSON.stringify(response.holdout_metrics);
     }
     model.FeatureImportance = JSON.stringify(response.feature_importance ?? {});
-    model.Lineage = JSON.stringify(this.buildLineage(resolved, input, split, response));
+    model.Lineage = JSON.stringify(this.buildLineage(resolved, input, split, evaluation));
     model.TrainedAt = new Date();
     model.TrainingDurationSec = Math.round(response.duration_sec ?? 0);
-    model.TrainingRowCount = response.training_row_count ?? split.trainingRowCount;
+    model.TrainingRowCount = response.training_row_count ?? split.TrainingRowCount;
     model.Status = 'Draft';
 
     await this.saveOrThrow(model, 'create ML Model');
@@ -360,7 +381,12 @@ export class TrainingEngine {
    * produce any feature columns at inference (train/serve break), so both are
    * persisted alongside the other provenance fields.
    */
-  private buildLineage(resolved: ResolvedPipeline, input: TrainModelInput, split: HoldoutSplit, _response: TrainResponse): Record<string, unknown> {
+  private buildLineage(
+    resolved: ResolvedPipeline,
+    input: TrainModelInput,
+    split: LockedHoldoutSplit,
+    evaluation: EvaluationRecord,
+  ): ModelTrainingLineage {
     return {
       pipelineId: resolved.pipeline.ID,
       pipelineVersion: resolved.pipeline.Version,
@@ -370,9 +396,11 @@ export class TrainingEngine {
       asOfStrategy: resolved.asOf,
       outcomeConfig: resolved.outcomeConfig,
       sidecarVersion: input.sidecarVersion ?? null,
-      lockedHoldoutRowCount: split.holdoutRowCount,
-      trainingRowCount: split.trainingRowCount,
+      lockedHoldoutRowCount: split.HoldoutRowCount,
+      lockedHoldoutClassCounts: split.HoldoutClassCounts,
+      trainingRowCount: split.TrainingRowCount,
       assembledAt: new Date().toISOString(),
+      [EvaluationLineage.Key]: evaluation,
     };
   }
 
@@ -391,9 +419,15 @@ export class TrainingEngine {
   }
 }
 
-/** Parse a possibly-null JSON column, falling back to a default on null/parse error. */
+/** The pipeline's stored AsOfStrategy; one with no `Mode` (a stored `{}`) asks for nothing and reads as `Mode: 'none'`. */
+function parseAsOf(raw: string | null | undefined): AsOfStrategy {
+  const parsed = parseJson<Partial<AsOfStrategy> | null>(raw, { Mode: 'none' });
+  return parsed?.Mode ? (parsed as AsOfStrategy) : { Mode: 'none' };
+}
+
+/** Parse a possibly-null JSON column, falling back to a default on null/empty/parse error. */
 function parseJson<T>(raw: string | null | undefined, fallback: T): T {
-  if (raw == null || raw.trim().length === 0) {
+  if (raw === null || raw === undefined || raw.trim().length === 0) {
     return fallback;
   }
   try {
@@ -401,14 +435,6 @@ function parseJson<T>(raw: string | null | undefined, fallback: T): T {
   } catch {
     return fallback;
   }
-}
-
-/** Clamp a fraction into [0, 1). */
-function clamp01(value: number): number {
-  if (!Number.isFinite(value) || value < 0) {
-    return 0;
-  }
-  return value > 1 ? 1 : value;
 }
 
 /** Decode a base64 artifact string into raw bytes (no Buffer dependency leak in types). */

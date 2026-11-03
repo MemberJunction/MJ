@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { WHITEBOARD_FONT_SIZES, WhiteboardFontFamily, WhiteboardShapeKind } from './whiteboard-state';
+import { IsWhiteboardHexColor, WHITEBOARD_FONT_SIZES, WhiteboardFontFamily, WhiteboardShapeKind } from './whiteboard-state';
 // WhiteboardTool is imported, never re-exported: public-api.ts `export *`s this file and the
 // roster module, and two modules exporting the same name that way is a TS2308 ambiguity.
 import { WhiteboardTool, WhiteboardToolRoster, VisibleToolbarEntries } from './whiteboard-tool-roster';
@@ -18,6 +18,31 @@ interface ToolbarEntry {
  * violet is the reserved ownership hue of the agent's marks.
  */
 export const WHITEBOARD_PEN_COLORS: readonly string[] = ['#cbd5e1', '#fbbf24', '#5cc0ed', '#4ade80', '#f87171'];
+
+/**
+ * A host-supplied pen palette as the toolbar/host will use it: a frozen copy holding only the
+ * trimmed STRING entries that are hex colors ({@link IsWhiteboardHexColor}), or `null` when the
+ * value is not an array or nothing survives. The type stops TypeScript callers from passing
+ * junk; a channel's `BindSurface` assigns from JSON and does not, and anything that got through
+ * would be painted into `style.background` (which Angular does not sanitize, so a `url(...)`
+ * entry would be fetched) and persisted as an ink item's `Color`. The same guard the agent
+ * tools apply to a text color, so a palette entry is always something the tools would accept.
+ */
+export function NormalizeWhiteboardPenPalette(value: unknown): readonly string[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const kept = value
+    .filter((c): c is string => typeof c === 'string')
+    .map((c) => c.trim())
+    .filter((c) => IsWhiteboardHexColor(c));
+  return kept.length > 0 ? Object.freeze(kept) : null;
+}
+
+/** Whether two pen colors are the same hex, whatever their case (`#1D4ED8` is `#1d4ed8`). */
+export function SameWhiteboardPenColor(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
 
 /** Available pen stroke widths (px). */
 export const WHITEBOARD_PEN_WIDTHS: readonly number[] = [2, 4, 7];
@@ -126,7 +151,23 @@ export class RealtimeWhiteboardToolbarComponent {
    */
   public VisibleTools: ToolbarEntry[] = [...this.Tools];
 
-  public readonly PenColors = WHITEBOARD_PEN_COLORS;
+  /**
+   * The pen flyout's swatches. Defaults to {@link WHITEBOARD_PEN_COLORS} (tuned for MJ's dark
+   * canvas); a host on a light theme passes its own hexes. Anything that is not an array with
+   * at least one usable entry reads as the default — a static template attribute
+   * (`PenColors="#000,#fff"`, a plausible slip) hands us a string, and a string reaching the
+   * template's `@for` would throw; blank, non-string and non-hex entries are dropped (see
+   * {@link NormalizeWhiteboardPenPalette}). The kept value is a frozen COPY so a host mutating
+   * its array afterwards changes theirs, not ours, until they bind it again.
+   */
+  @Input()
+  set PenColors(value: readonly string[] | null | undefined) {
+    this._penColors = NormalizeWhiteboardPenPalette(value) ?? WHITEBOARD_PEN_COLORS;
+  }
+  get PenColors(): readonly string[] {
+    return this._penColors;
+  }
+  private _penColors: readonly string[] = WHITEBOARD_PEN_COLORS;
   public readonly PenWidths = WHITEBOARD_PEN_WIDTHS;
   public readonly ShapeKinds: { Kind: WhiteboardShapeKind; Icon: string; Title: string }[] = [
     { Kind: 'rect', Icon: 'fa-regular fa-square', Title: 'Rectangle' },

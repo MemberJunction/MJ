@@ -9,6 +9,6 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$DIR"
 
 echo "Pushing metadata changes to MemberJunction database..."
-docker compose exec -T mj mj sync push --dir /work/metadata
+docker compose exec -T mj mj sync push --dir /work/metadata "$@"
 
 echo "Metadata sync complete!"

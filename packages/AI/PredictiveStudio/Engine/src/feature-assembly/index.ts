@@ -7,6 +7,7 @@
  */
 
 export * from './data-access';
+export * from './read-cap-error';
 export * from './as-of';
 export * from './leakage-guard';
 export * from './vision-llm';

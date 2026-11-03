@@ -14,7 +14,7 @@
  */
 
 import { IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
-import { MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntityExtended } from '@memberjunction/core-entities';
 import type { BridgeRoomTranscriptSink, BridgeTranscriptLineInput } from './bridge-room-transcript-sink';
 
 /** What identifies the conversation a session's transcript belongs to. */
@@ -60,8 +60,9 @@ async function WriteSessionTurn(
     provider: IMetadataProvider,
 ): Promise<void> {
     try {
-        const detail = await provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, contextUser);
+        const detail = await provider.GetEntityObject<MJConversationDetailEntityExtended>(CONVERSATION_DETAIL_ENTITY, contextUser);
         detail.NewRecord();
+        detail.MarkServerAuthoredReply(); // the agent's lines are the server's to write
         detail.ConversationID = options.ConversationID;
         detail.Role = line.IsAgentSpeech ? 'AI' : 'User';
         detail.Message = line.Text;

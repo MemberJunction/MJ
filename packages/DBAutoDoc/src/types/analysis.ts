@@ -64,6 +64,8 @@ export interface TableAnalysisContext {
   fkCandidateStats?: Array<{ sourceColumn: string; targetSchema: string; targetTable: string; targetColumn: string; valueOverlap: number; cardinalityRatio: number; confidence: number }>;
   /** Enum candidate evidence per column — columns that passed the deterministic pre-filter */
   enumCandidates?: EnumCandidateContext[];
+  /** Existing indexes on the table, one formatted line each (see FormatIndexHint) — evidence for keys */
+  existingIndexes?: string[];
 }
 
 /**

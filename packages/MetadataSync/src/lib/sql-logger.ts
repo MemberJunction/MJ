@@ -8,7 +8,9 @@
 
 import fs from 'fs-extra';
 import path from 'path';
+import type { SqlSchemaPlaceholder } from '@memberjunction/generic-database-provider';
 import { SyncConfig } from '../config';
+import { ApplySchemaPlaceholders, DEFAULT_SCHEMA_PLACEHOLDER } from './schema-placeholders';
 
 export interface SQLLoggerOptions {
   enabled: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
@@ -20,13 +22,21 @@ export class SQLLogger {
   private options: SQLLoggerOptions;
   private statements: string[] = [];
   private isInitialized = false;
+  private readonly schemaPlaceholders: SqlSchemaPlaceholder[];
   
-  constructor(syncConfig: SyncConfig | null) {
+  /**
+   * `schemaPlaceholders` are the rules a migration-format log applies (see `ResolveSchemaPlaceholders`);
+   * without them, `__mj` becomes `${flyway:defaultSchema}`. Kept for API callers: `mj sync push`
+   * passes no rules here and writes its log through the provider's `SqlLoggingSessionImpl`, so the
+   * tests of this parameter cover no production path.
+   */
+  constructor(syncConfig: SyncConfig | null, schemaPlaceholders?: SqlSchemaPlaceholder[]) {
     this.options = {
       enabled: syncConfig?.sqlLogging?.enabled ?? false,
       outputDirectory: syncConfig?.sqlLogging?.outputDirectory ?? './sql_logging',
       formatAsMigration: syncConfig?.sqlLogging?.formatAsMigration ?? false
     };
+    this.schemaPlaceholders = schemaPlaceholders && schemaPlaceholders.length > 0 ? schemaPlaceholders : [DEFAULT_SCHEMA_PLACEHOLDER];
   }
   
   get Enabled(): boolean {
@@ -125,13 +135,10 @@ export class SQLLogger {
         `-- Generated at: ${new Date().toISOString()}`,
         '-- Description: Metadata changes pushed via mj sync push command',
         '',
-        '-- Note: Schema placeholders can be replaced during deployment',
-        '-- Replace ${flyway:defaultSchema} with your target schema name',
+        '-- Note: schema names are written as Flyway placeholders',
         '',
-        ...this.statements.map(stmt => {
-          // Add schema placeholders for migration format
-          return stmt.replace(/(\[?)__mj(\]?)\./g, '${flyway:defaultSchema}.');
-        })
+        // One pass, brackets kept; `schema.` inside string data is rewritten too
+        ...this.statements.map(stmt => ApplySchemaPlaceholders(stmt, this.schemaPlaceholders))
       ].join('\n');
     } else {
       // Regular SQL log format

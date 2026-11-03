@@ -40,6 +40,18 @@ export class CreateDocumentAction extends BaseFileHandlerAction {
 
             const defaultFileNames: Record<string, string> = { pdf: 'document.pdf', docx: 'document.docx', xlsx: 'workbook.xlsx' };
 
+            const existingHandleParam = params.Params?.find((p) => p.Name.toLowerCase() === 'handle');
+            if (existingHandleParam) {
+                existingHandleParam.Value = handle;
+                existingHandleParam.Type = 'Output';
+            } else if (Array.isArray(params.Params)) {
+                params.Params.push({
+                    Name: 'Handle',
+                    Type: 'Output',
+                    Value: handle,
+                });
+            }
+
             return {
                 Success: true,
                 ResultCode: "SUCCESS",

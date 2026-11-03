@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { readdirSync, readFileSync, statSync } from 'fs';
+import { dirname, join, relative } from 'path';
+import { fileURLToPath } from 'url';
 import { DEFAULT_SYSTEM_PLACEHOLDERS } from '@memberjunction/ai-core-plus';
 import {
     DetectVolatilePlaceholders,
@@ -7,6 +10,28 @@ import {
     ResolveSpecializationPlacementParam,
     VOLATILE_PLACEHOLDER_NAMES,
 } from '../volatile-child-prompt';
+
+const __dirname_ = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = join(__dirname_, '../../../../..');
+const TEMPLATES_ROOT = join(REPO_ROOT, 'metadata/prompts/templates');
+
+function collectMarkdownFiles(dir: string): string[] {
+    const out: string[] = [];
+    for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry);
+        const st = statSync(full);
+        if (st.isDirectory()) {
+            // workflow-demos are standalone Flow step prompt templates, not Loop Agent child prompts
+            if (entry === 'workflow-demos') {
+                continue;
+            }
+            out.push(...collectMarkdownFiles(full));
+        } else if (entry.endsWith('.md')) {
+            out.push(full);
+        }
+    }
+    return out;
+}
 
 const STATIC = '# Sage\n\n## Role\n- Your name is Sage\n- You operate like a skilled concierge.';
 const DATED = `${STATIC}\n\nCurrent date/time: {{ _CURRENT_DATE_AND_TIME }}`;
@@ -28,8 +53,14 @@ describe('VOLATILE_PLACEHOLDER_NAMES', () => {
         }
     });
 
+    it('includes the execution-context placeholders that grow with the conversation every step', () => {
+        for (const v of ['_HAS_CONVERSATION_CONTEXT', '_CONVERSATION_LENGTH']) {
+            expect(VOLATILE_PLACEHOLDER_NAMES).toContain(v);
+        }
+    });
+
     it('does not include per-run-stable placeholders', () => {
-        for (const v of ['_USER_NAME', '_ENVIRONMENT', '_PROMPT_NAME', '_CURRENT_TIMEZONE']) {
+        for (const v of ['_USER_NAME', '_ENVIRONMENT', '_PROMPT_NAME', '_CURRENT_TIMEZONE', '_AGENT_NAME', '_CONFIGURATION_ID']) {
             expect(VOLATILE_PLACEHOLDER_NAMES).not.toContain(v);
         }
     });
@@ -102,5 +133,41 @@ describe('ResolveSpecializationPlacement', () => {
     it('an explicit choice overrides auto in both directions', () => {
         expect(ResolveSpecializationPlacement({ ...TRAILING, specializationPlacement: 'systemPrompt' }, DATED)).toBe('systemPrompt');
         expect(ResolveSpecializationPlacement({ ...TRAILING, specializationPlacement: 'trailingMessage' }, STATIC)).toBe('trailingMessage');
+    });
+});
+
+describe('Shipped Loop Agent child prompt templates — KV-cache alignment', () => {
+    const SIX_CLEANED_TEMPLATES = [
+        'agent-manager/agent-manager.template.md',
+        'database-designer/database-designer.template.md',
+        'model-development-agent/model-development-agent.template.md',
+        'model-development-agent/data-scout.template.md',
+        'model-development-agent/experiment-designer.template.md',
+        'model-development-agent/goal-analyst.template.md',
+    ];
+
+    it.each(SIX_CLEANED_TEMPLATES)(
+        'keeps %s free of volatile placeholders so specialization stays in systemPrompt',
+        (relPath) => {
+            const text = readFileSync(join(TEMPLATES_ROOT, relPath), 'utf8');
+            expect(DetectVolatilePlaceholders(text)).toEqual([]);
+            expect(IsVolatileChildPrompt(text)).toBe(false);
+            expect(ResolveSpecializationPlacement({ specializationPlacement: 'auto' }, text)).toBe('systemPrompt');
+        }
+    );
+
+    it('sweeps all shipped Loop Agent child prompt templates in metadata/prompts/templates/ to ensure none are volatile', () => {
+        const files = collectMarkdownFiles(TEMPLATES_ROOT);
+        expect(files.length).toBeGreaterThan(50);
+
+        const offenders: Array<{ file: string; placeholders: string[] }> = [];
+        for (const file of files) {
+            const text = readFileSync(file, 'utf8');
+            const found = DetectVolatilePlaceholders(text);
+            if (found.length > 0 || IsVolatileChildPrompt(text) || ResolveSpecializationPlacement({ specializationPlacement: 'auto' }, text) !== 'systemPrompt') {
+                offenders.push({ file: relative(TEMPLATES_ROOT, file), placeholders: found });
+            }
+        }
+        expect(offenders).toEqual([]);
     });
 });

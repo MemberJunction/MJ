@@ -1,25 +1,7 @@
 import { BaseEmbeddings, EmbedTextParams, EmbedTextResult, EmbedTextsParams, EmbedTextsResult, ModelUsage, ThrowIfAborted } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
-import { Ollama, EmbeddingsRequest, EmbeddingsResponse, Fetch } from 'ollama';
-
-/**
- * One signal that aborts when either of two does. Built on an AbortController rather than
- * `AbortSignal.any`, which not every supported Node version has.
- */
-function combineSignals(token: AbortSignal, existing: AbortSignal | null | undefined): AbortSignal {
-    if (!existing) {
-        return token;
-    }
-    const controller = new AbortController();
-    for (const signal of [token, existing]) {
-        if (signal.aborted) {
-            controller.abort(signal.reason);
-            return controller.signal;
-        }
-        signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
-    }
-    return controller.signal;
-}
+import { Ollama, EmbeddingsRequest, EmbeddingsResponse } from 'ollama';
+import { CancellableOllamaClient, CreateCancellableOllamaClient } from './cancellable-client';
 
 /**
  * Ollama implementation of the BaseEmbeddings class for local embedding generation
@@ -89,10 +71,12 @@ export class OllamaEmbedding extends BaseEmbeddings {
         }
 
         const startTime = new Date();
+        let scoped: CancellableOllamaClient | undefined;
 
         try {
             ThrowIfAborted(params.CancellationToken, 'Ollama');
-            const client = this.clientForRequest(params.CancellationToken);
+            scoped = this.clientForRequest(params.CancellationToken);
+            const client = scoped.Client;
             // Ensure the model is available
             await this.ensureModelAvailable(params.model, client);
 
@@ -133,6 +117,8 @@ export class OllamaEmbedding extends BaseEmbeddings {
             // An aborted request is reported as cancelled; any other failure is rethrown as it is
             this.ThrowIfRequestAborted(error, params.CancellationToken);
             throw error;
+        } finally {
+            scoped?.Dispose();
         }
     }
 
@@ -147,12 +133,14 @@ export class OllamaEmbedding extends BaseEmbeddings {
         }
 
         const startTime = new Date();
+        let scoped: CancellableOllamaClient | undefined;
         const embeddings: number[][] = [];
         let totalPromptTokens = 0;
 
         try {
             ThrowIfAborted(params.CancellationToken, 'Ollama');
-            const client = this.clientForRequest(params.CancellationToken);
+            scoped = this.clientForRequest(params.CancellationToken);
+            const client = scoped.Client;
             // Ensure the model is available
             await this.ensureModelAvailable(params.model, client);
 
@@ -196,6 +184,8 @@ export class OllamaEmbedding extends BaseEmbeddings {
             // On error, throw to let caller handle; an aborted request is reported as cancelled
             this.ThrowIfRequestAborted(error, params.CancellationToken);
             throw error;
+        } finally {
+            scoped?.Dispose();
         }
     }
 
@@ -205,13 +195,11 @@ export class OllamaEmbedding extends BaseEmbeddings {
      * client, so a request with a cancellation token gets a short-lived client whose `fetch` carries
      * the token: aborting it tears down the HTTP request. Without a token the shared client is used.
      */
-    private clientForRequest(signal: AbortSignal | undefined): Ollama {
+    private clientForRequest(signal: AbortSignal | undefined): CancellableOllamaClient {
         if (!signal) {
-            return this.Client;
+            return { Client: this.Client, Dispose: () => undefined };
         }
-        const cancellableFetch: Fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> =>
-            fetch(input, { ...init, signal: combineSignals(signal, init?.signal) });
-        return new Ollama({ host: this._baseUrl, fetch: cancellableFetch });
+        return CreateCancellableOllamaClient(this._baseUrl, signal);
     }
 
     /**

@@ -125,19 +125,17 @@ export class MJInitializationService {
   }
 
   /**
-   * Navigate to initial route after successful login
+   * Navigate to the initial route after a successful login. A deep link is replayed
+   * through the router; a bare `/` is left to the router's default route (the Home app).
+   *
+   * @param document Unused since the Kendo drawer was removed; kept so existing callers
+   * (`AuthShellComponent`) and the deprecated alias keep compiling.
    */
   NavigateToInitialRoute(initialPath: string, document: Document): void {
+    void document;
     localStorage.removeItem('jwt-retry-ts');
 
-    if (initialPath === '/') {
-      // Use first nav item instead
-      setTimeout(() => {
-        // Find the KendoDrawer element and simulate a click for the first item
-        const drawerElement = document.querySelector('li.k-drawer-item.k-level-0') as any;
-        if (drawerElement) drawerElement.click();
-      }, 10); // Wait for the drawer to finish render
-    } else {
+    if (initialPath !== '/') {
       this.router.navigateByUrl(initialPath, { replaceUrl: true });
     }
   }

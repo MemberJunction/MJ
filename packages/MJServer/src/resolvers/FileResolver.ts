@@ -1,4 +1,4 @@
-import { EntityPermissionType, FieldValueCollection, EntitySaveOptions, IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
+import { AssertClientInputWritableForUser, EntityPermissionType, FieldValueCollection, EntitySaveOptions, IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
 import { MJFileEntity, MJFileStorageProviderEntity, MJFileStorageAccountEntity } from '@memberjunction/core-entities';
 import {
@@ -47,10 +47,11 @@ import {
 import { CreateMJFileInput, MJFileResolver as FileResolverBase, MJFile_, UpdateMJFileInput } from '../generated/generated.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { GetReadOnlyProvider } from '../util.js';
-import { configInfo } from '../config.js';
+import { ProjectEntityObjectForCaller, ProjectableEntityObject } from '../generic/fieldSecurityTransport.js';
 import { MediaAccessKeyManager } from '../rest/MediaAccessKeys.js';
 import { UploadTokenManager } from '../rest/UploadTokenManager.js';
 import { DeriveSidecarPath, ParsePeaksSidecar } from './peaksSidecar.js';
+import { ApiRoute } from '../apiRoot.js';
 
 @InputType()
 export class CreateUploadURLInput {
@@ -448,16 +449,6 @@ const SEARCH_ACCOUNT_REFUSED_MESSAGE = 'Access denied: you do not have access to
 @Resolver(MJFile_)
 export class FileResolver extends FileResolverBase {
   /**
-   * Resolves the server's public base URL the same way callbacks/magic-link do:
-   * `publicUrl` if configured (e.g. an ngrok URL), else `baseUrl:graphqlPort`. Trailing
-   * slash stripped so callers can append `/media/...`.
-   */
-  private resolvePublicBaseUrl(): string {
-    const base = configInfo.publicUrl || `${configInfo.baseUrl}:${configInfo.graphqlPort}${configInfo.graphqlRootPath || ''}`;
-    return base.replace(/\/+$/, '');
-  }
-
-  /**
    * Mints a short-lived signed media-access token for an `MJ: Files` record and returns the
    * authenticated streaming URL (`<publicBase>/media/<fileId>?token=<token>`). Permission-gated
    * IDENTICALLY to {@link GetFileContents}: the file is loaded under the CALLING USER's context, so
@@ -487,7 +478,7 @@ export class FileResolver extends FileResolverBase {
       // Access authorized — mint the capability token.
       const { Token, ExpiresAt } = MediaAccessKeyManager.Instance.Sign(fileId, contextUser.ID);
       const fileNameSuffix = fileEntity.Name ? `/${encodeURIComponent(fileEntity.Name)}` : '';
-      const url = `${this.resolvePublicBaseUrl()}/media/${encodeURIComponent(fileId)}${fileNameSuffix}?token=${encodeURIComponent(Token)}`;
+      const url = ApiRoute(`/media/${encodeURIComponent(fileId)}${fileNameSuffix}?token=${encodeURIComponent(Token)}`, { absolute: true });
 
       // Best-effort: surface precomputed waveform peaks from a peaks.json sidecar beside the file, so
       // the player renders the real waveform instantly without fetching/decoding the audio. Never
@@ -676,6 +667,8 @@ export class FileResolver extends FileResolverBase {
     const fileEntity = await provider.GetEntityObject<MJFileEntity>('MJ: Files', user);
     const providerEntity = await provider.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', user);
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
+    // Field-level security: refuse a key the caller may not read, or that names no field, before anything else
+    AssertClientInputWritableForUser(fileEntity.EntityInfo, { ...input }, user);
 
     // The upload URL signs an overwrite of `Name` (and the row will point at `ProviderKey`): Write on the account the
     // provider resolves to, and the tracked-file rule on both keys, as for every other route that writes an object.
@@ -703,7 +696,7 @@ export class FileResolver extends FileResolverBase {
     if (!saved) {
       console.error('[CreateFile] File save failed:', fileEntity.LatestResult?.CompleteMessage);
     }
-    const File = mapper.MapFields({ ...fileEntity.GetAll() });
+    const File = this.fileResponse(fileEntity, user, provider);
 
     return { File, UploadUrl, NameExists };
   }
@@ -770,8 +763,7 @@ export class FileResolver extends FileResolverBase {
       });
 
       const loaded = await fileEntity.Load(uploadResult.FileID);
-      const mapper = new FieldMapper();
-      const File = loaded ? (mapper.MapFields({ ...fileEntity.GetAll() }) as unknown as MJFile_) : undefined;
+      const File = loaded ? (this.fileResponse(fileEntity, user, provider) as unknown as MJFile_) : undefined;
 
       return {
         Success: true,
@@ -786,6 +778,14 @@ export class FileResolver extends FileResolverBase {
         ErrorMessage: message,
       };
     }
+  }
+
+  /**
+   * The file record for a response: its field values as the caller may read them, in GraphQL field
+   * names. The record was just saved or reloaded, and a save re-reads the whole row.
+   */
+  private fileResponse(fileEntity: ProjectableEntityObject, user: UserInfo, provider: IMetadataProvider): Record<string, unknown> {
+    return new FieldMapper().MapFields({ ...ProjectEntityObjectForCaller(fileEntity, user, provider) });
   }
 
   /**
@@ -1061,7 +1061,7 @@ export class FileResolver extends FileResolverBase {
       return {
         Success: true,
         Token: mint.Token,
-        Url: '/media/upload-stage',
+        Url: ApiRoute('/media/upload-stage'),
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

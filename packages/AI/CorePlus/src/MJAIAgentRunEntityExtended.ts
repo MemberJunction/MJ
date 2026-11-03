@@ -1,11 +1,24 @@
-import { BaseEntity, CompositeKey, LogErrorEx, IMetadataProvider } from "@memberjunction/core";
+import { BaseEntity, CompositeKey, EntitySaveOptions, LogErrorEx, IMetadataProvider } from "@memberjunction/core";
 import { MJAIAgentRunEntity, ConversationEngine, type ConversationBranchRow } from "@memberjunction/core-entities";
-import { RegisterClass, SafeJSONParse } from "@memberjunction/global";
+import { EscapeSQLString, RegisterClass, SafeJSONParse } from "@memberjunction/global";
 import { MJAIAgentRunStepEntityExtended } from "./MJAIAgentRunStepEntityExtended";
 
 @RegisterClass(BaseEntity, "MJ: AI Agent Runs")
 export class MJAIAgentRunEntityExtended extends MJAIAgentRunEntity {
     private _runSteps: MJAIAgentRunStepEntityExtended[] = [];
+    private _hasAuthoritativeBoundActionParams = false;
+    private _authoritativeBoundActionParams: string | null = null;
+
+    /**
+     * Records the run's server-authored action parameter bindings. Only server code (`BaseAgent`)
+     * calls this; values set directly on `BoundActionParams` by a client create or update (including
+     * via `OldValues___`) are ignored on save.
+     */
+    public SetServerBoundActionParams(serialized: string | null): void {
+        this._hasAuthoritativeBoundActionParams = true;
+        this._authoritativeBoundActionParams = serialized;
+        this.BoundActionParams = serialized;
+    }
 
     // ---- Run-state vocabulary ---------------------------------------------------------------
     // Typed from the entity's own unions so a CHECK-constraint change surfaces here at compile
@@ -168,11 +181,57 @@ export class MJAIAgentRunEntityExtended extends MJAIAgentRunEntity {
 
     override async InnerLoad(CompositeKey: CompositeKey, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
         if (await super.InnerLoad(CompositeKey, EntityRelationshipsToLoad)) {
+            this._hasAuthoritativeBoundActionParams = true;
+            this._authoritativeBoundActionParams = this.BoundActionParams ?? null;
             return await this.LoadRelatedData();
         }
         else {
             return false;
         }
+    }
+
+    override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        if (!this.IsSaved) {
+            if (!this._hasAuthoritativeBoundActionParams) {
+                this.BoundActionParams = null;
+                this._hasAuthoritativeBoundActionParams = true;
+                this._authoritativeBoundActionParams = null;
+            } else {
+                this.BoundActionParams = this._authoritativeBoundActionParams;
+            }
+        } else if (this._hasAuthoritativeBoundActionParams) {
+            this.BoundActionParams = this._authoritativeBoundActionParams;
+        } else {
+            const stored = await this.readStoredBoundActionParams();
+            if (!stored.ok) {
+                return false;
+            }
+            this._authoritativeBoundActionParams = stored.value;
+            this._hasAuthoritativeBoundActionParams = true;
+            this.BoundActionParams = this._authoritativeBoundActionParams;
+        }
+        return super.Save(options);
+    }
+
+    private async readStoredBoundActionParams(): Promise<{ ok: true; value: string | null } | { ok: false }> {
+        if (!this.ID) {
+            return { ok: false };
+        }
+        const rv = this.RunViewProviderToUse;
+        if (!rv || typeof rv.RunView !== 'function') {
+            return { ok: false };
+        }
+        const result = await rv.RunView<{ BoundActionParams: string | null }>({
+            EntityName: 'MJ: AI Agent Runs',
+            ExtraFilter: `ID='${EscapeSQLString(this.ID)}'`,
+            Fields: ['BoundActionParams'],
+            ResultType: 'simple',
+            BypassCache: true
+        }, this.ContextCurrentUser);
+        if (!result?.Success || !result.Results?.length) {
+            return { ok: false };
+        }
+        return { ok: true, value: result.Results[0].BoundActionParams ?? null };
     }
 
     /**

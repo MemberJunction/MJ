@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import type { RunActionParams, ActionParam, ActionResultSimple } from '@memberjunction/actions-base';
 
-import type { IMetadataProvider } from '@memberjunction/core';
+import { Metadata, type IMetadataProvider } from '@memberjunction/core';
 
 import { PredictiveStudioScoreRecordSetAction } from '../score-record-set.action';
 import { ProductionScoreRecordSetRunner } from '../score-record-set.runner';
+import { ModelNotScorableError } from '../../scoring/model-readiness';
 import type {
   IScoreRecordSetRunner,
   ScoreRecordSetRequest,
@@ -13,6 +14,7 @@ import type {
 import type { JsonObject } from '../base-predictive-studio.action';
 import type { RecordRef, RecordResult } from '@memberjunction/record-set-processor-base';
 import type { MLInferenceResultPayload } from '../../scoring/ml-model-inference-processor';
+import { LocalArtifactLoader } from '../../scoring/artifact-loader';
 
 /**
  * Unit tests for the Score Record Set action. NO live DB, NO live sidecar — the
@@ -136,6 +138,57 @@ describe('PredictiveStudioScoreRecordSetAction — ephemeral predictions', () =>
   });
 });
 
+describe('PredictiveStudioScoreRecordSetAction — provider', () => {
+  const scoreParams = (provider?: IMetadataProvider): RunActionParams => {
+    const p = params([
+      { Name: 'ModelID', Type: 'Input', Value: 'model-7' },
+      { Name: 'Scope', Type: 'Input', Value: { records: ['r1'] } },
+    ]);
+    p.Provider = provider;
+    return p;
+  };
+  const emptyResult: ScoreRecordSetResult = { scoredCount: 0, failedCount: 0, skippedCount: 0, wroteBack: false, predictions: [] };
+
+  it('hands the runner the provider the caller passed', async () => {
+    const runner = new MockRunner(emptyResult);
+    const scoped = { Name: 'scoped' } as unknown as IMetadataProvider; // test double: the mock runner only carries it
+    await new TestableScoreAction(runner).run(scoreParams(scoped));
+    expect(runner.LastRequest?.provider).toBe(scoped);
+  });
+
+  it('falls back to the global provider when RunActionParams.Provider is absent (ActionEngine contract)', async () => {
+    const previous = Metadata.Provider;
+    const global = { Name: 'global' } as unknown as IMetadataProvider; // test double: the mock runner only carries it
+    Metadata.Provider = global;
+    try {
+      const runner = new MockRunner(emptyResult);
+      const result = await new TestableScoreAction(runner).run(scoreParams());
+      expect(result.Success).toBe(true);
+      expect(runner.LastRequest?.provider).toBe(global);
+    } finally {
+      Metadata.Provider = previous;
+    }
+  });
+});
+
+/** The action with its production `createRunner` left in place, exposed for inspection. */
+class DefaultRunnerScoreAction extends PredictiveStudioScoreRecordSetAction {
+  public DefaultRunner(): IScoreRecordSetRunner {
+    return this.createRunner();
+  }
+}
+
+describe('PredictiveStudioScoreRecordSetAction — default runner', () => {
+  it('builds the production runner with a real artifact loader, not the refusing placeholder', () => {
+    const runner = new DefaultRunnerScoreAction().DefaultRunner();
+    if (!(runner instanceof ProductionScoreRecordSetRunner)) {
+      throw new Error('expected the action to build a ProductionScoreRecordSetRunner');
+    }
+    const deps = runner['resolveDeps']();
+    expect(deps.artifactLoader).toBeInstanceOf(LocalArtifactLoader);
+  });
+});
+
 describe('PredictiveStudioScoreRecordSetAction — write-back', () => {
   it('passes the write-back directive and confirms write-back instead of returning predictions', async () => {
     const runner = new MockRunner({ scoredCount: 5, failedCount: 0, skippedCount: 0, wroteBack: true });
@@ -159,7 +212,7 @@ describe('PredictiveStudioScoreRecordSetAction — write-back', () => {
     const runner = new MockRunner({ scoredCount: 3, failedCount: 0, skippedCount: 0, wroteBack: true });
     const p = params([
       { Name: 'ModelID', Type: 'Input', Value: 'model-1' },
-      { Name: 'Scope', Type: 'Input', Value: { listId: 'list-1' } },
+      { Name: 'Scope', Type: 'Input', Value: { listId: '3e9b2f4a-6c1d-4b8e-a7f2-5d0c9e8b1a26' } },
       { Name: 'WriteBack', Type: 'Input', Value: true },
     ]);
     await new TestableScoreAction(runner).run(p);
@@ -170,19 +223,19 @@ describe('PredictiveStudioScoreRecordSetAction — write-back', () => {
 // ---------------------------------------------------------------------------
 // C3 — the single-record scope's primary-key FIELD NAMES are untrusted and get
 // interpolated into a SQL filter. The runner must validate each key against the
-// entity's real fields and REJECT unknown names (SQL-injection defense) rather
-// than concatenating them. NO live DB — a minimal metadata provider double
-// supplies a known entity + field set.
+// entity's PRIMARY-KEY fields, REJECT any other name (SQL-injection defense, and a
+// non-key field would select an arbitrary row) and require every key field. NO live
+// DB — a minimal metadata provider double supplies a known entity + key set.
 // ---------------------------------------------------------------------------
 
 /** A minimal entity-info double exposing only the members `primaryKeyFilter` reads. */
-function fakeEntity(name: string, fieldNames: string[]) {
-  return { Name: name, Fields: fieldNames.map((n) => ({ Name: n })) };
+function fakeEntity(name: string, fieldNames: string[], primaryKeyNames: string[]) {
+  return { Name: name, Fields: fieldNames.map((n) => ({ Name: n })), PrimaryKeys: primaryKeyNames.map((n) => ({ Name: n })) };
 }
 
 /** A spy provider resolving exactly one entity by (case-insensitive) name. */
-function fakeProvider(name: string, fieldNames: string[]): IMetadataProvider {
-  const entity = fakeEntity(name, fieldNames);
+function fakeProvider(name: string, fieldNames: string[], primaryKeyNames: string[]): IMetadataProvider {
+  const entity = fakeEntity(name, fieldNames, primaryKeyNames);
   return {
     EntityByName(n: string) {
       return n.trim().toLowerCase() === name.trim().toLowerCase() ? entity : undefined;
@@ -213,10 +266,11 @@ class TestableRunner extends ProductionScoreRecordSetRunner {
 
 describe('ProductionScoreRecordSetRunner.primaryKeyFilter — SQL-injection guard (C3)', () => {
   const runner = new TestableRunner();
-  const provider = fakeProvider('Customers', ['ID', 'TenantID']);
+  const provider = fakeProvider('Customers', ['ID', 'TenantID', 'Status'], ['ID', 'TenantID']);
+  const singleKey = fakeProvider('Accounts', ['ID', 'Status'], ['ID']);
 
   it('builds a Field=value filter for valid key names (and escapes the value)', () => {
-    const filter = runner.buildFilter('Customers', { ID: "a'b" }, provider);
+    const filter = runner.buildFilter('Accounts', { ID: "a'b" }, singleKey);
     expect(filter).toBe("ID='a''b'");
   });
 
@@ -225,10 +279,24 @@ describe('ProductionScoreRecordSetRunner.primaryKeyFilter — SQL-injection guar
     expect(filter).toBe("ID='1' AND TenantID='2'");
   });
 
+  it('matches key names case-insensitively and emits the real field name', () => {
+    expect(runner.buildFilter('Accounts', { id: '7' }, singleKey)).toBe("ID='7'");
+  });
+
   it('REJECTS an unknown key name rather than concatenating it (injection vector)', () => {
     expect(() =>
       runner.buildFilter('Customers', { "ID='x' OR 1=1 --": 'y' }, provider),
-    ).toThrow(/is not a field on entity 'Customers'/);
+    ).toThrow(/is not a primary-key field on entity 'Customers'/);
+  });
+
+  it('REJECTS a real field that is not a primary key (it would score an arbitrary matching row)', () => {
+    expect(() => runner.buildFilter('Accounts', { Status: 'Active' }, singleKey)).toThrow(
+      /'Status' is not a primary-key field on entity 'Accounts'/,
+    );
+  });
+
+  it('REJECTS a composite key with a key field missing', () => {
+    expect(() => runner.buildFilter('Customers', { ID: '1' }, provider)).toThrow(/missing primary-key field\(s\) TenantID/);
   });
 
   it('throws when the entity is unknown to metadata', () => {
@@ -245,6 +313,9 @@ describe('ProductionScoreRecordSetRunner.primaryKeyFilter — SQL-injection guar
 // to its record by the PAIRED record's RecordID (not a bare positional lookup).
 // ---------------------------------------------------------------------------
 
+/** Test double: `summarize` folds results only and never reads the provider. */
+const SUMMARY_PROVIDER = { Name: 'summary-test' } as unknown as IMetadataProvider;
+
 describe('ProductionScoreRecordSetRunner.summarize — counts + RecordID correlation (M2)', () => {
   const runner = new TestableRunner();
 
@@ -252,10 +323,10 @@ describe('ProductionScoreRecordSetRunner.summarize — counts + RecordID correla
     return { EntityID: 'e1', RecordID: id };
   }
   function payload(score: number, klass?: string): MLInferenceResultPayload {
-    return { modelId: 'm1', score, class: klass } as unknown as MLInferenceResultPayload;
+    return { modelId: 'm1', target: 'Churned', problemType: 'classification', score, class: klass, scoredAt: '2026-10-23T00:00:00.000Z' };
   }
   function baseRequest(): ScoreRecordSetRequest {
-    return { modelId: 'm1', scope: { records: [] } };
+    return { modelId: 'm1', scope: { records: [] }, provider: SUMMARY_PROVIDER };
   }
 
   it('tallies Succeeded / Failed / Skipped into the three count buckets', () => {
@@ -312,5 +383,23 @@ describe('ProductionScoreRecordSetRunner.summarize — counts + RecordID correla
     expect(summary.failedCount).toBe(1);
     expect(summary.wroteBack).toBe(true);
     expect(summary.predictions).toBeUndefined();
+  });
+});
+
+describe('PredictiveStudioScoreRecordSetAction — refusal codes', () => {
+  it('keeps a refusal\'s typed code instead of SCORING_FAILED', async () => {
+    class RefusingRunner implements IScoreRecordSetRunner {
+      public async run(): Promise<ScoreRecordSetResult> {
+        throw new ModelNotScorableError('model-7', 'Archived');
+      }
+    }
+    const result = await new TestableScoreAction(new RefusingRunner()).run(
+      params([
+        { Name: 'ModelID', Type: 'Input', Value: 'model-7' },
+        { Name: 'Scope', Type: 'Input', Value: { records: [{ ID: 'r1' }] } },
+      ]),
+    );
+    expect(result.Success).toBe(false);
+    expect(result.ResultCode).toBe('MODEL_NOT_SCORABLE');
   });
 });

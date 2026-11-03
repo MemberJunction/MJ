@@ -181,3 +181,87 @@ describe('SweepCutoff — the bound is on abandonment, not on age', () => {
         expect(SweepCutoff(NOW, 1)).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     });
 });
+
+describe('TaskGraphDispatcher — ancestor ParentRunID readiness and settlement', () => {
+    it('defers submittingRunReadiness until both sub-agent and parent conversation agent runs have parked, then settles both', async () => {
+        const { TaskGraphDispatcher } = await import('../TaskGraphDispatcher');
+
+        type MockRunRow = {
+            ID: string;
+            Status: string;
+            ParentRunID: string | null;
+            Load: (id: string) => Promise<boolean>;
+        };
+
+        const runStore = new Map<string, { ID: string; Status: string; ParentRunID: string | null }>([
+            ['subagent-run', { ID: 'subagent-run', Status: 'Paused', ParentRunID: 'parent-sage-run' }],
+            ['parent-sage-run', { ID: 'parent-sage-run', Status: 'Running', ParentRunID: null }],
+        ]);
+
+        const provider = {
+            GetEntityObject: async (): Promise<MockRunRow> => {
+                const row: MockRunRow = {
+                    ID: '',
+                    Status: '',
+                    ParentRunID: null,
+                    Load: async (id: string) => {
+                        const found = runStore.get(id);
+                        if (!found) return false;
+                        row.ID = found.ID;
+                        row.Status = found.Status;
+                        row.ParentRunID = found.ParentRunID;
+                        return true;
+                    },
+                };
+                return row;
+            },
+        };
+
+        const settledIDs: string[] = [];
+        const dispatcherStub = Object.create(TaskGraphDispatcher.prototype) as {
+            contextUser: { ID: string };
+            claims: { TrySettleRun: (_p: unknown, runId: string) => Promise<boolean> };
+            submittingRunReadiness: (
+                p: unknown,
+                parent: { ID: string; Name: string; CompletedAt: Date | null; InputPayload: string },
+            ) => Promise<{ Verdict: 'ready' | 'defer'; SubmitterCancelled: boolean }>;
+            settleSubmittingRun: (
+                p: unknown,
+                parent: { ID: string; Name: string; CompletedAt: Date | null; InputPayload: string },
+                status: 'Complete' | 'Failed',
+            ) => Promise<'done' | 'defer'>;
+        };
+        dispatcherStub.contextUser = { ID: 'sys-user' };
+        dispatcherStub.claims = {
+            TrySettleRun: async (_p: unknown, runId: string) => {
+                settledIDs.push(runId);
+                return true;
+            },
+        };
+
+        const parentTask = {
+            ID: 'parent-graph-1',
+            Name: 'Order Analysis Workflow',
+            CompletedAt: new Date(),
+            InputPayload: JSON.stringify({
+                continuation: 'reinvoke',
+                submittedByAgentRunID: 'subagent-run',
+            }),
+        };
+
+        // 1. Sub-agent is Paused, but parent Sage run is still Running -> must defer!
+        const firstCheck = await dispatcherStub.submittingRunReadiness(provider, parentTask);
+        expect(firstCheck.Verdict).toBe('defer');
+
+        // 2. Parent Sage run parks as Paused -> now ready!
+        runStore.set('parent-sage-run', { ID: 'parent-sage-run', Status: 'Paused', ParentRunID: null });
+        const secondCheck = await dispatcherStub.submittingRunReadiness(provider, parentTask);
+        expect(secondCheck.Verdict).toBe('ready');
+
+        // 3. settleSubmittingRun settles BOTH the sub-agent run and the parent Sage run!
+        const settleResult = await dispatcherStub.settleSubmittingRun(provider, parentTask, 'Complete');
+        expect(settleResult).toBe('done');
+        expect(settledIDs).toEqual(['subagent-run', 'parent-sage-run']);
+    });
+});
+

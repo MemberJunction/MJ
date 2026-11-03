@@ -45,12 +45,15 @@ import { BaseAgentType } from '../agent-types/base-agent-type';
 // (its @RegisterClass decorator) so BaseAgentType.GetAgentTypeInstance resolves DriverClass
 // 'LoopAgentType'. A named-but-unreferenced import would be dropped by the TS transform.
 import '../agent-types/loop-agent-type';
+import { FlowAgentType } from '../agent-types/flow-agent-type';
+import { AgentRunner } from '../AgentRunner';
 import type { LoopAgentResponse } from '../agent-types/loop-agent-response-type';
 import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
-import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended, MJAIAgentRunStepEntityExtended, AgentDecisionRequest, AgentFinishIf, BaseAgentNextStep, AgentChatMessage } from '@memberjunction/ai-core-plus';
+import { GetTaskGraphSubmitter, type TaskGraphSubmitter, type TaskGraphSpec, type AIPromptParams, type AIPromptRunResult, type ExecuteAgentParams, type MJAIAgentEntityExtended, type MJAIAgentRunStepEntityExtended, type AgentDecisionRequest, type AgentFinishIf, type BaseAgentNextStep, type AgentChatMessage } from '@memberjunction/ai-core-plus';
 import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
-import { RecordToolCallingDecision } from '@memberjunction/ai-prompts';
+import { RecordSentPrefixFingerprint, RecordToolCallingDecision } from '@memberjunction/ai-prompts';
 import { SanitizeToolName } from '../native-tools/action-tool-builder';
+import type { AgentToolDefinition } from '../native-tools/agent-tools';
 import { FINISH_IF_MODE_WARNING_SHOWN_MAX, FINISH_IF_MODE_WARNINGS_REMEMBERED } from '../finish-if-mode-warnings';
 import { LogErrorEx, LogStatus } from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
@@ -59,13 +62,21 @@ import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import type { AIEngine } from '@memberjunction/aiengine';
 import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS } from '../agent-types/loop-agent-prompt-params';
 import { PayloadFeedbackManager } from '../PayloadFeedbackManager';
-import { AIAPIKeys } from '@memberjunction/ai';
+import { AIAPIKeys, type ChatMessage, type ChatResult } from '@memberjunction/ai';
 import { UserInfo as CoreUserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 
 // ============================================================================
 // Module mocks (boundaries only)
 // ============================================================================
+
+vi.mock('@memberjunction/ai-core-plus', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/ai-core-plus')>();
+    return {
+        ...actual,
+        GetTaskGraphSubmitter: vi.fn(() => actual.GetTaskGraphSubmitter()),
+    };
+});
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
@@ -158,6 +169,7 @@ interface AgentRow {
     MaxIterationsPerRun: number | null;
     AgentTypePromptParams: string | null;
     OwnerUserID: string | null;
+    TypeConfiguration: string | null;
 }
 
 /** ActionParam-shaped record used by the scripted action results. */
@@ -356,6 +368,7 @@ class LoopHarness {
             GetAutoActivatableSkillsForAgent: (): unknown[] => [],
             GetSkillsForAgent: (): unknown[] => [],
             GetClientToolsForAgent: (): unknown[] => [],
+            GetAgentConfigurationPresets: (): unknown[] => [],
             GetAgentBaseCatalog: (agentId: string): unknown => this.catalog.get(agentId),
             SetAgentBaseCatalog: (agentId: string, cat: unknown): void => {
                 this.catalog.set(agentId, cat);
@@ -457,6 +470,7 @@ function makeAgentRow(overrides: Partial<AgentRow> = {}): AgentRow {
         MaxIterationsPerRun: null,
         AgentTypePromptParams: null,
         OwnerUserID: null,
+        TypeConfiguration: null,
         ...overrides,
     };
 }
@@ -635,8 +649,9 @@ describe('BaseAgent.Execute — full loop: prompt → actions → prompt → fin
         expect(harness.steps[1].TargetID).toBe(CHILD_PROMPT_ID);
         expect(harness.steps[2].TargetID).toBe(ACTION_ID);
 
-        // All fire-and-forget saves were flushed by finalizeAgentRun (INSERT + finalize UPDATE each)
-        expect(harness.steps.every((s) => s.saveCount >= 2)).toBe(true);
+        // Pre-completed Validation step persists in a single INSERT; two-phase steps (Prompt, Actions) do INSERT + finalize UPDATE
+        expect(harness.steps[0].saveCount).toBe(1);
+        expect(harness.steps.slice(1).every((s) => s.saveCount >= 2)).toBe(true);
     });
 
     it("propagates the payload: step N's output payload is exactly what step N+1's prompt receives, and the run records the last step's payload", async () => {
@@ -662,10 +677,11 @@ describe('BaseAgent.Execute — full loop: prompt → actions → prompt → fin
         const [, prompt1, actionStep, prompt2] = harness.steps;
         expect(JSON.parse(prompt1.PayloadAtStart ?? 'null')).toEqual(initialPayload);
         expect(JSON.parse(prompt1.PayloadAtEnd ?? 'null')).toEqual(afterStep1);
-        // The action step starts from prompt 1's end, so it stores a pointer to prompt 1 instead of a copy
+        // The action step starts from prompt 1's end and leaves the payload unchanged, so both its start and end store a pointer to prompt 1 instead of a copy
         expect(actionStep.PayloadAtStart).toBeNull();
         expect(actionStep.PayloadAtStartSourceStepID).toBe(prompt1.ID);
-        expect(JSON.parse(actionStep.PayloadAtEnd ?? 'null')).toEqual(afterStep1);
+        expect(actionStep.PayloadAtEnd).toBeNull();
+        expect(actionStep.PayloadAtEndSourceStepID).toBe(prompt1.ID);
         expect(JSON.parse(prompt2.PayloadAtEnd ?? 'null')).toEqual(finalPayload);
 
         // The final run payload is the LAST step's payload
@@ -708,6 +724,60 @@ describe('BaseAgent.Execute — full loop: prompt → actions → prompt → fin
         // Prompt 2 received the conversation history with the trailing runtime state fragment appended
         expect(runner.Calls[1].conversationMessages.slice(0, -1)).toEqual(params.conversationMessages);
         expect(runner.Calls[1].conversationMessages.at(-1)?.metadata?.volatileState).toBe(true);
+    });
+});
+
+describe('BaseAgent.Execute — Phase 2 context injections land in a fixed order', () => {
+    /**
+     * Memory, RAG and decision discovery run in parallel during Phase 2. Each is handed its own staging
+     * array and the three are spliced in afterwards, so the order the model sees never depends on which
+     * lookup finished first (plan Lesson 1, vector 5). Here the slowest one is the one that must come first.
+     */
+    class OrderingAgent extends BaseAgent {
+        protected override async InjectContextMemory(
+            _input: string,
+            _agent: MJAIAgentEntityExtended,
+            _userId?: string,
+            _companyId?: string,
+            _contextUser?: UserInfo,
+            conversationMessages?: ChatMessage[]
+        ): Promise<{ notes: never[]; examples: never[] }> {
+            await new Promise((r) => setTimeout(r, 30));
+            conversationMessages?.unshift({ role: 'system', content: 'MEMORY' });
+            return { notes: [], examples: [] };
+        }
+        protected override async InjectPreExecutionRAG(
+            _lastUserMessage: string,
+            _agent: MJAIAgentEntityExtended,
+            _contextUser: UserInfo | undefined,
+            conversationMessages: ChatMessage[] | undefined
+        ): Promise<AgentPreExecutionRAGResult | null> {
+            await new Promise((r) => setTimeout(r, 15));
+            conversationMessages?.unshift({ role: 'system', content: 'RAG' });
+            return null;
+        }
+        protected override async InjectDecisionDiscovery(
+            _agent: MJAIAgentEntityExtended,
+            _contextUser: UserInfo | undefined,
+            conversationMessages: ChatMessage[] | undefined
+        ): Promise<void> {
+            await new Promise((r) => setTimeout(r, 1));
+            conversationMessages?.unshift({ role: 'system', content: 'DISCOVERY' });
+        }
+    }
+
+    it('places memory, then RAG, then discovery ahead of the first user message, whatever order they finish in', async () => {
+        const agent = new OrderingAgent();
+        const runner = new ScriptedPromptRunner([() => llmEnvelope(successEnvelope())]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        const contents = (runner.Calls[0].conversationMessages ?? []).map((m) => (typeof m.content === 'string' ? m.content : ''));
+        const positions = ['MEMORY', 'RAG', 'DISCOVERY', 'Please complete the task'].map((c) => contents.indexOf(c));
+        expect(positions.every((i) => i >= 0)).toBe(true);
+        expect(positions).toEqual([...positions].sort((a, b) => a - b));
     });
 });
 
@@ -2505,6 +2575,29 @@ describe("BaseAgent.Execute — memory, RAG and the prompt read the run's valida
     });
 });
 
+describe('BaseAgent.Execute — system placeholders in scoped prompt parts', () => {
+    afterEach(() => vi.useRealTimers());
+    const contentOf = (m: { content: unknown }): string => (typeof m.content === 'string' ? m.content : '');
+
+    it('replaces them in the messages InjectScopedPromptParts adds, even from an override, and nowhere else', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date(2026, 9, 14, 12));
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const keyhole = agent as unknown as Record<string, (...args: unknown[]) => unknown>;
+        vi.spyOn(keyhole, 'InjectContextMemory').mockResolvedValue({ notes: [], examples: [] });
+        vi.spyOn(keyhole, 'InjectPreExecutionRAG').mockResolvedValue(null);
+        vi.spyOn(keyhole, 'InjectScopedPromptParts').mockImplementation((_agent, messages) => {
+            (messages as AgentChatMessage[]).unshift({ role: 'system', content: 'Today is {{ _CURRENT_DATE }}, {{ _USER_NAME }}.' });
+        });
+
+        await agent.Execute(makeParams({ conversationMessages: [{ role: 'user', content: 'Keep {{ _CURRENT_DATE }} as typed' }] }));
+
+        const sent = (runner.Calls[0].conversationMessages ?? []).map(contentOf);
+        expect(sent).toContain(`Today is 2026-10-14, ${TEST_USER.Name}.`);
+        expect(sent.some((c) => c.includes('Keep {{ _CURRENT_DATE }} as typed'))).toBe(true);
+    });
+});
+
 describe('BaseAgent.Execute — the reserved run-data keys count only with TrustReservedRunData', () => {
     const TENANT = 'aaaaaaaa-0000-4000-8000-0000000000b7';
     /** What an untrusted caller (a browser, an Execute Agent action call, MCP, A2A) might put in `data`. */
@@ -2601,6 +2694,7 @@ describe('BaseAgent.buildAgentBaseCatalog — relationship targets', () => {
             ],
             AgentActions: [],
             AgentTypes: [],
+            GetAgentConfigurationPresets: (): unknown[] => [],
         };
 
         const catalog = new HarnessAgent().ExposeBuildAgentBaseCatalog(
@@ -2612,5 +2706,1406 @@ describe('BaseAgent.buildAgentBaseCatalog — relationship targets', () => {
         expect(catalog.subAgentCount).toBe(1);
         expect(catalog.subAgentDetails).toContain('Research Agent');
         expect(catalog.subAgentDetails).not.toContain('Skip');
+    });
+});
+
+describe('BaseAgent.Execute — Loop agent-type gates read the merged params (VS-SAGE-0)', () => {
+    const TENANT = 'aaaaaaaa-0000-4000-8000-0000000000d7';
+    const CHILD_AGENT_ID = 'aaaaaaaa-5555-4000-8000-000000000001';
+    const FLOW_TYPE_ID = 'aaaaaaaa-5555-4000-8000-000000000002';
+    const FLOW_STEP_ID = 'aaaaaaaa-5555-4000-8000-000000000003';
+    const PARENT_TASK_ID = 'aaaaaaaa-5555-4000-8000-000000000004';
+
+    const twoNodeGraph = (): TaskGraphSpec => ({
+        workflowName: 'Quarterly review',
+        tasks: [
+            {
+                tempId: 'a',
+                name: 'Gather',
+                description: 'gather the data',
+                kind: 'Agent',
+                configuration: { agentName: 'Query Builder' },
+                dependsOn: [],
+            },
+            {
+                tempId: 'b',
+                name: 'Summarize',
+                description: 'summarize it',
+                kind: 'Agent',
+                configuration: { agentName: 'Sage' },
+                dependsOn: ['a'],
+            },
+        ],
+    });
+
+    const tasksEnvelope = (): LoopAgentResponse => ({
+        taskComplete: false,
+        reasoning: 'Schedule durable two-node task graph',
+        nextStep: {
+            type: 'Tasks',
+            tasks: twoNodeGraph(),
+        },
+    });
+
+    let submitSpy: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+        submitSpy = vi.fn().mockResolvedValue({
+            Success: true,
+            ParentTaskID: PARENT_TASK_ID,
+        });
+        vi.mocked(GetTaskGraphSubmitter).mockReturnValue({
+            Submit: submitSpy,
+        } as unknown as TaskGraphSubmitter);
+    });
+
+    afterEach(() => {
+        vi.mocked(GetTaskGraphSubmitter).mockReset();
+        vi.restoreAllMocks();
+    });
+
+    it('1. metadata-only gate: an agent with AgentTypePromptParams.enableTaskGraphs=true and nothing in data reaches executeTasksStep', async () => {
+        harness.agent = makeAgentRow({
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(tasksEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams({ parentAgentHierarchy: ['Root Agent'] }));
+
+        expect(result.success).toBe(true);
+        expect(submitSpy).toHaveBeenCalledTimes(1);
+        expect(submitSpy.mock.calls[0][0].Spec.workflowName).toBe('Quarterly review');
+        expect(submitSpy.mock.calls[0][0].ParentAgentHierarchy).toEqual(['Root Agent', 'Loop Test Agent']);
+        expect(harness.steps.map((s) => s.StepType)).toContain('TaskGraph');
+        expect(runner.Calls).toHaveLength(1);
+    });
+
+    it('2. withheld: the same metadata-enabled agent on a run that withholds task graphs is refused', async () => {
+        harness.agent = makeAgentRow({
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(tasksEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams({ PrimaryScopeRecordID: TENANT }));
+
+        expect(result.success).toBe(true);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(harness.steps.map((s) => s.StepType)).not.toContain('TaskGraph');
+        expect(runner.Calls).toHaveLength(2);
+        const turn2Messages = (runner.Calls[1].conversationMessages ?? []).map((m) =>
+            typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+        );
+        expect(turn2Messages.some((c) => /not enabled to emit task graphs/i.test(c))).toBe(true);
+    });
+
+    it('3. off: an agent without the flag in metadata is refused', async () => {
+        harness.agent = makeAgentRow();
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(tasksEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(harness.steps.map((s) => s.StepType)).not.toContain('TaskGraph');
+        expect(runner.Calls).toHaveLength(2);
+        const turn2Messages = (runner.Calls[1].conversationMessages ?? []).map((m) =>
+            typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+        );
+        expect(turn2Messages.some((c) => /not enabled to emit task graphs/i.test(c))).toBe(true);
+    });
+
+    it("4. a sub-agent's data never carries the parent's merged params", async () => {
+        harness.agent = makeAgentRow({
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const childRow = {
+            ...makeAgentRow({ ID: CHILD_AGENT_ID, Name: 'Child Worker' }),
+            ParentID: AGENT_ID,
+            Status: 'Active',
+            ExposeAsAction: false,
+            PayloadDownstreamPaths: '["*"]',
+            PayloadUpstreamPaths: '["*"]',
+        };
+        const baseEngine = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine,
+            Agents: [childRow],
+            GetSubAgents: () => [childRow],
+        });
+
+        const runAgentSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockResolvedValue({
+            success: true,
+            payload: {},
+            agentRun: { ID: 'aaaaaaaa-6666-4000-8000-000000000001', Status: 'Completed' } as unknown as MJAIAgentRunStepEntityExtended['AgentRun'],
+        } as unknown as Awaited<ReturnType<AgentRunner['RunAgent']>>);
+
+        const { agent } = makeAgent([
+            () =>
+                llmEnvelope({
+                    taskComplete: false,
+                    reasoning: 'Delegate to Child Worker',
+                    nextStep: {
+                        type: 'Sub-Agent',
+                        subAgent: {
+                            name: 'Child Worker',
+                            message: 'Do sub-work',
+                            terminateAfter: true,
+                        },
+                    },
+                }),
+        ]);
+
+        const callerData = { callerKey: 'keep-me' };
+        const runParams = makeParams({ data: callerData });
+        const result = await agent.Execute(runParams);
+
+        expect(result.success).toBe(true);
+        expect(callerData).toEqual({ callerKey: 'keep-me' });
+        expect(runParams.data).toBe(callerData);
+        expect(runAgentSpy).toHaveBeenCalledTimes(1);
+        const childParams = runAgentSpy.mock.calls[0][0];
+        expect(childParams.data).toEqual({ callerKey: 'keep-me' });
+        expect(childParams.data).not.toHaveProperty('__agentTypePromptParams');
+    });
+
+    it("5. a Flow agent's DetermineNextStep gets the run's params object unchanged", async () => {
+        const flowAgent = makeAgentRow({
+            TypeID: FLOW_TYPE_ID,
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        harness.agent = flowAgent;
+        const flowStep = {
+            ID: FLOW_STEP_ID,
+            AgentID: AGENT_ID,
+            Name: 'Flow Prompt Step',
+            Description: 'Run prompt',
+            StepType: 'Prompt',
+            StartingStep: true,
+            Status: 'Active',
+            SubAgentID: null,
+            PromptID: CHILD_PROMPT_ID,
+            ActionID: null,
+            ActionInputMapping: null,
+            ActionOutputMapping: null,
+            Configuration: null,
+            LoopBodyType: null,
+            PositionX: 0,
+            PositionY: 0,
+        };
+        const baseEngine = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine,
+            AgentTypes: [
+                ...(baseEngine.AgentTypes as unknown[]),
+                {
+                    ID: FLOW_TYPE_ID,
+                    Name: 'Flow',
+                    DriverClass: 'FlowAgentType',
+                    SystemPromptID: SYS_PROMPT_ID,
+                    AgentPromptPlaceholder: '_AGENT_PROMPT_',
+                    PromptParamsSchema: null,
+                    DefaultStorageAccountID: null,
+                },
+            ],
+            GetAgentSteps: () => [flowStep],
+            GetAgentStepByID: (id: string) => (id === FLOW_STEP_ID ? flowStep : null),
+            GetPathsFromStep: () => [],
+        });
+
+        const determineSpy = vi.spyOn(FlowAgentType.prototype, 'DetermineNextStep');
+        const { agent } = makeAgent([() => llmEnvelope(successEnvelope())]);
+        const callerData = { flowConditionKey: 'present' };
+        const runParams = makeParams({
+            agent: flowAgent as unknown as MJAIAgentEntityExtended,
+            data: callerData,
+            agentTypeParams: { executionMode: 'inRun' },
+        });
+
+        const determineStepSpy = vi.spyOn(
+            agent as unknown as { determineNextStep: (...args: unknown[]) => unknown },
+            'determineNextStep',
+        );
+        const result = await agent.Execute(runParams);
+
+        expect(result.success).toBe(true);
+        expect(determineStepSpy).toHaveBeenCalledTimes(1);
+        expect(determineSpy).toHaveBeenCalledTimes(1);
+        const runLevelParams = determineStepSpy.mock.calls[0][0] as ExecuteAgentParams;
+        const passedParams = determineSpy.mock.calls[0][1];
+        expect(passedParams).toBe(runLevelParams);
+        expect(passedParams.data).toBe(callerData);
+        expect(passedParams.data).toEqual({ flowConditionKey: 'present' });
+    });
+
+    it('6. host allow-list: runs a task graph when every Agent task is in HostAllowedAgentIDs, and refuses without running when one is outside it', async () => {
+        const QB_AGENT_ID = 'aaaaaaaa-5555-4000-8000-000000000011';
+        const SAGE_AGENT_ID = 'aaaaaaaa-5555-4000-8000-000000000012';
+        const qbRow = makeAgentRow({ ID: QB_AGENT_ID, Name: 'Query Builder', Status: 'Active' });
+        const sageRow = makeAgentRow({ ID: SAGE_AGENT_ID, Name: 'Sage', Status: 'Active' });
+
+        // (a) Allowed graph runs when both agents are in ALL_AVAILABLE_AGENTS
+        harness.agent = makeAgentRow({
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const baseEngine1 = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine1,
+            Agents: [harness.agent, qbRow, sageRow],
+        });
+
+        const allowedRun = makeAgent([() => llmEnvelope(tasksEnvelope())]);
+        const allowedResult = await allowedRun.agent.Execute(
+            makeParams({
+                data: {
+                    ALL_AVAILABLE_AGENTS: [
+                        { ID: QB_AGENT_ID, Name: 'Query Builder' },
+                        { ID: SAGE_AGENT_ID, Name: 'Sage' },
+                    ],
+                },
+            }),
+        );
+
+        expect(allowedResult.success).toBe(true);
+        expect(submitSpy).toHaveBeenCalledTimes(1);
+        expect(harness.steps.map((s) => s.StepType)).toContain('TaskGraph');
+
+        // (b) Disallowed agent ('Sage' omitted from ALL_AVAILABLE_AGENTS) -> nothing runs, refusal message
+        submitSpy.mockClear();
+        harness = new LoopHarness();
+        harness.agent = makeAgentRow({
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const baseEngine2 = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine2,
+            Agents: [harness.agent, qbRow, sageRow],
+        });
+
+        const disallowedRun = makeAgent([() => llmEnvelope(tasksEnvelope())]);
+        const disallowedResult = await disallowedRun.agent.Execute(
+            makeParams({
+                data: {
+                    ALL_AVAILABLE_AGENTS: [{ ID: QB_AGENT_ID, Name: 'Query Builder' }],
+                },
+            }),
+        );
+
+        expect(disallowedResult.success).toBe(false);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(harness.steps.map((s) => s.StepType)).not.toContain('TaskGraph');
+        expect(disallowedRun.runner.Calls).toHaveLength(1);
+        expect(disallowedResult.agentRun?.Message).toBe("Sage isn't available in this chat, so it didn't run.");
+        expect(disallowedResult.agentRun?.ErrorMessage).toContain("Sage isn't available in this chat, so it didn't run.");
+    });
+});
+
+describe('BaseAgent.Execute — single-node task-graph fold vs unfold (VS-SAGE-4)', () => {
+    const UNRELATED_AGENT_ID = 'aaaaaaaa-7777-4000-8000-000000000001';
+    const CHILD_AGENT_ID = 'aaaaaaaa-7777-4000-8000-000000000002';
+    const RELATED_AGENT_ID = 'aaaaaaaa-7777-4000-8000-000000000003';
+    const SKILL_GRANTED_AGENT_ID = 'aaaaaaaa-7777-4000-8000-000000000004';
+    const PARENT_TASK_ID = 'aaaaaaaa-7777-4000-8000-000000000005';
+
+    const singleNodeGraph = (agentName: string): TaskGraphSpec => ({
+        workflowName: `Single-node ${agentName}`,
+        tasks: [
+            {
+                tempId: 'only',
+                name: `Run ${agentName}`,
+                description: `Delegate to ${agentName}`,
+                kind: 'Agent',
+                configuration: { agentName },
+                dependsOn: [],
+            },
+        ],
+    });
+
+    const singleNodeTasksEnvelope = (agentName: string): LoopAgentResponse => ({
+        taskComplete: false,
+        reasoning: `Emit single-node graph for ${agentName}`,
+        nextStep: {
+            type: 'Tasks',
+            tasks: singleNodeGraph(agentName),
+        },
+    });
+
+    let submitSpy: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+        vi.mocked(LogStatus).mockClear();
+        submitSpy = vi.fn().mockResolvedValue({
+            Success: true,
+            ParentTaskID: PARENT_TASK_ID,
+        });
+        vi.mocked(GetTaskGraphSubmitter).mockReturnValue({
+            Submit: submitSpy,
+        } as unknown as TaskGraphSubmitter);
+    });
+
+    afterEach(() => {
+        vi.mocked(GetTaskGraphSubmitter).mockReset();
+        vi.restoreAllMocks();
+    });
+
+    it('unfolds a single-node graph naming an unrelated root agent and submits durably without a Retry', async () => {
+        harness.agent = makeAgentRow({
+            Name: 'Sage',
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const unrelatedRoot = {
+            ...makeAgentRow({ ID: UNRELATED_AGENT_ID, Name: 'Marketing Agent' }),
+            ParentID: null,
+            Status: 'Active',
+        };
+        const baseEngine = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine,
+            Agents: [harness.agent, unrelatedRoot],
+            AgentRelationships: [],
+            GetSubAgents: () => [],
+        });
+
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(singleNodeTasksEnvelope('Marketing Agent')),
+            () => llmEnvelope(successEnvelope('should not reach second prompt turn')),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(submitSpy).toHaveBeenCalledTimes(1);
+        expect(submitSpy.mock.calls[0][0].Spec.workflowName).toBe('Single-node Marketing Agent');
+        expect(runner.Calls).toHaveLength(1);
+        expect((agent as unknown as { _generalValidationRetryCount: number })._generalValidationRetryCount).toBe(0);
+        const taskGraphSteps = harness.steps.filter((s) => s.StepType === 'TaskGraph');
+        expect(taskGraphSteps).toHaveLength(1);
+        expect(JSON.parse(taskGraphSteps[0].InputData ?? '{}')).toMatchObject({ folded: false });
+        const statusLogs = vi.mocked(LogStatus).mock.calls.map((c) => String(c[0]));
+        expect(statusLogs.some((m) => m.includes('target is not a sub-agent of Sage; submitting durably'))).toBe(true);
+    });
+
+    it('falls through to "not found or not active" Retry when a single-node graph names an unknown agent', async () => {
+        harness.agent = makeAgentRow({
+            Name: 'Sage',
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const baseEngine = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine,
+            Agents: [harness.agent],
+            AgentRelationships: [],
+            GetSubAgents: () => [],
+        });
+
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(singleNodeTasksEnvelope('NonExistent Specialist')),
+            () => llmEnvelope(successEnvelope('Recovered after retry')),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(runner.Calls).toHaveLength(2);
+        expect((agent as unknown as { _generalValidationRetryCount: number })._generalValidationRetryCount).toBe(1);
+        const secondCallText = JSON.stringify(runner.Calls[1].conversationMessages);
+        expect(secondCallText).toContain("Sub-agent 'NonExistent Specialist' not found or not active");
+    });
+
+    it('falls through to "not found or not active" Retry when a single-node graph uses a different case for an Active root agent', async () => {
+        harness.agent = makeAgentRow({
+            Name: 'Sage',
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const activeRootAgent = {
+            ...makeAgentRow({ ID: UNRELATED_AGENT_ID, Name: 'Marketing Agent' }),
+            ParentID: null,
+            Status: 'Active',
+        };
+        const baseEngine = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine,
+            Agents: [harness.agent, activeRootAgent],
+            AgentRelationships: [],
+            GetSubAgents: () => [],
+        });
+
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(singleNodeTasksEnvelope('marketing agent')),
+            () => llmEnvelope(successEnvelope('Recovered after case-variant retry')),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(runner.Calls).toHaveLength(2);
+        expect((agent as unknown as { _generalValidationRetryCount: number })._generalValidationRetryCount).toBe(1);
+        const secondCallText = JSON.stringify(runner.Calls[1].conversationMessages);
+        expect(secondCallText).toContain("Sub-agent 'marketing agent' not found or not active");
+    });
+
+    it('falls through to "not found or not active" Retry when a single-node graph names a Disabled agent', async () => {
+        harness.agent = makeAgentRow({
+            Name: 'Sage',
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const disabledRootAgent = {
+            ...makeAgentRow({ ID: UNRELATED_AGENT_ID, Name: 'Marketing Agent' }),
+            ParentID: null,
+            Status: 'Disabled',
+        };
+        const baseEngine = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine,
+            Agents: [harness.agent, disabledRootAgent],
+            AgentRelationships: [],
+            GetSubAgents: () => [],
+        });
+
+        const { agent, runner } = makeAgent([
+            () => llmEnvelope(singleNodeTasksEnvelope('Marketing Agent')),
+            () => llmEnvelope(successEnvelope('Recovered after disabled-agent retry')),
+        ]);
+
+        const result = await agent.Execute(makeParams());
+
+        expect(result.success).toBe(true);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(runner.Calls).toHaveLength(2);
+        expect((agent as unknown as { _generalValidationRetryCount: number })._generalValidationRetryCount).toBe(1);
+        const secondCallText = JSON.stringify(runner.Calls[1].conversationMessages);
+        expect(secondCallText).toContain("Sub-agent 'Marketing Agent' not found or not active");
+    });
+
+    it('keeps a single-node graph folded in-run when targeting a ParentID child, relationship target, or skill-granted sub-agent', async () => {
+        // 1) ParentID child
+        harness.agent = makeAgentRow({
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const childRow = {
+            ...makeAgentRow({ ID: CHILD_AGENT_ID, Name: 'Child Sub-Agent' }),
+            ParentID: AGENT_ID,
+            Status: 'Active',
+            ExposeAsAction: false,
+            PayloadDownstreamPaths: '["*"]',
+            PayloadUpstreamPaths: '["*"]',
+        };
+        const baseEngine1 = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine1,
+            Agents: [harness.agent, childRow],
+            AgentRelationships: [],
+            GetSubAgents: () => [childRow],
+        });
+        const runAgentSpy = vi.spyOn(AgentRunner.prototype, 'RunAgent').mockResolvedValue({
+            success: true,
+            payload: {},
+            agentRun: { ID: 'aaaaaaaa-6666-4000-8000-000000000011', Status: 'Completed' } as unknown as MJAIAgentRunStepEntityExtended['AgentRun'],
+        } as unknown as Awaited<ReturnType<AgentRunner['RunAgent']>>);
+
+        const childRun = makeAgent([
+            () => llmEnvelope(singleNodeTasksEnvelope('Child Sub-Agent')),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const childResult = await childRun.agent.Execute(makeParams());
+        expect(childResult.success).toBe(true);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(runAgentSpy).toHaveBeenCalledTimes(1);
+        expect(harness.steps.find((s) => s.StepType === 'TaskGraph')?.StepName).toContain('Task Graph (folded)');
+
+        // 2) Relationship target
+        harness = new LoopHarness();
+        harness.agent = makeAgentRow({
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const relatedRow = {
+            ...makeAgentRow({ ID: RELATED_AGENT_ID, Name: 'Related Sub-Agent' }),
+            ParentID: null,
+            Status: 'Active',
+            ExposeAsAction: false,
+        };
+        const relationshipRow = {
+            ID: 'aaaaaaaa-7777-4000-8000-000000000099',
+            AgentID: AGENT_ID,
+            SubAgentID: RELATED_AGENT_ID,
+            Status: 'Active',
+            SubAgentOutputMapping: null,
+            SubAgentInputMapping: null,
+            SubAgentContextPaths: null,
+        };
+        const baseEngine2 = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine2,
+            Agents: [harness.agent, relatedRow],
+            AgentRelationships: [relationshipRow],
+            GetSubAgents: () => [relatedRow],
+        });
+        runAgentSpy.mockClear();
+
+        const relatedRun = makeAgent([
+            () => llmEnvelope(singleNodeTasksEnvelope('Related Sub-Agent')),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const relatedResult = await relatedRun.agent.Execute(makeParams());
+        expect(relatedResult.success).toBe(true);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(runAgentSpy).toHaveBeenCalledTimes(1);
+        expect(harness.steps.find((s) => s.StepType === 'TaskGraph')?.StepName).toContain('Task Graph (folded)');
+
+        // 3) Skill-granted / runtime subAgentChanges sub-agent
+        harness = new LoopHarness();
+        harness.agent = makeAgentRow({
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const skillGrantedRow = {
+            ...makeAgentRow({ ID: SKILL_GRANTED_AGENT_ID, Name: 'Skill Granted Agent' }),
+            ParentID: null,
+            Status: 'Active',
+            ExposeAsAction: false,
+            PayloadDownstreamPaths: '["*"]',
+            PayloadUpstreamPaths: '["*"]',
+        };
+        const baseEngine3 = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine3,
+            Agents: [harness.agent, skillGrantedRow],
+            AgentRelationships: [],
+            GetSubAgents: () => [],
+        });
+        runAgentSpy.mockClear();
+
+        const skillRun = makeAgent([
+            () => llmEnvelope(singleNodeTasksEnvelope('Skill Granted Agent')),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const skillResult = await skillRun.agent.Execute(
+            makeParams({
+                subAgentChanges: [{ scope: 'root', mode: 'add', subAgentIds: [SKILL_GRANTED_AGENT_ID] }],
+            }),
+        );
+        expect(skillResult.success).toBe(true);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(runAgentSpy).toHaveBeenCalledTimes(1);
+        expect(harness.steps.find((s) => s.StepType === 'TaskGraph')?.StepName).toContain('Task Graph (folded)');
+    });
+});
+
+describe('BaseAgent.Execute — agent.AgentTypePromptParams task graph gate & folded peer-agent resolution', () => {
+    const PEER_QB_ID = 'aaaaaaaa-5555-4000-8000-000000000001';
+
+    it('propagates agent.AgentTypePromptParams.enableTaskGraphs into DetermineNextStep and resolves folded 1-node peer agents', async () => {
+        harness.agent = makeAgentRow({
+            Name: 'Sage',
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+
+        const peerQueryBuilder = makeAgentRow({
+            ID: PEER_QB_ID,
+            Name: 'Query Builder',
+            Status: 'Active',
+        });
+
+        // Expose the peer agent in AIEngine.Instance.Agents (not as a ParentID child or AgentRelationship of Sage)
+        const baseEngine = harness.engineInstance;
+        vi.spyOn(harness, 'engineInstance', 'get').mockReturnValue({
+            ...baseEngine,
+            Agents: [harness.agent, peerQueryBuilder],
+        });
+
+        const singleTaskEnvelope = {
+            taskComplete: false,
+            message: "I'll have Query Builder handle this.",
+            nextStep: {
+                type: 'Tasks',
+                tasks: {
+                    workflowName: 'Order Revenue Breakdown',
+                    reasoning: 'Single-agent SQL query delegation',
+                    tasks: [
+                        {
+                            tempId: 'task1',
+                            name: 'Build Order Revenue Query',
+                            description: 'Build a parameterized SQL query for order revenue by status',
+                            kind: 'Agent',
+                            configuration: {
+                                agentName: 'Query Builder',
+                            },
+                            dependsOn: [],
+                            inputPayload: {},
+                        },
+                    ],
+                },
+            },
+        } as unknown as LoopAgentResponse;
+
+        const { agent, internals } = makeAgent([
+            () => llmEnvelope(singleTaskEnvelope),
+            () => llmEnvelope(successEnvelope({ message: 'Here is your query from Query Builder.' })),
+        ]);
+
+        // Verify resolveSubAgentByName only resolves peer agents when allowAnyActiveAgent=true (folded task graph)
+        const internalResolver = agent as unknown as {
+            resolveSubAgentByName: (
+                p: ExecuteAgentParams,
+                name: string,
+                allowAnyActiveAgent?: boolean
+            ) => { subAgentEntity: { ID: string; Name: string } } | undefined;
+        };
+        const execParams = makeParams();
+        expect(internalResolver.resolveSubAgentByName(execParams, 'Query Builder', false)).toBeUndefined();
+        expect(internalResolver.resolveSubAgentByName(execParams, 'Query Builder', true)?.subAgentEntity.ID).toBe(PEER_QB_ID);
+
+        // Stub processSubAgentStep to verify validateSubAgentNextStep approved the folded peer agent
+        const seenDecisions: BaseAgentNextStep[] = [];
+        internals.processSubAgentStep = async function (this: unknown, _p?: ExecuteAgentParams, decision?: BaseAgentNextStep) {
+            if (decision) {
+                seenDecisions.push(decision);
+            }
+            return {
+                step: 'Success',
+                terminate: false,
+                newPayload: { sql: 'SELECT 1' },
+                previousPayload: {},
+            } as BaseAgentNextStep;
+        } as unknown as () => Promise<BaseAgentNextStep>;
+
+        const result = await agent.Execute(execParams);
+
+        expect(result.success).toBe(true);
+        expect(seenDecisions).toHaveLength(1);
+        expect(seenDecisions[0].step).toBe('Sub-Agent');
+        expect(seenDecisions[0].subAgent?.name).toBe('Query Builder');
+        expect(seenDecisions[0].taskGraph?.folded).toBe(true);
+
+        // Pre-completed folded TaskGraph step persists in a single INSERT (saveCount === 1)
+        const foldedStep = harness.steps.find((s) => s.StepType === 'TaskGraph');
+        expect(foldedStep?.saveCount).toBe(1);
+    });
+});
+
+
+describe('BaseAgent.Execute — agent-local tools: write, a failing edit, a successful edit', () => {
+    type DocPayload = { doc?: string };
+    type ToolBlock = { type: string; toolCallId?: string; isError?: boolean; content?: string };
+
+    /** `write_doc` / `edit_doc`, the shape of a write/edit agent: state lives in the payload. */
+    const docTools: AgentToolDefinition<DocPayload>[] = [
+        {
+            Name: 'write_doc',
+            Description: 'Call this to write the whole document.',
+            InputSchema: { type: 'object', properties: { content: { type: 'string' } }, required: ['content'] },
+            Execute: async (args) => ({ Content: 'Document written.', IsError: false, PayloadChange: { newElements: { doc: String(args.content) } } })
+        },
+        {
+            Name: 'edit_doc',
+            Description: 'Call this to replace one exact passage of the document.',
+            InputSchema: { type: 'object', properties: { old_string: { type: 'string' }, new_string: { type: 'string' } }, required: ['old_string', 'new_string'] },
+            Execute: async (args, context) => {
+                const doc = context.CurrentPayload.doc ?? '';
+                const oldString = String(args.old_string);
+                if (!doc.includes(oldString)) {
+                    return { Content: `old_string not found: '${oldString}'`, IsError: true };
+                }
+                return { Content: 'Edit applied.', IsError: false, PayloadChange: { updateElements: { doc: doc.replace(oldString, () => String(args.new_string)) } } };
+            }
+        }
+    ];
+
+    class DocAgent extends HarnessAgent {
+        protected override GetAgentTools(): AgentToolDefinition[] {
+            return docTools as AgentToolDefinition[];
+        }
+    }
+
+    /** A native turn calling one of the agent's tools, results going back natively. */
+    function llmToolCall(id: string, name: string, args: Record<string, unknown>): AIPromptRunResult {
+        const chatResult = {
+            success: true,
+            data: { choices: [{ message: { role: 'assistant', content: '', toolCalls: [{ id, name, arguments: args }] } }] },
+        } as unknown as AIPromptRunResult['chatResult'];
+        RecordToolCallingDecision(chatResult, { useNativeTools: true, mode: 'Native', controlFlow: 'envelope', toolResults: true });
+        return { success: true, result: { result: null } as unknown as string, rawResult: '', chatResult };
+    }
+
+    function makeDocAgent(script: Array<(params: AIPromptParams, callIndex: number) => AIPromptRunResult>) {
+        const agent = new DocAgent();
+        const runner = new ScriptedPromptRunner(script);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+        return { agent, runner };
+    }
+
+    /** The tool turn answering the assistant turn that made `callId`. */
+    function answerTo(messages: AgentChatMessage[], callId: string): ToolBlock[] {
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === callId));
+        const next = messages[at + 1];
+        expect(next?.role).toBe('tool');
+        return next.content as unknown as ToolBlock[];
+    }
+
+    it('applies each change in order, returns the failed edit to the model as an error, and logs a Tool step per call', async () => {
+        const { agent, runner } = makeDocAgent([
+            () => llmToolCall('call_write', 'write_doc', { content: '# Report\nHello world' }),
+            () => llmToolCall('call_bad_edit', 'edit_doc', { old_string: 'Goodbye', new_string: 'Hi' }),
+            () => llmToolCall('call_edit', 'edit_doc', { old_string: 'Hello', new_string: 'Hi' }),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect((result.payload as DocPayload).doc).toBe('# Report\nHi world');
+
+        const toolSteps = harness.steps.filter((s) => s.StepType === 'Tool');
+        expect(toolSteps.map((s) => [s.StepName, s.Success])).toEqual([
+            ['Agent Tool: write_doc', true],
+            ['Agent Tool: edit_doc', false],
+            ['Agent Tool: edit_doc', true],
+        ]);
+
+        const messages = params.conversationMessages as AgentChatMessage[];
+        expect(answerTo(messages, 'call_write')).toEqual([expect.objectContaining({ toolCallId: 'call_write', isError: false, content: 'Document written.' })]);
+        expect(answerTo(messages, 'call_bad_edit')).toEqual([expect.objectContaining({ toolCallId: 'call_bad_edit', isError: true, content: "old_string not found: 'Goodbye'" })]);
+        expect(answerTo(messages, 'call_edit')).toEqual([expect.objectContaining({ toolCallId: 'call_edit', isError: false })]);
+        // No retry or recap message rides along with the results.
+        expect(messages.some((m) => typeof m.content === 'string' && m.content.includes('Retrying due to'))).toBe(false);
+
+        // The turn after the failed edit saw the document exactly as the write left it.
+        expect(injectedPayload(runner.Calls[2])?.doc).toBe('# Report\nHello world');
+    });
+
+    it('rejects a change outside PayloadSelfWritePaths and tells the model, leaving the payload untouched', async () => {
+        harness.agent = makeAgentRow({ PayloadSelfWritePaths: JSON.stringify(['notes']) });
+        const { agent } = makeDocAgent([
+            () => llmToolCall('call_write', 'write_doc', { content: 'Hello' }),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect((result.payload as DocPayload | undefined)?.doc).toBeUndefined();
+        const answer = answerTo(params.conversationMessages as AgentChatMessage[], 'call_write');
+        expect(answer[0].isError).toBe(true);
+        expect(answer[0].content).toContain('may not write');
+        expect(harness.steps.find((s) => s.StepType === 'Tool')?.Success).toBe(false);
+    });
+
+    it('reports a tool that throws as an error result instead of failing the run', async () => {
+        const throwing: AgentToolDefinition = {
+            Name: 'explode', Description: 'Call this to fail.', InputSchema: { type: 'object', properties: {} },
+            Execute: async () => { throw new Error('disk full'); }
+        };
+        class ThrowingAgent extends HarnessAgent {
+            protected override GetAgentTools(): AgentToolDefinition[] {
+                return [throwing];
+            }
+        }
+        const agent = new ThrowingAgent();
+        (agent as unknown as AgentInternals)._promptRunner = new ScriptedPromptRunner([
+            () => llmToolCall('call_x', 'explode', {}),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(answerTo(params.conversationMessages as AgentChatMessage[], 'call_x')).toEqual([
+            expect.objectContaining({ isError: true, content: 'The tool failed: disk full' })
+        ]);
+    });
+
+    /** An implicit-control-flow turn with several calls, results going back natively. */
+    function llmImplicitCalls(calls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>): AIPromptRunResult {
+        const chatResult = {
+            success: true,
+            data: { choices: [{ message: { role: 'assistant', content: '', toolCalls: calls } }] },
+        } as unknown as AIPromptRunResult['chatResult'];
+        RecordToolCallingDecision(chatResult, { useNativeTools: true, mode: 'NativeImplicit', controlFlow: 'implicit', toolResults: true });
+        return { success: true, result: { result: null } as unknown as string, rawResult: '', chatResult, promptRun: { ToolCallingMode: 'NativeImplicit' } as unknown as MJAIPromptRunEntity };
+    }
+
+    it('with relaxed turn shapes, a failed write declines the complete_task that came after it', async () => {
+        harness.agent = makeAgentRow({ TypeConfiguration: JSON.stringify({ NativeControl: { RelaxedTurnShapes: true } }) });
+        const { agent, runner } = makeDocAgent([
+            () => llmImplicitCalls([
+                { id: 'call_bad_edit', name: 'edit_doc', arguments: { old_string: 'Goodbye', new_string: 'Hi' } },
+                { id: 'call_done', name: 'complete_task', arguments: { message: 'Edited.' } }
+            ]),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        const answers = answerTo(params.conversationMessages as AgentChatMessage[], 'call_done');
+        expect(answers.map((b) => [b.toolCallId, b.isError])).toEqual([['call_bad_edit', true], ['call_done', true]]);
+        expect(answers[1].content).toMatch(/A write on this turn failed/);
+        expect(params.conversationMessages.some((m) => typeof m.content === 'string' && m.content.includes('Task complete'))).toBe(false);
+    });
+
+    it('with relaxed turn shapes, a write that succeeds lets the complete_task after it end the run', async () => {
+        harness.agent = makeAgentRow({ TypeConfiguration: JSON.stringify({ NativeControl: { RelaxedTurnShapes: true } }) });
+        const { agent, runner } = makeDocAgent([
+            () => llmImplicitCalls([
+                { id: 'call_write', name: 'write_doc', arguments: { content: 'Hello' } },
+                { id: 'call_done', name: 'complete_task', arguments: { message: 'Written.' } }
+            ]),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(1);
+        expect((result.payload as DocPayload).doc).toBe('Hello');
+    });
+});
+
+describe('BaseAgent.Execute — native-only control plane: framework capabilities as tools', () => {
+    type ToolBlock = { type: string; toolCallId?: string; isError?: boolean; content?: string };
+
+    function llmToolCall(id: string, name: string, args: Record<string, unknown>): AIPromptRunResult {
+        const chatResult = {
+            success: true,
+            data: { choices: [{ message: { role: 'assistant', content: '', toolCalls: [{ id, name, arguments: args }] } }] },
+        } as unknown as AIPromptRunResult['chatResult'];
+        RecordToolCallingDecision(chatResult, { useNativeTools: true, mode: 'NativeImplicit', controlFlow: 'implicit', toolResults: true });
+        return { success: true, result: { result: null } as unknown as string, rawResult: '', chatResult, promptRun: { ToolCallingMode: 'NativeImplicit' } as unknown as MJAIPromptRunEntity };
+    }
+
+    it('declares scratchpad_write, asks for the tools-only prompt, and applies a scratchpad write made on a tool-call turn', async () => {
+        harness.agent = makeAgentRow({ TypeConfiguration: JSON.stringify({ NativeControl: { NativeOnly: true } }) });
+        const { agent, runner } = makeAgent([
+            () => llmToolCall('call_pad', 'scratchpad_write', { notes: 'Sales DB starts in 2019.' }),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls[0].tools?.map((t) => t.name)).toContain('scratchpad_write');
+        expect(runner.Calls[0].data?._NATIVE_ONLY_REQUESTED).toBe(true);
+        const scratchpad = (agent as unknown as { _scratchpadManager: { GetNotes(): string } })._scratchpadManager;
+        expect(scratchpad.GetNotes()).toBe('Sales DB starts in 2019.');
+        const messages = params.conversationMessages as AgentChatMessage[];
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === 'call_pad'));
+        expect(messages[at + 1].role).toBe('tool');
+        expect(messages[at + 1].content as unknown as ToolBlock[]).toEqual([expect.objectContaining({ toolCallId: 'call_pad', isError: false })]);
+        expect(harness.steps.some((s) => s.StepType === 'Tool' && s.StepName === 'Agent Tool: scratchpad_write')).toBe(true);
+    });
+
+    it('runs a memory_write made on a tool-call turn through the memory write path, and answers the call with its outcome', async () => {
+        harness.agent = makeAgentRow({ AllowMemoryWrite: true, TypeConfiguration: JSON.stringify({ NativeControl: { NativeOnly: true } }) });
+        const { agent, runner } = makeAgent([
+            () => llmToolCall('call_mem', 'memory_write', { note: 'The user reports revenue in EUR.', type: 'Preference', scopeHint: 'user' }),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const writes: Array<{ note: string; type: string; scopeHint?: string }> = [];
+        (agent as unknown as { _memoryWriteManager: { Clear: () => void; ExecuteWrite: (w: { note: string; type: string; scopeHint?: string }) => Promise<{ disposition: string }> } })
+            ._memoryWriteManager = { Clear: () => undefined, ExecuteWrite: async (w) => { writes.push(w); return { disposition: 'created' }; } };
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls[0].tools?.map((t) => t.name)).toContain('memory_write');
+        expect(writes).toEqual([{ note: 'The user reports revenue in EUR.', type: 'Preference', scopeHint: 'user' }]);
+        const messages = params.conversationMessages as AgentChatMessage[];
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === 'call_mem'));
+        expect(messages[at + 1].content as unknown as ToolBlock[]).toEqual([expect.objectContaining({ toolCallId: 'call_mem', isError: false, content: 'created' })]);
+        expect(harness.steps.some((s) => s.StepType === 'Tool' && s.StepName === 'Agent Tool: memory_write' && s.Success === true)).toBe(true);
+    });
+
+    it('declares no memory_write for a native-only agent that may not write memory', async () => {
+        harness.agent = makeAgentRow({ TypeConfiguration: JSON.stringify({ NativeControl: { NativeOnly: true } }) });
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+
+        await agent.Execute(makeParams());
+
+        expect(runner.Calls[0].tools?.map((t) => t.name) ?? []).not.toContain('memory_write');
+    });
+
+    it('declares no framework tools for an agent that did not opt in', async () => {
+        const { agent, runner } = makeAgent([() => llmEnvelope(successEnvelope())]);
+
+        await agent.Execute(makeParams());
+
+        expect(runner.Calls[0].tools?.map((t) => t.name) ?? []).not.toContain('scratchpad_write');
+        expect(runner.Calls[0].data?._NATIVE_ONLY_REQUESTED).toBeUndefined();
+    });
+});
+
+describe('BaseAgent.Execute — one native turn that acts and then asks or completes', () => {
+    type ToolBlock = { type: string; toolCallId?: string; isError?: boolean; content?: string };
+    const okAction = () => { harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null }); };
+
+    /** An implicit-control-flow turn with several native calls. */
+    function llmCalls(calls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>): AIPromptRunResult {
+        const chatResult = {
+            success: true,
+            data: { choices: [{ message: { role: 'assistant', content: '', toolCalls: calls } }] },
+        } as unknown as AIPromptRunResult['chatResult'];
+        RecordToolCallingDecision(chatResult, { useNativeTools: true, mode: 'NativeImplicit', controlFlow: 'implicit', toolResults: true });
+        return { success: true, result: { result: null } as unknown as string, rawResult: '', chatResult, promptRun: { ToolCallingMode: 'NativeImplicit' } as unknown as MJAIPromptRunEntity };
+    }
+    const actionCall = { id: 'call_act', name: SanitizeToolName(ACTION_NAME), arguments: { foo: 'bar' } };
+    const relaxed = () => { harness.agent = makeAgentRow({ TypeConfiguration: JSON.stringify({ NativeControl: { RelaxedTurnShapes: true } }) }); };
+
+    it('by default runs nothing and asks again, answering every call with the reason', async () => {
+        okAction();
+        const { agent, runner } = makeAgent([
+            () => llmCalls([actionCall, { id: 'call_ask', name: 'ask_user', arguments: { message: 'Which region?' } }]),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        expect(harness.runActionCalls).toHaveLength(0);
+        const messages = params.conversationMessages as AgentChatMessage[];
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === 'call_ask'));
+        const answers = messages[at + 1].content as unknown as ToolBlock[];
+        expect(answers.map((b) => [b.toolCallId, b.isError])).toEqual([['call_act', true], ['call_ask', true]]);
+        expect(answers[1].content).toMatch(/ask_user must be the only call/);
+    });
+
+    it('with relaxed turn shapes, runs the Action and answers ask_user as not run', async () => {
+        relaxed();
+        okAction();
+        const { agent, runner } = makeAgent([
+            () => llmCalls([actionCall, { id: 'call_ask', name: 'ask_user', arguments: { message: 'Which region?' } }]),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        expect(harness.runActionCalls).toHaveLength(1);
+        const messages = params.conversationMessages as AgentChatMessage[];
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === 'call_ask'));
+        const answers = messages[at + 1].content as unknown as ToolBlock[];
+        expect(answers.find((b) => b.toolCallId === 'call_act')?.isError).toBe(false);
+        expect(answers.find((b) => b.toolCallId === 'call_ask')?.content).toMatch(/read their results/);
+    });
+
+    it('with relaxed turn shapes, runs the Action and answers complete_task as not run, so the model completes after reading the result', async () => {
+        relaxed();
+        okAction();
+        const { agent, runner } = makeAgent([
+            () => llmCalls([actionCall, { id: 'call_done', name: 'complete_task', arguments: { message: 'Done' } }]),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        expect(harness.runActionCalls).toHaveLength(1);
+        const messages = params.conversationMessages as AgentChatMessage[];
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === 'call_done'));
+        const answers = messages[at + 1].content as unknown as ToolBlock[];
+        expect(answers.find((b) => b.toolCallId === 'call_act')?.isError).toBe(false);
+        expect(answers.find((b) => b.toolCallId === 'call_done')).toEqual(expect.objectContaining({ isError: true }));
+        expect(messages[at + 2]?.role).not.toBe('tool');
+        expect(answers.find((b) => b.toolCallId === 'call_done')?.content).toMatch(/read their results/);
+        // Both answers sit directly behind the call turn, before anything else.
+        expect(messages[at + 1].role).toBe('tool');
+    });
+});
+
+describe('BaseAgent.Execute — a failed native action carries its guidance in its own error result', () => {
+    type ToolBlock = { type: string; toolCallId?: string; isError?: boolean; content?: string };
+
+    it('puts the failure guidance inside the is_error tool result and sends no separate guidance message', async () => {
+        harness.runAction = () => ({ Success: false, Message: 'boom — downstream system unavailable', Params: [], Result: { ResultCode: 'FAILED' }, LogEntry: null });
+        const { agent } = makeAgent([
+            () => llmNativeActionCall('call_1', true),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        await agent.Execute(params);
+
+        const messages = params.conversationMessages as AgentChatMessage[];
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === 'call_1'));
+        const result = (messages[at + 1].content as unknown as ToolBlock[]).find((b) => b.toolCallId === 'call_1');
+        expect(result?.isError).toBe(true);
+        expect(result?.content).toContain('boom — downstream system unavailable');
+        expect(result?.content).toContain(`Action '${ACTION_NAME}'`);
+        expect(messages.some((m) => typeof m.content === 'string' && m.content.includes('Action Execution Failure Guidance'))).toBe(false);
+    });
+
+    it('keeps the separate guidance message when results go back as markdown', async () => {
+        harness.runAction = () => ({ Success: false, Message: 'boom', Params: [], Result: { ResultCode: 'FAILED' }, LogEntry: null });
+        const { agent } = makeAgent([
+            () => llmNativeActionCall('call_1', false),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams();
+
+        await agent.Execute(params);
+
+        expect(params.conversationMessages.some((m) => typeof m.content === 'string' && m.content.includes('Action Execution Failure Guidance'))).toBe(true);
+    });
+});
+
+describe('BaseAgent.Execute — replayed reasoning behind an unchanged history', () => {
+    type Selection = AIPromptRunResult['modelSelectionInfo'];
+    /** Stands in for a run served by a driver whose replayed reasoning is bound to the history before it. */
+    class BoundReasoningAgent extends HarnessAgent {
+        protected override ResolveAppendOnlyState(): boolean {
+            return (this as unknown as { _nativeToolBindings?: unknown })._nativeToolBindings !== undefined;
+        }
+    }
+
+    function thinkingCall(id: string): AIPromptRunResult {
+        const result = llmNativeActionCall(id, true);
+        const message = (result.chatResult as unknown as { data: { choices: Array<{ message: Record<string, unknown> }> } }).data.choices[0].message;
+        message.reasoning = [{ provider: 'anthropic', kind: 'thinking', text: `Think ${id}.`, signature: `sig-${id}` }];
+        return { ...result, modelSelectionInfo: { ModelSelected: { ID: 'm' }, vendorSelected: { ID: 'v' } } as unknown as Selection };
+    }
+
+    it('keeps every earlier message of each request, so a replayed thinking block is sent after exactly the history it was made with', async () => {
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const agent = new BoundReasoningAgent();
+        const runner = new ScriptedPromptRunner([() => thinkingCall('c1'), () => thinkingCall('c2'), () => llmEnvelope(successEnvelope())]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+
+        await agent.Execute(makeParams());
+
+        expect(runner.Calls).toHaveLength(3);
+        for (let i = 1; i < runner.Calls.length; i++) {
+            const before = runner.Calls[i - 1].conversationMessages ?? [];
+            const after = runner.Calls[i].conversationMessages ?? [];
+            // Request i extends request i-1: nothing it sent was removed or rewritten.
+            expect(after.slice(0, before.length)).toEqual(before);
+        }
+        const last = runner.Calls[2].conversationMessages as AgentChatMessage[];
+        const replayed = last.findIndex((m) => m.toolCalls?.some((c) => c.id === 'c2'));
+        expect(last[replayed].reasoning?.[0]).toMatchObject({ signature: 'sig-c2' });
+    });
+});
+
+describe('BaseAgent.Execute — replayed reasoning after an earlier message is rewritten', () => {
+    type Selection = AIPromptRunResult['modelSelectionInfo'];
+    /** A run on a prefix-bound driver whose first tool result is stubbed before the third request, as expiry would. */
+    class RewritingAgent extends HarnessAgent {
+        protected override ResolveAppendOnlyState(): boolean {
+            return true;
+        }
+        protected override DriverRequiresStableReasoningPrefix(): boolean {
+            return true;
+        }
+        /** The window is "full": expiry runs every step, as it would once the compaction trigger is reached. */
+        protected override isMidLoopCompactionThresholdReached(): boolean {
+            return true;
+        }
+        protected override async pruneAndCompactExpiredMessages(params: ExecuteAgentParams): Promise<void> {
+            const firstResults = params.conversationMessages.findIndex((m) => m.role === 'tool');
+            // Before the third request: both call turns are answered.
+            if (params.conversationMessages.filter((m) => m.role === 'tool').length === 2) {
+                params.conversationMessages[firstResults] = { ...params.conversationMessages[firstResults], content: [{ type: 'tool_result', toolCallId: 'c1', toolName: 'x', content: '[result expired]' }] } as ChatMessage;
+            }
+        }
+    }
+
+    function thinkingCall(id: string): AIPromptRunResult {
+        const result = llmNativeActionCall(id, true);
+        const message = (result.chatResult as unknown as { data: { choices: Array<{ message: Record<string, unknown> }> } }).data.choices[0].message;
+        message.reasoning = [{ provider: 'anthropic', kind: 'thinking', text: `Think ${id}.`, signature: `sig-${id}` }];
+        return { ...result, modelSelectionInfo: { ModelSelected: { ID: 'm' }, vendorSelected: { ID: 'v' } } as unknown as Selection };
+    }
+
+    it('keeps the reasoning made before the change and drops the reasoning after it, in the request and the history', async () => {
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const agent = new RewritingAgent();
+        const runner = new ScriptedPromptRunner([() => thinkingCall('c1'), () => thinkingCall('c2'), () => llmEnvelope(successEnvelope())]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+        const params = makeParams();
+
+        await agent.Execute(params);
+
+        expect(runner.Calls).toHaveLength(3);
+        const third = runner.Calls[2].conversationMessages as AgentChatMessage[];
+        const turnOf = (messages: AgentChatMessage[], id: string) => messages.find((m) => m.toolCalls?.some((c) => c.id === id));
+        expect(turnOf(third, 'c1')?.reasoning?.[0]).toMatchObject({ signature: 'sig-c1' });
+        expect(turnOf(third, 'c2')).not.toHaveProperty('reasoning');
+        expect(turnOf(params.conversationMessages as AgentChatMessage[], 'c2')).not.toHaveProperty('reasoning');
+        // The second request, sent before the rewrite, still carried the turn-1 reasoning unchanged.
+        expect(turnOf(runner.Calls[1].conversationMessages as AgentChatMessage[], 'c1')?.reasoning?.[0]).toMatchObject({ signature: 'sig-c1' });
+    });
+});
+
+describe('BaseAgent.Execute — the system prompt or tools change mid-run', () => {
+    type Selection = AIPromptRunResult['modelSelectionInfo'];
+    class BoundAgent extends HarnessAgent {
+        protected override ResolveAppendOnlyState(): boolean {
+            return true;
+        }
+        protected override DriverRequiresStableReasoningPrefix(): boolean {
+            return true;
+        }
+    }
+
+    /** A thinking tool-call turn whose request the runner fingerprinted as `prefix`. */
+    function thinkingCall(id: string, prefix: string): AIPromptRunResult {
+        const result = llmNativeActionCall(id, true);
+        const message = (result.chatResult as unknown as { data: { choices: Array<{ message: Record<string, unknown> }> } }).data.choices[0].message;
+        message.reasoning = [{ provider: 'anthropic', kind: 'thinking', text: `Think ${id}.`, signature: `sig-${id}` }];
+        RecordSentPrefixFingerprint(result.chatResult as unknown as ChatResult, prefix);
+        return { ...result, modelSelectionInfo: { ModelSelected: { ID: 'm' }, vendorSelected: { ID: 'v' } } as unknown as Selection };
+    }
+
+    it('hands each request the previous fingerprint, and drops the history\'s reasoning once it changes', async () => {
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const agent = new BoundAgent();
+        // Request 2's prefix differs from request 1's — a skill activated and added a tool.
+        const runner = new ScriptedPromptRunner([() => thinkingCall('c1', 'prefix-A'), () => thinkingCall('c2', 'prefix-B'), () => llmEnvelope(successEnvelope())]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+        const params = makeParams();
+
+        await agent.Execute(params);
+
+        expect(runner.Calls.map((c) => c.ReplayedReasoningPrefix)).toEqual([undefined, 'prefix-A', 'prefix-B']);
+        const turnOf = (messages: AgentChatMessage[], id: string) => messages.find((m) => m.toolCalls?.some((c) => c.id === id));
+        // c1's thinking was made under prefix A; the runner sent request 2 without it, and the history dropped it.
+        expect(turnOf(runner.Calls[2].conversationMessages as AgentChatMessage[], 'c1')).not.toHaveProperty('reasoning');
+        // c2's thinking was made under prefix B, which request 3 still has.
+        expect(turnOf(runner.Calls[2].conversationMessages as AgentChatMessage[], 'c2')?.reasoning?.[0]).toMatchObject({ signature: 'sig-c2' });
+    });
+
+    const turnOf = (messages: AgentChatMessage[] | undefined, id: string) => messages?.find((m) => m.toolCalls?.some((c) => c.id === id));
+
+    it('keeps the previous fingerprint across a failed request, so the request after it is still compared', async () => {
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const agent = new BoundAgent();
+        // Request 2 fails before the runner records a fingerprint (failover had nowhere to go); request 3
+        // is sent under a new prefix, so its result says prefix B.
+        const runner = new ScriptedPromptRunner([
+            () => thinkingCall('c1', 'prefix-A'),
+            () => llmFailure('Rate limit exceeded — 429'),
+            () => thinkingCall('c2', 'prefix-B'),
+            () => llmEnvelope(successEnvelope())
+        ]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+        const params = makeParams();
+
+        await agent.Execute(params);
+
+        expect(runner.Calls).toHaveLength(4);
+        // Request 3 is compared with request 1's prefix, not with nothing.
+        expect(runner.Calls.map((c) => c.ReplayedReasoningPrefix)).toEqual([undefined, 'prefix-A', 'prefix-A', 'prefix-B']);
+        // Request 3 came back under prefix B, so the history drops c1's thinking, made under prefix A.
+        expect(turnOf(runner.Calls[3].conversationMessages as AgentChatMessage[], 'c1')).not.toHaveProperty('reasoning');
+        expect(turnOf(params.conversationMessages as AgentChatMessage[], 'c1')).not.toHaveProperty('reasoning');
+    });
+
+    it('keeps the history\'s reasoning while the prefix is unchanged', async () => {
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const agent = new BoundAgent();
+        const runner = new ScriptedPromptRunner([() => thinkingCall('c1', 'prefix-A'), () => thinkingCall('c2', 'prefix-A'), () => llmEnvelope(successEnvelope())]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+        const params = makeParams();
+
+        await agent.Execute(params);
+
+        expect(runner.Calls.map((c) => c.ReplayedReasoningPrefix)).toEqual([undefined, 'prefix-A', 'prefix-A']);
+        expect(turnOf(runner.Calls[2].conversationMessages as AgentChatMessage[], 'c1')?.reasoning?.[0]).toMatchObject({ signature: 'sig-c1' });
+        expect(turnOf(params.conversationMessages as AgentChatMessage[], 'c1')?.reasoning?.[0]).toMatchObject({ signature: 'sig-c1' });
+    });
+
+    it('starts each run without a previous fingerprint', async () => {
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const agent = new BoundAgent();
+        const runner = new ScriptedPromptRunner([
+            () => thinkingCall('c1', 'prefix-A'),
+            () => llmEnvelope(successEnvelope()),
+            () => thinkingCall('c2', 'prefix-B'),
+            () => llmEnvelope(successEnvelope())
+        ]);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+
+        await agent.Execute(makeParams());
+        await agent.Execute(makeParams());
+
+        expect(runner.Calls).toHaveLength(4);
+        // The second run's first request has no earlier request of its own to be compared with.
+        expect(runner.Calls.map((c) => c.ReplayedReasoningPrefix)).toEqual([undefined, 'prefix-A', undefined, 'prefix-B']);
+    });
+});
+
+describe('BaseAgent — a native complete_task refused by validation', () => {
+    class Probe extends HarnessAgent {
+        public async Process(step: BaseAgentNextStep, params: ExecuteAgentParams): Promise<BaseAgentNextStep> {
+            return (this as unknown as { processNextStep(s: BaseAgentNextStep, p: ExecuteAgentParams, ...rest: unknown[]): Promise<BaseAgentNextStep> })
+                .processNextStep(step, params, {}, {}, {}, {});
+        }
+    }
+
+    it('answers the call with the feedback, as an error, so the model can act on it', async () => {
+        const agent = new Probe();
+        const internals = agent as unknown as { validateNextStep: (p: unknown, s: BaseAgentNextStep) => Promise<BaseAgentNextStep>; checkExecutionGuardrails: (p: unknown, s: BaseAgentNextStep) => Promise<BaseAgentNextStep> };
+        internals.validateNextStep = async (_p, s) => s;
+        internals.checkExecutionGuardrails = async (_p, s) => s;
+        const params = { agent: { Name: 'Probe' }, conversationMessages: [] } as unknown as ExecuteAgentParams;
+        const step: BaseAgentNextStep = {
+            step: 'Retry', terminate: false, payloadToolCallId: 'call_done', message: 'The rubric failed: the summary is missing.',
+            nativeTurn: { text: '', toolCalls: [{ id: 'call_done', name: 'complete_task', arguments: {} }], sendResultsNatively: true }
+        };
+
+        await agent.Process(step, params);
+
+        const answer = (params.conversationMessages[1].content as unknown as Array<{ toolCallId: string; content: string; isError: boolean }>)[0];
+        expect(answer).toMatchObject({ toolCallId: 'call_done', isError: true, content: 'The rubric failed: the summary is missing.' });
+    });
+});
+
+describe('BaseAgent.Execute — a payload change sent with a completion is applied only if the completion is accepted', () => {
+    type ToolBlock = { type: string; toolCallId?: string; isError?: boolean; content?: string };
+
+    /** Refuses the first `refusals` completions for an unmet minimum-execution requirement. */
+    class MinExecAgent extends HarnessAgent {
+        public Refusals = 1;
+        protected override async checkMinimumExecutionRequirements(): Promise<string[]> {
+            return this.Refusals-- > 0 ? ["Action 'Lookup' requires 1 execution(s) but was executed 0 time(s)"] : [];
+        }
+    }
+
+    function makeMinExecAgent(script: Array<(params: AIPromptParams, callIndex: number) => AIPromptRunResult>): { agent: MinExecAgent; runner: ScriptedPromptRunner } {
+        const agent = new MinExecAgent();
+        const runner = new ScriptedPromptRunner(script);
+        (agent as unknown as AgentInternals)._promptRunner = runner;
+        return { agent, runner };
+    }
+
+    /** An implicit-control-flow turn of native calls, results going back natively. */
+    function llmImplicitCalls(calls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>): AIPromptRunResult {
+        const chatResult = {
+            success: true,
+            data: { choices: [{ message: { role: 'assistant', content: '', toolCalls: calls } }] },
+        } as unknown as AIPromptRunResult['chatResult'];
+        RecordToolCallingDecision(chatResult, { useNativeTools: true, mode: 'NativeImplicit', controlFlow: 'implicit', toolResults: true });
+        return { success: true, result: { result: null } as unknown as string, rawResult: '', chatResult, promptRun: { ToolCallingMode: 'NativeImplicit' } as unknown as MJAIPromptRunEntity };
+    }
+
+    const completeTask = (id: string, change?: Record<string, unknown>) =>
+        ({ id, name: 'complete_task', arguments: { message: 'Done.', ...(change ? { payloadChangeRequest: change } : {}) } });
+
+    function answerTo(messages: AgentChatMessage[], callId: string): ToolBlock[] {
+        const at = messages.findIndex((m) => m.role === 'assistant' && m.toolCalls?.some((c) => c.id === callId));
+        const next = messages[at + 1];
+        expect(next?.role).toBe('tool');
+        return next.content as unknown as ToolBlock[];
+    }
+
+    it('native: a complete_task refused for minimum executions leaves its change out of the next request and the final payload, and says so', async () => {
+        const { agent, runner } = makeMinExecAgent([
+            () => llmImplicitCalls([completeTask('call_done', { newElements: { verdict: 'approved' } })]),
+            () => llmImplicitCalls([completeTask('call_done_2')]),
+        ]);
+        const params = makeParams({ payload: { summary: 'draft' } });
+
+        const result = await agent.Execute(params);
+
+        expect(runner.Calls).toHaveLength(2);
+        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft' });
+        expect(result.payload).toEqual({ summary: 'draft' });
+        const [answer] = answerTo(params.conversationMessages as AgentChatMessage[], 'call_done');
+        expect(answer.isError).toBe(true);
+        expect(answer.content).toMatch(/Minimum execution requirements not met/);
+        expect(answer.content).toMatch(/payloadChangeRequest sent with this complete_task call was NOT applied/);
+    });
+
+    it('envelope: a refused completion leaves its change out of the next request and the final payload, and the Retry says to send it again', async () => {
+        const { agent, runner } = makeMinExecAgent([
+            () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { verdict: 'approved' } } })),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        const params = makeParams({ payload: { summary: 'draft' } });
+
+        const result = await agent.Execute(params);
+
+        expect(runner.Calls).toHaveLength(2);
+        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft' });
+        expect(result.payload).toEqual({ summary: 'draft' });
+        const retry = params.conversationMessages.find((m) => typeof m.content === 'string' && m.content.startsWith('Retrying due to:'));
+        expect(retry?.content).toMatch(/Minimum execution requirements not met/);
+        expect(retry?.content).toMatch(/NOT applied\. Send it again with your next completion/);
+    });
+
+    it('validates the draft against FinalPayloadValidation, and commits nothing when it fails', async () => {
+        harness.agent = makeAgentRow({ FinalPayloadValidation: JSON.stringify({ 'summary:string': 'x', 'title:string': 'x', 'count:number': 1 }) });
+        const { agent, runner } = makeAgent([
+            // Adds the title but not the count: the draft fails on the count alone.
+            () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { title: 'Q3 report' } } })),
+            () => llmEnvelope(successEnvelope({ payloadChangeRequest: { newElements: { title: 'Q3 report', count: 3 } } })),
+        ]);
+        const params = makeParams({ payload: { summary: 'draft' } });
+
+        const result = await agent.Execute(params);
+
+        expect(runner.Calls).toHaveLength(2);
+        const retry = params.conversationMessages.find((m) => typeof m.content === 'string' && m.content.startsWith('Retrying due to:'));
+        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft' });
+        // The draft was what failed: the title it added is not reported missing, the count is.
+        expect(retry?.content).toMatch(/count/);
+        expect(retry?.content).not.toMatch(/title/i);
+        expect(retry?.content).toMatch(/NOT applied/);
+        // The accepted completion's change is applied.
+        expect(result.success).toBe(true);
+        expect(result.payload).toEqual({ summary: 'draft', title: 'Q3 report', count: 3 });
+    });
+
+    it('applies the change of an accepted completion', async () => {
+        const { agent } = makeMinExecAgent([
+            () => llmImplicitCalls([completeTask('call_done', { newElements: { verdict: 'approved' } })]),
+        ]);
+        agent.Refusals = 0;
+        const params = makeParams({ payload: { summary: 'draft' } });
+
+        const result = await agent.Execute(params);
+
+        expect(result.success).toBe(true);
+        expect(result.payload).toEqual({ summary: 'draft', verdict: 'approved' });
+        expect(answerTo(params.conversationMessages as AgentChatMessage[], 'call_done')[0]).toMatchObject({ isError: false, content: 'Task complete.' });
+    });
+
+    it('keeps a payload_change_request made on the same turn as a refused complete_task', async () => {
+        harness.agent = makeAgentRow({ TypeConfiguration: JSON.stringify({ NativeControl: { RelaxedTurnShapes: true } }) });
+        const { agent, runner } = makeMinExecAgent([
+            () => llmImplicitCalls([
+                { id: 'call_write', name: 'payload_change_request', arguments: { newElements: { notes: 'kept' } } },
+                completeTask('call_done')
+            ]),
+            () => llmImplicitCalls([completeTask('call_done_2')]),
+        ]);
+        const params = makeParams({ payload: { summary: 'draft' } });
+
+        const result = await agent.Execute(params);
+
+        expect(runner.Calls).toHaveLength(2);
+        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: 'draft', notes: 'kept' });
+        expect(result.payload).toEqual({ summary: 'draft', notes: 'kept' });
+        const answers = answerTo(params.conversationMessages as AgentChatMessage[], 'call_done');
+        expect(answers.find((b) => b.toolCallId === 'call_write')?.isError).toBe(false);
     });
 });

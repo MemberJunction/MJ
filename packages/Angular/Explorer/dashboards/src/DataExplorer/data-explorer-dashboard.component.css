@@ -14,6 +14,11 @@
   transition: width 0.2s ease-in-out;
   overflow: hidden;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04);
+  /* Isolate the navigation panel stacking context so its internal .collapse-toggle
+     (z-index: 10) never leaks out above .content-body or full-screen dialogs. */
+  isolation: isolate;
+  position: relative;
+  z-index: 1;
 }
 .navigation-panel.collapsed {
   width: 48px;
@@ -96,7 +101,7 @@
   gap: 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   position: relative;
-  z-index: 2; /* Above sibling .content-body so header dropdowns render on top of grid/map content */
+  z-index: 2;
 }
 
 .header-left {
@@ -438,17 +443,12 @@
   display: flex;
   flex: 1 1 0%;
   overflow: hidden;
-  /* Contain the body's stacking context. The view components inside (grid
-  option menus, the map's Leaflet panes/toolbar, etc.) use z-index values up
-  to ~1000; .content-header sits at z-index 2 (kept below the shell header —
-  see #2701). Without this, those body z-indices leak into the shared context
-  and paint over the header's own dropdowns (view-selector, date-field).
-  `isolation: isolate` flattens all body z-indices into one context beneath
-  the header. Safe because modals + the detail panel render at the dashboard
-  root (outside .content-body), so they still overlay everything. */
-  isolation: isolate;
-  position: relative;   /* added */
-  z-index: 3;           /* added — higher than .content-header's z-index: 2 */
+  /* Intentionally no z-index or isolation here: .content-header sits at z-index: 2
+     above normal body content, .dynamic-view-host isolates plug-in renderers such as
+     Leaflet (whose internal controls reach z-index: 1000) at z-index: 1, and full-screen
+     modal overlays (--mj-z-modal) hosted inside mj-view-workspace or mj-entity-data-grid
+     can escape above .content-header without being trapped. */
+  position: relative;
 }
 
 /* ============================================

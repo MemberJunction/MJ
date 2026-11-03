@@ -10,6 +10,9 @@ import {
     ServerExtensionInitContext,
     ExtensionInitResult,
     ExtensionHealthResult,
+    SERVER_EXTENSION_CORE_SERVICE_KEYS,
+    type IServerExtensionMagicLinkService,
+    type IServerExtensionHostRuntimeService,
 } from './types.js';
 
 /**
@@ -40,6 +43,14 @@ export class DefaultServerExtensionServiceRegistry implements ServerExtensionSer
     public GetAllServices(): ReadonlyMap<string, object> {
         return this._services;
     }
+
+    public GetMagicLinkService(): IServerExtensionMagicLinkService | undefined {
+        return this.GetService<IServerExtensionMagicLinkService>(SERVER_EXTENSION_CORE_SERVICE_KEYS.MagicLink);
+    }
+
+    public GetHostRuntimeService(): IServerExtensionHostRuntimeService | undefined {
+        return this.GetService<IServerExtensionHostRuntimeService>(SERVER_EXTENSION_CORE_SERVICE_KEYS.HostRuntime);
+    }
 }
 
 /**
@@ -58,6 +69,8 @@ export interface LoadExtensionsOptions {
 
     /** Canonical public base URL of the MJ server. */
     publicUrl?: string;
+    /** MJAPI's base path (no trailing slash), passed through to {@link ServerExtensionInitContext.apiRootPath}. */
+    apiRootPath?: string; // case-violation-ok-legacy-back-compat: matches this options type's existing camelCase members
 
     /** Custom service registry if not using the loader's default. */
     services?: ServerExtensionServiceRegistry;
@@ -149,6 +162,7 @@ export class ServerExtensionLoader {
     public async NotifyAllExtensionsMounted(options?: {
         httpServer?: HttpServer;
         publicUrl?: string;
+        apiRootPath?: string;
     }): Promise<void> {
         for (const ext of this._loadedExtensions) {
             if (typeof ext.Instance.OnAllExtensionsMounted === 'function') {
@@ -158,6 +172,7 @@ export class ServerExtensionLoader {
                         httpServer: options?.httpServer ?? ext.Context.httpServer,
                         config: ext.Config,
                         publicUrl: options?.publicUrl ?? ext.Context.publicUrl,
+                        apiRootPath: options?.apiRootPath ?? ext.Context.apiRootPath,
                         services: this._services,
                         phase: ext.Config.Phase ?? ext.Instance.DefaultPhase ?? 'pre-auth',
                     };
@@ -287,6 +302,7 @@ export class ServerExtensionLoader {
                 httpServer: options?.httpServer,
                 config: { ...config, Phase: effectivePhase },
                 publicUrl: options?.publicUrl,
+                apiRootPath: options?.apiRootPath,
                 services,
                 phase: effectivePhase,
             };

@@ -282,6 +282,7 @@ export class HarnessAgentBase extends BaseAgent {
                         `AND ExternalSessionID IS NOT NULL`,
                     OrderBy: '__mj_CreatedAt DESC',
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'simple',
                 },
                 contextUser,
@@ -821,6 +822,7 @@ export class HarnessAgentBase extends BaseAgent {
                     { ...(promptParams.data ?? {}), ...(promptParams.templateData ?? {}) },
                     true,
                     true,
+                    { ContextUser: promptParams.contextUser },
                 );
                 if (rendered.Success && rendered.Output?.trim()) {
                     return rendered.Output;

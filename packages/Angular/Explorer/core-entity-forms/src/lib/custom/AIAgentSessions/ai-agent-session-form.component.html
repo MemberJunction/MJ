@@ -21,7 +21,12 @@
             <div class="meta-info">
               @if (record.AgentID) {
                 <span class="agent-name">
-                  <a href="javascript:void(0)" class="entity-link" (click)="OpenEntityRecord('AI Agents', record.AgentID)">
+                  <a href="javascript:void(0)"
+                     class="entity-link"
+                     [mjRecordLink]="record"
+                     FieldName="AgentID"
+                     [HandleClick]="false"
+                     (click)="OpenEntityRecord('AI Agents', record.AgentID)">
                     {{ record.Agent || 'Agent' }}
                   </a>
                 </span>
@@ -29,7 +34,14 @@
               @if (TargetAgentID) {
                 <i class="fas fa-arrow-right-long target-arrow"></i>
                 <span class="agent-name">
-                  <a href="javascript:void(0)" class="entity-link" (click)="OpenEntityRecord('AI Agents', TargetAgentID)">
+                  <a href="javascript:void(0)"
+                     class="entity-link"
+                     mjRecordLink
+                     [EntityName]="'MJ: AI Agents'"
+                     [RecordID]="TargetAgentID"
+                     [DisplayName]="TargetAgentName || 'Target agent'"
+                     [HandleClick]="false"
+                     (click)="OpenEntityRecord('AI Agents', TargetAgentID)">
                     {{ TargetAgentName || 'Target agent' }}
                   </a>
                 </span>
@@ -62,7 +74,12 @@
         <div class="stat">
           <span class="label">User</span>
           <span class="value">
-            <a href="javascript:void(0)" class="entity-link" (click)="OpenEntityRecord('Users', record.UserID)">{{ record.User }}</a>
+            <a href="javascript:void(0)"
+               class="entity-link"
+               [mjRecordLink]="record"
+               FieldName="UserID"
+               [HandleClick]="false"
+               (click)="OpenEntityRecord('Users', record.UserID)">{{ record.User }}</a>
           </span>
         </div>
         <div class="stat">

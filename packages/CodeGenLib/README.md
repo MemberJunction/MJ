@@ -319,6 +319,7 @@ All configuration is validated at startup using Zod schemas, with clear error me
 | `excludeSchemas` / `excludeTables` | Filter schemas and tables from metadata discovery |
 | `includeSchemas` | Opt-in positive scope: generate only these schemas (resolved into `excludeSchemas` **for this run**). Heal SQL logged into migrations uses `@IncludedSchemaNames` from this list plus authored `excludeSchemas` — never a snapshot of sibling apps on the publisher DB. |
 | `allowCrossSchemaCascadeDeletes` | Default **false**. Cascade-delete SQL is intra-schema only. `true` restores the old walk of every FK pointing at the entity, including other Open Apps. Dangerous; leave off. |
+| `cleanupStaleRelationships` | Default **false**: One To Many relationships whose join field no longer exists (or now points at another entity) are logged as warnings and kept. `true` deletes them. Only rows with `AutoUpdateFromSchema` set, between two in-scope entities, are considered. |
 | `entityPackageName` | String: npm package this emit writes. Record: install-time host map (those schemas are also skipped for local generation) |
 | `entityImportPackages` | Schema → npm map for peer classes this emit does **not** generate (embeds + related-record collections). See below. |
 | `entityNaming` | Controls ALL CAPS normalization and compound word splitting for entity/field names |
@@ -976,6 +977,13 @@ The `CodeGenDatabaseProvider` is the abstract base class that encapsulates **all
 | `PostgreSQLCodeGenProvider` | `@memberjunction/postgresql-dataprovider` | PostgreSQL (PL/pgSQL functions, DROP IF EXISTS, psql) |
 
 Providers are registered via `@RegisterClass(CodeGenDatabaseProvider, 'ProviderName')` and selected at runtime based on the configured database platform.
+
+#### CRUD Routine Return Modes (`SaveReturnMode: 'full' | 'datestamps_only'`)
+
+Both `SQLServerCodeGenProvider` and `PostgreSQLCodeGenProvider` inspect `entity.SaveReturnMode` (configured via `{"SaveReturnMode": "datestamps_only"}` in `Entity.Configuration`, defaulting to `'full'`) when generating `spCreate*` and `spUpdate*`:
+
+- **`'full'` (default)**: The generated routine finishes with `SELECT * FROM [schema].[BaseView] WHERE [PK] = @ID` (PostgreSQL: `RETURNS SETOF schema."BaseView"`), returning all base-table and joined virtual columns.
+- **`'datestamps_only'`**: For high-write tables whose UUIDs are pre-populated and whose `BaseView` has expensive joins or large `NVARCHAR(MAX)` columns, the generated routine queries only the primary key(s) and `[__mj_CreatedAt]` / `[__mj_UpdatedAt]` directly from `BaseTable` (PostgreSQL: `RETURNS TABLE(...)` with `#variable_conflict use_column`), bypassing `BaseView` while still returning the database-generated timestamps required by `DatabaseProviderBase` concurrency checking.
 
 #### Adding a New Database Backend
 

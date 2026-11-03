@@ -9,7 +9,7 @@
  *
  * WHAT THIS BUNDLE PROVES — the permission-reality contract the fix rests on, against the real
  * database and the real role-driven permission engine, on BOTH sides of the identity swap:
- *  - SA1: a scoped anonymous principal (synthesized exactly as `buildMagicLinkSessionUser` does —
+ *  - SA1: a scoped anonymous principal (synthesized exactly as `BuildMagicLinkSessionUser` does —
  *    zero roles) is DENIED Create on `MJ: AI Agent Runs` (the premise; if a deployment ever grants
  *    this, the elevation is moot and this fails loudly),
  *  - SA2: the elevation target exists and is sufficient — the real `UserCache` serves a system
@@ -26,7 +26,7 @@
  *    details must NOT be elevated. On a conversation owned by the core-seeded magic-link
  *    Anonymous user, the conversation owner gate (`MJConversationDetailEntityExtended`) refuses
  *    the row written as the system user AND reports why; written as the visitor principal
- *    (Anonymous + a synthesized claimed `UI` role, as `buildMagicLinkSessionUser` builds it), the
+ *    (Anonymous + a synthesized claimed `UI` role, as `BuildMagicLinkSessionUser` builds it), the
  *    same row saves.
  *
  * WHAT IT DOES NOT RE-PROVE — the elevation ROUTING (which resolver/SessionManager seams swap the
@@ -46,12 +46,13 @@ import {
     MJAIAgentRunEntity,
     MJAIPromptRunEntity,
     MJConversationDetailEntity,
+    MJConversationDetailEntityExtended,
     MJConversationEntity,
 } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { RealtimeClientSessionService } from '@memberjunction/ai-agents';
-import { Assert, AssertEqual, IntegrationCheckRegistry, NamedCheck } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, NamedCheck, SkipCheck } from '@memberjunction/testing-integration';
 
 /** The reason `MJConversationDetailEntityExtended`'s owner gate records for a non-owner without a grant. */
 const CONVERSATION_ACCESS_DENIED = 'You do not have access to this conversation.';
@@ -67,7 +68,7 @@ const VISITOR_CLAIMED_ROLE = 'UI';
 
 /**
  * Synthesizes the scoped anonymous magic-link principal exactly as MJServer's
- * `buildMagicLinkSessionUser` does for an `mj_anon` token: a FRESH UserInfo over `base` whose
+ * `BuildMagicLinkSessionUser` does for an `mj_anon` token: a FRESH UserInfo over `base` whose
  * roles are ONLY the token's claimed roles (never the record's DB roles), plus
  * `IsMagicLinkAnonymous` and a `MagicLinkScope`.
  *
@@ -92,7 +93,7 @@ function findMagicLinkAnonymousUser(): UserInfo | undefined {
     return UserCache.Instance.Users.find((u) => u.Email?.trim().toLowerCase() === MAGIC_LINK_ANONYMOUS_EMAIL);
 }
 
-/** A role by name, resolved from `Metadata.Provider.Roles` the way `buildMagicLinkSessionUser` resolves a claim. */
+/** A role by name, resolved from `Metadata.Provider.Roles` the way `BuildMagicLinkSessionUser` resolves a claim. */
 function findRoleByName(name: string): RoleInfo | undefined {
     const md = Metadata.Provider; // global-provider-ok: integration test script — single-provider process by design
     return md?.Roles.find((r) => r.Name?.trim().toLowerCase() === name.trim().toLowerCase());
@@ -125,7 +126,9 @@ async function buildAgentRunFixture(user: UserInfo, agentID: string): Promise<MJ
 /**
  * Creates (unsaved) the hidden tool-execution turn `persistDirectActionTurn` writes, under `user`.
  * The same field values are built for every principal SA6 tries, so the principal is the only
- * difference between the refused save and the accepted one.
+ * difference between the refused save and the accepted one. Marked as a server-authored reply, as
+ * `persistDirectActionTurn` marks it: only the server writes an agent's reply (A19), and the marker
+ * grants nothing on a conversation the writer can't reach — which is what SA6 pins.
  */
 async function buildHiddenToolTurnFixture(
     user: UserInfo,
@@ -133,8 +136,9 @@ async function buildHiddenToolTurnFixture(
     ownerID: string,
 ): Promise<MJConversationDetailEntity> {
     const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
-    const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', user);
+    const detail = await md.GetEntityObject<MJConversationDetailEntityExtended>('MJ: Conversation Details', user);
     detail.NewRecord();
+    detail.MarkServerAuthoredReply();
     detail.ConversationID = conversationID;
     detail.Role = 'AI';
     detail.HiddenToUser = true;
@@ -196,8 +200,7 @@ export const ScopedAnonElevationChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const agentID = await firstID('MJ: AI Agents', ctx.User);
             if (!agentID) {
-                console.warn('  ⚠ scoped-anon-elevation.SA1 SKIPPED — no MJ: AI Agents seeded in this deployment');
-                return;
+                SkipCheck('no MJ: AI Agents rows are seeded in this deployment.');
             }
             const anon = makeScopedAnonPrincipal(ctx.User);
             const run = await buildAgentRunFixture(anon, agentID);
@@ -241,8 +244,7 @@ export const ScopedAnonElevationChecks: NamedCheck[] = [
             const sys = systemUser();
             const agentID = await firstID('MJ: AI Agents', ctx.User);
             if (!sys || !agentID) {
-                console.warn('  ⚠ scoped-anon-elevation.SA3 SKIPPED — needs a system user and a seeded MJ: AI Agents row');
-                return;
+                SkipCheck('needs a system user and a seeded MJ: AI Agents row.');
             }
             const run = await buildAgentRunFixture(sys, agentID);
             // The elevated write stamps the VISITOR as the run owner — the createCoAgentRun /
@@ -273,8 +275,7 @@ export const ScopedAnonElevationChecks: NamedCheck[] = [
             const sys = systemUser();
             const agentID = await firstID('MJ: AI Agents', ctx.User);
             if (!sys || !agentID) {
-                console.warn('  ⚠ scoped-anon-elevation.SA4 SKIPPED — needs a system user and a seeded MJ: AI Agents row');
-                return;
+                SkipCheck('needs a system user and a seeded MJ: AI Agents row.');
             }
             const run = await buildAgentRunFixture(sys, agentID);
             let runID: string | undefined;
@@ -322,8 +323,7 @@ export const ScopedAnonElevationChecks: NamedCheck[] = [
                 firstID('MJ: AI Vendors', ctx.User),
             ]);
             if (!sys || !promptID || !modelID || !vendorID) {
-                console.warn('  ⚠ scoped-anon-elevation.SA5 SKIPPED — needs a system user plus seeded AI Prompts/Models/Vendors');
-                return;
+                SkipCheck('needs a system user plus seeded MJ: AI Prompts, MJ: AI Models and MJ: AI Vendors rows.');
             }
             const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
             const promptRun = await md.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', sys);
@@ -380,7 +380,7 @@ export const ScopedAnonElevationChecks: NamedCheck[] = [
          *
          * PRINCIPALS — built the way production builds them, independent of `ctx.User` (which is
          * itself the system user in the standard tier):
-         *  - OWNER: the core-seeded magic-link Anonymous user, synthesized as `buildMagicLinkSessionUser`
+         *  - OWNER: the core-seeded magic-link Anonymous user, synthesized as `BuildMagicLinkSessionUser`
          *    does for an `mj_anon` token claiming core's `UI` role (fresh UserInfo, synthesized role,
          *    `IsMagicLinkAnonymous`, `MagicLinkScope`). `UI` grants Create/Read/Update/Delete on both
          *    `MJ: Conversations` and `MJ: Conversation Details` with no RLS filter, so this one
@@ -396,9 +396,8 @@ export const ScopedAnonElevationChecks: NamedCheck[] = [
             const anonymousUser = findMagicLinkAnonymousUser();
             const claimedRole = findRoleByName(VISITOR_CLAIMED_ROLE);
             if (!sys || !anonymousUser || !claimedRole) {
-                console.warn('  ⚠ scoped-anon-elevation.SA6 SKIPPED — needs a system user, the magic-link Anonymous user '
-                    + `(${MAGIC_LINK_ANONYMOUS_EMAIL}) and the '${VISITOR_CLAIMED_ROLE}' role`);
-                return;
+                SkipCheck('needs a system user, the magic-link Anonymous user '
+                    + `(${MAGIC_LINK_ANONYMOUS_EMAIL}) and the '${VISITOR_CLAIMED_ROLE}' role.`);
             }
             const owner = makeScopedAnonPrincipal(anonymousUser, [claimedRole]);
             const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design

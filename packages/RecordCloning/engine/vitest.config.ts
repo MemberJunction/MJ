@@ -1,8 +1,12 @@
-import { defineConfig } from 'vitest/config';
+import { defineProject, mergeConfig } from 'vitest/config';
+import sharedConfig from '../../../vitest.shared';
 
-export default defineConfig({
-  test: {
-    globals: true,
-    environment: 'node',
-  },
-});
+export default mergeConfig(
+  sharedConfig,
+  defineProject({
+    test: {
+      globals: true,
+      environment: 'node',
+    },
+  })
+);

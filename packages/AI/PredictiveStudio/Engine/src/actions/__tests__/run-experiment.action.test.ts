@@ -1,13 +1,24 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { RunActionParams, ActionParam, ActionResultSimple } from '@memberjunction/actions-base';
-import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
+import { ExperimentSessions, type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import type {
+  MJActionResultCodeEntity,
   MJExperimentEntity,
   MJExperimentSessionEntity,
   MJMLModelEntity,
 } from '@memberjunction/core-entities';
 
 import { PredictiveStudioRunExperimentAction } from '../run-experiment.action';
+import {
+  BuildProductionExperimentDeps,
+  buildProductionExperimentDeps,
+  ExperimentSessionsUnavailableError,
+  UnresolvedPipelineResolver,
+} from '../run-experiment.deps';
+import type { TrainExperimentInput } from '../../experiment/types';
 import { ExperimentOrchestrator } from '../../experiment/experiment-orchestrator';
 import type { ExperimentDeps, ExperimentRunOptions, ExperimentSessionResult } from '../../experiment/types';
 
@@ -48,10 +59,16 @@ function inertDeps(): ExperimentDeps {
   };
 }
 
-/** Test subclass injecting a mock orchestrator + inert deps, exposing a clean `run`. */
+/**
+ * Test subclass with sessions switched on, injecting a mock orchestrator + inert deps, exposing a clean `run`.
+ * It exercises the validation and delegation path that sits behind the {@link ExperimentSessions} switch.
+ */
 class TestableExperimentAction extends PredictiveStudioRunExperimentAction {
   constructor(private readonly orchestrator: ExperimentOrchestrator) {
     super();
+  }
+  protected override sessionsEnabled(): boolean {
+    return true;
   }
   protected override createOrchestrator(): ExperimentOrchestrator {
     return this.orchestrator;
@@ -192,5 +209,70 @@ describe('PredictiveStudioRunExperimentAction — orchestrator error', () => {
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('EXPERIMENT_FAILED');
     expect(result.Message).toContain('pipeline resolver');
+  });
+});
+
+/** The action with production deps (no buildDeps override) and a recording orchestrator. */
+class ProductionDepsExperimentAction extends PredictiveStudioRunExperimentAction {
+  constructor(private readonly orchestrator: ExperimentOrchestrator) {
+    super();
+  }
+  protected override createOrchestrator(): ExperimentOrchestrator {
+    return this.orchestrator;
+  }
+  public RunAction(params: RunActionParams): Promise<ActionResultSimple> {
+    return this.Run(params);
+  }
+}
+
+describe('Experiment sessions are switched off (F-EXP-1)', () => {
+  it('the action refuses an approved plan with EXPERIMENT_SESSIONS_UNAVAILABLE and never runs the orchestrator', async () => {
+    const orch = new MockOrchestrator(sessionResult());
+    const p = params([{ Name: 'PlanSpec', Type: 'Input', Value: approvedPlan() }]);
+    const result = await new ProductionDepsExperimentAction(orch).RunAction(p);
+    expect(result.Success).toBe(false);
+    expect(result.ResultCode).toBe('EXPERIMENT_SESSIONS_UNAVAILABLE');
+    expect(result.Message).toBe(ExperimentSessions.DisabledReason);
+    expect(orch.CallCount).toBe(0);
+  });
+
+  it('the action refuses before validating parameters', async () => {
+    const orch = new MockOrchestrator(sessionResult());
+    const result = await new ProductionDepsExperimentAction(orch).RunAction(params([]));
+    expect(result.ResultCode).toBe('EXPERIMENT_SESSIONS_UNAVAILABLE');
+    expect(orch.CallCount).toBe(0);
+  });
+});
+
+describe('run-experiment.deps published entry points (kept from next)', () => {
+  it('BuildProductionExperimentDeps and its deprecated twin refuse before touching the database', async () => {
+    await expect(BuildProductionExperimentDeps(undefined, undefined)).rejects.toBeInstanceOf(ExperimentSessionsUnavailableError);
+    await expect(buildProductionExperimentDeps(undefined, undefined)).rejects.toBeInstanceOf(ExperimentSessionsUnavailableError);
+  });
+
+  it('UnresolvedPipelineResolver fails with an actionable message naming the experiment', async () => {
+    // Test double: the resolver reads only the experiment label.
+    const input = { experiment: { Label: 'xgb-baseline' } } as unknown as TrainExperimentInput;
+    await expect(new UnresolvedPipelineResolver().resolvePipelineId(input)).rejects.toThrow("experiment 'xgb-baseline'");
+  });
+});
+
+/** One action record of the Predictive Studio action metadata file, as far as these tests read it. */
+interface ActionMetadataRecord {
+  fields: { Name: string };
+  relatedEntities: { 'MJ: Action Result Codes': Array<{ fields: Pick<MJActionResultCodeEntity, 'ResultCode' | 'IsSuccess'> }> };
+}
+
+describe('Run Experiment Session action metadata', () => {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../../../..');
+  const actions = JSON.parse(
+    readFileSync(path.join(repoRoot, 'metadata/actions/predictive-studio/.predictive-studio-actions.json'), 'utf8'),
+  ) as ActionMetadataRecord[];
+
+  it('declares EXPERIMENT_SESSIONS_UNAVAILABLE, the refusal code the action returns, as a failure code', () => {
+    const action = actions.find((a) => a.fields.Name === 'Run Experiment Session');
+    const codes = action?.relatedEntities['MJ: Action Result Codes'].map((r) => ({ ResultCode: r.fields.ResultCode, IsSuccess: r.fields.IsSuccess })) || [];
+    expect(codes).toContainEqual({ ResultCode: 'EXPERIMENT_SESSIONS_UNAVAILABLE', IsSuccess: false });
+    expect(codes.map((c) => c.ResultCode)).not.toContain('EXPERIMENT_UNAVAILABLE');
   });
 });

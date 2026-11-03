@@ -4,7 +4,7 @@
 import { GoogleGenAI, ApiError, Content, Part, Blob, FileData, FunctionDeclaration, FunctionCallingConfigMode, ToolConfig, ToolListUnion, GenerateContentResponseUsageMetadata, ThinkingConfig } from "@google/genai";
 
 // MJ stuff
-import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ChatMessageContentBlock, ModelUsage, ErrorAnalyzer, FileCapabilities, ChatToolCall, CHAT_FINISH_REASON_TOOL_CALLS, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ChatMessageContentBlock, ModelUsage, ErrorAnalyzer, FileCapabilities, ChatToolCall, ChatReasoningBlock, CHAT_FINISH_REASON_TOOL_CALLS, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL, CHAT_FINISH_REASON_UNEXPECTED_TOOL_CALL } from "@memberjunction/ai";
 import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
 import { AcceptsCustomSampling } from "./geminiSampling";
 import { GeminiThinkingFallback, ResolveGeminiThinkingConfig } from "./geminiThinking";
@@ -45,6 +45,9 @@ const GEMINI_INJECTED_CALL_THOUGHT_SIGNATURE = 'skip_thought_signature_validator
  */
 const THOUGHT_SIGNATURE_ORIGIN_KEY = 'thoughtSignatureOrigin';
 
+/** The `provider` this driver (and Vertex, which extends it) stamps on its {@link ChatReasoningBlock}s. */
+const GEMINI_REASONING_PROVIDER = 'gemini';
+
 /**
  * The user turn Gemini is given when a conversation would otherwise open with a model turn.
  *
@@ -57,6 +60,18 @@ const THOUGHT_SIGNATURE_ORIGIN_KEY = 'thoughtSignatureOrigin';
  * so the model reads it as the opening request rather than as noise.
  */
 export const GEMINI_LEADING_USER_TURN_TEXT = 'Proceed with the task described in the system instructions.';
+
+/**
+ * The user turn Gemini is given when a conversation would otherwise end with a model turn.
+ *
+ * Gemini answers a request whose last turn is the user's; one ending with a model turn is a 400
+ * ("Requests ending with a model turn are not supported"). The driver sends the last turn as the
+ * new message, and the SDK always sends that message as a user turn, so a trailing model turn would
+ * otherwise go out with its own parts relabelled as the user's. It stays a model turn in the
+ * history instead, and this turn asks the model to go on. Gemini models here take no assistant
+ * prefill, so no caller means a trailing model turn as one.
+ */
+export const GEMINI_TRAILING_USER_TURN_TEXT = 'Continue with the task.';
 
 @RegisterClass(BaseLLM, "GeminiLLM")
 export class GeminiLLM extends BaseLLM {
@@ -157,43 +172,68 @@ export class GeminiLLM extends BaseLLM {
         return true;
     }
 
+    /**
+     * Shapes converted messages into the alternating `contents` Gemini accepts: consecutive turns of
+     * one role are combined, and the conversation opens with a user turn (see
+     * {@link GEMINI_LEADING_USER_TURN_TEXT}).
+     *
+     * Two exceptions to combining:
+     * - A model turn with nothing in it (an assistant message with no text, no calls and no
+     *   reasoning) is dropped. It carries nothing, and Gemini rejects an empty turn.
+     * - A user turn that follows a function-response turn is kept as a turn of its own. Vertex AI
+     *   rejects a turn whose function responses are followed by text with "Requests ending with a
+     *   model turn are not supported", although the turn is the user's. Google AI Studio accepts both
+     *   shapes. The agent loop sends exactly this: a tool turn, then its per-turn runtime-state message.
+     */
     protected geminiMessageSpacing(messages: Content[]): Content[] {
-        // This method ensures messages alternate between user and model roles
-        // by combining consecutive messages with the same role
-        if (messages.length === 0) {
-            return [];
-        }
-
         const result: Content[] = [];
-        let currentMessage: Content | null = null;
-
         for (const message of messages) {
-            if (currentMessage === null) {
-                // First message - start accumulating
-                currentMessage = { role: message.role, parts: [...message.parts] };
-            } else if (currentMessage.role === message.role) {
-                // Same role as current - combine the parts
-                currentMessage.parts.push(...message.parts);
+            if (GeminiLLM.isEmptyModelTurn(message)) {
+                continue;
+            }
+            const current = result[result.length - 1];
+            if (current && current.role === message.role && !GeminiLLM.endsFunctionResponseTurn(current, message)) {
+                current.parts = [...(current.parts ?? []), ...(message.parts ?? [])];
             } else {
-                // Different role - push current and start new
-                result.push(currentMessage);
-                currentMessage = { role: message.role, parts: [...message.parts] };
+                result.push({ role: message.role, parts: [...(message.parts ?? [])] });
             }
         }
-
-        // Push the last accumulated message
-        if (currentMessage !== null) {
-            result.push(currentMessage);
-        }
-        // The conversation must open with a user turn — see GEMINI_LEADING_USER_TURN_TEXT for why a
-        // model turn here (an agent with no user message replaying its own tool calls) is rejected.
         if (result.length > 0 && result[0].role === 'model') {
             result.unshift({ role: 'user', parts: [{ text: GEMINI_LEADING_USER_TURN_TEXT }] });
         }
-
         return result;
     }
-    
+
+    /** Whether a turn is a model turn with nothing in it: no parts, or only empty text with no signature. */
+    private static isEmptyModelTurn(content: Content): boolean {
+        return content.role === 'model'
+            && (content.parts ?? []).every((p) => p.text === '' && !p.thoughtSignature && !p.thought && Object.keys(p).length === 1);
+    }
+
+    /** Whether `next` is a user turn of other parts after a function-response turn, and so must stay separate. */
+    private static endsFunctionResponseTurn(current: Content, next: Content): boolean {
+        const hasResponses = (c: Content) => (c.parts ?? []).some((p) => !!p.functionResponse);
+        return current.role === 'user' && hasResponses(current) && !(next.parts ?? []).every((p) => !!p.functionResponse);
+    }
+
+    /**
+     * Splits shaped `contents` into the chat history and the message to send. The SDK sends the
+     * message as a user turn, so only a user turn is taken off the end. A conversation that ends
+     * with a model turn keeps it in the history and sends {@link GEMINI_TRAILING_USER_TURN_TEXT};
+     * one with no turns at all sends {@link GEMINI_LEADING_USER_TURN_TEXT}, since Vertex AI rejects
+     * an empty message ("Model input cannot be empty").
+     */
+    protected SplitForSend(contents: Content[]): { history: Content[]; message: Part[] } {
+        const last = contents[contents.length - 1];
+        if (!last) {
+            return { history: [], message: [{ text: GEMINI_LEADING_USER_TURN_TEXT }] };
+        }
+        if (last.role === 'model') {
+            return { history: contents, message: [{ text: GEMINI_TRAILING_USER_TURN_TEXT }] };
+        }
+        return { history: contents.slice(0, -1), message: last.parts?.length ? last.parts : [{ text: GEMINI_LEADING_USER_TURN_TEXT }] };
+    }
+
     /**
      * Implementation of non-streaming chat completion for Gemini
      */
@@ -215,21 +255,11 @@ export class GeminiLLM extends BaseLLM {
             const convertedMessages = noSystemMessages.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m, signatureOrigin));
             const tempMessages = this.geminiMessageSpacing(convertedMessages);
 
-            // Split: all but last message go in history, last message gets system instructions prepended
-            const history = tempMessages.slice(0, -1);
-            const lastMessage = tempMessages.length > 0 ? tempMessages[tempMessages.length - 1] : null;
-
-            // The system prompt is passed via systemInstruction (below), NOT bundled into the user
-            // message — bundling put the stable prompt AFTER the variable history, defeating Gemini's
-            // implicit prompt caching. The final message is just the latest user turn's parts.
-            let finalMessageParts: Part[] = [];
-            if (lastMessage) {
-                finalMessageParts.push(...lastMessage.parts);
-            }
-            // If no messages at all, send empty
-            if (finalMessageParts.length === 0) {
-                finalMessageParts = [{ text: '' }];
-            }
+            // All but the last user turn go in the history; that turn is the message sent. The system
+            // prompt is passed via systemInstruction (below), NOT bundled into the user message —
+            // bundling put the stable prompt AFTER the variable history, defeating Gemini's implicit
+            // prompt caching.
+            const { history, message: finalMessageParts } = this.SplitForSend(tempMessages);
 
             // Sampling + response-format options, shaped for the model's version (see buildGenerationOptions)
             const modelOptions = this.buildGenerationOptions(params, modelName);
@@ -295,14 +325,20 @@ export class GeminiLLM extends BaseLLM {
                 throw new Error(`Content blocked by model: ${finishReason}${blockedCategories ? ` - ${blockedCategories}` : ''}`);
             }
 
-            const rawContent = candidate.content?.parts?.find(part => part.text && !part.thought)?.text || '';
+            // Every visible text part, not only the first: a turn can split its answer across parts.
+            const rawContent = (candidate.content?.parts ?? []).filter(part => part.text && !part.thought).map(part => part.text).join('');
             const thinking = (candidate.content?.parts ?? []).filter(part => part.thought && part.text).map(part => part.text).join('');
             const toolCalls = this.extractToolCalls(candidate.content?.parts, this.thoughtSignatureOrigin(modelName));
+            const reasoning = GeminiLLM.extractReasoning(candidate.content?.parts, this.thoughtSignatureOrigin(modelName));
 
             // Check if we got empty content despite no blocking. A native tool call IS output, and a
             // forced/clean tool-call turn legitimately carries no text at all — so tool calls
             // satisfy this check just as text does.
-            if (!rawContent && !thinking && !toolCalls) {
+            // A rejected tool call is an answer the tool loop must correct, not missing output — but
+            // only for a request that declared tools. Without any, no tool loop can correct it, and
+            // the empty turn stays the error it always was, so failover can try another model.
+            const rejectedCall = params.tools?.length ? GeminiLLM.rejectedToolCallReason(finishReason) : undefined;
+            if (!rawContent && !thinking && !toolCalls && !rejectedCall) {
                 const usage = result.usageMetadata;
                 throw new Error(
                     `No output received from model (finishReason: ${finishReason || 'none'}, ` +
@@ -353,14 +389,14 @@ export class GeminiLLM extends BaseLLM {
                             role: 'assistant',
                             content: content,
                             thinking: thinkingContent || undefined,
-                            toolCalls: toolCalls
+                            toolCalls: toolCalls,
+                            ...(reasoning ? { reasoning } : {})
                         },
                         // Normalize the tool-call case and Gemini's "tried to call a tool but the call was
                         // unreadable" case; every other reason keeps Gemini's own value.
-                        finish_reason: toolCalls ? CHAT_FINISH_REASON_TOOL_CALLS
-                            : finishReason === 'MALFORMED_FUNCTION_CALL' ? CHAT_FINISH_REASON_MALFORMED_TOOL_CALL
-                            : (finishReason || "completed"),
-                        index: 0
+                        finish_reason: toolCalls ? CHAT_FINISH_REASON_TOOL_CALLS : (rejectedCall ?? (finishReason || "completed")),
+                        index: 0,
+                        ...(rejectedCall && candidate.finishMessage ? { finishMessage: candidate.finishMessage } : {})
                     }],
                     usage: geminiUsage
                 },
@@ -426,8 +462,9 @@ export class GeminiLLM extends BaseLLM {
             requestConfig.toolConfig = toolConfig;
         }
 
-        if (params.parallelToolCalls !== undefined) {
-            console.warn('Gemini provider does not support the parallelToolCalls parameter, ignoring');
+        // Gemini always allows parallel calls, so only a request to turn them off goes unmet.
+        if (params.parallelToolCalls === false) {
+            console.warn('Gemini provider does not support turning parallel tool calls off, ignoring parallelToolCalls=false');
         }
     }
 
@@ -461,6 +498,19 @@ export class GeminiLLM extends BaseLLM {
     /** Endpoint plus model — the scope a thought signature validates in. */
     protected thoughtSignatureOrigin(modelName: string): string {
         return `${this.ThoughtSignatureEndpoint}:${modelName}`;
+    }
+
+    /**
+     * The normalized finish reason for a tool call Gemini rejected — `MALFORMED_FUNCTION_CALL` (the
+     * call could not be read) or `UNEXPECTED_TOOL_CALL` (a call to a tool the request did not offer)
+     * — or undefined for any other finish reason.
+     */
+    private static rejectedToolCallReason(finishReason: string | undefined): string | undefined {
+        switch (finishReason) {
+            case 'MALFORMED_FUNCTION_CALL': return CHAT_FINISH_REASON_MALFORMED_TOOL_CALL;
+            case 'UNEXPECTED_TOOL_CALL': return CHAT_FINISH_REASON_UNEXPECTED_TOOL_CALL;
+            default: return undefined;
+        }
     }
 
     /**
@@ -540,15 +590,12 @@ export class GeminiLLM extends BaseLLM {
             this.warnUnsupportedSampling(modelName, 'topK', params.topK);
         }
 
-        switch (params.responseFormat) {
-            case 'JSON':
-                modelOptions.responseMimeType = 'application/json';
-                break;
-            case 'ModelSpecific':
-                if (params.modelSpecificResponseFormat) {
-                    Object.assign(modelOptions, params.modelSpecificResponseFormat);
-                }
-                break;
+        // Provider options (e.g. a thinkingConfig) ride along with JSON too, not only ModelSpecific.
+        if (params.modelSpecificResponseFormat && (params.responseFormat === 'ModelSpecific' || params.responseFormat === 'JSON')) {
+            Object.assign(modelOptions, params.modelSpecificResponseFormat);
+        }
+        if (params.responseFormat === 'JSON') {
+            modelOptions.responseMimeType = 'application/json';
         }
 
         if (params.stopSequences != null && params.stopSequences.length > 0) {
@@ -594,27 +641,36 @@ export class GeminiLLM extends BaseLLM {
     private static readonly _warnedThinking = new Set<string>();
 
     private thinkingReplacementKey(modelName: string, config: ThinkingConfig): string {
-        return `${this.constructor.name}|${modelName}|${JSON.stringify(config)}`;
+        // Sorted keys, so the same setting with its keys in another order hits the same memo.
+        return `${this.constructor.name}|${modelName}|${JSON.stringify(config, Object.keys(config).sort())}`;
     }
 
     /**
      * Puts the `thinkingConfig` for `effortLevel` on the request (see {@link ResolveGeminiThinkingConfig}),
-     * or what replaced it after the model rejected it earlier in this process. Nothing is added when
-     * no effort is set; an effort that cannot be used is reported once.
+     * or what replaced it after the model rejected it earlier in this process. With no usable effort, a
+     * `thinkingConfig` already on the request (from `modelSpecificResponseFormat`) gets the same
+     * replacement, so a rejected setting is not re-sent on every call. An effort that cannot be used is
+     * reported once.
      */
     private applyThinkingConfig(requestConfig: Record<string, unknown>, modelName: string, effortLevel: string | undefined): void {
         const resolution = ResolveGeminiThinkingConfig(modelName, effortLevel);
         if (resolution.Ignored) {
             this.warnThinkingOnce(`${modelName}:${resolution.Ignored}`, `Gemini: ${resolution.Ignored}; sending no thinking setting, so the model thinks at its default.`);
         }
-        if (!resolution.Config) {
+        const supplied = requestConfig.thinkingConfig as ThinkingConfig | undefined;
+        const wanted = resolution.Config ?? supplied;
+        if (!wanted) {
             return;
         }
-        const key = this.thinkingReplacementKey(modelName, resolution.Config);
-        const config = GeminiLLM._thinkingReplacements.has(key) ? GeminiLLM._thinkingReplacements.get(key) : resolution.Config;
+        const key = this.thinkingReplacementKey(modelName, wanted);
+        const config = GeminiLLM._thinkingReplacements.has(key) ? GeminiLLM._thinkingReplacements.get(key) : wanted;
         if (config) {
             requestConfig.thinkingConfig = config;
+        } else if (!supplied || wanted === supplied) {
+            delete requestConfig.thinkingConfig;
         }
+        // Otherwise the effort's own setting was rejected with nothing to fall back to, and the caller's
+        // `thinkingConfig` stays, as it would have with no effort level.
     }
 
     /**
@@ -712,9 +768,8 @@ export class GeminiLLM extends BaseLLM {
         const convertedMessages = noSystemMessages.map(m => GeminiLLM.MapMJMessageToGeminiHistoryEntry(m, signatureOrigin));
         const tempMessages = this.geminiMessageSpacing(convertedMessages);
 
-        // Split: all but last message go in history, last message gets system instructions prepended
-        const history = tempMessages.slice(0, -1);
-        const lastMessage = tempMessages.length > 0 ? tempMessages[tempMessages.length - 1] : null;
+        // All but the last user turn go in the history; that turn is the message sent (see SplitForSend).
+        const { history, message: finalMessageParts } = this.SplitForSend(tempMessages);
 
         // Capture the request's cacheable-prefix info so the final streamed chunk's usage can be
         // logged next to it (GEMINI_CACHE_DEBUG only; processStreamingChunk reads this).
@@ -724,15 +779,7 @@ export class GeminiLLM extends BaseLLM {
 
         // System prompt is passed via systemInstruction (below), NOT bundled into the user message
         // — bundling defeats Gemini's implicit prompt caching (stable prompt ends up after the
-        // variable history). The final message is just the latest user turn's parts.
-        let finalMessageParts: Part[] = [];
-        if (lastMessage) {
-            finalMessageParts.push(...lastMessage.parts);
-        }
-        // If no messages at all, send empty
-        if (finalMessageParts.length === 0) {
-            finalMessageParts = [{ text: '' }];
-        }
+        // variable history).
 
         // Sampling + response-format options, shaped for the model's version (see buildGenerationOptions)
         const modelOptions = this.buildGenerationOptions(params, modelName);
@@ -1162,6 +1209,56 @@ export class GeminiLLM extends BaseLLM {
     }
 
     /**
+     * A turn's thought parts and signed text parts, as replayable reasoning.
+     *
+     * Thought parts are kept with their signature when they have one. Text parts are kept only when
+     * at least one of them is signed, and then all of them, in order — the replay rebuilds the
+     * turn's text from these blocks, so each signature lands back on the text it was minted for.
+     * Function-call signatures travel on the calls themselves (see {@link extractToolCalls}).
+     *
+     * @param parts The candidate's content parts
+     * @param signatureOrigin Where this response's signatures validate (see {@link thoughtSignatureOrigin})
+     * @returns The blocks, or undefined when the turn had nothing to replay
+     */
+    private static extractReasoning(parts: Part[] | undefined, signatureOrigin: string): ChatReasoningBlock[] | undefined {
+        const all = parts ?? [];
+        const signature = (part: Part) => (part.thoughtSignature ? { signature: part.thoughtSignature } : {});
+        const blocks: ChatReasoningBlock[] = all
+            .filter((part) => part.thought && part.text)
+            .map((part) => ({ provider: GEMINI_REASONING_PROVIDER, kind: 'thought', text: part.text, ...signature(part), origin: signatureOrigin }));
+        // Gemini can put a turn's signature on a trailing part with empty text; it has to come back too.
+        const textParts = all.filter((part) => typeof part.text === 'string' && !part.thought && !part.functionCall
+            && (part.text.length > 0 || !!part.thoughtSignature));
+        if (textParts.some((part) => part.thoughtSignature)) {
+            blocks.push(...textParts.map((part): ChatReasoningBlock =>
+                ({ provider: GEMINI_REASONING_PROVIDER, kind: 'signed_text', text: part.text, ...signature(part), origin: signatureOrigin })));
+        }
+        return blocks.length > 0 ? blocks : undefined;
+    }
+
+    /**
+     * The parts that replay a model turn's own reasoning: its thought parts, and — when its text
+     * parts were signed and the message text is still exactly theirs — those text parts with their
+     * signatures. `text` is undefined when the message's content should be mapped as usual: no
+     * signed text, or text that was changed after the turn (compaction), which a signature would
+     * no longer match. Blocks from another provider, or signed where this request is not going,
+     * are dropped — a foreign signature is a hard 400.
+     */
+    private static reasoningPartsForReplay(message: ChatMessage, signatureOrigin: string | undefined): { thoughts: Part[]; text?: Part[] } {
+        const usable = (message.reasoning ?? []).filter((block) =>
+            block.provider === GEMINI_REASONING_PROVIDER
+            && !(signatureOrigin !== undefined && block.origin !== undefined && block.origin !== signatureOrigin));
+        const toPart = (block: ChatReasoningBlock, thought: boolean): Part =>
+            ({ text: block.text ?? '', ...(thought ? { thought: true } : {}), ...(block.signature ? { thoughtSignature: block.signature } : {}) });
+        const thoughts = usable.filter((block) => block.kind === 'thought').map((block) => toPart(block, true));
+        const signedText = usable.filter((block) => block.kind === 'signed_text');
+        const textMatches = typeof message.content === 'string'
+            && signedText.length > 0
+            && signedText.map((block) => block.text ?? '').join('').trim() === message.content.trim();
+        return { thoughts, text: textMatches ? signedText.map((block) => toPart(block, false)) : undefined };
+    }
+
+    /**
      * Maps one MJ message to a Gemini history entry.
      *
      * @param message The message to map
@@ -1169,7 +1266,10 @@ export class GeminiLLM extends BaseLLM {
      *   call's thought signature from anywhere else is swapped for the placeholder.
      */
     public static MapMJMessageToGeminiHistoryEntry(message: ChatMessage, signatureOrigin?: string): Content {
-        const parts = GeminiLLM.MapMJContentToGeminiParts(message.content);
+        // A model turn replays its own thoughts first, then its text, then its calls — the order
+        // Gemini produced them in.
+        const replay = message.role === 'assistant' ? GeminiLLM.reasoningPartsForReplay(message, signatureOrigin) : { thoughts: [] };
+        const parts = [...replay.thoughts, ...(replay.text ?? GeminiLLM.MapMJContentToGeminiParts(message.content))];
 
         // An assistant turn that called tools must replay those calls as `functionCall` parts so the
         // `functionResponse` parts that follow have something to pair with.
@@ -1183,8 +1283,9 @@ export class GeminiLLM extends BaseLLM {
         }
 
         // Gemini rejects an empty part list, and a pure tool-call turn has no prose — drop the empty
-        // text part that content mapping produces once real parts are carrying the turn.
-        const meaningfulParts = parts.length > 1 ? parts.filter(p => p.text !== '') : parts;
+        // text part that content mapping produces once real parts are carrying the turn. An empty
+        // part that carries a signature is the model's own, and stays.
+        const meaningfulParts = parts.length > 1 ? parts.filter(p => p.text !== '' || !!p.thoughtSignature) : parts;
 
         return {
             role: message.role === 'assistant' ? 'model' : 'user', // google calls all messages other than the replies from the model 'user' which would include the system prompt
