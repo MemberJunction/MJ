@@ -5954,8 +5954,9 @@ export abstract class BaseEntity<T = unknown> {
 
         // 2) Batch-load hinted child rows (from unfiltered memory caches first, then at most 1 RunViews call);
         //    any missing/failed row falls back to discovery
+        let unlinkedFromHints: BaseEntity[] = [];
         if (hintedByChild.size > 0) {
-            const unlinkedFromHints = await BaseEntity.batchLoadAndLinkDisjointChildren(
+            unlinkedFromHints = await BaseEntity.batchLoadAndLinkDisjointChildren(
                 hintedByChild,
                 md,
                 entityProvider,
@@ -5965,21 +5966,13 @@ export abstract class BaseEntity<T = unknown> {
                 deniedChildLogged,
                 batchUnfilteredCache
             );
-            for (const unlinked of unlinkedFromHints) {
-                // Same diagnostic the per-row path emits when a SubtypeSelector hint names a
-                // child that has no row: operators need the signal that a selector is wrong.
-                const hinted = hintedNameByParent.get(unlinked);
-                if (hinted) {
-                    BaseEntity.logLoadFoundNoRow(hinted, unlinked.PrimaryKey);
-                }
-                needsDiscovery.push(unlinked);
-            }
+            needsDiscovery.push(...unlinkedFromHints);
         }
 
         // 3) Discover and hydrate remaining unresolved parents (consulting unfiltered memory caches first,
         //    then 1 single-pass RunViews call when FindISAChildEntitiesBatch is absent)
         if (needsDiscovery.length > 0) {
-            await BaseEntity.discoverAndHydrateDisjointChildren(
+            const discoveredByParent = await BaseEntity.discoverAndHydrateDisjointChildren(
                 parentInfo,
                 needsDiscovery,
                 md,
@@ -5990,9 +5983,39 @@ export abstract class BaseEntity<T = unknown> {
                 deniedChildLogged,
                 batchUnfilteredCache
             );
+            for (const p of unlinkedFromHints) {
+                BaseEntity.reportBatchSubtypeLoadHintMiss(p, hintedNameByParent.get(p), discoveredByParent.get(p) ?? null);
+            }
         }
     }
 
+    /**
+     * The batch twin of the per-row path's diagnostics in {@link initializeDisjointChildEntity}, for
+     * a parent whose hinted child had no row, run once discovery has had its say. When discovery
+     * found the hinted child but could not link it, the row exists and its load came back empty, so
+     * the empty load is logged, as the discovery-only path logs it. Anything else goes to
+     * {@link reportSubtypeLoadHintMiss}: quiet (verbose, once) when no subtype row exists at all,
+     * which is a normal state, and an error once per pair when the row is in a different child.
+     */
+    private static reportBatchSubtypeLoadHintMiss(parent: BaseEntity, hintedName: string | undefined, discoveredName: string | null): void {
+        if (!hintedName) {
+            return;
+        }
+        if (discoveredName && sameEntityName(discoveredName, hintedName)) {
+            if (!parent._childEntity) {
+                BaseEntity.logLoadFoundNoRow(hintedName, parent.PrimaryKey);
+            }
+            return;
+        }
+        parent.reportSubtypeLoadHintMiss(hintedName, discoveredName);
+    }
+
+    /**
+     * Discovers and links the child of each disjoint parent.
+     *
+     * @returns The child each parent was found to have, whether or not it could then be linked.
+     *   A parent with no child, or whose child could not be determined, is absent.
+     */
     private static async discoverAndHydrateDisjointChildren(
         parentInfo: EntityInfo,
         parents: ReadonlyArray<BaseEntity>,
@@ -6003,10 +6026,11 @@ export abstract class BaseEntity<T = unknown> {
         outLinkedChildren: BaseEntity[],
         deniedChildLogged: Set<string>,
         batchUnfilteredCache?: ReadonlyMap<string, ReadonlyArray<BaseEntity | Record<string, unknown>>>
-    ): Promise<void> {
+    ): Promise<Map<BaseEntity, string>> {
+        const discoveredByParent = new Map<BaseEntity, string>();
         const validChildren = parentInfo.ChildEntities.filter(c => c.FirstPrimaryKey != null); // first-pk-ok: IS-A children share the parent's single key
         if (validChildren.length === 0) {
-            return;
+            return discoveredByParent;
         }
 
         const userForPerm = contextUser ?? parents[0]?._contextCurrentUser ?? md.CurrentUser;
@@ -6044,7 +6068,7 @@ export abstract class BaseEntity<T = unknown> {
         }
 
         if (readableChildren.length === 0) {
-            return;
+            return discoveredByParent;
         }
 
         // In a disjoint IS-A hierarchy (`AllowMultipleSubtypes === false`), each parent record
@@ -6063,6 +6087,7 @@ export abstract class BaseEntity<T = unknown> {
                     const pkKey = CanonicalPrimaryKeyValue(rawPk, rc.pkIsUuid);
                     const matched = rc.cachedByPk?.get(pkKey);
                     if (matched) {
+                        discoveredByParent.set(p, rc.childInfo.Name);
                         await BaseEntity.linkSingleParentFromRawOrEntityRecord(
                             p,
                             rc.childInfo.Name,
@@ -6083,7 +6108,7 @@ export abstract class BaseEntity<T = unknown> {
         }
 
         if (remainingParents.length === 0 || uncachedChildren.length === 0) {
-            return;
+            return discoveredByParent;
         }
 
         // Server-side batch UNION ALL discovery when available
@@ -6095,6 +6120,7 @@ export abstract class BaseEntity<T = unknown> {
                 rvProvider,
                 contextUser
             );
+            BaseEntity.recordDiscoveredChildren(discoveredByChild, discoveredByParent);
             if (discoveredByChild.size > 0) {
                 await BaseEntity.batchLoadAndLinkDisjointChildren(
                     discoveredByChild,
@@ -6106,7 +6132,7 @@ export abstract class BaseEntity<T = unknown> {
                     deniedChildLogged
                 );
             }
-            return;
+            return discoveredByParent;
         }
 
         // Single-pass RunViews discovery + hydration when FindISAChildEntitiesBatch is absent (e.g. GraphQLDataProvider)
@@ -6119,7 +6145,13 @@ export abstract class BaseEntity<T = unknown> {
                 outLinkedChildren,
                 deniedChildLogged
             );
-            return;
+            // Here discovery and the load are one read, so a child is known only where it linked.
+            for (const p of remainingParents) {
+                if (p._childEntity) {
+                    discoveredByParent.set(p, p._childEntity.EntityInfo.Name);
+                }
+            }
+            return discoveredByParent;
         }
 
         // Last-resort per-parent fallback when neither FindISAChildEntitiesBatch nor RunViews exists
@@ -6131,6 +6163,7 @@ export abstract class BaseEntity<T = unknown> {
                     BaseEntity.appendParentToChildGroup(discoveredByChild, found.ChildEntityName, p);
                 }
             }
+            BaseEntity.recordDiscoveredChildren(discoveredByChild, discoveredByParent);
             if (discoveredByChild.size > 0) {
                 await BaseEntity.batchLoadAndLinkDisjointChildren(
                     discoveredByChild,
@@ -6141,6 +6174,16 @@ export abstract class BaseEntity<T = unknown> {
                     outLinkedChildren,
                     deniedChildLogged
                 );
+            }
+        }
+        return discoveredByParent;
+    }
+
+    /** Copies a child-name → parents grouping into a parent → child-name map. */
+    private static recordDiscoveredChildren(byChild: ReadonlyMap<string, ReadonlyArray<BaseEntity>>, out: Map<BaseEntity, string>): void {
+        for (const [childName, parents] of byChild) {
+            for (const p of parents) {
+                out.set(p, childName);
             }
         }
     }
