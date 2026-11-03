@@ -315,6 +315,18 @@ Generic mobile bottom sheet: scrim + panel sliding up from the bottom edge with 
 </mj-bottom-sheet>
 ```
 
+### `mj-section-picker` — MJSectionPickerComponent
+The phone replacement for a section rail, tab strip or icon rail: one full-width 44px button naming the current section (icon, title, error/warning/dirty indicators, row count, chevron) that opens a searchable "Sections" `mj-bottom-sheet` listing every section, first-class `Items` first and then each `Groups` entry under its heading (a form's More folder, say). Pure chrome, no breakpoint logic: the caller decides when a picker is the right presentation and applies the selection itself. Inputs: `Items: SectionPickerItem[]` (`Key`, `Title`, `Icon?`, `Count?`, `ErrorCount?`, `WarningCount?`, `DirtyCount?`), `Groups: SectionPickerGroup[]` (`Title`, `Items`), `ActiveKey` (falls back to the first item), `SheetTitle`, `Searchable`, `SearchPlaceholder`. Output: `ActiveKeyChange` (the sheet closes and the search clears on every pick). Every tap target is 44px.
+
+```html
+@if (IsPhone) {
+  <mj-section-picker [Items]="sections" [Groups]="[{ Title: 'More', Items: moreSections }]"
+                     [ActiveKey]="activeKey" (ActiveKeyChange)="Activate($event)"></mj-section-picker>
+} @else {
+  <mj-left-nav …></mj-left-nav>
+}
+```
+
 ## Patterns
 
 ### `mj-empty-state` — MJEmptyStateComponent

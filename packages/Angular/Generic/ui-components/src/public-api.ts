@@ -21,6 +21,7 @@ export * from './lib/alert/alert.component';
 export * from './lib/window/window.component';
 export * from './lib/slide-panel/slide-panel.component';
 export * from './lib/bottom-sheet/bottom-sheet.component';
+export * from './lib/section-picker/section-picker.component';
 export * from './lib/combobox/combobox.component';
 export * from './lib/icon-picker/icon-picker.component';
 export * from './lib/icon-picker/font-awesome-icons';

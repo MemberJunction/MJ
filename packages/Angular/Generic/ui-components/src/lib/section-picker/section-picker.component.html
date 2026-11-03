@@ -1,0 +1,78 @@
+@let active = ActiveItem;
+<button type="button"
+        class="mj-section-picker"
+        aria-haspopup="dialog"
+        [attr.aria-expanded]="SheetOpen"
+        [attr.aria-label]="'Change section — ' + (active?.Title ?? '')"
+        (click)="OpenSheet()">
+  @if (active?.Icon) {
+    <i [class]="active!.Icon" aria-hidden="true"></i>
+  }
+  <span class="mj-section-picker-title">{{ active?.Title ?? '' }}</span>
+  @if (active) {
+    @if ((active.DirtyCount ?? 0) > 0) {
+      <span class="mj-section-picker-dirty" role="img" [title]="DirtyLabel(active)" [attr.aria-label]="DirtyLabel(active)"></span>
+    }
+    @if ((active.ErrorCount ?? 0) > 0) {
+      <span class="mj-section-picker-error" role="img" [title]="ErrorLabel(active)" [attr.aria-label]="ErrorLabel(active)">{{ active.ErrorCount }}</span>
+    } @else if ((active.WarningCount ?? 0) > 0) {
+      <span class="mj-section-picker-warning" role="img" [title]="WarningLabel(active)" [attr.aria-label]="WarningLabel(active)">{{ active.WarningCount }}</span>
+    }
+    @if (active.Count != null && active.Count > 0) {
+      <span class="mj-section-picker-count">{{ active.Count }}</span>
+    }
+  }
+  <i class="fa-solid fa-chevron-down mj-section-picker-chevron" aria-hidden="true"></i>
+</button>
+
+<mj-bottom-sheet [Visible]="SheetOpen" (VisibleChange)="OnSheetVisibleChange($event)" [Title]="SheetTitle">
+  <div class="mj-section-sheet">
+    @if (Searchable) {
+      <input type="text"
+             class="mj-input mj-section-sheet-search"
+             [value]="Query"
+             (input)="OnSearchInput($event)"
+             [placeholder]="SearchPlaceholder"
+             aria-label="Search sections">
+    }
+    <div class="mj-section-sheet-list" role="list">
+      @for (item of FilteredItems; track item.Key) {
+        <ng-container *ngTemplateOutlet="row; context: { $implicit: item }"></ng-container>
+      }
+      @for (group of FilteredGroups; track group.Title) {
+        <div class="mj-section-sheet-heading">{{ group.Title }}</div>
+        @for (item of group.Items; track item.Key) {
+          <ng-container *ngTemplateOutlet="row; context: { $implicit: item }"></ng-container>
+        }
+      }
+      @if (!HasMatches) {
+        <div class="mj-section-sheet-empty">No sections match.</div>
+      }
+    </div>
+  </div>
+  <ng-template #row let-item>
+    <button type="button"
+            class="mj-section-sheet-item"
+            role="listitem"
+            [attr.data-key]="item.Key"
+            [class.is-active]="IsActive(item)"
+            [attr.aria-current]="IsActive(item) ? 'page' : null"
+            (click)="Select(item.Key)">
+      @if (item.Icon) {
+        <i [class]="item.Icon" aria-hidden="true"></i>
+      }
+      <span class="mj-section-sheet-label">{{ item.Title }}</span>
+      @if ((item.ErrorCount ?? 0) > 0) {
+        <span class="mj-section-picker-error" role="img" [attr.aria-label]="ErrorLabel(item)">{{ item.ErrorCount }}</span>
+      } @else if ((item.WarningCount ?? 0) > 0) {
+        <span class="mj-section-picker-warning" role="img" [attr.aria-label]="WarningLabel(item)">{{ item.WarningCount }}</span>
+      }
+      @if ((item.DirtyCount ?? 0) > 0) {
+        <span class="mj-section-picker-dirty" role="img" [attr.aria-label]="DirtyLabel(item)"></span>
+      }
+      @if (item.Count != null && item.Count > 0) {
+        <span class="mj-section-picker-count">{{ item.Count }}</span>
+      }
+    </button>
+  </ng-template>
+</mj-bottom-sheet>
