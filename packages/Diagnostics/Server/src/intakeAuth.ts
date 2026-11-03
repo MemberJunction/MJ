@@ -29,6 +29,7 @@ export type SenderAuthFailureReason =
   | 'missing'
   | 'malformed'
   | 'unknown-install'
+  | 'lookup-failed'
   | 'not-active'
   | 'unknown-key'
   | 'skew'
@@ -183,7 +184,8 @@ function registrationFailure(registration: SenderRegistration | null, keyId: str
  * First step of authentication, done before the body is read: parses the `MJDiag-Ed25519` header,
  * finds the Active registration for the install and requires the header `keyId` to be the
  * registered key. With `unknownInstalls`, an install in that cache is refused without a lookup,
- * and an install with no registration is added to it. Failures are logged with their reason.
+ * and an install with no registration is added to it. A failed lookup is refused and not cached.
+ * Failures are logged with their reason.
  */
 export async function ResolveSender(
   authorizationHeader: string | undefined,
@@ -196,7 +198,8 @@ export async function ResolveSender(
   if (!assertion) return fail('malformed');
   if (unknownInstalls?.Has(assertion.InstallID)) return fail('unknown-install', assertion.InstallID);
   const registration = await registry.Find(assertion.InstallID, data);
-  if (!registration) unknownInstalls?.Remember(assertion.InstallID);
+  if (registration === undefined) return fail('lookup-failed', assertion.InstallID);
+  if (registration === null) unknownInstalls?.Remember(assertion.InstallID);
   const regFailure = registrationFailure(registration, assertion.KeyID);
   if (regFailure || !registration) return fail(regFailure ?? 'unknown-install', assertion.InstallID);
   return { Ok: true, Assertion: assertion, Registration: registration };

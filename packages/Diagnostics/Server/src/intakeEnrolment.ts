@@ -1,9 +1,15 @@
 import * as crypto from 'node:crypto';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { MJDiagnosticSenderRegistrationEntity } from '@memberjunction/core-entities';
-import { SanitizeForLog } from '@memberjunction/global';
+import { SanitizeForLog, UUIDsEqual } from '@memberjunction/global';
 import { VerifyEnrolProof } from '@memberjunction/diagnostics';
-import { IntakeDataContext, LoadSenderRegistrationRow, SENDER_REGISTRATION_ENTITY } from './senderRegistry.js';
+import {
+  IntakeDataContext,
+  LoadSenderRegistrationRow,
+  SENDER_REGISTRATION_ENTITY,
+  WithSenderRegistrationLock,
+} from './senderRegistry.js';
+import { MarkTrustedRegistrationWrite } from './senderRegistrationEntityServer.js';
 
 const REGISTRATION_CODE_TTL_MS = 24 * 60 * 60_000;
 const MAX_FIELD_LENGTH = { installId: 100, keyId: 100, publicKeyBase64: 255, registrationCode: 200, proof: 200 } as const;
@@ -78,7 +84,6 @@ function codeFailure(row: MJDiagnosticSenderRegistrationEntity, code: string, no
 /**
  * Records the enrolled key on the row, sets it Active (also from Revoked: a new code re-enables a
  * sender) and clears the code. Returns false when the save fails.
- * The load-check-save is not atomic: two enrolments racing with the same code can both succeed, and the last save wins.
  */
 async function activateRegistration(row: MJDiagnosticSenderRegistrationEntity, body: EnrolRequestBody, now: Date): Promise<boolean> {
   row.KeyID = body.keyId;
@@ -88,6 +93,7 @@ async function activateRegistration(row: MJDiagnosticSenderRegistrationEntity, b
   row.RevokedAt = null;
   row.RegistrationCodeHash = null;
   row.RegistrationCodeExpiresAt = null;
+  MarkTrustedRegistrationWrite(row);
   if (await row.Save()) {
     return true;
   }
@@ -103,6 +109,9 @@ function reject(installId: string, reason: string, status: 400 | 401 = 401): Enr
 /**
  * Enrols a sender: checks the one-time registration code (hash, expiry, constant-time compare),
  * checks the proof of possession of the new key, then activates the registration with that key.
+ * The code is single-use within this process: activation runs under the registration lock, and
+ * inside it the row is reloaded from the database and the code is checked again. Two collector
+ * processes that receive the same code at the same moment can still both accept it.
  */
 export async function EnrolSenderAtCollector(
   body: EnrolRequestBody,
@@ -112,6 +121,9 @@ export async function EnrolSenderAtCollector(
   now = new Date()
 ): Promise<EnrolOutcome> {
   const row = await LoadSenderRegistrationRow(body.installId, data);
+  if (row === undefined) {
+    return reject(body.installId, 'the registration could not be loaded', 400);
+  }
   if (!row) {
     return reject(body.installId, 'no registration exists for this install');
   }
@@ -130,8 +142,9 @@ export async function EnrolSenderAtCollector(
   if (!proofOk) {
     return reject(body.installId, 'the proof of possession does not verify');
   }
-  if (!(await activateRegistration(row, body, now))) {
-    return reject(body.installId, 'the registration could not be saved', 400);
+  const activationFailure = await WithSenderRegistrationLock(row.ID, () => consumeCodeAndActivate(row.ID, body, data, now));
+  if (activationFailure) {
+    return activationFailure;
   }
   LogStatus(`Diagnostics enrolment: install '${SanitizeForLog(body.installId, 200)}' enrolled key '${SanitizeForLog(body.keyId, 200)}'.`);
   return {
@@ -145,6 +158,31 @@ export async function EnrolSenderAtCollector(
   };
 }
 
+/**
+ * Reloads the registration by ID, checks the code again and activates the row.
+ * Returns the refusal, or null when the registration is now Active with the new key.
+ * Call it under the registration lock.
+ */
+async function consumeCodeAndActivate(
+  registrationId: string,
+  body: EnrolRequestBody,
+  data: IntakeDataContext,
+  now: Date
+): Promise<EnrolOutcome | null> {
+  const fresh = await data.Provider.GetEntityObject<MJDiagnosticSenderRegistrationEntity>(SENDER_REGISTRATION_ENTITY, data.ContextUser);
+  if (!(await fresh.Load(registrationId)) || !UUIDsEqual(fresh.ID, registrationId)) {
+    return reject(body.installId, 'the registration could not be reloaded', 400);
+  }
+  const failure = codeFailure(fresh, body.registrationCode, now);
+  if (failure) {
+    return reject(body.installId, failure);
+  }
+  if (!(await activateRegistration(fresh, body, now))) {
+    return reject(body.installId, 'the registration could not be saved', 400);
+  }
+  return null;
+}
+
 /** A new one-time registration code. */
 export interface IssuedRegistrationCode {
   Code: string;
@@ -154,13 +192,17 @@ export interface IssuedRegistrationCode {
 /**
  * Issues a registration code for a registration: 32 random bytes as base64url, its SHA-256 hex
  * saved on the row with a 24-hour expiry. The plain code is returned once and never stored.
- * Throws when the registration does not exist or the save fails.
+ * Runs under the registration lock. Throws when the registration does not exist or the save fails.
  */
 export async function IssueSenderRegistrationCode(
   registrationId: string,
   data: IntakeDataContext,
   now = new Date()
 ): Promise<IssuedRegistrationCode> {
+  return WithSenderRegistrationLock(registrationId, () => issueCode(registrationId, data, now));
+}
+
+async function issueCode(registrationId: string, data: IntakeDataContext, now: Date): Promise<IssuedRegistrationCode> {
   const row = await data.Provider.GetEntityObject<MJDiagnosticSenderRegistrationEntity>(SENDER_REGISTRATION_ENTITY, data.ContextUser);
   if (!(await row.Load(registrationId))) {
     throw new Error(`Diagnostic sender registration '${registrationId}' not found.`);
@@ -169,6 +211,7 @@ export async function IssueSenderRegistrationCode(
   const expiresAt = new Date(now.getTime() + REGISTRATION_CODE_TTL_MS);
   row.RegistrationCodeHash = HashRegistrationCode(code);
   row.RegistrationCodeExpiresAt = expiresAt;
+  MarkTrustedRegistrationWrite(row);
   if (!(await row.Save())) {
     throw new Error(`Could not save the registration code: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
   }
