@@ -234,9 +234,6 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   @Input() ShowPerceptionChip = false;
 
-  /** Whether inline markdown links in the session thread open in a new browser tab. Default true. */
-  @Input() OpenLinksInNewTab = true;
-
   // ── Declarative UI configuration (host controls every aspect of the surface) ──
   //
   // Each input is a thin, PascalCase setter over a private slot in {@link _uiInputs}.

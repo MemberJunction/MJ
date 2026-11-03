@@ -49,9 +49,6 @@ export class RealtimeSessionThreadComponent implements OnInit, AfterViewChecked,
   /** Whether developer affordances on delegation cards are revealed (gear-gated). */
   @Input() DevMode = false;
 
-  /** Whether inline markdown links in caption bubbles open in a new browser tab. Default true. */
-  @Input() OpenLinksInNewTab = true;
-
   /** Re-emitted from a delegation card's dev "Open run" link (the delegated run's ID). */
   @Output() OpenRunRequested = new EventEmitter<string>();
 

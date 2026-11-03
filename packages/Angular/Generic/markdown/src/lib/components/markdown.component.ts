@@ -49,7 +49,6 @@ const RERENDER_INPUTS = new Set([
   'headingIdPrefix',
   'mermaidTheme',
   'sanitize',
-  'openLinksInNewTab',
 ]);
 
 /**
@@ -367,13 +366,6 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   }
 
   /**
-   * Whether links open in a new browser tab (`target="_blank"` with `rel="noopener noreferrer"`).
-   * In-page fragment links (`#heading`) and non-navigational schemes (`mailto:`, `tel:`, `sms:`)
-   * stay in the current tab. Default `false`.
-   */
-  @Input() OpenLinksInNewTab: boolean = false;
-
-  /**
    * Emitted when rendering is complete
    */
   @Output() Rendered = new EventEmitter<MarkdownRenderEvent>();
@@ -571,11 +563,6 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     const container = this.elementRef.nativeElement.querySelector('.mj-markdown-container');
     if (!container) return;
 
-    // Open external/inline links in a new tab when opted in
-    if (this.OpenLinksInNewTab) {
-      this.applyLinkTargets(container as HTMLElement);
-    }
-
     // Add copy buttons to code blocks
     if (this.EnableCodeCopy && this.hasCodeBlocks) {
       this.markdownService.addCodeCopyButtons(container as HTMLElement);
@@ -630,38 +617,6 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
       hasMermaid: this.hasMermaid,
       hasCodeBlocks: this.hasCodeBlocks,
       headingIds,
-    });
-  }
-
-  /**
-   * Stamp `target="_blank"` and `rel="noopener noreferrer"` on rendered HTML links when
-   * {@link OpenLinksInNewTab} is enabled. In-page fragment links (`#section`), non-navigational
-   * protocol-handler links (`mailto:`, `tel:`, `sms:`), SVG diagram links, and anchors that
-   * already declare an explicit `target` keep their behaviour.
-   */
-  private applyLinkTargets(container: HTMLElement): void {
-    container.querySelectorAll<HTMLAnchorElement>('a[href]').forEach((anchor) => {
-      if (anchor.closest('svg')) {
-        return;
-      }
-      const href = (anchor.getAttribute('href') || '').trim();
-      if (!href || href.startsWith('#') || /^(mailto|tel|sms|javascript|vbscript|data):/i.test(href)) {
-        return;
-      }
-      if (!anchor.hasAttribute('target')) {
-        anchor.setAttribute('target', '_blank');
-      }
-      if (anchor.getAttribute('target') === '_blank') {
-        const existingRel = (anchor.getAttribute('rel') || '').trim();
-        const tokens = existingRel ? existingRel.split(/\s+/) : [];
-        if (!tokens.includes('noopener')) {
-          tokens.push('noopener');
-        }
-        if (!tokens.includes('noreferrer')) {
-          tokens.push('noreferrer');
-        }
-        anchor.setAttribute('rel', tokens.join(' '));
-      }
     });
   }
 

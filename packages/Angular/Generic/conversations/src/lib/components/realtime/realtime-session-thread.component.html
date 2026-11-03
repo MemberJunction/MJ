@@ -15,7 +15,7 @@
               </div>
               <div class="bubble" [class.bubble--clamped]="IsLongText(item.Text) && !IsExpanded($index)" [class.bubble--expanded]="IsLongText(item.Text) && IsExpanded($index)">
                 <div class="bubble-content" [class.bubble-content--clamped]="IsLongText(item.Text) && !IsExpanded($index)" [class.bubble-content--expanded]="IsLongText(item.Text) && IsExpanded($index)">
-                  <mj-markdown [data]="FormatMarkdownText(item.Text)" [enableCollapsibleHeadings]="true" [OpenLinksInNewTab]="OpenLinksInNewTab"></mj-markdown>
+                  <mj-markdown [data]="FormatMarkdownText(item.Text)" [enableCollapsibleHeadings]="true"></mj-markdown>
                 </div>
                 @if (IsLongText(item.Text)) {
                   <div class="bubble-actions">
