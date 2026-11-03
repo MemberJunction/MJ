@@ -7,10 +7,8 @@ import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { NoLog } from '../logging/NoLog.js';
 import { v4 as uuidv4 } from 'uuid';
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { GetReadOnlyDataSource, GetReadOnlyProvider } from '../util.js';
-import { GetDbType } from '../index.js';
+import { GetReadOnlyProvider } from '../util.js';
 import { GetSystemUser } from '../auth/index.js';
-import sql from 'mssql';
  
 @InputType()
 export class GetDataInputType {
@@ -131,17 +129,18 @@ export class GetDataResolver {
                 throw new Error('Access token is not valid or has expired');
             }
 
-            // Use the read-only connection for executing queries
-            const readOnlyDataSource = GetReadOnlyDataSource(context.dataSources, {allowFallbackToReadWrite: false})
-            if (!readOnlyDataSource) {
-                throw new Error('Read-only data source not found');
+            // Run every query through the read-only PROVIDER (SQL Server or PostgreSQL), never a
+            // driver-specific pool, and never fall back to the read-write login.
+            const readOnlyProvider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: false });
+            if (!readOnlyProvider) {
+                throw new Error('Read-only provider not found: GetData requires a read-only database login');
             }
 
             // Resolve composition tokens in queries before execution.
             // Queries may contain {{query:"CategoryPath/QueryName(params)"}} tokens that
             // reference reusable queries. These must be resolved to CTEs before raw SQL execution.
             const compositionEngine = new QueryCompositionEngine();
-            const platform = GetDbType();
+            const platform = readOnlyProvider.PlatformKey;
             const systemUser = await GetSystemUser();
 
             // Execute all queries in parallel, but execute each individual query in its own try catch block so that if one fails, the others can still be processed
@@ -168,42 +167,15 @@ export class GetDataResolver {
                             return { result: null, error: validation.error || 'SQL validation failed' };
                         }
 
-                        const request = new sql.Request(readOnlyDataSource);
-                        const result = await request.query(sqlToRun);
-                        return { result: result.recordset, error: null };
+                        const rows = await readOnlyProvider.ExecuteSQL<Record<string, unknown>>(
+                            sqlToRun,
+                            undefined,
+                            { description: 'GetData', ignoreLogging: true },
+                            systemUser
+                        );
+                        return { result: rows, error: null };
                     } catch (err) {
-                        // Extract clean SQL error message
-                        let errorMessage = err instanceof Error ? err.message : String(err);
-
-                        // SQL Server errors often have additional context in properties
-                        // Try to get more context from the error object
-                        if (err && typeof err === 'object') {
-                            const sqlError = err as any;
-
-                            // SQL Server error objects may have a 'procName' with the problematic token
-                            // or 'lineNumber' and other useful properties
-                            if (sqlError.precedingErrors && sqlError.precedingErrors.length > 0) {
-                                // Sometimes the error has preceding errors with better context
-                                const precedingError = sqlError.precedingErrors[0];
-                                if (precedingError.message) {
-                                    errorMessage = precedingError.message;
-                                }
-                            }
-
-                            // Enhance error message with line number if available
-                            if (sqlError.lineNumber && sqlError.lineNumber > 0) {
-                                errorMessage = `${errorMessage} (Line ${sqlError.lineNumber})`;
-                            }
-                        }
-
-                        // SQL Server errors often have the format "message\nstatement"
-                        // Extract just the first line which contains the actual error
-                        const firstLine = errorMessage.split('\n')[0];
-                        if (firstLine) {
-                            errorMessage = firstLine.trim();
-                        }
-
-                        return { result: null, error: errorMessage };
+                        return { result: null, error: GetDataErrorMessage(err) };
                     }
                 })
             );
@@ -225,7 +197,7 @@ export class GetDataResolver {
         } 
         catch (err) {
             LogError(err);
-            return { Success: false, ErrorMessages: [typeof err === 'string' ? err : (err as any).message], Results: [], Queries: input.Queries };
+            return { Success: false, ErrorMessages: [typeof err === 'string' ? err : err instanceof Error ? err.message : String(err)], Results: [], Queries: input.Queries };
         }
     }
 
@@ -266,7 +238,7 @@ export class GetDataResolver {
         } 
         catch (err) {
             LogError(err);
-            return { Success: false, ErrorMessage: typeof err === 'string' ? err : (err as any).message, Results: [] };
+            return { Success: false, ErrorMessage: typeof err === 'string' ? err : err instanceof Error ? err.message : String(err), Results: [] };
         }
     }
 
@@ -427,4 +399,40 @@ export function RecordTokenUse(token: string, usePayload: any) {
 /** @deprecated Use {@link RecordTokenUse}. */
 export function recordTokenUse(token: string, usePayload: any) {
     return RecordTokenUse(token, usePayload);
+}
+
+/** The driver error details GetData reads. SQL Server's driver sets both; PostgreSQL's sets neither. */
+interface DriverErrorDetails {
+    message?: unknown;
+    precedingErrors?: ReadonlyArray<{ message?: unknown }>;
+    lineNumber?: unknown;
+    cause?: unknown;
+}
+
+function asDriverError(err: unknown): DriverErrorDetails | null {
+    return err !== null && typeof err === 'object' ? (err as DriverErrorDetails) : null;
+}
+
+/**
+ * The one-line message GetData reports for a failed query. The provider rethrows the driver's
+ * error as it is (or wraps it, in which case the driver error is its `cause`), so the SQL Server
+ * details — a preceding error with better context, the line number — are read from whichever of
+ * the two carries them. Only the first line is kept: SQL Server messages often append the statement.
+ */
+export function GetDataErrorMessage(err: unknown): string {
+    let errorMessage = err instanceof Error ? err.message : String(err);
+    const outer = asDriverError(err);
+    const causeError = asDriverError(outer?.cause);
+    const driverError = outer?.precedingErrors || outer?.lineNumber ? outer : causeError ?? outer;
+    if (driverError) {
+        const preceding = driverError.precedingErrors?.[0];
+        if (preceding && typeof preceding.message === 'string' && preceding.message) {
+            errorMessage = preceding.message;
+        }
+        if (typeof driverError.lineNumber === 'number' && driverError.lineNumber > 0) {
+            errorMessage = `${errorMessage} (Line ${driverError.lineNumber})`;
+        }
+    }
+    const firstLine = errorMessage.split('\n')[0];
+    return firstLine ? firstLine.trim() : errorMessage;
 }

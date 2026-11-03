@@ -3,7 +3,6 @@ import { MJFileCategoryEntity, MJFileEntity } from '@memberjunction/core-entitie
 import { AppContext, Arg, Ctx, DeleteOptionsInput, Int, Mutation } from '@memberjunction/server';
 import { mj_core_schema } from '../config.js';
 import { MJFileCategoryResolver as FileCategoryResolverBase, MJFileCategory_ } from '../generated/generated.js';
-import sql from 'mssql';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { GetReadWriteProvider } from '../util.js';
 

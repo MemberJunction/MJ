@@ -231,17 +231,28 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
   }
 
   /**
-   * Extends a ConnectionPool with a query method that returns results in the format expected by generated code
-   * This provides backwards compatibility with code that expects TypeORM-style query results
+   * Extends an mssql ConnectionPool with a query method that returns results in the format expected by generated code.
+   * This provides backwards compatibility with code that expects TypeORM-style query results.
+   *
+   * Only an mssql `ConnectionPool` is extended. Any other pool — the PostgreSQL compatibility pool MJAPI
+   * puts in `context.dataSource` on PostgreSQL — is returned unchanged, so its own `query` is not
+   * replaced with one that would run through the mssql driver (#3427).
+   *
+   * @deprecated Run SQL through the request's provider (`provider.ExecuteSQL`), which works on every
+   * platform, rather than through a driver pool.
    */
   export function ExtendConnectionPoolWithQuery(pool: sql.ConnectionPool): sql.ConnectionPool & { query: (sql: string, params?: any) => Promise<any[]> } {
-    const extendedPool = pool as any;
-    extendedPool.query = async (sqlQuery: string, parameters?: any): Promise<any[]> => {
+    type QueryFn = (sqlQuery: string, parameters?: unknown) => Promise<unknown[]>;
+    const extendedPool = pool as sql.ConnectionPool & { query: QueryFn };
+    if (!(pool instanceof sql.ConnectionPool)) {
+      return extendedPool;
+    }
+    extendedPool.query = async (sqlQuery: string, parameters?: unknown): Promise<unknown[]> => {
       const request = new sql.Request(pool);
       // Add parameters if provided
       if (parameters) {
         if (Array.isArray(parameters)) {
-          parameters.forEach((value, index) => {
+          parameters.forEach((value: unknown, index: number) => {
             request.input(`p${index}`, value);
           });
           // Replace ? with @p0, @p1, etc. in the query
