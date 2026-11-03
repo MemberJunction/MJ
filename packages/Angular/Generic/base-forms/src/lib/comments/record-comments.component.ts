@@ -658,7 +658,7 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
             const escapedName = cand.Name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const pattern = new RegExp(`@${escapedName}(?=$|[\\s.,!?;:)])`, 'gi');
             const wireToken = `@{"type":"${cand.Type}","id":"${cand.ID}","name":${JSON.stringify(cand.Name)}}`;
-            serialized = serialized.replace(pattern, wireToken);
+            serialized = serialized.replace(pattern, () => wireToken);
         }
         return serialized;
     }
@@ -1091,7 +1091,7 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
      * Queries `MJ: Users` and `MJ: AI Agents` dynamically by `Name` / `Email` so organizations
      * with more than 50 active users can `@mention` any person regardless of alphabetical order.
      */
-    public async searchMentionCandidatesFromServer(query: string): Promise<void> {
+    private async searchMentionCandidatesFromServer(query: string): Promise<void> {
         const trimmed = query.trim();
         if (!trimmed) return;
         const provider: IMetadataProvider | null = this.ProviderToUse;
