@@ -70,6 +70,7 @@ export * from './AgentWakeTriggerService';
 export * from './KnowledgeAgent';
 export * from './DuplicateReasoningAgentProvider';
 export * from './ClientToolRequestManager';
+export * from './client-tool-results';
 export * from './realtime/realtime-session-runner';
 export * from './realtime/bridge-realtime-session-factory';
 export * from './realtime/bridge-room-transcript-sink';

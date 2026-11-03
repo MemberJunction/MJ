@@ -9886,10 +9886,11 @@ export const MJActionSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
         * * Description: Default prompt for compacting/summarizing this action's results when used by agents with CompactMode=AISummary. Action designers define how their specific results should be summarized. Can be overridden per agent in AIAgentAction.CompactPromptID.`),
-    Config_: z.string().nullable().describe(`
+    Config_: z.any().nullable().describe(`
         * * Field Name: Config
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJActionEntity_IActionConfiguration
         * * Description: Optional JSON configuration for the action. For integration actions, contains routing info: integrationName, objectName, verb, and optional connectorConfig. Non-integration actions leave this NULL.`),
     RuntimeActionConfiguration: z.any().nullable().describe(`
         * * Field Name: RuntimeActionConfiguration
@@ -71060,6 +71061,46 @@ export class MJActionResultCodeEntity extends BaseEntity<MJActionResultCodeEntit
 
 
 /**
+ * Configuration stored on Action.Config (`Config_` in TypeScript): the per-action settings that
+ * need neither a foreign key nor an index, so they live in one evolvable JSON bag instead of a
+ * column each. New optional keys can be added without a schema migration.
+ *
+ * Two kinds of setting share it today:
+ *
+ *  - Integration routing, written by IntegrationActionGenerator for actions with
+ *    DriverClass='IntegrationActionExecutor' and read by that executor to dispatch the call.
+ *  - Output trust, read by the agent runtime (BaseAgent.resolveActionTrustLevel) to decide
+ *    how far to trust what the action returns.
+ *
+ * NULL for actions that need neither.
+ */
+export interface MJActionEntity_IActionConfiguration {
+    /** Integration routing: the MJ: Integrations record the generated action calls. */
+    IntegrationName?: string;
+
+    /** Integration routing: the external object (table, endpoint, resource) the action operates on. */
+    ObjectName?: string;
+
+    /** Integration routing: the operation the action performs on the object (Get, List, Create, Update, Upsert, Delete, ...). */
+    Verb?: string;
+
+    /** Integration routing: connector-specific options passed through to the integration connector. */
+    connectorConfig?: Record<string, unknown>;
+
+    /**
+     * How far the agent runtime trusts this action's output. The action's metadata is the source
+     * of truth; a per-agent or per-run override lives in AgentTypePromptParams.
+     *
+     *  - 'Trusted' (the default when absent): internal structured data or platform-validated output.
+     *  - 'SemiTrusted': may carry user-authored or partner content; wrapped in a data envelope.
+     *  - 'Untrusted': content fetched from outside MJ (web pages, search results, mail, feeds,
+     *    arbitrary HTTP responses, MCP tool output). Wrapped in <untrusted_external_data>, its
+     *    AIDirectives are dropped, and the run is marked tainted so its memory writes land Pending.
+     */
+    outputTrustLevel?: 'Trusted' | 'SemiTrusted' | 'Untrusted';
+}
+
+/**
  * Configuration stored on Action.RuntimeActionConfiguration when Action.Type='Runtime'.
  *
  * Runtime actions are JavaScript payloads executed inside MJ's isolated-vm
@@ -71671,6 +71712,7 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     * * Field Name: Config
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJActionEntity_IActionConfiguration
     * * Description: Optional JSON configuration for the action. For integration actions, contains routing info: integrationName, objectName, verb, and optional connectorConfig. Non-integration actions leave this NULL.
     * * NOTE: Property renamed to `Config_` to avoid conflict with BaseEntity.Config
     */
@@ -71679,6 +71721,21 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     }
     set Config_(value: string | null) {
         this.Set('Config', value);
+    }
+
+    /**
+    * Typed accessor for Config — a live view of the parsed JSON as MJActionEntity_IActionConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Config field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get Config_Object(): MJActionEntity_IActionConfiguration | null {
+        return this.GetJSONFieldObject<MJActionEntity_IActionConfiguration>('Config');
+    }
+    set Config_Object(value: MJActionEntity_IActionConfiguration | null) {
+        this.SetJSONFieldObject<MJActionEntity_IActionConfiguration>('Config', value);
     }
 
     /**
