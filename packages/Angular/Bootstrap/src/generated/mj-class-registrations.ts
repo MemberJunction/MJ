@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (472 classes)
+// @memberjunction/core-entities (476 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -242,6 +242,10 @@ import {
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
+    MJDiagnosticBundleEntity,
+    MJDiagnosticSenderRegistrationEntity,
+    MJDiagnosticSessionChunkEntity,
+    MJDiagnosticSessionEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -1109,6 +1113,10 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
+    MJDiagnosticBundleEntity,
+    MJDiagnosticSenderRegistrationEntity,
+    MJDiagnosticSessionChunkEntity,
+    MJDiagnosticSessionEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -1288,14 +1296,14 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRubricScaleLevelEntity,
     MJRubricVersionEntity,
     MJSQLDialectEntity,
-    MJScheduledJobEntity,
-    MJScheduledJobRunEntity,
-    MJScheduledJobTypeEntity,
-    MJSchemaInfoEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJScheduledJobEntity,
+    MJScheduledJobRunEntity,
+    MJScheduledJobTypeEntity,
+    MJSchemaInfoEntity,
     MJScopedNotificationConfigEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
@@ -1492,14 +1500,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJActionFormComponentExtended,
     MJEntityActionFormComponentExtended,
     MJEntityFormComponentExtended,
-    MJFileFormComponentExtended,
-    MJListFormComponentExtended,
-    MJQueryFormComponentExtended,
-    MJRubricBandFormComponentExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MJFileFormComponentExtended,
+    MJListFormComponentExtended,
+    MJQueryFormComponentExtended,
+    MJRubricBandFormComponentExtended,
     MJRubricCategoryFormComponentExtended,
     MJRubricCriterionFormComponentExtended,
     MJRubricEvaluationFormComponentExtended,
@@ -1686,7 +1694,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 772;
+export const CLASS_REGISTRATIONS_COUNT = 776;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
