@@ -13,14 +13,23 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // integration engine, so stub both — this suite exercises loop behavior only.
 vi.mock('../config.js', () => ({ configInfo: {} }));
 
-const mockUsers: Array<{ ID: string; Email: string }> = [];
+type MockUser = { ID: string; Name: string; Email: string; Type: string; IsActive: boolean };
+const mockUsers: MockUser[] = [];
+const SYSTEM_USER_ID = 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E';
+/** A user row with the fields principal resolution reads. */
+function user(id: string, email: string, overrides: Partial<MockUser> = {}): MockUser {
+    return { ID: id, Name: email, Email: email, Type: 'User', IsActive: true, ...overrides };
+}
 // UserCache lives in generic-database-provider, not sqlserver-dataprovider — it moved there in the
 // platform split. Mocking the old package silently left the service reading the REAL (empty) cache,
 // so all 13 tests failed on "System user not found" rather than on anything they were asserting.
 vi.mock('@memberjunction/generic-database-provider', () => ({
     UserCache: {
         get Users() { return mockUsers; },
-        Instance: { get Users() { return mockUsers; } },
+        Instance: {
+            get Users() { return mockUsers; },
+            get SYSTEM_USER_ID() { return SYSTEM_USER_ID; },
+        },
     },
 }));
 
@@ -61,7 +70,7 @@ describe('IntegrationSyncWorkerService', () => {
     beforeEach(() => {
         vi.useFakeTimers();
         mockUsers.length = 0;
-        mockUsers.push({ ID: 'sys-1', Email: 'system@memberjunction.org' });
+        mockUsers.push(user('sys-1', 'system@memberjunction.org'));
         mockPollQueuedRuns.mockReset().mockResolvedValue([]);
         mockExecuteQueuedRun.mockReset().mockResolvedValue({ Success: true, RecordsProcessed: 0 });
         mockConfig.mockClear();
@@ -99,10 +108,29 @@ describe('IntegrationSyncWorkerService', () => {
 
         it('matches the system user case-insensitively and configures the engine as that user', async () => {
             mockUsers.length = 0;
-            mockUsers.push({ ID: 'sys-1', Email: 'System@MemberJunction.ORG' });
+            const configured = user('sys-1', 'System@MemberJunction.ORG', { Name: 'Sync Runner' });
+            mockUsers.push(configured);
             const svc = new IntegrationSyncWorkerService(makeConfig());
             await svc.Initialize();
-            expect(mockConfig).toHaveBeenCalledWith(false, { ID: 'sys-1', Email: 'System@MemberJunction.ORG' });
+            expect(mockConfig).toHaveBeenCalledWith(false, configured);
+        });
+
+        it('falls back to the system user when no systemUserEmail is configured (#4232)', async () => {
+            mockUsers.length = 0;
+            const system = user(SYSTEM_USER_ID, 'not.set@nowhere.com', { Name: 'System', Type: 'Owner' });
+            mockUsers.push(user('other-1', 'jane@example.com'), system);
+            const svc = new IntegrationSyncWorkerService(makeConfig({ systemUserEmail: undefined }));
+            await svc.Initialize();
+            expect(mockConfig).toHaveBeenCalledWith(false, system);
+        });
+
+        it('does not run as a deactivated user named by the setting (#4232)', async () => {
+            mockUsers.length = 0;
+            const system = user(SYSTEM_USER_ID, 'not.set@nowhere.com', { Name: 'System', Type: 'Owner' });
+            mockUsers.push(user('sys-1', 'system@memberjunction.org', { IsActive: false }), system);
+            const svc = new IntegrationSyncWorkerService(makeConfig());
+            await svc.Initialize();
+            expect(mockConfig).toHaveBeenCalledWith(false, system);
         });
     });
 
@@ -217,7 +245,7 @@ describe('IntegrationSyncWorkerService', () => {
 
         it('executes a claimed run as the system user and frees the slot afterwards', async () => {
             const svc = await startWithOneCandidate({ Success: true, RecordsProcessed: 12 });
-            expect(mockExecuteQueuedRun).toHaveBeenCalledWith('r1', { ID: 'sys-1', Email: 'system@memberjunction.org' });
+            expect(mockExecuteQueuedRun).toHaveBeenCalledWith('r1', user('sys-1', 'system@memberjunction.org'));
             expect(svc.InFlightCount).toBe(0);
             svc.Stop();
         });

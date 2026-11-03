@@ -45,6 +45,11 @@ const userHandlingInfoSchema = z.object({
    * then to the lowest-ID active Owner. See `src/auth/principals.ts`.
    */
   contextUserForNewUserCreation: z.string().optional().default(''),
+  /**
+   * How often, in ms, a setting that names no usable user (`contextUserForNewUserCreation`,
+   * `scheduledJobs.systemUserEmail`, ...) is reported again while it stays wrong. Default 6 hours.
+   */
+  misconfigurationReportIntervalMs: z.number().optional().default(6 * 60 * 60 * 1000),
   CreateUserApplicationRecords: z.boolean().optional().default(false),
   UserApplications: z.array(z.string()).optional().default([]),
   /**
@@ -170,7 +175,12 @@ const componentRegistrySchema = z.object({
 
 const scheduledJobsSchema = z.object({
   enabled: z.boolean().optional().default(false),
-  systemUserEmail: z.string().optional().default('system@memberjunction.org'),
+  /**
+   * The user scheduled jobs run as, matched against `User.Name` then `User.Email`. When unset or
+   * unmatched, resolution falls back to the system user (see `src/auth/principals.ts`). The
+   * default lives in `DEFAULT_SERVER_CONFIG` only, so the two cannot disagree (#4232).
+   */
+  systemUserEmail: z.string().optional(),
   maxConcurrentJobs: z.number().optional().default(5),
   defaultLockTimeout: z.number().optional().default(600000), // 10 minutes in ms
   staleLockCleanupInterval: z.number().optional().default(300000), // 5 minutes in ms
@@ -185,8 +195,12 @@ const scheduledJobsSchema = z.object({
 const integrationSyncWorkerSchema = z.object({
   /** Master switch — off by default so existing deployments keep running syncs inline. */
   enabled: z.boolean().optional().default(false),
-  /** Email of the user the worker executes syncs as. */
-  systemUserEmail: z.string().optional().default('system@memberjunction.org'),
+  /**
+   * The user the worker executes syncs as, matched against `User.Name` then `User.Email`. When
+   * unset or unmatched, resolution falls back to the system user (see `src/auth/principals.ts`).
+   * The default lives in `DEFAULT_SERVER_CONFIG` only (#4232).
+   */
+  systemUserEmail: z.string().optional(),
   /** How often to poll the queue, in ms. */
   pollingIntervalMs: z.number().optional().default(15000),
   /** Maximum runs this worker executes concurrently. */

@@ -114,7 +114,7 @@ import {
   GetCorsOwningServerExtensionRoots,
 } from '@memberjunction/server-extensions-core';
 import { CreateIsolatedProvider } from './isolatedProvider.js';
-import { ResolveConfiguredPrincipal } from './auth/principals.js';
+import { ResolveConfiguredPrincipal, SetMisconfigurationReportInterval } from './auth/principals.js';
 import { CreateExtensionOwnedPreflightFallback, CreateGlobalCorsMiddleware } from './globalCors.js';
 import { CoreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
 import { ApiRoute, ApiRootPath, ConfiguredPublicUrl } from './apiRoot.js';
@@ -191,7 +191,7 @@ export * from './auth/actingContextResolver.js';
 // `ReportedMisconfigurationCount` / `MAX_REPORTED_MISCONFIGURATIONS` are deliberately NOT here:
 // they exist so the LRU's bound is assertable, the tests import them from the module directly, and
 // a published export is a maintenance commitment no caller asked for.
-export { ResolveConfiguredPrincipal, resolvePrincipalFrom } from './auth/principals.js';
+export { ResolveConfiguredPrincipal, resolvePrincipalFrom, SetMisconfigurationReportInterval, DEFAULT_MISCONFIGURATION_REPORT_INTERVAL_MS } from './auth/principals.js';
 export type { ResolvablePrincipal, PrincipalResolution, PrincipalResolutionReason } from './auth/principals.js';
 export { CloneUserForSessionContext } from './auth/sessionUserClone.js';
 
@@ -485,6 +485,9 @@ export const Serve = async (resolverPaths: Array<string>, app: Application = Cre
 const setupComplete$ = new ReplaySubject(1);
   const dbType = GetDbType();
   const dataSources: DataSourceInfo[] = [];
+
+  // How often a setting that names no usable user is reported again while it stays wrong (#4237).
+  SetMisconfigurationReportInterval(configInfo.userHandling?.misconfigurationReportIntervalMs);
 
   // Shared cache first: the database provider loads metadata and startup engines through
   // it, so the first server to start fills it and later servers read it instead of each querying

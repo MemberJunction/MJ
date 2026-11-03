@@ -4,7 +4,7 @@
  */
 
 import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
-import { UserCache } from '@memberjunction/generic-database-provider';
+import { ResolveConfiguredPrincipal } from '../auth/principals.js';
 import { IntegrationEngine } from '@memberjunction/integration-engine';
 import { IntegrationSyncWorkerConfig } from '../config.js';
 
@@ -47,10 +47,10 @@ export class IntegrationSyncWorkerService {
     public async Initialize(): Promise<void> {
         if (!this.config.enabled) return;
 
-        const email = this.config.systemUserEmail;
-        this.systemUser = UserCache.Users.find(u => u.Email?.toLowerCase() === email.toLowerCase()) ?? null;
+        // Name or Email of an active user, falling back to the system user (#4232).
+        this.systemUser = ResolveConfiguredPrincipal(this.config.systemUserEmail, 'IntegrationSyncWorker');
         if (!this.systemUser) {
-            throw new Error(`[IntegrationSyncWorker] System user not found with email: ${email}`);
+            throw new Error(`[IntegrationSyncWorker] No user to run syncs as: integrationSyncWorker.systemUserEmail (${this.config.systemUserEmail ?? 'unset'}) matched no active user, and there is no active system user or Owner.`);
         }
         await IntegrationEngine.Instance.Config(false, this.systemUser);
     }

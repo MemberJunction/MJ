@@ -9,7 +9,7 @@
  * Resolution is a pure function; this file covers the impure shell around it — reading the user
  * cache and deciding how often a misconfiguration is worth saying out loud.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const { mockLogError, mockUsers, SYSTEM_USER_ID } = vi.hoisted(() => ({
     mockLogError: vi.fn(),
@@ -156,5 +156,53 @@ describe('the misconfiguration report stays bounded WITHOUT regressing to per-re
         }
 
         expect(ReportedMisconfigurationCount()).toBeLessThanOrEqual(MAX_REPORTED_MISCONFIGURATIONS);
+    });
+});
+
+describe('a misconfiguration that stays wrong is reported again on an interval (#4237)', () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it('logs once inside the interval and again after it, by default every 6 hours', async () => {
+        vi.useFakeTimers();
+        const { ResolveConfiguredPrincipal, DEFAULT_MISCONFIGURATION_REPORT_INTERVAL_MS } = await loadSubject();
+        expect(DEFAULT_MISCONFIGURATION_REPORT_INTERVAL_MS).toBe(6 * 60 * 60 * 1000);
+
+        ResolveConfiguredPrincipal('ghost@nowhere.example', 'MagicLink');
+        vi.advanceTimersByTime(DEFAULT_MISCONFIGURATION_REPORT_INTERVAL_MS - 1000);
+        ResolveConfiguredPrincipal('ghost@nowhere.example', 'MagicLink');
+        expect(mockLogError).toHaveBeenCalledTimes(1);
+
+        vi.advanceTimersByTime(2000);
+        ResolveConfiguredPrincipal('ghost@nowhere.example', 'MagicLink');
+        expect(mockLogError).toHaveBeenCalledTimes(2);
+    });
+
+    it('a burst of lookups inside a configured interval logs once; the next interval logs again', async () => {
+        vi.useFakeTimers();
+        const { ResolveConfiguredPrincipal, SetMisconfigurationReportInterval } = await loadSubject();
+        SetMisconfigurationReportInterval(60_000);
+
+        for (let i = 0; i < 50; i++) {
+            ResolveConfiguredPrincipal('ghost@nowhere.example', 'ScheduledJobs');
+            vi.advanceTimersByTime(1000);
+        }
+        expect(mockLogError).toHaveBeenCalledTimes(1);
+
+        vi.advanceTimersByTime(10_001);
+        ResolveConfiguredPrincipal('ghost@nowhere.example', 'ScheduledJobs');
+        expect(mockLogError).toHaveBeenCalledTimes(2);
+    });
+
+    it('ignores a non-positive interval and keeps the default', async () => {
+        vi.useFakeTimers();
+        const { ResolveConfiguredPrincipal, SetMisconfigurationReportInterval, DEFAULT_MISCONFIGURATION_REPORT_INTERVAL_MS } = await loadSubject();
+        SetMisconfigurationReportInterval(0);
+
+        ResolveConfiguredPrincipal('ghost@nowhere.example', 'MagicLink');
+        vi.advanceTimersByTime(DEFAULT_MISCONFIGURATION_REPORT_INTERVAL_MS - 1000);
+        ResolveConfiguredPrincipal('ghost@nowhere.example', 'MagicLink');
+        expect(mockLogError).toHaveBeenCalledTimes(1);
     });
 });

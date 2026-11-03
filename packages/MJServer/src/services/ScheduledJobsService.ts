@@ -4,7 +4,7 @@
  */
 
 import { LogError, LogStatus, LogStatusEx, UserInfo } from '@memberjunction/core';
-import { UserCache } from '@memberjunction/generic-database-provider';
+import { ResolveConfiguredPrincipal } from '../auth/principals.js';
 import { SchedulingEngine } from '@memberjunction/scheduling-engine';
 import { ScheduledJobsConfig } from '../config.js';
 
@@ -38,7 +38,7 @@ export class ScheduledJobsService {
             this.systemUser = await this.getSystemUser();
 
             if (!this.systemUser) {
-                throw new Error(`System user not found with email: ${this.config.systemUserEmail}`);
+                throw new Error(`No user to run scheduled jobs as: scheduledJobs.systemUserEmail (${this.config.systemUserEmail ?? 'unset'}) matched no active user, and there is no active system user or Owner.`);
             }
 
             // Pre-load metadata cache
@@ -126,23 +126,11 @@ export class ScheduledJobsService {
     }
 
     /**
-     * Get the system user for job execution
-     * Uses the email configured in scheduledJobs.systemUserEmail
+     * Get the user scheduled jobs run as: `scheduledJobs.systemUserEmail` matched against an
+     * active user's Name or Email, falling back to the system user (#4232).
      */
     private async getSystemUser(): Promise<UserInfo | null> {
-        const systemUserEmail = this.config.systemUserEmail;
-
-        // Search UserCache for system user
-        const user = UserCache.Users.find(u =>
-            u.Email?.toLowerCase() === systemUserEmail.toLowerCase()
-        );
-
-        if (user) {
-            return user;
-        }
-
-        LogError(`[ScheduledJobsService] System user not found with email: ${systemUserEmail}`);
-        return null;
+        return ResolveConfiguredPrincipal(this.config.systemUserEmail, 'ScheduledJobs');
     }
 
     /**

@@ -73,7 +73,7 @@ describe('SessionRunIDVerifier.Verify', () => {
     it('runs the lookup as the system user when one is available', async () => {
         // Row-level security can hide a session's own runs from its owner: a web-widget guest's
         // delegated runs carry no ConversationID, so the guest's run filter does not match them.
-        const systemUser = { ID: UserCache.Instance.SYSTEM_USER_ID, Email: 'system@example.com' } as unknown as UserInfo;
+        const systemUser = { ID: UserCache.Instance.SYSTEM_USER_ID, Email: 'system@example.com', IsActive: true } as unknown as UserInfo;
         UserCache.Instance.SetUsers([systemUser]);
         const { provider, runViews } = makeProvider({ 'MJ: AI Agent Runs': [{ ID: PAUSED_RUN_ID }] });
 
