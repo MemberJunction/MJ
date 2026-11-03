@@ -2,6 +2,9 @@
   {
     "fields": {
       "Name": "Tavily Search",
+      "Config": {
+        "outputTrustLevel": "Untrusted"
+      },
       "Description": "Web search through the Tavily API, built for AI consumption: returns cleaned page content and an optional synthesised answer rather than only links.",
       "DriverClass": "Tavily Search",
       "Type": "Custom",
