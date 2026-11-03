@@ -125,6 +125,12 @@ export const DIAGNOSTIC_SESSION_CHUNK_ENTITY = 'MJ: Diagnostic Session Chunks';
 /** Wait after a failed chunk save before a background save of the same session starts again. */
 const BACKGROUND_SAVE_RETRY_MS = 30_000;
 
+/** How long chunks a save could not write are kept for a session this process no longer holds. */
+export const UNHELD_UNSAVED_CHUNK_TTL_MS = 15 * 60_000;
+
+/** How often kept chunks of sessions no longer held are checked against their time-to-live. */
+const UNSAVED_CHUNK_SWEEP_MS = 60_000;
+
 /** One console method the console tap wraps. */
 interface ConsoleTapMethod {
   method: 'log' | 'warn' | 'error';
@@ -309,6 +315,9 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
   private _sessionWorkTails = new Map<string, Promise<void>>();
   private _queuedSaves = new Map<string, Set<Promise<SavedSessionChunks>>>();
   private _backgroundRetryAfterMs = new Map<string, number>();
+  /** When the unsaved-chunk sweep first saw each session with kept chunks and no longer held. */
+  private _unheldSinceMs = new Map<string, number>();
+  private _unsavedSweepTimer: ReturnType<typeof setInterval> | null = null;
   private _backgroundSave: BackgroundSaveContext | null = null;
 
   public constructor() {
@@ -338,6 +347,8 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     this._sessionWorkTails.clear();
     this._queuedSaves.clear();
     this._backgroundRetryAfterMs.clear();
+    this._unheldSinceMs.clear();
+    this.stopUnsavedChunkSweep();
     this.SyncCaptureHooks();
   }
 
@@ -550,17 +561,71 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
   /** Saves the buffers of a session that ended without Stop, or drops them with a log line when no save user is set. */
   private settleEndedSessionBuffers(sessionId: string): void {
     const pendingBytes = this._pendingBytes.get(sessionId) ?? 0;
-    if (pendingBytes === 0) {
+    if (pendingBytes === 0 && !this._sessionWorkTails.has(sessionId)) {
       return;
     }
     if (this._backgroundSave) {
       this.startBackgroundSave(sessionId, true);
       return;
     }
+    this.queueDropUnsavedEntries(sessionId, 'ended with no user to save its entries');
+  }
+
+  /** Drops a session's unsaved entries now, or after its queued saves and builds finish when any are queued. */
+  private queueDropUnsavedEntries(sessionId: string, reason: string): void {
+    if (!this._sessionWorkTails.has(sessionId)) {
+      this.dropUnsavedEntries(sessionId, reason);
+      return;
+    }
+    void this.runSessionWork(sessionId, async () => this.dropUnsavedEntries(sessionId, reason));
+  }
+
+  /** Drops a session's kept chunks and buffers, and logs the number of entries dropped. */
+  private dropUnsavedEntries(sessionId: string, reason: string): void {
     const dropped = this.DrainPendingBuffersForSession(sessionId).reduce((n, c) => n + c.entryCount, 0);
-    WithoutDiagnosticCapture(() =>
-      LogError(`Diagnostic session '${sessionId}' ended with ${dropped} unsaved entries and no user to save them; the entries were dropped.`)
-    );
+    this._backgroundRetryAfterMs.delete(sessionId);
+    this._unheldSinceMs.delete(sessionId);
+    if (dropped > 0) {
+      WithoutDiagnosticCapture(() => LogError(`Diagnostic session '${sessionId}' ${reason}; ${dropped} unsaved entries were dropped.`));
+    }
+  }
+
+  /**
+   * Drops the kept chunks of each session this process no longer holds once
+   * {@link UNHELD_UNSAVED_CHUNK_TTL_MS} has passed since the sweep first saw it unheld. A held session keeps its chunks.
+   */
+  private sweepUnsavedChunks(): void {
+    const now = Date.now();
+    for (const sessionId of [...this._unsavedChunks.keys()]) {
+      if (this._activeSessions.has(sessionId)) {
+        this._unheldSinceMs.delete(sessionId);
+        continue;
+      }
+      const since = this._unheldSinceMs.get(sessionId);
+      if (since === undefined) {
+        this._unheldSinceMs.set(sessionId, now);
+      } else if (now - since >= UNHELD_UNSAVED_CHUNK_TTL_MS) {
+        this.queueDropUnsavedEntries(sessionId, `was no longer held and its unsaved chunks passed their ${UNHELD_UNSAVED_CHUNK_TTL_MS / 60_000}-minute limit`);
+      }
+    }
+    if (this._unsavedChunks.size === 0) {
+      this.stopUnsavedChunkSweep();
+    }
+  }
+
+  private startUnsavedChunkSweep(): void {
+    if (!this._unsavedSweepTimer) {
+      this._unsavedSweepTimer = setInterval(() => this.sweepUnsavedChunks(), UNSAVED_CHUNK_SWEEP_MS);
+      this._unsavedSweepTimer.unref?.();
+    }
+  }
+
+  private stopUnsavedChunkSweep(): void {
+    if (this._unsavedSweepTimer) {
+      clearInterval(this._unsavedSweepTimer);
+      this._unsavedSweepTimer = null;
+    }
+    this._unheldSinceMs.clear();
   }
 
   /**
@@ -915,6 +980,7 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
   /** Puts chunks a save could not write back in front of the session's unsaved chunks, in order, with their sequence numbers. */
   private retainUnsavedChunks(sessionId: string, chunks: DrainedChunk[]): void {
     this._unsavedChunks.set(sessionId, [...chunks, ...(this._unsavedChunks.get(sessionId) ?? [])]);
+    this.startUnsavedChunkSweep();
     const bytes = chunks.reduce((n, c) => n + c.serializedBytes, 0);
     this._pendingBytes.set(sessionId, (this._pendingBytes.get(sessionId) ?? 0) + bytes);
   }
@@ -1040,6 +1106,7 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
         this.keepFailedChunks(sessionId, drained.slice(index), drained.length, failure);
       } else {
         this._backgroundRetryAfterMs.delete(sessionId);
+        this._unheldSinceMs.delete(sessionId);
       }
       return saved;
     });
@@ -1081,14 +1148,22 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     }
   }
 
-  public async FlushAllPendingChunks(contextUser?: UserInfo): Promise<number> {
-    const sessionIds = new Set<string>();
+  /**
+   * Saves the buffers and kept chunks of every session, as `contextUser` or else the background save
+   * user. A session still waiting after a failed save is skipped. Returns the chunks saved.
+   */
+  public async FlushAllPendingChunks(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<number> {
+    const saver = contextUser ? { contextUser, provider } : this._backgroundSave;
+    const sessionIds = new Set<string>(this._unsavedChunks.keys());
     for (const buf of this._chunkBuffers.values()) {
       sessionIds.add(buf.sessionId);
     }
     let total = 0;
     for (const sid of sessionIds) {
-      total += await this.FlushSessionChunksToDatabase(sid, contextUser);
+      if (Date.now() < (this._backgroundRetryAfterMs.get(sid) ?? 0)) {
+        continue;
+      }
+      total += (await this.SaveSessionChunks(sid, saver?.contextUser, saver?.provider)).ChunksWritten;
     }
     return total;
   }

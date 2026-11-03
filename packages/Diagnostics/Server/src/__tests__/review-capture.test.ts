@@ -361,4 +361,69 @@ describe('diagnostics server capture (review fixes)', () => {
             expect(saved.ChunksWritten).toBe(2);
         });
     });
+    describe('fix round 2', () => {
+        it('drops the kept chunks of a session that is no longer held after their time-to-live, and keeps a held session\'s', async () => {
+            vi.useFakeTimers();
+            const fake = createFakeProvider();
+            fake.FailSaves = true;
+            const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+            manager.RegisterActiveSession(session('session-held-kept', { endsAtMs: Date.now() + 24 * 60 * 60_000 }));
+            manager.AppendToChunkBuffer('session-held-kept', 'Server', 'SQL', sqlEntry);
+            manager.AppendToChunkBuffer('session-unheld-kept', 'Client', 'Logs', { message: 'kept' });
+            await manager.SaveSessionChunks('session-held-kept', ownerUser, fake.Provider);
+            await manager.SaveSessionChunks('session-unheld-kept', ownerUser, fake.Provider);
+
+            await vi.advanceTimersByTimeAsync(16 * 60_000);
+
+            expect(manager.DrainPendingBuffersForSession('session-unheld-kept')).toHaveLength(0);
+            expect(logged.mock.calls.some((c) => c.join(' ').includes('session-unheld-kept') && c.join(' ').includes('dropped'))).toBe(true);
+            expect(manager.DrainPendingBuffersForSession('session-held-kept')).toHaveLength(1);
+        });
+
+        it('drops the chunks a running save puts back when the session expires with no save user', async () => {
+            WatchSessionExpiry(undefined);
+            const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+            let release: (ok: boolean) => void = () => {};
+            const gated = {
+                GetEntityObject: async () => ({
+                    LatestResult: { CompleteMessage: 'chunk save rejected' },
+                    Save: () => new Promise<boolean>((resolve) => (release = resolve)),
+                }),
+                EntityByName: (entity: string) => ({ Name: entity }),
+            } as unknown as IMetadataProvider;
+            vi.useFakeTimers({ toFake: ['Date'] });
+            manager.RegisterActiveSession(session('session-race'));
+            manager.AppendToChunkBuffer('session-race', 'Server', 'SQL', sqlEntry);
+            const saving = manager.SaveSessionChunks('session-race', ownerUser, gated);
+            for (let i = 0; i < 10; i++) await Promise.resolve();
+
+            vi.setSystemTime(Date.now() + 2 * 60_000);
+            expect(manager.GetActiveSession('session-race')).toBeUndefined();
+            release(false);
+            await saving;
+            for (let i = 0; i < 5; i++) await Promise.resolve();
+
+            expect(manager.DrainPendingBuffersForSession('session-race')).toHaveLength(0);
+            expect(logged.mock.calls.some((c) => c.join(' ').includes('session-race') && c.join(' ').includes('dropped'))).toBe(true);
+        });
+
+        it('the poll retries a session that has only kept chunks, after the retry wait', async () => {
+            const fake = createFakeProvider();
+            WatchSessionExpiry(ownerUser, fake.Provider);
+            vi.spyOn(console, 'error').mockImplementation(() => {});
+            vi.useFakeTimers({ toFake: ['Date'] });
+            fake.FailSaves = true;
+            manager.AppendToChunkBuffer('session-poll', 'Client', 'Logs', { message: 'first' });
+            await manager.SaveSessionChunks('session-poll', ownerUser, fake.Provider);
+            fake.FailSaves = false;
+            manager.AppendToChunkBuffer('session-poll', 'Client', 'Network', { url: '/during-wait' });
+
+            await manager.FlushAllPendingChunks();
+            expect(fake.Rows(CHUNK_ENTITY)).toHaveLength(0);
+
+            vi.setSystemTime(Date.now() + 31_000);
+            await manager.FlushAllPendingChunks();
+            expect(fake.Rows(CHUNK_ENTITY)).toHaveLength(2);
+        });
+    });
 });
