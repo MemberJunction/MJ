@@ -415,8 +415,17 @@ describe('ExperimentOrchestrator.runSession', () => {
     await new ExperimentOrchestrator().runSession(rmsePlan, deps(factory, trainer, new FakeClock()), { concurrency: 2, keepTopK: 1 });
     const pruned = factory.Iterations.find((it) => it.Label === 'B')!;
     expect(pruned.Status).toBe('Pruned');
-    expect(pruned.Rationale).toContain('Pruned: dominated branch, scored rmse 20 (top-ranked so far: rmse 10).');
+    expect(pruned.Rationale).toContain('Pruned: dominated branch, scored rmse 20.000 (top-ranked so far: rmse 10.000).');
     expect(pruned.Rationale).not.toMatch(/-10|-20|best/);
+  });
+
+  it("writes a pruned iteration's scores to three decimals, as the other surfaces do, not as raw floats", async () => {
+    const factory = new FakeFactory();
+    const trainer = new FakeTrainer({ A: -0.1, B: -(0.1 + 0.2) });
+    const rmsePlan: ModelingPlanSpec = { ...plan([experiment('A', 1), experiment('B', 2)]), TargetDefinition: { EntityName: 'Members', TargetVariable: 'Y', ProblemType: 'regression', SuccessMetric: 'rmse' } };
+    await new ExperimentOrchestrator().runSession(rmsePlan, deps(factory, trainer, new FakeClock()), { concurrency: 2, keepTopK: 1 });
+    const pruned = factory.Iterations.find((it) => it.Label === 'B')!;
+    expect(pruned.Rationale).toContain('Pruned: dominated branch, scored rmse 0.300 (top-ranked so far: rmse 0.100).');
   });
 
   it('prunes via a relative threshold (below 80% of the best)', async () => {

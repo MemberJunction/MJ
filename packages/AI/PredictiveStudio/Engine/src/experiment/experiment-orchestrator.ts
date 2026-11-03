@@ -563,9 +563,12 @@ export class ExperimentOrchestrator {
     return ok;
   }
 
-  /** A leaderboard entry's normalized score written on its metric's own scale, after its label (Core's one inverse). */
+  /**
+   * A leaderboard entry's normalized score written on its metric's own scale (Core's one inverse), after its label, to
+   * three decimals as the Studio surfaces show it: a raw float would persist as `rmse 0.30000000000000004`.
+   */
   private static onMetricScale(entry: ExperimentLeaderboardEntry): string {
-    return `${MetricDirections.MetricScaleLabel(entry.ScoreMetric)} ${MetricDirections.OnMetricScale(entry.Metric, entry.ScoreMetric)}`;
+    return `${MetricDirections.MetricScaleLabel(entry.ScoreMetric)} ${MetricDirections.OnMetricScale(entry.Metric, entry.ScoreMetric).toFixed(3)}`;
   }
 
   // region: budget gate ---------------------------------------------------------
