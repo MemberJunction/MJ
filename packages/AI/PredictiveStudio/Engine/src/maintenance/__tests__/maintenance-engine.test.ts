@@ -493,6 +493,20 @@ describe('MaintenanceEngine.TriggerRetrainIfStale + CompareChallenger', () => {
     expect(promote.delta).toBeCloseTo(-1.0, 5);
   });
 
+  it('never ranks a pinned closer-to-one metric (calibration slope): it holds and says the metric is not one a model is ranked on', () => {
+    // calibration-slope is closer-to-one: 1.5 is farther from 1 than 0.95, so a higher-is-better reading would
+    // promote the worse-calibrated challenger.
+    const policy: RetrainingPolicy = { ...DEFAULT_RETRAINING_POLICY, comparisonMetric: 'calibration-slope', promotionMargin: 0.1 };
+    const incumbent = new FakeModel('m1');
+    incumbent.HoldoutMetrics = JSON.stringify({ 'calibration-slope': 0.95 });
+    const challenger = new FakeModel('m2');
+    challenger.HoldoutMetrics = JSON.stringify({ 'calibration-slope': 1.5 });
+    const cmp = engine.CompareChallenger(asModel(incumbent), asModel(challenger), policy);
+    expect(cmp.recommendation).toBe('hold');
+    expect(cmp.detail).toContain('"calibration-slope" is not a metric a model is ranked on');
+    expect(cmp.detail).not.toMatch(/does not beat|beats/);
+  });
+
   it('compareChallenger never mutates the models / performs no promotion (pure recommendation)', () => {
     const incumbent = new FakeModel('m1');
     incumbent.HoldoutMetrics = JSON.stringify({ roc_auc: 0.7 });

@@ -350,12 +350,20 @@ export class MaintenanceEngine {
    * direction (positive = better). Returns `null` when either value is absent.
    * For error metrics lower is better → improvement = incumbent − challenger;
    * for higher-is-better metrics → improvement = challenger − incumbent.
+   * A closer-to-one metric (calibration slope) is never ranked, so it gives no
+   * improvement (null → hold).
    */
   private metricImprovement(metric: string, incumbentValue: number | null, challengerValue: number | null): number | null {
     if ((incumbentValue === null || incumbentValue === undefined) || (challengerValue === null || challengerValue === undefined)) {
       return null;
     }
+    if (MaintenanceEngine.isUnrankedMetric(metric)) return null;
     return MetricDirections.IsErrorMetric(metric) ? incumbentValue - challengerValue : challengerValue - incumbentValue;
+  }
+
+  /** Whether a metric's declared direction is closer-to-one: such a metric is never ranked (see `MetricDirections`). */
+  private static isUnrankedMetric(metric: string): boolean {
+    return MetricDirections.MetricDirectionOf(metric) === 'closer-to-one';
   }
 
   /** Decide promote-vs-hold from the directional improvement + margin (hold when unknown). */
@@ -379,6 +387,13 @@ export class MaintenanceEngine {
       return (
         `Could not compare on "${metric}" — ${incumbentValue === null || incumbentValue === undefined ? 'the current model' : 'the new model'} ` +
         `has no holdout value for it. Recommending HOLD until a human reviews. No promotion was performed.`
+      );
+    }
+    if (MaintenanceEngine.isUnrankedMetric(metric)) {
+      return (
+        `The newly-trained model scores ${challengerValue.toFixed(4)} vs the current model's ${incumbentValue.toFixed(4)} ` +
+        `on "${metric}", but "${metric}" is not a metric a model is ranked on (closer to 1 is better calibrated, not a ` +
+        `higher or lower score). Recommending HOLD until a human reviews. No promotion was performed.`
       );
     }
     const verb = recommendation === 'promote' ? 'beats' : 'does not beat';
