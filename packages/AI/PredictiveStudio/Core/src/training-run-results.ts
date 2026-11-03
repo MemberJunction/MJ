@@ -121,6 +121,7 @@ const assemblyRefusalSchema: z.ZodType<AssemblyRefusal> = z.discriminatedUnion('
   z.object({ kind: z.literal('unresolved-column'), entity: z.string(), field: z.string() }),
   z.object({ kind: z.literal('virtual-field'), entity: z.string(), field: z.string() }),
   z.object({ kind: z.literal('unsupported-step-kind'), stepId: z.string(), stepKind: z.string() }),
+  z.object({ kind: z.literal('invalid-date-in-history'), entity: z.string(), field: z.string(), value: z.string() }),
 ]);
 const trainerRefusalSchema: z.ZodType<TrainerRefusal> = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('trainer-failed'), stage: TrainerResultSchemas.TrainerFailureStage, message: z.string(), computeSeconds: z.number().nonnegative() }),

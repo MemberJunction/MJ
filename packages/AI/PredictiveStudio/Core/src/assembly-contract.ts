@@ -100,7 +100,9 @@ export type AssemblyRefusal =
   | { readonly kind: 'unresolved-column'; readonly entity: string; readonly field: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   /** A virtual field read for a row decided before the assembly's day: its value is the joined record's value today; select it through that entity's key. */
   | { readonly kind: 'virtual-field'; readonly entity: string; readonly field: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
-  | { readonly kind: 'unsupported-step-kind'; readonly stepId: string; readonly stepKind: string };  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'unsupported-step-kind'; readonly stepId: string; readonly stepKind: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  /** A Record Changes value or a stored value written as a timestamp that names no valid instant, so it cannot be compared. */
+  | { readonly kind: 'invalid-date-in-history'; readonly entity: string; readonly field: string; readonly value: string };  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
 
 /** What every provenance record names: the matrix column and the dated source it was read from. */
 export interface ProvenanceSource {

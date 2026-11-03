@@ -68,6 +68,9 @@ const SNAPSHOT_DESCRIPTION = 'History snapshot for Predictive Studio as-of cover
  */
 const SNAPSHOT_SAVE_BATCH = 50;
 
+/** Text written as an ISO timestamp: a date, `T`, hours and minutes, optional seconds and fraction, optional zone. */
+const TIMESTAMP_TEXT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/;
+
 /** Replay of `MJ: Record Changes` rows, and the snapshots that start a record's history. */
 export class RecordHistory {
   /**
@@ -94,7 +97,7 @@ export class RecordHistory {
     const byKey = RecordHistory.indexByKey(changes);
     const start = RecordHistory.historyStarts(byKey);
     const created = RecordHistory.creationInstants(byKey);
-    const continuity = RecordHistory.checkContinuity(byKey, start, current, fields);
+    const continuity = RecordHistory.checkContinuity(entityName, byKey, start, current, fields);
     const allCovered = [...current.keys()].every((k) => start.has(k));
     const historyStart = allCovered && start.size > 0 ? new Date(Math.max(...[...start.values()].map((d) => d.getTime()))).toISOString() : null;
     return {
@@ -106,7 +109,7 @@ export class RecordHistory {
         onUncoveredRow: policy.onUncoveredRow,
       },
       ValueAt: (recordKey, field, before) => RecordHistory.valueAt(byKey, start, continuity.Mismatched, policy, recordKey, field, before),
-      ChangesAfter: (recordKey, field, after) => RecordHistory.changesAfter(byKey.get(recordKey.toLowerCase()) || [], field, after),
+      ChangesAfter: (recordKey, field, after) => RecordHistory.changesAfter(entityName, byKey.get(recordKey.toLowerCase()) || [], field, after),
       RowsBefore: (recordKey, before) => RecordHistory.rowsBefore(byKey.get(recordKey.toLowerCase()) || [], before),
       CreatedAt: (recordKey) => created.get(recordKey.toLowerCase()) || null,
     };
@@ -230,7 +233,7 @@ export class RecordHistory {
 
   /** Replays every covered record to now and compares it with the stored value; a mismatch marks that record-field. */
   private static checkContinuity(
-    byKey: ReadonlyMap<string, readonly RecordChangeRow[]>, start: ReadonlyMap<string, Date>,
+    entityName: string, byKey: ReadonlyMap<string, readonly RecordChangeRow[]>, start: ReadonlyMap<string, Date>,
     current: ReadonlyMap<string, Readonly<Record<string, CellValue>>>, fields: readonly string[],
   ): { readonly Mismatched: ReadonlySet<string>; readonly Replayed: number; readonly RecordsMismatched: number } {
     const mismatched = new Set<string>();
@@ -241,19 +244,20 @@ export class RecordHistory {
       replayed++;
       const last = list[list.length - 1];
       for (const f of fields) {
-        if (RecordHistory.comparable(RecordHistory.fieldOf(last.FullRecordJSON, f)) !== RecordHistory.comparable(row[f])) mismatched.add(`${k}|${f}`);
+        if (RecordHistory.comparable(RecordHistory.fieldOf(last.FullRecordJSON, f), entityName, f) !== RecordHistory.comparable(row[f], entityName, f)) mismatched.add(`${k}|${f}`);
       }
     }
     return { Mismatched: mismatched, Replayed: replayed, RecordsMismatched: new Set([...mismatched].map((x) => x.split('|')[0])).size };
   }
 
   /** See {@link EntityHistory.ChangesAfter}; `list` is one record's rows in ChangedAt order. */
-  private static changesAfter(list: readonly RecordChangeRow[], field: string, after: Date): number {
+  private static changesAfter(entityName: string, list: readonly RecordChangeRow[], field: string, after: Date): number {
     let n = 0;
     list.forEach((c, i) => {
       if (c.ChangedAt.getTime() < after.getTime()) return;
       const listsField = c.Type === 'Update' && RecordHistory.changedFields(c.ChangesJSON).has(field);
-      const valueMoved = i > 0 && RecordHistory.comparable(RecordHistory.fieldOf(c.FullRecordJSON, field)) !== RecordHistory.comparable(RecordHistory.fieldOf(list[i - 1].FullRecordJSON, field));
+      const valueMoved = i > 0
+        && RecordHistory.comparable(RecordHistory.fieldOf(c.FullRecordJSON, field), entityName, field) !== RecordHistory.comparable(RecordHistory.fieldOf(list[i - 1].FullRecordJSON, field), entityName, field);
       if (listsField || c.Type === 'Delete' || valueMoved) n++;
     });
     return n;
@@ -306,11 +310,20 @@ export class RecordHistory {
     return new Set(Object.keys(parsed.Value));
   }
 
-  /** A value in the form both sides of the continuity check compare in: blank as '', dates as ISO instants. */
-  private static comparable(v: CellValue): string {
+  /**
+   * A value in the form both sides of a comparison use: blank as '', dates and timestamp text as ISO instants, anything
+   * else as text. Text that only starts like a timestamp (a code such as `2025-01-15T-BATCH-1`) stays text.
+   *
+   * @throws AssemblyRefused `invalid-date-in-history` for timestamp text that names no valid instant (`2025-99-99T00:00`)
+   */
+  private static comparable(v: CellValue, entityName: string, field: string): string {
     if (v === null || v === undefined || v === '') return '';
     if (v instanceof Date) return v.toISOString();
-    if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) return new Date(v).toISOString();
+    if (typeof v === 'string' && TIMESTAMP_TEXT.test(v)) {
+      const instant = new Date(v);
+      if (Number.isNaN(instant.getTime())) throw new AssemblyRefused({ kind: 'invalid-date-in-history', entity: entityName, field, value: v });
+      return instant.toISOString();
+    }
     return String(v);
   }
 }

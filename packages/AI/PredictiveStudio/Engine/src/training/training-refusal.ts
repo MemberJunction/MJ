@@ -43,6 +43,7 @@ export class TrainingRefusedError extends Error {
       case 'unresolved-column': return `Refused (unresolved-column): ${reason.entity}.${reason.field} is not a field the pipeline can read.`;
       case 'virtual-field': return `Refused (virtual-field): ${reason.entity}.${reason.field} is a virtual field joined from a related record, so its stored value is that record's value today and cannot be read for rows decided on earlier days; select the field from the related entity through its key (a select step with Entity and KeyField).`;
       case 'unsupported-step-kind': return `Refused (unsupported-step-kind): step ${reason.stepId} is a ${reason.stepKind} step, which has no as-of reading.`;
+      case 'invalid-date-in-history': return `Refused (invalid-date-in-history): ${reason.entity}.${reason.field} holds "${reason.value}", written as a timestamp that names no valid instant, so its history cannot be checked; correct the value.`;
       case 'trainer-failed': return `Refused (trainer-failed): the trainer stopped at stage ${reason.stage} after ${reason.computeSeconds}s: ${reason.message}`;
       case 'lineage-incomplete': return `Refused (lineage-incomplete): the trainer's CodeVersion lacks ${reason.gaps.join(', ')}.`;
       case 'selection-invalid': return `Refused (selection-invalid): ${reason.reason} — ${reason.detail}`;

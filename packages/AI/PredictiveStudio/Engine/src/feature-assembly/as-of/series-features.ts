@@ -7,6 +7,9 @@
  */
 import { MS_PER_DAY, type DatedSource, type TemporalSpec } from '@memberjunction/predictive-studio-core';
 
+/** 1970-01-01 was a Thursday: shifting by three days makes whole weeks counted from the epoch start on Mondays. */
+const EPOCH_TO_MONDAY_MS = 3 * MS_PER_DAY;
+
 /** A series feature reference, derived from the contract's `series` source (never restated). */
 // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
 export type SeriesFeatureRef = Extract<DatedSource, { kind: 'series' }>['feature'];
@@ -19,14 +22,14 @@ export type SeriesHistory = { readonly Spec: TemporalSpec; readonly ByEntity: Re
 /** Series lags and rolling windows. */
 export class SeriesFeatures {
   /**
-   * Calendar index of a period start, monotonic in time so consecutive periods differ by one: days since the epoch for
-   * daily, year * 12 + month for monthly, the year for yearly. Weekly buckets count whole weeks from the epoch (a
-   * Thursday), so they rely on every point being a period start on one consistent weekday.
+   * Calendar index of a period, monotonic in time so consecutive periods differ by one: days since the epoch for daily,
+   * ISO weeks (Monday to Sunday, as the holdout carve and the trainer bucket weeks) for weekly, year * 12 + month for
+   * monthly, the year for yearly.
    */
   public static PeriodIndex(period: Date, unit: TemporalSpec['period']): number {
     switch (unit) {
       case 'day': return Math.floor(period.getTime() / MS_PER_DAY);
-      case 'week': return Math.floor(period.getTime() / (7 * MS_PER_DAY));
+      case 'week': return Math.floor((period.getTime() + EPOCH_TO_MONDAY_MS) / (7 * MS_PER_DAY));
       case 'month': return period.getUTCFullYear() * 12 + period.getUTCMonth();
       case 'year': return period.getUTCFullYear();
     }

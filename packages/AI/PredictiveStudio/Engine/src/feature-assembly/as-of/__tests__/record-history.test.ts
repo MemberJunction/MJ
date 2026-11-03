@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { EntityInfo, IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 import type { MJRecordChangeEntity } from '@memberjunction/core-entities';
 import { RecordHistory, RunViewRecordHistoryReader, type RecordChangeRow } from '../record-history';
+import { AssemblyRefused } from '../refusal';
 import type { FetchRowsParams, FetchRowsResult, SourceRow } from '../../data-access';
 import type { AssemblyEntityInfo } from '../../assembly-metadata';
 import { TableDataAccess } from '../../../__tests__/fakes/table-data-access';
@@ -136,5 +137,24 @@ describe('RunViewRecordHistoryReader', () => {
     expect(data.Reads.get('People')).toBe(2);
     expect(status.ValueAt('P1', 'Status', new Date('2022-01-01T00:00:00Z'))).toMatchObject({ Status: 'value', Value: 'Active' });
     expect(tier.ValueAt('P2', 'Tier', new Date('2023-01-01T00:00:00Z'))).toMatchObject({ Status: 'value', Value: 'B' });
+  });
+});
+
+describe('BuildEntityHistory — values shaped like timestamps', () => {
+  const policy = { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' } as const;
+  const build = (value: string) => () =>
+    RecordHistory.BuildEntityHistory('People', [rc('c', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Code: value })], new Map([['p1', { ID: 'P1', Code: value }]]), ['Code'], policy, new Date('2026-10-12T00:00:00Z'));
+
+  it('compares a text value that only starts like a timestamp as text', () => {
+    expect(build('2025-01-15T-BATCH-1')().Coverage.continuity.recordsMismatched).toBe(0);
+  });
+  it('refuses a timestamp value that is not a valid instant with a typed refusal naming the entity, field and value', () => {
+    let refusal: unknown = null;
+    try {
+      build('2025-99-99T00:00')();
+    } catch (e) {
+      refusal = e instanceof AssemblyRefused ? e.Refusal : e;
+    }
+    expect(refusal).toEqual({ kind: 'invalid-date-in-history', entity: 'People', field: 'Code', value: '2025-99-99T00:00' });
   });
 });

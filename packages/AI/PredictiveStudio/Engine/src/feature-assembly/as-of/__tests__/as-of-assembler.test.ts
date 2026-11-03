@@ -781,3 +781,15 @@ describe('AsOfFeatureAssembler — child rows are judged at each unit row\'s own
     expect(out.UncoveredRowsExcluded).toEqual([{ entity: 'Gifts', field: 'PersonID', rows: 1 }]);
   });
 });
+
+describe('AsOfFeatureAssembler — an invalid timestamp in a record\'s history', () => {
+  it('returns the typed refusal instead of throwing', async () => {
+    const one: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2022-12-01T00:00:00Z'), Period: null }];
+    const bad = '2025-99-99T00:00';
+    const replayed: FeatureColumnSpec = { name: 'Status', source: { kind: 'record-changes', entity: 'People', field: 'Status', keyField: 'PersonID' }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } };
+    const out = await new AsOfFeatureAssembler().Assemble(input([replayed], { Rows: one, Tables: { Years: [{ ID: 'y1', PersonID: 'P1' }], People: [{ ID: 'P1', Status: bad }] }, Changes: { People: [
+      rc('c0', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: bad }),
+    ] } }));
+    expect(out).toEqual({ Status: 'refused', Refusal: { kind: 'invalid-date-in-history', entity: 'People', field: 'Status', value: bad } });
+  });
+});

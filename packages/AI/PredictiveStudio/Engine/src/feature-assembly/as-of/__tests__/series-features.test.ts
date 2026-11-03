@@ -26,3 +26,13 @@ describe('ComputeSeriesFeature', () => {
     expect(() => SeriesFeatures.ComputeSeriesFeature(history, 'series', new Date(Date.UTC(2006, 5, 1)), spec, { kind: 'rolling', index: 1 })).toThrow(/rolling.*index 1/);
   });
 });
+
+describe('SeriesFeatures.PeriodIndex — weeks', () => {
+  it('puts every day of one ISO week (Monday to Sunday) in one period and the next Monday in the next', () => {
+    const idx = (d: string) => SeriesFeatures.PeriodIndex(new Date(`${d}T00:00:00Z`), 'week');
+    const monday = idx('2025-01-06');
+    expect([idx('2025-01-07'), idx('2025-01-09'), idx('2025-01-12')]).toEqual([monday, monday, monday]);
+    expect(idx('2025-01-13')).toBe(monday + 1);
+    expect(idx('2025-01-05')).toBe(monday - 1);
+  });
+});
