@@ -1108,6 +1108,18 @@ export class BaseEntityEvent {
     ChangedFieldNames?: string[];
 }
 
+/** One field's value in a {@link ChainStateBeforeChildLoad} snapshot. */
+type ChainFieldValue = { name: string; value: unknown };
+
+/** One entity of an IS-A chain as it was before a child's row was loaded into the chain. */
+type ChainStateBeforeChildLoad = {
+    entity: BaseEntity;
+    /** Fields with unsaved edits. */
+    dirtyFields: ChainFieldValue[];
+    /** Clean fields that held loaded values. */
+    loadedFields: ChainFieldValue[];
+};
+
 /**
  * What came of loading the child that an entity's subtype rule named for a loaded record:
  * `'Linked'` (its row loaded and it is linked), `'NotFound'` (its load came back empty), or
@@ -1889,8 +1901,8 @@ export abstract class BaseEntity<T = unknown> {
 
         this._childEntity = childEntity;
 
-        // Capture any pending modifications on this entity or its ancestors before child InnerLoad
-        const dirtySnapshots = this.captureChainDirtyState();
+        // Capture this entity's chain before child InnerLoad: pending edits, and loaded values the child's row may not carry
+        const chainSnapshots = this.captureChainStateForChildLoad();
 
         // Load the child's record using our shared PK
         const loaded = await childEntity.InnerLoad(this.PrimaryKey);
@@ -1900,8 +1912,8 @@ export abstract class BaseEntity<T = unknown> {
             return false;
         }
 
-        // Re-apply any pending modifications so child hydration does not overwrite unsaved in-memory edits
-        this.restoreChainDirtyState(dirtySnapshots);
+        // Restore loaded values the child's row omitted and re-apply unsaved in-memory edits
+        this.restoreChainStateAfterChildLoad(chainSnapshots);
 
         // Recursively discover grandchildren (child may also be a parent type)
         // InitializeChildEntity is idempotent via _childEntityDiscoveryDone flag
@@ -2324,9 +2336,9 @@ export abstract class BaseEntity<T = unknown> {
             this.replaceChildParentChain(childEntity);
             this._childEntity = childEntity;
 
-            const dirtySnapshots = this.captureChainDirtyState();
+            const chainSnapshots = this.captureChainStateForChildLoad();
             await this.loadOrMirrorChildRow(childEntity);
-            this.restoreChainDirtyState(dirtySnapshots);
+            this.restoreChainStateAfterChildLoad(chainSnapshots);
 
             // Recursively discover grandchildren if the child is also a parent type
             if (childEntity.EntityInfo.IsParentType) {
@@ -2350,9 +2362,9 @@ export abstract class BaseEntity<T = unknown> {
             );
             this.replaceChildParentChain(childEntity);
 
-            const dirtySnapshots = this.captureChainDirtyState();
+            const chainSnapshots = this.captureChainStateForChildLoad();
             await this.loadOrMirrorChildRow(childEntity);
-            this.restoreChainDirtyState(dirtySnapshots);
+            this.restoreChainStateAfterChildLoad(chainSnapshots);
 
             if (childEntity.EntityInfo.IsParentType) {
                 await childEntity.EnsureISAChild();
@@ -2631,24 +2643,50 @@ export abstract class BaseEntity<T = unknown> {
         return value == null ? null : NormalizeUUID(String(value));
     }
 
-    private captureChainDirtyState(): Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }> {
-        const snapshots: Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }> = [];
+    /**
+     * Captures this entity's IS-A chain (this entity and its ancestors) before a child's row is
+     * loaded into it. Loading the child hydrates every ancestor from the child's view row, which
+     * resets fields the row does not carry; {@link restoreChainStateAfterChildLoad} puts back what
+     * that reset would lose.
+     */
+    private captureChainStateForChildLoad(): ChainStateBeforeChildLoad[] {
+        const snapshots: ChainStateBeforeChildLoad[] = [];
         let curr: BaseEntity | null = this;
         while (curr) {
-            const dirtyFields = curr.Fields.filter(f => f.Dirty).map(f => ({
-                name: f.Name,
-                value: f.Value,
-            }));
-            if (dirtyFields.length > 0) {
-                snapshots.push({ entity: curr, dirtyFields });
+            const dirtyFields: ChainFieldValue[] = [];
+            const loadedFields: ChainFieldValue[] = [];
+            for (const f of curr.Fields) {
+                if (f.Dirty) {
+                    dirtyFields.push({ name: f.Name, value: f.Value });
+                }
+                else if (!f.NotLoaded) {
+                    loadedFields.push({ name: f.Name, value: f.Value });
+                }
             }
+            snapshots.push({ entity: curr, dirtyFields, loadedFields });
             curr = curr._parentEntity;
         }
         return snapshots;
     }
 
-    private restoreChainDirtyState(snapshots: Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }>): void {
+    /**
+     * Restores what loading a child's row would otherwise lose on the chain captured by
+     * {@link captureChainStateForChildLoad}:
+     * - a loaded value the child's row omitted. A child's view joins its ancestors' base tables, so
+     *   it never carries an ancestor's view-only virtual fields (the joined display names); without
+     *   this they would read back null on any record that has a child (#4403). The value goes back
+     *   as loaded and clean, as the ancestor's own load set it.
+     * - a pending in-memory edit, re-applied so it stays dirty.
+     */
+    private restoreChainStateAfterChildLoad(snapshots: ChainStateBeforeChildLoad[]): void {
         for (const snap of snapshots) {
+            for (const lf of snap.loadedFields) {
+                const field = snap.entity.GetFieldByName(lf.name);
+                if (field?.NotLoaded) {
+                    field.ResetForInPlaceHydration();
+                    field.Value = lf.value;
+                }
+            }
             for (const df of snap.dirtyFields) {
                 snap.entity.Set(df.name, df.value);
             }
