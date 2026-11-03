@@ -100,17 +100,32 @@ export function EscapeFilterByLiteral(value: string): string {
  * it cannot climb out of the folder. A legitimate segment value (a uuid, an enum, an int) is none of these.
  */
 function pathSegmentProblem(value: string): string | null {
-    // Judged as it would be interpolated: control characters are stripped first, so `.\0.` is `..`.
-    const segment = stripPathControlCharacters(value).trim();
+    // Judged as it would be interpolated: control characters are stripped first, so `.\0.` is `..`,
+    // and invisible format characters do not hide a `..` (zero-width space + `..` is `..`).
+    const segment = VisiblePathSegment(stripPathControlCharacters(value));
     if (segment === '..') return 'it is ".." (path traversal)';
     if (segment === '.') return 'it is "." (the enclosing folder)';
     if (/[/\\]/.test(value)) return 'it contains a path separator';
     return null;
 }
 
-/** The control characters a path segment loses before it is interpolated. */
+/**
+ * The characters a path segment loses before it is interpolated: ASCII control characters and Unicode
+ * format characters (`\p{Cf}`: zero-width space/joiners, word joiner, BOM, soft hyphen), so the escaped
+ * value is the same text {@link pathSegmentProblem} judged.
+ */
 function stripPathControlCharacters(value: string): string {
-    return value.replace(/[\0\b\n\r\t\x1a]/g, '');
+    return value.replace(/[\0\b\n\r\t\x1a]/g, '').replace(/\p{Cf}/gu, '');
+}
+
+/**
+ * A path segment as a storage backend sees it: Unicode format characters (`\p{Cf}` — zero-width space,
+ * joiners, word joiner, BOM, soft hyphen) removed, then surrounding whitespace trimmed. `trim()` alone
+ * keeps format characters, so a zero-width-padded `..` would pass a `segment.trim() === '..'` check.
+ * Used by the FolderPath guard and the path escaper so both judge the same visible text.
+ */
+export function VisiblePathSegment(segment: string): string {
+    return segment.replace(/\p{Cf}/gu, '').trim();
 }
 
 /**

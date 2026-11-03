@@ -211,4 +211,18 @@ describe('CheckRenderedFolderPath (storage lane FolderPath restricts the lane to
     it('reports UNUSABLE when raw template syntax survived a render error', () => {
         expect(CheckRenderedFolderPath(TEMPLATE, TEMPLATE).Status).toBe('unusable');
     });
+
+    // trim() keeps Unicode format characters, so zero-width padding used to hide a `..` or an
+    // empty segment from the check while a backend that ignores them saw the real thing (#5645).
+    it('reports UNUSABLE for a ".." or empty segment padded with invisible format characters', () => {
+        for (const pad of ['\u200B', '\u200C', '\u200D', '\u2060', '\uFEFF', '\u00AD']) {
+            expect(CheckRenderedFolderPath(TEMPLATE, `clients/${pad}..${pad}`).Status, `padded .. with U+${pad.codePointAt(0)?.toString(16)}`).toBe('unusable');
+            expect(CheckRenderedFolderPath(TEMPLATE, `clients/${pad}`).Status, `empty segment with U+${pad.codePointAt(0)?.toString(16)}`).toBe('unusable');
+        }
+    });
+
+    it('still accepts a name that merely contains ".." next to format characters', () => {
+        expect(CheckRenderedFolderPath(TEMPLATE, 'clients/Acme..Inc').Status).toBe('usable');
+        expect(CheckRenderedFolderPath(TEMPLATE, 'clients/\u200BAcme..Inc').Status).toBe('usable');
+    });
 });

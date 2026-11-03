@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest';
 
 import {
     EscapeSqlLiteral, EscapeODataLiteral, EscapeJsonValue, EscapeFilterByLiteral,
-    EscapePathSegment, EscapeScopeValueDeep, LaneKindForIndexType, type ScopeLaneKind,
+    EscapePathSegment, EscapeScopeValueDeep, LaneKindForIndexType, VisiblePathSegment, type ScopeLaneKind,
 } from '../generic/ScopeValueEscaper';
 import { RenderScopeTemplate } from '../generic/ScopeTemplateRenderer';
 import type { SearchContext } from '../generic/search.types';
@@ -74,6 +74,23 @@ describe('each escaper neutralises its own dialect', () => {
         const iso = '2026-07-28T10:30:00Z';
         expect(EscapeFilterByLiteral(iso)).toBe(iso);
         for (const kind of ALL_KINDS) expect(EscapeScopeValueDeep(iso, kind)).toBe(iso);
+    });
+
+    it('path: REFUSES "..", "." and empty-looking values hidden by invisible format characters (#5645)', () => {
+        for (const pad of ['\u200B', '\u200C', '\u200D', '\u2060', '\uFEFF', '\u00AD']) {
+            expect(() => EscapePathSegment(`${pad}..${pad}`)).toThrow(/path traversal/);
+            expect(() => EscapePathSegment(`.${pad}.`)).toThrow(/path traversal/);
+            expect(() => EscapePathSegment(`${pad}.`)).toThrow(/enclosing folder/);
+        }
+        // The escaped value is the text that was judged: format characters are removed.
+        expect(EscapePathSegment('Acme\u200B..Inc')).toBe('Acme..Inc');
+        expect(EscapePathSegment('Acme..Inc')).toBe('Acme..Inc');
+    });
+
+    it('VisiblePathSegment removes format characters, then trims', () => {
+        expect(VisiblePathSegment(' \u200B..\u2060 ')).toBe('..');
+        expect(VisiblePathSegment('\uFEFF')).toBe('');
+        expect(VisiblePathSegment('tenant-a')).toBe('tenant-a');
     });
 
     it('path: REFUSES traversal and separators instead of stripping them into a wider path', () => {

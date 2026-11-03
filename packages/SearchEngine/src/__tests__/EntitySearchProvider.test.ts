@@ -67,7 +67,7 @@ vi.mock('@memberjunction/core', async () => {
     };
 });
 
-import { EntitySearchProvider } from '../generic/EntitySearchProvider';
+import { EntitySearchProvider, ClassifyKeywordMatch, ScoreKeywordMatch } from '../generic/EntitySearchProvider';
 import type { UserInfo } from '@memberjunction/core';
 
 /**
@@ -257,7 +257,7 @@ describe('EntitySearchProvider', () => {
             const results = await provider.Search('Alice', 10, undefined, contextUser);
 
             expect(results).toHaveLength(1);
-            // Name field match gets nameBoost of 0.35, so score should be >= 0.50
+            // A prefix match on a name field scores in the prefix tier (0.70-0.85)
             expect(results[0].Score).toBeGreaterThanOrEqual(0.50);
         });
 
@@ -502,6 +502,63 @@ describe('EntitySearchProvider', () => {
      * Reading `record.ID` yielded '' for every entity whose key isn't called ID, and SearchFusion
      * drops empty RecordIDs, so this lane silently contributed nothing for those entities.
      */
+    // #5643: the score sets the keyword lane's rank order, which RRF reads. With the old formula
+    // (0.15 + 0.45 × matched/total) an exact match on an entity with many searchable fields ranked
+    // below a loose substring match on an entity with few. Match-kind tiers fix the order.
+    describe('Search — match-kind tiers rank exact above prefix above contains', () => {
+        function wideEntity(name: string, fieldCount: number) {
+            const fields = [{ Name: 'Name', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 1 }];
+            for (let i = 1; i < fieldCount; i++) {
+                fields.push({ Name: `Field${i}`, IncludeInUserSearchAPI: true, IsNameField: false, Sequence: i + 1 });
+            }
+            return { Name: name, AllowUserSearchAPI: true, Fields: fields, NameField: { Name: 'Name' } };
+        }
+
+        it('an exact match on a 12-field entity outranks a contains match on a 2-field entity; prefix sits between', async () => {
+            mockEntities.push(wideEntity('Contacts', 12));
+            mockEntities.push(wideEntity('Notes', 2));
+            mockEntities.push(wideEntity('Leads', 3));
+            mockRunViewFn.mockImplementation(async (params: { EntityName: string }) => {
+                if (params.EntityName === 'Contacts') {
+                    // exact, on a non-name field (Field1), one field of twelve
+                    return { Success: true, Results: [{ ID: 'c1', Name: 'Pat Doe', Field1: 'pat@example.com' }] };
+                }
+                if (params.EntityName === 'Notes') {
+                    // contains, on the name field and the other field: two of two
+                    return { Success: true, Results: [{ ID: 'n1', Name: 're: pat@example.com.au', Field1: 'cc pat@example.com.au' }] };
+                }
+                // prefix, on a non-name field
+                return { Success: true, Results: [{ ID: 'l1', Name: 'Lead', Field1: 'pat@example.com (old)' }] };
+            });
+
+            const results = await provider.Search('pat@example.com', 10, undefined, contextUser);
+            const score = (entity: string) => results.find(r => r.EntityName === entity)?.Score ?? -1;
+
+            expect(score('Contacts')).toBeGreaterThan(score('Leads'));
+            expect(score('Leads')).toBeGreaterThan(score('Notes'));
+        });
+
+        it('the match is case-insensitive', () => {
+            expect(ClassifyKeywordMatch('acme-001', 'acme-001')).toBe('exact');
+            expect(ClassifyKeywordMatch('acme-0012', 'acme-001')).toBe('prefix');
+            expect(ClassifyKeywordMatch('x acme-001', 'acme-001')).toBe('contains');
+            expect(ClassifyKeywordMatch('other', 'acme-001')).toBeNull();
+        });
+
+        it('tiers do not overlap: the name boost and field ratio only reorder within a tier', () => {
+            const containsMax = ScoreKeywordMatch('contains', true, 1);
+            const prefixMin = ScoreKeywordMatch('prefix', false, 0);
+            const prefixMax = ScoreKeywordMatch('prefix', true, 1);
+            const exactMin = ScoreKeywordMatch('exact', false, 0);
+            expect(containsMax).toBeLessThan(prefixMin);
+            expect(prefixMax).toBeLessThan(exactMin);
+            expect(ScoreKeywordMatch('exact', true, 1)).toBeLessThan(1);
+            // Within a tier the name field wins over more matched fields
+            expect(ScoreKeywordMatch('prefix', true, 0.1)).toBeGreaterThan(ScoreKeywordMatch('prefix', false, 1));
+            expect(ScoreKeywordMatch('exact', true, 0.1)).toBeGreaterThan(ScoreKeywordMatch('exact', false, 1));
+        });
+    });
+
     describe('Search — RecordID honors the entity primary key', () => {
         it('uses the value of a single primary key that is not named ID', async () => {
             mockEntities.push({

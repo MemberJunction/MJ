@@ -47,6 +47,41 @@ export type EntitySearchIncompleteReport = {
     FailedEntities: string[];
 };
 
+/** How a searchable field value matched the keyword query, strongest last. */
+type KeywordMatchKind = 'contains' | 'prefix' | 'exact';
+
+const KEYWORD_MATCH_RANK: Record<KeywordMatchKind, number> = { contains: 0, prefix: 1, exact: 2 };
+
+/**
+ * How a lower-cased field value matches the lower-cased query: `exact` (equal), `prefix` (starts with
+ * it), `contains` (anywhere), or null when it does not contain the query at all.
+ */
+export function ClassifyKeywordMatch(valueLower: string, queryLower: string): KeywordMatchKind | null {
+    if (valueLower === queryLower) return 'exact';
+    if (valueLower.startsWith(queryLower)) return 'prefix';
+    if (valueLower.includes(queryLower)) return 'contains';
+    return null;
+}
+
+/**
+ * Keyword-lane score for a record. The tiers do not overlap (contains 0.15-0.65 < prefix 0.70-0.85 <
+ * exact 0.90-0.99), so the match kind decides the rank; the name-field boost and then the field ratio
+ * only order records within a tier.
+ * @param kind the best match kind over the record's searchable fields
+ * @param onNameField whether a match of that kind is on a name field
+ * @param fieldRatio matched searchable fields ÷ searchable fields (0-1)
+ */
+export function ScoreKeywordMatch(kind: KeywordMatchKind, onNameField: boolean, fieldRatio: number): number {
+    switch (kind) {
+        case 'exact':
+            return 0.90 + fieldRatio * 0.04 + (onNameField ? 0.05 : 0);
+        case 'prefix':
+            return 0.70 + fieldRatio * 0.05 + (onNameField ? 0.10 : 0);
+        case 'contains':
+            return Math.min(0.15 + fieldRatio * 0.30 + (onNameField ? 0.20 : 0), 0.65);
+    }
+}
+
 /**
  * Provides entity-level LIKE-based search using RunView + UserSearchString.
  * Searches all entities where AllowUserSearchAPI=true, returning results
@@ -487,8 +522,15 @@ export class EntitySearchProvider extends BaseSearchProvider {
 
     /**
      * Convert RunView results to SearchResultItem format with field-match relevance scores.
-     * Score is based on how many searchable fields contain the query and whether
-     * the match is in a name/title field (higher weight) vs description/other fields.
+     *
+     * Each record is scored by its best match kind over the searchable fields (case-insensitive),
+     * in tiers that do not overlap, so an exact match always outranks a prefix match, which always
+     * outranks a substring match — whatever the entity's number of searchable fields:
+     * - exact (a field value equals the query): 0.90 + 0.04 × ratio, +0.05 on a name field
+     * - prefix (a field value starts with the query): 0.70 + 0.05 × ratio, +0.10 on a name field
+     * - contains: 0.15 + 0.30 × ratio, +0.20 on a name field, capped at 0.65
+     * where ratio = matched searchable fields ÷ searchable fields.
+     * The field count only orders hits within a tier. RRF reads the order, not the value.
      */
     private convertResults(
         records: Record<string, unknown>[],
@@ -517,30 +559,32 @@ export class EntitySearchProvider extends BaseSearchProvider {
             const title = this.extractTitle(record, entityInfo);
             const snippet = this.extractSnippet(record, entityInfo);
 
-            // Calculate relevance: check how many fields match the query
+            // Calculate relevance: how many fields match the query, and the best kind of match
             let matchedFields = 0;
-            let nameFieldMatch = false;
+            let best: KeywordMatchKind | null = null;
+            let bestOnNameField = false;
             for (const field of searchFields) {
                 const val = record[field.Name];
-                if (val != null && String(val).toLowerCase().includes(queryLower)) {
-                    matchedFields++;
-                    if (nameFields.some(nf => nf.Name === field.Name)) {
-                        nameFieldMatch = true;
-                    }
+                if (val == null) continue;
+                const kind = ClassifyKeywordMatch(String(val).toLowerCase(), queryLower);
+                if (kind == null) continue;
+                matchedFields++;
+                const onNameField = nameFields.some(nf => nf.Name === field.Name);
+                const rank = KEYWORD_MATCH_RANK[kind];
+                if (best == null || rank > KEYWORD_MATCH_RANK[best]) {
+                    best = kind;
+                    bestOnNameField = onNameField;
+                } else if (kind === best && onNameField) {
+                    bestOnNameField = true;
                 }
             }
 
             // If zero searchable fields matched the query in memory, do not assign a baseline score — drop the record.
-            if (matchedFields === 0) {
+            if (best == null) {
                 return null;
             }
 
-            // Score: base from field match ratio, boost for name field matches
-            // Range: ~0.15 (weak match in one field) to ~0.95 (name field + multiple fields)
-            const fieldRatio = matchedFields / totalSearchableFields;
-            const baseScore = 0.15 + (fieldRatio * 0.45); // 0.15 to 0.60
-            const nameBoost = nameFieldMatch ? 0.35 : 0;  // +0.35 for name field match
-            const score = Math.min(baseScore + nameBoost, 0.95);
+            const score = ScoreKeywordMatch(best, bestOnNameField, matchedFields / totalSearchableFields);
 
             const entityDisplayName = entityInfo?.DisplayName || entityName;
             const resultItem: SearchResultItem = {
