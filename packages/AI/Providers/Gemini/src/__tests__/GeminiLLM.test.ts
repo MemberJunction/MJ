@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
+import * as actualChatTypes from '../../../../Core/src/generic/chat.types';
 import { ApiError } from '@google/genai';
 
 /* ------------------------------------------------------------------ */
@@ -117,6 +118,7 @@ vi.mock('@memberjunction/ai', () => {
     GeneratedImage: MockGeneratedImage,
     BaseRealtimeModel: MockBaseRealtimeModel,
     BaseEmbeddings: class {},
+    NormalizeFinishReason: actualChatTypes.NormalizeFinishReason,
   };
 });
 
@@ -778,11 +780,11 @@ describe('GeminiLLM — native tool calling', () => {
       expect(String(result.errorMessage)).toContain('No output received from model');
     });
 
-    it('leaves toolCalls undefined and finish_reason untouched on an ordinary turn', async () => {
+    it("leaves toolCalls undefined and normalizes Gemini's STOP to 'stop' on an ordinary turn", async () => {
       const result = await run({ messages: [{ role: 'user', content: 'x' }] });
 
       expect(result.data.choices[0].message.toolCalls).toBeUndefined();
-      expect(result.data.choices[0].finish_reason).toBe('STOP');
+      expect(result.data.choices[0].finish_reason).toBe('stop');
     });
   });
 });

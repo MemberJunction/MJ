@@ -197,10 +197,8 @@ export interface ChatReasoningBlock {
  * The normalized `finish_reason` a driver reports when the model ended its turn by calling one or
  * more tools. Consumers branch on this rather than on any provider-specific stop reason.
  *
- * This is currently the ONLY normalized value: every other `finish_reason` is whatever the driver's
- * SDK returned (`'stop'`, `"completed"`, `"STOP"`, …). Normalizing the rest is tracked in
- * MemberJunction/MJ#4335, which must preserve unrecognized values rather than map onto a closed
- * union — a shipped action overloads the field as a channel selector.
+ * Drivers report every other reason through {@link NormalizeFinishReason}, so the common cases
+ * read the same on every provider (`'stop'`, `'length'`, `'content_filter'`, `'tool_calls'`).
  */
 export const CHAT_FINISH_REASON_TOOL_CALLS = 'tool_calls';
 
@@ -220,6 +218,70 @@ export const CHAT_FINISH_REASON_MALFORMED_TOOL_CALL = 'malformed_tool_call';
  * carries no `toolCalls`; the agent loop turns it into a corrective retry.
  */
 export const CHAT_FINISH_REASON_UNEXPECTED_TOOL_CALL = 'unexpected_tool_call';
+
+/** The model finished its answer, or hit a stop sequence. */
+export const CHAT_FINISH_REASON_STOP = 'stop';
+
+/** The answer was cut off at the output token limit. */
+export const CHAT_FINISH_REASON_LENGTH = 'length';
+
+/** The provider withheld or ended the answer for safety or policy reasons. */
+export const CHAT_FINISH_REASON_CONTENT_FILTER = 'content_filter';
+
+/**
+ * Provider stop reasons with a normalized equivalent, keyed by the provider's value in lower case.
+ * OpenAI's own values (`stop`, `length`, `content_filter`, `tool_calls`) are the normalized set.
+ */
+const FINISH_REASON_MAP: Readonly<Record<string, string>> = {
+    // The normalized values themselves, so another casing (Gemini's STOP) normalizes too
+    stop: CHAT_FINISH_REASON_STOP,
+    length: CHAT_FINISH_REASON_LENGTH,
+    content_filter: CHAT_FINISH_REASON_CONTENT_FILTER,
+    tool_calls: CHAT_FINISH_REASON_TOOL_CALLS,
+    // Anthropic
+    end_turn: CHAT_FINISH_REASON_STOP,
+    stop_sequence: CHAT_FINISH_REASON_STOP,
+    max_tokens: CHAT_FINISH_REASON_LENGTH,
+    refusal: CHAT_FINISH_REASON_CONTENT_FILTER,
+    tool_use: CHAT_FINISH_REASON_TOOL_CALLS,
+    // Gemini (upper case on the wire)
+    safety: CHAT_FINISH_REASON_CONTENT_FILTER,
+    recitation: CHAT_FINISH_REASON_CONTENT_FILTER,
+    blocklist: CHAT_FINISH_REASON_CONTENT_FILTER,
+    prohibited_content: CHAT_FINISH_REASON_CONTENT_FILTER,
+    spii: CHAT_FINISH_REASON_CONTENT_FILTER,
+    image_safety: CHAT_FINISH_REASON_CONTENT_FILTER,
+    model_armor: CHAT_FINISH_REASON_CONTENT_FILTER,
+    // Bedrock Converse
+    guardrail_intervened: CHAT_FINISH_REASON_CONTENT_FILTER,
+    content_filtered: CHAT_FINISH_REASON_CONTENT_FILTER,
+    // Mistral / Ollama
+    model_length: CHAT_FINISH_REASON_LENGTH,
+    // Amazon Titan on Bedrock
+    finish: CHAT_FINISH_REASON_STOP,
+    // Driver-local spellings
+    completed: CHAT_FINISH_REASON_STOP,
+};
+
+/**
+ * Maps a provider's stop reason to MJ's normalized `finish_reason` (#4335).
+ *
+ * Anthropic `end_turn`/`stop_sequence` and Gemini `STOP` become `'stop'`; `max_tokens`/`MAX_TOKENS`
+ * become `'length'`; refusals and safety blocks become `'content_filter'`; `tool_use` becomes
+ * `'tool_calls'`. OpenAI-style values pass through. A value with no mapping is returned unchanged,
+ * because `finish_reason` is a string, not a closed union: a caller may read a provider value MJ
+ * does not know, and a shipped action uses the field as a channel selector. An empty or missing
+ * value gives `fallback`.
+ *
+ * @param raw The provider's stop reason
+ * @param fallback The value for an empty or missing reason (default `'stop'`)
+ */
+export function NormalizeFinishReason(raw: string | null | undefined, fallback: string = CHAT_FINISH_REASON_STOP): string {
+    if (raw == null || raw.trim() === '') {
+        return fallback;
+    }
+    return FINISH_REASON_MAP[raw.trim().toLowerCase()] ?? raw;
+}
 
 /**
  * Defines the shape of an individual chat message.
@@ -581,6 +643,11 @@ export type ChatResultLogProbs = {
  */
 export type ChatResultChoice = {
     message: ChatCompletionMessage
+    /**
+     * Why the model stopped. Drivers normalize it with {@link NormalizeFinishReason}: `'stop'`,
+     * `'length'`, `'content_filter'` and `'tool_calls'` mean the same on every provider. A provider
+     * value with no normalized form is passed through unchanged, so this stays a string.
+     */
     finish_reason: string
     index: number
     logprobs?: ChatResultLogProbs | null
