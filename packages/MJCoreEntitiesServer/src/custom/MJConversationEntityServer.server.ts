@@ -1,39 +1,47 @@
-import { BaseEntity, EntitySaveOptions, ValidationErrorInfo, ValidationErrorType, ValidationResult, WellKnownUserSource } from '@memberjunction/core';
+import {
+    BaseEntity,
+    BaseEntityResult,
+    EntitySaveOptions,
+    IMetadataProvider,
+    ValidationErrorInfo,
+    ValidationErrorType,
+    ValidationResult,
+    WellKnownUserSource
+} from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     CanonicalizeConversationAdditionalData,
+    IsConversationHiddenByFieldSecurity,
     IsInheritingFolderAccess,
     IsInheritingFolderAccessInSQL,
     MJConversationEntity,
+    MergeRestrictedFieldsIntoAnchorMetadata,
+    ParseConversationAnchorMetadata,
+    UserCanReadLinkedRecord
 } from '@memberjunction/core-entities';
 import { CheckAnonymousOwnershipKeyChange, IsSetByTransactionVariable } from './anonymousOwnershipKeyGuard';
 
 /**
  * Server-side `MJ: Conversations` entity.
  *
- * Keeps `ExternalID` — the scope identity an anonymous visitor's realtime session is owned through — out
- * of an anonymous visitor's reach once the conversation exists. See {@link CheckAnonymousOwnershipKeyChange}.
- * Keeps who a conversation belongs to and who it is shared with in its owner's hands: see
- * {@link checkOwnerOnlyChange}. Uses the synchronous `Validate()` so the rules run on every save, like
- * `MJAIAgentSessionEntityServer`.
- *
- * Saves `AdditionalData` as compact JSON when it holds an object, so the stored text always uses the spelling
- * the conversation list's SQL filter matches (`INHERIT_FOLDER_ACCESS_SQL_CLAUSE`), and refuses a value the filter
- * and the parser would still read differently: see {@link checkInheritanceReadingsAgree}.
+ * 1. Keeps `ExternalID` — the scope identity an anonymous visitor's realtime session is owned through — out
+ *    of an anonymous visitor's reach once the conversation exists. See {@link CheckAnonymousOwnershipKeyChange}.
+ * 2. Keeps who a conversation belongs to and who it is shared with in its owner's hands: see
+ *    {@link checkOwnerOnlyChange}. Uses the synchronous `Validate()` so the rules run on every save, like
+ *    `MJAIAgentSessionEntityServer`.
+ * 3. Saves `AdditionalData` as compact JSON when it holds an object, so the stored text always uses the spelling
+ *    the conversation list's SQL filter matches (`INHERIT_FOLDER_ACCESS_SQL_CLAUSE`), and refuses a value the filter
+ *    and the parser would still read differently: see {@link checkInheritanceReadingsAgree}.
+ * 4. Enforces Row-Level Security (RLS) and Field-Level Security (FLS) on anchored conversations
+ *    (`LinkedEntityID` + `LinkedRecordID` / `AnchorType`):
+ *    - Verifies the saving user can read the linked record (`UserCanReadLinkedRecord`).
+ *    - Verifies the saving user is not denied Read access on the anchored field or `restrictedFields`
+ *      (`IsConversationHiddenByFieldSecurity`).
+ *    - When `AnchorType === 'Field'` targets an FLS-governed field (`HasFieldPermissions === true`),
+ *      automatically stamps that canonical field name into `AnchorMetadataObject.restrictedFields`.
  */
 @RegisterClass(BaseEntity, 'MJ: Conversations')
 export class MJConversationEntityServer extends MJConversationEntity {
-    public override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        const additionalData = this.GetFieldByName('AdditionalData');
-        if (additionalData?.Dirty) {
-            const canonical = CanonicalizeConversationAdditionalData(additionalData.Value as string | null);
-            if (canonical !== additionalData.Value) {
-                additionalData.Value = canonical;
-            }
-        }
-        return super.Save(options);
-    }
-
     public override Validate(): ValidationResult {
         const result = super.Validate();
         for (const violation of [
@@ -47,6 +55,131 @@ export class MJConversationEntityServer extends MJConversationEntity {
             }
         }
         return result;
+    }
+
+    public override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        const additionalData = typeof this.GetFieldByName === 'function' ? this.GetFieldByName('AdditionalData') : undefined;
+        if (additionalData?.Dirty) {
+            const canonical = CanonicalizeConversationAdditionalData(additionalData.Value as string | null);
+            if (canonical !== additionalData.Value) {
+                additionalData.Value = canonical;
+            }
+        }
+        const refusal = await this.checkAnchoredConversationAccessAndStampMetadata();
+        if (refusal) {
+            this.recordSaveDenied(refusal);
+            return false;
+        }
+        return super.Save(options);
+    }
+
+    private async checkAnchoredConversationAccessAndStampMetadata(): Promise<string | null> {
+        if (!this.LinkedEntityID || !this.LinkedRecordID) {
+            return null;
+        }
+
+        const provider = this.ProviderToUse as unknown as IMetadataProvider;
+        const entityInfo =
+            (typeof provider?.EntityByID === 'function'
+                ? provider.EntityByID(this.LinkedEntityID)
+                : undefined) ??
+            provider?.Entities?.find((e) => UUIDsEqual(e.ID, this.LinkedEntityID)) ??
+            null;
+
+        if (this.AnchorType && entityInfo && entityInfo.AllowRecordComments === false) {
+            return `Record commenting is disabled for ${entityInfo.DisplayNameOrName}.`;
+        }
+
+        // Security invariant: never persist quotedValue snapshots for restricted (FLS) or encrypted fields,
+        // so protected field values cannot escape into plain AnchorMetadata JSON, Record Changes, or indexes.
+        if (entityInfo && this.AnchorType === 'Field' && this.AnchorKey) {
+            const targetLower = this.AnchorKey.trim().toLowerCase();
+            const targetField = entityInfo.Fields.find(
+                (f) => f.Name.toLowerCase() === targetLower
+            );
+            if (targetField && (targetField.HasFieldPermissions || targetField.Encrypt)) {
+                const existingMeta = ParseConversationAnchorMetadata(
+                    this.AnchorMetadataObject ?? this.AnchorMetadata
+                );
+                if (existingMeta && existingMeta.quotedValue !== undefined) {
+                    const sanitized = { ...existingMeta };
+                    delete sanitized.quotedValue;
+                    this.AnchorMetadataObject = sanitized;
+                }
+            }
+        }
+
+        // Auto-stamp restrictedFields when anchored directly to an FLS-governed field
+        if (entityInfo?.FieldLevelSecurityApplies && this.AnchorType === 'Field' && this.AnchorKey) {
+            const targetLower = this.AnchorKey.trim().toLowerCase();
+            const flsField = entityInfo.Fields.find(
+                (f) => f.HasFieldPermissions && f.Name.toLowerCase() === targetLower
+            );
+            if (flsField) {
+                const existingMeta = ParseConversationAnchorMetadata(
+                    this.AnchorMetadataObject ?? this.AnchorMetadata
+                );
+                const { Metadata, Changed } = MergeRestrictedFieldsIntoAnchorMetadata(existingMeta, [
+                    flsField.Name
+                ]);
+                if (Changed) {
+                    this.AnchorMetadataObject = Metadata;
+                }
+            }
+        }
+
+        if (provider?.ProviderType !== 'Database') {
+            return null;
+        }
+
+        const user = this.ContextCurrentUser;
+        if (!user || WellKnownUserSource.Instance.IsSystemUser(user)) {
+            return null;
+        }
+
+        const recordAccess = await UserCanReadLinkedRecord(
+            provider,
+            user,
+            this.LinkedEntityID,
+            this.LinkedRecordID
+        );
+        if (!recordAccess.Allowed) {
+            return recordAccess.Reason ?? 'You do not have access to the linked record.';
+        }
+
+        if (
+            this.AnchorType &&
+            recordAccess.EntityInfo &&
+            typeof recordAccess.EntityInfo.CanUserComment === 'function' &&
+            !recordAccess.EntityInfo.CanUserComment(user)
+        ) {
+            return `You do not have permission to post or modify comments on ${recordAccess.EntityInfo.DisplayNameOrName} records.`;
+        }
+
+        // fls-guard: block creating or updating a conversation anchored to a restricted field the user cannot read
+        if (
+            IsConversationHiddenByFieldSecurity(
+                recordAccess.EntityInfo,
+                user,
+                this.AnchorType,
+                this.AnchorKey,
+                this.AnchorMetadataObject ?? this.AnchorMetadata
+            )
+        ) {
+            return 'You do not have permission to access or comment on this restricted field.';
+        }
+
+        return null;
+    }
+
+    private recordSaveDenied(message: string): void {
+        const result = new BaseEntityResult();
+        result.Success = false;
+        result.Type = this.IsSaved ? 'update' : 'create';
+        result.Message = message;
+        result.StartedAt = new Date();
+        result.EndedAt = new Date();
+        this.RegisterResultHistoryEntry(result);
     }
 }
 

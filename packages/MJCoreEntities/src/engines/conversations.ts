@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, EntityEventRowIsFree, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, type RunViewParams, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, EntityEventRowIsFree, EntityInfo, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, type RunViewParams, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
 import { ChatMessage } from "@memberjunction/ai";
 import { EscapeSQLString, IndexByUUID, NormalizeUUID, ToEpochMs, UUIDMap, UUIDSet, UUIDsEqual } from "@memberjunction/global";
 import { BehaviorSubject, Observable } from "rxjs";
@@ -19,6 +19,13 @@ import {
 import type { MJResourcePermissionEntity } from "../generated/entity_subclasses";
 import { ArtifactMetadataEngine } from "./artifacts";
 import { ResourcePermissionEngine } from "../custom/ResourcePermissions/ResourcePermissionEngine";
+import {
+    ConversationAnchorMetadata,
+    ConversationAnchorType,
+    FilterAnchoredConversationsForUser,
+    IsConversationHiddenByFieldSecurity,
+    ParseConversationAnchorMetadata
+} from "../custom/AnchoredConversationSecurity";
 
 /**
  * `MJ: Resource Types.ID` for Conversations. Conversations that the current
@@ -211,6 +218,183 @@ export interface CreateConversationOptions {
      * (UUID, int, composite).
      */
     linkedRecordId?: string | null;
+    /**
+     * Structural anchor category when this conversation represents an anchored
+     * comment thread on a record or sub-target (`Record`, `Field`, `Section`,
+     * `Group`, `Contribution`, `DocBlock`, `SlideRegion`, `SheetRange`).
+     */
+    anchorType?: ConversationAnchorType;
+    /**
+     * Sub-target key within the linked record (field name, section key, group key, etc.).
+     */
+    anchorKey?: string | null;
+    /**
+     * Structured anchor metadata snapshot (`IConversationAnchorMetadata`).
+     */
+    anchorMetadata?: ConversationAnchorMetadata | null;
+}
+
+/**
+ * Filter options for {@link ConversationEngine.LoadAnchoredConversations}.
+ */
+export interface LoadAnchoredConversationsOptions {
+    /** Whether to include resolved threads (`IsResolved = 1`). Defaults to `true`. */
+    includeResolved?: boolean;
+    /** Optional filter by a specific `AnchorType`. */
+    anchorType?: ConversationAnchorType;
+    /** Optional filter by a specific `AnchorKey`. */
+    anchorKey?: string;
+    /** Optional explicit metadata provider (falls back to `ConversationEngine.ProviderToUse`). */
+    provider?: IMetadataProvider;
+    /** Force bypassing RunView cache. */
+    bypassCache?: boolean;
+}
+
+/**
+ * Parameters for creating a new anchored comment thread on a record or sub-target
+ * via {@link ConversationEngine.CreateAnchoredConversation}.
+ */
+export interface CreateAnchoredConversationParams {
+    /** Display name for the thread (defaults to anchor display label or record comment title). */
+    name?: string;
+    /** Optional environment ID. */
+    environmentId?: string;
+    /** Target entity ID (`MJ: Entities.ID`). */
+    linkedEntityId: string;
+    /** Target record serialized primary key. */
+    linkedRecordId: string;
+    /** Structural anchor category (`Record`, `Field`, `Section`, `Group`, `Contribution`, etc.). */
+    anchorType: NonNullable<ConversationAnchorType>;
+    /** Target key within the record (`FieldName`, `SectionKey`, `GroupKey`, etc.). Null for `Record`. */
+    anchorKey?: string | null;
+    /** Anchor snapshot metadata (`quotedValue`, `fieldName`, `sectionKey`, `groupKey`, etc.). */
+    anchorMetadata?: ConversationAnchorMetadata | null;
+    /** Optional first message to post immediately in the newly created thread. */
+    initialMessage?: string;
+    /** Optional AI agent to associate with the conversation (`DefaultAgentID`). */
+    defaultAgentId?: string | null;
+    /** Optional explicit metadata provider. */
+    provider?: IMetadataProvider;
+}
+
+/**
+ * Aggregated open and resolved comment counts across a record's fields, sections,
+ * left-nav rail groups, and contributions.
+ */
+export interface AnchoredCommentRollup {
+    /** Total unresolved anchored threads visible to the user on this record. */
+    TotalOpenCount: number;
+    /** Total resolved anchored threads visible to the user on this record. */
+    TotalResolvedCount: number;
+    /** Open threads anchored directly at the whole-record level (`AnchorType === 'Record'`). */
+    RecordLevelOpenCount: number;
+    /** Open thread counts keyed by normalized (lowercase) field name (`AnchorType === 'Field'`). */
+    ByField: ReadonlyMap<string, number>;
+    /**
+     * Open thread counts keyed by section key (`AnchorType === 'Section'` PLUS any open
+     * field threads whose `AnchorMetadataObject.sectionKey` belongs to that section).
+     */
+    BySection: ReadonlyMap<string, number>;
+    /**
+     * Open thread counts keyed by left-nav rail group key (`AnchorType === 'Group'` PLUS
+     * any open section/field threads whose `AnchorMetadataObject.groupKey` belongs to that group).
+     */
+    ByGroup: ReadonlyMap<string, number>;
+    /** Open thread counts keyed by contribution key (`AnchorType === 'Contribution'`). */
+    ByContribution: ReadonlyMap<string, number>;
+}
+
+/**
+ * Pure rollup helper that computes open and resolved anchored comment counts across
+ * fields, sections, groups, and contributions, while enforcing FLS visibility when
+ * `entityInfo` and `currentUser` are provided.
+ */
+export function ComputeAnchoredCommentCounts(
+    conversations: ReadonlyArray<Pick<MJConversationEntity, 'AnchorType' | 'AnchorKey' | 'AnchorMetadata' | 'AnchorMetadataObject' | 'IsResolved'>>,
+    currentUser?: UserInfo | null,
+    entityInfo?: EntityInfo | null
+): AnchoredCommentRollup {
+    let totalOpenCount = 0;
+    let totalResolvedCount = 0;
+    let recordLevelOpenCount = 0;
+    const byField = new Map<string, number>();
+    const bySection = new Map<string, number>();
+    const byGroup = new Map<string, number>();
+    const byContribution = new Map<string, number>();
+
+    for (const conv of conversations) {
+        if (!conv.AnchorType) {
+            continue;
+        }
+        if (
+            currentUser &&
+            entityInfo &&
+            IsConversationHiddenByFieldSecurity(
+                entityInfo,
+                currentUser,
+                conv.AnchorType,
+                conv.AnchorKey,
+                conv.AnchorMetadataObject ?? conv.AnchorMetadata
+            )
+        ) {
+            continue;
+        }
+        if (conv.IsResolved) {
+            totalResolvedCount++;
+            continue;
+        }
+
+        totalOpenCount++;
+        const meta = ParseConversationAnchorMetadata(conv.AnchorMetadataObject ?? conv.AnchorMetadata);
+        const rawKey = conv.AnchorKey?.trim() ?? '';
+
+        if (conv.AnchorType === 'Record') {
+            recordLevelOpenCount++;
+        } else if (conv.AnchorType === 'Field') {
+            const fieldKey = (rawKey || meta?.fieldName?.trim() || '').toLowerCase();
+            if (fieldKey) {
+                byField.set(fieldKey, (byField.get(fieldKey) ?? 0) + 1);
+            }
+        } else if (conv.AnchorType === 'Section') {
+            const sectionKey = rawKey || meta?.sectionKey?.trim() || '';
+            if (sectionKey) {
+                bySection.set(sectionKey, (bySection.get(sectionKey) ?? 0) + 1);
+            }
+        } else if (conv.AnchorType === 'Group') {
+            const groupKey = rawKey || meta?.groupKey?.trim() || '';
+            if (groupKey) {
+                byGroup.set(groupKey, (byGroup.get(groupKey) ?? 0) + 1);
+            }
+        } else if (conv.AnchorType === 'Contribution') {
+            if (rawKey) {
+                byContribution.set(rawKey, (byContribution.get(rawKey) ?? 0) + 1);
+            }
+        }
+
+        // Roll up Field threads into their parent Section and Group when metadata provides them
+        if (conv.AnchorType !== 'Section' && meta?.sectionKey) {
+            const secKey = meta.sectionKey.trim();
+            if (secKey) {
+                bySection.set(secKey, (bySection.get(secKey) ?? 0) + 1);
+            }
+        }
+        if (conv.AnchorType !== 'Group' && meta?.groupKey) {
+            const grpKey = meta.groupKey.trim();
+            if (grpKey) {
+                byGroup.set(grpKey, (byGroup.get(grpKey) ?? 0) + 1);
+            }
+        }
+    }
+
+    return {
+        TotalOpenCount: totalOpenCount,
+        TotalResolvedCount: totalResolvedCount,
+        RecordLevelOpenCount: recordLevelOpenCount,
+        ByField: byField,
+        BySection: bySection,
+        ByGroup: byGroup,
+        ByContribution: byContribution
+    };
 }
 
 /**
@@ -1183,7 +1367,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         environmentId: string,
         contextUser: UserInfo,
         forceRefresh: boolean = false,
-        options?: { includeApplicationScoped?: boolean }
+        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean; includeRecordLinked?: boolean }
     ): Promise<void> {
         // Skip if already loaded for this environment (unless forcing)
         if (!forceRefresh && this._lastEnvironmentId === environmentId && this._conversations$.value.length > 0) {
@@ -1424,7 +1608,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     public async GetVisibleConversationsFilter(
         environmentId: string,
         contextUser: UserInfo,
-        options?: { includeApplicationScoped?: boolean }
+        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean; includeRecordLinked?: boolean }
     ): Promise<string> {
         const sharedPermissions = await this.getSharedConversationPermissions(contextUser);
         const sharedProjectIds = this.getSharedProjectIds(environmentId);
@@ -1621,7 +1805,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         environmentId: string,
         userId: string,
         sharedConversationIds: string[],
-        options?: { includeApplicationScoped?: boolean },
+        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean; includeRecordLinked?: boolean },
         sharedProjectIds: string[] = []
     ): string {
         const ownershipClause = `UserID='${userId}'`;
@@ -1638,7 +1822,17 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const scopeClause = options?.includeApplicationScoped
             ? ''
             : ` AND ApplicationScope IN ('Global', 'Both')`;
-        return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}${sharedFolderClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}`;
+        // Anchored record/document comment threads live inside the target record's
+        // comment drawer/popover and should not clutter the main Chat sidebar list.
+        const anchorClause = options?.includeAnchored
+            ? ''
+            : ` AND AnchorType IS NULL`;
+        // Record-bound AI conversations (e.g. "Ask AI" on an entity record form) stay
+        // attached to their owning record and do not pollute the general-purpose Chat sidebar.
+        const recordLinkedClause = options?.includeRecordLinked
+            ? ''
+            : ` AND LinkedEntityID IS NULL`;
+        return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}${sharedFolderClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}${anchorClause}${recordLinkedClause}`;
     }
 
     /**
@@ -2078,6 +2272,15 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         if (options?.linkedRecordId !== undefined) {
             conversation.LinkedRecordID = options.linkedRecordId;
         }
+        if (options?.anchorType !== undefined) {
+            conversation.AnchorType = options.anchorType;
+        }
+        if (options?.anchorKey !== undefined) {
+            conversation.AnchorKey = options.anchorKey;
+        }
+        if (options?.anchorMetadata !== undefined) {
+            conversation.AnchorMetadataObject = options.anchorMetadata;
+        }
 
         // Guard our own save event: the engine's BaseEntity event handler
         // (handleConversationEntityEvent) ALSO prepends a conversation it doesn't yet
@@ -2106,11 +2309,267 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // out on next refresh.
         // The GetConversation() check is belt-and-suspenders against a save event that
         // slips past _selfMutating (e.g. async dispatch) — never add the same ID twice.
-        if (conversation.ApplicationScope !== 'Application' && !this.GetConversation(conversation.ID)) {
+        if (
+            conversation.ApplicationScope !== 'Application' &&
+            conversation.AnchorType == null &&
+            conversation.LinkedEntityID == null &&
+            !this.GetConversation(conversation.ID)
+        ) {
             const updated = [conversation, ...this._conversations$.value];
             this._conversations$.next(updated);
         }
         return conversation;
+    }
+
+    /**
+     * Loads non-anchored AI conversations (`AnchorType IS NULL`) bound to a specific
+     * `(linkedEntityId, linkedRecordId)` for `contextUser`, ordered by most-recently updated.
+     * Used by `<mj-chat-agents-overlay>` ("Ask AI") when a user opens an entity record form.
+     */
+    public async LoadRecordConversations(
+        linkedEntityId: string,
+        linkedRecordId: string,
+        contextUser: UserInfo,
+        environmentId?: string,
+        provider?: IMetadataProvider
+    ): Promise<MJConversationEntity[]> {
+        const cleanEntityId = linkedEntityId?.trim();
+        const cleanRecordId = linkedRecordId?.trim();
+        if (!cleanEntityId || !cleanRecordId || !contextUser?.ID) {
+            return [];
+        }
+
+        const md = provider ?? this.ProviderToUse;
+        const rv = RunView.FromMetadataProvider(md);
+        const safeEntityId = EscapeSQLString(cleanEntityId);
+        const safeRecordId = EscapeSQLString(cleanRecordId);
+        const safeUserId = EscapeSQLString(contextUser.ID);
+        const envClause = environmentId?.trim()
+            ? ` AND EnvironmentID='${EscapeSQLString(environmentId.trim())}'`
+            : '';
+
+        const result = await rv.RunView<MJConversationEntity>(
+            {
+                EntityName: 'MJ: Conversations',
+                ExtraFilter:
+                    `LinkedEntityID='${safeEntityId}'` +
+                    ` AND (LinkedRecordID='${safeRecordId}' OR LinkedRecordID='ID|${safeRecordId}')` +
+                    ` AND AnchorType IS NULL` +
+                    ` AND UserID='${safeUserId}'` +
+                    ` AND (IsArchived IS NULL OR IsArchived=0)` +
+                    envClause,
+                OrderBy: '__mj_UpdatedAt DESC',
+                MaxRows: 50,
+                ResultType: 'entity_object'
+            },
+            contextUser
+        );
+
+        return result.Success && result.Results ? result.Results : [];
+    }
+
+    // ========================================================================
+    // ANCHORED RECORD CONVERSATIONS & COMMENT THREADS
+    // ========================================================================
+
+    /**
+     * Loads all anchored conversations (`AnchorType IS NOT NULL`) attached to a specific
+     * `(linkedEntityId, linkedRecordId)` that `contextUser` is authorized to see under both
+     * row-level security (RLS on the linked record) and field-level security (FLS on the
+     * anchored field or any `restrictedFields` stamped in `AnchorMetadataObject`).
+     */
+    public async LoadAnchoredConversations(
+        linkedEntityId: string,
+        linkedRecordId: string,
+        contextUser: UserInfo,
+        options?: LoadAnchoredConversationsOptions
+    ): Promise<MJConversationEntity[]> {
+        const provider = options?.provider ?? this.ProviderToUse;
+        const clauses: string[] = [
+            `LinkedEntityID='${EscapeSQLString(linkedEntityId)}'`,
+            `LinkedRecordID='${EscapeSQLString(linkedRecordId)}'`,
+            `AnchorType IS NOT NULL`,
+            `(IsArchived IS NULL OR IsArchived=0)`
+        ];
+        if (options?.includeResolved === false) {
+            clauses.push(`IsResolved=0`);
+        }
+        if (options?.anchorType) {
+            clauses.push(`AnchorType='${EscapeSQLString(options.anchorType)}'`);
+        }
+        if (options?.anchorKey !== undefined) {
+            clauses.push(`AnchorKey='${EscapeSQLString(options.anchorKey)}'`);
+        }
+
+        const rv = RunView.FromMetadataProvider(provider);
+        const result = await rv.RunView<MJConversationEntity>(
+            {
+                EntityName: 'MJ: Conversations',
+                ExtraFilter: clauses.join(' AND '),
+                OrderBy: 'IsResolved ASC, __mj_UpdatedAt DESC',
+                ResultType: 'entity_object',
+                BypassCache: options?.bypassCache ?? false
+            },
+            contextUser
+        );
+        if (!result.Success || !result.Results) {
+            return [];
+        }
+
+        return FilterAnchoredConversationsForUser(provider, contextUser, result.Results);
+    }
+
+    /**
+     * Loads all `MJ: Conversation Details` rows for the given anchored conversation IDs,
+     * grouped by normalized `ConversationID` in chronological `Sequence ASC, __mj_CreatedAt ASC` order.
+     */
+    public async LoadAnchoredConversationDetails(
+        conversationIds: ReadonlyArray<string>,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider,
+        bypassCache: boolean = false
+    ): Promise<Map<string, MJConversationDetailEntity[]>> {
+        const byConversationId = new Map<string, MJConversationDetailEntity[]>();
+        const cleanIds = conversationIds.map(id => id?.trim()).filter((id): id is string => !!id);
+        if (cleanIds.length === 0) {
+            return byConversationId;
+        }
+        for (const id of cleanIds) {
+            byConversationId.set(NormalizeUUID(id), []);
+        }
+
+        const md = provider ?? this.ProviderToUse;
+        const rv = RunView.FromMetadataProvider(md);
+        const inList = cleanIds.map(id => `'${EscapeSQLString(id)}'`).join(',');
+        const result = await rv.RunView<MJConversationDetailEntity>(
+            {
+                EntityName: 'MJ: Conversation Details',
+                ExtraFilter: `ConversationID IN (${inList}) AND (HiddenToUser IS NULL OR HiddenToUser=0) AND ReplacedAt IS NULL`,
+                OrderBy: 'Sequence ASC, __mj_CreatedAt ASC',
+                ResultType: 'entity_object',
+                BypassCache: bypassCache
+            },
+            contextUser
+        );
+
+        if (result.Success && result.Results) {
+            for (const detail of result.Results) {
+                const key = NormalizeUUID(detail.ConversationID);
+                const list = byConversationId.get(key) ?? [];
+                list.push(detail);
+                byConversationId.set(key, list);
+            }
+        }
+        return byConversationId;
+    }
+
+    /**
+     * Creates a new anchored comment thread (`MJ: Conversations` with `AnchorType`, `AnchorKey`,
+     * and `AnchorMetadataObject`) bound to `(linkedEntityId, linkedRecordId)`, and optionally
+     * posts the opening `MJ: Conversation Details` message.
+     */
+    public async CreateAnchoredConversation(
+        params: CreateAnchoredConversationParams,
+        contextUser: UserInfo
+    ): Promise<{ Conversation: MJConversationEntity; InitialDetail: MJConversationDetailEntity | null }> {
+        const md = params.provider ?? this.ProviderToUse;
+        const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+        conversation.NewRecord();
+
+        const fallbackName = params.anchorMetadata?.anchorDisplayName
+            || params.anchorMetadata?.sectionDisplayName
+            || params.anchorMetadata?.groupDisplayName
+            || params.anchorKey
+            || `${params.anchorType} Comment`;
+        conversation.Name = (params.name?.trim() || fallbackName).slice(0, 255);
+        if (params.environmentId) {
+            conversation.EnvironmentID = params.environmentId;
+        } else if (this._lastEnvironmentId) {
+            conversation.EnvironmentID = this._lastEnvironmentId;
+        }
+        conversation.UserID = contextUser.ID;
+        conversation.ApplicationScope = 'Global';
+        conversation.LinkedEntityID = params.linkedEntityId;
+        conversation.LinkedRecordID = params.linkedRecordId;
+        conversation.AnchorType = params.anchorType;
+        conversation.AnchorKey = params.anchorKey ?? null;
+        conversation.AnchorMetadataObject = params.anchorMetadata ?? null;
+        if (params.defaultAgentId !== undefined) {
+            conversation.DefaultAgentID = params.defaultAgentId;
+        }
+
+        this._selfMutating = true;
+        try {
+            const saved = await conversation.Save();
+            if (!saved) {
+                throw new Error(conversation.LatestResult?.CompleteMessage || conversation.LatestResult?.Message || 'Failed to create anchored conversation');
+            }
+        } finally {
+            this._selfMutating = false;
+        }
+
+        let initialDetail: MJConversationDetailEntity | null = null;
+        const messageText = params.initialMessage?.trim();
+        if (messageText) {
+            initialDetail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', contextUser);
+            initialDetail.NewRecord();
+            initialDetail.ConversationID = conversation.ID;
+            initialDetail.UserID = contextUser.ID;
+            initialDetail.Role = 'User';
+            initialDetail.Message = messageText;
+            const detailSaved = await initialDetail.Save();
+            if (!detailSaved) {
+                throw new Error(initialDetail.LatestResult?.CompleteMessage || initialDetail.LatestResult?.Message || 'Failed to save initial comment message');
+            }
+        }
+
+        return { Conversation: conversation, InitialDetail: initialDetail };
+    }
+
+    /**
+     * Marks an anchored conversation thread as resolved or re-opened (`IsResolved`,
+     * `ResolvedByUserID`, `ResolvedAt`).
+     */
+    public async SetConversationResolved(
+        conversationId: string,
+        isResolved: boolean,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<MJConversationEntity> {
+        const md = provider ?? this.ProviderToUse;
+        const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+        const loaded = await conversation.Load(conversationId);
+        if (!loaded) {
+            throw new Error(`Conversation ${conversationId} not found`);
+        }
+
+        conversation.IsResolved = isResolved;
+        conversation.ResolvedByUserID = isResolved ? contextUser.ID : null;
+        conversation.ResolvedAt = isResolved ? new Date() : null;
+
+        this._selfMutating = true;
+        try {
+            const saved = await conversation.Save();
+            if (!saved) {
+                throw new Error(conversation.LatestResult?.CompleteMessage || conversation.LatestResult?.Message || 'Failed to update conversation resolution status');
+            }
+        } finally {
+            this._selfMutating = false;
+        }
+
+        return conversation;
+    }
+
+    /**
+     * Computes open and resolved anchored comment counts across fields, sections, groups,
+     * and contributions for a record, respecting FLS for `currentUser`.
+     */
+    public ComputeAnchoredCommentCounts(
+        conversations: ReadonlyArray<Pick<MJConversationEntity, 'AnchorType' | 'AnchorKey' | 'AnchorMetadata' | 'AnchorMetadataObject' | 'IsResolved'>>,
+        currentUser?: UserInfo | null,
+        entityInfo?: EntityInfo | null
+    ): AnchoredCommentRollup {
+        return ComputeAnchoredCommentCounts(conversations, currentUser, entityInfo);
     }
 
     /**
@@ -2147,9 +2606,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return null;
         }
 
-        // App-scoped conversations live inside their owning Application's embedded surface,
-        // not the main-chat list this engine caches — mirror CreateConversation and skip them.
-        if (conversation.ApplicationScope === 'Application') {
+        // App-scoped, anchored, and record-bound conversations live inside their owning
+        // surface, not the main-chat list this engine caches — mirror CreateConversation and skip them.
+        if (
+            conversation.ApplicationScope === 'Application' ||
+            conversation.AnchorType != null ||
+            conversation.LinkedEntityID != null
+        ) {
             return conversation;
         }
 
@@ -4534,12 +4997,20 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 // app-scoped rows live in their owning surface (see CreateConversation), and
                 // archived rows don't belong in the active list.
                 const scope = data['ApplicationScope'] as string | undefined;
+                const anchorType = data['AnchorType'] as string | null | undefined;
+                const linkedEntityId = data['LinkedEntityID'] as string | null | undefined;
                 const environmentId = data['EnvironmentID'] as string | undefined;
                 const isArchived = data['IsArchived'] === true;
                 const inLoadedEnvironment =
                     !this._lastEnvironmentId ||
                     (environmentId != null && UUIDsEqual(environmentId, this._lastEnvironmentId));
-                if (scope !== 'Application' && !isArchived && inLoadedEnvironment) {
+                if (
+                    scope !== 'Application' &&
+                    anchorType == null &&
+                    linkedEntityId == null &&
+                    !isArchived &&
+                    inLoadedEnvironment
+                ) {
                     this._conversations$.next([event.baseEntity as MJConversationEntity, ...this._conversations$.value]);
                     this.reconcileFolderSharedConversations();
                 }

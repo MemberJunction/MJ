@@ -39,6 +39,8 @@ export * from './custom/sessionConfigGuard';
 export * from './custom/MJAIAgentSessionEntityServer.server';
 export * from './custom/anonymousOwnershipKeyGuard';
 export * from './custom/MJConversationEntityServer.server';
+export * from './custom/RestrictedFieldCommentClassifier';
+export * from './custom/AnchoredConversationReadSecurityHook';
 export * from './custom/MJProjectEntityServer.server';
 export * from './custom/MJAIAgentSessionBridgeParticipantEntityServer.server';
 export * from './custom/MJAIRemoteBrowserProviderEntityServer.server';
