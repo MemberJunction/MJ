@@ -456,6 +456,8 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   private hasCodeBlocks: boolean = false;
   private themeObserver: MutationObserver | null = null;
   private diagramViewers: DiagramViewerInstance[] = [];
+  private renderSeq = 0;
+  private isDestroyed = false;
 
   constructor(
     private elementRef: ElementRef<HTMLElement>,
@@ -479,13 +481,15 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   ngAfterViewInit(): void {
     // Initial render if data was provided
     if (this.Data) {
-      this.postRenderProcessing();
+      void this.postRenderProcessing(this.renderSeq);
     }
 
     this.setupThemeObserver();
   }
 
   ngOnDestroy(): void {
+    this.isDestroyed = true;
+    this.renderSeq++;
     this.themeObserver?.disconnect();
     this.themeObserver = null;
     this.destroyDiagramViewers();
@@ -503,6 +507,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
    * Render the markdown content
    */
   private render(): void {
+    const seq = ++this.renderSeq;
     this.destroyDiagramViewers();
     if (!this.Data) {
       this.RenderedContent = '';
@@ -560,14 +565,15 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     this.cdr.markForCheck();
 
     // Schedule post-render processing for next tick (after DOM update)
-    Promise.resolve().then(() => this.postRenderProcessing());
+    Promise.resolve().then(() => this.postRenderProcessing(seq));
   }
 
   /**
    * Process rendered content after DOM update
    * Handles syntax highlighting, mermaid rendering, interactive MJ diagrams, copy buttons, etc.
    */
-  private async postRenderProcessing(): Promise<void> {
+  private async postRenderProcessing(seq = this.renderSeq): Promise<void> {
+    if (this.isDestroyed || seq !== this.renderSeq) return;
     const container = this.elementRef.nativeElement.querySelector('.mj-markdown-container');
     if (!container) return;
 
@@ -592,6 +598,7 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     if (this.hasMath) {
       if (this.EnableMath) {
         await this.markdownService.RenderMath(container as HTMLElement);
+        if (this.isDestroyed || seq !== this.renderSeq) return;
       } else {
         this.markdownService.UseUnicodeMathLetters(container as HTMLElement);
       }
@@ -600,10 +607,12 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     // Render mermaid diagrams (async)
     if (this.EnableMermaid && this.hasMermaid) {
       await this.markdownService.renderMermaid(container as HTMLElement);
+      if (this.isDestroyed || seq !== this.renderSeq) return;
     }
 
     // Upgrade any MJ Interactive Diagram SVGs (`svg[data-mj-diagram="1"]`) embedded in markdown
-    this.mountEmbeddedInteractiveDiagrams(container as HTMLElement);
+    await this.mountEmbeddedInteractiveDiagrams(container as HTMLElement, seq);
+    if (this.isDestroyed || seq !== this.renderSeq) return;
 
     // Setup heading click listeners
     if (this.EnableHeadingIds) {
@@ -666,10 +675,45 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   }
 
   /**
-   * Upgrades rendered MJ diagram SVGs in place. They are already in the DOM and already sanitized by
-   * MarkdownService.Parse, so they are mounted as they are, not re-serialized and re-parsed.
+   * Loads the MJ diagram renderer on demand when a fenced ```mj-diagram block is encountered.
    */
-  private mountEmbeddedInteractiveDiagrams(container: HTMLElement): void {
+  public LoadDiagramRenderer(): Promise<typeof import('@memberjunction/ai-diagrams')> {
+    // MEASURED BUNDLE DEFERRAL: load @memberjunction/ai-diagrams (and @dagrejs/dagre) only when an mj-diagram fence is present
+    return import('@memberjunction/ai-diagrams');
+  }
+
+  /**
+   * Upgrades rendered MJ diagram SVGs (`svg[data-mj-diagram="1"]`) and fenced ```mj-diagram JSON spec
+   * blocks in place into interactive diagram viewers.
+   */
+  private async mountEmbeddedInteractiveDiagrams(container: HTMLElement, seq: number): Promise<void> {
+    if (!this.EnableSvgRenderer) return;
+    const fences = container.querySelectorAll<HTMLElement>('pre > code.language-mj-diagram');
+    if (fences.length > 0) {
+      try {
+        const { RenderDiagram } = await this.LoadDiagramRenderer();
+        if (this.isDestroyed || seq !== this.renderSeq) return;
+        fences.forEach((codeEl) => {
+          const pre = codeEl.parentElement;
+          const raw = codeEl.textContent?.trim();
+          if (!pre || !raw) return;
+          try {
+            const rendered = RenderDiagram(JSON.parse(raw));
+            if (rendered.Success) {
+              const wrapper = document.createElement('div');
+              wrapper.className = 'svg-rendered';
+              wrapper.innerHTML = this.markdownService.SanitizeHtml(rendered.Svg);
+              pre.replaceWith(wrapper);
+            }
+          } catch {
+            // Leave malformed JSON blocks as code
+          }
+        });
+      } catch (error: unknown) {
+        console.warn('Failed to load the MJ diagram renderer:', error);
+      }
+    }
+    if (this.isDestroyed || seq !== this.renderSeq) return;
     container.querySelectorAll<SVGSVGElement>('svg[data-mj-diagram="1"]').forEach((svg) => {
       if (!svg.closest('.mjd-shell')) {
         this.diagramViewers.push(MountDiagramViewer(svg));
