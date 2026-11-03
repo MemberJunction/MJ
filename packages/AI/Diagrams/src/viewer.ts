@@ -613,12 +613,6 @@ function sourcesOf(subset: EdgeRecord[]): string[] {
     return roots.length > 0 ? roots : subset.slice(0, 1).map((e) => e.from);
 }
 
-function mainSteps(edges: EdgeRecord[]): FlowStep[] {
-    const main = edges.filter((e) => e.main);
-    const subset = main.length > 0 ? main : edges;
-    return computeBeats(subset, sourcesOf(subset), 'down');
-}
-
 function createFlowRun(doc: Document, layer: SVGGElement, step: FlowStep, t0: number): FlowRun | null {
     const orig = step.edge.el.querySelector<SVGPathElement>('path:not(.mjd-hit)');
     if (!orig || typeof orig.getTotalLength !== 'function') return null;
@@ -709,7 +703,6 @@ class DiagramViewer implements DiagramViewerInstance {
         const viewBoxWidth = Number(Svg.getAttribute('viewBox')?.split(/[\s,]+/)[2]);
         if (viewBoxWidth > 0) this.shell.style.setProperty('--mjd-min-w', `${Math.round(viewBoxWidth * MIN_SCALE)}px`);
         this.bindEvents();
-        this.playFlow(mainSteps(this.index.edges));
     }
 
     public Clear(): void {
@@ -717,7 +710,7 @@ class DiagramViewer implements DiagramViewerInstance {
         this.highlight(null, null);
         this.panel.dataset.empty = 'true';
         this.panel.replaceChildren();
-        this.playFlow(mainSteps(this.index.edges));
+        this.stopFlow();
     }
 
     public Select(id: string | null): void {
@@ -829,6 +822,7 @@ class DiagramViewer implements DiagramViewerInstance {
         const n = this.index.nodes.get(id);
         if (!n) return;
         n.classList.remove('arrive');
+        void n.getBoundingClientRect();
         n.classList.add('arrive');
     }
 

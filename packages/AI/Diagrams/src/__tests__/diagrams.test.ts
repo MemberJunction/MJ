@@ -592,6 +592,50 @@ describe('@memberjunction/ai-diagrams — limits, layout and keyboard', () => {
         // Sequence diagram edges carry sequential data-edge-order attributes 0..N-1
         const seqOrders = [...v2.Svg.querySelectorAll<SVGGElement>('.edge')].map((e) => Number(e.dataset.edgeOrder));
         expect(seqOrders).toEqual(seqOrders.map((_, idx) => idx));
+
+        // WCAG 2.2.2: flow does not autoplay on mount; it starts on user selection/trace and stops on Clear()
+        const flowLayer = v1.Svg.querySelector<SVGGElement>('g.flow-layer')!;
+        expect(flowLayer.children).toHaveLength(0);
+        const win = doc.defaultView!;
+        let rafCallback: ((now: number) => void) | null = null;
+        win.requestAnimationFrame = (cb: FrameRequestCallback): number => {
+            rafCallback = cb;
+            return 1;
+        };
+        win.cancelAnimationFrame = (): void => {
+            rafCallback = null;
+        };
+        Object.assign(win.SVGElement.prototype, {
+            getTotalLength: () => 120,
+            getPointAtLength: (d: number) => ({ x: d, y: 0 }),
+        });
+
+        const targetNode = v1.Svg.querySelector<SVGGElement>('[data-node-id="submit"]')!;
+        let reflowReadWithoutArrive = 0;
+        const origRect = targetNode.getBoundingClientRect.bind(targetNode);
+        targetNode.getBoundingClientRect = (): DOMRect => {
+            if (!targetNode.classList.contains('arrive')) reflowReadWithoutArrive++;
+            return origRect();
+        };
+
+        v1.SelectEdge('e1');
+        expect(flowLayer.querySelectorAll('.comet')).toHaveLength(1);
+        expect(rafCallback).not.toBeNull();
+
+        // Simulate two loop cycles landing on targetNode ("submit") and verify reflow happens between remove/add
+        // With 1 beat (STEP_MS=720, period=1820), t > 1 occurs in (840, 1940) and t in [0,1] occurs in [1940, 2660], then t > 1 again at 2700
+        const t0 = win.performance.now();
+        rafCallback!(t0 + 1000);
+        expect(targetNode.classList.contains('arrive')).toBe(true);
+        expect(reflowReadWithoutArrive).toBeGreaterThanOrEqual(1);
+        const countAfterFirstArrive = reflowReadWithoutArrive;
+        rafCallback!(t0 + 2100);
+        rafCallback!(t0 + 2800);
+        expect(reflowReadWithoutArrive).toBeGreaterThan(countAfterFirstArrive);
+
+        v1.Clear();
+        expect(flowLayer.children).toHaveLength(0);
+        expect(rafCallback).toBeNull();
     });
 });
 

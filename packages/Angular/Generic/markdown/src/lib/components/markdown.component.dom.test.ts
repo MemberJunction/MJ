@@ -442,10 +442,36 @@ describe('MarkdownComponent (DOM)', () => {
       expect(c.querySelector('.mjd-shell')).toBeNull();
     });
 
+    it('continues post-render processing and mounts inline SVGs when the diagram renderer chunk fails to load', async () => {
+      const inlineSvg =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" data-mj-diagram="1">' +
+        '<g class="nodes"><g class="node" data-node-id="n1" data-label="Step 1"><rect x="10" y="10" width="80" height="40"/></g></g>' +
+        '</svg>';
+      const markdownMessage = `\`\`\`mj-diagram\n{"kind":"workflow"}\n\`\`\`\n\n\`\`\`svg\n${inlineSvg}\n\`\`\``;
+      const f = render({ data: '', enableSvgRenderer: true });
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      vi.spyOn(f.componentInstance, 'LoadDiagramRenderer').mockRejectedValueOnce(new Error('ChunkLoadError'));
+      const done = new Promise<void>((resolve) => {
+        const sub = f.componentInstance.Rendered.subscribe(() => {
+          sub.unsubscribe();
+          resolve();
+        });
+      });
+      f.componentRef.setInput('data', markdownMessage);
+      f.detectChanges();
+      await done;
+      warnSpy.mockRestore();
+
+      const c = container(f);
+      expect(c.querySelector('code.language-mj-diagram')).not.toBeNull();
+      expect(c.querySelector('.mjd-shell')).not.toBeNull();
+    });
+
     it('does not skip the Angular sanitizer just because a message contains the diagram marker', () => {
       const c = container(render({ data: 'text <span data-mj-diagram="1" style="position:fixed;inset:0">x</span>', enableSvgRenderer: false }));
       expect(c.querySelector('[style]')).toBeNull();
     });
   });
 });
+
 

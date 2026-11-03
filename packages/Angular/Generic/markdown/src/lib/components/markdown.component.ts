@@ -630,6 +630,14 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   }
 
   /**
+   * Loads the MJ diagram renderer on demand when a fenced ```mj-diagram block is encountered.
+   */
+  public LoadDiagramRenderer(): Promise<typeof import('@memberjunction/ai-diagrams')> {
+    // MEASURED BUNDLE DEFERRAL: load @memberjunction/ai-diagrams (and @dagrejs/dagre) only when an mj-diagram fence is present
+    return import('@memberjunction/ai-diagrams');
+  }
+
+  /**
    * Upgrades rendered MJ diagram SVGs (`svg[data-mj-diagram="1"]`) and fenced ```mj-diagram JSON spec
    * blocks in place into interactive diagram viewers.
    */
@@ -637,26 +645,30 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     if (!this.EnableSvgRenderer) return;
     const fences = container.querySelectorAll<HTMLElement>('pre > code.language-mj-diagram');
     if (fences.length > 0) {
-      // MEASURED BUNDLE DEFERRAL: load @memberjunction/ai-diagrams (and @dagrejs/dagre) only when an mj-diagram fence is present
-      const { RenderDiagram } = await import('@memberjunction/ai-diagrams');
-      if (this.isDestroyed || seq !== this.renderSeq) return;
-      fences.forEach((codeEl) => {
-        const pre = codeEl.parentElement;
-        const raw = codeEl.textContent?.trim();
-        if (!pre || !raw) return;
-        try {
-          const rendered = RenderDiagram(JSON.parse(raw));
-          if (rendered.Success) {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'svg-rendered';
-            wrapper.innerHTML = this.markdownService.SanitizeHtml(rendered.Svg);
-            pre.replaceWith(wrapper);
+      try {
+        const { RenderDiagram } = await this.LoadDiagramRenderer();
+        if (this.isDestroyed || seq !== this.renderSeq) return;
+        fences.forEach((codeEl) => {
+          const pre = codeEl.parentElement;
+          const raw = codeEl.textContent?.trim();
+          if (!pre || !raw) return;
+          try {
+            const rendered = RenderDiagram(JSON.parse(raw));
+            if (rendered.Success) {
+              const wrapper = document.createElement('div');
+              wrapper.className = 'svg-rendered';
+              wrapper.innerHTML = this.markdownService.SanitizeHtml(rendered.Svg);
+              pre.replaceWith(wrapper);
+            }
+          } catch {
+            // Leave malformed JSON blocks as code
           }
-        } catch {
-          // Leave malformed JSON blocks as code
-        }
-      });
+        });
+      } catch (error: unknown) {
+        console.warn('Failed to load the MJ diagram renderer:', error);
+      }
     }
+    if (this.isDestroyed || seq !== this.renderSeq) return;
     container.querySelectorAll<SVGSVGElement>('svg[data-mj-diagram="1"]').forEach((svg) => {
       if (!svg.closest('.mjd-shell')) {
         this.diagramViewers.push(MountDiagramViewer(svg));
