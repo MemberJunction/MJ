@@ -12,6 +12,11 @@
 -- three pairs join @Handled, and the policy in
 -- packages/CodeGenLib/src/__tests__/fixtures/entity-delete-fk-policy.json records them.
 --
+-- Also clears Conversation.AnchorType, AnchorKey, and AnchorMetadata alongside
+-- LinkedEntityID / LinkedRecordID so CK_Conversation_AnchorLinkBinding (added in
+-- V202611022155__v6.2.x__Anchored_Conversations_And_Record_Comments) is satisfied when an
+-- entity with anchored conversations is removed.
+--
 -- Conventions (migrations/CLAUDE.md):
 --   - Proc redefinition only (CREATE OR ALTER, no existence guards); no table changes,
 --     so there is no CodeGen output to append.
@@ -212,7 +217,8 @@ BEGIN TRY
     UPDATE [${flyway:defaultSchema}].[AuditLog] SET [EntityID] = NULL WHERE [EntityID] = @EntityID;
     UPDATE [${flyway:defaultSchema}].[ClusterAnalysis] SET [EntityID] = NULL WHERE [EntityID] = @EntityID;
     UPDATE [${flyway:defaultSchema}].[ContentSource] SET [EntityID] = NULL WHERE [EntityID] = @EntityID;
-    UPDATE [${flyway:defaultSchema}].[Conversation] SET [LinkedEntityID] = NULL, [LinkedRecordID] = NULL WHERE [LinkedEntityID] = @EntityID;
+    -- CK_Conversation_LinkBinding / CK_Conversation_AnchorLinkBinding: clear LinkedRecordID and anchor columns with LinkedEntityID
+    UPDATE [${flyway:defaultSchema}].[Conversation] SET [LinkedEntityID] = NULL, [LinkedRecordID] = NULL, [AnchorType] = NULL, [AnchorKey] = NULL, [AnchorMetadata] = NULL WHERE [LinkedEntityID] = @EntityID;
     UPDATE [${flyway:defaultSchema}].[DataContextItem] SET [EntityID] = NULL WHERE [EntityID] = @EntityID;
     -- Other entities' fields that point AT this entity (#3561)
     UPDATE [${flyway:defaultSchema}].[EntityField] SET [RelatedEntityID] = NULL WHERE [RelatedEntityID] = @EntityID;

@@ -127,9 +127,12 @@
       "column": "LinkedEntityID",
       "nullable": true,
       "action": "null",
-      "reason": "Nullable reference; cleared with LinkedRecordID (both-or-neither CHECK) so the row survives without the entity.",
+      "reason": "Nullable reference; cleared with LinkedRecordID and anchor columns (CK_Conversation_LinkBinding / CK_Conversation_AnchorLinkBinding) so the row survives without the entity.",
       "alsoNull": [
-        "LinkedRecordID"
+        "LinkedRecordID",
+        "AnchorType",
+        "AnchorKey",
+        "AnchorMetadata"
       ]
     },
     {
