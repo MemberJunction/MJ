@@ -1885,7 +1885,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     const typedChar = event.key;
     this.OnComposerOpenChanged(true);
     // The dock may have just been created — seed the typed character + focus after this CD pass.
-    setTimeout(() => this.composer?.AppendAndFocus(typedChar));
+    setTimeout(() => {
+      this.composer?.AppendAndFocus(typedChar);
+      this.cdr.markForCheck();
+    });
   }
 
   /**
