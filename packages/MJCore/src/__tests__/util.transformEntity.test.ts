@@ -6,7 +6,9 @@ import { EntityInfo } from '../generic/entityInfo';
 import { IEntityDataProvider, IMetadataProvider } from '../generic/interfaces';
 import { Metadata } from '../generic/metadata';
 import { ProviderBase } from '../generic/providerBase';
+import { RunViewParams } from '../generic/runView';
 import { UserInfo } from '../generic/securityInfo';
+import * as logging from '../generic/logging';
 import {
     ADMIN_ROLE_ID,
     BuildLoadHintEntities,
@@ -605,5 +607,846 @@ describe('TransformSimpleObjectToEntityObject batched IS-A hydration & 1-query C
         expect(results[3].ISAChild?.EntityInfo.Name).toBe('Publications');
         // Meetings was never even queried via RunViews
         expect(batchedProvider.RunViewsParams.map(p => p.EntityName)).toEqual(['Publications']);
+    });
+
+    it('discovers and hydrates IS-A children in a single RunViews pass when FindISAChildEntitiesBatch is absent (e.g. GraphQLDataProvider)', async () => {
+        Object.defineProperty(batchedProvider, 'FindISAChildEntitiesBatch', { value: undefined });
+
+        const productsInfo = batchedProvider.EntityByName('Products')!;
+        const rows = Array.from({ length: BATCH_ROWS }, (_, i) => {
+            const id = `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`;
+            return store.ViewRow(productsInfo, id)!;
+        });
+
+        const results = await TransformSimpleObjectToEntityObject<BaseEntity>(
+            batchedProvider as object as IMetadataProvider,
+            'Products',
+            rows,
+            user
+        );
+
+        expect(results).toHaveLength(BATCH_ROWS);
+        results.forEach((p, idx) => {
+            expect(p.ISAChild?.EntityInfo.Name).toBe(idx % 2 === 0 ? 'Meetings' : 'Publications');
+            if (idx % 2 === 0) {
+                expect(p.ISAChild?.Get('Venue')).toBe(`Hall ${idx}`);
+            } else {
+                expect(p.ISAChild?.Get('ISBN')).toBe(`978-${idx}`);
+            }
+        });
+        expect(batchedProvider.BatchDiscoveryCalls).toBe(0);
+        // 1 single RunViews call (SELECT * across child tables) instead of 2 sequential RunViews calls
+        expect(batchedProvider.RunViewsBatchCalls).toBe(1);
+        expect(batchedProvider.RoundTrips).toHaveLength(0);
+    });
+
+    it('hydrates N IS-A parent rows with 0 extra queries when child entities are already cached unfiltered in BaseEngineRegistry', async () => {
+        const meetingsInfo = batchedProvider.EntityByName('Meetings')!;
+        const pubsInfo = batchedProvider.EntityByName('Publications')!;
+        const meetingRows: Record<string, unknown>[] = [];
+        const pubRows: Record<string, unknown>[] = [];
+        for (let i = 0; i < BATCH_ROWS; i++) {
+            const id = `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`;
+            if (i % 2 === 0) {
+                meetingRows.push(store.ViewRow(meetingsInfo, id)!);
+            } else {
+                pubRows.push(store.ViewRow(pubsInfo, id)!);
+            }
+        }
+        const meetingEntities = await TransformSimpleObjectToEntityObject<LoadHintTestEntity>(
+            batchedProvider as object as IMetadataProvider,
+            'Meetings',
+            meetingRows,
+            user
+        );
+        const pubEntities = await TransformSimpleObjectToEntityObject<LoadHintTestEntity>(
+            batchedProvider as object as IMetadataProvider,
+            'Publications',
+            pubRows,
+            user
+        );
+
+        const multiChildEngine = {
+            Loaded: true,
+            Meetings: meetingEntities,
+            Publications: pubEntities,
+            ReadonlyConfigs: [
+                { PropertyName: 'Meetings', EntityName: 'Meetings', Type: 'entity' },
+                { PropertyName: 'Publications', EntityName: 'Publications', Type: 'entity' },
+            ],
+        };
+        BaseEngineRegistry.Instance.RegisterEngine(multiChildEngine);
+        try {
+            const productsInfo = batchedProvider.EntityByName('Products')!;
+            const rows = Array.from({ length: BATCH_ROWS }, (_, i) => {
+                const id = `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`;
+                return store.ViewRow(productsInfo, id)!;
+            });
+
+            const results = await TransformSimpleObjectToEntityObject<BaseEntity>(
+                batchedProvider as object as IMetadataProvider,
+                'Products',
+                rows,
+                user
+            );
+
+            expect(results).toHaveLength(BATCH_ROWS);
+            results.forEach((p, idx) => {
+                expect(p.ISAChild?.EntityInfo.Name).toBe(idx % 2 === 0 ? 'Meetings' : 'Publications');
+                if (idx % 2 === 0) {
+                    expect(p.ISAChild?.Get('Venue')).toBe(`Hall ${idx}`);
+                } else {
+                    expect(p.ISAChild?.Get('ISBN')).toBe(`978-${idx}`);
+                }
+            });
+            // Resolved 100% in memory from the engine's unfiltered child caches
+            expect(batchedProvider.BatchDiscoveryCalls).toBe(0);
+            expect(batchedProvider.RunViewsBatchCalls).toBe(0);
+            expect(batchedProvider.RoundTrips).toHaveLength(0);
+        } finally {
+            BaseEngineRegistry.Instance.UnregisterEngine(multiChildEngine);
+        }
+    });
+
+    it('hydrates IS-A parents with 0 extra queries when parent and child views are in the same RunViews batch (even when parent is listed before children)', async () => {
+        const productsInfo = batchedProvider.EntityByName('Products')!;
+        const meetingsInfo = batchedProvider.EntityByName('Meetings')!;
+        const pubsInfo = batchedProvider.EntityByName('Publications')!;
+
+        const productRows: Record<string, unknown>[] = [];
+        const meetingRows: Record<string, unknown>[] = [];
+        const pubRows: Record<string, unknown>[] = [];
+        for (let i = 0; i < BATCH_ROWS; i++) {
+            const id = `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`;
+            productRows.push(store.ViewRow(productsInfo, id)!);
+            if (i % 2 === 0) {
+                meetingRows.push(store.ViewRow(meetingsInfo, id)!);
+            } else {
+                pubRows.push(store.ViewRow(pubsInfo, id)!);
+            }
+        }
+
+        // Simulate ProviderBase.PostProcessRunViews / TransformBatchRunViewResults where Products (index 0)
+        // is requested alongside Meetings (index 1) and Publications (index 2) in the same batch.
+        const batchParams = [
+            { EntityName: 'Products', ResultType: 'entity_object' as const },
+            { EntityName: 'Meetings', ResultType: 'entity_object' as const },
+            { EntityName: 'Publications', ResultType: 'entity_object' as const },
+        ];
+        const batchResults = [
+            { Success: true, Results: productRows as unknown[], RowCount: productRows.length, TotalRowCount: productRows.length, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' },
+            { Success: true, Results: meetingRows as unknown[], RowCount: meetingRows.length, TotalRowCount: meetingRows.length, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' },
+            { Success: true, Results: pubRows as unknown[], RowCount: pubRows.length, TotalRowCount: pubRows.length, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' },
+        ];
+
+        const providerWithTransform = Object.assign(batchedProvider, {
+            TransformSimpleObjectToEntityObject: ProviderBase.prototype['TransformSimpleObjectToEntityObject'],
+            NormalizeSimpleRowTypes: () => {},
+            isUnfilteredFullEntityBatchView: ProviderBase.prototype['isUnfilteredFullEntityBatchView'],
+            isFullCoverageFieldList: ProviderBase.prototype['isFullCoverageFieldList'],
+        });
+
+        await ProviderBase.prototype['TransformBatchRunViewResults'].call(
+            providerWithTransform,
+            batchParams,
+            batchResults,
+            undefined,
+            undefined,
+            user
+        );
+
+        const hydratedProducts = batchResults[0].Results as BaseEntity[];
+        expect(hydratedProducts).toHaveLength(BATCH_ROWS);
+        hydratedProducts.forEach((p, idx) => {
+            expect(p.ISAChild?.EntityInfo.Name).toBe(idx % 2 === 0 ? 'Meetings' : 'Publications');
+            if (idx % 2 === 0) {
+                expect(p.ISAChild?.Get('Venue')).toBe(`Hall ${idx}`);
+            } else {
+                expect(p.ISAChild?.Get('ISBN')).toBe(`978-${idx}`);
+            }
+        });
+        expect(batchedProvider.BatchDiscoveryCalls).toBe(0);
+        expect(batchedProvider.RunViewsBatchCalls).toBe(0);
+        expect(batchedProvider.RoundTrips).toHaveLength(0);
+    });
+
+    it('queries only uncached child entities and unresolved parent PKs when BaseEngineRegistry partially covers IS-A children', async () => {
+        Object.defineProperty(batchedProvider, 'FindISAChildEntitiesBatch', { value: undefined });
+
+        const meetingsInfo = batchedProvider.EntityByName('Meetings')!;
+        const meetingRows: Record<string, unknown>[] = [];
+        for (let i = 0; i < BATCH_ROWS; i += 2) {
+            const id = `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`;
+            meetingRows.push(store.ViewRow(meetingsInfo, id)!);
+        }
+        const meetingEntities = await TransformSimpleObjectToEntityObject<LoadHintTestEntity>(
+            batchedProvider as object as IMetadataProvider,
+            'Meetings',
+            meetingRows,
+            user
+        );
+
+        const partialEngine = {
+            Loaded: true,
+            Meetings: meetingEntities,
+            ReadonlyConfigs: [
+                { PropertyName: 'Meetings', EntityName: 'Meetings', Type: 'entity' },
+            ],
+        };
+        BaseEngineRegistry.Instance.RegisterEngine(partialEngine);
+        try {
+            const productsInfo = batchedProvider.EntityByName('Products')!;
+            const rows = Array.from({ length: BATCH_ROWS }, (_, i) => {
+                const id = `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`;
+                return store.ViewRow(productsInfo, id)!;
+            });
+
+            const results = await TransformSimpleObjectToEntityObject<BaseEntity>(
+                batchedProvider as object as IMetadataProvider,
+                'Products',
+                rows,
+                user
+            );
+
+            expect(results).toHaveLength(BATCH_ROWS);
+            results.forEach((p, idx) => {
+                expect(p.ISAChild?.EntityInfo.Name).toBe(idx % 2 === 0 ? 'Meetings' : 'Publications');
+            });
+
+            // 1 single-pass RunViews call for the remaining uncached child entities (Publications, Courses);
+            // Meetings was already satisfied from BaseEngineRegistry so it must NOT be queried again.
+            expect(batchedProvider.RunViewsBatchCalls).toBe(1);
+            const queriedChildNames = batchedProvider.RunViewsParams.map(p => p.EntityName);
+            expect(queriedChildNames).not.toContain('Meetings');
+            expect(queriedChildNames).toContain('Publications');
+            // And the WHERE ID IN (...) filter only includes the odd-indexed (unresolved) parent PKs
+            const pubFilter = String(batchedProvider.RunViewsParams.find(p => p.EntityName === 'Publications')?.ExtraFilter ?? '');
+            expect(pubFilter).not.toContain('c2000000-0000-0000-0000-000000000000');
+            expect(pubFilter).toContain('c2000000-0000-0000-0000-000000000001');
+        } finally {
+            BaseEngineRegistry.Instance.UnregisterEngine(partialEngine);
+        }
+    });
+
+    it('rejects filtered, paged, or narrow sibling views and filtered engine configs as authoritative IS-A caches', async () => {
+        Object.defineProperty(batchedProvider, 'FindISAChildEntitiesBatch', { value: undefined });
+
+        const productsInfo = batchedProvider.EntityByName('Products')!;
+        const meetingsInfo = batchedProvider.EntityByName('Meetings')!;
+        const pubsInfo = batchedProvider.EntityByName('Publications')!;
+
+        // Register an engine whose Meetings config has a Filter — must be ignored by FindUnfilteredEntityRecord
+        const onlyFirstMeeting = await TransformSimpleObjectToEntityObject<LoadHintTestEntity>(
+            batchedProvider as object as IMetadataProvider,
+            'Meetings',
+            [store.ViewRow(meetingsInfo, 'c2000000-0000-0000-0000-000000000000')!],
+            user
+        );
+        const filteredEngine = {
+            Loaded: true,
+            Meetings: onlyFirstMeeting,
+            ReadonlyConfigs: [
+                { PropertyName: 'Meetings', EntityName: 'Meetings', Type: 'entity', Filter: "Venue = 'Hall 0'" },
+            ],
+        };
+        BaseEngineRegistry.Instance.RegisterEngine(filteredEngine);
+
+        try {
+            const productRows = [0, 1, 2, 3].map(i =>
+                store.ViewRow(productsInfo, `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`)!
+            );
+            const filteredMeetingRows = [store.ViewRow(meetingsInfo, 'c2000000-0000-0000-0000-000000000000')!];
+            const narrowPubRows = [1, 3].map(i => ({
+                ID: `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`,
+            }));
+
+            // Sibling views in RunViews are filtered (ExtraFilter) and narrow (Fields: ['ID']),
+            // so TransformBatchRunViewResults must NOT register them in batchEntityCache.
+            const batchParams = [
+                { EntityName: 'Products', ResultType: 'entity_object' as const },
+                { EntityName: 'Meetings', ExtraFilter: "Venue = 'Hall 0'", ResultType: 'entity_object' as const },
+                { EntityName: 'Publications', Fields: ['ID'], ResultType: 'entity_object' as const },
+            ];
+            const batchResults = [
+                { Success: true, Results: productRows as unknown[], RowCount: productRows.length, TotalRowCount: productRows.length, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' },
+                { Success: true, Results: filteredMeetingRows as unknown[], RowCount: 1, TotalRowCount: 1, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' },
+                { Success: true, Results: narrowPubRows as unknown[], RowCount: 2, TotalRowCount: 2, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' },
+            ];
+
+            const providerWithTransform = Object.assign(batchedProvider, {
+                TransformSimpleObjectToEntityObject: ProviderBase.prototype['TransformSimpleObjectToEntityObject'],
+                NormalizeSimpleRowTypes: () => {},
+                isUnfilteredFullEntityBatchView: ProviderBase.prototype['isUnfilteredFullEntityBatchView'],
+                isFullCoverageFieldList: ProviderBase.prototype['isFullCoverageFieldList'],
+            });
+
+            await ProviderBase.prototype['TransformBatchRunViewResults'].call(
+                providerWithTransform,
+                batchParams,
+                batchResults,
+                undefined,
+                undefined,
+                user
+            );
+
+            const hydratedProducts = batchResults[0].Results as BaseEntity[];
+            expect(hydratedProducts).toHaveLength(4);
+            // Hall 2 (index 2) was excluded from the filtered Meetings view and filtered engine config,
+            // yet it is still properly discovered and hydrated via the fallback RunViews pass!
+            expect(hydratedProducts[0].ISAChild?.Get('Venue')).toBe('Hall 0');
+            expect(hydratedProducts[1].ISAChild?.Get('ISBN')).toBe('978-1');
+            expect(hydratedProducts[2].ISAChild?.Get('Venue')).toBe('Hall 2');
+            expect(hydratedProducts[3].ISAChild?.Get('ISBN')).toBe('978-3');
+            expect(batchedProvider.RunViewsBatchCalls).toBe(1);
+            expect(pubsInfo.Fields.length).toBeGreaterThan(1);
+        } finally {
+            BaseEngineRegistry.Instance.UnregisterEngine(filteredEngine);
+        }
+    });
+
+    it('refuses to serve BaseEngineRegistry child records on a Database provider when the user has an active RLS filter on the child entity', async () => {
+        Object.defineProperty(batchedProvider, 'FindISAChildEntitiesBatch', { value: undefined });
+        Object.defineProperty(batchedProvider, 'ProviderType', { value: 'Database', configurable: true });
+
+        const meetingsInfo = batchedProvider.EntityByName('Meetings')!;
+        const meetingRows = [0, 2].map(i =>
+            store.ViewRow(meetingsInfo, `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`)!
+        );
+        const meetingEntities = await TransformSimpleObjectToEntityObject<LoadHintTestEntity>(
+            batchedProvider as object as IMetadataProvider,
+            'Meetings',
+            meetingRows,
+            user
+        );
+
+        // Simulate an active RLS filter on Meetings for this user
+        vi.spyOn(meetingsInfo, 'GetUserRowLevelSecurityWhereClause').mockReturnValue("Venue = 'Hall 0'");
+
+        const systemEngine = {
+            Loaded: true,
+            Meetings: meetingEntities,
+            ReadonlyConfigs: [
+                { PropertyName: 'Meetings', EntityName: 'Meetings', Type: 'entity' },
+            ],
+        };
+        BaseEngineRegistry.Instance.RegisterEngine(systemEngine);
+
+        try {
+            const productsInfo = batchedProvider.EntityByName('Products')!;
+            const rows = [0, 1, 2, 3].map(i =>
+                store.ViewRow(productsInfo, `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`)!
+            );
+
+            await TransformSimpleObjectToEntityObject<BaseEntity>(
+                batchedProvider as object as IMetadataProvider,
+                'Products',
+                rows,
+                user
+            );
+
+            // Because Meetings has an active RLS filter for `user` on a Database provider,
+            // BaseEngineRegistry was bypassed for Meetings and Meetings WAS queried via RunViews with user context
+            expect(batchedProvider.RunViewsBatchCalls).toBe(1);
+            expect(batchedProvider.RunViewsParams.map(p => p.EntityName)).toContain('Meetings');
+        } finally {
+            BaseEngineRegistry.Instance.UnregisterEngine(systemEngine);
+        }
+    });
+
+    it('hydrates a 3-level IS-A chain (Products -> Courses -> Webinars) with 0 extra queries from a RunViews batch, and in 2 level-by-level RunViews passes when uncached', async () => {
+        Object.defineProperty(batchedProvider, 'FindISAChildEntitiesBatch', { value: undefined });
+
+        const productsInfo = batchedProvider.EntityByName('Products')!;
+        const coursesInfo = batchedProvider.EntityByName('Courses')!;
+        const webinarsInfo = batchedProvider.EntityByName('Webinars')!;
+
+        const webinarIds = Array.from({ length: 6 }, (_, i) => `c3000000-0000-0000-0000-${String(i).padStart(12, '0')}`);
+        for (const [i, id] of webinarIds.entries()) {
+            store.Insert('Products', { ID: id, Name: `Webinar Product ${i}`, ProductTypeID: null });
+            store.Insert('Courses', { ID: id, CreditHours: (i + 1) * 2 });
+            store.Insert('Webinars', { ID: id, PlatformURL: `https://example.com/webinar/${i}` });
+        }
+
+        const productRows = webinarIds.map(id => store.ViewRow(productsInfo, id)!);
+        const courseRows = webinarIds.map(id => store.ViewRow(coursesInfo, id)!);
+        const webinarRows = webinarIds.map(id => store.ViewRow(webinarsInfo, id)!);
+
+        // Part A: All 3 levels in the same RunViews batch (listed top-down: Products, Courses, Webinars)
+        const batchParams = [
+            { EntityName: 'Products', ResultType: 'entity_object' as const },
+            { EntityName: 'Courses', ResultType: 'entity_object' as const },
+            { EntityName: 'Webinars', ResultType: 'entity_object' as const },
+        ];
+        const batchResults = [
+            { Success: true, Results: productRows as unknown[], RowCount: productRows.length, TotalRowCount: productRows.length, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' },
+            { Success: true, Results: courseRows as unknown[], RowCount: courseRows.length, TotalRowCount: courseRows.length, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' },
+            { Success: true, Results: webinarRows as unknown[], RowCount: webinarRows.length, TotalRowCount: webinarRows.length, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' },
+        ];
+
+        const providerWithTransform = Object.assign(batchedProvider, {
+            TransformSimpleObjectToEntityObject: ProviderBase.prototype['TransformSimpleObjectToEntityObject'],
+            NormalizeSimpleRowTypes: () => {},
+            isUnfilteredFullEntityBatchView: ProviderBase.prototype['isUnfilteredFullEntityBatchView'],
+            isFullCoverageFieldList: ProviderBase.prototype['isFullCoverageFieldList'],
+        });
+
+        await ProviderBase.prototype['TransformBatchRunViewResults'].call(
+            providerWithTransform,
+            batchParams,
+            batchResults,
+            undefined,
+            undefined,
+            user
+        );
+
+        const hydratedProducts = batchResults[0].Results as BaseEntity[];
+        expect(hydratedProducts).toHaveLength(6);
+        hydratedProducts.forEach((p, idx) => {
+            expect(p.ISAChild?.EntityInfo.Name).toBe('Courses');
+            expect(p.ISAChild?.Get('CreditHours')).toBe((idx + 1) * 2);
+            expect(p.ISAChild?.ISAChild?.EntityInfo.Name).toBe('Webinars');
+            expect(p.ISAChild?.ISAChild?.Get('PlatformURL')).toBe(`https://example.com/webinar/${idx}`);
+            expect(p.LeafEntity.EntityInfo.Name).toBe('Webinars');
+            expect(p.LeafEntity.RootEntity).toBe(p);
+        });
+        expect(batchedProvider.RunViewsBatchCalls).toBe(0);
+        expect(batchedProvider.RoundTrips).toHaveLength(0);
+
+        // Part B: Uncached 3-level hydration via single-pass RunViews per level (1 pass for Products' children, 1 pass for Courses' children)
+        const uncachedProducts = await TransformSimpleObjectToEntityObject<BaseEntity>(
+            batchedProvider as object as IMetadataProvider,
+            'Products',
+            webinarIds.map(id => store.ViewRow(productsInfo, id)!),
+            user
+        );
+        expect(uncachedProducts).toHaveLength(6);
+        uncachedProducts.forEach((p, idx) => {
+            expect(p.LeafEntity.EntityInfo.Name).toBe('Webinars');
+            expect(p.LeafEntity.Get('PlatformURL')).toBe(`https://example.com/webinar/${idx}`);
+        });
+        expect(batchedProvider.RunViewsBatchCalls).toBe(2);
+        expect(batchedProvider.RoundTrips).toHaveLength(0);
+    });
+
+    it('hydrates overlapping IS-A subtypes (AllowMultipleSubtypes = true) in 1 RunViews pass or 0 queries from memory', async () => {
+        Object.defineProperty(batchedProvider, 'FindISAChildEntitiesBatch', { value: undefined });
+
+        const partiesInfo = batchedProvider.EntityByName('Parties')!;
+        const customersInfo = batchedProvider.EntityByName('Customers')!;
+        const vendorsInfo = batchedProvider.EntityByName('Vendors')!;
+
+        const partyIds = ['d1000000-0000-0000-0000-000000000001', 'd1000000-0000-0000-0000-000000000002'];
+        // Party 0 is BOTH a Customer and a Vendor; Party 1 is only a Customer
+        store.Insert('Parties', { ID: partyIds[0], Name: 'Dual Party' });
+        store.Insert('Customers', { ID: partyIds[0], CreditLimit: 5000 });
+        store.Insert('Vendors', { ID: partyIds[0], PaymentTerms: 'Net 30' });
+
+        store.Insert('Parties', { ID: partyIds[1], Name: 'Customer Only' });
+        store.Insert('Customers', { ID: partyIds[1], CreditLimit: 1000 });
+
+        const partyRows = partyIds.map(id => store.ViewRow(partiesInfo, id)!);
+        const results = await TransformSimpleObjectToEntityObject<BaseEntity>(
+            batchedProvider as object as IMetadataProvider,
+            'Parties',
+            partyRows,
+            user
+        );
+
+        expect(results).toHaveLength(2);
+        expect(results[0].ISAChildren?.map(c => c.entityName)).toEqual(['Customers', 'Vendors']);
+        expect(results[1].ISAChildren?.map(c => c.entityName)).toEqual(['Customers']);
+        expect(batchedProvider.RunViewsBatchCalls).toBe(1);
+        expect(batchedProvider.RoundTrips).toHaveLength(0);
+
+        // Now test in-memory resolution when Customers and Vendors are in BaseEngineRegistry
+        batchedProvider.RunViewsBatchCalls = 0;
+        const customerEntities = await TransformSimpleObjectToEntityObject<LoadHintTestEntity>(
+            batchedProvider as object as IMetadataProvider,
+            'Customers',
+            partyIds.map(id => store.ViewRow(customersInfo, id)!),
+            user
+        );
+        const vendorEntities = await TransformSimpleObjectToEntityObject<LoadHintTestEntity>(
+            batchedProvider as object as IMetadataProvider,
+            'Vendors',
+            [store.ViewRow(vendorsInfo, partyIds[0])!],
+            user
+        );
+        const partyEngine = {
+            Loaded: true,
+            Customers: customerEntities,
+            Vendors: vendorEntities,
+            ReadonlyConfigs: [
+                { PropertyName: 'Customers', EntityName: 'Customers', Type: 'entity' },
+                { PropertyName: 'Vendors', EntityName: 'Vendors', Type: 'entity' },
+            ],
+        };
+        BaseEngineRegistry.Instance.RegisterEngine(partyEngine);
+        try {
+            const cachedResults = await TransformSimpleObjectToEntityObject<BaseEntity>(
+                batchedProvider as object as IMetadataProvider,
+                'Parties',
+                partyIds.map(id => store.ViewRow(partiesInfo, id)!),
+                user
+            );
+            expect(cachedResults[0].ISAChildren?.map(c => c.entityName)).toEqual(['Customers', 'Vendors']);
+            expect(cachedResults[1].ISAChildren?.map(c => c.entityName)).toEqual(['Customers']);
+            expect(batchedProvider.RunViewsBatchCalls).toBe(0);
+            expect(batchedProvider.RoundTrips).toHaveLength(0);
+        } finally {
+            BaseEngineRegistry.Instance.UnregisterEngine(partyEngine);
+        }
+    });
+
+    it('does not treat a UserViewMaxRows-capped sibling child view as complete unless IgnoreMaxRows is true', async () => {
+        Object.defineProperty(batchedProvider, 'FindISAChildEntitiesBatch', { value: undefined });
+
+        const productsInfo = batchedProvider.EntityByName('Products')!;
+        const meetingsInfo = batchedProvider.EntityByName('Meetings')!;
+        const pubsInfo = batchedProvider.EntityByName('Publications')!;
+
+        // Cap Meetings at UserViewMaxRows = 2 (simulating __mj.Entity.UserViewMaxRows default truncation)
+        Object.defineProperty(meetingsInfo, 'UserViewMaxRows', { get: () => 2, configurable: true });
+
+        try {
+            // 6 products: indices 0, 2, 4 are Meetings (3 total, so the 3rd Meeting at index 4 falls past the cap of 2)
+            const productRows = [0, 1, 2, 3, 4, 5].map(i =>
+                store.ViewRow(productsInfo, `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`)!
+            );
+            const cappedMeetingRows = [0, 2].map(i =>
+                store.ViewRow(meetingsInfo, `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`)!
+            );
+            const fullPubRows = [1, 3, 5].map(i =>
+                store.ViewRow(pubsInfo, `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`)!
+            );
+
+            // Meetings does NOT set IgnoreMaxRows: true and returned 2 rows (== UserViewMaxRows),
+            // whereas Publications sets IgnoreMaxRows: true.
+            const batchParams = [
+                { EntityName: 'Products', ResultType: 'entity_object' as const },
+                { EntityName: 'Meetings', ResultType: 'simple' as const },
+                { EntityName: 'Publications', ResultType: 'simple' as const, IgnoreMaxRows: true },
+            ];
+            const batchResults = [
+                { Success: true, Results: productRows as unknown[], RowCount: 6, TotalRowCount: 6, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' },
+                { Success: true, Results: cappedMeetingRows as unknown[], RowCount: 2, TotalRowCount: 2, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' },
+                { Success: true, Results: fullPubRows as unknown[], RowCount: 3, TotalRowCount: 3, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' },
+            ];
+
+            const providerWithTransform = Object.assign(batchedProvider, {
+                TransformSimpleObjectToEntityObject: ProviderBase.prototype['TransformSimpleObjectToEntityObject'],
+                NormalizeSimpleRowTypes: () => {},
+                isUnfilteredFullEntityBatchView: ProviderBase.prototype['isUnfilteredFullEntityBatchView'],
+                isFullCoverageFieldList: ProviderBase.prototype['isFullCoverageFieldList'],
+            });
+
+            await ProviderBase.prototype['TransformBatchRunViewResults'].call(
+                providerWithTransform,
+                batchParams,
+                batchResults,
+                undefined,
+                undefined,
+                user
+            );
+
+            const hydratedProducts = batchResults[0].Results as BaseEntity[];
+            expect(hydratedProducts).toHaveLength(6);
+            // Product 4 (the 3rd Meeting, truncated from the capped sibling view) must NOT lose its subtype!
+            expect(hydratedProducts[0].ISAChild?.Get('Venue')).toBe('Hall 0');
+            expect(hydratedProducts[1].ISAChild?.Get('ISBN')).toBe('978-1');
+            expect(hydratedProducts[2].ISAChild?.Get('Venue')).toBe('Hall 2');
+            expect(hydratedProducts[3].ISAChild?.Get('ISBN')).toBe('978-3');
+            expect(hydratedProducts[4].ISAChild?.EntityInfo.Name).toBe('Meetings');
+            expect(hydratedProducts[4].ISAChild?.Get('Venue')).toBe('Hall 4');
+            expect(hydratedProducts[5].ISAChild?.Get('ISBN')).toBe('978-5');
+
+            // Publications was uncapped (IgnoreMaxRows: true) so it was resolved in memory;
+            // Meetings was capped so it was queried via RunViews for the remaining unresolved parents.
+            expect(batchedProvider.RunViewsBatchCalls).toBe(1);
+            expect(batchedProvider.RunViewsParams.map(p => p.EntityName)).toContain('Meetings');
+            expect(batchedProvider.RunViewsParams.map(p => p.EntityName)).not.toContain('Publications');
+        } finally {
+            delete (meetingsInfo as unknown as Record<string, unknown>)['UserViewMaxRows'];
+        }
+    });
+
+    it('isolates concurrent RunViews batches across different users sharing the same provider instance', async () => {
+        Object.defineProperty(batchedProvider, 'FindISAChildEntitiesBatch', { value: undefined });
+
+        const productsInfo = batchedProvider.EntityByName('Products')!;
+        const meetingsInfo = batchedProvider.EntityByName('Meetings')!;
+        const pubsInfo = batchedProvider.EntityByName('Publications')!;
+
+        const userA = MakeLoadHintUser(ADMIN_ROLE_ID);
+        userA.ID = 'user-a-restricted';
+        const userB = MakeLoadHintUser(ADMIN_ROLE_ID);
+        userB.ID = 'user-b-full';
+
+        const productRows = [0, 1, 2, 3].map(i =>
+            store.ViewRow(productsInfo, `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`)!
+        );
+        // User A's sibling Meetings view only returned Hall 0 (e.g. due to User A's RLS on Meetings)
+        const userAMeetingRows = [store.ViewRow(meetingsInfo, 'c2000000-0000-0000-0000-000000000000')!];
+        const pubRows = [1, 3].map(i =>
+            store.ViewRow(pubsInfo, `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`)!
+        );
+
+        const batchParamsA = [
+            { EntityName: 'Products', ResultType: 'entity_object' as const },
+            { EntityName: 'Meetings', ResultType: 'simple' as const, IgnoreMaxRows: true },
+            { EntityName: 'Publications', ResultType: 'simple' as const, IgnoreMaxRows: true },
+        ];
+        const batchResultsA = [
+            { Success: true, Results: productRows.map(r => ({ ...r })) as unknown[], RowCount: 4, TotalRowCount: 4, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' },
+            { Success: true, Results: userAMeetingRows as unknown[], RowCount: 1, TotalRowCount: 1, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' },
+            { Success: true, Results: pubRows as unknown[], RowCount: 2, TotalRowCount: 2, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' },
+        ];
+
+        const providerWithTransform = Object.assign(batchedProvider, {
+            TransformSimpleObjectToEntityObject: ProviderBase.prototype['TransformSimpleObjectToEntityObject'],
+            NormalizeSimpleRowTypes: () => {},
+            isUnfilteredFullEntityBatchView: ProviderBase.prototype['isUnfilteredFullEntityBatchView'],
+            isFullCoverageFieldList: ProviderBase.prototype['isFullCoverageFieldList'],
+        });
+
+        // Run User A's batch transformation and User B's standalone Products hydration concurrently on the same provider
+        const [, userBProducts] = await Promise.all([
+            ProviderBase.prototype['TransformBatchRunViewResults'].call(
+                providerWithTransform,
+                batchParamsA,
+                batchResultsA,
+                undefined,
+                undefined,
+                userA
+            ),
+            TransformSimpleObjectToEntityObject<BaseEntity>(
+                batchedProvider as object as IMetadataProvider,
+                'Products',
+                productRows.map(r => ({ ...r })),
+                userB
+            ),
+        ]);
+
+        // User B must NOT have been served User A's incomplete Meetings batch — Hall 2 (index 2) must be present for User B!
+        expect(userBProducts).toHaveLength(4);
+        expect(userBProducts[0].ISAChild?.Get('Venue')).toBe('Hall 0');
+        expect(userBProducts[1].ISAChild?.Get('ISBN')).toBe('978-1');
+        expect(userBProducts[2].ISAChild?.EntityInfo.Name).toBe('Meetings');
+        expect(userBProducts[2].ISAChild?.Get('Venue')).toBe('Hall 2');
+        expect(userBProducts[3].ISAChild?.Get('ISBN')).toBe('978-3');
+    });
+
+    it('preserves freshly fetched parent field values when linking a lagging engine-cached child record', async () => {
+        const productsInfo = batchedProvider.EntityByName('Products')!;
+        const meetingsInfo = batchedProvider.EntityByName('Meetings')!;
+        const id = 'c2000000-0000-0000-0000-000000000000';
+
+        // Build an engine-cached Meetings row that carries a STALE inherited parent field ('Name')
+        const staleChildRow: Record<string, unknown> = {
+            ...store.ViewRow(meetingsInfo, id)!,
+            Name: 'Stale Engine Cached Product Name',
+            Venue: 'Hall 0 Cached',
+        };
+
+        const laggingEngine = {
+            Loaded: true,
+            Meetings: [staleChildRow],
+            ReadonlyConfigs: [
+                { PropertyName: 'Meetings', EntityName: 'Meetings', Type: 'entity', ResultType: 'simple' },
+            ],
+        };
+        BaseEngineRegistry.Instance.RegisterEngine(laggingEngine);
+
+        try {
+            const freshParentRow: Record<string, unknown> = {
+                ...store.ViewRow(productsInfo, id)!,
+                Name: 'Freshly Read Product Name',
+            };
+
+            const [hydratedParent] = await TransformSimpleObjectToEntityObject<BaseEntity>(
+                batchedProvider as object as IMetadataProvider,
+                'Products',
+                [freshParentRow],
+                user
+            );
+
+            // Child's own field ('Venue') comes from the engine cache with 0 queries
+            expect(hydratedParent.ISAChild?.EntityInfo.Name).toBe('Meetings');
+            expect(hydratedParent.ISAChild?.Get('Venue')).toBe('Hall 0 Cached');
+            // Parent's own field ('Name') MUST keep the fresh value read for the parent and stay clean!
+            expect(hydratedParent.Get('Name')).toBe('Freshly Read Product Name');
+            expect(hydratedParent.GetAll().Name).toBe('Freshly Read Product Name');
+            expect(hydratedParent.ISAChild?.GetAll().Name).toBe('Freshly Read Product Name');
+            expect(hydratedParent.Dirty).toBe(false);
+            expect(hydratedParent.ISAChild?.Dirty).toBe(false);
+            expect(batchedProvider.BatchDiscoveryCalls).toBe(0);
+            expect(batchedProvider.RunViewsBatchCalls).toBe(0);
+        } finally {
+            BaseEngineRegistry.Instance.UnregisterEngine(laggingEngine);
+        }
+    });
+
+    it('narrows field-level security denied columns when linking an IS-A child from a system-user engine cache', async () => {
+        const productsInfo = batchedProvider.EntityByName('Products')!;
+        const meetingsInfo = batchedProvider.EntityByName('Meetings')!;
+        const id = 'c2000000-0000-0000-0000-000000000000';
+
+        // Enable FLS on Meetings and deny 'venue' for the active user
+        Object.defineProperty(meetingsInfo, 'EnableFieldLevelSecurity', { get: () => true, configurable: true });
+        const deniedSpy = vi.spyOn(meetingsInfo, 'GetDeniedReadFields').mockReturnValue(new Set(['venue']));
+
+        const fullWidthCachedChild: Record<string, unknown> = {
+            ...store.ViewRow(meetingsInfo, id)!,
+            Venue: 'CONFIDENTIAL-VENUE-SECRET',
+        };
+        const systemEngine = {
+            Loaded: true,
+            Meetings: [fullWidthCachedChild],
+            ReadonlyConfigs: [
+                { PropertyName: 'Meetings', EntityName: 'Meetings', Type: 'entity', ResultType: 'simple' },
+            ],
+        };
+        BaseEngineRegistry.Instance.RegisterEngine(systemEngine);
+
+        try {
+            const [hydratedParent] = await TransformSimpleObjectToEntityObject<BaseEntity>(
+                batchedProvider as object as IMetadataProvider,
+                'Products',
+                [store.ViewRow(productsInfo, id)!],
+                user
+            );
+
+            expect(hydratedParent.ISAChild?.EntityInfo.Name).toBe('Meetings');
+            const serialized = JSON.stringify(hydratedParent.ISAChild?.GetAll() ?? {});
+            expect(serialized).not.toContain('CONFIDENTIAL-VENUE-SECRET');
+        } finally {
+            BaseEngineRegistry.Instance.UnregisterEngine(systemEngine);
+            deniedSpy.mockRestore();
+            delete (meetingsInfo as unknown as Record<string, unknown>)['EnableFieldLevelSecurity'];
+        }
+    });
+
+    it('logs a warning when an overlapping-subtype RunViews probe fails', async () => {
+        Object.defineProperty(batchedProvider, 'FindISAChildEntitiesBatch', { value: undefined });
+
+        const partiesInfo = batchedProvider.EntityByName('Parties')!;
+        const partyId = 'd2000000-0000-0000-0000-000000000001';
+        store.Insert('Parties', { ID: partyId, Name: 'Warn Party' });
+        store.Insert('Customers', { ID: partyId, CreditLimit: 2500 });
+
+        const origRunViews = batchedProvider.RunViews.bind(batchedProvider);
+        vi.spyOn(batchedProvider, 'RunViews').mockImplementation(async <T>(params: RunViewParams[]) => {
+            const res = await origRunViews<T>(params);
+            return res.map((r, i) =>
+                params[i]?.EntityName === 'Vendors'
+                    ? { ...r, Success: false, ErrorMessage: 'Simulated Vendors probe failure', Results: [] }
+                    : r
+            );
+        });
+        const warnSpy = vi.spyOn( logging, 'LogWarning' );
+
+        const results = await TransformSimpleObjectToEntityObject<BaseEntity>(
+            batchedProvider as object as IMetadataProvider,
+            'Parties',
+            [store.ViewRow(partiesInfo, partyId)!],
+            user
+        );
+
+        expect(results).toHaveLength(1);
+        expect(results[0].ISAChildren?.map(c => c.entityName)).toEqual(['Customers']);
+        expect(warnSpy).toHaveBeenCalledWith(
+            expect.stringContaining("batched IS-A child load of 'Vendors' failed (Simulated Vendors probe failure)"),
+            'IS-A'
+        );
+    });
+
+    it('CloneEntityWithISAChain clones an IS-A parent and its attached 3-level ISAChild chain in 0 provider queries', async () => {
+        const productsInfo = batchedProvider.EntityByName('Products')!;
+        const coursesInfo = batchedProvider.EntityByName('Courses')!;
+        const webinarsInfo = batchedProvider.EntityByName('Webinars')!;
+        const webinarId = 'e2000000-0000-0000-0000-000000000001';
+
+        store.Insert('Products', {
+            ID: webinarId,
+            Name: 'Deep Clone Webinar',
+            ProductTypeID: null,
+        });
+        store.Insert('Courses', { ID: webinarId, CreditHours: 6 });
+        store.Insert('Webinars', { ID: webinarId, PlatformURL: 'https://stream.example.com/clone' });
+
+        const batchParams = [
+            { EntityName: 'Products', ResultType: 'entity_object' as const },
+            { EntityName: 'Courses', ResultType: 'simple' as const },
+            { EntityName: 'Webinars', ResultType: 'simple' as const },
+        ];
+        const batchResults = [
+            {
+                Success: true,
+                Results: [store.ViewRow(productsInfo, webinarId)!] as unknown[],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 0,
+                ErrorMessage: '',
+                UserViewRunID: '',
+            },
+            {
+                Success: true,
+                Results: [store.ViewRow(coursesInfo, webinarId)!] as unknown[],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 0,
+                ErrorMessage: '',
+                UserViewRunID: '',
+            },
+            {
+                Success: true,
+                Results: [store.ViewRow(webinarsInfo, webinarId)!] as unknown[],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 0,
+                ErrorMessage: '',
+                UserViewRunID: '',
+            },
+        ];
+
+        const providerWithTransform = Object.assign(batchedProvider, {
+            TransformSimpleObjectToEntityObject: ProviderBase.prototype['TransformSimpleObjectToEntityObject'],
+            NormalizeSimpleRowTypes: () => {},
+            isUnfilteredFullEntityBatchView: ProviderBase.prototype['isUnfilteredFullEntityBatchView'],
+            isFullCoverageFieldList: ProviderBase.prototype['isFullCoverageFieldList'],
+        });
+
+        await ProviderBase.prototype['TransformBatchRunViewResults'].call(
+            providerWithTransform,
+            batchParams,
+            batchResults,
+            undefined,
+            undefined,
+            user
+        );
+
+        const [sourceProduct] = batchResults[0].Results as BaseEntity[];
+        expect(sourceProduct.ISAChild?.ISAChild?.EntityInfo.Name).toBe('Webinars');
+
+        batchedProvider.ResetRoundTrips();
+        const clonedProduct = await batchedProvider.GetEntityObject<BaseEntity>('Products', user);
+        await BaseEntity.CloneEntityWithISAChain(
+            sourceProduct,
+            clonedProduct,
+            batchedProvider as object as IMetadataProvider,
+            user
+        );
+
+        expect(clonedProduct).not.toBe(sourceProduct);
+        expect(clonedProduct.Get('Name')).toBe('Deep Clone Webinar');
+        expect(clonedProduct.ISAChild?.EntityInfo.Name).toBe('Courses');
+        expect(clonedProduct.ISAChild).not.toBe(sourceProduct.ISAChild);
+        expect(clonedProduct.ISAChild?.Get('CreditHours')).toBe(6);
+        expect(clonedProduct.ISAChild?.ISAChild?.EntityInfo.Name).toBe('Webinars');
+        expect(clonedProduct.ISAChild?.ISAChild?.Get('PlatformURL')).toBe('https://stream.example.com/clone');
+        expect(batchedProvider.BatchDiscoveryCalls).toBe(0);
+        expect(batchedProvider.RunViewsBatchCalls).toBe(0);
+        expect(batchedProvider.Count('FindISAChildEntity')).toBe(0);
+        expect(batchedProvider.Count('Load')).toBe(0);
     });
 });

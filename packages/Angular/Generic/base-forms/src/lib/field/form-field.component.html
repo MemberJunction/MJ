@@ -13,6 +13,7 @@
       @if (ShowLabel) {
         <div class="mj-forms-field-label-row">
           <label class="mj-forms-field-label" [innerHTML]="HighlightedDisplayName"></label>
+          <ng-container *ngTemplateOutlet="fieldCommentsBadgeTpl"></ng-container>
           @if (HasTimeTravelDiff) {
             <span class="mj-forms-time-travel-badge" title="This field's value at the previewed historical version differs from the current live record">
               <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
@@ -204,6 +205,7 @@
       @if (ShowLabel) {
         <div class="mj-forms-field-label-row">
           <label class="mj-forms-field-label" [innerHTML]="HighlightedDisplayName"></label>
+          <ng-container *ngTemplateOutlet="fieldCommentsBadgeTpl"></ng-container>
           <ng-container *ngTemplateOutlet="fieldEditIndicatorsTpl"></ng-container>
         </div>
       }
@@ -697,5 +699,31 @@
       <span>Updated live</span>
       <span class="mj-forms-field__auto-merged-tooltip">Previously: {{ FormattedAutoMergedPreviousValue }}</span>
     </span>
+  }
+</ng-template>
+
+<!-- Shared template for field-level anchored comments pill / hover trigger -->
+<ng-template #fieldCommentsBadgeTpl>
+  @if (CanCommentOnField) {
+    @if (FieldOpenCommentCount > 0) {
+      <button
+        type="button"
+        class="mj-forms-field__comment-pill"
+        [title]="FieldOpenCommentCount + (FieldOpenCommentCount === 1 ? ' open comment' : ' open comments') + ' on ' + DisplayName"
+        [attr.aria-label]="FieldOpenCommentCount + (FieldOpenCommentCount === 1 ? ' open comment' : ' open comments') + ' on ' + DisplayName"
+        (click)="OnOpenFieldComments($event)">
+        <i class="fa-regular fa-comment-dots" aria-hidden="true"></i>
+        <span>{{ FieldOpenCommentCount }}</span>
+      </button>
+    } @else {
+      <button
+        type="button"
+        class="mj-forms-field__comment-trigger"
+        [title]="'Comment on ' + DisplayName"
+        [attr.aria-label]="'Comment on ' + DisplayName"
+        (click)="OnOpenFieldComments($event)">
+        <i class="fa-regular fa-comment-dots" aria-hidden="true"></i>
+      </button>
+    }
   }
 </ng-template>
