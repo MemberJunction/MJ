@@ -489,3 +489,28 @@ describe('decideNullabilityOverlay — both-silent keeps the declaration', () =>
         expect(DecideNullabilityOverlay(undefined, undefined, undefined).value).toBe(true);
     });
 });
+
+// #3527 / decision actions.2 A: declared numbers persist typed; an existing string column is not flipped.
+describe('DecideTypeOverlay — typed numeric columns (#3527)', () => {
+    it('a new field declared integer / decimal / float persists typed', () => {
+        expect(DecideTypeOverlay(null, 'integer').value).toBe('int');
+        expect(DecideTypeOverlay(null, 'bigint').value).toBe('bigint');
+        expect(DecideTypeOverlay(null, 'decimal').value).toBe('decimal');
+        expect(DecideTypeOverlay(null, 'currency').value).toBe('decimal');
+        expect(DecideTypeOverlay(null, 'float').value).toBe('float');
+    });
+
+    it("'number' gives no width, so it stays text", () => {
+        expect(DecideTypeOverlay(null, 'number').value).toBe('nvarchar');
+    });
+
+    it('an existing nvarchar column is not retyped to a number on re-discovery', () => {
+        expect(DecideTypeOverlay('nvarchar', 'integer')).toEqual({ value: 'nvarchar', winner: 'Declared' });
+        expect(DecideTypeOverlay('nvarchar', 'decimal')).toEqual({ value: 'nvarchar', winner: 'Declared' });
+    });
+
+    it('booleans and dates keep their typed mapping', () => {
+        expect(DecideTypeOverlay(null, 'boolean').value).toBe('bit');
+        expect(DecideTypeOverlay(null, 'datetime').value).toBe('datetimeoffset');
+    });
+});
