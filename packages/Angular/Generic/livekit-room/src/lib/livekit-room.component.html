@@ -47,8 +47,10 @@
     }
 
     <!-- Every remote voice plays here, whatever the layout shows: tiles never play audio. -->
-    @for (p of State.Remote; track p.Identity) {
-      <mj-livekit-participant-audio [Participant]="p"></mj-livekit-participant-audio>
+    @if (!IsRoomOnHold) {
+      @for (p of State.Remote; track p.Identity) {
+        <mj-livekit-participant-audio [Participant]="p"></mj-livekit-participant-audio>
+      }
     }
 
     <div class="lk-room__body">
