@@ -10,7 +10,7 @@ import {
     RegisterFormToolbarAction,
 } from '@memberjunction/ng-base-forms';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import type { MJConfirmOptions } from '@memberjunction/ng-ui-components';
+import { MJConfirmService } from '@memberjunction/ng-ui-components';
 
 const SENDER_REGISTRATIONS_ENTITY = 'MJ: Diagnostic Sender Registrations';
 const SUCCESS_DURATION_MS = 3000;
@@ -52,6 +52,15 @@ abstract class SenderRegistrationStatusAction extends BaseFormToolbarAction {
     }
 }
 
+/** Resolves MJConfirmService from the form container's injector, or null when it cannot. */
+function confirmServiceOf(ctx: FormToolbarActionLifecycleContext): MJConfirmService | null {
+    try {
+        return ctx.Injector?.get(MJConfirmService, null, { optional: true }) ?? null;
+    } catch {
+        return null;
+    }
+}
+
 function notify(message: string, style: 'success' | 'error', duration: number): void {
     MJNotificationService.Instance.CreateSimpleNotification(message, style, duration);
 }
@@ -67,7 +76,8 @@ async function reloadRecord(ctx: FormToolbarActionLifecycleContext): Promise<voi
 
 /**
  * Revoke button on the sender registration form. Shown on a saved registration that is not
- * Revoked. Asks for confirmation, then calls `Diagnostics.RevokeSender`.
+ * Revoked. Asks for confirmation through `MJConfirmService` from `ctx.Injector`, then calls
+ * `Diagnostics.RevokeSender`. Without a confirm service it shows an error and makes no call.
  */
 @RegisterFormToolbarAction({
     Key: 'diagnostics-revoke-sender',
@@ -82,9 +92,6 @@ async function reloadRecord(ctx: FormToolbarActionLifecycleContext): Promise<voi
     Pinnable: false,
 })
 export class DiagnosticsRevokeSenderToolbarAction extends SenderRegistrationStatusAction {
-    /** Opens the confirmation dialog. When null, Revoke shows an error and does nothing. */
-    public static Confirm: ((options: MJConfirmOptions) => Promise<boolean>) | null = null;
-
     public override IsApplicable(ctx: FormToolbarActionLifecycleContext): boolean {
         const registration = this.RegistrationOf(ctx);
         return Boolean(registration?.IsSaved && registration.Status !== 'Revoked');
@@ -92,13 +99,13 @@ export class DiagnosticsRevokeSenderToolbarAction extends SenderRegistrationStat
 
     public override async OnExecute(ctx: FormToolbarActionLifecycleContext): Promise<void> {
         if (this.IsLoading) return;
-        const confirm = DiagnosticsRevokeSenderToolbarAction.Confirm;
-        if (!confirm) {
+        const confirmService = confirmServiceOf(ctx);
+        if (!confirmService) {
             notify('Cannot open the confirmation dialog, so the sender was not revoked.', 'error', ERROR_DURATION_MS);
             return;
         }
         const registration = this.RegistrationOf(ctx);
-        const confirmed = await confirm({
+        const confirmed = await confirmService.Confirm({
             title: 'Revoke sender',
             message: `Revoke the sender registration for '${registration.InstallID}'?`,
             detail: 'The collector refuses bundles from this sender. A sender with an enrolled key can be reactivated later.',

@@ -1,11 +1,17 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Injector } from '@angular/core';
 import type { FormToolbarActionLifecycleContext } from '@memberjunction/ng-base-forms';
-import type { MJConfirmOptions } from '@memberjunction/ng-ui-components';
+import { MJConfirmService, type MJConfirmOptions } from '@memberjunction/ng-ui-components';
 
 const mocks = vi.hoisted(() => ({
     revokeExecute: vi.fn(),
     reactivateExecute: vi.fn(),
     notify: vi.fn(),
+    confirm: vi.fn<(options: MJConfirmOptions) => Promise<boolean>>(),
+}));
+
+vi.mock('@memberjunction/ng-ui-components', () => ({
+    MJConfirmService: class {},
 }));
 
 vi.mock('@memberjunction/ng-base-forms', () => {
@@ -57,7 +63,14 @@ interface FakeContext {
     setLoading: ReturnType<typeof vi.fn>;
 }
 
-function makeContext(overrides: Partial<FakeRecord> = {}): FakeContext {
+/** An injector that resolves MJConfirmService to a fake whose Confirm is `mocks.confirm`. */
+function makeInjector(): Injector {
+    return {
+        get: (token: object) => (token === MJConfirmService ? { Confirm: mocks.confirm } : null),
+    } as unknown as Injector;
+}
+
+function makeContext(overrides: Partial<FakeRecord> = {}, injector: Injector | null = makeInjector()): FakeContext {
     const record: FakeRecord = {
         ID: REG_ID,
         InstallID: 'install-1',
@@ -78,6 +91,7 @@ function makeContext(overrides: Partial<FakeRecord> = {}): FakeContext {
         EditMode: false,
         IsDirty: false,
         FormComponent: { RefreshRecord: refreshRecord },
+        Injector: injector ?? undefined,
         SetLoading: setLoading,
         RequestChangeDetection: vi.fn(),
     } as unknown as FormToolbarActionLifecycleContext;
@@ -85,17 +99,11 @@ function makeContext(overrides: Partial<FakeRecord> = {}): FakeContext {
 }
 
 describe('DiagnosticsRevokeSenderToolbarAction', () => {
-    let confirm: ReturnType<typeof vi.fn<(options: MJConfirmOptions) => Promise<boolean>>>;
-
     beforeEach(() => {
         mocks.revokeExecute.mockReset();
         mocks.notify.mockReset();
-        confirm = vi.fn<(options: MJConfirmOptions) => Promise<boolean>>().mockResolvedValue(true);
-        DiagnosticsRevokeSenderToolbarAction.Confirm = confirm;
-    });
-
-    afterEach(() => {
-        DiagnosticsRevokeSenderToolbarAction.Confirm = null;
+        mocks.confirm.mockReset();
+        mocks.confirm.mockResolvedValue(true);
     });
 
     it.each([
@@ -118,14 +126,14 @@ describe('DiagnosticsRevokeSenderToolbarAction', () => {
 
         await new DiagnosticsRevokeSenderToolbarAction().OnExecute(ctx);
 
-        expect(confirm).toHaveBeenCalledTimes(1);
+        expect(mocks.confirm).toHaveBeenCalledTimes(1);
         expect(mocks.revokeExecute).toHaveBeenCalledWith({ RegistrationID: REG_ID }, { provider });
         expect(refreshRecord).toHaveBeenCalledTimes(1);
         expect(mocks.notify).toHaveBeenCalledWith(expect.any(String), 'success', expect.any(Number));
     });
 
     it('makes no call when the confirmation is cancelled', async () => {
-        confirm.mockResolvedValue(false);
+        mocks.confirm.mockResolvedValue(false);
         const { ctx, refreshRecord } = makeContext();
 
         await new DiagnosticsRevokeSenderToolbarAction().OnExecute(ctx);
@@ -134,12 +142,22 @@ describe('DiagnosticsRevokeSenderToolbarAction', () => {
         expect(refreshRecord).not.toHaveBeenCalled();
     });
 
-    it('makes no call when no confirmation dialog is available', async () => {
-        DiagnosticsRevokeSenderToolbarAction.Confirm = null;
-        const { ctx } = makeContext();
+    it('makes no call when the context has no injector', async () => {
+        const { ctx } = makeContext({}, null);
 
         await new DiagnosticsRevokeSenderToolbarAction().OnExecute(ctx);
 
+        expect(mocks.revokeExecute).not.toHaveBeenCalled();
+        expect(mocks.notify).toHaveBeenCalledWith(expect.any(String), 'error', expect.any(Number));
+    });
+
+    it('makes no call when the injector cannot resolve the confirm service', async () => {
+        const empty = { get: () => null } as unknown as Injector;
+        const { ctx } = makeContext({}, empty);
+
+        await new DiagnosticsRevokeSenderToolbarAction().OnExecute(ctx);
+
+        expect(mocks.confirm).not.toHaveBeenCalled();
         expect(mocks.revokeExecute).not.toHaveBeenCalled();
         expect(mocks.notify).toHaveBeenCalledWith(expect.any(String), 'error', expect.any(Number));
     });
@@ -184,6 +202,7 @@ describe('DiagnosticsReactivateSenderToolbarAction', () => {
     beforeEach(() => {
         mocks.reactivateExecute.mockReset();
         mocks.notify.mockReset();
+        mocks.confirm.mockReset();
     });
 
     it.each([
@@ -203,18 +222,16 @@ describe('DiagnosticsReactivateSenderToolbarAction', () => {
     });
 
     it('calls its operation without a confirmation and reloads the record', async () => {
-        const confirm = vi.fn<(options: MJConfirmOptions) => Promise<boolean>>().mockResolvedValue(true);
-        DiagnosticsRevokeSenderToolbarAction.Confirm = confirm;
+        mocks.confirm.mockResolvedValue(true);
         mocks.reactivateExecute.mockResolvedValue({ Success: true, Output: { Status: 'Active' } });
         const { ctx, provider, refreshRecord, setLoading } = makeContext({ Status: 'Revoked' });
 
         await new DiagnosticsReactivateSenderToolbarAction().OnExecute(ctx);
 
-        expect(confirm).not.toHaveBeenCalled();
+        expect(mocks.confirm).not.toHaveBeenCalled();
         expect(mocks.reactivateExecute).toHaveBeenCalledWith({ RegistrationID: REG_ID }, { provider });
         expect(refreshRecord).toHaveBeenCalledTimes(1);
         expect(setLoading.mock.calls).toEqual([[true], [false]]);
-        DiagnosticsRevokeSenderToolbarAction.Confirm = null;
     });
 
     it('reloads through the record when the form has no form component', async () => {

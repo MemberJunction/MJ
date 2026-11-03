@@ -1,3 +1,4 @@
+import type { Injector } from '@angular/core';
 import { BaseEntity, EntityInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJGlobal, RegisterClassEx } from '@memberjunction/global';
 import type { BaseFormComponent } from '../base-form-component';
@@ -110,6 +111,8 @@ export interface FormToolbarActionLifecycleContext {
     readonly IsVisibleOnBar: boolean;
     /** Optional reference to the host `BaseFormComponent`. */
     readonly FormComponent: BaseFormComponent | null;
+    /** Injector of the host form container, for resolving Angular services such as dialogs. */
+    readonly Injector?: Injector;
 
     /** Update the badge count or text displayed on this toolbar button. */
     SetBadge(badge: string | number | null | undefined): void;
