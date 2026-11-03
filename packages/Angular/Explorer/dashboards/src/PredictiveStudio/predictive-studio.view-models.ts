@@ -447,7 +447,7 @@ function rankGroupOf(entry: PSRankedScore): string {
 }
 
 /** A normalized score on its metric's own scale, and the label that scale reads under. */
-function scoreOnMetric(entry: PSRankedScore): { Value: number; Label: string } {
+export function ScoreOnMetric(entry: PSRankedScore): { Value: number; Label: string } {
   switch (MetricDirections.MetricDirectionOf(entry.ScoreMetric)) {
     case 'lower-is-better': return { Value: -entry.Metric, Label: entry.ScoreMetric };
     case 'closer-to-one': return { Value: -entry.Metric, Label: `${entry.ScoreMetric} distance from 1` };
@@ -513,7 +513,7 @@ export function DeriveLeaderboard(iterations: PSIterationRow[], ranked: readonly
   return shown.slice(0, topN).map(({ it, entry }, idx) => {
     const algo = it.AlgorithmName ?? 'Unknown';
     const style = algoStyle(algo);
-    const score = scoreOnMetric(entry);
+    const score = ScoreOnMetric(entry);
     return {
       rank: idx + 1,
       algorithm: algo,
@@ -556,7 +556,7 @@ function toScoredCard(
 ): PSIterationCard {
   const algo = it.AlgorithmName ?? 'Unknown';
   const style = algoStyle(algo);
-  const score = entry === undefined ? undefined : scoreOnMetric(entry);
+  const score = entry === undefined ? undefined : ScoreOnMetric(entry);
   return {
     Algorithm: algo,
     AlgorithmIcon: style.icon,

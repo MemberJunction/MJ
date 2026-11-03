@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   DeriveLeaderboard, FormatMetricValue, GroupIterationsToKanban, ParseMetrics, ParseSessionLeaderboard, PrimaryModelScore,
-  ReadStoredGate,
+  ReadStoredGate, ScoreOnMetric,
   type PSIterationRow,
 } from './predictive-studio.view-models';
 import { WidgetFixtures } from './components/evaluation-results/widget-fixtures';
@@ -104,5 +104,17 @@ describe('ReadStoredGate', () => {
     expect(ReadStoredGate('{}')).toBeNull();
     expect(ReadStoredGate(JSON.stringify({ ...WidgetFixtures.StoredRunEnvelope(), status: 'failed' }))).toBeNull();
     expect(ReadStoredGate(WidgetFixtures.StoredRunJson({ gate: null }))).toBeNull();
+  });
+});
+
+describe('ScoreOnMetric', () => {
+  it('flips a lower-is-better metric onto a higher-is-better scale under its own name', () => {
+    expect(ScoreOnMetric({ IterationID: 'i', Metric: -2.5, ScoreMetric: 'rmse', OnSuccessMetric: true })).toEqual({ Value: 2.5, Label: 'rmse' });
+  });
+  it('labels a closer-to-one metric by its distance from 1', () => {
+    expect(ScoreOnMetric({ IterationID: 'i', Metric: -0.1, ScoreMetric: 'calibration-slope', OnSuccessMetric: false }).Label).toBe('calibration-slope distance from 1');
+  });
+  it('keeps a higher-is-better metric as stored', () => {
+    expect(ScoreOnMetric({ IterationID: 'i', Metric: 0.81, ScoreMetric: 'auc', OnSuccessMetric: true })).toEqual({ Value: 0.81, Label: 'auc' });
   });
 });
