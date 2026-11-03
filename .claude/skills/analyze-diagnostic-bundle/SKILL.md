@@ -14,7 +14,7 @@ Use this skill when a user provides a `.mjdiag` file (plain ZIP archive or encry
    npx mj diag inspect <path-to-bundle.mjdiag> --json
    ```
    - The JSON has `wasEncrypted`, `manifest` and `findings`.
-   - Review these manifest fields: `bundleId`, `sessionId`, `createdAt`, `captureReason`, `scrubberProfile`, `redactionSummary` (`credentialsScrubbedCount`, `sqlLiteralsNormalizedCount`, `customPatternsAppliedCount`) and `files`.
+   - Review these manifest fields: `schemaVersion`, `bundleId`, `sessionId`, `createdAt`, `captureReason`, `scrubberProfile`, `redactionSummary` (`credentialsScrubbedCount`, `sqlLiteralsNormalizedCount`, `customPatternsAppliedCount`) and `files`.
    - `manifest.files` maps each archive entry (for example `server/sql.ndjson`) to its `sha256`, `sizeBytes` and, for list files, `entryCount`. Use `entryCount` for the number of logs, spans, SQL events, breadcrumbs and findings.
    - The environment (MJ version and more) is in the bundle's `environment.json`, not in the manifest. The text output (without `--json`) shows the MJ version.
    - If the bundle is an encrypted `MJDB` envelope from an intake server, give the base64 PKCS#8 private key with `--private-key-file <path>` or the `MJ_DIAG_PRIVATE_KEY` environment variable. `--private-key <base64>` also works, but other processes and the shell history can see the value. If more than one is given, `--private-key` wins, then `--private-key-file`, then `MJ_DIAG_PRIVATE_KEY`. The same options work on `slow`, `timeline`, `export` and `scrub`.

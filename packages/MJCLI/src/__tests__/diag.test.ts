@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import {
     BuildMjdiagArchive,
     EncryptDiagnosticBundle,
@@ -73,6 +73,15 @@ async function makeSampleBundleBytes(): Promise<Uint8Array> {
         scrubberProfile: 'FullRaw',
     });
 }
+
+/** A key in the developer's shell must not reach tests that expect no key. */
+beforeEach(() => {
+    vi.stubEnv('MJ_DIAG_PRIVATE_KEY', '');
+});
+
+afterEach(() => {
+    vi.unstubAllEnvs();
+});
 
 describe('mj diag CLI utilities', () => {
     it('loads, verifies, timelines, finds slow ops, re-scrubs, and exports .mjdiag bundles (plain & encrypted)', async () => {
