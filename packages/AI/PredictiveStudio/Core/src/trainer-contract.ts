@@ -25,7 +25,7 @@ import type { GateDecision, PairedComparison } from './gate';
 import type { FeatureImportance, ImportanceKind } from './sidecar-contract';
 import type { JsonValue, ParseResult } from './json-value';
 import { StoreSchemas } from './store-schemas';
-import type { TaskType } from './task-type';
+import { TaskTypeRules, type TaskType } from './task-type';
 import { TrainerResultSchemas } from './trainer-result-schemas';
 
 /** One hyperparameter value of a candidate. */
@@ -404,11 +404,19 @@ export class TrainerContract {
   }
 
   /**
-   * Whether a family is hidden for its holdout calibration: a slope outside 0.8–1.2, or one that is not a finite
-   * number, hides it, so it is never offered. A null report (regression families have none) hides nothing.
+   * Whether a family is hidden for its holdout calibration, so it is never offered. Only the probability tasks the
+   * trainer calibrates (binary and multiclass, {@link TaskTypeRules.IsClassificationTask}) can be hidden: a slope
+   * outside 0.8–1.2, or one that is not a finite number, hides the family, and so does a null report, because the
+   * sidecar returns none when the slope could not be measured on the holdout rows (constant predictions, separated
+   * classes, a fit that does not converge) or when the protocol declares no calibration. Any other task is never
+   * hidden: the trainer calibrates none of them.
+   *
+   * @param report the completed result's holdout calibration report
+   * @param task the task the run trained
    */
-  public static CalibrationHidesFamily(report: CalibrationReport | null): boolean {
-    if (report === null) return false;
+  public static CalibrationHidesFamily(report: CalibrationReport | null, task: TaskType): boolean {
+    if (!TaskTypeRules.IsClassificationTask(task)) return false;
+    if (report === null) return true;
     return (
       !Number.isFinite(report.slope) ||
       report.slope < CALIBRATION_SLOPE_RANGE[0] ||

@@ -78,6 +78,17 @@ describe('DefaultEvaluationProtocolDraft', () => {
 });
 
 describe('ValidateProtocolForUnit', () => {
+  it('refuses calibration "not-applicable" on a binary or multiclass unit, whose probabilities are calibrated and judged', () => {
+    const u = unit(binary);
+    const p = protocol({ ...draftFor(u), calibration: { kind: 'not-applicable', reason: 'regression-task' } });
+    const refusals = EvaluationProtocolRules.ValidateProtocolForUnit(p, u);
+    expect(refusals).toEqual([{ Kind: 'calibration-not-applicable-for-probability-task', UnitTask: 'binary' }]);
+    expect(EvaluationProtocolRules.DescribeProtocolRefusal(refusals[0])).toBe(
+      'A binary unit\'s probabilities are calibrated and their holdout calibration slope decides whether the model is offered; calibration "not-applicable" is for regression tasks only, so no model trained under this protocol could be offered.',
+    );
+    expect(EvaluationProtocolRules.ValidateProtocolForUnit(protocol(draftFor(u)), u)).toEqual([]);
+  });
+
   it('refuses ranking a Tweedie target by RMSE', () => {
     const u = unit({ kind: 'non-negative', tweediePower: 1.5 });
     const p = protocol({ ...draftFor(u), primaryScore: { family: 'continuous', metric: 'rmse' } });

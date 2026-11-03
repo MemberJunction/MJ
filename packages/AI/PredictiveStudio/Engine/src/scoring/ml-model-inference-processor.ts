@@ -44,7 +44,7 @@
  * processor dynamically by work-type key via {@link resolveMLInferenceProcessor}.
  */
 
-import { RegisterClass, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, RegisterClass, UserScopedCacheKey, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { LogError, RunView } from '@memberjunction/core';
 import type {
   IRecordProcessor,
@@ -98,6 +98,8 @@ import {
   ModelArtifactMissingMessage,
   ModelNeedsTrainingError,
   ModelNotScorableError,
+  ModelNotServableError,
+  ModelReadiness,
 } from './model-readiness';
 import type {
   IModelAutoTrainer,
@@ -136,6 +138,19 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
   private loadedModel: LoadedModel | null = null;
   /** Memoized in-flight load so concurrent records don't double-load the artifact. */
   private loadPromise: Promise<LoadedModel> | null = null;
+  /**
+   * The run's one scoring instant, read by its first unit assembly and kept for every later batch: every row of a run is
+   * dated (an advancing fixed decision date), assembled and read for lags as of the same instant.
+   */
+  private scoringInstant: Date | null = null;
+  /**
+   * The run's series history ({@link SeriesHistoryForScoring}), built by the first batch that needs it and reused by
+   * every later batch of the run, so the unit's rows are read once per run, not once per batch. A processor is
+   * constructed per run, so it is never shared across runs. One entry, bounded by construction: keyed by the unit
+   * version, the run's scoring instant and the user it was read as, a different key replaces it, a failed build is
+   * dropped so a later batch retries, and {@link resetModelCache} clears it when the run retargets its model.
+   */
+  private seriesHistoryEntry: { readonly Key: string; readonly History: Promise<SeriesHistory | null> } | null = null;
 
   /**
    * @param options model id + injected seams (+ optional pk field / dated sources)
@@ -212,10 +227,11 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     throw new TrainingRefusedError({ stage: 'assembly', reason: { kind: 'scope-entity-mismatch', modelEntity: model.unit.RowEntity, scopeEntity } });
   }
 
-  /** Drop the warm-model cache (and any memoized failed load). */
+  /** Drop the warm-model cache (and any memoized failed load) and the series history read for that model's unit. */
   private resetModelCache(): void {
     this.loadPromise = null;
     this.loadedModel = null;
+    this.seriesHistoryEntry = null;
   }
 
   /**
@@ -316,7 +332,8 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
   /**
    * Refuse a model whose lifecycle status or missing artifact forbids scoring, in this order: a Draft with no artifact
    * needs training (the opt-in auto-train path reacts to that, D2-C3) and a trained Draft is not scorable; Validated and
-   * Published score once they have an artifact; any other status (Archived, or a value CodeGen adds later) is refused
+   * Published score once they have an artifact that `/predict` serves (a series forecaster's is refused with
+   * {@link ModelNotServableError}, never "needs training", so auto-train does not retrain for it); any other status (Archived, or a value CodeGen adds later) is refused
    * before the artifact is looked at. Returns the artifact file of a model that may score.
    */
   private assertStatusCanScore(model: MJMLModelEntity): string {
@@ -326,8 +343,11 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
         this.requireArtifactFileId(model);
         throw new ModelNotScorableError(this.modelId, status);
       case 'Validated':
-      case 'Published':
-        return this.requireArtifactFileId(model);
+      case 'Published': {
+        const fileId = this.requireArtifactFileId(model);
+        if (!ModelReadiness.IsServedByPredict(model)) throw new ModelNotServableError(this.modelId);
+        return fileId;
+      }
       default:
         throw new ModelNotScorableError(this.modelId, status);
     }
@@ -545,7 +565,9 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
    * column); each is dated by the unit's rule (`'unit-rule'`, the reader's own rule) or, given a date, every row is read
    * as of that day. The assembler gets the feature columns and kept categorical levels training stored, so a value
    * reads and folds exactly as it did in training. A refusal (a key that is not found, a read the history does not
-   * cover) is returned as the refused result; the scoring path throws it as a typed `TrainingRefusedError`.
+   * cover) is returned as the refused result; the scoring path throws it as a typed `TrainingRefusedError`. The run
+   * reads its clock once, on its first assembly: every batch of the run is dated and assembled as of that instant and
+   * reads its lags from one series history, built by the first batch that needs it.
    *
    * @param rows the rows to score; each carries the unit row entity's primary key
    * @param context the run's user and provider
@@ -560,7 +582,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     const read = await KeyedReader.ReadByKeys(seams.DataAccess, rowEntity.Name, rowEntity.PrimaryKey, keys, MLModelInferenceProcessor.datingFields(unit.Spec));
     if (read.Status === 'refused') return read;
     // One clock read per scoring run: the assembly day and the day an advancing fixed decision date moves to.
-    const now = new Date();
+    const now = this.runScoringInstant();
     const refs = keys.map((k) => MLModelInferenceProcessor.rowRef(unit.Spec, rowEntity, read.Rows.get(k.toLowerCase()), k, asOf, now));
     return new AsOfFeatureAssembler().Assemble({
       Context: 'score',
@@ -568,7 +590,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       RowEntity: rowEntity,
       Rows: refs,
       Features: unit.Features,
-      SeriesHistory: await MLModelInferenceProcessor.SeriesHistoryForScoring(unit.Spec, seams, now),
+      SeriesHistory: await this.seriesHistoryForRun(unit.Spec, seams, now, context),
       Read: { mode: 'complete' },
       DataAccess: seams.DataAccess,
       History: this.deps.history || new RunViewRecordHistoryReader(seams.DataAccess, { mode: 'complete' }),
@@ -625,11 +647,37 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     return PredictionUnitRowReader.UnitRowRef(spec, rowEntity, row, decision);
   }
 
+  /** The run's scoring instant: the clock read by the run's first unit assembly ({@link scoringInstant}). */
+  private runScoringInstant(): Date {
+    if (this.scoringInstant === null) this.scoringInstant = new Date();
+    return this.scoringInstant;
+  }
+
+  /**
+   * The run's series history ({@link seriesHistoryEntry}): built once for the key and shared by every batch, concurrent
+   * ones included (they await one in-flight read). Without a user there is no safe key, so the history is read for the
+   * batch and not kept: rows read under one user's permissions are never handed to another.
+   */
+  private seriesHistoryForRun(spec: PredictionUnitSpec, seams: ScoringSeams, now: Date, context: RecordProcessorContext): Promise<SeriesHistory | null> {
+    const key = UserScopedCacheKey(context.ContextUser?.ID, NormalizeUUID(spec.id), String(spec.version), now.toISOString());
+    if (key === null) return MLModelInferenceProcessor.SeriesHistoryForScoring(spec, seams, now);
+    if (this.seriesHistoryEntry !== null && this.seriesHistoryEntry.Key === key) return this.seriesHistoryEntry.History;
+    const entry = { Key: key, History: MLModelInferenceProcessor.SeriesHistoryForScoring(spec, seams, now) };
+    this.seriesHistoryEntry = entry;
+    // The batch awaiting the build sees its failure; the entry is only dropped so the next batch reads again.
+    entry.History.catch(() => {
+      if (this.seriesHistoryEntry === entry) this.seriesHistoryEntry = null;
+    });
+    return entry.History;
+  }
+
   /**
    * The series history a unit with a Temporal Spec reads its lags from at scoring, built from the unit's rows the way
-   * training builds it. Rows whose outcome window is still open at `now` are kept: the lag a row being scored reads is a
-   * recent period's recorded value, and every period a training row's lag read was already in training's own read, so
-   * censoring them here would leave the recent lags empty that training always had.
+   * training builds it. Rows whose outcome window has not closed by the unit's cutoff are kept, not censored: a period's
+   * value is its resolved outcome, and a lag reads it only once its outcome window has closed by the row's decision day
+   * and the scoring day (`SeriesFeatures.ComputeSeriesFeature`). A period whose window closed after the unit's cutoff but
+   * before the scoring day is therefore read, as training would read it had it run on the scoring day, and a period
+   * still open is kept in the history but never read.
    */
   public static async SeriesHistoryForScoring(spec: PredictionUnitSpec, seams: ScoringSeams, now: Date): Promise<SeriesHistory | null> {
     if (!spec.temporal) return null;

@@ -901,6 +901,39 @@
             "lastModified": "2026-07-01T17:33:34.470Z",
             "checksum": "c17d3d3fa656d3b4c2c44d2cec56734c8a4281b13e1360172354bddbf94aa9b5"
           }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SIGNOFF_REASON_REQUIRED",
+            "IsSuccess": false,
+            "Description": "A leakage sign-off was given without a reason; overriding a leakage-flagged model requires a non-empty Reason."
+          },
+          "primaryKey": {
+            "ID": "2210EFA6-996E-4B50-BBDD-2EDD89BB2B7B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CALIBRATION_HOLD",
+            "IsSuccess": false,
+            "Description": "The model is held: its holdout calibration slope is outside 0.8-1.2 or could not be measured, so it is not offered and cannot be validated or published (no sign-off overrides this)."
+          },
+          "primaryKey": {
+            "ID": "2BA2642A-EEE4-4C7E-9403-7CB2EBC70E36"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MODEL_NOT_SERVABLE",
+            "IsSuccess": false,
+            "Description": "The model cannot be published: its artifact is a series forecaster, which /predict does not serve yet."
+          },
+          "primaryKey": {
+            "ID": "655E1445-800B-4AC4-8EFF-8FE9DF2D5EF6"
+          }
         }
       ]
     },

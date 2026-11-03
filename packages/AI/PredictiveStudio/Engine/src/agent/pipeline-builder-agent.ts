@@ -32,7 +32,7 @@ export interface PredictiveStudioBuildOutcome {
   /** The trust verdict's headline ("Beats the flat guess by X [lo, hi] …"); absent when the build trained no model. */
   headline?: string;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
   published: boolean;
-  /** When not published, the plain reason (the stored gate decision's reason / leakage); else null. */
+  /** When not published, the plain reason (the stored gate decision's reason, leakage, a calibration hold or the promotion gate's refusal); else null. */
   heldReason: string | null;
   /** A clean error message when the build failed; else null. */
   errorMessage: string | null;

@@ -8,6 +8,7 @@ import {
   type CandidateInnerScore, type StoredGateRecord, type ModelingPlanSpec, type PredictionUnitColumns, type TrainingRunResults,
 } from '@memberjunction/predictive-studio-core';
 import { PredictiveStudioPipelineBuilder, RESERVED_CANDIDATE_NAMES, RESERVED_CANDIDATE_PREFIX, type AlgorithmRow } from '../pipeline-builder';
+import type { IModelPromotionGate, PromoteModelOutcome, PromoteModelRequest } from '../../actions/promote-model.action';
 import { TrainingDelegation } from '../../operations/delegation';
 import { PipelineMigration } from '../../migration/legacy-pipeline-migration';
 import type { TrainModelInput, TrainModelResult } from '../../training/types';
@@ -145,11 +146,42 @@ function measuredModel(): MJMLModelEntity {
   return { ID: 'M-1', Version: 1, Metrics: null, HoldoutMetrics: JSON.stringify({ auc: 0.8 }), ProblemType: 'classification', FeatureImportance: null, Lineage: null } as unknown as MJMLModelEntity;
 }
 
-/** A model the builder may publish: it records how many times it was saved. */
-function publishableModel(): { readonly Entity: MJMLModelEntity; readonly Saves: number } {
-  const state = { Saves: 0 };
-  const entity = { ID: 'M-1', Version: 1, Status: 'Draft', HoldoutMetrics: JSON.stringify({ auc: 0.95 }), FeatureImportance: null, Lineage: null, LatestResult: null, Save: async () => { state.Saves += 1; return true; } };
-  return { Entity: entity as unknown as MJMLModelEntity, get Saves() { return state.Saves; } };
+/**
+ * A model the builder may publish: it records how many times it was saved and reloaded; a reload reads back the status
+ * `Stored` holds (what the promotion gate saved).
+ */
+function publishableModel(lineage: string | null = null): { readonly Entity: MJMLModelEntity; readonly Saves: number; readonly Loads: number; Stored: MJMLModelEntity['Status'] } {
+  const state = { Saves: 0, Loads: 0, Stored: 'Draft' as MJMLModelEntity['Status'] };
+  const entity = {
+    ID: 'M-1', Version: 1, Status: 'Draft', HoldoutMetrics: JSON.stringify({ auc: 0.95 }), FeatureImportance: null, Lineage: lineage, LatestResult: null,
+    Save: async () => { state.Saves += 1; return true; },
+    Load: async () => { state.Loads += 1; entity.Status = state.Stored; return true; },
+  };
+  return {
+    Entity: entity as unknown as MJMLModelEntity,
+    get Saves() { return state.Saves; },
+    get Loads() { return state.Loads; },
+    get Stored() { return state.Stored; },
+    set Stored(v: MJMLModelEntity['Status']) { state.Stored = v; },
+  };
+}
+
+/** A promotion gate that records each request; it refuses `refuseAt` with `refusal`, else it promotes and stores the status. */
+class RecordingGate implements IModelPromotionGate {
+  public readonly Requests: PromoteModelRequest[] = [];
+  constructor(private readonly onPromote: (status: PromoteModelRequest['targetStatus']) => void, private readonly refuseAt?: PromoteModelRequest['targetStatus'], private readonly refusal?: PromoteModelOutcome) {}
+  public async promote(request: PromoteModelRequest): Promise<PromoteModelOutcome> {
+    this.Requests.push(request);
+    if (request.targetStatus === this.refuseAt && this.refusal !== undefined) return this.refusal;
+    this.onPromote(request.targetStatus);
+    return { kind: 'promoted', newStatus: request.targetStatus };
+  }
+}
+
+/** The builder publishing through the given gate. */
+class GatedBuilder extends PredictiveStudioPipelineBuilder {
+  constructor(private readonly gate: IModelPromotionGate) { super(); }
+  protected override CreatePromotionGate(): IModelPromotionGate { return this.gate; }
 }
 
 /**
@@ -226,19 +258,49 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
     expect(ConsoleCapture.Lines(errors)).toHaveLength(1);
   });
 
-  it("publishes a model whose run's stored gate decision ships it, and renders the verdict from that run", async () => {
+  it("publishes a model whose run's stored gate decision ships it through the promotion gate, and renders the verdict from that run", async () => {
     const world = new BuildWorld();
     world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
     world.Pipeline.EvaluationProtocolID = 'EP-1';
     const run = completedRun([inner('A', 0.42), inner('B', 0.40)], 'B');
     const model = publishableModel();
+    const promotions = new RecordingGate((status) => { model.Stored = status; });
     vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: model.Entity, run });
-    const result = await new PredictiveStudioPipelineBuilder().Build({ spec: plan(['A', 'B']), provider: world.Provider(), user });
+    const provider = world.Provider();
+    const result = await new GatedBuilder(promotions).Build({ spec: plan(['A', 'B']), provider, user });
     const gate = storedGate(run);
-    expect([result.published, result.heldReason, model.Saves, model.Entity.Status]).toEqual([true, null, 1, 'Published']);
+    // Draft → Validated → Published through the gate with no sign-off; the builder never saves the model itself.
+    expect(promotions.Requests.map((r) => [r.modelId, r.targetStatus, r.signOff, r.contextUser, r.provider])).toEqual([['M-1', 'Validated', false, user, provider], ['M-1', 'Published', false, user, provider]]);
+    expect([result.published, result.heldReason, model.Saves, model.Loads, model.Entity.Status]).toEqual([true, null, 0, 1, 'Published']);
     expect(result.trust).toEqual(TrustVerdicts.DeriveTrustVerdict({ ValidationResults: run.ValidationResults, Lineage: null }));
     expect(result.Gate).toEqual({ Outcome: 'model', Reason: gate.reason.text });
     expect(result.trust?.Comparison).toEqual({ Against: 'the flat guess', Shipped: 'B', Value: gate.intervals.modelVsDummy.value, Lower: gate.intervals.modelVsDummy.lower, Upper: gate.intervals.modelVsDummy.upper, Metric: gate.primaryMetric });
+  });
+
+  it('holds a model the promotion gate refuses, with the refusal as the reason, at the status the gate left it', async () => {
+    const world = new BuildWorld();
+    world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
+    world.Pipeline.EvaluationProtocolID = 'EP-1';
+    const model = publishableModel();
+    const refusal: PromoteModelOutcome = { kind: 'not-servable', message: "ML Model 'M-1' cannot be published or score records: forecast models are not served by /predict yet." };
+    const promotions = new RecordingGate((status) => { model.Stored = status; }, 'Published', refusal);
+    vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: model.Entity, run: completedRun([inner('A', 0.42), inner('B', 0.40)], 'B') });
+    const result = await new GatedBuilder(promotions).Build({ spec: plan(['A', 'B']), provider: world.Provider(), user });
+    expect(promotions.Requests.map((r) => r.targetStatus)).toEqual(['Validated', 'Published']);
+    expect([result.published, model.Saves, model.Entity.Status]).toEqual([false, 0, 'Validated']);
+    expect(result.heldReason).toBe("Not published — the promotion gate refused to move it to Published: ML Model 'M-1' cannot be published or score records: forecast models are not served by /predict yet.");
+  });
+
+  it('holds a calibration-held model with the reason, without asking the promotion gate', async () => {
+    const world = new BuildWorld();
+    world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
+    world.Pipeline.EvaluationProtocolID = 'EP-1';
+    const model = publishableModel(JSON.stringify({ shippedMember: 'B', calibrationHold: { slope: 0.5 } }));
+    const promotions = new RecordingGate((status) => { model.Stored = status; });
+    vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: model.Entity, run: completedRun([inner('A', 0.42), inner('B', 0.40)], 'B') });
+    const result = await new GatedBuilder(promotions).Build({ spec: plan(['A', 'B']), provider: world.Provider(), user });
+    expect([result.published, promotions.Requests.length, model.Saves, model.Entity.Status]).toEqual([false, 0, 0, 'Draft']);
+    expect(result.heldReason).toBe('Held — its calibration slope 0.50 is outside 0.8–1.2, so its family is hidden (calibration hold); a hidden family is never published.');
   });
 
   it("holds a model whose run's stored gate decision is no-signal, with the stored reason", async () => {

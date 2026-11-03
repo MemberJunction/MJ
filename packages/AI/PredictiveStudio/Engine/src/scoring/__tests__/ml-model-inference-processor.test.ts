@@ -9,6 +9,7 @@ import type {
   AsOfStrategy,
   FeatureStepGraph,
   PredictionUnitSpec,
+  PredictionUnitColumns,
   FeatureColumnSpec,
 } from '@memberjunction/predictive-studio-core';
 import type {
@@ -21,7 +22,7 @@ import {
   MatrixToFeatureRows,
   type MLInferenceResultPayload,
 } from '../ml-model-inference-processor';
-import { ModelNotScorableError, ModelNeedsTrainingError } from '../model-readiness';
+import { ModelNotScorableError, ModelNeedsTrainingError, ModelNotServableError } from '../model-readiness';
 import { InMemoryArtifactLoader } from '../artifact-loader';
 import type { IMLModelLoader, ISidecarPredictor, MLInferenceDeps } from '../types';
 import { FeatureAssemblyExecutor } from '../../feature-assembly';
@@ -406,6 +407,14 @@ describe('MLModelInferenceProcessor — lifecycle status gate', () => {
     const { deps } = buildDeps(model);
     await expect(buildProcessor(deps).Preflight(CTX)).rejects.toBeInstanceOf(ModelNotScorableError);
   });
+
+  it('refuses a Published series forecaster with ModelNotServableError (/predict does not serve it), not "needs training"', async () => {
+    const model = new FakeMLModel();
+    model.Status = 'Published';
+    model.Lineage = JSON.stringify({ shippedDriver: 'trend_season_ar1' });
+    const { deps } = buildDeps(model);
+    await expect(buildProcessor(deps).Preflight(CTX)).rejects.toBeInstanceOf(ModelNotServableError);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -729,16 +738,17 @@ describe('MLModelInferenceProcessor — series history for scoring', () => {
     incumbent: { kind: 'none' }, authoredBy: { kind: 'human', userId: 'U' },
   };
   const seams = { DataAccess: new TableDataAccess({ Series: [{ ID: 'S1' }], Months: months }), Metadata: { Entity: (n: string) => entities[n] || null } };
-  const lag1 = (h: Awaited<ReturnType<typeof MLModelInferenceProcessor.SeriesHistoryForScoring>>, period: string) =>
-    (h === null ? 'no history' : SeriesFeatures.ComputeSeriesFeature(h, 'S1', new Date(period), temporal, { kind: 'lag', index: 0 }, new Date(period)).Value);
+  const lag1 = (h: Awaited<ReturnType<typeof MLModelInferenceProcessor.SeriesHistoryForScoring>>, period: string, assembledAt: Date) =>
+    (h === null ? 'no history' : SeriesFeatures.ComputeSeriesFeature(h, 'S1', new Date(period), temporal, { kind: 'lag', index: 0 }, new Date(period), assembledAt).Value);
 
   it('reads the periods training censored at its cutoff, so a lag whose window has closed reads the last period\'s value', async () => {
     // A fixed cutoff before the last months and a 28-day window: m22 (2026-11) is censored for training, but its window
     // closed 2026-11-29, so the row decided 2026-12-01 reads it.
     const fixed: PredictionUnitSpec = { ...unit, label: { ...unit.label, windowDays: 28 }, censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2026-06-01' } } };
-    const h = await MLModelInferenceProcessor.SeriesHistoryForScoring(fixed, seams, new Date('2026-12-05T00:00:00Z'));
-    expect(lag1(h, '2026-12-01T00:00:00Z')).toBe(122);
-    expect(lag1(h, '2026-11-01T00:00:00Z')).toBe(121);
+    const scoringDay = new Date('2026-12-05T00:00:00Z');
+    const h = await MLModelInferenceProcessor.SeriesHistoryForScoring(fixed, seams, scoringDay);
+    expect(lag1(h, '2026-12-01T00:00:00Z', scoringDay)).toBe(122);
+    expect(lag1(h, '2026-11-01T00:00:00Z', scoringDay)).toBe(121);
   });
 
   it('gives every row training read the same lag training gave it', async () => {
@@ -747,18 +757,86 @@ describe('MLModelInferenceProcessor — series history for scoring', () => {
     if (read.Status !== 'read') throw new Error('training read refused');
     const training = TrainingEngine.SeriesHistoryFor(unit, read.Rows);
     const scoring = await MLModelInferenceProcessor.SeriesHistoryForScoring(unit, seams, now);
-    for (const r of read.Rows) expect(lag1(scoring, (r.Period as Date).toISOString())).toBe(lag1(training, (r.Period as Date).toISOString()));
+    for (const r of read.Rows) expect(lag1(scoring, (r.Period as Date).toISOString(), now)).toBe(lag1(training, (r.Period as Date).toISOString(), now));
+  });
+
+  describe('one read of the unit\'s rows per scoring run', () => {
+    /** Counts the complete reads of the unit's row entity (the series history read; a keyed read carries a filter). */
+    class CountingDataAccess extends TableDataAccess {
+      public CompleteMonthReads = 0;
+      /** When set, the next complete read of the row entity fails (a transient read error). */
+      public FailNextCompleteRead = false;
+      public override async fetchRows(p: FetchRowsParams): Promise<FetchRowsResult> {
+        if (p.EntityName === 'Months' && !p.ExtraFilter) {
+          this.CompleteMonthReads++;
+          if (this.FailNextCompleteRead) {
+            this.FailNextCompleteRead = false;
+            return { Success: false, Rows: [], TotalRowCount: 0, ErrorMessage: 'connection reset' };
+          }
+        }
+        return super.fetchRows(p);
+      }
+    }
+    const lag = (name: string, index: number): FeatureColumnSpec => ({ name, source: { kind: 'series', feature: { kind: 'lag', index } }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } });
+    const unitColumns: PredictionUnitColumns = {
+      ID: unit.id, LineageRootID: unit.lineageRootId, Version: unit.version, Name: unit.name, LabelVersion: 1, LabelWindowDays: unit.label.windowDays, LabelGapDays: unit.label.gapDays, GroupKey: null,
+      TemporalSpec: JSON.stringify(temporal), UnitRows: JSON.stringify(unit.rows), LabelRule: JSON.stringify(unit.label.rule), TaskType: JSON.stringify(unit.label.outcome),
+      Censoring: JSON.stringify(unit.censoring), ChangeHistoryPolicy: JSON.stringify(unit.history), DecisionSpec: JSON.stringify(unit.decision),
+      IncumbentHeuristic: JSON.stringify(unit.incumbent), AuthoredBy: JSON.stringify(unit.authoredBy),
+    };
+    const scoringCtx: RecordProcessorContext = { ContextUser: { ID: 'user-1' } as UserInfo, Provider: undefined as unknown as IMetadataProvider };
+    function seriesModelDeps(dataAccess: CountingDataAccess): MLInferenceDeps {
+      const model = new FakeMLModel();
+      model.Status = 'Validated';
+      model.PipelineID = 'pipe-m';
+      model.Lineage = JSON.stringify({
+        predictionUnitId: unit.id, predictionUnitVersion: 1, labelVersion: 1, featureSpecVersion: 1, unitRowEntity: 'Months',
+        featureSpec: [lag('Lag1', 0), lag('Lag12', 1)], categoryLevels: {}, trainingSnapshotId: 'TS-M', snapshotContentHash: 'b'.repeat(64),
+        targetEntityName: 'Months', sourceBindings: [], featureSteps: { Steps: [{ Id: 's1', Kind: 'select', Columns: ['Y'] }] }, asOfStrategy: { Mode: 'none' },
+      });
+      const { deps } = buildDeps(model);
+      return { ...deps, pipelineUnits: { PredictionUnitIDOf: async () => unit.id }, predictionUnits: new FakePredictionUnitStore(unitColumns), assemblyMetadata: seams.Metadata, dataAccess };
+    }
+
+    it('reads the unit\'s rows once for every batch of one run, and gives each batch the lags of that read', async () => {
+      const dataAccess = new CountingDataAccess({ Series: [{ ID: 'S1' }], Months: months });
+      const processor = new MLModelInferenceProcessor({ modelId: 'model-1', deps: seriesModelDeps(dataAccess) });
+      const first = await processor.AssembleForScoring([{ ID: 'm20' }], scoringCtx, 'unit-rule');
+      const second = await processor.AssembleForScoring([{ ID: 'm21' }, { ID: 'm13' }], scoringCtx, 'unit-rule');
+      expect(dataAccess.CompleteMonthReads).toBe(1);
+      if (first.Status !== 'assembled' || second.Status !== 'assembled') throw new Error('assembly refused');
+      // Lag 12 of m13 (2026-02) reads m01 (2025-02), whose window closed 2025-05-02.
+      expect(second.Rows.find((r) => r.RowID === 'm13')?.Values).toEqual([null, 101]);
+    });
+
+    it('reads them again on the next batch when the run\'s read failed, never keeping the failure', async () => {
+      const dataAccess = new CountingDataAccess({ Series: [{ ID: 'S1' }], Months: months });
+      dataAccess.FailNextCompleteRead = true;
+      const processor = new MLModelInferenceProcessor({ modelId: 'model-1', deps: seriesModelDeps(dataAccess) });
+      await expect(processor.AssembleForScoring([{ ID: 'm20' }], scoringCtx, 'unit-rule')).rejects.toThrow(/connection reset/);
+      const retried = await processor.AssembleForScoring([{ ID: 'm13' }], scoringCtx, 'unit-rule');
+      expect(retried.Status).toBe('assembled');
+      expect(dataAccess.CompleteMonthReads).toBe(2);
+    });
+
+    it('reads them again for a new run', async () => {
+      const dataAccess = new CountingDataAccess({ Series: [{ ID: 'S1' }], Months: months });
+      const deps = seriesModelDeps(dataAccess);
+      await new MLModelInferenceProcessor({ modelId: 'model-1', deps }).AssembleForScoring([{ ID: 'm20' }], scoringCtx, 'unit-rule');
+      await new MLModelInferenceProcessor({ modelId: 'model-1', deps }).AssembleForScoring([{ ID: 'm20' }], scoringCtx, 'unit-rule');
+      expect(dataAccess.CompleteMonthReads).toBe(2);
+    });
   });
 
   describe('a lag reads a period only once its outcome window had closed by the row\'s decision', () => {
     const now = new Date('2026-11-10T00:00:00Z');
     const lagFeature = (name: string, index: number): FeatureColumnSpec => ({ name, source: { kind: 'series', feature: { kind: 'lag', index } }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } });
     const features = [lagFeature('Lag1', 0), lagFeature('Lag12', 1)];
-    const assemble = async (context: 'train' | 'score', history: Awaited<ReturnType<typeof MLModelInferenceProcessor.SeriesHistoryForScoring>>, rows: readonly UnitRowLike[]): Promise<AsOfAssemblyResult> =>
+    const assemble = async (context: 'train' | 'score', history: Awaited<ReturnType<typeof MLModelInferenceProcessor.SeriesHistoryForScoring>>, rows: readonly UnitRowLike[], assembledAt: Date = now): Promise<AsOfAssemblyResult> =>
       new AsOfFeatureAssembler().Assemble({
         Context: context, Unit: unit, RowEntity: entities.Months, Features: features, SeriesHistory: history, Read: { mode: 'complete' },
         Rows: rows.map((r) => ({ RowID: r.RowID, EntityKey: r.EntityKey, DecisionDate: r.DecisionDate, Period: r.Period })),
-        DataAccess: seams.DataAccess, History: new RunViewRecordHistoryReader(seams.DataAccess, { mode: 'complete' }), Metadata: seams.Metadata, AssembledAt: now,
+        DataAccess: seams.DataAccess, History: new RunViewRecordHistoryReader(seams.DataAccess, { mode: 'complete' }), Metadata: seams.Metadata, AssembledAt: assembledAt,
         CategoryLevels: new Map(),
       });
     type UnitRowLike = { readonly RowID: string; readonly EntityKey: string; readonly DecisionDate: Date; readonly Period: Date | null };
@@ -780,6 +858,21 @@ describe('MLModelInferenceProcessor — series history for scoring', () => {
       if (trained.Status !== 'assembled' || scored.Status !== 'assembled') throw new Error('assembly refused');
       expect(scored.Rows.map((r) => [r.RowID, r.Values])).toEqual(trained.Rows.map((r) => [r.RowID, r.Values]));
       expect(scored.Rows.some((r) => r.Values[0] !== null)).toBe(false);
+    });
+
+    it('nulls, on a row scored ahead of its decision day, a lag whose period\'s window is still open on the scoring day', async () => {
+      // Scored 2026-11-10 for a decision on 2027-10-01: lag 12 reads m21 (2026-10-01), whose window closes 2026-12-30,
+      // after the scoring day and before the decision. The history keeps m21 (its window is open), but its label is not
+      // yet resolved, so the lag must not read it.
+      const ahead: UnitRowLike = { RowID: 'f1', EntityKey: 'S1', DecisionDate: new Date('2027-10-01T00:00:00Z'), Period: new Date('2027-10-01T00:00:00Z') };
+      const history = await MLModelInferenceProcessor.SeriesHistoryForScoring(unit, seams, now);
+      const scored = await assemble('score', history, [ahead]);
+      if (scored.Status !== 'assembled') throw new Error(JSON.stringify(scored));
+      expect(scored.Rows[0].Values).toEqual([null, null]);
+      // Scored on or after the decision day, the same row reads it by the decision-day rule.
+      const onTheDay = await assemble('score', history, [ahead], new Date('2027-10-01T09:00:00Z'));
+      if (onTheDay.Status !== 'assembled') throw new Error(JSON.stringify(onTheDay));
+      expect(onTheDay.Rows[0].Values).toEqual([null, 121]);
     });
   });
 });

@@ -291,6 +291,33 @@ export interface TrainerModelLineage {
    * `MJ: ML Algorithms` row, so the row names the pipeline's algorithm and this key holds the truth.
    */
   shippedDriver: string;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the ModelTrainingLineage keys
+  /**
+   * The run's leakage audit: the top feature of the finalist's held-out importance and its share, whatever shipped.
+   * A kept simple baseline stores no importance of its own (`FeatureImportance` is `{}`), so the promotion gate reads
+   * this audit to judge it against the pipeline's current dominance threshold. Null when the trainer measured no
+   * importance (a forecast reports none).
+   */
+  trainingLeakageAudit: TrainingLeakageAudit | null;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the ModelTrainingLineage keys
+  /**
+   * Set when the shipped finalist's family is hidden for its holdout calibration (a probability task whose slope is
+   * outside 0.8–1.2, or could not be measured): the model stays `Draft` and the promotion gate never moves it to
+   * Validated or Published, with or without a sign-off. Null when nothing is held (a kept baseline member is not
+   * judged by the finalist's calibration report).
+   */
+  calibrationHold: CalibrationHold | null;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the ModelTrainingLineage keys
+}
+
+/** The finalist importance's top feature and its share of the total, as a trainer run's model Lineage records it. */
+export interface TrainingLeakageAudit {
+  topFeature: string;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the TrainerModelLineage keys
+  /** The top feature's share of the total importance (0..1). */
+  topShare: number;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the TrainerModelLineage keys
+}
+
+/** Why a model's family is hidden for its calibration, as its Lineage records it. */
+export interface CalibrationHold {
+  /** The finalist's holdout calibration slope; null when the slope could not be measured. */
+  slope: number | null;  // case-violation-ok-legacy-back-compat: a stored Lineage JSON key, beside the TrainerModelLineage keys
 }
 
 /** Re-export for downstream training consumers without reaching into core. */

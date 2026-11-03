@@ -35,6 +35,7 @@ export type ProtocolRefusal =
   | { readonly Kind: 'group-key-mismatch'; readonly ProtocolGroupKey: string; readonly UnitGroupKey: string | null }
   | { readonly Kind: 'new-entity-group-key-mismatch'; readonly ReportGroupKey: string; readonly UnitGroupKey: string | null }
   | { readonly Kind: 'primary-score-family-mismatch'; readonly Declared: ProperScore['family']; readonly UnitTask: TaskKind }
+  | { readonly Kind: 'calibration-not-applicable-for-probability-task'; readonly UnitTask: TaskKind }
   | { readonly Kind: 'holdout-kind-mismatch'; readonly Holdout: HoldoutSplit['kind']; readonly UnitTask: TaskKind }
   | { readonly Kind: 'forecast-prediction-intervals'; readonly Method: PredictionIntervalSpec['method'] }
   | { readonly Kind: 'forecast-slices'; readonly OutOfTime: boolean; readonly Subgroups: readonly string[] }
@@ -128,6 +129,7 @@ export class EvaluationProtocolRules {
       ...EvaluationProtocolRules.checkGroupKey(p.innerValidation, unit),
       ...EvaluationProtocolRules.checkNewEntityGroupKey(p.holdout, unit),
       ...EvaluationProtocolRules.checkFamily(p.primaryScore, unit.label.outcome),
+      ...EvaluationProtocolRules.checkCalibration(p.calibration, unit.label.outcome),
       ...EvaluationProtocolRules.checkForecast(p, unit),
     ];
   }
@@ -154,6 +156,8 @@ export class EvaluationProtocolRules {
         return `The new-entity report holds out whole groups by "${r.ReportGroupKey}", but the Prediction Unit ${EvaluationProtocolRules.unitGrouping(r.UnitGroupKey)}; the report would not hold out the groups the protocol names.`;
       case 'primary-score-family-mismatch':
         return `The primary score is a ${r.Declared} score but the Prediction Unit's task is ${r.UnitTask}; candidates may only be ranked by a ${r.UnitTask} score.`;
+      case 'calibration-not-applicable-for-probability-task':
+        return `A ${r.UnitTask} unit's probabilities are calibrated and their holdout calibration slope decides whether the model is offered; calibration "not-applicable" is for regression tasks only, so no model trained under this protocol could be offered.`;
       case 'holdout-kind-mismatch':
         return `A ${r.UnitTask} unit cannot use a ${r.Holdout} holdout: forecasts use rolling-origin, units with one fixed decision date use seeded-random, every other unit a date-carved holdout.`;
       case 'forecast-prediction-intervals':
@@ -328,6 +332,16 @@ export class EvaluationProtocolRules {
 
   private static checkFamily(primary: ProperScore, task: TaskType): ProtocolRefusal[] {
     return primary.family === task.kind ? [] : [{ Kind: 'primary-score-family-mismatch', Declared: primary.family, UnitTask: task.kind }];
+  }
+
+  /**
+   * A binary or multiclass unit's family is offered only with a measured holdout calibration slope inside 0.8–1.2
+   * (`TrainerContract.CalibrationHidesFamily`); `not-applicable` (meant for regression tasks) yields no
+   * calibration report, so every model trained under it would be held. Refused at binding instead.
+   */
+  private static checkCalibration(calibration: CalibrationMethod, task: TaskType): ProtocolRefusal[] {
+    const probabilityTask = task.kind === 'binary' || task.kind === 'multiclass';
+    return probabilityTask && calibration.kind === 'not-applicable' ? [{ Kind: 'calibration-not-applicable-for-probability-task', UnitTask: task.kind }] : [];
   }
 
   /**

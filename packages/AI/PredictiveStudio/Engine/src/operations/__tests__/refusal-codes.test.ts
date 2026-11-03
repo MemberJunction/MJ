@@ -4,7 +4,7 @@ import { PredictiveStudioRefusals } from '../refusals';
 import { ReadCapExceededError } from '../../feature-assembly/read-cap-error';
 import { TrainingRefusedError } from '../../training/training-refusal';
 import { AsOfSettingHasNoEffectError } from '../../training/as-of-refusal';
-import { ModelNotScorableError, ModelNeedsTrainingError } from '../../scoring/model-readiness';
+import { ModelNotScorableError, ModelNeedsTrainingError, ModelNotServableError } from '../../scoring/model-readiness';
 import { ExperimentSessionsUnavailableError } from '../../actions/run-experiment.deps';
 
 describe('PredictiveStudioRefusals', () => {
@@ -13,6 +13,7 @@ describe('PredictiveStudioRefusals', () => {
     expect(PredictiveStudioRefusals.CodeOf(new AsOfSettingHasNoEffectError('modeling-plan', 'column', null))).toBe('AS_OF_NO_EFFECT');
     expect(PredictiveStudioRefusals.CodeOf(new ModelNotScorableError('m1', 'Archived'))).toBe('MODEL_NOT_SCORABLE');
     expect(PredictiveStudioRefusals.CodeOf(new ModelNeedsTrainingError('needs training'))).toBe('MODEL_NEEDS_TRAINING');
+    expect(PredictiveStudioRefusals.CodeOf(new ModelNotServableError('m1'))).toBe('MODEL_NOT_SERVABLE');
     expect(PredictiveStudioRefusals.CodeOf(new ExperimentSessionsUnavailableError())).toBe('EXPERIMENT_SESSIONS_UNAVAILABLE');
     expect(PredictiveStudioRefusals.CodeOf(new InvalidMajorityBaselineRuleError('off'))).toBe('INVALID_EVALUATION_SETTING');
   });

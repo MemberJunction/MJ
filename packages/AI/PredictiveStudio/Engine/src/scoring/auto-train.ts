@@ -18,8 +18,9 @@
  *      bytes load on this server (so concurrent or repeated runs don't retrain), or
  *   2. **trains** the pipeline through the real {@link TrainingEngine} path and
  *      **publishes** the result through the promotion gate (Draft → Validated →
- *      Published — a leakage-flagged model is refused and stays Draft, exactly as a
- *      human-driven promotion would be);
+ *      Published — a leakage-flagged or calibration-held model, or one whose artifact
+ *      `/predict` does not serve, is refused and stays Draft, exactly as a human-driven
+ *      promotion would be);
  *   3. **repoints** the Record Process's `Configuration.modelId` and every scoring
  *      binding on that process (or on the superseded model) at the new model, and
  *      creates the declared binding when none exists yet;
@@ -40,7 +41,7 @@ import { MetadataEntityFactory } from '../training/seams';
 import { TrainingEngine } from '../training/training-engine';
 import { LocalArtifactLoader } from './artifact-loader';
 import { UpsertScoringBinding } from './scoring-binding';
-import { ModelHasTrainedArtifact } from './model-readiness';
+import { ModelHasTrainedArtifact, ModelReadiness } from './model-readiness';
 import type { AutoTrainRequest, IArtifactLoader, IModelAutoTrainer } from './types';
 
 /** Signature of the train step (production: {@link TrainingDelegation.TrainModelViaEngine}); injectable for tests. */
@@ -110,14 +111,17 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
 
   // ----- reuse --------------------------------------------------------------
 
-  /** The newest Published model of the pipeline whose artifact loads on this server, if any. */
+  /**
+   * The newest Published model of the pipeline whose artifact `/predict` serves and loads on this server, if any (a
+   * forecast's series forecaster published before the gate refused one is skipped).
+   */
   protected async findReusableModel(pipelineId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<string | null> {
-    const result = await RunView.FromMetadataProvider(provider).RunView<{ ID: string; ArtifactFileID: string | null }>(
+    const result = await RunView.FromMetadataProvider(provider).RunView<Pick<MJMLModelEntity, 'ID' | 'ArtifactFileID' | 'Lineage'>>(
       {
         EntityName: 'MJ: ML Models',
         ExtraFilter: `PipelineID='${pipelineId}' AND Status='Published' AND ArtifactFileID IS NOT NULL`,
         OrderBy: 'Version DESC',
-        Fields: ['ID', 'ArtifactFileID'],
+        Fields: ['ID', 'ArtifactFileID', 'Lineage'],
         ResultType: 'simple',
         MaxRows: 5,
       },
@@ -127,7 +131,8 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
       return null;
     }
     for (const row of result.Results) {
-      if (ModelHasTrainedArtifact(row) && row.ArtifactFileID && (await this.artifactLoader.load(row.ArtifactFileID, contextUser))) {
+      const servable = ModelHasTrainedArtifact(row) && ModelReadiness.IsServedByPredict(row);
+      if (servable && row.ArtifactFileID && (await this.artifactLoader.load(row.ArtifactFileID, contextUser))) {
         return row.ID;
       }
     }
@@ -151,23 +156,9 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
     return model.ID;
   }
 
-  /** Plain description of a non-promoted outcome. */
+  /** Plain description of a non-promoted outcome ({@link ProductionModelPromotionGate.DescribeRefusal}). */
   protected describeRefusal(outcome: PromoteModelOutcome): string {
-    switch (outcome.kind) {
-      case 'refused-leakage':
-      case 'signoff-reason-required':
-        return `possible target leakage on "${outcome.topFeature ?? 'a feature'}" needs human sign-off`;
-      case 'invalid-transition':
-        return `invalid transition from ${outcome.currentStatus}`;
-      case 'needs-training':
-        return outcome.message;
-      case 'not-found':
-        return 'model not found';
-      case 'save-failed':
-        return outcome.message;
-      case 'promoted':
-        return 'promoted';
-    }
+    return ProductionModelPromotionGate.DescribeRefusal(outcome);
   }
 
   // ----- repoint ------------------------------------------------------------

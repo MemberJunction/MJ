@@ -28,7 +28,11 @@
  * created from the artifact the decision ships only: the finalist's for `model` (with the trainer's held-out
  * permutation importance), the kept simple baseline member's for `keep-simple-baseline`, and none for `no-signal` or
  * a kept heuristic rule. A single feature dominating the finalist's importance flags the run (a LEAKAGE WARNING note on the
- * run) and the model stays `Draft`. The run stores the trainer's result with its artifacts
+ * run) and the model stays `Draft`; every trainer model's Lineage records that leakage audit, so a kept baseline (whose
+ * own importance is `{}`) is judged by it at promotion. A shipped finalist of a probability task whose holdout
+ * calibration hides its family ({@link TrainerContract.CalibrationHidesFamily}) is held: a CALIBRATION HOLD note on
+ * the run and a `calibrationHold` on its Lineage, which the promotion gate never lets through. The run stores the
+ * trainer's result with its artifacts
  * as file references, never their bytes, the unit resolution counts, the holdout carve's summary, the gate record and
  * the request settings a retrain replays; the model Lineage names the unit version, the typed feature columns, the kept
  * categorical levels scoring reuses, the snapshot's ID and content hash, and the protocol. A refusal
@@ -66,6 +70,7 @@ import {
   type FeatureColumnSpec,
   type CandidateSpec,
   TrainerContract,
+  CALIBRATION_SLOPE_RANGE,
   PREDICTOR_ARTIFACT_FORMAT,
   type EvaluationProtocolSpec,
   type TrainerCompleted,
@@ -108,7 +113,9 @@ import { TrainerRunRecorder, TrainerLineageRefusedError } from './trainer-result
 import { EvaluationProtocolSpecs, RunViewEvaluationProtocolStore, type LoadedProtocol } from './evaluation-protocol-store';
 import { ProtocolSearchGuard } from '../protocol/search-guard';
 import { ComputePricing } from './compute-cost';
-import type { ITrainerEvaluator, TrainModelInput, TrainModelResult, TrainingDeps, ModelTrainingLineage, TrainerModelLineage } from './types';
+import type {
+  ITrainerEvaluator, TrainModelInput, TrainModelResult, TrainingDeps, ModelTrainingLineage, TrainerModelLineage, TrainingLeakageAudit, CalibrationHold,
+} from './types';
 import type { UnitModelLineage } from './unit-model-lineage';
 
 /** Parsed JSON config columns pulled off a `MJ: ML Training Pipelines` row. */
@@ -230,6 +237,8 @@ interface TrainerOutcome {
   readonly Evaluation: EvaluationRecord;
   /** The single-feature-dominance check of `Importance` against the pipeline's leakage guard. */
   readonly Dominance: DominanceResult;
+  /** The shipped finalist's calibration hold; null when nothing ships, a baseline member ships, or its family is offered. */
+  readonly CalibrationHold: CalibrationHold | null;
 }
 
 /** The artifact the gate decision ships: the finalist, or a simple baseline member the trainer fitted. */
@@ -485,8 +494,8 @@ export class TrainingEngine {
    * and refuse a sidecar decision that differs from it, store every returned artifact in `MJ: Files`, create the model
    * row from the artifact the decision ships (none for `no-signal` or a kept heuristic rule) and complete the run with
    * the stored result (artifacts as file references, never bytes), the holdout carve's summary, the gate record, the
-   * request settings a retrain replays and the leakage note of the single-feature-dominance check over the trainer's
-   * importance. A failed result is the refusal `trainer-failed` and a result whose code version cannot be recorded is
+   * request settings a retrain replays, the leakage note of the single-feature-dominance check over the trainer's
+   * importance and, for a shipped finalist whose calibration hides its family, the calibration hold. A failed result is the refusal `trainer-failed` and a result whose code version cannot be recorded is
    * `lineage-incomplete`; both keep the compute they recorded. The gate stage's refusals are stored before any artifact.
    *
    * @returns the model row, or null when the decision ships no artifact
@@ -506,7 +515,7 @@ export class TrainingEngine {
     const gate = TrainingEngine.buildGateRecord(x, result);
     const shipped = TrainingEngine.shippedArtifact(gate.decision, result);
     const fileIds = await this.storeTrainerArtifacts(run, result, deps);
-    const outcome = this.trainerOutcome(x, result, candidates);
+    const outcome = this.trainerOutcome(x, result, candidates, shipped);
     const model = shipped === null ? null : await this.createTrainerModelRow(x, outcome, shipped, TrainingEngine.storedFileOf(fileIds, shipped.Name));
     await this.completeTrainerRun(x, request, outcome, gate, fileIds, model);
     return model;
@@ -516,7 +525,8 @@ export class TrainingEngine {
    * Complete a trainer run: the envelope (the stored result with artifacts as file references, the carve, the gate
    * record and the request settings), the resulting model (null when nothing ships), the features, the hyperparameters
    * (the finalist's, except `{}` when a baseline member is kept: a member has none of its own) and the notes: the
-   * trainer's, the gate's reason (saying no model was created when nothing ships) and the leakage note every run carries.
+   * trainer's, the gate's reason (saying no model was created when nothing ships), the leakage note every run carries
+   * and a held model's CALIBRATION HOLD note.
    */
   private async completeTrainerRun(
     x: TrainerRunInputs, request: TrainerRequest, outcome: TrainerOutcome, gate: StoredGateRecord, fileIds: ReadonlyMap<string, string>, model: MJMLModelEntity | null,
@@ -531,9 +541,11 @@ export class TrainingEngine {
     run.FeaturesUsed = JSON.stringify(x.Snapshot.Content.Header.featureSchema.map((f) => f.Name));
     run.Hyperparameters = JSON.stringify(gate.decision.outcome !== 'keep-simple-baseline' && outcome.Finalist ? outcome.Finalist.hyperparameters : {});
     run.ValidationResults = JSON.stringify(results);
-    // The trainer's note, the gate's reason, then the same leakage note every run carries (a dominant feature is a LEAKAGE WARNING).
+    // The trainer's note, the gate's reason, the same leakage note every run carries (a dominant feature is a LEAKAGE
+    // WARNING), then a held model's CALIBRATION HOLD.
     const gateNote = model === null ? `No model was created: ${gate.reason.text}` : gate.reason.text;
-    const notes = `${run.Notes || ''} ${gateNote} ${this.buildRunNotes(outcome.Dominance, outcome.Evaluation, model !== null)}`.trim();
+    const leakageNote = this.buildRunNotes(outcome.Dominance, outcome.Evaluation, model !== null);
+    const notes = `${run.Notes || ''} ${gateNote} ${leakageNote} ${TrainingEngine.calibrationHoldNote(outcome.CalibrationHold)}`.trim();
     run.Notes = TrainingEngine.withUncoveredNote(notes, x.Uncovered);
     await this.saveOrThrow(run, 'finalize ML Training Run');
   }
@@ -582,10 +594,11 @@ export class TrainingEngine {
 
   /**
    * What a completed trainer result decides about the run and its model, computed once: the finalist candidate, the
-   * held-out permutation importance as the stored share map, the evaluation record, and the single-feature-dominance
-   * check of that map against the pipeline's leakage guard (the check every run records).
+   * held-out permutation importance as the stored share map, the evaluation record, the single-feature-dominance
+   * check of that map against the pipeline's leakage guard (the check every run records) and the calibration hold of
+   * what ships ({@link calibrationHoldOf}).
    */
-  private trainerOutcome(x: TrainerRunInputs, result: TrainerCompleted, candidates: readonly CandidateSpec[]): TrainerOutcome {
+  private trainerOutcome(x: TrainerRunInputs, result: TrainerCompleted, candidates: readonly CandidateSpec[], shipped: ShippedArtifact | null): TrainerOutcome {
     const importance = TrainerContract.FeatureImportanceOf(result.importance);
     return {
       Result: result,
@@ -597,7 +610,40 @@ export class TrainingEngine {
         HoldoutRespectsTime: ProtocolSearchGuard.TimeRespectingHoldouts.includes(x.Training.Protocol.Protocol.holdout.kind),
       }),
       Dominance: this.checkLeakage(importance, x.Resolved.leakageGuard),
+      CalibrationHold: TrainingEngine.calibrationHoldOf(shipped, result, x.Unit.label.outcome),
     };
+  }
+
+  /**
+   * The calibration hold of what ships: only a shipped finalist is judged by the result's holdout calibration report,
+   * which is the finalist's (a kept baseline member, or nothing shipping, holds nothing). It holds when the report
+   * hides the task's family ({@link TrainerContract.CalibrationHidesFamily}), recording the slope, or null when the slope
+   * could not be measured.
+   */
+  private static calibrationHoldOf(shipped: ShippedArtifact | null, result: TrainerCompleted, task: TaskType): CalibrationHold | null {
+    if (shipped === null || shipped.Member !== null) return null;
+    if (!TrainerContract.CalibrationHidesFamily(result.calibration, task)) return null;
+    const slope = result.calibration === null || !Number.isFinite(result.calibration.slope) ? null : result.calibration.slope;
+    return { slope };
+  }
+
+  /**
+   * The run's leakage audit as a model Lineage stores it: the top feature of the finalist importance and its share, or
+   * null when no importance was measured.
+   */
+  private static leakageAuditOf(dominance: DominanceResult): TrainingLeakageAudit | null {
+    if (dominance.TopFeature === undefined || dominance.TopShare === undefined) return null;
+    return { topFeature: dominance.TopFeature, topShare: dominance.TopShare };
+  }
+
+  /** The plain-language CALIBRATION HOLD sentence of a held model's run; empty when nothing is held. */
+  private static calibrationHoldNote(hold: CalibrationHold | null): string {
+    if (hold === null) return '';
+    const range = `${CALIBRATION_SLOPE_RANGE[0]}–${CALIBRATION_SLOPE_RANGE[1]}`;
+    const why = hold.slope === null
+      ? `the calibration slope of the model's probabilities could not be measured on the held-back rows, so they cannot be shown to fall in the ${range} range`
+      : `the model's probabilities are miscalibrated on the held-back rows (calibration slope ${hold.slope.toFixed(2)}, outside the ${range} range)`;
+    return `CALIBRATION HOLD: ${why}. Its family is hidden: the model is kept in Draft and the promotion gate will not move it to Validated or Published, with or without a sign-off.`;
   }
 
   /**
@@ -698,7 +744,8 @@ export class TrainingEngine {
    * `Metrics`, the holdout scores as `HoldoutMetrics` and the held-out permutation importance per source column as
    * `FeatureImportance` (`{}` when the trainer measured none, as for a forecast). For a kept baseline member: the
    * catalog algorithm of its driver ({@link shippedAlgorithmId}), its holdout score as `HoldoutMetrics`, and `{}` for
-   * `Metrics` and `FeatureImportance` (a baseline has no inner score and no importance of its own).
+   * `Metrics` and `FeatureImportance` (a baseline has no inner score and no importance of its own; its Lineage's
+   * leakage audit carries the finalist's, {@link trainerLineage}).
    */
   private async createTrainerModelRow(x: TrainerRunInputs, outcome: TrainerOutcome, shipped: ShippedArtifact, artifactFileId: string): Promise<MJMLModelEntity> {
     const { Resolved: resolved, Snapshot: snapshot, Deps: deps } = x;
@@ -733,7 +780,9 @@ export class TrainingEngine {
    * split), the unit's, and the protocol it was judged under with its artifact format. Its evaluation record states
    * out-of-sample scoring (the holdout rows are scored once by the shipped artifact, which never trained on them) and the
    * kind of the importance the row stores: the finalist's held-out importance, or none for a kept baseline member (its
-   * row stores `{}`). It names what shipped and that artifact's driver.
+   * row stores `{}`). It names what shipped and that artifact's driver, the run's leakage audit (the finalist
+   * importance's top feature and share, whatever shipped: the promotion gate judges a kept baseline by it) and the
+   * calibration hold of a shipped finalist whose family is hidden.
    */
   private trainerLineage(x: TrainerRunInputs, outcome: TrainerOutcome, split: LockedHoldoutSplit, shipped: ShippedArtifact): ModelTrainingLineage & Partial<UnitModelLineage> & TrainerModelLineage {
     const evaluation: EvaluationRecord = shipped.Member === null ? outcome.Evaluation : { ...outcome.Evaluation, ImportanceKind: 'none' };
@@ -744,6 +793,8 @@ export class TrainingEngine {
       artifactFormat: PREDICTOR_ARTIFACT_FORMAT,
       shippedMember: shipped.Name,
       shippedDriver: TrainingEngine.shippedDriver(x, outcome, shipped),
+      trainingLeakageAudit: TrainingEngine.leakageAuditOf(outcome.Dominance),
+      calibrationHold: outcome.CalibrationHold,
     };
   }
 

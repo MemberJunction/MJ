@@ -175,6 +175,31 @@ describe('PredictiveStudioPromoteModelAction — outcome mapping', () => {
     expect(saveFailed.ResultCode).toBe('SAVE_FAILED');
     expect(saveFailed.Message).toContain('FK violation');
   });
+
+  it('maps a calibration hold to CALIBRATION_HOLD, naming the slope or that it could not be measured, with no sign-off route', async () => {
+    const run = (slope: number | null) => new TestablePromoteAction(new MockGate({ kind: 'refused-calibration', slope })).run(
+      params([
+        { Name: 'ModelID', Type: 'Input', Value: 'model-1' },
+        { Name: 'TargetStatus', Type: 'Input', Value: 'Validated' },
+        { Name: 'SignOff', Type: 'Input', Value: true },
+      ]),
+    );
+    const measured = await run(0.5);
+    expect([measured.Success, measured.ResultCode]).toEqual([false, 'CALIBRATION_HOLD']);
+    expect(measured.Message).toContain('calibration slope 0.50');
+    expect(measured.Message).toContain('no sign-off overrides it');
+    expect((await run(null)).Message).toContain('could not be measured');
+  });
+
+  it('maps a model /predict does not serve to MODEL_NOT_SERVABLE with the gate\'s message', async () => {
+    const result = await new TestablePromoteAction(new MockGate({ kind: 'not-servable', message: 'forecast models are not served by /predict yet' })).run(
+      params([
+        { Name: 'ModelID', Type: 'Input', Value: 'model-1' },
+        { Name: 'TargetStatus', Type: 'Input', Value: 'Published' },
+      ]),
+    );
+    expect([result.Success, result.ResultCode, result.Message]).toEqual([false, 'MODEL_NOT_SERVABLE', 'forecast models are not served by /predict yet']);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -187,6 +212,8 @@ class FakeModel {
   public ID = 'model-1';
   public PipelineID: string | null = 'pipe-1';
   public FeatureImportance: string | null = null;
+  /** No trainer Lineage by default (a model trained before the trainer recorded its keys). */
+  public Lineage: string | null = null;
   /** Trained by default; set null to model a seeded/untrained row that "needs training". */
   public ArtifactFileID: string | null = 'file-1';
   public Status: 'Archived' | 'Draft' | 'Published' | 'Validated' = 'Draft';
@@ -341,6 +368,43 @@ describe('ProductionModelPromotionGate — leakage sign-off gate', () => {
   it('returns not-found when the model does not load', async () => {
     const outcome = await new TestableGate(null).promote(req());
     expect(outcome.kind).toBe('not-found');
+  });
+
+  it("refuses a model whose Lineage leakage audit is dominant although its own importance is {} (a kept simple baseline)", async () => {
+    const model = new FakeModel({});
+    model.Lineage = JSON.stringify({ shippedMember: 'glm', trainingLeakageAudit: { topFeature: 'cancelled_flag', topShare: 0.92 } });
+    expect(await new TestableGate(model).promote(req({ targetStatus: 'Validated' }))).toEqual({ kind: 'refused-leakage', topFeature: 'cancelled_flag', topShare: 0.92 });
+    expect(model.SaveCallCount).toBe(0);
+    const signedOff = await new TestableGate(model).promote(req({ targetStatus: 'Validated', signOff: true, reason: 'cancelled_flag is set before the decision date.' }));
+    expect(signedOff.kind).toBe('promoted');
+  });
+
+  it("promotes a model whose recorded audit is under the pipeline's current threshold, or that records none", async () => {
+    const audited = new FakeModel({});
+    audited.Lineage = JSON.stringify({ trainingLeakageAudit: { topFeature: 'tenure', topShare: 0.55 } });
+    expect((await new TestableGate(audited).promote(req({ targetStatus: 'Validated' }))).kind).toBe('promoted');
+    const unaudited = new FakeModel({});
+    unaudited.Lineage = JSON.stringify({ trainingLeakageAudit: null });
+    expect((await new TestableGate(unaudited).promote(req({ targetStatus: 'Validated' }))).kind).toBe('promoted');
+  });
+
+  it('refuses a calibration-held model at Validated and Published whatever the sign-off, and never saves it', async () => {
+    const model = new FakeModel({ tenure: 0.5, city: 0.5 });
+    model.Lineage = JSON.stringify({ calibrationHold: { slope: 1.6 } });
+    expect(await new TestableGate(model).promote(req({ targetStatus: 'Validated' }))).toEqual({ kind: 'refused-calibration', slope: 1.6 });
+    model.Status = 'Validated';
+    expect(await new TestableGate(model).promote(req({ targetStatus: 'Published', signOff: true, reason: 'ok' }))).toEqual({ kind: 'refused-calibration', slope: 1.6 });
+    expect(model.SaveCallCount).toBe(0);
+  });
+
+  it("refuses to publish a model whose shipped artifact is a forecast's series forecaster, and still lets it reach Validated", async () => {
+    const model = new FakeModel({});
+    model.Lineage = JSON.stringify({ shippedMember: 'seasonalNaive', shippedDriver: 'seasonal-naive' });
+    expect((await new TestableGate(model).promote(req({ targetStatus: 'Validated' }))).kind).toBe('promoted');
+    const refused = await new TestableGate(model).promote(req({ targetStatus: 'Published' }));
+    expect(refused.kind).toBe('not-servable');
+    expect(refused.kind === 'not-servable' ? refused.message : '').toContain('forecast models are not served by /predict yet');
+    expect([model.Status, model.SaveCallCount]).toEqual(['Validated', 1]);
   });
 
   it('returns save-failed and surfaces the CompleteMessage', async () => {

@@ -3,7 +3,7 @@ import { InvalidMajorityBaselineRuleError, type PredictiveStudioRefusalCode } fr
 import { ReadCapExceededError } from '../feature-assembly/read-cap-error';
 import { TrainingRefusedError } from '../training/training-refusal';
 import { AsOfSettingHasNoEffectError } from '../training/as-of-refusal';
-import { ModelNotScorableError, ModelNeedsTrainingError } from '../scoring/model-readiness';
+import { ModelNotScorableError, ModelNeedsTrainingError, ModelNotServableError } from '../scoring/model-readiness';
 import { ExperimentSessionsUnavailableError } from '../actions/run-experiment.deps';
 
 /**
@@ -22,6 +22,7 @@ export class PredictiveStudioRefusals {
     if (e instanceof AsOfSettingHasNoEffectError) return 'AS_OF_NO_EFFECT';
     if (e instanceof ModelNotScorableError) return 'MODEL_NOT_SCORABLE';
     if (e instanceof ModelNeedsTrainingError) return 'MODEL_NEEDS_TRAINING';
+    if (e instanceof ModelNotServableError) return 'MODEL_NOT_SERVABLE';
     if (e instanceof ExperimentSessionsUnavailableError) return 'EXPERIMENT_SESSIONS_UNAVAILABLE';
     if (e instanceof InvalidMajorityBaselineRuleError) return 'INVALID_EVALUATION_SETTING';
     return null;

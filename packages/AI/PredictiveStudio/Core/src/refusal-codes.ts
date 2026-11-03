@@ -11,6 +11,8 @@ const REFUSAL_CODES = [
   'AS_OF_NO_EFFECT',
   'MODEL_NOT_SCORABLE',
   'MODEL_NEEDS_TRAINING',
+  /** The model's artifact is a forecast's series forecaster, which the sidecar's `/predict` does not serve. */
+  'MODEL_NOT_SERVABLE',
   'EXPERIMENT_SESSIONS_UNAVAILABLE',
   /** A pipeline's evaluation setting is not a known value (e.g. `ValidationStrategy.MajorityBaselineRule`). */
   'INVALID_EVALUATION_SETTING',

@@ -18,6 +18,7 @@ import {
   type TrainerCompleted,
   type TrainerFailed,
   type TrainerRequest,
+  type TaskType,
 } from '../index';
 
 const complete: CodeVersion = {
@@ -145,18 +146,35 @@ describe('trainer contract member lists', () => {
 
 describe('TrainerContract.CalibrationHidesFamily (a family is offered only with a calibration slope inside 0.8–1.2)', () => {
   const report = (slope: number): CalibrationReport => ({ method: 'platt', intercept: 0, slope, reliability: [] });
+  const binary: TaskType = { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 1 };
+  const multiclass: TaskType = { kind: 'multiclass', classOrder: ['a', 'b', 'c'], adverseIndices: [2] };
+  const notCalibrated: readonly TaskType[] = [
+    { kind: 'continuous' }, { kind: 'count' }, { kind: 'non-negative', tweediePower: 1.5 }, { kind: 'forecast', valueKind: 'continuous' },
+  ];
   it('offers a family with slope inside 0.8–1.2 and hides one outside or undefined', () => {
-    expect(TrainerContract.CalibrationHidesFamily(report(0.95))).toBe(false);
-    expect(TrainerContract.CalibrationHidesFamily(report(0.7998))).toBe(true);
-    expect(TrainerContract.CalibrationHidesFamily(report(1.25))).toBe(true);
-    expect(TrainerContract.CalibrationHidesFamily(report(Number.NaN))).toBe(true);
-    expect(TrainerContract.CalibrationHidesFamily(null)).toBe(false);
+    expect(TrainerContract.CalibrationHidesFamily(report(0.95), binary)).toBe(false);
+    expect(TrainerContract.CalibrationHidesFamily(report(0.7998), binary)).toBe(true);
+    expect(TrainerContract.CalibrationHidesFamily(report(1.25), binary)).toBe(true);
+    expect(TrainerContract.CalibrationHidesFamily(report(Number.NaN), binary)).toBe(true);
+    expect(TrainerContract.CalibrationHidesFamily(report(0.5), multiclass)).toBe(true);
+  });
+
+  it('hides a probability task (binary, multiclass) with no report: its slope could not be measured', () => {
+    expect(TrainerContract.CalibrationHidesFamily(null, binary)).toBe(true);
+    expect(TrainerContract.CalibrationHidesFamily(null, multiclass)).toBe(true);
+  });
+
+  it('never hides a task the trainer does not calibrate, with or without a report', () => {
+    for (const task of notCalibrated) {
+      expect(TrainerContract.CalibrationHidesFamily(null, task)).toBe(false);
+      expect(TrainerContract.CalibrationHidesFamily(report(0.5), task)).toBe(false);
+    }
   });
 
   it('keeps both range ends offered', () => {
-    expect(TrainerContract.CalibrationHidesFamily(report(0.8))).toBe(false);
-    expect(TrainerContract.CalibrationHidesFamily(report(1.2))).toBe(false);
-    expect(TrainerContract.CalibrationHidesFamily(report(Number.POSITIVE_INFINITY))).toBe(true);
+    expect(TrainerContract.CalibrationHidesFamily(report(0.8), binary)).toBe(false);
+    expect(TrainerContract.CalibrationHidesFamily(report(1.2), binary)).toBe(false);
+    expect(TrainerContract.CalibrationHidesFamily(report(Number.POSITIVE_INFINITY), binary)).toBe(true);
   });
 
   it("declares the same slope range as the sidecar's calibration module", () => {

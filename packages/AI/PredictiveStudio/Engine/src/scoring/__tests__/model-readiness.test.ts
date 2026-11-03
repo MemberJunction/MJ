@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import type { UserInfo, IMetadataProvider, RunViewParams, RunViewResult } from '@memberjunction/core';
 import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 import type { PredictRequest, PredictResponse, FeatureSchemaEntry } from '@memberjunction/predictive-studio-core';
 import type { RecordProcessorContext, RecordRef } from '@memberjunction/record-set-processor-base';
@@ -11,6 +13,8 @@ import {
   ModelNeedsTrainingMessage,
   ModelArtifactMissingMessage,
   ModelNeedsTrainingError,
+  ModelNotServableError,
+  ModelReadiness,
 } from '../model-readiness';
 import { AutoTrainShippedNoModelError, PipelineAutoTrainer } from '../auto-train';
 import { TrainingDelegation } from '../../operations/delegation';
@@ -120,6 +124,38 @@ describe('model readiness helpers', () => {
   it('produces plain, actionable messages', () => {
     expect(ModelNeedsTrainingMessage('m-1')).toMatch(/needs training/);
     expect(ModelArtifactMissingMessage('m-1', 'f-1')).toMatch(/needs training on this server/);
+  });
+});
+
+describe('ModelReadiness.IsServedByPredict (the sidecar /predict serves trainer predictors, not a forecast\'s series forecasters)', () => {
+  const shippedBy = (shippedDriver: string) => ({ ID: 'm', Lineage: JSON.stringify({ shippedMember: 'x', shippedDriver }) });
+
+  it('refuses a model whose shipped artifact is a series model or a series baseline', () => {
+    for (const driver of ['ar1_const', 'trend_season_ols', 'trend_season_ar1', 'naive', 'seasonal-naive', 'mean']) {
+      expect(ModelReadiness.IsServedByPredict(shippedBy(driver))).toBe(false);
+    }
+  });
+
+  it('serves a tabular driver (a forecast unit\'s tabular finalist too) and a model whose Lineage names no shipped driver', () => {
+    expect(ModelReadiness.IsServedByPredict(shippedBy('xgboost'))).toBe(true);
+    expect(ModelReadiness.IsServedByPredict(shippedBy('logistic_regression'))).toBe(true);
+    expect(ModelReadiness.IsServedByPredict({ ID: 'm', Lineage: null })).toBe(true);
+    expect(ModelReadiness.IsServedByPredict({ ID: 'm', Lineage: JSON.stringify({ targetEntityName: 'Members' }) })).toBe(true);
+  });
+
+  it('says plainly why such a model cannot be published or score, and the error carries it', () => {
+    expect(ModelReadiness.NotServedByPredictMessage('m-1')).toContain("ML Model 'm-1' cannot be published or score records: forecast models are not served by /predict yet");
+    const error = new ModelNotServableError('m-1');
+    expect([error.ModelID, error.message]).toEqual(['m-1', `MLModelInferenceProcessor: ${ModelReadiness.NotServedByPredictMessage('m-1')}`]);
+  });
+
+  it("lists exactly the sidecar's series algorithms and series baseline kinds (Sidecar/src/python/app/temporal.py)", () => {
+    const python = readFileSync(fileURLToPath(new URL('../../../../Sidecar/src/python/app/temporal.py', import.meta.url)), 'utf8');
+    const algos = /^SERIES_ALGOS: Tuple\[SeriesAlgo, \.\.\.\] = \(([^)]*)\)$/m.exec(python);
+    const baselines = /^BaselineKind = Literal\[([^\]]*)\]$/m.exec(python);
+    if (algos === null || baselines === null) throw new Error('temporal.py no longer declares SERIES_ALGOS and BaselineKind as this test reads them');
+    const quoted = (list: string) => [...list.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    expect([...ModelReadiness.SeriesForecasterDrivers].sort()).toEqual([...quoted(algos[1]), ...quoted(baselines[1])].sort());
   });
 });
 
@@ -300,6 +336,32 @@ describe('PipelineAutoTrainer', () => {
       trainer.EnsureTrainedModel({ pipelineId: "x' OR 1=1 --", currentModelId: null, recordProcessId: null }, USER, PROVIDER),
     ).rejects.toThrow(/not a valid/);
     expect(trainer.TrainCount).toBe(0);
+  });
+});
+
+describe('PipelineAutoTrainer.findReusableModel', () => {
+  /** The auto-trainer with its reuse lookup exposed. */
+  class ReuseProbe extends PipelineAutoTrainer {
+    public Reusable(provider: IMetadataProvider): Promise<string | null> {
+      return this.findReusableModel(PIPE, USER, provider);
+    }
+  }
+  const rows = [
+    { ID: 'forecast-model', ArtifactFileID: 'file-forecast', Lineage: JSON.stringify({ shippedMember: 'seasonalNaive', shippedDriver: 'seasonal-naive' }) },
+    { ID: 'tabular-model', ArtifactFileID: 'file-tabular', Lineage: JSON.stringify({ shippedMember: 'xgb', shippedDriver: 'xgboost' }) },
+  ];
+  const provider = {
+    async RunView<T>(params: RunViewParams): Promise<RunViewResult<T>> {
+      expect(params.Fields).toContain('Lineage');
+      return { Success: true, Results: rows as unknown as T[], RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '' };
+    },
+  } as unknown as IMetadataProvider;
+
+  it('skips a newer Published model /predict does not serve and reuses the next loadable one', async () => {
+    const artifacts = new InMemoryArtifactLoader();
+    artifacts.Set('file-forecast', new TextEncoder().encode('series'));
+    artifacts.Set('file-tabular', new TextEncoder().encode('tabular'));
+    expect(await new ReuseProbe({ artifactLoader: artifacts }).Reusable(provider)).toBe('tabular-model');
   });
 });
 
