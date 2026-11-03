@@ -36,15 +36,19 @@ describe('NormalizeSqlLiterals running time', () => {
     });
 });
 
+// These inputs make a backtracking pattern run for minutes. The bound sits well above linear time on a shared CI runner
+// (535 ms was measured for the 1.6 MB case while six test shards ran) and far below what a backtracking regression costs.
+const LINEAR_TIME_BOUND_MS = 2_000;
+
 describe('Stage 1 running time', () => {
-    it('scrubs 400 KB of JWT-like dashed segments in well under a second', () => {
+    it('scrubs 400 KB of JWT-like dashed segments in linear time', () => {
         const hostile = 'eyJ-'.repeat(100_000);
-        expect(elapsedMs(() => ScrubString(hostile, 'FullRaw'))).toBeLessThan(500);
+        expect(elapsedMs(() => ScrubString(hostile, 'FullRaw'))).toBeLessThan(LINEAR_TIME_BOUND_MS);
     }, 60_000);
 
-    it('scrubs 1.6 MB of sensitive name: value lines with no carriage return in well under a second', () => {
+    it('scrubs 1.6 MB of sensitive name: value lines with no carriage return in linear time', () => {
         const hostile = 'pwd:x\n'.repeat(280_000);
-        expect(elapsedMs(() => ScrubString(hostile, 'FullRaw'))).toBeLessThan(500);
+        expect(elapsedMs(() => ScrubString(hostile, 'FullRaw'))).toBeLessThan(LINEAR_TIME_BOUND_MS);
     }, 60_000);
 });
 
