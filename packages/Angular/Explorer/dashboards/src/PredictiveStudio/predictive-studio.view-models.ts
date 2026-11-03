@@ -17,6 +17,8 @@
  *   model actually recorded, never fabricated zeros.
  */
 
+import { IndexByUUID, UUIDsEqual } from '@memberjunction/global';
+import { JsonParse, MetricDirections } from '@memberjunction/predictive-studio-core';
 import { PSFeatureBar, PSIterationCard, PSLeaderboardEntry } from './predictive-studio.types';
 
 // ---------------------------------------------------------------------------
@@ -78,9 +80,13 @@ export const PS_KNOWN_METRIC_KEYS = [
   'Recall',
   'F1',
   'LogLoss',
+  'MulticlassLogLoss',
   'Brier',
   'RMSE',
   'MAE',
+  'PoissonDeviance',
+  'TweedieDeviance',
+  'MASE',
   'R2',
 ] as const;
 
@@ -106,10 +112,15 @@ const METRIC_ALIASES: Record<string, PSMetricKey> = {
   f1score: 'F1',
   logloss: 'LogLoss',
   'log_loss': 'LogLoss',
+  'log-loss': 'LogLoss',
+  'multiclass-log-loss': 'MulticlassLogLoss',
   brier: 'Brier',
   'brier_score': 'Brier',
   rmse: 'RMSE',
   mae: 'MAE',
+  'poisson-deviance': 'PoissonDeviance',
+  'tweedie-deviance': 'TweedieDeviance',
+  mase: 'MASE',
   r2: 'R2',
   'r_squared': 'R2',
 };
@@ -141,21 +152,11 @@ export function ParseMetrics(json: string | null | undefined): PSMetricMap {
   return out;
 }
 
-/** @deprecated Use {@link ParseMetrics}. */
-export function parseMetrics(json: string | null | undefined): PSMetricMap {
-  return ParseMetrics(json);
-}
-
 /** Resolve a raw metric key to its canonical form (exact match first, then alias), or null. */
 export function CanonicalMetricKey(rawKey: string): PSMetricKey | null {
   const exact = PS_KNOWN_METRIC_KEYS.find((k) => k === rawKey);
   if (exact) return exact;
   return METRIC_ALIASES[rawKey.trim().toLowerCase()] ?? null;
-}
-
-/** @deprecated Use {@link CanonicalMetricKey}. */
-export function canonicalMetricKey(rawKey: string): PSMetricKey | null {
-  return CanonicalMetricKey(rawKey);
 }
 
 /** The primary AUC/score of a model: holdout AUC preferred, else training AUC, else null. */
@@ -166,43 +167,37 @@ export function PrimaryAuc(model: Pick<PSModelRow, 'Metrics' | 'HoldoutMetrics'>
   return train.AUC ?? null;
 }
 
-/** @deprecated Use {@link PrimaryAuc}. */
-export function primaryAuc(model: Pick<PSModelRow, 'Metrics' | 'HoldoutMetrics'>): number | null {
-  return PrimaryAuc(model);
-}
+/** A model's score as the panels show it: the metric, its label and the value. */
+type PSModelScore = { key: PSMetricKey; label: string; value: number };
 
-/** The primary metric score of a model: holdout preferred, else training. Inspects ProblemType and selects R² for regression, AUC for classification. */
+/**
+ * The primary metric score of a model: holdout preferred, else training. Inspects ProblemType and selects R² for
+ * regression, AUC for classification; failing those, the first metric the holdout stores, which a trained model's
+ * holdout lists first as the protocol's primary proper score (all a kept simple baseline or a forecast stores).
+ */
 export function PrimaryModelScore(
   model: Pick<PSModelRow, 'Metrics' | 'HoldoutMetrics'> & { ProblemType?: string | null },
-): { key: PSMetricKey; label: string; value: number } | null {
-  const isReg = (model.ProblemType ?? '').toLowerCase() === 'regression';
+): PSModelScore | null {
+  const preferred: readonly PSMetricKey[] = (model.ProblemType ?? '').toLowerCase() === 'regression'
+    ? ['R2', 'RMSE', 'MAE', 'AUC', 'Accuracy', 'F1']
+    : ['AUC', 'Accuracy', 'F1', 'R2', 'RMSE'];
   const holdout = ParseMetrics(model.HoldoutMetrics);
   const train = ParseMetrics(model.Metrics);
-
-  if (isReg) {
-    for (const k of ['R2', 'RMSE', 'MAE'] as const) {
-      if (holdout[k] != null) return { key: k, label: METRIC_LABELS[k], value: holdout[k]! };
-    }
-    for (const k of ['R2', 'RMSE', 'MAE'] as const) {
-      if (train[k] != null) return { key: k, label: METRIC_LABELS[k], value: train[k]! };
-    }
-  }
-
-  for (const k of ['AUC', 'Accuracy', 'F1', 'R2', 'RMSE'] as const) {
-    if (holdout[k] != null) return { key: k, label: METRIC_LABELS[k], value: holdout[k]! };
-  }
-  for (const k of ['AUC', 'Accuracy', 'F1', 'R2', 'RMSE'] as const) {
-    if (train[k] != null) return { key: k, label: METRIC_LABELS[k], value: train[k]! };
-  }
-
-  return null;
+  return preferredScore(holdout, preferred) || firstStoredScore(holdout) || preferredScore(train, preferred) || firstStoredScore(train);
 }
 
-/** @deprecated Use {@link PrimaryModelScore}. */
-export function primaryModelScore(
-  model: Pick<PSModelRow, 'Metrics' | 'HoldoutMetrics'> & { ProblemType?: string | null },
-): { key: PSMetricKey; label: string; value: number } | null {
-  return PrimaryModelScore(model);
+/** The first of `keys` the map holds. */
+function preferredScore(metrics: PSMetricMap, keys: readonly PSMetricKey[]): PSModelScore | null {
+  const key = keys.find((k) => metrics[k] != null);
+  const value = key === undefined ? undefined : metrics[key];
+  return key === undefined || value === undefined ? null : { key, label: METRIC_LABELS[key], value };
+}
+
+/** The first metric the map holds, in the order the stored JSON lists them. */
+function firstStoredScore(metrics: PSMetricMap): PSModelScore | null {
+  const key = Object.keys(metrics).map((k) => CanonicalMetricKey(k)).find((k): k is PSMetricKey => k !== null);
+  const value = key === undefined ? undefined : metrics[key];
+  return key === undefined || value === undefined ? null : { key, label: METRIC_LABELS[key], value };
 }
 
 /** A labeled metric ready for display (value formatted to a sensible precision). */
@@ -220,9 +215,13 @@ export const METRIC_LABELS: Record<PSMetricKey, string> = {
   Recall: 'Recall',
   F1: 'F1',
   LogLoss: 'Log Loss',
+  MulticlassLogLoss: 'Multiclass Log Loss',
   Brier: 'Brier',
   RMSE: 'RMSE',
   MAE: 'MAE',
+  PoissonDeviance: 'Poisson Deviance',
+  TweedieDeviance: 'Tweedie Deviance',
+  MASE: 'MASE',
   R2: 'R²',
 };
 
@@ -245,20 +244,10 @@ export function MetricsToDisplay(metrics: PSMetricMap, options?: { excludeAuc?: 
   return out;
 }
 
-/** @deprecated Use {@link MetricsToDisplay}. */
-export function metricsToDisplay(metrics: PSMetricMap, options?: { excludeAuc?: boolean }): PSMetricDisplay[] {
-  return MetricsToDisplay(metrics, options);
-}
-
 /** Format a metric value: 3 decimals for ratio metrics, 2 for the rest. */
 export function FormatMetricValue(key: PSMetricKey, value: number): string {
-  const threeDecimals: PSMetricKey[] = ['AUC', 'LogLoss', 'Brier', 'RMSE', 'MAE', 'R2'];
+  const threeDecimals: PSMetricKey[] = ['AUC', 'LogLoss', 'MulticlassLogLoss', 'Brier', 'RMSE', 'MAE', 'PoissonDeviance', 'TweedieDeviance', 'MASE', 'R2'];
   return value.toFixed(threeDecimals.includes(key) ? 3 : 2);
-}
-
-/** @deprecated Use {@link FormatMetricValue}. */
-export function formatMetricValue(key: PSMetricKey, value: number): string {
-  return FormatMetricValue(key, value);
 }
 
 /**
@@ -286,14 +275,6 @@ export function OverfitGap(
   const holdout = holdoutMetrics[key];
   if (train == null || holdout == null) return null;
   return train - holdout;
-}
-
-/** @deprecated Use {@link OverfitGap}. */
-export function overfitGap(
-  model: Pick<PSModelRow, 'Metrics' | 'HoldoutMetrics'> & { ProblemType?: string | null },
-  preferredKey?: PSMetricKey,
-): number | null {
-  return OverfitGap(model, preferredKey);
 }
 
 // ---------------------------------------------------------------------------
@@ -331,21 +312,11 @@ export function ParseFeatureImportance(json: string | null | undefined, topN = 6
   });
 }
 
-/** @deprecated Use {@link ParseFeatureImportance}. */
-export function parseFeatureImportance(json: string | null | undefined, topN = 6): PSFeatureBar[] {
-  return ParseFeatureImportance(json, topN);
-}
-
 /** The single largest absolute feature importance (the dominance number), or null. */
 export function MaxFeatureImportance(json: string | null | undefined): number | null {
   const entries = extractImportanceEntries(json);
   if (entries.length === 0) return null;
   return entries.reduce((max, e) => Math.max(max, Math.abs(e.value)), 0);
-}
-
-/** @deprecated Use {@link MaxFeatureImportance}. */
-export function maxFeatureImportance(json: string | null | undefined): number | null {
-  return MaxFeatureImportance(json);
 }
 
 /** Internal: tolerant extraction of `{ name, value }[]` from either object or array JSON. */
@@ -417,88 +388,131 @@ export interface PSKanbanColumns {
 }
 
 /**
+ * One entry of an experiment session's stored leaderboard (`MJ: Experiment Sessions.Leaderboard`), which the session
+ * writes best first. `Metric` is the normalized score: higher is better (a lower-is-better metric is negated, a
+ * closer-to-one metric is minus its distance from one), as the iteration's `Score` is.
+ */
+export interface PSRankedScore {
+  /** The iteration the entry ranks. */
+  IterationID: string;
+  /** The normalized score. */
+  Metric: number;
+  /** The holdout metric the score was read from, lower-cased. */
+  ScoreMetric: string;
+  /** True when `ScoreMetric` is the plan's success metric: every such entry ranks above a fallback entry. */
+  OnSuccessMetric: boolean;
+}
+
+/**
+ * The session's stored leaderboard, in its stored (best-first) order. An entry written before entries named their metric
+ * is on the plan's success metric, the only metric a session then scored on. Empty when nothing is stored yet (the first
+ * wave has not finished) or the JSON cannot be read; an entry without an iteration or a score is left out.
+ *
+ * @param json the session's `Leaderboard` column
+ * @param successMetric the plan's `TargetDefinition.SuccessMetric`
+ */
+export function ParseSessionLeaderboard(json: string | null | undefined, successMetric: string): PSRankedScore[] {
+  const parsed = JsonParse.ParseJsonText(json, 'Leaderboard');
+  if (parsed.Ok === false || !Array.isArray(parsed.Value)) return [];
+  const success = successMetric.trim().toLowerCase();
+  return parsed.Value.flatMap((e): PSRankedScore[] => {
+    if (!JsonParse.IsJsonObject(e)) return [];
+    const iterationId = JsonParse.JsonString(e, 'IterationID');
+    const metric = JsonParse.JsonNumber(e, 'Metric');
+    if (iterationId === null || metric === null) return [];
+    const scoreMetric = JsonParse.JsonString(e, 'ScoreMetric');
+    if (scoreMetric === null) return [{ IterationID: iterationId, Metric: metric, ScoreMetric: success, OnSuccessMetric: true }];
+    return [{ IterationID: iterationId, Metric: metric, ScoreMetric: scoreMetric.trim().toLowerCase(), OnSuccessMetric: JsonParse.JsonBoolean(e, 'OnSuccessMetric') === true }];
+  });
+}
+
+/** The group an entry ranks in: the success metric's, else its fallback metric's (numbers compare only within one). */
+function rankGroupOf(entry: PSRankedScore): string {
+  return entry.OnSuccessMetric ? '' : entry.ScoreMetric;
+}
+
+/** A normalized score on its metric's own scale, and the label that scale reads under. */
+function scoreOnMetric(entry: PSRankedScore): { Value: number; Label: string } {
+  switch (MetricDirections.MetricDirectionOf(entry.ScoreMetric)) {
+    case 'lower-is-better': return { Value: -entry.Metric, Label: entry.ScoreMetric };
+    case 'closer-to-one': return { Value: -entry.Metric, Label: `${entry.ScoreMetric} distance from 1` };
+    default: return { Value: entry.Metric, Label: entry.ScoreMetric };
+  }
+}
+
+/**
  * Group a session's iterations into the Running / Completed / Pruned kanban columns, mapping each to
- * a {@link PSIterationCard}. The single best-scoring Completed iteration is badged `Best`; `Pending`
- * iterations are treated as Running (they're queued/in-flight); `Failed` iterations join Pruned (a
- * terminal non-success outcome). Completed/pruned cards carry the holdout score + Δ-from-best; running
- * cards carry an indeterminate progress hint.
+ * a {@link PSIterationCard}. The session's stored best is badged `Best`; `Pending` iterations are treated as Running
+ * (they're queued/in-flight); `Failed` iterations join Pruned (a terminal non-success outcome). Completed/pruned cards
+ * carry their score on its own metric and the Δ from the best on that metric (scores on two metrics are never
+ * compared); an iteration the stored ranking does not hold yet shows no score. Running cards carry an indeterminate
+ * progress hint.
  *
  * @param iterations The session's iterations (any order — sorted by Sequence internally).
+ * @param ranked The session's stored leaderboard ({@link ParseSessionLeaderboard}).
  * @returns The three populated kanban columns.
  */
-export function GroupIterationsToKanban(iterations: PSIterationRow[]): PSKanbanColumns {
+export function GroupIterationsToKanban(iterations: PSIterationRow[], ranked: readonly PSRankedScore[]): PSKanbanColumns {
   const sorted = [...iterations].sort((a, b) => a.Sequence - b.Sequence);
-  const bestScore = BestIterationScore(sorted);
+  const entries = IndexByUUID(ranked, (r) => r.IterationID);
+  const bestByGroup = new Map<string, PSRankedScore>();
+  for (const r of ranked) if (!bestByGroup.has(rankGroupOf(r))) bestByGroup.set(rankGroupOf(r), r);
+  const best = ranked[0];
 
   const running: PSIterationCard[] = [];
   const completed: PSIterationCard[] = [];
   const pruned: PSIterationCard[] = [];
 
   for (const it of sorted) {
-    const status = it.Status;
-    if (status === 'Running' || status === 'Pending') {
+    const entry = entries.Get(it.ID);
+    const groupBest = entry === undefined ? undefined : bestByGroup.get(rankGroupOf(entry));
+    if (it.Status === 'Running' || it.Status === 'Pending') {
       running.push(toRunningCard(it));
-    } else if (status === 'Completed') {
-      const isBest = it.Score != null && bestScore != null && it.Score === bestScore;
-      completed.push(toScoredCard(it, isBest ? 'Best' : 'Completed', bestScore));
+    } else if (it.Status === 'Completed') {
+      const isBest = entry !== undefined && best !== undefined && UUIDsEqual(entry.IterationID, best.IterationID);
+      completed.push(toScoredCard(it, isBest ? 'Best' : 'Completed', entry, groupBest));
     } else {
       // Pruned or Failed → the pruned column (terminal, non-leading).
-      pruned.push(toScoredCard(it, 'Pruned', bestScore));
+      pruned.push(toScoredCard(it, 'Pruned', entry, groupBest));
     }
   }
   return { Running: running, Completed: completed, Pruned: pruned };
 }
 
-/** @deprecated Use {@link GroupIterationsToKanban}. */
-export function groupIterationsToKanban(iterations: PSIterationRow[]): PSKanbanColumns {
-  return GroupIterationsToKanban(iterations);
-}
-
-/** The highest Completed-iteration score in a set (the leaderboard top), or null. */
-export function BestIterationScore(iterations: PSIterationRow[]): number | null {
-  let best: number | null = null;
-  for (const it of iterations) {
-    if (it.Status !== 'Completed' || it.Score == null) continue;
-    if (best == null || it.Score > best) best = it.Score;
-  }
-  return best;
-}
-
-/** @deprecated Use {@link BestIterationScore}. */
-export function bestIterationScore(iterations: PSIterationRow[]): number | null {
-  return BestIterationScore(iterations);
-}
-
 /**
- * Derive the leaderboard (rank-ordered pills) from a session's iterations: every iteration with a
- * score, sorted by score descending, ranked 1..N. The top entry is flagged `best`; pruned/failed
- * iterations are flagged `pruned`. Iterations without a score are omitted.
+ * Derive the leaderboard (rank-ordered pills) from the session's stored ranking: every entry in its stored order, the
+ * success-metric entries before every entry on a fallback metric, each labelled with its metric and shown on that
+ * metric's own scale. The top entry is flagged `best`; pruned/failed iterations are flagged `pruned`. An iteration the
+ * stored ranking does not hold yet (its wave has not finished) is left out, since nothing says which metric its score is on.
  *
  * @param iterations The session's iterations.
+ * @param ranked The session's stored leaderboard ({@link ParseSessionLeaderboard}).
  * @param topN Maximum leaderboard entries (default 6).
  */
-export function DeriveLeaderboard(iterations: PSIterationRow[], topN = 6): PSLeaderboardEntry[] {
-  const scored = iterations.filter((it) => it.Score != null);
-  scored.sort((a, b) => (b.Score as number) - (a.Score as number));
-  return scored.slice(0, topN).map((it, idx) => {
+export function DeriveLeaderboard(iterations: PSIterationRow[], ranked: readonly PSRankedScore[], topN = 6): PSLeaderboardEntry[] {
+  const byId = IndexByUUID(iterations, (it) => it.ID);
+  const shown = ranked.flatMap((entry) => {
+    const it = byId.Get(entry.IterationID);
+    return it === undefined ? [] : [{ it, entry }];
+  });
+  return shown.slice(0, topN).map(({ it, entry }, idx) => {
     const algo = it.AlgorithmName ?? 'Unknown';
     const style = algoStyle(algo);
+    const score = scoreOnMetric(entry);
     return {
       rank: idx + 1,
       algorithm: algo,
       algorithmIcon: style.icon,
       algorithmColor: style.color,
       features: it.Label ?? `iteration ${it.Sequence}`,
-      auc: it.Score as number,
+      IterationID: it.ID,
+      Score: score.Value,
+      ScoreMetric: score.Label,
+      OnSuccessMetric: entry.OnSuccessMetric,
       best: idx === 0,
       pruned: it.Status === 'Pruned' || it.Status === 'Failed',
     };
   });
-}
-
-/** @deprecated Use {@link DeriveLeaderboard}. */
-export function deriveLeaderboard(iterations: PSIterationRow[], topN = 6): PSLeaderboardEntry[] {
-  return DeriveLeaderboard(iterations, topN);
 }
 
 /** Build a Running/Pending iteration card (indeterminate progress — no live percent available). */
@@ -518,10 +532,16 @@ function toRunningCard(it: PSIterationRow): PSIterationCard {
   };
 }
 
-/** Build a Completed/Best/Pruned iteration card carrying the score + Δ-from-best. */
-function toScoredCard(it: PSIterationRow, status: 'Best' | 'Completed' | 'Pruned', bestScore: number | null): PSIterationCard {
+/** Build a Completed/Best/Pruned iteration card carrying its score on its own metric + Δ from the best on that metric. */
+function toScoredCard(
+  it: PSIterationRow,
+  status: 'Best' | 'Completed' | 'Pruned',
+  entry: PSRankedScore | undefined,
+  groupBest: PSRankedScore | undefined,
+): PSIterationCard {
   const algo = it.AlgorithmName ?? 'Unknown';
   const style = algoStyle(algo);
+  const score = entry === undefined ? undefined : scoreOnMetric(entry);
   return {
     Algorithm: algo,
     AlgorithmIcon: style.icon,
@@ -529,8 +549,9 @@ function toScoredCard(it: PSIterationRow, status: 'Best' | 'Completed' | 'Pruned
     Iteration: `iteration ${it.Sequence}`,
     Features: featureChips(it.Label),
     Status: status,
-    score: it.Score ?? undefined,
-    ScoreDelta: scoreDelta(it.Score, bestScore, status),
+    score: score?.Value,
+    ScoreMetric: score?.Label,
+    ScoreDelta: scoreDelta(entry, groupBest, status),
     Rationale: it.Rationale ?? 'No rationale recorded.',
   };
 }
@@ -547,11 +568,15 @@ function featureChips(label: string | null): string[] {
   return chips.length > 0 ? chips.slice(0, 4) : [label];
 }
 
-/** Format the Δ-from-best string for a scored card. */
-function scoreDelta(score: number | null | undefined, bestScore: number | null, status: 'Best' | 'Completed' | 'Pruned'): string {
+/**
+ * Format the Δ-from-best string for a scored card: against the best entry on the card's own metric (normalized scores,
+ * so a Δ below zero is worse). The overall best reads "Δ best —"; the best of a fallback metric names that metric.
+ */
+function scoreDelta(entry: PSRankedScore | undefined, groupBest: PSRankedScore | undefined, status: 'Best' | 'Completed' | 'Pruned'): string {
   if (status === 'Best') return 'Δ best —';
-  if (score == null || bestScore == null) return '';
-  const delta = score - bestScore;
+  if (entry === undefined || groupBest === undefined) return '';
+  if (UUIDsEqual(entry.IterationID, groupBest.IterationID)) return `Δ best on ${entry.ScoreMetric} —`;
+  const delta = entry.Metric - groupBest.Metric;
   return `Δ ${delta >= 0 ? '+' : '−'}${Math.abs(delta).toFixed(3)}`;
 }
 
@@ -599,17 +624,7 @@ export function ComputeHomeKpis(
   };
 }
 
-/** @deprecated Use {@link ComputeHomeKpis}. */
-export function computeHomeKpis(
-  models: PSModelRow[],
-  runningSessionCount: number,
-  recentScoringRuns: PSProcessRunRow[],
-  experimentRunCount: number,
-): PSHomeKpis {
-  return ComputeHomeKpis(models, runningSessionCount, recentScoringRuns, experimentRunCount);
-}
-
-/** A vertical activity-feed item, with the icon/kind chosen by {@link buildActivityFeed}. */
+/** A vertical activity-feed item, with the icon/kind chosen by {@link BuildActivityFeed}. */
 export interface PSActivityFeedItem {
   Kind: 'promote' | 'run' | 'warn' | 'archive';
   icon: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
@@ -674,16 +689,6 @@ export function BuildActivityFeed(
   return items.slice(0, limit);
 }
 
-/** @deprecated Use {@link BuildActivityFeed}. */
-export function buildActivityFeed(
-  scoringRuns: PSProcessRunRow[],
-  modelEvents: PSModelEvent[],
-  now: Date,
-  limit = 6,
-): PSActivityFeedItem[] {
-  return BuildActivityFeed(scoringRuns, modelEvents, now, limit);
-}
-
 /** A model lifecycle event (promotion / archive) feeding the activity timeline. */
 export interface PSModelEvent {
   Kind: 'promote' | 'archive';
@@ -715,12 +720,7 @@ export function DeriveModelEvents(models: PSModelEventSource[], limit = 8): PSMo
   return events.slice(0, limit);
 }
 
-/** @deprecated Use {@link DeriveModelEvents}. */
-export function deriveModelEvents(models: PSModelEventSource[], limit = 8): PSModelEvent[] {
-  return DeriveModelEvents(models, limit);
-}
-
-/** Source row for {@link deriveModelEvents} — a model plus its resolved display name + timestamp. */
+/** Source row for {@link DeriveModelEvents} — a model plus its resolved display name + timestamp. */
 export interface PSModelEventSource extends Pick<PSModelRow, 'Metrics' | 'HoldoutMetrics' | 'Status'> {
   Name: string;
   Algorithm: string | null;
@@ -738,11 +738,6 @@ export function ToDate(value: Date | string | null | undefined): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** @deprecated Use {@link ToDate}. */
-export function toDate(value: Date | string | null | undefined): Date | null {
-  return ToDate(value);
-}
-
 export function RelativeTime(when: Date, now: Date): string {
   const ms = now.getTime() - when.getTime();
   if (ms < 0) return 'just now';
@@ -755,11 +750,6 @@ export function RelativeTime(when: Date, now: Date): string {
   if (days === 1) return 'Yesterday';
   if (days < 7) return `${days} days ago`;
   return when.toLocaleDateString();
-}
-
-/** @deprecated Use {@link RelativeTime}. */
-export function relativeTime(when: Date, now: Date): string {
-  return RelativeTime(when, now);
 }
 
 // ---------------------------------------------------------------------------
@@ -808,11 +798,6 @@ export function DeriveCompareColumns(iterations: PSIterationRow[], maxRuns = 3):
   });
 }
 
-/** @deprecated Use {@link DeriveCompareColumns}. */
-export function deriveCompareColumns(iterations: PSIterationRow[], maxRuns = 3): PSCompareColumn[] {
-  return DeriveCompareColumns(iterations, maxRuns);
-}
-
 /** A compare metric row (label + per-run formatted values + which column is best). */
 export interface PSCompareMetricRow {
   label: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
@@ -846,11 +831,6 @@ export function BuildCompareMetricRows(columns: PSCompareColumn[]): PSCompareMet
   ];
 }
 
-/** @deprecated Use {@link BuildCompareMetricRows}. */
-export function buildCompareMetricRows(columns: PSCompareColumn[]): PSCompareMetricRow[] {
-  return BuildCompareMetricRows(columns);
-}
-
 /** Index of the max/min finite value in an array (−1 when all null). */
 function indexOfExtreme(values: (number | null)[], dir: 'max' | 'min'): number {
   let bestIdx = -1;
@@ -879,9 +859,4 @@ export function CoerceFiniteNumber(value: unknown): number | null {
     return Number.isFinite(n) ? n : null;
   }
   return null;
-}
-
-/** @deprecated Use {@link CoerceFiniteNumber}. */
-export function coerceFiniteNumber(value: unknown): number | null {
-  return CoerceFiniteNumber(value);
 }

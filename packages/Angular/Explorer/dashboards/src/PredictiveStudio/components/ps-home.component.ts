@@ -22,9 +22,9 @@ import {
  * paths, a vertical recent-activity timeline, and a side rail of weekly KPIs. Fully live:
  *
  * - **KPIs** (published count, active experiments, best holdout AUC, scored-this-week) come from the
- *   cached models/sessions + recent ML scoring runs loaded on demand, via {@link computeHomeKpis}.
+ *   cached models/sessions + recent ML scoring runs loaded on demand, via {@link ComputeHomeKpis}.
  * - **Recent activity** merges recent ML scoring process runs and recent model promotions/archives
- *   into one reverse-chronological feed via {@link buildActivityFeed}.
+ *   into one reverse-chronological feed via {@link BuildActivityFeed}.
  *
  * Recent scoring runs are loaded once on init (cheap, capped) — `MJ: Process Runs` isn't bulk-cached
  * because it grows unbounded. 100% entity-agnostic.

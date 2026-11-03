@@ -22,7 +22,7 @@ try {
 
 type Row = ReturnType<PredictiveStudioEngine['IterationRowsForSession']>[number];
 
-const makeEngine = (sessions: Array<{ ID: string; Name: string; Status: string; Budget?: string | null }>, rows: Row[] = []) =>
+const makeEngine = (sessions: Array<{ ID: string; Name: string; Status: string; Budget?: string | null; Leaderboard?: string | null; PlanSpec?: string | null }>, rows: Row[] = []) =>
   ({
     Sessions: sessions,
     IterationRowsForSession: () => rows,
@@ -67,5 +67,18 @@ describe('PSExperimentsComponent (DOM)', () => {
   it('shows the empty-leaderboard note when the session has no scored iterations', () => {
     const fixture = render(makeEngine([{ ID: 's1', Name: 'Run', Status: 'Running', Budget: null }]));
     expect(query(fixture, '[data-testid="ps-experiments-leaderboard"]')?.textContent).toContain('No scored iterations yet');
+  });
+
+  it("labels each leaderboard pill with its own metric, a kept baseline's fallback score after every success-metric score", () => {
+    const row = (ID: string, Score: number, AlgorithmName: string): Row =>
+      ({ ID, ExperimentSessionID: 's1', Sequence: 1, Label: null, Status: 'Completed', Score, ComputeCost: null, TokensUsed: null, Rationale: null, AlgorithmName });
+    const Leaderboard = JSON.stringify([
+      { IterationID: 'it-a', Metric: -12.5, ScoreMetric: 'rmse', OnSuccessMetric: true },
+      { IterationID: 'it-c', Metric: -0.3, ScoreMetric: 'log-loss', OnSuccessMetric: false },
+    ]);
+    const PlanSpec = JSON.stringify({ TargetDefinition: { SuccessMetric: 'RMSE' } });
+    const fixture = render(makeEngine([{ ID: 's1', Name: 'Run', Status: 'Completed', Budget: null, Leaderboard, PlanSpec }], [row('it-c', -0.3, 'GLM'), row('it-a', -12.5, 'XGBoost')]));
+    const pills = queryAll(fixture, '[data-testid="ps-experiments-lp-score"]').map((e) => (e.textContent || '').replace(/\s+/g, ' ').trim());
+    expect(pills).toEqual(['12.500 rmse', '0.300 log-loss']);
   });
 });

@@ -72,7 +72,7 @@ import { validateStringParam } from '../../shared/agent-tool-validation';
             <as-split-area [size]="IsNavCollapsed ? 100 : ContentSizePct" [minSize]="50">
               <section class="ps-content" [class.fill]="ActiveSection === 'registry' || ActiveSection === 'production'" [attr.data-testid]="'ps-panel-' + ActiveSection">
                 @switch (ActiveSection) {
-                  @case ('registry') { <ps-registry [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser" [initialModelId]="initialModelId"></ps-registry> }
+                  @case ('registry') { <ps-registry [engine]="engine" [provider]="ProviderToUse" [CurrentUser]="ProviderToUse.CurrentUser" [InitialModelId]="initialModelId"></ps-registry> }
                   @case ('production') { <ps-production [engine]="engine"></ps-production> }
                 }
               </section>
@@ -93,7 +93,7 @@ import { validateStringParam } from '../../shared/agent-tool-validation';
       .models-splitter .as-split-gutter:hover::after { background: var(--mj-text-inverse); }
 
       .ps-nav-collapsed-strip { width: 44px; min-width: 44px; max-width: 44px; flex: none; background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); display: flex; flex-direction: column; align-items: center; padding: 10px 0; gap: 14px; z-index: 2; }
-      .ps-nav-rail-collapse { background: var(--mj-bg-surface-subtle); border: 1px solid var(--mj-border-default); border-radius: 6px; color: var(--mj-text-secondary); cursor: pointer; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; font-size: 11px; transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease; }
+      .ps-nav-rail-collapse { background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-default); border-radius: 6px; color: var(--mj-text-secondary); cursor: pointer; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; font-size: 11px; transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease; }
       .ps-nav-rail-collapse:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
       .ps-nav-collapsed-strip-label { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: var(--mj-text-muted); display: flex; align-items: center; gap: 8px; text-transform: uppercase; }
 

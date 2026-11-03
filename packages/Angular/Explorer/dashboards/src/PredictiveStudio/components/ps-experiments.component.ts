@@ -17,6 +17,8 @@ import {
   PSKanbanColumns,
   DeriveLeaderboard,
   GroupIterationsToKanban,
+  ParseSessionLeaderboard,
+  type PSRankedScore,
 } from '../predictive-studio.view-models';
 
 /** A budget gauge derived from the session's budget JSON + actual iteration spend. */
@@ -31,12 +33,13 @@ interface BudgetGaugeVM {
 
 /**
  * Experiments panel: a kanban of iteration cards in Running / Completed / Pruned columns, a leaderboard
- * strip ranked by score, and budget gauges — all live against `MJ: Experiment Sessions` + their
+ * strip in the session's stored ranking, and budget gauges — all live against `MJ: Experiment Sessions` + their
  * `MJ: Experiment Session Iterations`:
  *
  * - The **active session** is the first Running session, else the most-recently-created one.
- * - The **kanban** + **leaderboard** are derived from that session's iterations (grouped by status,
- *   ranked by score) via the pure {@link groupIterationsToKanban} / {@link deriveLeaderboard} helpers.
+ * - The **kanban** + **leaderboard** are derived from that session's iterations (grouped by status) and its stored
+ *   leaderboard (each score on its own metric, success-metric entries before fallback ones) via the pure
+ *   {@link GroupIterationsToKanban} / {@link DeriveLeaderboard} helpers.
  * - **Budget gauges** combine the session's budget JSON caps with actual iteration spend (compute
  *   cost, iteration count).
  * - Sessions are switched off: the panel shows earlier sessions and offers no start or control action.
@@ -103,7 +106,10 @@ interface BudgetGaugeVM {
                 <span class="ps-rank" [class.gold]="lp.best">{{ lp.rank }}</span>
                 <span class="algo-ic" [style.background]="lp.algorithmColor"><i [class]="lp.algorithmIcon"></i></span>
                 <div><div class="nm">{{ lp.algorithm }}</div><div class="fs ps-muted ps-small">{{ lp.features }}</div></div>
-                <span class="auc" [class.win]="lp.best">{{ lp.auc | number: '1.3-3' }}</span>
+                <span class="auc" [class.win]="lp.best" data-testid="ps-experiments-lp-score"
+                  [title]="lp.OnSuccessMetric ? '' : 'Scored on ' + lp.ScoreMetric + ': its holdout gave no score on the success metric, so it ranks after every entry that has one.'">
+                  {{ lp.Score | number: '1.3-3' }} <span class="lp-metric">{{ lp.ScoreMetric }}</span>
+                </span>
               </div>
             }
           </div>
@@ -179,7 +185,7 @@ interface BudgetGaugeVM {
             } @else {
               <div class="ic-score">
                 <span class="v" [class.green]="c.status === 'Best'">{{ c.score | number: '1.3-3' }}</span>
-                <span class="lbl ps-muted ps-small">score · {{ c.ScoreDelta }}</span>
+                <span class="lbl ps-muted ps-small">{{ c.ScoreMetric || 'not ranked yet' }} · {{ c.ScoreDelta }}</span>
               </div>
             }
             <div class="rationale"><i class="fa-solid fa-robot"></i><span class="ps-small">{{ c.rationale }}</span></div>
@@ -363,9 +369,7 @@ export class PSExperimentsComponent implements OnInit {
 
       const planSpec = this.parsePlanSpec(s.PlanSpec);
       const winningRow = this.leaderboard[0];
-      const winningIteration = winningRow
-        ? this.engine.IterationsForSession(s.ID).find((it) => this.engine.AlgorithmForIteration(it.ID) === winningRow.algorithm && it.Score === winningRow.auc)
-        : undefined;
+      const winningIteration = winningRow ? this.engine.IterationsForSession(s.ID).find((it) => UUIDsEqual(it.ID, winningRow.IterationID)) : undefined;
       const winningRun = winningIteration ? this.engine.TrainingRuns.find((r) => UUIDsEqual(r.ExperimentSessionIterationID, winningIteration.ID)) : undefined;
       const winningModelId = winningRun?.ResultingModelID ?? undefined;
 
@@ -379,13 +383,14 @@ export class PSExperimentsComponent implements OnInit {
           algorithm: lb.algorithm,
           algorithmName: lb.algorithm,
           featureSet: lb.features,
-          score: lb.auc,
+          score: lb.Score,
+          metricName: lb.ScoreMetric,
           isWinner: lb.best,
         })),
         BestModelID: winningModelId,
         BestModel: winningModelId && winningRow ? { ID: winningModelId, Name: winningRow.algorithm } : undefined,
         Markdown: `## Experiment Session: ${s.Name}\n\n**Status:** ${s.Status}\n**Goal:** ${s.Goal || 'N/A'}\n\n### Leaderboard\n\nRanked by metric:\n` +
-          this.leaderboard.map(l => `- **#${l.rank} ${l.algorithm}**: Score ${l.auc.toFixed(3)} (${l.features})`).join('\n'),
+          this.leaderboard.map(l => `- **#${l.rank} ${l.algorithm}**: ${l.ScoreMetric} ${l.Score.toFixed(3)} (${l.features})`).join('\n'),
       };
 
       ver.Content = JSON.stringify(payload);
@@ -413,6 +418,13 @@ export class PSExperimentsComponent implements OnInit {
   /** @deprecated Use {@link ViewResultsArtifact}. */
   public async viewResultsArtifact(): Promise<void> {
     return this.ViewResultsArtifact();
+  }
+
+  /** The active session's stored leaderboard, each entry on its metric; an entry with none named is on the plan's success metric. */
+  private storedRanking(): PSRankedScore[] {
+    const session = this.Session;
+    if (!session) return [];
+    return ParseSessionLeaderboard(session.Leaderboard, this.parsePlanSpec(session.PlanSpec)?.TargetDefinition?.SuccessMetric || '');
   }
 
   private parsePlanSpec(raw: string | null): ModelingPlanSpec | null {
@@ -468,8 +480,9 @@ export class PSExperimentsComponent implements OnInit {
       return;
     }
     const rows = this.engine.IterationRowsForSession(this.sessionId);
-    this.Kanban = GroupIterationsToKanban(rows);
-    this.Leaderboard = DeriveLeaderboard(rows);
+    const ranked = this.storedRanking();
+    this.Kanban = GroupIterationsToKanban(rows, ranked);
+    this.Leaderboard = DeriveLeaderboard(rows, ranked);
     this.Budget = this.buildBudget(rows);
   }
 

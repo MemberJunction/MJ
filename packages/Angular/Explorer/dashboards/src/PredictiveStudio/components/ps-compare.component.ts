@@ -21,9 +21,9 @@ interface SessionOption {
  * within a selected experiment session. Fully live:
  *
  * - A session picker lists every session that has ≥2 scored iterations (only those are comparable).
- * - The top runs of the selected session are derived via {@link deriveCompareColumns} and rendered as
+ * - The top runs of the selected session are derived via {@link DeriveCompareColumns} and rendered as
  *   side-by-side columns; the real metric rows (holdout score, compute cost) come from
- *   {@link buildCompareMetricRows}, with the best column per row highlighted.
+ *   {@link BuildCompareMetricRows}, with the best column per row highlighted.
  *
  * Empty/prompt state when nothing is comparable. 100% entity-agnostic.
  */

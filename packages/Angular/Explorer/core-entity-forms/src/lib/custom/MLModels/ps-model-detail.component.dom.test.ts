@@ -73,3 +73,25 @@ describe('PSModelDetailComponent (DOM) — importance containment', () => {
     expect(query(fixture, '[data-testid="ps-leakage-gate"]')?.textContent).toContain('Member Since Days');
   });
 });
+
+describe('PSModelDetailComponent (DOM) — the performance tiles', () => {
+  // each tile's lines (title | value | caption): Angular drops the whitespace between them, so they are read one by one
+  const tiles = (model: ModelDouble): string[] =>
+    queryAll(render(model), '.metric-pair .mtile').map((t) => Array.from(t.children).map((c) => (c.textContent || '').replace(/\s+/g, ' ').trim()).join(' | '));
+
+  it("titles a kept baseline's tiles by the metric it stores and shows its holdout score, never \"AUC\"", () => {
+    const shown = tiles(makeModel({ Metrics: '{}', HoldoutMetrics: '{"log-loss":0.3674}' }));
+    expect(shown[1]).toContain('Holdout Log Loss | 0.367');
+    expect(shown.join(' ')).not.toContain('AUC');
+  });
+
+  it("captions the train tile of a model trained under an Evaluation Protocol as the inner-CV estimate", () => {
+    const shown = tiles(makeModel({ Metrics: '{"mase":0.9}', HoldoutMetrics: '{"mase":0.82}', Lineage: JSON.stringify({ evaluationProtocolId: 'EP-1' }) }));
+    expect(shown[0]).toContain('inner-CV estimate');
+    expect(shown[0]).not.toContain('in-sample');
+  });
+
+  it('keeps the in-sample caption for an older model trained without a protocol', () => {
+    expect(tiles(makeModel({}))[0]).toContain('in-sample');
+  });
+});
