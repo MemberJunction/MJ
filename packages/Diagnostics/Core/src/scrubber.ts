@@ -98,7 +98,7 @@ const SENSITIVE_EXACT_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 /** Normalized key names that contain a sensitive fragment but hold counts or settings, not secrets. */
-const SAFE_KEY_NAMES: ReadonlySet<string> = new Set(['credentialsscrubbedcount', 'tokentype', 'tokens']);
+const SAFE_KEY_NAMES: ReadonlySet<string> = new Set(['credentialsscrubbedcount', 'tokentype']);
 
 /** Normalized name endings that mark a descriptor of a secret (its kind, version or rules), not the secret itself. */
 const SAFE_KEY_SUFFIXES: readonly string[] = ['type', 'version', 'policy'];
@@ -106,11 +106,14 @@ const SAFE_KEY_SUFFIXES: readonly string[] = ['type', 'version', 'policy'];
 /** Normalized name endings whose value is kept only when it is a number. */
 const NUMERIC_ONLY_KEY_SUFFIXES: readonly string[] = ['count', 'length'];
 
+/** Normalized names whose value is kept only when it is a number. */
+const NUMERIC_ONLY_KEY_NAMES: ReadonlySet<string> = new Set(['tokens']);
+
 /** Text that is a plain number. */
 const NUMERIC_TEXT_REGEX = /^-?\d+(?:\.\d+)?$/;
 
-/** Names that end in an `Id` / `ID` word, such as `apiKeyId` or `API_KEY_ID`. */
-const SAFE_ID_SUFFIX_REGEX = /(?:Id|ID|[-_.\s][iI][dD])$/;
+/** Names that end in an `Id` / `ID` word: after a lower-case letter or digit (`apiKeyId`), or after a separator (`API_KEY_ID`). */
+const SAFE_ID_SUFFIX_REGEX = /(?:[a-z0-9]I[dD]|[-_.\s][iI][dD])$/;
 
 
 /** Token-count style names (`maxTokens`, `promptTokens`, `tokenCount`, `tokenizer`, `TokensUsed`). */
@@ -233,16 +236,15 @@ function sensitivePair(key: string, value: string): boolean {
     return IsSensitiveKeyName(key) && !PURE_MARKER_REGEX.test(value) && !isKeptTextValue(key, value);
 }
 
-/** True when `key` ends in `Count` or `Length` (normalized), whose value is kept only when it is a number. */
+/** True when `key` is `tokens` or ends in `Count` or `Length` (normalized); its value is kept only when it is a number. */
 function isNumericOnlyKey(key: string): boolean {
     const normalized = normalizeKeyName(key);
-    return NUMERIC_ONLY_KEY_SUFFIXES.some((suffix) => normalized.endsWith(suffix));
+    return NUMERIC_ONLY_KEY_NAMES.has(normalized) || NUMERIC_ONLY_KEY_SUFFIXES.some((suffix) => normalized.endsWith(suffix));
 }
 
-/** True when a text value under a sensitive key is kept: `true`/`false`, or a number under a Count/Length key. */
+/** True when a text value under a sensitive key is kept: a number under a numeric-only key. */
 function isKeptTextValue(key: string, value: string): boolean {
-    const trimmed = value.trim();
-    return trimmed === 'true' || trimmed === 'false' || (isNumericOnlyKey(key) && NUMERIC_TEXT_REGEX.test(trimmed));
+    return isNumericOnlyKey(key) && NUMERIC_TEXT_REGEX.test(value.trim());
 }
 
 /** Lower-cases a key name and removes `-`, `_`, `.` and spaces. */

@@ -94,6 +94,7 @@ async function deflateRaw(input: Uint8Array): Promise<Uint8Array> {
     const chunks: Uint8Array[] = [];
     const reader = cs.readable.getReader();
     let total = 0;
+    let writeError: Error | null = null;
     try {
         while (true) {
             const { done, value } = await reader.read();
@@ -102,10 +103,10 @@ async function deflateRaw(input: Uint8Array): Promise<Uint8Array> {
             total += value.byteLength;
         }
     } finally {
-        const writeError = await writeDone;
-        if (writeError) {
-            throw writeError;
-        }
+        writeError = await writeDone;
+    }
+    if (writeError) {
+        throw writeError;
     }
     return concatChunks(chunks, total);
 }
@@ -120,6 +121,7 @@ async function inflateRaw(compressed: Uint8Array, maxUncompressedBytes: number):
     const reader = ds.readable.getReader();
     const chunks: Uint8Array[] = [];
     let total = 0;
+    let writeError: Error | null = null;
     try {
         while (true) {
             const { done, value } = await reader.read();
@@ -132,9 +134,8 @@ async function inflateRaw(compressed: Uint8Array, maxUncompressedBytes: number):
             chunks.push(value);
         }
     } finally {
-        await writeDone;
+        writeError = await writeDone;
     }
-    const writeError = await writeDone;
     if (writeError) {
         throw writeError;
     }

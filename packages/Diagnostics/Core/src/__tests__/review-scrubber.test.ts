@@ -144,6 +144,35 @@ describe('Stage 1 colon-form values', () => {
     });
 });
 
+describe('Stage 1 boolean-looking text values', () => {
+    it('redacts the text true or false under a sensitive name', () => {
+        expect(ScrubString('password: false', 'FullRaw')).toBe('password: [REDACTED_SECRET]');
+        expect(ScrubString('pwd: true', 'FullRaw')).toBe('pwd: [REDACTED_SECRET]');
+        expect(ScrubString('password=false', 'FullRaw')).toBe('password=[REDACTED_SECRET]');
+        expect(ScrubString('{"password": "false"}', 'FullRaw')).not.toContain('"false"');
+    });
+});
+
+describe('Stage 1 tokens name', () => {
+    it('keeps a tokens value only when it is a number', () => {
+        expect(ScrubString('tokens=abc123', 'FullRaw')).not.toContain('abc123');
+        const out = ScrubValue({ tokens: ['opaque-abc'] }, 'FullRaw');
+        expect(JSON.stringify(out)).not.toContain('opaque-abc');
+        expect(ScrubValue({ tokens: 120 }, 'FullRaw').tokens).toBe(120);
+    });
+});
+
+describe('Stage 1 all-caps ID suffix', () => {
+    it('keeps an all-caps name only when ID follows a separator', () => {
+        expect(ScrubString('AUTH_TOKEN_VALID=abc123', 'FullRaw')).not.toContain('abc123');
+        const out = ScrubValue({ AUTH_TOKEN_VALID: 'v1', CLIENT_SECRET_ANDROID: 'v2', API_KEY_ID: 'k-2', apiKeyId: 'k-1' }, 'FullRaw');
+        expect(out.AUTH_TOKEN_VALID).toBe('[REDACTED_KEY]');
+        expect(out.CLIENT_SECRET_ANDROID).toBe('[REDACTED_KEY]');
+        expect(out.API_KEY_ID).toBe('k-2');
+        expect(out.apiKeyId).toBe('k-1');
+    });
+});
+
 describe('Stage 1 count and length names', () => {
     it('keeps a Count or Length value only when it is a number', () => {
         const out = ScrubValue({ passwordLength: 'hunter2', secretCount: 'x1', tokenLength: 7 }, 'FullRaw');
