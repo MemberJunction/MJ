@@ -11,7 +11,7 @@ import { query, queryAll, renderComponentFixture } from '@memberjunction/ng-test
 import { MJButtonDirective, MJConfirmService } from '@memberjunction/ng-ui-components';
 import { VSStudioSlideInStateService } from '../services/vs-studio-slide-in-state.service';
 import { VideoStudioBrandKitsResourceComponent } from './video-studio-brand-kits-resource.component';
-import { ExpectConsoleLines } from '../../__tests__/support/expected-console';
+import { ExpectConsoleLines } from '@memberjunction/ng-test-utils';
 
 /** The lines these tests log on purpose: engine loads against doubles with no RunViews and no GraphQL server. Any other line fails its test. */
 ExpectConsoleLines({

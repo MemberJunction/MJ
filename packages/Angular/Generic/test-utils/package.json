@@ -10,6 +10,10 @@
     ".": {
       "types": "./dist/public-api.d.ts",
       "default": "./dist/public-api.js"
+    },
+    "./expected-console": {
+      "types": "./dist/lib/expected-console.d.ts",
+      "default": "./dist/lib/expected-console.js"
     }
   },
   "files": [

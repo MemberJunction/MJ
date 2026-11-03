@@ -6,7 +6,7 @@ import { createFakeProvider, useFakeGlobalProvider, query, queryAll, StubDropdow
 import { MJPageSearchComponent, MJRefreshButtonComponent } from '@memberjunction/ng-ui-components';
 import { KPICardComponent } from '../../widgets/kpi-card.component';
 import { AnalyticsRealtimeSessionsComponent } from './realtime-sessions.component';
-import { ExpectConsoleLines } from '../../../../__tests__/support/expected-console';
+import { ExpectConsoleLines } from '@memberjunction/ng-test-utils';
 
 /** The lines these tests log on purpose: the AI engine's load against a provider double that has no datasets. Any other line fails its test. */
 ExpectConsoleLines({

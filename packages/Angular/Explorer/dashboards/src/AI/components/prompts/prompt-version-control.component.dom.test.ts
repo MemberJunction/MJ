@@ -7,7 +7,7 @@ import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { renderComponentFixture, query, queryAll, text, capture, createFakeProvider, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { PromptVersionControlComponent } from './prompt-version-control.component';
-import { ExpectConsoleLines } from '../../../__tests__/support/expected-console';
+import { ExpectConsoleLines } from '@memberjunction/ng-test-utils';
 
 /** The lines these tests log on purpose: the prompt list load against a metadata double without GetEntityObject. Any other line fails its test. */
 ExpectConsoleLines({

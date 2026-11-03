@@ -15,7 +15,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ExpectConsoleLines } from './support/expected-console';
+import { ExpectConsoleLines } from '@memberjunction/ng-test-utils/expected-console';
 
 // ── Angular and MJ mocks, so the component file can be imported without the runtime ──
 // Follows the node-preset pattern already used by database-preview-pane.test.ts and

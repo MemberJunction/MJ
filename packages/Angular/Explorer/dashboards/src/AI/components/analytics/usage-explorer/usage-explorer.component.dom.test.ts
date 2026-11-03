@@ -12,7 +12,7 @@ import { MJButtonDirective, MJDropdownComponent } from '@memberjunction/ng-ui-co
 import { UsageExplorerComponent } from './usage-explorer.component';
 import { AIInstrumentationService } from '../../../services/ai-instrumentation.service';
 import { AIUsageDailyRow } from '../../../services/ai-usage-analytics.types';
-import { ExpectConsoleLines } from '../../../../__tests__/support/expected-console';
+import { ExpectConsoleLines } from '@memberjunction/ng-test-utils';
 
 /** The lines these tests log on purpose: the AI engine's load against a provider double that has no datasets, and AG Grid's warning when a test destroys the grid before its column resize. Any other line fails its test. */
 ExpectConsoleLines({

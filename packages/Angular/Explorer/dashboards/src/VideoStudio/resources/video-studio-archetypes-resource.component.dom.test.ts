@@ -6,7 +6,7 @@ import { NavigationService } from '@memberjunction/ng-shared';
 import { query, queryAll, renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { VSStudioSlideInStateService } from '../services/vs-studio-slide-in-state.service';
 import { VideoStudioArchetypesResourceComponent } from './video-studio-archetypes-resource.component';
-import { ExpectConsoleLines } from '../../__tests__/support/expected-console';
+import { ExpectConsoleLines } from '@memberjunction/ng-test-utils';
 
 /** The lines these tests log on purpose: engine and agent lookups against doubles that hold neither companies nor the Video Studio agent. Any other line fails its test. */
 ExpectConsoleLines({

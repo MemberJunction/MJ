@@ -38,7 +38,7 @@ import type {
 import { RenderComponentFixture, CreateFakeProvider, Click, Query, QueryAll, Text, TypeInto } from '@memberjunction/ng-test-utils';
 import type { DashboardOwnerRow } from '../shared/dashboard-owner-names';
 import { DashboardBrowserResourceComponent } from './dashboard-browser-resource.component';
-import { ExpectConsoleLines } from '../__tests__/support/expected-console';
+import { ExpectConsoleLines } from '@memberjunction/ng-test-utils';
 
 /** The lines these tests log on purpose: the resource's load status line. Any other line fails its test. */
 ExpectConsoleLines({

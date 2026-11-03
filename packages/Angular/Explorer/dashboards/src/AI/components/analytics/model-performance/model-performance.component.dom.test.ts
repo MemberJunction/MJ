@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RunViewParams } from '@memberjunction/core';
 import { createFakeProvider, useFakeGlobalProvider, query, queryAll, StubLoadingComponent, StubEmptyStateComponent } from '@memberjunction/ng-test-utils';
 import { AnalyticsModelPerformanceComponent } from './model-performance.component';
-import { ExpectConsoleLines } from '../../../../__tests__/support/expected-console';
+import { ExpectConsoleLines } from '@memberjunction/ng-test-utils';
 
 /** The lines these tests log on purpose: the AI engine's load against a provider double that has no datasets. Any other line fails its test. */
 ExpectConsoleLines({

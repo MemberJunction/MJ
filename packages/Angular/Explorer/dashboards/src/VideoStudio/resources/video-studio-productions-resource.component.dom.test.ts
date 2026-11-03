@@ -10,7 +10,7 @@ import { query, renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { VSCopilotPanelComponent } from '../components/vs-copilot-panel.component';
 import { VSStudioSlideInStateService } from '../services/vs-studio-slide-in-state.service';
 import { VideoStudioProductionsResourceComponent } from './video-studio-productions-resource.component';
-import { ExpectConsoleLines } from '../../__tests__/support/expected-console';
+import { ExpectConsoleLines } from '@memberjunction/ng-test-utils';
 
 /** The lines these tests log on purpose: reads against doubles with no attribute rows, no recent-access entity, no tab id and no GraphQL server. Any other line fails its test. */
 ExpectConsoleLines({

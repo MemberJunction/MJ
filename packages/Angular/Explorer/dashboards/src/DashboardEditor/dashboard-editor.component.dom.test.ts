@@ -35,7 +35,7 @@ import { RenderComponentFixture, CreateFakeProvider, Attr, Capture, Click, HasCl
 import { DashboardEditorComponent } from './dashboard-editor.component';
 import type { DashboardEditorLoadError } from './dashboard-editor.types';
 import { DashboardViewerFactory } from './dashboard-viewer-factory';
-import { ExpectConsoleLines } from '../__tests__/support/expected-console';
+import { ExpectConsoleLines } from '@memberjunction/ng-test-utils';
 
 /** The lines these tests log on purpose: the refused save the broken-mapping test drives. Any other line fails its test. */
 ExpectConsoleLines({

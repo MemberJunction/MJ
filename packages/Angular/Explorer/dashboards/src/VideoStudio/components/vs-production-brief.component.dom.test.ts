@@ -10,7 +10,7 @@ import {
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { query, queryAll, renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { VSProductionBriefComponent, VSProductionBriefStartEvent } from './vs-production-brief.component';
-import { ExpectConsoleLines } from '../../__tests__/support/expected-console';
+import { ExpectConsoleLines } from '@memberjunction/ng-test-utils';
 
 /** The lines these tests log on purpose: an engine load against a provider double without RunViews. Any other line fails its test. */
 ExpectConsoleLines({
