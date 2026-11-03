@@ -524,6 +524,22 @@ jobs:
       - name: Generate a throwaway encryption key for this run
         run: echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
 
+      # Clone the provisioned [test] database into 3 isolated worker databases ([test_s1],
+      # [test_s2], [test_s3]) so the 101 pure-server deterministic bundles can execute across
+      # 3 LPT-balanced shards concurrently without cross-bundle mutation or entity-cache collisions,
+      # while [test] remains dedicated to MJAPI and the client-transport (+ wire-companion) worker.
+      - name: Clone isolated worker databases for parallel server shards
+        run: |
+          docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -b \
+            -Q "
+              BACKUP DATABASE [test] TO DISK='/var/opt/mssql/worker_seed.bak' WITH COMPRESSION, INIT, FORMAT;
+              RESTORE DATABASE [test_s1] FROM DISK='/var/opt/mssql/worker_seed.bak' WITH REPLACE, MOVE 'test' TO '/var/opt/mssql/data/test_s1.mdf', MOVE 'test_log' TO '/var/opt/mssql/data/test_s1_log.ldf';
+              RESTORE DATABASE [test_s2] FROM DISK='/var/opt/mssql/worker_seed.bak' WITH REPLACE, MOVE 'test' TO '/var/opt/mssql/data/test_s2.mdf', MOVE 'test_log' TO '/var/opt/mssql/data/test_s2_log.ldf';
+              RESTORE DATABASE [test_s3] FROM DISK='/var/opt/mssql/worker_seed.bak' WITH REPLACE, MOVE 'test' TO '/var/opt/mssql/data/test_s3.mdf', MOVE 'test_log' TO '/var/opt/mssql/data/test_s3_log.ldf';
+            "
+          docker exec -u 0 sql rm -f /var/opt/mssql/worker_seed.bak
+
       # Boot MJAPI against the provisioned DB so the client-transport members execute
       # instead of skipping. MJ_API_KEY is a throwaway per-run system key: MJServer
       # accepts it via the x-mj-api-key header, and the test process presents the same
@@ -565,6 +581,10 @@ jobs:
       # MJ_API_KEY (same value MJAPI booted with) arms the client-transport members.
       # RUN_MUTATION_TESTS=1 on the nightly cron arms the save/delete cache-invalidation
       # checks — PR/push runs keep them Skipped (visible in the summary, never false-green).
+      #
+      # Parallel sharding across 4 isolated databases (1 per vCPU on standard 4-core runners):
+      #   - server-1..3 run `--transport=server --shard=k/3` against `test_s1..3`
+      #   - client runs `--transport=client` against `test` (the DB served by MJAPI on :4000)
       - name: Run integration tier (mj test)
         env:
           MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
@@ -588,8 +608,68 @@ jobs:
           # tiers.ts's own doc comment assumes CI does this, and nothing did.
           RUN_AGENT_TESTS: '0'
         run: |
-          set -o pipefail
-          pnpm run test:integration 2>&1 | tee /tmp/integration.log
+          set -uo pipefail
+          SUITE_NAME="Integration Tests — Deterministic"
+          rm -f /tmp/integration-shard-*.log /tmp/integration-shard-*.status /tmp/integration.log
+
+          run_shard() {
+            local name="$1"
+            local db="$2"
+            shift 2
+            local log="/tmp/integration-shard-${name}.log"
+            local status_file="/tmp/integration-shard-${name}.status"
+            local start_ts
+            start_ts=$(date +%s)
+            echo "[shard:${name}] Starting on DB=${db} args=($*)..."
+            local rc=0
+            DB_DATABASE="${db}" MJ_INTEGRATION_TEST=1 \
+              node packages/MJCLI/bin/run.js test suite "${SUITE_NAME}" "$@" > "${log}" 2>&1 || rc=$?
+            local end_ts
+            end_ts=$(date +%s)
+            local elapsed=$((end_ts - start_ts))
+            printf '%s\t%s\t%s\t%s\t%s\n' "${name}" "${db}" "$*" "${rc}" "${elapsed}s" > "${status_file}"
+            echo "[shard:${name}] Finished with exit=${rc} in ${elapsed}s"
+            return 0
+          }
+
+          run_shard "server-1" "test_s1" --transport=server --shard=1/3 &
+          PID_S1=$!
+          run_shard "server-2" "test_s2" --transport=server --shard=2/3 &
+          PID_S2=$!
+          run_shard "server-3" "test_s3" --transport=server --shard=3/3 &
+          PID_S3=$!
+          run_shard "client"   "test"    --transport=client &
+          PID_CLIENT=$!
+
+          wait "${PID_S1}" "${PID_S2}" "${PID_S3}" "${PID_CLIENT}"
+
+          OVERALL_EXIT=0
+          for SHARD in server-1 server-2 server-3 client; do
+            LOG="/tmp/integration-shard-${SHARD}.log"
+            STATUS_FILE="/tmp/integration-shard-${SHARD}.status"
+            RC=$(cut -f4 "${STATUS_FILE}")
+            ELAPSED=$(cut -f5 "${STATUS_FILE}")
+            echo "::group::Shard ${SHARD} (exit=${RC}, duration=${ELAPSED})"
+            cat "${LOG}"
+            echo "::endgroup::"
+            cat "${LOG}" >> /tmp/integration.log
+            if [ "${RC}" -ne 0 ]; then
+              OVERALL_EXIT=1
+            fi
+          done
+
+          if [ "${OVERALL_EXIT}" -ne 0 ]; then
+            echo "::error::One or more integration shards failed — summary of failing shards:"
+            for SHARD in server-1 server-2 server-3 client; do
+              STATUS_FILE="/tmp/integration-shard-${SHARD}.status"
+              RC=$(cut -f4 "${STATUS_FILE}")
+              if [ "${RC}" -ne 0 ]; then
+                echo "=== Failing shard: ${SHARD} (exit=${RC}) ==="
+                grep -E '(\[(SUITE_COMPLETE|SUMMARY|DURATION|FAILURES|SKIPPED)\]|✗|Error:)' "/tmp/integration-shard-${SHARD}.log" | tail -80 || true
+              fi
+            done
+            exit 1
+          fi
 
       # IT92 and IT134 are the only checks that prove field-level security through MJAPI's
       # GraphQL and REST endpoints. The suite counts a skipped check as a skip, not a failure, so a
@@ -605,9 +685,33 @@ jobs:
         if: always()
         run: |
           {
-            echo '## Integration tier result'
+            echo '## Integration tier result (4 parallel shards)'
+            echo ''
+            echo '| Shard | Database | Flags | Exit | Wall Time | Suite Summary |'
+            echo '| --- | --- | --- | --- | --- | --- |'
+            for SHARD in server-1 server-2 server-3 client; do
+              STATUS_FILE="/tmp/integration-shard-${SHARD}.status"
+              LOG_FILE="/tmp/integration-shard-${SHARD}.log"
+              if [ -f "${STATUS_FILE}" ]; then
+                DB=$(cut -f2 "${STATUS_FILE}")
+                FLAGS=$(cut -f3 "${STATUS_FILE}")
+                RC=$(cut -f4 "${STATUS_FILE}")
+                ELAPSED=$(cut -f5 "${STATUS_FILE}")
+                SUMMARY_LINE=$(grep -E '\[SUMMARY\]' "${LOG_FILE}" | tail -1 | sed 's/.*\[SUMMARY\] //' || true)
+                [ -z "${SUMMARY_LINE}" ] && SUMMARY_LINE="(no summary line)"
+                echo "| \`${SHARD}\` | \`${DB}\` | \`${FLAGS}\` | \`${RC}\` | ${ELAPSED} | ${SUMMARY_LINE} |"
+              fi
+            done
+            echo ''
+            echo '### Per-shard details'
             echo '```'
-            grep -E '\[(SUITE_COMPLETE|SUMMARY|DURATION|FAILURES|SKIPPED)\]' /tmp/integration.log || echo 'No suite summary found in the log.'
+            for SHARD in server-1 server-2 server-3 client; do
+              LOG_FILE="/tmp/integration-shard-${SHARD}.log"
+              if [ -f "${LOG_FILE}" ]; then
+                echo "=== ${SHARD} ==="
+                grep -E '\[(SUITE_COMPLETE|SUMMARY|DURATION|FAILURES|SKIPPED)\]' "${LOG_FILE}" || echo 'No suite summary found in shard log.'
+              fi
+            done
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
