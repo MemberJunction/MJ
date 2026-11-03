@@ -29,6 +29,8 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { RecordOpenedEvent } from '@memberjunction/ng-entity-viewer';
 import { MJEntityFormComponent } from '../../generated/Entities/MJEntity/mjentity.form.component';
+import { SectionPickerItem } from '@memberjunction/ng-ui-components';
+import { IsPhoneViewport } from '../../shared/phone-viewport';
 
 export type ExplorerSection =
     | 'overview'
@@ -539,8 +541,18 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     private get _metadata() { return this.ProviderToUse; }
     override async ngOnInit(): Promise<void> {
         await super.ngOnInit();
+        this.ApplyPhoneDefaults(IsPhoneViewport());
         this.setupStateManagement();
         this.loadExplorerData();
+    }
+
+    /**
+     * Phone-width defaults, applied once at init: Relations opens as the list, since the ERD is a
+     * desktop experience (pan, zoom, depth) that a 375px canvas cannot carry. The user can still
+     * switch to the diagram from the section header.
+     */
+    public ApplyPhoneDefaults(isPhone: boolean): void {
+        if (isPhone) this.RelationshipViewMode = 'list';
     }
 
     ngOnDestroy(): void {
@@ -984,6 +996,17 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     }
 
     // === Public Methods ===
+
+    /** The rail's items as `mj-section-picker` items: same order, the badge as the count. */
+    public get SectionPickerItems(): SectionPickerItem[] {
+        return this.NavItems.map((item) => ({ Key: item.id, Title: item.label, Icon: item.icon, Count: item.badge ?? null }));
+    }
+
+    /** A pick from the phone section sheet; a key that names no rail item is ignored. */
+    public OnSectionPicked(key: string): void {
+        const item = this.NavItems.find((i) => i.id === key);
+        if (item) this.SetActiveSection(item.id);
+    }
 
     public SetActiveSection(section: ExplorerSection): void {
         this.ActiveSection = section;
