@@ -152,7 +152,7 @@ function enrolledSettings(collector: FakeCollector): Record<string, string> {
 
 async function buildAndSend(destination: 'CustomerCollector' | 'MJC' = 'CustomerCollector') {
     const ctx = { user: ownerUser };
-    const built = await new DiagnosticsBuildBundleServerOperation().ExecuteServer({}, ctx);
+    const built = await new DiagnosticsBuildBundleServerOperation().ExecuteServer({ ScrubLiterals: true }, ctx);
     expect(built.Success).toBe(true);
     return new DiagnosticsSendBundleServerOperation().ExecuteServer({ BundleID: built.Output!.BundleID, Destination: destination }, ctx);
 }

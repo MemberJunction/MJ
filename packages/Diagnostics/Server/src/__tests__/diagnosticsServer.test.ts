@@ -1430,7 +1430,7 @@ describe('@memberjunction/diagnostics-server', () => {
         });
 
         it('SendBundle marks the row Failed with the reason when the send fails', async () => {
-            mockInstanceSettings({ 'Diagnostics.External.Enabled': 'true', 'Diagnostics.External.CollectorUrl': 'https://collector.example' });
+            mockInstanceSettings({ 'Diagnostics.External.Enabled': 'true', 'Diagnostics.External.AllowUnscrubbedSend': 'true', 'Diagnostics.External.CollectorUrl': 'https://collector.example' });
             vi.stubGlobal('fetch', vi.fn(async () => {
                 throw new Error('collector unreachable');
             }));
