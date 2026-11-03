@@ -58,7 +58,7 @@ export class MJConversationEntityServer extends MJConversationEntity {
     }
 
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        const additionalData = this.GetFieldByName('AdditionalData');
+        const additionalData = typeof this.GetFieldByName === 'function' ? this.GetFieldByName('AdditionalData') : undefined;
         if (additionalData?.Dirty) {
             const canonical = CanonicalizeConversationAdditionalData(additionalData.Value as string | null);
             if (canonical !== additionalData.Value) {
