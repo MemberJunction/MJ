@@ -21,7 +21,7 @@ import {
   type GateOutcome,
 } from '@memberjunction/predictive-studio-core';
 import { PSPanelKey } from '../predictive-studio.types';
-import { ReadStoredGate } from '../predictive-studio.view-models';
+import { PublishedModelTag, ReadStoredGate, type PSPublishedModelTag, type PSStoredGate } from '../predictive-studio.view-models';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 
 type NodeType = 'src' | 'feat' | 'emb' | 'target' | 'algo' | 'output';
@@ -1203,12 +1203,8 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
    * record (read by {@link ReadStoredGate}, as the results artifact reads it), and `none` when the model is not published
    * or the gate shipped nothing.
    */
-  public ModelTag(m: MJMLModelEntity): 'winner' | 'kept-baseline' | 'not-evaluated' | 'none' {
-    if (m.Status !== 'Published') return 'none';
-    const outcome = this.storedGateOutcome(m.ID);
-    if (outcome === null) return 'not-evaluated';
-    if (outcome === 'model') return 'winner';
-    return outcome === 'keep-simple-baseline' ? 'kept-baseline' : 'none';
+  public ModelTag(m: MJMLModelEntity): PSPublishedModelTag {
+    return PublishedModelTag(m.Status, this.storedGate(m.ID));
   }
 
   /**
@@ -1228,9 +1224,13 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
 
   /** The stored gate outcome of the run that produced a model; null when the run is missing or stores no readable gate record. */
   private storedGateOutcome(modelId: string): GateOutcome | null {
+    return this.storedGate(modelId)?.Outcome ?? null;
+  }
+
+  /** The stored gate record of the run that produced a model; null when the run is missing or stores no readable one. */
+  private storedGate(modelId: string): PSStoredGate | null {
     const run = (this.engine?.TrainingRuns ?? []).find((r) => UUIDsEqual(r.ResultingModelID, modelId));
-    if (!run) return null;
-    return ReadStoredGate(run.ValidationResults)?.Outcome ?? null;
+    return run ? ReadStoredGate(run.ValidationResults) : null;
   }
 
   /**

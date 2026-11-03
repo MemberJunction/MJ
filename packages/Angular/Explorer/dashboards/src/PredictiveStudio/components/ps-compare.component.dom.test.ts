@@ -36,9 +36,12 @@ const scoredRow = (id: string, score: number, algo: string): Row =>
     AlgorithmName: algo,
   } as unknown as Row);
 
-const makeEngine = (rowsBySession: Record<string, Row[]>, leaderboard: string | null = null, planSpec: string | null = null) =>
+/** A session's stored ranking and plan; every session takes the defaults unless named in `perSession`. */
+type SessionStore = { Leaderboard: string | null; PlanSpec: string | null };
+
+const makeEngine = (rowsBySession: Record<string, Row[]>, leaderboard: string | null = null, planSpec: string | null = null, perSession: Record<string, SessionStore> = {}) =>
   ({
-    Sessions: Object.keys(rowsBySession).map((id) => ({ ID: id, Name: `Session ${id}`, Leaderboard: leaderboard, PlanSpec: planSpec })),
+    Sessions: Object.keys(rowsBySession).map((id) => ({ ID: id, Name: `Session ${id}`, ...(perSession[id] ?? { Leaderboard: leaderboard, PlanSpec: planSpec }) })),
     IterationRowsForSession: (id: string) => rowsBySession[id] ?? [],
   } as unknown as PredictiveStudioEngine);
 
@@ -74,15 +77,21 @@ describe('PSCompareComponent (DOM)', () => {
   });
 
   it('only lists sessions whose stored ranking holds ≥2 of their iterations, and counts the ranked ones', () => {
-    const engine = {
-      Sessions: [
-        { ID: 's1', Name: 'Session s1', Leaderboard: rankingOf('i1', 'i2'), PlanSpec: rmsePlan },
-        { ID: 's2', Name: 'Session s2', Leaderboard: rankingOf('i3'), PlanSpec: rmsePlan }, // one ranked → excluded
-      ],
-      IterationRowsForSession: (id: string) => (id === 's1' ? [scoredRow('i1', 0.9, 'XGBoost'), scoredRow('i2', 0.8, 'Ridge')] : [scoredRow('i3', 0.7, 'MLP'), scoredRow('i4', 0.6, 'GLM')]),
-    } as unknown as PredictiveStudioEngine;
+    const engine = makeEngine(
+      { s1: [scoredRow('i1', 0.9, 'XGBoost'), scoredRow('i2', 0.8, 'Ridge')], s2: [scoredRow('i3', 0.7, 'MLP'), scoredRow('i4', 0.6, 'GLM')] },
+      null, null,
+      { s1: { Leaderboard: rankingOf('i1', 'i2'), PlanSpec: rmsePlan }, s2: { Leaderboard: rankingOf('i3'), PlanSpec: rmsePlan } }, // s2: one ranked → excluded
+    );
     const options = queryAll(render(engine), '[data-testid="ps-compare-session"] option').map((o) => (o.textContent || '').replace(/\s+/g, ' ').trim());
     expect(options).toEqual(['Session s1 · 2 ranked']);
+  });
+
+  it('writes no "best" copy when the top run kept a simple baseline: the leading cells read TOP and LOWEST COST', () => {
+    // i1 leads on rmse; its run's stored gate kept a simple baseline, so nothing here may call it the best.
+    const fixture = render(makeEngine({ s1: [scoredRow('i1', -2.5, 'XGBoost'), scoredRow('i2', -3.5, 'Ridge')] }, rankingOf('i1', 'i2'), rmsePlan));
+    const layout = query(fixture, '[data-testid="ps-compare-layout-side"]');
+    expect(layout?.textContent).not.toMatch(/best/i);
+    expect(queryAll(fixture, '.best-pill').map((e) => e.textContent?.trim())).toEqual(['TOP', 'LOWEST COST']);
   });
 
   it('shows an RMSE run on its own scale, never as a negated score', () => {

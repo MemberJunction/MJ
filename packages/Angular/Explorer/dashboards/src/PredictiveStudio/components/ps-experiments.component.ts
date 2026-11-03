@@ -22,6 +22,7 @@ import {
   type PSRankedScore,
   type PSStoredGate,
   ReadStoredGate,
+  GateCrowns,
 } from '../predictive-studio.view-models';
 
 /** A budget gauge derived from the session's budget JSON + actual iteration spend. */
@@ -393,7 +394,7 @@ export class PSExperimentsComponent implements OnInit {
           featureSet: lb.features,
           score: lb.Score,
           metricName: lb.ScoreMetric,
-          isWinner: lb.best && outcome === 'model',
+          isWinner: lb.best === true && GateCrowns(gate),
         })),
         BestModelID: outcome === 'model' || outcome === 'keep-simple-baseline' ? winningModelId : undefined,
         BestModel: winningModelId && winningRow ? this.bestModelFor(outcome, winningModelId, winningRow.algorithm) : undefined,

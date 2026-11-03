@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   BuildCompareMetricRows, DeriveCompareColumns, SessionSuccessMetric, DeriveLeaderboard, FormatMetricValue, GroupIterationsToKanban, ParseMetrics, ParseSessionLeaderboard, PrimaryModelScore,
-  ReadStoredGate, ScoreOnMetric,
+  ReadStoredGate, ScoreOnMetric, GateCrowns, PublishedModelTag,
   type PSIterationRow,
 } from './predictive-studio.view-models';
 import { WidgetFixtures } from './components/evaluation-results/widget-fixtures';
@@ -85,10 +85,10 @@ describe('the experiment leaderboard over the stored session ranking', () => {
     const k = GroupIterationsToKanban(rows, ParseSessionLeaderboard(stored, 'RMSE'));
     const card = (algo: string) => k.Completed.find((c) => c.Algorithm === algo);
     expect([card('XGBoost')?.Status, card('LightGBM')?.Status, card('GLM')?.Status]).toEqual(['Best', 'Completed', 'Completed']);
-    expect([card('LightGBM')?.ScoreMetric, card('LightGBM')?.score, card('LightGBM')?.ScoreDelta]).toEqual(['rmse', 13, '0.500 behind best']);
+    expect([card('LightGBM')?.ScoreMetric, card('LightGBM')?.score, card('LightGBM')?.ScoreDelta]).toEqual(['rmse', 13, '0.500 behind the top']);
     // rmse 13 is worse than the best rmse 12.5: the gap reads as how far behind, never as a signed (improving-looking) Δ.
     expect(card('LightGBM')?.ScoreDelta).not.toMatch(/[−+-]/);
-    expect([card('GLM')?.ScoreMetric, card('GLM')?.score, card('GLM')?.ScoreDelta]).toEqual(['log-loss', 0.3, 'Δ best on log-loss —']);
+    expect([card('GLM')?.ScoreMetric, card('GLM')?.score, card('GLM')?.ScoreDelta]).toEqual(['log-loss', 0.3, 'Δ top on log-loss —']);
   });
 });
 
@@ -106,6 +106,19 @@ describe('ReadStoredGate', () => {
     expect(ReadStoredGate('{}')).toBeNull();
     expect(ReadStoredGate(JSON.stringify({ ...WidgetFixtures.StoredRunEnvelope(), status: 'failed' }))).toBeNull();
     expect(ReadStoredGate(WidgetFixtures.StoredRunJson({ gate: null }))).toBeNull();
+  });
+});
+
+describe('GateCrowns / PublishedModelTag — the one rule a stored gate decides a winner by', () => {
+  const gateOf = (Outcome: 'model' | 'keep-simple-baseline' | 'no-signal') => ({ Outcome, Reason: 'r' });
+  it('crowns only a run whose stored gate shipped the model', () => {
+    expect([GateCrowns(gateOf('model')), GateCrowns(gateOf('keep-simple-baseline')), GateCrowns(gateOf('no-signal')), GateCrowns(null)]).toEqual([true, false, false, false]);
+  });
+  it('tags a published model by its run\'s stored gate, not evaluated without one, and an unpublished model none', () => {
+    expect([
+      PublishedModelTag('Published', gateOf('model')), PublishedModelTag('Published', gateOf('keep-simple-baseline')),
+      PublishedModelTag('Published', gateOf('no-signal')), PublishedModelTag('Published', null), PublishedModelTag('Draft', gateOf('model')),
+    ]).toEqual(['winner', 'kept-baseline', 'none', 'not-evaluated', 'none']);
   });
 });
 
@@ -210,6 +223,15 @@ describe('one session reads the same on every surface', () => {
     expect(ReadStoredGate(topRun.ValidationResults)?.Outcome).toBe('keep-simple-baseline');
   });
 
+  it('writes no "best" copy on the kanban or the compare rows for that run (rank copy only: top, behind the top)', () => {
+    const k = GroupIterationsToKanban(iterations, ranked);
+    const kanbanText = [...k.Completed, ...k.Pruned].map((c) => `${c.Status === 'Best' ? '' : c.Status} ${c.ScoreDelta ?? ''} ${c.ScoreMetric ?? ''}`).join(' ');
+    const compareText = BuildCompareMetricRows(DeriveCompareColumns(iterations, ranked)).map((r) => `${r.label} ${r.Qualifier} ${r.Values.join(' ')}`).join(' ');
+    expect(kanbanText).not.toMatch(/best/i);
+    expect(compareText).not.toMatch(/best/i);
+    expect(k.Completed.map((c) => c.ScoreDelta)).toEqual(['Δ top —', '0.500 behind the top', 'Δ top on log-loss —']);
+  });
+
   it('sets no winner flag on any surface helper output for that run', () => {
     const outputs: object[] = [
       ...DeriveLeaderboard(iterations, ranked),
@@ -219,5 +241,8 @@ describe('one session reads the same on every surface', () => {
     ];
     const winnerKeys = outputs.flatMap((o) => Object.keys(o).filter((k) => /winner|crown|winning/i.test(k)));
     expect(winnerKeys).toEqual([]);
+    // The gate-reading surfaces, as the components call them: the artifact's isWinner and the pipelines panel's tag.
+    const gate = ReadStoredGate(topRun.ValidationResults);
+    expect([GateCrowns(gate), PublishedModelTag('Published', gate)]).toEqual([false, 'kept-baseline']);
   });
 });

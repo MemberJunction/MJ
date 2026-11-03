@@ -68,7 +68,7 @@ interface SessionOption {
           </div>
         } @else {
           <div class="ps-card" data-testid="ps-compare-layout-side">
-            <div class="ps-card-head"><h3>Side-by-side comparison</h3><span class="ps-muted ps-small">Best value in each row highlighted</span></div>
+            <div class="ps-card-head"><h3>Side-by-side comparison</h3><span class="ps-muted ps-small">The leading value in each row is highlighted</span></div>
             <div class="ps-card-body" style="overflow-x:auto">
               <div class="cmp-grid" [style.grid-template-columns]="gridTemplate">
                 <div class="stub">Run / Metric</div>
@@ -84,7 +84,7 @@ interface SessionOption {
                   @for (v of row.Values; track $index) {
                     <div class="cell" [class.best]="$index === row.BestIndex">
                       <span class="v">{{ v }}</span>
-                      @if ($index === row.BestIndex) { <span class="best-pill">BEST</span> }
+                      @if ($index === row.BestIndex) { <span class="best-pill">{{ row.LeadLabel }}</span> }
                     </div>
                   }
                 }

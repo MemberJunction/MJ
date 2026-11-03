@@ -441,6 +441,26 @@ export function ReadStoredGate(validationResults: string | null): PSStoredGate |
   return { Outcome: parsed.Value.gate.decision.outcome, Reason: parsed.Value.gate.reason.text };
 }
 
+/** Whether a run's stored gate crowns it: only when the gate shipped the trained model (no record: not evaluated). */
+export function GateCrowns(gate: PSStoredGate | null): boolean {
+  return gate !== null && gate.Outcome === 'model';
+}
+
+/** How a model is tagged by its training run's stored gate (pipelines panel). */
+export type PSPublishedModelTag = 'winner' | 'kept-baseline' | 'not-evaluated' | 'none';
+
+/**
+ * The tag of a model by its status and its run's stored gate: `winner` only when published and the gate shipped it,
+ * `kept-baseline` when the gate kept a simple baseline, `not-evaluated` when the run stores no gate record, and `none`
+ * when the model is not published or the gate shipped nothing.
+ */
+export function PublishedModelTag(status: string, gate: PSStoredGate | null): PSPublishedModelTag {
+  if (status !== 'Published') return 'none';
+  if (gate === null) return 'not-evaluated';
+  if (GateCrowns(gate)) return 'winner';
+  return gate.Outcome === 'keep-simple-baseline' ? 'kept-baseline' : 'none';
+}
+
 /** The group an entry ranks in: the success metric's, else its fallback metric's (numbers compare only within one). */
 function rankGroupOf(entry: PSRankedScore): string {
   return entry.OnSuccessMetric ? '' : entry.ScoreMetric;
@@ -580,16 +600,17 @@ function featureChips(label: string | null): string[] {
 }
 
 /**
- * The gap-from-best string for a scored card, against the best entry on the card's own metric: how far behind it is, as
- * an unsigned magnitude on that metric's scale (the normalized gap's size is the on-scale gap's size for every
- * direction), so a worse rmse never reads as a signed, improving-looking Δ. The overall best reads "Δ best —"; the
- * best of a fallback metric names that metric.
+ * The gap-from-the-top string for a scored card, against the top entry on the card's own metric: how far behind it is,
+ * as an unsigned magnitude on that metric's scale (the normalized gap's size is the on-scale gap's size for every
+ * direction), so a worse rmse never reads as a signed, improving-looking Δ. Rank copy only ("top", never "best"):
+ * whether a run's model ships is its stored gate's decision. The overall top reads "Δ top —"; the top of a fallback
+ * metric names that metric.
  */
 function scoreDelta(entry: PSRankedScore | undefined, groupBest: PSRankedScore | undefined, status: 'Best' | 'Completed' | 'Pruned'): string {
-  if (status === 'Best') return 'Δ best —';
+  if (status === 'Best') return 'Δ top —';
   if (entry === undefined || groupBest === undefined) return '';
-  if (UUIDsEqual(entry.IterationID, groupBest.IterationID)) return `Δ best on ${entry.ScoreMetric} —`;
-  return `${Math.abs(groupBest.Metric - entry.Metric).toFixed(3)} behind best`;
+  if (UUIDsEqual(entry.IterationID, groupBest.IterationID)) return `Δ top on ${entry.ScoreMetric} —`;
+  return `${Math.abs(groupBest.Metric - entry.Metric).toFixed(3)} behind the top`;
 }
 
 // ---------------------------------------------------------------------------
@@ -835,12 +856,14 @@ export function DeriveCompareColumns(iterations: PSIterationRow[], ranked: reado
     });
 }
 
-/** A compare metric row (label + per-run formatted values + which column is best). */
+/** A compare metric row (label + per-run formatted values + which column leads, and the pill that column carries). */
 export interface PSCompareMetricRow {
   label: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   Qualifier: string;
   Values: string[];
   BestIndex: number;
+  /** The leading cell's pill: rank or value copy, never "best" (the stored gate decides what ships). */
+  LeadLabel: 'TOP' | 'LOWEST COST';
 }
 
 /**
@@ -857,12 +880,14 @@ export function BuildCompareMetricRows(columns: PSCompareColumn[]): PSCompareMet
       Qualifier: 'the honest number · on each run\'s own metric',
       Values: columns.map((c) => (c.holdoutAuc == null ? '—' : `${c.ScoreMetric} ${c.holdoutAuc.toFixed(3)}`)),
       BestIndex: columns.findIndex((c) => c.OnSuccessMetric),
+      LeadLabel: 'TOP',
     },
     {
       label: 'Compute cost',
       Qualifier: 'lower is better',
       Values: costs.map((v) => (v == null ? '—' : v.toFixed(2))),
       BestIndex: indexOfExtreme(costs, 'min'),
+      LeadLabel: 'LOWEST COST',
     },
   ];
 }
