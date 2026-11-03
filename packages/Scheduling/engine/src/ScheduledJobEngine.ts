@@ -65,6 +65,18 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
 
     private pollingTimer?: NodeJS.Timeout;
     private isPolling: boolean = false;
+
+    /**
+     * How often a polling tick checks the `MJ: Scheduled Jobs` table for rows written behind the engine's back (#4822):
+     * by a script, raw SQL, or a process that publishes no cache event. One cheap query (row count and newest
+     * `__mj_UpdatedAt`); a difference reloads the job list. The check rides existing ticks and adds no wake-ups, so
+     * when the tick interval is longer than this it simply runs on every tick. 0 turns it off.
+     */
+    public JobReconcileIntervalMs: number = 5 * 60_000;
+
+    /** When the last reconcile check ran, and what it saw. */
+    private _lastReconcileAt = 0;
+    private _jobTableSnapshot?: { Count: number; MaxUpdatedAt: string | null };
     private hasInitialized: boolean = false;
 
     /**
@@ -380,12 +392,64 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
                 // No fallback timer needed — re-arm at top of function already
                 // scheduled the next poll before any await could fire.
             }
+
+            try {
+                await this.ReconcileJobsIfDue(contextUser);
+            } catch (error) {
+                this.logError('Error during scheduled job reconcile', error);
+            }
         };
 
         // First poll fires on the timer (not immediate) so observers can stop
         // us between StartPolling returning and the first poll firing.
         this.pollingTimer = setTimeout(poll, this.ActivePollingInterval ?? 60_000);
         this.log('Started scheduled job polling');
+    }
+
+    /**
+     * #4822 — reloads the job list when the `MJ: Scheduled Jobs` table changed without a cache event. Runs at most once
+     * per {@link JobReconcileIntervalMs}; the first call only records what it saw. Public so a host (or a test) can force
+     * a check; the polling tick calls it.
+     *
+     * @returns true when a change was found and the jobs were reloaded
+     */
+    public async ReconcileJobsIfDue(contextUser: UserInfo, now: number = Date.now()): Promise<boolean> {
+        if (this.JobReconcileIntervalMs <= 0 || now - this._lastReconcileAt < this.JobReconcileIntervalMs) {
+            return false;
+        }
+        this._lastReconcileAt = now;
+
+        const rv = new RunView(this.Base.RunViewProviderToUse);
+        const result = await rv.RunView<{ ID: string; __mj_UpdatedAt: Date | string | null }>({
+            EntityName: 'MJ: Scheduled Jobs',
+            Fields: ['ID', '__mj_UpdatedAt'],
+            OrderBy: '__mj_UpdatedAt DESC',
+            MaxRows: 1,
+            ResultType: 'simple',
+            // The question is whether the database changed without telling the cache, so the cache cannot answer it.
+            BypassCache: true,
+            Telemetry: { Exempt: true, Reason: 'Reconcile probe for job rows written without a cache event' },
+        }, contextUser);
+        if (!result.Success) {
+            this.logError('Scheduled job reconcile probe failed', result.ErrorMessage);
+            return false;
+        }
+
+        const newest = result.Results[0]?.__mj_UpdatedAt ?? null;
+        const snapshot = {
+            Count: result.TotalRowCount ?? result.Results.length,
+            MaxUpdatedAt: newest === null ? null : new Date(newest).toISOString(),
+        };
+        const previous = this._jobTableSnapshot;
+        this._jobTableSnapshot = snapshot;
+        if (!previous || (previous.Count === snapshot.Count && previous.MaxUpdatedAt === snapshot.MaxUpdatedAt)) {
+            return false;
+        }
+
+        this.log(`[reconcile] Scheduled Jobs changed outside this process (rows ${previous.Count} → ${snapshot.Count}); reloading`);
+        await this.Config(true, contextUser);
+        await this.onBaseJobsChanged();
+        return true;
     }
 
     /**

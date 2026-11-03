@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock all external dependencies
 vi.mock('@memberjunction/global', () => ({
     RegisterClass: () => (target: unknown) => target,
+    UUIDsEqual: (a: string | null | undefined, b: string | null | undefined) => (a ?? '').toLowerCase() === (b ?? '').toLowerCase(),
     SafeJSONParse: (value: string) => {
         try {
             return JSON.parse(value);
@@ -248,3 +249,27 @@ describe('ActionScheduledJobDriver', () => {
         });
     });
 });
+
+describe('ActionScheduledJobDriver.Execute — run ID and heartbeat reach the action (#5938)', () => {
+    it('passes Context { ScheduledJobRunID, Heartbeat } to RunAction', async () => {
+        const { ActionEngineServer } = await import('@memberjunction/actions');
+        const engine = ActionEngineServer.Instance as unknown as { Actions: Array<Record<string, unknown>>; RunAction: ReturnType<typeof vi.fn> };
+        engine.Actions = [{ ID: 'act-1', Name: 'Steward Feature Pipeline Version' }];
+        const heartbeat = vi.fn().mockResolvedValue(undefined);
+        const driver = new ActionScheduledJobDriver();
+
+        await driver.Execute({
+            Schedule: { ID: 'job-1', Configuration: JSON.stringify({ ActionID: 'act-1', Params: [] }) },
+            Run: { ID: 'run-42' },
+            ContextUser: { ID: 'user-1' },
+            heartbeat,
+        } as never);
+
+        const call = engine.RunAction.mock.calls[engine.RunAction.mock.calls.length - 1][0] as { Context: { ScheduledJobRunID: string; Heartbeat: () => void } };
+        expect(call.Context.ScheduledJobRunID).toBe('run-42');
+        heartbeat.mockClear();
+        call.Context.Heartbeat();
+        expect(heartbeat).toHaveBeenCalledTimes(1);
+    });
+});
+
