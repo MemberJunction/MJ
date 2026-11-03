@@ -168,12 +168,12 @@ erDiagram
 
 `GraphConcept` (`MJ: Graph Concepts` in `__mj.GraphConcept`) is a first-class concept hub entity scoped to a `GraphID`. It replaces the earlier Canon-only `CanonConcept` table so any graph (`Canon`, `Knowledge`, `Network`, or `Custom`) can organize higher-level `Domain`, `Term`, `Policy`, `Metric`, and `Process` concepts with optional `Specification`, `AuthorityTier`, and `ParentID` hierarchy, and so `MJ: Content Sources` can populate concepts and edges into a target `GraphID` via the Content Pipeline `Graph` stage.
 
-The migration's hand-written half (`migrations/v6/V202611021615__v6.2.x__Semantic_Graph_And_Graph_Concepts.sql`), following [`migrations/CLAUDE.md`](../migrations/CLAUDE.md)
+The migration's hand-written half (`migrations/v6/V202611022300__v6.2.x__Semantic_Graph_And_Graph_Concepts.sql`), following [`migrations/CLAUDE.md`](../migrations/CLAUDE.md)
 (`sp_addextendedproperty` on every column; CodeGen output appended; no `__mj_*` columns or FK
 indexes):
 
 ```sql
--- migrations/v6/V202611021615__v6.2.x__Semantic_Graph_And_Graph_Concepts.sql
+-- migrations/v6/V202611022300__v6.2.x__Semantic_Graph_And_Graph_Concepts.sql
 CREATE TABLE [${flyway:defaultSchema}].[Graph] (
     [ID]          UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_Graph_ID] DEFAULT (newsequentialid()),
     [Name]        NVARCHAR(255)    NOT NULL,
