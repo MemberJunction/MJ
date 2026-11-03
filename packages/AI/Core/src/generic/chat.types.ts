@@ -494,6 +494,14 @@ export class ChatParams extends BaseParams  {
      * Anthropic `tool_choice.disable_parallel_tool_use`.
      */
     parallelToolCalls?: boolean;
+
+    /**
+     * Whether the selected model accepts {@link ChatParams.tools} only with reasoning off. Set by the
+     * prompt runner from the catalog's `LLM.ChatCompletionsToolsRequireNoReasoning`. A driver that
+     * honors it (OpenAI Chat Completions) sends reasoning off on the first request when tools are
+     * declared; other drivers ignore it.
+     */
+    toolsRequireNoReasoning?: boolean;
 }
 /**
  * Returns the first user message from the chat params

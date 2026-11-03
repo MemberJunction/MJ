@@ -6315,15 +6315,18 @@ export const MJAIModelSchema = z.object({
     DriverClass: z.string().nullable().describe(`
         * * Field Name: DriverClass
         * * Display Name: Driver Class
-        * * SQL Data Type: nvarchar(100)`),
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Read-only, from the view vwAIModels: the DriverClass of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read DriverClass from that vendor's MJ: AI Model Vendors row.`),
     DriverImportPath: z.string().nullable().describe(`
         * * Field Name: DriverImportPath
         * * Display Name: Driver Import Path
-        * * SQL Data Type: nvarchar(255)`),
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Read-only, from the view vwAIModels: the DriverImportPath of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read DriverImportPath from that vendor's MJ: AI Model Vendors row.`),
     APIName: z.string().nullable().describe(`
         * * Field Name: APIName
         * * Display Name: API Name
-        * * SQL Data Type: nvarchar(100)`),
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Read-only, from the view vwAIModels: the APIName of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read APIName from that vendor's MJ: AI Model Vendors row.`),
     InputTokenLimit: z.number().nullable().describe(`
         * * Field Name: InputTokenLimit
         * * Display Name: Input Token Limit
@@ -58653,6 +58656,16 @@ export interface MJAIModelTypeEntity_LLMConfigurationSettings {
     SupportsForcedToolChoice?: boolean | null;
 
     /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
+
+    /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
      * it reuses a prior request only when that request's entire prompt is a prefix of the new one
      * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
@@ -59348,6 +59361,16 @@ export interface MJAIModelVendorEntity_LLMConfigurationSettings {
      * forced choice, and the agent's prompt is what steers the model to the tool.
      */
     SupportsForcedToolChoice?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
 
     /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
@@ -60239,6 +60262,16 @@ export interface MJAIModelEntity_LLMConfigurationSettings {
     SupportsForcedToolChoice?: boolean | null;
 
     /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
+
+    /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
      * it reuses a prior request only when that request's entire prompt is a prefix of the new one
      * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
@@ -60962,6 +60995,7 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
     * * Field Name: DriverClass
     * * Display Name: Driver Class
     * * SQL Data Type: nvarchar(100)
+    * * Description: Read-only, from the view vwAIModels: the DriverClass of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read DriverClass from that vendor's MJ: AI Model Vendors row.
     */
     get DriverClass(): string | null {
         return this.Get('DriverClass');
@@ -60974,6 +61008,7 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
     * * Field Name: DriverImportPath
     * * Display Name: Driver Import Path
     * * SQL Data Type: nvarchar(255)
+    * * Description: Read-only, from the view vwAIModels: the DriverImportPath of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read DriverImportPath from that vendor's MJ: AI Model Vendors row.
     */
     get DriverImportPath(): string | null {
         return this.Get('DriverImportPath');
@@ -60986,6 +61021,7 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
     * * Field Name: APIName
     * * Display Name: API Name
     * * SQL Data Type: nvarchar(100)
+    * * Description: Read-only, from the view vwAIModels: the APIName of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read APIName from that vendor's MJ: AI Model Vendors row.
     */
     get APIName(): string | null {
         return this.Get('APIName');
@@ -61849,6 +61885,16 @@ export interface MJAIPromptModelEntity_LLMConfigurationSettings {
      * forced choice, and the agent's prompt is what steers the model to the tool.
      */
     SupportsForcedToolChoice?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
 
     /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
@@ -64685,6 +64731,16 @@ export interface MJAIPromptEntity_LLMConfigurationSettings {
      * forced choice, and the agent's prompt is what steers the model to the tool.
      */
     SupportsForcedToolChoice?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
 
     /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
@@ -68117,6 +68173,16 @@ export interface MJAIVendorEntity_LLMConfigurationSettings {
      * forced choice, and the agent's prompt is what steers the model to the tool.
      */
     SupportsForcedToolChoice?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
 
     /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:

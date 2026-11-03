@@ -27287,7 +27287,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "ChatCompletionsToolsRequireNoReasoning": true
+              }
+            }
           },
           "primaryKey": {
             "ID": "7C84DCEE-1E6C-4616-8C0F-56819A91F67D"
@@ -28880,11 +28885,11 @@
   },
   {
     "fields": {
-      "Name": "Nano Banana 2.1",
+      "Name": "Nano Banana 2.1 (retired duplicate)",
       "PowerRank": 18,
-      "Description": "Google's current high-efficiency image generation and editing model, officially gemini-nano-banana-2.1 (released 2026-10-06, straight to general availability). Improved visual quality, typography and multi-turn consistency over Nano Banana 2, which it succeeds; conversational editing; 1K, 2K and 4K output (no 512px). Google lists it as New Stable.",
+      "Description": "Retired duplicate of Nano Banana 2.1 (defined in .gemini-image-models.json, which is the row to use). Kept inactive so existing references resolve; see issue #6121. Google's current high-efficiency image generation and editing model, officially gemini-nano-banana-2.1 (released 2026-10-06, straight to general availability). Improved visual quality, typography and multi-turn consistency over Nano Banana 2, which it succeeds; conversational editing; 1K, 2K and 4K output (no 512px). Google lists it as New Stable.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 9,
       "CostRank": 3,
       "InheritTypeModalities": true
@@ -28896,7 +28901,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 0,
-            "Status": "Active",
+            "Status": "Inactive",
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
@@ -28915,7 +28920,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 1,
-            "Status": "Active",
+            "Status": "Inactive",
             "DriverClass": "GeminiImageGenerator",
             "APIName": "gemini-nano-banana-2.1",
             "MaxInputTokens": 12000,
@@ -28939,7 +28944,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "StartedAt": "2026-10-06T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Image Generation",
             "InputPricePerUnit": 0,
@@ -28948,7 +28953,8 @@
             "ProcessingType": "Realtime",
             "Comments": "Nano Banana 2.1 (gemini-nano-banana-2.1) pricing as of October 2026 (Standard tier). Per output image: 1K $0.0336 (the representative figure here), 2K $0.0504, 4K $0.113; text/image/video input $1.50 per 1M tokens. Source: https://ai.google.dev/gemini-api/docs/pricing (last updated 2026-10-13).",
             "CacheReadPricePerUnit": null,
-            "CacheWritePricePerUnit": null
+            "CacheWritePricePerUnit": null,
+            "EndedAt": "2026-11-03T00:00:00.000Z"
           },
           "primaryKey": {
             "ID": "96B433D1-06B8-408C-BB92-A7ECCB71642A"

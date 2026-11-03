@@ -2151,8 +2151,12 @@ export class AIPromptRunner extends BaseModelRunner {
       chatParams.tools = decision.controlFlow === 'implicit'
         ? params.tools
         : params.tools?.filter((t) => !control.has(t.name));
-      chatParams.toolChoice = ResolveToolChoiceForRequest(params.toolChoice, chatParams.tools, this.catalogConfigurationFor(model, vendorId));
+      const catalogConfiguration = this.catalogConfigurationFor(model, vendorId);
+      chatParams.toolChoice = ResolveToolChoiceForRequest(params.toolChoice, chatParams.tools, catalogConfiguration);
       chatParams.parallelToolCalls = params.parallelToolCalls;
+      if (catalogConfiguration?.LLM?.ChatCompletionsToolsRequireNoReasoning === true) {
+        chatParams.toolsRequireNoReasoning = true;
+      }
     }
 
     // Recorded even on the envelope path, so a run is always attributable to a path. The whole

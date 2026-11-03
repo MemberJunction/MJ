@@ -162,6 +162,25 @@ describe('applyNativeToolCalling — filling the outgoing request', () => {
         expect(chatParams.toolChoice).toBe('auto');
     });
 
+    it('passes the catalog flag ChatCompletionsToolsRequireNoReasoning to ChatParams when tools go out (#6210)', () => {
+        engineState.configuration = { LLM: { SupportsNativeToolCalling: true, DefaultToNativeToolCalling: true, ChatCompletionsToolsRequireNoReasoning: true } };
+        const chatParams = new ChatParams();
+        priv(runner).applyNativeToolCalling(chatParams, prompt(), { tools: [WEATHER_TOOL] }, model(), VENDOR_ID);
+        expect(chatParams.toolsRequireNoReasoning).toBe(true);
+    });
+
+    it('leaves toolsRequireNoReasoning unset without the flag, and on the envelope path', () => {
+        engineState.configuration = { LLM: { SupportsNativeToolCalling: true, DefaultToNativeToolCalling: true } };
+        const unflagged = new ChatParams();
+        priv(runner).applyNativeToolCalling(unflagged, prompt(), { tools: [WEATHER_TOOL] }, model(), VENDOR_ID);
+        expect(unflagged.toolsRequireNoReasoning).toBeUndefined();
+
+        engineState.configuration = { LLM: { SupportsNativeToolCalling: false, ChatCompletionsToolsRequireNoReasoning: true } };
+        const envelope = new ChatParams();
+        priv(runner).applyNativeToolCalling(envelope, prompt(true), { tools: [WEATHER_TOOL] }, model(), VENDOR_ID);
+        expect(envelope.toolsRequireNoReasoning).toBeUndefined();
+    });
+
     it("downgrades a forced complete_task to 'none' on a hybrid model, which never receives it", () => {
         // A named choice for an undeclared tool is rejected by every provider; the hybrid's terminal
         // answer is the envelope, which 'none' asks for.

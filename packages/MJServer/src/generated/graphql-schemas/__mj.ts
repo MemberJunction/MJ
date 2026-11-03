@@ -14787,15 +14787,15 @@ export class MJAIModel_ {
     @MaxLength(50)
     Vendor?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: "Read-only, from the view vwAIModels: the DriverClass of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read DriverClass from that vendor's MJ: AI Model Vendors row."}) 
     @MaxLength(100)
     DriverClass?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: "Read-only, from the view vwAIModels: the DriverImportPath of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read DriverImportPath from that vendor's MJ: AI Model Vendors row."}) 
     @MaxLength(255)
     DriverImportPath?: string;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: "Read-only, from the view vwAIModels: the APIName of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read APIName from that vendor's MJ: AI Model Vendors row."}) 
     @MaxLength(100)
     APIName?: string;
         
