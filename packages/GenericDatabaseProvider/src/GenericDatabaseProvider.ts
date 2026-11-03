@@ -75,6 +75,9 @@ import {
     LogError,
     LogStatus,
     LogStatusEx,
+    DiagnosticContext,
+    GetDiagnosticContext,
+    IsDiagnosticCaptureSuppressed,
     PostCommitTask,
     PostCommitToken,
     StripStopWords,
@@ -103,7 +106,7 @@ import { QueryPagingEngine } from './queryPagingEngine.js';
 import { createHash } from 'node:crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { ApplyStatementTransforms, SqlLoggingSessionImpl } from './SqlLogger.js';
-import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
+import { DatabasePoolStats, SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
 import { SQLParser, SqlDocument, IsReadOnlyQuery, CheckAggregateExpression, IsBalancedSQLFragment, SplitTopLevelAndTerms, type BalancedFragmentOptions } from '@memberjunction/sql-parser';
 import { DescribeStatementFailure, type DescribedColumn, type DescribeStatementResult } from './describeStatement.js';
@@ -235,7 +238,227 @@ export class DoomedTransactionError extends Error {
     }
 }
 
+/**
+ * Summary of a bound SQL parameter (name, runtime type, byte length, and value only when safe).
+ * Mutation parameters omit values by default so customer field writes are not captured.
+ */
+export interface SqlParameterSummary {
+    name: string;
+    type: string;
+    byteLength?: number;
+    value?: string | number | boolean | null;
+}
+
+/**
+ * Structured observation emitted for each executed SQL statement or batch.
+ */
+export interface SqlObservation {
+    ts: number;
+    durationMs: number;
+    sql: string;
+    description?: string;
+    isMutation: boolean;
+    rowCount?: number;
+    parameterSummaries?: SqlParameterSummary[];
+    parameterTypes?: Array<{ name: string; sqlType: string; byteLength: number }>;
+    error?: { name: string; message: string; code?: string };
+    errorMessage?: string;
+    diagnosticContext?: DiagnosticContext;
+    sessionId?: string;
+    traceId?: string;
+    spanId?: string;
+    ignoreLogging?: boolean;
+}
+
+/**
+ * Observer callback for SQL statement executions across SQL Server and PostgreSQL providers.
+ */
+export interface ISqlObserver {
+    onSqlExecuted(observation: SqlObservation): void;
+}
+
+/**
+ * Builds a safe parameter summary list for SQL error messages and diagnostic observations.
+ * When `includeReadValues` is false (e.g., mutations or error strings), only parameter names,
+ * types, and byte lengths are included — never raw parameter values.
+ */
+export function SummarizeSqlParameters(
+    parameters: unknown,
+    includeReadValues: boolean = false
+): SqlParameterSummary[] {
+    if (!parameters) {
+        return [];
+    }
+    const summaries: SqlParameterSummary[] = [];
+    const describeValue = (name: string, rawVal: unknown): SqlParameterSummary => {
+        const unwrapped =
+            rawVal != null && typeof rawVal === 'object' && 'value' in (rawVal as Record<string, unknown>)
+                ? (rawVal as { value: unknown }).value
+                : rawVal;
+        if (unwrapped === null || unwrapped === undefined) {
+            return { name, type: unwrapped === null ? 'null' : 'undefined', byteLength: 0, value: includeReadValues ? null : undefined };
+        }
+        if (Buffer.isBuffer(unwrapped) || unwrapped instanceof Uint8Array) {
+            return { name, type: 'binary', byteLength: unwrapped.byteLength };
+        }
+        if (unwrapped instanceof Date) {
+            const iso = unwrapped.toISOString();
+            return {
+                name,
+                type: 'Date',
+                byteLength: iso.length,
+                value: includeReadValues ? iso : undefined,
+            };
+        }
+        const t = typeof unwrapped;
+        if (t === 'string') {
+            const s = unwrapped as string;
+            const byteLen = Buffer.byteLength(s, 'utf8');
+            return {
+                name,
+                type: 'string',
+                byteLength: byteLen,
+                value: includeReadValues ? (s.length > 256 ? `${s.slice(0, 256)}…` : s) : undefined,
+            };
+        }
+        if (t === 'number' || t === 'boolean') {
+            return {
+                name,
+                type: t,
+                byteLength: String(unwrapped).length,
+                value: includeReadValues ? (unwrapped as number | boolean) : undefined,
+            };
+        }
+        return { name, type: t };
+    };
+
+    if (Array.isArray(parameters)) {
+        for (let i = 0; i < parameters.length; i++) {
+            const item = parameters[i];
+            if (item != null && typeof item === 'object' && 'name' in (item as Record<string, unknown>)) {
+                const named = item as { name: string; value?: unknown };
+                summaries.push(describeValue(String(named.name), named.value));
+            } else {
+                summaries.push(describeValue(`@p${i}`, item));
+            }
+        }
+    } else if (typeof parameters === 'object') {
+        for (const [k, v] of Object.entries(parameters as Record<string, unknown>)) {
+            summaries.push(describeValue(k, v));
+        }
+    }
+    return summaries;
+}
+
+/**
+ * Formats parameter summaries into a compact `name:type(bytes)` string for safe error messages.
+ */
+export function FormatSqlParameterTypesForError(parameters: unknown): string {
+    const summaries = SummarizeSqlParameters(parameters, false);
+    if (summaries.length === 0) {
+        return 'none';
+    }
+    return summaries
+        .map(s => `${s.name}:${s.type}${s.byteLength !== undefined ? `(${s.byteLength}B)` : ''}`)
+        .join(', ');
+}
+
 export abstract class GenericDatabaseProvider extends DatabaseProviderBase implements ClientClauseScreeningProvider {
+    private static readonly _sqlObserversGlobalKey = '___MJ_SQL_OBSERVERS___';
+    private static readonly _fallbackSqlObservers = new Set<ISqlObserver>();
+
+    private static get _sqlObservers(): Set<ISqlObserver> {
+        const g = MJGlobal.Instance.GetGlobalObjectStore();
+        if (!g) {
+            return GenericDatabaseProvider._fallbackSqlObservers;
+        }
+        let set = g[GenericDatabaseProvider._sqlObserversGlobalKey] as Set<ISqlObserver> | undefined;
+        if (!set) {
+            set = new Set<ISqlObserver>();
+            g[GenericDatabaseProvider._sqlObserversGlobalKey] = set;
+        }
+        return set;
+    }
+
+    /**
+     * Registers a global SQL observer that receives timing and metadata for all SQL executions
+     * across provider instances (including per-request providers and pool shims).
+     * Returns an unsubscribe function.
+     */
+    public static RegisterSqlObserver(observer: ISqlObserver | ((observation: SqlObservation) => void)): () => void {
+        const normalized: ISqlObserver =
+            typeof observer === 'function' ? { onSqlExecuted: observer } : observer;
+        GenericDatabaseProvider._sqlObservers.add(normalized);
+        return () => {
+            GenericDatabaseProvider._sqlObservers.delete(normalized);
+        };
+    }
+
+    /**
+     * Returns the live connection pool counts, or `null` when this provider has no pool to measure.
+     * Providers that own a pool override this.
+     */
+    public GetPoolStats(): DatabasePoolStats | null {
+        return null;
+    }
+
+    /**
+     * Instance convenience alias for {@link GenericDatabaseProvider.RegisterSqlObserver}.
+     */
+    public RegisterSqlObserver(observer: ISqlObserver | ((observation: SqlObservation) => void)): () => void {
+        return GenericDatabaseProvider.RegisterSqlObserver(observer);
+    }
+
+    /**
+     * Returns true when at least one SQL observer is registered and capture is not suppressed.
+     */
+    public static HasSqlObservers(): boolean {
+        return GenericDatabaseProvider._sqlObservers.size > 0 && !IsDiagnosticCaptureSuppressed();
+    }
+
+    /**
+     * Dispatches a SQL execution observation to all registered observers unless `ignoreLogging`
+     * or `WithoutDiagnosticCapture` is active. Automatically enriches with ambient `DiagnosticContext`.
+     */
+    public static NotifySqlObservers(observation: SqlObservation): void {
+        if (
+            observation.ignoreLogging ||
+            GenericDatabaseProvider._sqlObservers.size === 0 ||
+            IsDiagnosticCaptureSuppressed()
+        ) {
+            return;
+        }
+        const ctx = observation.diagnosticContext ?? GetDiagnosticContext();
+        const parameterTypes =
+            observation.parameterTypes ??
+            (observation.parameterSummaries
+                ? observation.parameterSummaries.map((s) => ({
+                      name: s.name,
+                      sqlType: s.type,
+                      byteLength: s.byteLength ?? 0,
+                  }))
+                : []);
+        const enriched: SqlObservation = {
+            ...observation,
+            diagnosticContext: ctx,
+            errorMessage: observation.errorMessage ?? observation.error?.message,
+            parameterTypes,
+            ...(ctx
+                ? {
+                      sessionId: observation.sessionId ?? ctx.sessionId ?? ctx.SessionID,
+                      traceId: observation.traceId ?? ctx.traceId ?? ctx.TraceID,
+                      spanId: observation.spanId ?? ctx.spanId ?? ctx.SpanID,
+                  }
+                : {}),
+        };
+        for (const observer of GenericDatabaseProvider._sqlObservers) {
+            try {
+                observer.onSqlExecuted(enriched);
+            } catch {
+                // Observer errors must never affect SQL execution
+            }
+        }
+    }
     // Composition engine is now owned by RenderPipeline
 
     /**************************************************************************/
@@ -342,6 +565,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * cached dataset item slots against live SQL row counts and timestamps.
      */
     private _lastDatasetStatusByName = new Map<string, { status: DatasetStatusResultType; timestamp: number }>();
+
+    protected override invalidateInflightViewsForEntity(lowerEntityName: string): void {
+        super.invalidateInflightViewsForEntity(lowerEntityName);
+        this._lastDatasetStatusByName.clear();
+    }
+
+    public override async ClearDatasetCache(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<void> {
+        const statusKey = this.buildDatasetStatusCacheKey(datasetName, itemFilters);
+        this._lastDatasetStatusByName.delete(statusKey);
+        await super.ClearDatasetCache(datasetName, itemFilters);
+    }
 
     /**************************************************************************/
     // SQL Logging — Session Management & Statement Logging
@@ -7809,6 +8043,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const uncachedItems: Record<string, unknown>[] = [];
         // Track fingerprints for uncached items so we can write-through after SQL
         const uncachedFingerprints: string[] = [];
+        // Track per-entity mutation versions before SQL execution so an in-flight read does not
+        // overwrite LocalCacheManager with pre-mutation rows if a save/delete lands mid-fetch.
+        const uncachedMutationVersions: number[] = [];
 
         let cacheHitCount = 0;
         let cacheMissCount = 0;
@@ -7928,7 +8165,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 } catch (statusErr) {
                     LogError(`GetDatasetByName("${datasetName}"): status verification failed: ${statusErr instanceof Error ? statusErr.message : String(statusErr)}`);
                 }
-            } else if (recorded?.status?.Success) {
+            } else if (
+                recorded?.status?.Success &&
+                this.ServerCacheVerificationTTLMs > 0 &&
+                (Date.now() - recorded.timestamp) <= this.ServerCacheVerificationTTLMs
+            ) {
                 liveStatus = recorded.status;
             }
         }
@@ -8028,6 +8269,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             uncachedItems.push(item);
             // A narrowed read (the caller is denied fields) is never written to the shared slot.
             uncachedFingerprints.push(deniedFields.size === 0 ? fingerprint : '');
+            uncachedMutationVersions.push(provider.GetEntityMutationVersion(entityName));
         }
 
         // Phase 2: Execute SQL only for cache misses
@@ -8093,8 +8335,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
             const latestUpdateDate = this.computeLatestUpdateDate(itemData, dateFieldToCheck, item);
 
-            // Write-through: cache this result for future requests (including empty results)
-            if (cacheAvailable && uncachedFingerprints[i]) {
+            // Write-through: cache this result for future requests (including empty results),
+            // unless the entity was mutated while ExecuteSQLBatch / PostProcessRows was in flight.
+            const mutatedDuringFetch = provider.GetEntityMutationVersion(entityName) !== uncachedMutationVersions[i];
+            if (cacheAvailable && uncachedFingerprints[i] && !mutatedDuringFetch) {
                 const maxUpdatedAt = itemData.length > 0
                     ? this.extractMaxUpdatedAtFromRows(itemData, dateFieldToCheck)
                     : new Date(0).toISOString();

@@ -8,6 +8,7 @@
 import { ComponentRegistryAPIServer } from '../src/Server.js';
 import { Request } from 'express';
 import { Metadata, RunView } from '@memberjunction/core';
+import { SanitizeForLog } from '@memberjunction/global';
 
 /**
  * Custom registry server with database-backed Bearer token authentication
@@ -39,9 +40,9 @@ export class AuthenticatedRegistryServer extends ComponentRegistryAPIServer {
     const isValid = this.validTokensCache.has(token);
     
     if (isValid) {
-      console.log(`Valid token used: ${token.substring(0, 8)}...`);
+      console.log(`Valid token used: ${SanitizeForLog(token.substring(0, 8))}...`);
     } else {
-      console.log(`Invalid token attempted: ${token.substring(0, 8)}...`);
+      console.log(`Invalid token attempted: ${SanitizeForLog(token.substring(0, 8))}...`);
     }
     
     return isValid;
@@ -105,7 +106,7 @@ export class AuthenticatedRegistryServer extends ComponentRegistryAPIServer {
       // Log response after it's sent
       res.on('finish', () => {
         const duration = Date.now() - start;
-        console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
+        console.log(`[${new Date().toISOString()}] ${SanitizeForLog(req.method)} ${SanitizeForLog(req.path)} - ${res.statusCode} (${duration}ms)`);
       });
       
       next();
