@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ComputeUnmappedFields, HasUnmappedFields, ReconcileOverflowValue, CUSTOM_OVERFLOW_COLUMN } from '../CustomOverflow.js';
-import { ExternalTextMB, PAGE_MB, ParseFirstValue, ResponsePage } from './helpers/retainedText.js';
+import { ExternalTextMB, MBKeptByOneParsedValue, PAGE_MB, ParseFirstValue, ResponsePage } from './helpers/retainedText.js';
 
 describe('CustomOverflow', () => {
     describe('CUSTOM_OVERFLOW_COLUMN', () => {
@@ -125,6 +125,8 @@ describe('foldCustomKeyStats (candidates exist even when every row is skipped)',
     });
 
     it('keeps sampled values without keeping the response pages they were parsed from', async () => {
+        // The premise: a parsed value that is not copied keeps its page.
+        expect(await MBKeptByOneParsedValue()).toBeGreaterThan(PAGE_MB / 2);
         // A connector that parses response text with a regex hands over values that point into the
         // page. The run keeps these samples until it ends, so each one must not keep its page.
         const pages = 10;
@@ -137,6 +139,26 @@ describe('foldCustomKeyStats (candidates exist even when every row is skipped)',
         const kept = (await ExternalTextMB()) - before;
 
         expect(agg.get('column3')!.samples).toEqual(['sampled value from page 3']);
+        expect(kept).toBeLessThan(PAGE_MB);
+    });
+
+    it('keeps sampled objects and arrays without keeping the response pages their strings were parsed from', async () => {
+        // The premise: a parsed value that is not copied keeps its page.
+        expect(await MBKeptByOneParsedValue()).toBeGreaterThan(PAGE_MB / 2);
+        // An XML parser builds an object per element and an array per repeated element, so a
+        // structured value can hold strings that point into the page.
+        const pages = 10;
+        const agg = new Map<string, CustomKeyAccumulator>();
+        const before = await ExternalTextMB();
+        const foldPage = (page: number) => {
+            const parsed = ParseFirstValue(ResponsePage(`sampled value from page ${page}`));
+            FoldCustomKeyStats([{ [`column${page}`]: page % 2 === 0 ? { Line: parsed } : [parsed] }], agg);
+        };
+        for (let page = 0; page < pages; page++) foldPage(page);
+        const kept = (await ExternalTextMB()) - before;
+
+        expect(agg.get('column2')!.samples).toEqual([{ Line: 'sampled value from page 2' }]);
+        expect(agg.get('column3')!.samples).toEqual([['sampled value from page 3']]);
         expect(kept).toBeLessThan(PAGE_MB);
     });
 });

@@ -19,6 +19,21 @@ export function ParseFirstValue(page: string): string {
     return match[1];
 }
 
+/**
+ * MB that one parsed value keeps outside the JS heap when nothing copies it.
+ *
+ * The memory tests prove something only while V8 points a parsed value into its page. If a later
+ * Node copies small parts instead, this falls to about 0 and the tests must fail, not pass.
+ */
+export async function MBKeptByOneParsedValue(): Promise<number> {
+    const before = await ExternalTextMB();
+    const parsed = ParseFirstValue(ResponsePage('value-kept-for-the-premise-check'));
+    const kept = (await ExternalTextMB()) - before;
+    // Reading `parsed` here keeps it alive through the measurement above.
+    if (parsed.length === 0) throw new Error('the premise-check page has no value');
+    return kept;
+}
+
 /** MB of text Node holds outside the JS heap, measured after a full garbage collection. */
 export async function ExternalTextMB(): Promise<number> {
     await new Promise(resolve => setTimeout(resolve, 0));

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { DetachString } from '../DetachedString.js';
+import { DetachString } from '../DetachString.js';
 import { ParseFirstValue, ResponsePage } from './helpers/retainedText.js';
 
 describe('DetachString', () => {
-    it('returns an equal string that is not the parsed value itself', () => {
+    it('returns an equal string', () => {
         const parsed = ParseFirstValue(ResponsePage('record-id-0001'));
         const copy = DetachString(parsed);
         expect(copy).toBe('record-id-0001');

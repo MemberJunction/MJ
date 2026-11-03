@@ -53,7 +53,7 @@ import { RecordMapBatch } from './RecordMapBatch.js';
 import { BuildContentHashPrefetchFilter, QuoteTextLiteral } from './prefetchFilter.js';
 import { SerializeKeyValue } from './KeySerialization.js';
 import { CUSTOM_OVERFLOW_COLUMN, ReconcileOverflowValue, FoldCustomKeyStats, type CustomKeyAccumulator } from './CustomOverflow.js';
-import { DetachString } from './DetachedString.js';
+import { DetachString } from './DetachString.js';
 import { ComputeExcludedSourceNames } from './SyncDirectives.js';
 import { DescribeUnbindableFieldMaps, FindUnbindableFieldMaps } from './FieldMapValidation.js';
 import { PartitionRecords, PartitionRollupHash, DiffPartitions, PartitionKeyForIdentity } from './HashDiff.js';
@@ -3359,7 +3359,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                         if (fetchedExternalIDs.has(rec.ExternalID)) {
                             crossBatchRepeatCount++;
                             if (crossBatchRepeatSamples.length < 5) {
-                                crossBatchRepeatSamples.push(String(rec.ExternalID));
+                                crossBatchRepeatSamples.push(DetachString(String(rec.ExternalID)));
                             }
                         }
                     }

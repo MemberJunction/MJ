@@ -16,7 +16,7 @@ import type {
 } from '../BaseIntegrationConnector.js';
 import type { ExternalRecord } from '../types.js';
 import { IntegrationEngine } from '../IntegrationEngine.js';
-import { ExternalTextMB, PAGE_MB, ParseFirstValue, ResponsePage } from './helpers/retainedText.js';
+import { ExternalTextMB, MBKeptByOneParsedValue, PAGE_MB, ParseFirstValue, ResponsePage } from './helpers/retainedText.js';
 
 // ---------------------------------------------------------------------------
 // Memory held by an entity map while it pages through a source.
@@ -135,12 +135,34 @@ const contextUser = { ID: 'user-1' } as UserInfo;
 /** Pages the fake source serves for one object. */
 const PAGES = 12;
 
+/** A Contact record with the given ExternalID. */
+function contact(externalID: string, page: number): ExternalRecord {
+    return { ExternalID: externalID, ObjectType: 'Contact', Fields: { Name: `C${page}` }, IsDeleted: false };
+}
+
+/** One record per page. Its ExternalID is parsed out of that page's text. */
+function oneIDPerPage(page: number): ExternalRecord[] {
+    return [contact(ParseFirstValue(ResponsePage(`record-from-page-${String(page).padStart(4, '0')}`)), page)];
+}
+
 /**
- * A page-paged connector with one record per page. Each record's ExternalID is parsed out of a
- * large page of response text, so it keeps that page alive for as long as anything holds it.
+ * Every page serves the ID that page 1 served, as overlapping pages do, and pages after the first
+ * also serve one new record. Each copy of the repeated ID is parsed out of the page that served it.
+ */
+function idRepeatedOnEveryPage(page: number): ExternalRecord[] {
+    const repeated = contact(ParseFirstValue(ResponsePage('record-served-by-every-page')), page);
+    return page === 1 ? [repeated] : [contact(`record-${page}`, page), repeated];
+}
+
+/**
+ * A page-paged connector that serves `recordsForPage(page)` for each page. Each ExternalID parsed out
+ * of a page of response text keeps that page alive for as long as anything holds it.
  * `onLastPage` runs when the engine asks for the last page, while the map is still running.
  */
-function pageTextConnector(onLastPage: () => Promise<void>): BaseIntegrationConnector {
+function pageTextConnector(
+    recordsForPage: (page: number) => ExternalRecord[],
+    onLastPage: () => Promise<void>,
+): BaseIntegrationConnector {
     return {
         TestConnection: async () => ({ Success: true }),
         DiscoverObjects: async () => [],
@@ -148,13 +170,7 @@ function pageTextConnector(onLastPage: () => Promise<void>): BaseIntegrationConn
         FetchChanges: async (ctx: FetchContext): Promise<FetchBatchResult> => {
             const page = ctx.CurrentPage ?? 1;
             if (page === PAGES) await onLastPage();
-            const record: ExternalRecord = {
-                ExternalID: ParseFirstValue(ResponsePage(`record-from-page-${String(page).padStart(4, '0')}`)),
-                ObjectType: 'Contact',
-                Fields: { Name: `C${page}` },
-                IsDeleted: false,
-            };
-            return { Records: [record], HasMore: page < PAGES, NextPage: page + 1 };
+            return { Records: recordsForPage(page), HasMore: page < PAGES, NextPage: page + 1 };
         },
         GetDefaultFieldMappings: () => [],
         RateLimitPolicy: null,
@@ -257,9 +273,11 @@ describe('IntegrationEngine — memory held while an entity map pages through a 
     });
 
     it('does not keep the earlier pages of a map while it fetches the next one', async () => {
+        // The premise: a parsed value that is not copied keeps its page.
+        expect(await MBKeptByOneParsedValue()).toBeGreaterThan(PAGE_MB / 2);
         const before = await ExternalTextMB();
         let heldAtLastPage = Number.NaN;
-        const connector = pageTextConnector(async () => {
+        const connector = pageTextConnector(oneIDPerPage, async () => {
             heldAtLastPage = (await ExternalTextMB()) - before;
         });
 
@@ -267,6 +285,24 @@ describe('IntegrationEngine — memory held while an entity map pages through a 
 
         // The run reached the last page and wrote every record.
         expect(result.RecordsCreated).toBe(PAGES);
+        expect(Number.isNaN(heldAtLastPage)).toBe(false);
+        // The page being processed and the page being fetched may be alive; the other ten may not.
+        expect(heldAtLastPage).toBeLessThan(3 * PAGE_MB);
+    });
+
+    it('does not keep the pages of IDs that a later page serves again', async () => {
+        // The premise: a parsed value that is not copied keeps its page.
+        expect(await MBKeptByOneParsedValue()).toBeGreaterThan(PAGE_MB / 2);
+        const before = await ExternalTextMB();
+        let heldAtLastPage = Number.NaN;
+        const connector = pageTextConnector(idRepeatedOnEveryPage, async () => {
+            heldAtLastPage = (await ExternalTextMB()) - before;
+        });
+
+        const result = await runPull(new IntegrationEngine(), connector);
+
+        // The engine saw the repeats: overlapping pages mark the object incomplete.
+        expect(result.IncompleteObjects).toContain('contacts');
         expect(Number.isNaN(heldAtLastPage)).toBe(false);
         // The page being processed and the page being fetched may be alive; the other ten may not.
         expect(heldAtLastPage).toBeLessThan(3 * PAGE_MB);
