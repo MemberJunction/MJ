@@ -26,6 +26,7 @@ import { MjCollapsiblePanelComponent } from './panel/collapsible-panel.component
 import { FormNavigationEvent } from './types/navigation-events';
 import {
   FormContext,
+  FormModeSwitch,
   FormNotificationEvent,
   RecordSavedEvent,
   RecordRefreshedEvent,
@@ -104,6 +105,13 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public OnVariantChanged: (variantID: string | null) => void = (_id) => {
     // host installs the real handler post-construction
   };
+
+  /**
+   * Callback supplied by `MjEntityFormHostComponent` when the entity has both a
+   * custom form and a CodeGen standard form, allowing the toolbar's phone View
+   * sheet to switch between them.
+   */
+  public FormModeSwitch: FormModeSwitch | null = null;
   public isHistoryDialogOpen: boolean = false;
   public IsTagsPanelOpen: boolean = false;
   public TagCount: number = 0;
