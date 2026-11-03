@@ -117,8 +117,10 @@ export class AIModelRunParams {
    * rejects with a typed `AIPromptTimeoutError` (classified as a retriable NetworkError), so it
    * flows into the normal failover/retry machinery instead of hanging forever.
    *
-   * When omitted (and the runner declares no `DefaultPromptTimeoutMS`), the model call is bounded
-   * ONLY by `cancellationToken` — i.e. unbounded if no token is supplied.
+   * Precedence: this value, then the prompt's own `AIPrompt.TimeoutMS`, then the runner's
+   * `DefaultPromptTimeoutMS`. The first one set wins; passing `0` opts this call out of any bound.
+   * When none is set, the model call is bounded ONLY by `cancellationToken` — i.e. unbounded if no
+   * token is supplied.
    */
   timeoutMS?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 

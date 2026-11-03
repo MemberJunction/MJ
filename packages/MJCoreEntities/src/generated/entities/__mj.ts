@@ -7833,6 +7833,11 @@ export const MJAIPromptSchema = z.object({
     *   * None
     *   * Referenced
         * * Description: Which template inputs (data, templateData) prompt runs store in Messages: None (shape only), Referenced (only keys the template uses) or Full. NULL uses the server default.`),
+    TimeoutMS: z.number().nullable().describe(`
+        * * Field Name: TimeoutMS
+        * * Display Name: Timeout MS
+        * * SQL Data Type: int
+        * * Description: Wall-clock bound, in milliseconds, on each model call this prompt makes (each failover candidate, validation retry and parallel task gets its own budget). A call that runs longer is aborted and fails over like a network error. A timeoutMS passed by the caller takes precedence; the runner default applies when both are empty. NULL means this prompt sets no bound.`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template Text
@@ -66147,6 +66152,19 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     }
     set TemplateDataCapture(value: 'Full' | 'None' | 'Referenced' | null) {
         this.Set('TemplateDataCapture', value);
+    }
+
+    /**
+    * * Field Name: TimeoutMS
+    * * Display Name: Timeout MS
+    * * SQL Data Type: int
+    * * Description: Wall-clock bound, in milliseconds, on each model call this prompt makes (each failover candidate, validation retry and parallel task gets its own budget). A call that runs longer is aborted and fails over like a network error. A timeoutMS passed by the caller takes precedence; the runner default applies when both are empty. NULL means this prompt sets no bound.
+    */
+    get TimeoutMS(): number | null {
+        return this.Get('TimeoutMS');
+    }
+    set TimeoutMS(value: number | null) {
+        this.Set('TimeoutMS', value);
     }
 
     /**

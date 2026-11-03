@@ -2177,10 +2177,10 @@ export abstract class BaseModelRunner {
   }
 
   /**
-   * Engine-level default model-call timeout, in milliseconds, applied when the caller supplies no
-   * `AIPromptParams.timeoutMS`. `undefined` (the default) means NO implicit bound — a prompt run
-   * with neither a timeout nor a cancellation token stays unbounded, exactly as before, so this
-   * change is behavior-preserving for existing callers.
+   * Engine-level default model-call timeout, in milliseconds, applied when neither the caller
+   * (`AIPromptParams.timeoutMS`) nor the prompt (`AIPrompt.TimeoutMS`) supplies one. `undefined`
+   * (the default) means NO implicit bound — a prompt run with no timeout from any source and no
+   * cancellation token stays unbounded.
    *
    * Subclasses (or a host application's runner subclass) can override this to impose a global
    * safety ceiling on every prompt call.
@@ -2190,20 +2190,21 @@ export abstract class BaseModelRunner {
   }
 
   /**
-   * Resolves the per-model-call timeout: the caller's `AIPromptParams.timeoutMS`, else the runner's
-   * {@link DefaultPromptTimeoutMS}. Non-positive / non-numeric values mean "no timeout".
+   * Resolves the per-model-call timeout, most specific source first:
+   *
+   * 1. the caller's `AIPromptParams.timeoutMS`
+   * 2. the prompt's own `AIPrompt.TimeoutMS` column
+   * 3. the runner's {@link DefaultPromptTimeoutMS}
+   *
+   * The first source that is set wins, even when it is not positive: a caller passing `0` opts this
+   * call out of any bound. Non-positive / non-numeric results mean "no timeout".
    *
    * The bound is applied PER MODEL CALL (not per prompt execution), which mirrors the parallel
    * path's existing `taskTimeoutMS` semantics: each failover candidate / validation retry gets a
    * fresh budget rather than sharing one wall-clock window.
-   *
-   * NOTE (issue #3064): there is deliberately NO prompt-entity source here yet — the `AIPrompt`
-   * table has no `TimeoutMS` column today. Once a migration adds one and CodeGen regenerates the
-   * entity, this becomes `prompt.TimeoutMS ?? params.timeoutMS ?? this.DefaultPromptTimeoutMS`
-   * and every bound below starts honoring the per-prompt configuration with no other change.
    */
-  protected getEffectiveTimeoutMS(params: AIPromptParams): number | undefined {
-    const timeoutMS = params.timeoutMS ?? this.DefaultPromptTimeoutMS;
+  protected getEffectiveTimeoutMS(prompt: Pick<MJAIPromptEntityExtended, 'TimeoutMS'> | null | undefined, params: AIPromptParams): number | undefined {
+    const timeoutMS = params.timeoutMS ?? prompt?.TimeoutMS ?? this.DefaultPromptTimeoutMS;
     return typeof timeoutMS === 'number' && timeoutMS > 0 ? timeoutMS : undefined;
   }
 
@@ -2221,7 +2222,7 @@ export abstract class BaseModelRunner {
    * on Node 18 (where `AbortSignal.any` does not exist — it landed in Node 20.3).
    */
   protected createExecutionBound(prompt: MJAIPromptEntityExtended, params: AIPromptParams, cancellationToken?: AbortSignal): ExecutionBound {
-    const timeoutMS = this.getEffectiveTimeoutMS(params);
+    const timeoutMS = this.getEffectiveTimeoutMS(prompt, params);
     if (timeoutMS === undefined) {
       // No prompt timeout: use the caller's token as-is (or nothing at all).
       return { Signal: cancellationToken, TimeoutMS: undefined, TimedOut: () => false, Dispose: () => { /* nothing to release */ } };

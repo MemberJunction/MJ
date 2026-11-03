@@ -17663,6 +17663,9 @@ export class MJAIPrompt_ {
     @MaxLength(20)
     TemplateDataCapture?: string;
         
+    @Field(() => Int, {nullable: true, description: "Wall-clock bound, in milliseconds, on each model call this prompt makes (each failover candidate, validation retry and parallel task gets its own budget). A call that runs longer is aborted and fails over like a network error. A timeoutMS passed by the caller takes precedence; the runner default applies when both are empty. NULL means this prompt sets no bound."}) 
+    TimeoutMS?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Template?: string;
@@ -17855,6 +17858,9 @@ export class CreateMJAIPromptInput {
     @Field({ nullable: true })
     TemplateDataCapture: string | null;
 
+    @Field(() => Int, { nullable: true })
+    TimeoutMS: number | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -18026,6 +18032,9 @@ export class UpdateMJAIPromptInput {
 
     @Field({ nullable: true })
     TemplateDataCapture?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    TimeoutMS?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
