@@ -248,7 +248,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
   }
 
   /** The side card's title: the winning model, or what the gate decided instead. */
-  public get OutcomeCardTitle(): string {
+  public get OutcomeCardTitle(): 'Winning Model' | 'Kept a simple baseline' | 'No model shipped' | 'Not evaluated' {
     switch (this.Spec?.GateOutcome) {
       case 'no-signal': return 'No model shipped';
       case 'keep-simple-baseline': return 'Kept a simple baseline';

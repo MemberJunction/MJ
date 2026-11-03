@@ -393,7 +393,7 @@ export class PSExperimentsComponent implements OnInit {
           metricName: lb.ScoreMetric,
           isWinner: lb.best && outcome === 'model',
         })),
-        BestModelID: winningModelId,
+        BestModelID: outcome === 'model' || outcome === 'keep-simple-baseline' ? winningModelId : undefined,
         BestModel: winningModelId && winningRow ? this.bestModelFor(outcome, winningModelId, winningRow.algorithm) : undefined,
         Markdown: `## Experiment Session: ${s.Name}\n\n**Status:** ${s.Status}\n**Goal:** ${s.Goal || 'N/A'}\n\n### Leaderboard\n\nRanked by metric:\n` +
           this.leaderboard.map(l => `- **#${l.rank} ${l.algorithm}**: ${l.ScoreMetric} ${l.Score.toFixed(3)} (${l.features})`).join('\n'),
@@ -428,13 +428,19 @@ export class PSExperimentsComponent implements OnInit {
 
   /** The artifact summary's outcome sentence: a winner is named only when the stored gate shipped the model. */
   private gateSummary(gate: PSStoredGate | null, algorithm: string | undefined): string {
-    const reason = gate?.Reason.replace(/\.$/, '');
-    switch (gate?.Outcome) {
+    if (gate === null) return 'Not evaluated under an Evaluation Protocol.';
+    const outcome: GateOutcome = gate.Outcome;
+    switch (outcome) {
       case 'model': return `Winning algorithm: ${algorithm ?? 'None'}.`;
-      case 'keep-simple-baseline': return `The gate kept a simple baseline: ${reason}.`;
-      case 'no-signal': return `No model shipped: ${reason}.`;
-      default: return 'Not evaluated under an Evaluation Protocol.';
+      case 'keep-simple-baseline': return `The gate kept a simple baseline: ${gate.Reason.replace(/\.$/, '')}.`;
+      case 'no-signal': return `No model shipped: ${gate.Reason.replace(/\.$/, '')}.`;
+      default: return this.unreachableOutcome(outcome);
     }
+  }
+
+  /** Compile-time exhaustiveness guard for the gate outcomes: a new outcome fails to compile here. */
+  private unreachableOutcome(outcome: never): never {
+    throw new Error(`Unhandled gate outcome: ${String(outcome)}`);
   }
 
   /** The artifact's model record: named by its algorithm only when the gate shipped the model; a kept baseline is not the finalist. */

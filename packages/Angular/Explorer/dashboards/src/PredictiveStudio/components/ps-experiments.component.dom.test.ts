@@ -72,14 +72,14 @@ describe('PSExperimentsComponent (DOM)', () => {
   });
 
   it("labels each leaderboard pill with its own metric, a kept baseline's fallback score after every success-metric score", () => {
-    const row = (ID: string, Score: number, AlgorithmName: string): Row =>
-      ({ ID, ExperimentSessionID: 's1', Sequence: 1, Label: null, Status: 'Completed', Score, ComputeCost: null, TokensUsed: null, Rationale: null, AlgorithmName });
+    const row = (ID: string, Score: number, AlgorithmName: string, Sequence: number): Row =>
+      ({ ID, ExperimentSessionID: 's1', Sequence, Label: null, Status: 'Completed', Score, ComputeCost: null, TokensUsed: null, Rationale: null, AlgorithmName });
     const Leaderboard = JSON.stringify([
       { IterationID: 'it-a', Metric: -12.5, ScoreMetric: 'rmse', OnSuccessMetric: true },
       { IterationID: 'it-c', Metric: -0.3, ScoreMetric: 'log-loss', OnSuccessMetric: false },
     ]);
     const PlanSpec = JSON.stringify({ TargetDefinition: { SuccessMetric: 'RMSE' } });
-    const fixture = render(makeEngine([{ ID: 's1', Name: 'Run', Status: 'Completed', Budget: null, Leaderboard, PlanSpec }], [row('it-c', -0.3, 'GLM'), row('it-a', -12.5, 'XGBoost')]));
+    const fixture = render(makeEngine([{ ID: 's1', Name: 'Run', Status: 'Completed', Budget: null, Leaderboard, PlanSpec }], [row('it-c', -0.3, 'GLM', 2), row('it-a', -12.5, 'XGBoost', 1)]));
     const pills = queryAll(fixture, '[data-testid="ps-experiments-lp-score"]').map((e) => (e.textContent || '').replace(/\s+/g, ' ').trim());
     expect(pills).toEqual(['12.500 rmse', '0.300 log-loss']);
   });
@@ -91,6 +91,7 @@ describe('PSExperimentsComponent (DOM) — ViewResultsArtifact payload', () => {
     GateOutcome: string | null;
     GateReason: string | null;
     Leaderboard: Array<{ isWinner: boolean }>;
+    BestModelID?: string;
     BestModel?: { ID: string; Name: string };
   }
 
@@ -139,6 +140,7 @@ describe('PSExperimentsComponent (DOM) — ViewResultsArtifact payload', () => {
     expect(p.Summary).not.toContain('..');
     expect(p.Leaderboard[0].isWinner).toBe(false);
     expect(p.BestModel?.Name).toBe('Kept simple baseline');
+    expect(p.BestModelID).toBe('model-1');
   });
 
   it('names no winner when the stored gate found no signal', async () => {
@@ -149,6 +151,7 @@ describe('PSExperimentsComponent (DOM) — ViewResultsArtifact payload', () => {
     expect(p.Summary).toContain('No model shipped:');
     expect(p.Leaderboard[0].isWinner).toBe(false);
     expect(p.BestModel).toBeUndefined();
+    expect(p.BestModelID).toBeUndefined();
   });
 
   it('reads as not evaluated for a legacy run with no stored gate record', async () => {
@@ -159,6 +162,7 @@ describe('PSExperimentsComponent (DOM) — ViewResultsArtifact payload', () => {
     expect(p.Summary).not.toContain('Winning');
     expect(p.Leaderboard[0].isWinner).toBe(false);
     expect(p.BestModel).toBeUndefined();
+    expect(p.BestModelID).toBeUndefined();
   });
 
   it('crowns the leaderboard winner only when the stored gate shipped the model', async () => {
@@ -167,5 +171,6 @@ describe('PSExperimentsComponent (DOM) — ViewResultsArtifact payload', () => {
     expect(p.Summary).toContain('Winning algorithm: XGBoost.');
     expect(p.Leaderboard[0].isWinner).toBe(true);
     expect(p.BestModel?.Name).toBe('XGBoost');
+    expect(p.BestModelID).toBe('model-1');
   });
 });
