@@ -13,7 +13,8 @@
  */
 
 import type { MJAIAgentRunEntity } from '@memberjunction/core-entities';
-import { AIUsageCoverage, AIUsageHourlyRow } from './ai-usage-analytics.types';
+import { NormalizeUUID } from '@memberjunction/global';
+import { AIUsageByModelRow, AIUsageCoverage, AIUsageHourlyRow } from './ai-usage-analytics.types';
 
 export interface TrendData {
   timestamp: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
@@ -815,4 +816,222 @@ export function ComputeKPIs(
     Coverage: ComputeCoverage(rows),
     IsMixedCurrency: currency.IsMixed
   };
+}
+
+// ── Usage patterns and model leaderboard (from the usage aggregates) ──
+
+/**
+ * Parses a UTC bucket start from the usage queries. The queries return `HourBucket` as a SQL
+ * DATETIME holding UTC, which can arrive without a zone designator; a bare value is read as UTC,
+ * not as the viewer's local time.
+ */
+export function ParseUtcBucket(raw: string | Date | null | undefined): Date | null {
+  if (!raw) return null;
+  if (raw instanceof Date) return isNaN(raw.getTime()) ? null : raw;
+  const hasZone = /[zZ]|[+-]\d\d:?\d\d$/.test(raw);
+  const iso = hasZone || raw.length <= 10 ? raw : `${raw}Z`;
+  const parsed = new Date(iso);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/** The viewer's offset from UTC, in minutes, at a given instant (east positive, DST-aware). */
+export type UtcOffsetMinutes = (instant: Date) => number;
+
+/** The browser's own zone. */
+export const ViewerUtcOffsetMinutes: UtcOffsetMinutes = (instant: Date) => -instant.getTimezoneOffset();
+
+/**
+ * Folds hourly usage rows into a 7×24 run-count matrix in the viewer's zone:
+ * `counts[day][hour]`, day 0 = Monday … 6 = Sunday.
+ *
+ * Each UTC hour bucket is placed at the local hour it starts in, so a viewer in a half-hour zone
+ * (+5:30) sees the 03:00 UTC bucket at 08:00 local.
+ */
+export function FoldRunsByHourOfWeek(
+  rows: ReadonlyArray<Pick<AIUsageHourlyRow, 'HourBucket' | 'Runs'>>,
+  offsetMinutes: UtcOffsetMinutes = ViewerUtcOffsetMinutes
+): number[][] {
+  const counts: number[][] = Array.from({ length: 7 }, () => new Array<number>(24).fill(0));
+  for (const r of rows) {
+    const runs = typeof r.Runs === 'number' ? r.Runs : 0;
+    if (runs <= 0) continue;
+    const start = ParseUtcBucket(r.HourBucket);
+    if (start === null) continue;
+    const local = new Date(start.getTime() + offsetMinutes(start) * 60000);
+    const jsDay = local.getUTCDay(); // 0 = Sunday
+    const day = jsDay === 0 ? 6 : jsDay - 1;
+    counts[day][local.getUTCHours()] += runs;
+  }
+  return counts;
+}
+
+/** Total runs across usage rows. */
+export function SumRuns(rows: ReadonlyArray<Pick<AIUsageHourlyRow, 'Runs'>>): number {
+  let total = 0;
+  for (const r of rows) {
+    total += typeof r.Runs === 'number' ? r.Runs : 0;
+  }
+  return total;
+}
+
+/** One currency's share of a cost total. */
+export interface CurrencyAmount {
+  Currency: string;
+  Amount: number;
+}
+
+/** One model's leaderboard figures, computed from the usage aggregates. */
+export interface ModelUsageStats {
+  /** The model, or '' for runs with no model. */
+  ModelID: string;
+  /** The vendor that ran most of this model's runs in range ('' when none is recorded). */
+  VendorID: string;
+  Runs: number;
+  SucceededRuns: number;
+  /** 0..100. */
+  SuccessRate: number;
+  /** 0..1, share of input tokens served from the provider's prompt cache. */
+  CacheHitRate: number;
+  /** Every token processed: prompt + completion + cache reads + cache writes. */
+  TotalTokens: number;
+  /** Own cost per currency, primary currency first. Empty when nothing was priced. */
+  Costs: CurrencyAmount[];
+  /** The currency {@link CostPer1KTokens} is in; null when nothing was priced. */
+  CostCurrency: string | null;
+  /** Cost per 1K tokens in {@link CostCurrency}, over that currency's tokens. Null when unpriced. */
+  CostPer1KTokens: number | null;
+  PricedRuns: number;
+  UnpricedRuns: number;
+  /** Median latency in ms; null when the model has no latency row in range. */
+  LatencyP50: number | null;
+  LatencyP95: number | null;
+}
+
+function num(v: number | null | undefined): number {
+  return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+}
+
+/**
+ * Run-weighted latency across one model's AIUsageByModel rows.
+ *
+ * The query computes exact percentiles per (vendor, model, currency). A model normally has one such
+ * row; when it has several (more than one vendor or currency), their percentiles are weighted by
+ * runs. That is an approximation, but it never averages per-hour medians.
+ */
+function weightedLatency(rows: AIUsageByModelRow[], pick: (r: AIUsageByModelRow) => number | null): number | null {
+  let weighted = 0;
+  let weight = 0;
+  for (const r of rows) {
+    const value = pick(r);
+    const runs = num(r.Runs);
+    if (typeof value !== 'number' || !Number.isFinite(value) || runs <= 0) continue;
+    weighted += value * runs;
+    weight += runs;
+  }
+  return weight > 0 ? weighted / weight : null;
+}
+
+/** Own cost per currency, in {@link ResolveCostCurrency} order (primary first). */
+function costsByCurrency(rows: AIUsageHourlyRow[]): CurrencyAmount[] {
+  const amounts = new Map<string, number>();
+  for (const r of rows) {
+    const code = normalizeCurrency(r.CostCurrency);
+    if (code === null || num(r.PricedRuns) <= 0 || typeof r.OwnCost !== 'number') continue;
+    amounts.set(code, (amounts.get(code) ?? 0) + r.OwnCost);
+  }
+  return ResolveCostCurrency(rows).Currencies
+    .filter(c => amounts.has(c))
+    .map(c => ({ Currency: c, Amount: amounts.get(c) as number }));
+}
+
+function tokensOf(r: AIUsageHourlyRow): number {
+  return num(r.TokensPrompt) + num(r.TokensCompletion) + num(r.TokensCacheRead) + num(r.TokensCacheWrite);
+}
+
+/**
+ * Builds one leaderboard entry per model from AIUsageHourly rows (runs, success, tokens, cost) and
+ * AIUsageByModel rows (latency percentiles). With `vendorId`, only that vendor's rows count.
+ *
+ * Cost is never summed across currencies: each currency is its own figure, and cost per 1K tokens
+ * is in the model's primary currency over the tokens of rows in that currency.
+ */
+export function ComputeModelLeaderboard(
+  hourlyRows: AIUsageHourlyRow[],
+  byModelRows: AIUsageByModelRow[],
+  vendorId?: string | null
+): ModelUsageStats[] {
+  const vendorKey = NormalizeUUID(vendorId);
+  const inVendor = (id: string | null | undefined) => vendorKey === '' || NormalizeUUID(id) === vendorKey;
+
+  const groups = new Map<string, { id: string; rows: AIUsageHourlyRow[] }>();
+  for (const r of hourlyRows) {
+    if (!inVendor(r.VendorID)) continue;
+    const key = NormalizeUUID(r.ModelID);
+    const group = groups.get(key);
+    if (group) {
+      group.rows.push(r);
+    } else {
+      groups.set(key, { id: r.ModelID ?? '', rows: [r] });
+    }
+  }
+
+  const latencyRows = new Map<string, AIUsageByModelRow[]>();
+  for (const r of byModelRows) {
+    if (!inVendor(r.VendorID)) continue;
+    const key = NormalizeUUID(r.ModelID);
+    const list = latencyRows.get(key);
+    if (list) {
+      list.push(r);
+    } else {
+      latencyRows.set(key, [r]);
+    }
+  }
+
+  const result: ModelUsageStats[] = [];
+  for (const [key, group] of groups) {
+    const rows = group.rows;
+    const runs = rows.reduce((s, r) => s + num(r.Runs), 0);
+    if (runs <= 0) continue;
+    const succeeded = rows.reduce((s, r) => s + num(r.SucceededRuns), 0);
+
+    const vendorRuns = new Map<string, { id: string; runs: number }>();
+    for (const r of rows) {
+      const vKey = NormalizeUUID(r.VendorID);
+      const entry = vendorRuns.get(vKey) ?? { id: r.VendorID ?? '', runs: 0 };
+      entry.runs += num(r.Runs);
+      vendorRuns.set(vKey, entry);
+    }
+    let topVendor = { id: '', runs: -1 };
+    for (const v of vendorRuns.values()) {
+      if (v.runs > topVendor.runs) topVendor = v;
+    }
+
+    const costs = costsByCurrency(rows);
+    const costCurrency = costs.length > 0 ? costs[0].Currency : null;
+    const tokensInCurrency = costCurrency !== null
+      ? FilterRowsToCurrency(rows, costCurrency).reduce((s, r) => s + tokensOf(r), 0)
+      : 0;
+    const costPer1K = costCurrency !== null && tokensInCurrency > 0
+      ? (costs[0].Amount / tokensInCurrency) * 1000
+      : null;
+
+    const latency = latencyRows.get(key) ?? [];
+    result.push({
+      ModelID: group.id,
+      VendorID: topVendor.id,
+      Runs: runs,
+      SucceededRuns: succeeded,
+      SuccessRate: (succeeded / runs) * 100,
+      CacheHitRate: ComputeCacheHitRate(rows),
+      TotalTokens: rows.reduce((s, r) => s + tokensOf(r), 0),
+      Costs: costs,
+      CostCurrency: costCurrency,
+      CostPer1KTokens: costPer1K,
+      PricedRuns: rows.reduce((s, r) => s + num(r.PricedRuns), 0),
+      UnpricedRuns: rows.reduce((s, r) => s + num(r.UnpricedRuns), 0),
+      LatencyP50: weightedLatency(latency, r => r.LatencyP50),
+      LatencyP95: weightedLatency(latency, r => r.LatencyP95),
+    });
+  }
+  return result;
 }
