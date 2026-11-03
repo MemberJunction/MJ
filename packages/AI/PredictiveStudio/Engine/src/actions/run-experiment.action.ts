@@ -101,7 +101,8 @@ export class PredictiveStudioRunExperimentAction extends BasePredictiveStudioAct
     this.addOutputParam(params, 'Leaderboard', JSON.stringify(result.leaderboard));
     this.addOutputParam(params, 'StopReason', result.stopReason);
 
-    const best = result.bestModel ? `best model ${result.bestModel.ID}` : 'no winning model';
+    // The top-ranked iteration's model, named without a ship claim: whether it shipped is its run's stored gate decision.
+    const best = result.bestModel ? `the top-ranked iteration's model ${result.bestModel.ID}` : 'no model from the top-ranked iteration';
     return this.ok(
       params,
       `Experiment session ${result.session.ID} finished (${result.stopReason}) with ${best} across ${result.iterations.length} iteration(s).`,

@@ -252,13 +252,20 @@ describe('PSPipelinesComponent (DOM)', () => {
       expect(fixture.nativeElement.textContent).not.toContain('Winner');
     });
 
-    it('calls a published model the winner when the stored gate outcome is a model, and when the run stores no gate record', () => {
-      for (const outcome of ['model', null] as const) {
-        const fixture = renderWith(publishedModel(), runWithOutcome(outcome));
-        const row = fixture.nativeElement.querySelector('.pl-model-row') as HTMLElement;
-        expect(row.textContent).toContain('Winner');
-        expect(row.textContent).not.toContain('Kept a simple baseline');
-      }
+    it('calls a published model the winner when the stored gate outcome is a model', () => {
+      const fixture = renderWith(publishedModel(), runWithOutcome('model'));
+      const row = fixture.nativeElement.querySelector('.pl-model-row') as HTMLElement;
+      expect(row.textContent).toContain('Winner');
+      expect(row.textContent).not.toContain('Kept a simple baseline');
+    });
+
+    it('reads a published model whose run stores no gate record as not evaluated, with no winner or trophy anywhere', () => {
+      const fixture = renderWith(publishedModel(), runWithOutcome(null));
+      const row = fixture.nativeElement.querySelector('.pl-model-row') as HTMLElement;
+      expect([row.textContent?.includes('Not evaluated'), row.textContent?.includes('Winner'), row.querySelector('.fa-trophy') !== null]).toEqual([true, false, false]);
+      expect(queryAll(fixture, '.pl-metric-badge .fa-trophy').length).toBe(0);
+      const card = algorithmCard(publishedModel(), runWithOutcome(null));
+      expect([card?.textContent?.includes('Current Serving Winner'), card?.textContent?.includes('Published model — not evaluated'), card?.querySelector('.fa-trophy') !== null]).toEqual([false, true, false]);
     });
 
     it('shows the stored primary holdout score, not the word Scored, for a metric the legacy list did not know', () => {

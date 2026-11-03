@@ -216,7 +216,7 @@ ${headline}
 ${gate !== null && !shipped ? `- **Why**: ${gate.Reason}\n` : ''}- **Target Variable**: \`${targetVar}\`
 - **Primary Metric**: **${targetMetric}** = **${score !== null && score !== undefined ? score.toFixed(3) : 'not measured'}**
 - **Outcome**: **${trustTitle}** (${published ? 'Published to Catalog' : 'Held for Review'})
-${renderLeaderboardSection(leaderboard, targetMetric, hasWinner, shipped)}
+${renderLeaderboardSection(leaderboard, targetMetric, hasWinner, gate)}
 ## Features the model weighted most (associations, not causes)
 ${topFeatures}
 
@@ -227,11 +227,17 @@ ${topFeatures}
 }
 
 /**
- * Whether the marked finalist shipped: the stored gate outcome is `model`, or the run stores no gate record (the
- * report then says nothing the gate did not decide). A finalist the gate did not ship is never called the winner.
+ * Whether the marked finalist shipped: only when the stored gate outcome is `model`. A finalist the gate did not ship,
+ * or one whose run stores no gate record (not evaluated), is never called the winner.
  */
 function finalistShipped(gate: BuildGateDecision | null): boolean {
-  return gate === null || gate.Outcome === 'model';
+  return gate !== null && gate.Outcome === 'model';
+}
+
+/** The marked finalist's status cell: the winner only when it shipped; else whether the gate decided or never ran. */
+function finalistStatus(gate: BuildGateDecision | null): string {
+  if (finalistShipped(gate)) return '🏆 Winner (Selected)';
+  return gate === null ? 'Finalist (not evaluated)' : 'Finalist (not shipped)';
 }
 
 /** The performance section's heading: the winning model's, or what the stored gate decided instead. */
@@ -239,7 +245,7 @@ function performanceHeading(gate: BuildGateDecision | null, isTournament: boolea
   if (gate !== null && gate.Outcome === 'no-signal') return 'No model shipped';
   if (gate !== null && gate.Outcome === 'keep-simple-baseline') return 'Kept a simple baseline';
   if (!isTournament) return 'Model Performance';
-  return hasWinner ? 'Winning Model Performance' : 'Selected Model Performance';
+  return hasWinner && finalistShipped(gate) ? 'Winning Model Performance' : 'Selected Model Performance';
 }
 
 /** Whether a leaderboard holds a search's inner-fold scores (optimistic by construction) rather than a holdout score. */
@@ -252,7 +258,7 @@ function isSearchLeaderboard(leaderboard: readonly MLLeaderboardEntryPayload[] |
  * those scores are optimistic; any other leaderboard prints its score. An unmeasured row says so, and a leaderboard of
  * several rows with no measured one says it has no winner.
  */
-function renderLeaderboardSection(leaderboard: MLLeaderboardEntryPayload[] | undefined, targetMetric: string, hasWinner: boolean, shipped: boolean): string {
+function renderLeaderboardSection(leaderboard: MLLeaderboardEntryPayload[] | undefined, targetMetric: string, hasWinner: boolean, gate: BuildGateDecision | null): string {
   if (!leaderboard || leaderboard.length === 0) {
     return '';
   }
@@ -261,7 +267,7 @@ function renderLeaderboardSection(leaderboard: MLLeaderboardEntryPayload[] | und
     .map((r) => {
       const measured = typeof r.score === 'number';
       const scoreText = typeof r.score === 'number' ? leaderboardScoreText(r, r.score, search) : 'not measured';
-      const status = r.isWinner ? (shipped ? '🏆 Winner (Selected)' : 'Finalist (not shipped)') : measured ? 'Evaluated' : 'Not measured';
+      const status = r.isWinner ? finalistStatus(gate) : measured ? 'Evaluated' : 'Not measured';
       return `| ${r.rank ?? '—'} | ${r.algorithm ?? 'Candidate'} | ${scoreText} | ${status} |`;
     })
     .join('\n');

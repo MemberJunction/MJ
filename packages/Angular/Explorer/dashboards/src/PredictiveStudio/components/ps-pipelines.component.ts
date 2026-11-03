@@ -437,6 +437,8 @@ const PS_PIPELINES_STARTER_PROMPT =
                                   <span class="ps-tag success"><i class="fa-solid fa-trophy"></i> Winner</span>
                                 } @else if (ModelTag(m) === 'kept-baseline') {
                                   <span class="ps-tag" data-testid="ps-pipelines-kept-baseline">Kept a simple baseline</span>
+                                } @else if (ModelTag(m) === 'not-evaluated') {
+                                  <span class="ps-tag" data-testid="ps-pipelines-not-evaluated">Not evaluated</span>
                                 }
                               </div>
                             </td>
@@ -718,6 +720,8 @@ const PS_PIPELINES_STARTER_PROMPT =
                                       <span class="ps-tag success"><i class="fa-solid fa-trophy"></i> Winner</span>
                                     } @else if (ModelTag(mdl) === 'kept-baseline') {
                                       <span class="ps-tag">Kept a simple baseline</span>
+                                    } @else if (ModelTag(mdl) === 'not-evaluated') {
+                                      <span class="ps-tag">Not evaluated</span>
                                     }
                                     <span class="ps-badge" [class]="StatusClass(mdl.Status)">{{ mdl.Status }}</span>
                                   </div>
@@ -1195,26 +1199,29 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
 
   /**
    * How the pipeline's leaderboard marks a published model: `winner` when its training run's stored gate outcome shipped
-   * a model (or the run stores no gate record), `kept-baseline` when the gate kept a simple baseline, and `none` when the
-   * model is not published or the gate shipped nothing.
+   * a model, `kept-baseline` when the gate kept a simple baseline, `not-evaluated` when the run stores no readable gate
+   * record (read by {@link ReadStoredGate}, as the results artifact reads it), and `none` when the model is not published
+   * or the gate shipped nothing.
    */
-  public ModelTag(m: MJMLModelEntity): 'winner' | 'kept-baseline' | 'none' {
+  public ModelTag(m: MJMLModelEntity): 'winner' | 'kept-baseline' | 'not-evaluated' | 'none' {
     if (m.Status !== 'Published') return 'none';
     const outcome = this.storedGateOutcome(m.ID);
-    if (outcome === null || outcome === 'model') return 'winner';
+    if (outcome === null) return 'not-evaluated';
+    if (outcome === 'model') return 'winner';
     return outcome === 'keep-simple-baseline' ? 'kept-baseline' : 'none';
   }
 
   /**
    * The algorithm card's title for the model it shows: the published model by its gate outcome (the serving winner only
-   * when its run shipped it, or stores no gate record), or, when no model of the pipeline is published, the latest model,
-   * which nothing serves yet.
+   * when its run shipped it; not evaluated when the run stores no gate record), or, when no model of the pipeline is
+   * published, the latest model, which nothing serves yet.
    */
   public ModelCardTitle(m: MJMLModelEntity): string {
     if (m.Status !== 'Published') return 'Latest model (not published)';
     switch (this.ModelTag(m)) {
       case 'winner': return 'Current Serving Winner';
       case 'kept-baseline': return 'Kept a simple baseline';
+      case 'not-evaluated': return 'Published model — not evaluated';
       default: return 'Published model';
     }
   }

@@ -54,6 +54,8 @@ describe('PSCompareComponent (DOM)', () => {
     expect(query(fixture, '[data-testid="ps-compare-empty"]')).not.toBeNull();
     expect(query(fixture, '[data-testid="ps-compare-session"]')).toBeNull();
     expect(fixture.nativeElement.textContent).toContain('Nothing to compare yet');
+    // Comparing runs shows which leads on the holdout score; whether a model ships is the stored gate's decision.
+    expect(fixture.nativeElement.textContent).not.toMatch(/winner/i);
   });
 
   it('renders the session picker when a comparable session exists', () => {

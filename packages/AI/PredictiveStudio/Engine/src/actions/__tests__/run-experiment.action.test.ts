@@ -194,6 +194,15 @@ describe('PredictiveStudioRunExperimentAction — happy path', () => {
     expect(result.Success).toBe(true);
     expect(out(p, 'BestModelID')).toBeNull();
     expect(out(p, 'StopReason')).toBe('budget-maxRuns');
+    expect(result.Message).not.toMatch(/winning|best/i);
+  });
+
+  it('names the top-ranked iteration\'s model without calling it the best or the winner (the stored gate decides that)', async () => {
+    const orch = new MockOrchestrator(sessionResult());
+    const p = params([{ Name: 'PlanSpec', Type: 'Input', Value: approvedPlan() }]);
+    const result = await new TestableExperimentAction(orch).run(p);
+    expect(result.Message).toContain("the top-ranked iteration's model model-9");
+    expect(result.Message).not.toMatch(/winning|best/i);
   });
 });
 

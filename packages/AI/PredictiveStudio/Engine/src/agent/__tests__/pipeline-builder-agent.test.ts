@@ -247,7 +247,7 @@ describe('GenerateMarkdownReport — measurement copy (M8)', () => {
     const searchRow = (rank: number, mean: number, isWinner: boolean): MLLeaderboardEntryPayload => ({
       IterationID: 'run-1', Metric: mean, rank, algorithm: `Algo ${rank}`, score: mean, metricName: 'log-loss', innerLower: mean - 0.02, innerUpper: mean + 0.02, optimistic: true, isWinner,
     });
-    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Ships — the model beats the flat guess', 'ok', true, [], [searchRow(1, 0.4, false), searchRow(2, 0.41, true)], null, false);
+    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Ships — the model beats the flat guess', 'ok', true, [], [searchRow(1, 0.4, false), searchRow(2, 0.41, true)], { Outcome: 'model', Reason: 'The model beats the flat guess.' }, false);
     expect(md).toContain('The winner is the simplest candidate whose inner-fold score is within one standard error of the best; inner-fold scores are optimistic, and the held-back rows were read once, for the winner.');
     expect(md).toContain('| Rank | Algorithm | Inner-CV log-loss [95% interval] (optimistic) | Status |');
     expect(md).toContain('| 1 | Algo 1 | 0.400 [0.380, 0.420] | Evaluated |');
@@ -289,12 +289,19 @@ describe('GenerateMarkdownReport — the stored gate outcome', () => {
     expect(md).toContain('## Kept a simple baseline\n- **Why**: The simple baseline glm is kept.');
   });
 
-  it('keeps the winner wording when the stored outcome ships the finalist, or the run stores none', () => {
-    for (const gate of [{ Outcome: 'model' as const, Reason: 'The model beats the flat guess.' }, null]) {
-      const md = report(gate);
-      expect(md).toContain('## Winning Model Performance');
-      expect(md).toContain('| 2 | Algo 2 | 0.410 [0.390, 0.430] | 🏆 Winner (Selected) |');
-    }
+  it('keeps the winner wording when the stored outcome ships the finalist', () => {
+    const md = report({ Outcome: 'model', Reason: 'The model beats the flat guess.' });
+    expect(md).toContain('## Winning Model Performance');
+    expect(md).toContain('| 2 | Algo 2 | 0.410 [0.390, 0.430] | 🏆 Winner (Selected) |');
+  });
+
+  it('crowns no winner when the run stores no gate record, and reads the finalist as not evaluated', () => {
+    const md = report(null);
+    expect(md).not.toContain('🏆');
+    expect(md).not.toMatch(/Winning|Winner|winner/);
+    expect(md).toContain('## Selected Model Performance');
+    expect(md).toContain('| 2 | Algo 2 | 0.410 [0.390, 0.430] | Finalist (not evaluated) |');
+    expect(md).toContain('The finalist is the simplest candidate');
   });
 });
 

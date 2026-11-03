@@ -83,6 +83,22 @@ describe('PSExperimentsComponent (DOM)', () => {
     const pills = queryAll(fixture, '[data-testid="ps-experiments-lp-score"]').map((e) => (e.textContent || '').replace(/\s+/g, ' ').trim());
     expect(pills).toEqual(['12.500 rmse', '0.300 log-loss']);
   });
+
+  it('badges the top-ranked iteration "Top scorer", the label the compare panel gives it, never "Best"', () => {
+    const row = (ID: string, AlgorithmName: string, Sequence: number): Row =>
+      ({ ID, ExperimentSessionID: 's1', Sequence, Label: null, Status: 'Completed', Score: null, ComputeCost: null, TokensUsed: null, Rationale: null, AlgorithmName });
+    const Leaderboard = JSON.stringify([
+      { IterationID: 'it-a', Metric: -12.5, ScoreMetric: 'rmse', OnSuccessMetric: true },
+      { IterationID: 'it-b', Metric: -13.5, ScoreMetric: 'rmse', OnSuccessMetric: true },
+    ]);
+    const PlanSpec = JSON.stringify({ TargetDefinition: { SuccessMetric: 'RMSE' } });
+    const fixture = render(makeEngine([{ ID: 's1', Name: 'Run', Status: 'Completed', Budget: null, Leaderboard, PlanSpec }], [row('it-a', 'XGBoost', 1), row('it-b', 'GLM', 2)]));
+    const badges = queryAll(fixture, '[data-testid="ps-kanban-col-completed"] .icard .ps-badge').map((e) => (e.textContent || '').trim());
+    expect(badges).toEqual(['Top scorer', 'Completed']);
+    // The card reads the view-model's own (PascalCase) fields: the algorithm name and the top card's highlight render.
+    expect(queryAll(fixture, '[data-testid="ps-kanban-col-completed"] .icard .nm').map((e) => e.textContent?.trim())).toEqual(['XGBoost', 'GLM']);
+    expect(queryAll(fixture, '[data-testid="ps-kanban-col-completed"] .icard.best')).toHaveLength(1);
+  });
 });
 
 describe('PSExperimentsComponent (DOM) — ViewResultsArtifact payload', () => {
@@ -93,6 +109,8 @@ describe('PSExperimentsComponent (DOM) — ViewResultsArtifact payload', () => {
     Leaderboard: Array<{ isWinner: boolean }>;
     BestModelID?: string;
     BestModel?: { ID: string; Name: string };
+    /** The artifact record's Description (not part of the version content). */
+    ArtifactDescription: string;
   }
 
   /** Runs ViewResultsArtifact on a one-iteration completed session whose top run stores `validationResults`; returns the saved payload. */
@@ -106,9 +124,11 @@ describe('PSExperimentsComponent (DOM) — ViewResultsArtifact payload', () => {
       TrainingRuns: [{ ExperimentSessionIterationID: 'it-a', ResultingModelID: 'model-1', ValidationResults: validationResults }],
     } as unknown as PredictiveStudioEngine;
     let saved = '';
-    const entity = (): { Save: () => Promise<boolean>; Content?: string } => ({
+    let described = '';
+    const entity = (): { Save: () => Promise<boolean>; Content?: string; Description?: string } => ({
       Save: async () => true,
       set Content(value: string) { saved = value; },
+      set Description(value: string) { described = value; },
     });
     const provider = {
       RunView: async () => ({ Success: true, Results: [] }),
@@ -116,7 +136,7 @@ describe('PSExperimentsComponent (DOM) — ViewResultsArtifact payload', () => {
     } as unknown as IMetadataProvider;
     const fixture = renderComponentFixture(PSExperimentsComponent, { inputs: { engine, provider } });
     await fixture.componentInstance.ViewResultsArtifact();
-    return JSON.parse(saved) as ArtifactPayload;
+    return { ...(JSON.parse(saved) as Omit<ArtifactPayload, 'ArtifactDescription'>), ArtifactDescription: described };
   }
 
   const gateDecisions: Record<'model' | 'no-signal', GateDecision> = {
@@ -130,6 +150,13 @@ describe('PSExperimentsComponent (DOM) — ViewResultsArtifact payload', () => {
     if (gate === null) throw new Error('the fixture stores no gate');
     return WidgetFixtures.StoredRunJson({ gate: { ...gate, decision: gateDecisions[outcome], reason: { code: reasonCodes[outcome], text: `The gate decided ${outcome}.` } } });
   };
+
+  it('describes the artifact record without a winning model, whatever the stored gate decided', async () => {
+    for (const vr of [WidgetFixtures.StoredRunJson(), gateOutcome('no-signal'), null]) {
+      const p = await payloadFor(vr);
+      expect(p.ArtifactDescription).toBe('Modeling results and leaderboard for Run.');
+    }
+  });
 
   it('names no winner when the stored gate kept a simple baseline', async () => {
     const p = await payloadFor(WidgetFixtures.StoredRunJson());

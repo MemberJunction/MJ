@@ -170,28 +170,28 @@ interface BudgetGaugeVM {
         </div>
 
         <ng-template #iterCard let-c="c">
-          <div class="icard" [class.best]="c.status === 'Best'" [class.running]="c.status === 'Running'" [class.pruned]="c.status === 'Pruned'">
+          <div class="icard" [class.best]="c.Status === 'Best'" [class.running]="c.Status === 'Running'" [class.pruned]="c.Status === 'Pruned'">
             <div class="ic-top">
-              <span class="algo-ic" [style.background]="c.algorithmColor"><i [class]="c.algorithmIcon"></i></span>
-              <div><div class="nm">{{ c.algorithm }}</div><div class="it ps-muted ps-small">{{ c.iteration }}</div></div>
+              <span class="algo-ic" [style.background]="c.AlgorithmColor"><i [class]="c.AlgorithmIcon"></i></span>
+              <div><div class="nm">{{ c.Algorithm }}</div><div class="it ps-muted ps-small">{{ c.Iteration }}</div></div>
               <span class="ps-spacer"></span>
-              <span class="ps-badge" [class]="statusBadgeClass(c.status)">{{ statusLabel(c.status) }}</span>
+              <span class="ps-badge" [class]="statusBadgeClass(c.Status)">{{ statusLabel(c.Status) }}</span>
             </div>
             <div class="feat-chips">
-              @for (f of c.features; track f) { <span class="ps-tag">{{ f }}</span> }
+              @for (f of c.Features; track f) { <span class="ps-tag">{{ f }}</span> }
             </div>
-            @if (c.status === 'Running') {
+            @if (c.Status === 'Running') {
               <div class="ic-prog">
                 <div class="ps-bar run"><span [style.width.%]="c.Progress"></span></div>
                 <div class="meta"><span class="ps-muted ps-small">{{ c.ProgressDetail }}</span></div>
               </div>
             } @else {
               <div class="ic-score">
-                <span class="v" [class.green]="c.status === 'Best'">{{ c.score | number: '1.3-3' }}</span>
+                <span class="v" [class.green]="c.Status === 'Best'">{{ c.score | number: '1.3-3' }}</span>
                 <span class="lbl ps-muted ps-small">{{ c.ScoreMetric || 'not ranked yet' }} · {{ c.ScoreDelta }}</span>
               </div>
             }
-            <div class="rationale"><i class="fa-solid fa-robot"></i><span class="ps-small">{{ c.rationale }}</span></div>
+            <div class="rationale"><i class="fa-solid fa-robot"></i><span class="ps-small">{{ c.Rationale }}</span></div>
           </div>
         </ng-template>
       }
@@ -356,7 +356,8 @@ export class PSExperimentsComponent implements OnInit {
 
       const art = await p.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser ?? undefined);
       art.Name = `${s.Name} — Results`;
-      art.Description = `Modeling results, leaderboard, and winning model metrics for ${s.Name}.`;
+      // Gate-independent: whether a model shipped is the stored gate's decision, which the version content carries.
+      art.Description = `Modeling results and leaderboard for ${s.Name}.`;
       art.TypeID = 'D41AB707-58F1-4413-8725-9DF31C95F4C5';
       art.Comments = sessionComment;
       const saved = await art.Save();
@@ -612,7 +613,7 @@ export class PSExperimentsComponent implements OnInit {
 
   public StatusLabel(status: PSIterationCard['Status']): string {
     switch (status) {
-      case 'Best': return 'Best';
+      case 'Best': return 'Top scorer';
       case 'AwaitingApproval': return 'Awaiting approval';
       default: return status;
     }

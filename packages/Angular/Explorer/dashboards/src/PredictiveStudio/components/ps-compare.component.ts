@@ -42,7 +42,7 @@ interface SessionOption {
         <div class="ps-empty" data-testid="ps-compare-empty">
           <span class="ps-empty-ico"><i class="fa-solid fa-chart-column"></i></span>
           <h3>Nothing to compare yet</h3>
-          <p>Run an experiment with at least two scored iterations and you'll be able to line up their metrics side-by-side here to pick a winner.</p>
+          <p>Run an experiment with at least two scored iterations and you'll be able to line up their metrics side-by-side here to see which leads on the holdout score.</p>
         </div>
       } @else {
         <!-- toolbar: session picker -->

@@ -257,6 +257,18 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
     }
   }
 
+  /**
+   * Which model the feature-importance bars describe, by the stored gate outcome: the winning model only when the gate
+   * shipped it, the shipped model for a kept simple baseline, else the trained model (no outcome stored: not evaluated).
+   */
+  public get FeatureImportanceModelLabel(): 'winning' | 'shipped' | 'trained' {
+    switch (this.Spec?.GateOutcome) {
+      case 'model': return 'winning';
+      case 'keep-simple-baseline': return 'shipped';
+      default: return 'trained';
+    }
+  }
+
   /** The stored gate decision's reason; empty when the artifact carries none. */
   public get GateReason(): string {
     return this.Spec?.GateReason || '';

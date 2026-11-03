@@ -125,7 +125,7 @@
           }
 
           @if (FeatureBars.length > 0) {
-            <div class="section-title">Feature Importance — {{ FinalistShipped ? 'winning' : 'shipped' }} model</div>
+            <div class="section-title">Feature Importance — {{ FeatureImportanceModelLabel }} model</div>
             <div class="fi-card">
               @for (bar of FeatureBars; track bar.feature) {
                 <div class="fbar">

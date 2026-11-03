@@ -105,6 +105,25 @@ describe('MLExperimentResultsViewerComponent (DOM) — no stored outcome', () =>
   }
 });
 
+describe('MLExperimentResultsViewerComponent (DOM) — the feature importance title', () => {
+  const leaderboard = [searchRow(1, 'xgb', 0.332, true)];
+  const FeatureImportance = [{ feature: 'tenure', importance: 0.4 }];
+  const title = (extra: object): string | undefined =>
+    queryAll(render({ Leaderboard: leaderboard, FeatureImportance, ...extra }), '.section-title').map((e) => e.textContent?.trim()).find((t) => t?.startsWith('Feature Importance'));
+
+  const cases: [string, object, string][] = [
+    ['the stored gate shipped the model', { GateOutcome: 'model' }, 'Feature Importance — winning model'],
+    ['the stored gate kept a simple baseline', { GateOutcome: 'keep-simple-baseline' }, 'Feature Importance — shipped model'],
+    ['GateOutcome is null (not evaluated)', { GateOutcome: null }, 'Feature Importance — trained model'],
+    ['GateOutcome is absent (not evaluated)', {}, 'Feature Importance — trained model'],
+  ];
+  for (const [when, extra, expected] of cases) {
+    it(`titles the section "${expected}" when ${when}`, () => {
+      expect(title(extra)).toBe(expected);
+    });
+  }
+});
+
 describe('MLExperimentResultsViewerComponent (DOM) — the optimistic tag', () => {
   const note = (f: ReturnType<typeof render>): string => queryAll(f, '.lb-optimistic')[0]?.getAttribute('title') || '';
 
