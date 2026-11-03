@@ -72,6 +72,14 @@ describe('RedactConstraintValues', () => {
     it('leaves an empty message alone', () => {
         expect(RedactConstraintValues('')).toBe('');
     });
+
+    it('handles a long run of repeated labels without a closing character', () => {
+        for (const msg of ['The duplicate key value is ('.repeat(20000), 'Key (a)=(1) '.repeat(20000), 'Key (Key ('.repeat(20000)]) {
+            const started = Date.now();
+            expect(RedactConstraintValues(msg)).toBe(msg);
+            expect(Date.now() - started).toBeLessThan(1000);
+        }
+    });
 });
 
 function employees(enableFieldLevelSecurity = true): EntityInfo {
