@@ -6893,6 +6893,9 @@ export abstract class BaseEntity<T = unknown> {
                         Fields: [c.pkField.Name],
                         ResultType: 'simple',
                         BypassCache: true,
+                        // Key-bounded (at most one row per PK in the chunk): the entity's
+                        // UserViewMaxRows cap protects nothing here and would drop subtypes.
+                        IgnoreMaxRows: true,
                     });
                     meta.push(c);
                 }
@@ -7187,6 +7190,9 @@ export abstract class BaseEntity<T = unknown> {
                     ResultType: 'simple',
                     // Internal hydration read: keep per-batch IN-list reads out of the shared RunView cache.
                     BypassCache: true,
+                    // Key-bounded (at most one row per PK in the chunk): the entity's
+                    // UserViewMaxRows cap protects nothing here and would drop subtypes.
+                    IgnoreMaxRows: true,
                 }));
                 const results = await rv.RunViews<Record<string, string | number | boolean | Date | object | null | undefined>>(params, contextUser);
                 for (let cIdx = 0; cIdx < uncachedChildren.length; cIdx++) {
@@ -7632,6 +7638,9 @@ export abstract class BaseEntity<T = unknown> {
                         // Internal hydration read: see batchDiscoverDisjointChildren — keep these
                         // per-batch IN-list reads out of the shared RunView cache.
                         BypassCache: true,
+                        // Key-bounded (at most one row per PK in the slice): the entity's
+                        // UserViewMaxRows cap protects nothing here and would drop subtypes.
+                        IgnoreMaxRows: true,
                     },
                 });
             }
