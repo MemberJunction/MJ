@@ -3260,12 +3260,11 @@ export class BaseAgent {
     /**
      * Why this run is not offered task graphs and refuses one the model writes, or null when it may use them — the one
      * predicate, so every condition that withholds graphs is added in one place. A graph runs outside the run: its
-     * action nodes are dispatched by the task-graph runner (MJServer's `TaskGraphActionRunner`) with no `Audience`,
-     * no `RunScope` and no run `Context`, outside {@link ExecuteSingleAction}, and an agent node starts a run
-     * (`TaskGraphAgentRunner`) that carries neither the audience nor the scope. So graphs are withheld when the
-     * audience adds a reader, and when the run's validated scope carries a tenant or a secondary dimension
-     * (`ActionRunScopeIsBounded`): a model-written Scoped Search node would search outside the run's tenant, and an
-     * agent node would drop it. Likewise when the host assigned the run's search scopes (`SearchScopeIDs`): a graph's
+     * action nodes are dispatched by the task-graph runner (MJServer's `TaskGraphActionRunner`) outside
+     * {@link ExecuteSingleAction}, with the run's `RunScope` and active skills (persisted at submit, #5624) but no
+     * `Audience`, and an agent node starts a run (`TaskGraphAgentRunner`) that carries neither the audience nor the
+     * scope. So graphs are withheld when the audience adds a reader, and when the run's validated scope carries a
+     * tenant or a secondary dimension (`ActionRunScopeIsBounded`): an agent node would drop it. Likewise when the host assigned the run's search scopes (`SearchScopeIDs`): a graph's
      * Scoped Search node would fall back to the agent's own search access.
      */
     private taskGraphWithholdingReason(params: ExecuteAgentParams): string | null {
@@ -3678,6 +3677,10 @@ export class BaseAgent {
             // CreateBridgeRealtimeSession (the LiveKit / telephony factory) passes no apiKeys today.
             APIKeys: params.apiKeys,
             CredentialScope: params.CredentialScope,
+            // The run's validated scope and active skills, built here on the server (never read from the session's
+            // Config), so the session's direct tool calls and delegated runs carry them (#5624).
+            RunScope: this.runScopeFor(params),
+            ActiveSkillIDs: this.activeSkillIDsForRun(params),
             AgentSessionID: (params.data?.agentSessionId as string | undefined) ?? '',
             PreferredModelID: modelID,
             ConfigOverridesJson: BuildRealtimeOverridesJson(modelID, voice) ?? undefined,
@@ -20801,6 +20804,11 @@ The context is now within limits. Please retry your request with the recovered c
             ConversationDetailID: params.conversationDetailId ?? null,
             AgentRunID: this._agentRun?.ID ?? null,
             ParentAgentHierarchy: this._agentHierarchy.length > 0 ? [...this._agentHierarchy] : undefined,
+            // The run's validated scope and active skills, persisted on the graph so its action nodes
+            // are handed them as every action call inside this run is (#5624): a node's Scoped Search
+            // then refuses a tenant or skill this run does not carry.
+            RunScope: this.runScopeFor(params),
+            ActiveSkillIDs: this.activeSkillIDsForRun(params),
             // If THIS run was itself started by a finished graph, the graph it emits inherits that
             // depth + 1. Without this the chain restarts at zero on every hop and
             // MAX_REINVOKE_DEPTH never fires — a graph reinvoking an agent that emits a graph would

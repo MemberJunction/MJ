@@ -4,6 +4,7 @@
  */
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { AgentDecisionQuestion, TaskGraphDecisionAnswer } from '@memberjunction/ai-core-plus';
+import type { ActionRunScope } from '@memberjunction/actions-base';
 
 /**
  * Mints a fresh metadata/data provider.
@@ -53,6 +54,17 @@ export type TaskActionRunParams = {
     DependencyOutputs: Map<string, unknown>;
     Provider: IMetadataProvider;
     ContextUser: UserInfo;
+    /**
+     * The scope of the agent run that submitted the graph, read from the graph's parent row. The
+     * runner passes it as `RunActionParams.RunScope`, so an action that scopes by tenant refuses one
+     * the run does not carry (#5624). Absent for a graph no agent run submitted.
+     */
+    RunScope?: ActionRunScope;
+    /**
+     * The skills active in the submitting run, passed as `Context.ActiveSkillIDs`. Present exactly
+     * when {@link RunScope} is.
+     */
+    ActiveSkillIDs?: string[];
     /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */
     OnProgress?: TaskRunProgressCallback;
 };

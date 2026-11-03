@@ -32,6 +32,10 @@ export class DurableTaskGraphSubmitter extends TaskGraphSubmitter {
             Provider: request.Provider,
             AgentRunID: request.AgentRunID ?? null,
             ParentAgentHierarchy: request.ParentAgentHierarchy,
+            // The submitting run's scope and active skills, so the graph's action nodes run under
+            // them (#5624). Only an agent run sets these; this seam is its only way in.
+            RunScope: request.RunScope,
+            ActiveSkillIDs: request.ActiveSkillIDs,
             // Carried through so MAX_REINVOKE_DEPTH bounds a real chain. Without it every
             // submission was depth 0 and the cap could never trip.
             ReinvokeDepth: request.ReinvokeDepth ?? 0,

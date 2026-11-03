@@ -1595,6 +1595,35 @@ describe('RealtimeClientSessionService.delegateToTarget (real path)', () => {
         expect(passed.autoPopulateLastRunPayload).toBeUndefined();
     });
 
+    it("threads the session's run scope and active skills into the delegated run (#5624)", async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+        const svc = new DelegateTestService();
+
+        await svc.CallDelegate(makeDelegateInput({
+            RunScope: { PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: 'TENANT-A', SecondaryScopes: { Region: 'EU' }, SearchScopeIDs: ['S-1'] },
+            ActiveSkillIDs: ['SKILL-1'],
+        }), makeDelegateRequest());
+
+        const passed = runAgentMock.mock.calls[0][0];
+        expect(passed.PrimaryScopeEntityName).toBe('Organizations');
+        expect(passed.PrimaryScopeRecordID).toBe('TENANT-A');
+        expect(passed.SecondaryScopes).toEqual({ Region: 'EU' });
+        expect(passed.SearchScopeIDs).toEqual(['S-1']);
+        expect(passed.parentActivatedSkillIDs).toEqual(['SKILL-1']);
+    });
+
+    it('starts an unscoped delegated run when the session has no scope', async () => {
+        runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
+        const svc = new DelegateTestService();
+
+        await svc.CallDelegate(makeDelegateInput(), makeDelegateRequest());
+
+        const passed = runAgentMock.mock.calls[0][0];
+        for (const key of ['PrimaryScopeEntityName', 'PrimaryScopeRecordID', 'SecondaryScopes', 'SearchScopeIDs', 'parentActivatedSkillIDs']) {
+            expect(passed).not.toHaveProperty(key);
+        }
+    });
+
     it('threads AttributionUserID into the run as userId (issue #3371)', async () => {
         runAgentMock.mockResolvedValue({ success: true, agentRun: { ID: 'r1', Status: 'Completed', Message: 'done' } });
         const svc = new DelegateTestService();
@@ -2602,6 +2631,40 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
             const calledRunParams = runSpy.mock.calls[0][0];
             expect(calledRunParams.Action.Name).toBe('SendEmail');
             expect(calledRunParams.Params).toEqual([{ Name: 'To', Value: 'test@domain.com', Type: 'Input' }]);
+        });
+
+        describe('run scope (#5624)', () => {
+            /** Runs one allowed SendEmail direct call with `extra` on the relayed input and returns the engine's params. */
+            async function runDirect(extra: Partial<ExecuteRelayedToolInput>) {
+                const service = new TestableService();
+                service.TargetActions = [mockEmailAction];
+                const cfg: RealtimeCoAgentConfig = { realtime: { directActions: { enabled: true, actionNames: ['SendEmail'] } } };
+                const targetAgent = { ID: 'target-1', Name: 'Sales Agent', TypeConfiguration: JSON.stringify(cfg) } as unknown as MJAIAgentEntityExtended;
+                vi.spyOn(service as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
+                const actionResult = new ActionResult();
+                actionResult.Success = true;
+                const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(actionResult);
+                const call: RealtimeToolCall = { CallID: 'call-scope', ToolName: 'SendEmail', Arguments: JSON.stringify({ PrimaryScopeRecordID: 'TENANT-B' }) };
+                await service.ExposeExecuteNonTargetTool(call, { AgentSessionID: 'sess-1', TargetAgentID: 'target-1', Call: call, ...extra }, contextUser);
+                expect(runSpy).toHaveBeenCalledTimes(1);
+                return runSpy.mock.calls[0][0];
+            }
+
+            it("passes the session's run scope and active skills, copied", async () => {
+                const scope = { PrimaryScopeEntityName: 'Organizations', PrimaryScopeRecordID: 'TENANT-A', SecondaryScopes: { Teams: ['t1'] } };
+                const skills = ['SKILL-1'];
+                const params = await runDirect({ RunScope: scope, ActiveSkillIDs: skills });
+                expect(params.RunScope).toEqual(scope);
+                expect(params.RunScope).not.toBe(scope);
+                expect(params.RunScope?.SecondaryScopes?.Teams).not.toBe(scope.SecondaryScopes.Teams);
+                expect(params.Context).toEqual({ ActiveSkillIDs: ['SKILL-1'] });
+            });
+
+            it('passes an unscoped run scope, never none, when the session has no scope', async () => {
+                const params = await runDirect({});
+                expect(params.RunScope).toEqual({ PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null });
+                expect(params.Context).toEqual({ ActiveSkillIDs: [] });
+            });
         });
 
         it('rejects execution when action is not in directActions allowlist', async () => {

@@ -2868,6 +2868,25 @@ describe('BaseAgent.Execute — Loop agent-type gates read the merged params (VS
         expect(runner.Calls).toHaveLength(1);
     });
 
+    it("1b. the submitted graph carries the run's scope and active skills (#5624)", async () => {
+        harness.agent = makeAgentRow({
+            AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),
+        });
+        const { agent } = makeAgent([
+            () => llmEnvelope(tasksEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+
+        await agent.Execute(makeParams({ parentActivatedSkillIDs: ['SKILL-1'] }));
+
+        expect(submitSpy).toHaveBeenCalledTimes(1);
+        const request = submitSpy.mock.calls[0][0];
+        // An unscoped run (bounded runs are not offered graphs): every field null, so a node's Scoped
+        // Search is still inside a run and refuses a tenant the model names.
+        expect(request.RunScope).toEqual({ PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null });
+        expect(request.ActiveSkillIDs).toEqual(['SKILL-1']);
+    });
+
     it('2. withheld: the same metadata-enabled agent on a run that withholds task graphs is refused', async () => {
         harness.agent = makeAgentRow({
             AgentTypePromptParams: JSON.stringify({ enableTaskGraphs: true }),

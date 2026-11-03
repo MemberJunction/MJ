@@ -103,6 +103,7 @@ import {
 import { RunForEachLoop, RunWhileLoop, type LoopBodyInvoker } from './TaskLoopExecutor';
 import { RegisterTaskGraphKick } from './task-graph-kick';
 import { NotificationEngine } from '@memberjunction/notifications';
+import type { ActionRunScope } from '@memberjunction/actions-base';
 
 /** Metadata-seeded notification type for human tasks (metadata/notifications/.task-assignment-type.json). */
 const HUMAN_TASK_NOTIFICATION_TYPE = 'Task Assignment';
@@ -214,6 +215,7 @@ import {
     ProviderFactory,
     type ReconciliationEvent,
     TaskActionRunner,
+    type TaskActionRunParams,
     TaskAgentRunner,
     TaskPromptRunner,
     TaskGraphDispatcherConfig,
@@ -280,6 +282,12 @@ type GraphContext = {
     Depth: number;
     SubmittingAgentRunID: string | null;
     ParentAgentHierarchy?: string[];
+    /**
+     * The submitting agent run's scope and active skills, handed to every action node (#5624). Absent
+     * when no agent run submitted the graph, or its parent row could not be read.
+     */
+    RunScope?: ActionRunScope;
+    ActiveSkillIDs?: string[];
     /**
      * The submitting invocation's `data` / `context` — an input mapping's roots of the same names,
      * as in the in-run walker (R3-3). Empty when the graph was submitted without one.
@@ -1905,6 +1913,16 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
+     * The submitting run's scope and active skills for an action node (#5624): what the graph's parent row
+     * recorded, or nothing for a graph no agent run submitted, whose action nodes then run as they always have.
+     */
+    private submittingRunScope(context: GraphContext): Pick<TaskActionRunParams, 'RunScope' | 'ActiveSkillIDs'> {
+        return context.RunScope
+            ? { RunScope: context.RunScope, ActiveSkillIDs: context.ActiveSkillIDs ?? [] }
+            : {};
+    }
+
+    /**
      * How deep the continuation chain already is, read from the graph's parent metadata, plus
      * the resolved `ExecutionUser` of the user who submitted the graph.
      *
@@ -1922,6 +1940,8 @@ export class TaskGraphDispatcher implements IShutdownable {
         let invocation: { data?: unknown; context?: unknown } = {};
         let submittedByUserID: string | null | undefined = task.UserID;
         let parentAgentHierarchy: string[] | undefined = undefined;
+        let runScope: ActionRunScope | undefined = undefined;
+        let activeSkillIDs: string[] | undefined = undefined;
         let parentRead = false;
 
         if (task.ParentID && prehydrated && (prehydrated.parentMetadata || prehydrated.parentTask)) {
@@ -1932,6 +1952,9 @@ export class TaskGraphDispatcher implements IShutdownable {
                 : ParseTaskGraphParentMetadata(parent?.InputPayload ?? null);
             depth = meta.reinvokeDepth + 1;
             submittingAgentRunID = parent?.AgentRunID ?? meta.submittedByAgentRunID ?? null;
+            parentAgentHierarchy = meta.parentAgentHierarchy;
+            runScope = meta.runScope;
+            activeSkillIDs = meta.activeSkillIDs;
             invocation = { data: meta.invocation?.data, context: meta.invocation?.context };
             submittedByUserID = meta.submittedByUserID ?? parent?.UserID ?? task.UserID;
         } else if (task.ParentID && typeof provider?.GetEntityObject === 'function') {
@@ -1945,6 +1968,8 @@ export class TaskGraphDispatcher implements IShutdownable {
                     depth = meta.reinvokeDepth + 1;
                     submittingAgentRunID = parent.AgentRunID;
                     parentAgentHierarchy = meta.parentAgentHierarchy;
+                    runScope = meta.runScope;
+                    activeSkillIDs = meta.activeSkillIDs;
                     invocation = { data: meta.invocation?.data, context: meta.invocation?.context };
                     submittedByUserID = meta.submittedByUserID ?? parent.UserID ?? task.UserID;
                 }
@@ -1964,6 +1989,8 @@ export class TaskGraphDispatcher implements IShutdownable {
             Depth: depth,
             SubmittingAgentRunID: submittingAgentRunID,
             ParentAgentHierarchy: parentAgentHierarchy,
+            RunScope: runScope,
+            ActiveSkillIDs: activeSkillIDs,
             Invocation: invocation,
             ExecutionUser: executionUser,
         };
@@ -3803,6 +3830,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 DependencyOutputs: dependencyOutputs,
                 Provider: provider,
                 ContextUser: context.ExecutionUser,
+                ...this.submittingRunScope(context),
                 OnProgress: onProgress,
             }), AgentRunID: null }
             : await this.runAgentNode(task, provider, effectiveInput, dependencyOutputs, onProgress, context);
@@ -3919,6 +3947,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     dependencyOutputs,
                     provider,
                     executionUser: graphContext.ExecutionUser,
+                    runScope: this.submittingRunScope(graphContext),
                     invocation: graphContext.Invocation,
                     iterationTrace,
                     budget,
@@ -4015,6 +4044,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     DependencyOutputs: dependencyOutputs,
                     Provider: provider,
                     ContextUser: graphContext.ExecutionUser,
+                    ...this.submittingRunScope(graphContext),
                 }), resolved);
             }
 
@@ -4144,6 +4174,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         dependencyOutputs: Map<string, unknown>;
         provider: IMetadataProvider;
         executionUser: UserInfo;
+        runScope: Pick<TaskActionRunParams, 'RunScope' | 'ActiveSkillIDs'>;
         invocation: { data?: unknown; context?: unknown };
         iterationTrace: MJTaskEntity_ITaskLoopIteration[];
         budget: IterationPayloadBudget;
@@ -4151,7 +4182,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         const {
             task, op, steps, stepActionIds, index, bindings,
             getLivePayload, setLivePayload, deferLivePayloadFold, deferredFoldsByIndex,
-            dependencyOutputs, provider, executionUser, invocation, iterationTrace, budget,
+            dependencyOutputs, provider, executionUser, runScope, invocation, iterationTrace, budget,
         } = args;
 
         const evaluator = this.conditionEvaluator ?? new DispatcherConditionEvaluator();
@@ -4223,6 +4254,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 DependencyOutputs: dependencyOutputs,
                 Provider: provider,
                 ContextUser: executionUser,
+                ...runScope,
             });
             if (actionOutcome.ActionLogID) {
                 lastActionLogID = actionOutcome.ActionLogID;
