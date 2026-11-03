@@ -1214,9 +1214,9 @@ export async function CheckFls25RelatedRowsNarrowed(ctx: IntegrationCheckContext
 
 /**
  * FLS26 — a duplicate-key error does not return a denied value. A unique index over
- * (Email, Title) on two probe rows that share a Title: multi (read-denied on Title) changes one
- * row's Email to the other's, the database reports the duplicate key, and the message multi gets
- * names the index but not the stored Title.
+ * (FirstName, Title), filtered to two probe rows that share a Title: multi (read-denied on Title)
+ * changes one row's FirstName to the other's, the database reports the duplicate key, and the
+ * message multi gets names the index but not the stored Title.
  */
 export async function CheckFls26ConstraintErrorRedacted(ctx: IntegrationCheckContext): Promise<void> {
     if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS26')) return;
@@ -1225,23 +1225,22 @@ export async function CheckFls26ConstraintErrorRedacted(ctx: IntegrationCheckCon
     const stamp = Date.now();
     const secretTitle = `UQ-Probe-Title-${stamp}`;
     const indexName = `IX_IT_FLS_UQProbe_${stamp}`;
-    const emailA = `uq-a-${stamp}@uqprobe.integration.test`;
-    const emailB = `uq-b-${stamp}@uqprobe.integration.test`;
+    const probeLastName = 'UQ probe (mj-integration-test)';
 
-    const seed = async (email: string): Promise<string> => {
+    const seed = async (firstName: string): Promise<string> => {
         const rows = await Q<{ ID: string }>(ctx,
             `INSERT INTO [${schema}].Employee (FirstName, LastName, CompanyID, Email, Title) OUTPUT INSERTED.ID ` +
-            `VALUES ('UQProbe', 'UQ probe (mj-integration-test)', '${fx.CompanyID}', '${email}', '${secretTitle}')`);
+            `VALUES ('${firstName}', '${probeLastName}', '${fx.CompanyID}', 'uq-${firstName.toLowerCase()}-${stamp}@integration.test', '${secretTitle}')`);
         fx.CreatedEmployeeIds.push(rows[0].ID);
         return rows[0].ID;
     };
-    const idA = await seed(emailA);
-    await seed(emailB);
-    await Q(ctx, `CREATE UNIQUE INDEX [${indexName}] ON [${schema}].Employee (Email, Title) WHERE Email LIKE '%@uqprobe.integration.test'`);
+    const idA = await seed('UQProbeA');
+    await seed('UQProbeB');
+    await Q(ctx, `CREATE UNIQUE INDEX [${indexName}] ON [${schema}].Employee (FirstName, Title) WHERE LastName = '${probeLastName}'`);
     try {
         const emp = await ctx.Provider.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY, fx.Multi!);
         Assert(await emp.Load(idA), 'multi must be able to load the probe employee');
-        emp.Email = emailB;
+        emp.FirstName = 'UQProbeB';
         Assert(!(await emp.Save()), 'the save must fail on the unique index');
         const message = emp.LatestResult?.Message ?? '';
         Assert(message.includes(indexName), `the failure must come from the probe index (got: ${message})`);

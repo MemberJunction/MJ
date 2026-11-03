@@ -45,8 +45,8 @@ export function RedactConstraintValues(message: string): string {
 
 /**
  * The save-failure message a caller may see: unchanged when field-level security withholds no
- * column of this entity from them, otherwise with constraint values removed (see
- * {@link RedactConstraintValues}). The full message still belongs in the server log.
+ * column of this entity from them, otherwise without the executed SQL (see
+ * {@link StripExecutedSQL}) and with constraint values removed (see {@link RedactConstraintValues}). The full message still belongs in the server log.
  */
 export function SaveErrorMessageForUser(message: string, entityInfo: EntityInfo, user: UserInfo | undefined): string {
     if (!entityInfo?.FieldLevelSecurityApplies) {
@@ -55,5 +55,18 @@ export function SaveErrorMessageForUser(message: string, entityInfo: EntityInfo,
     if (user && entityInfo.GetDeniedReadFields(user).size === 0) {
         return message;
     }
-    return RedactConstraintValues(message);
+    return RedactConstraintValues(StripExecutedSQL(message));
+}
+
+/**
+ * Drops the SQL text a provider appends to an execution error (`Query: …` and `Parameters: …`
+ * lines and everything after them). A save's SQL can carry stored values the caller may not
+ * read, such as the full-record JSON written to the audit trail.
+ */
+export function StripExecutedSQL(message: string): string {
+    if (!message) {
+        return message;
+    }
+    const match = /^[ \t]*(?:Query|Parameters):/m.exec(message);
+    return match ? message.slice(0, match.index).trimEnd() : message;
 }

@@ -10,6 +10,7 @@ import {
     RedactConstraintValues,
     REDACTED_CONSTRAINT_VALUES,
     SaveErrorMessageForUser,
+    StripExecutedSQL,
 } from '../generic/constraintErrorRedaction';
 
 const HR_ROLE = 'A0000000-0000-0000-0000-000000000001';
@@ -98,6 +99,16 @@ function user(roleID: string): UserInfo {
     return u;
 }
 
+describe('StripExecutedSQL', () => {
+    it('cuts the message at the Query line', () => {
+        expect(StripExecutedSQL('Error executing SQL\n    Error: boom\n    Query: SELECT 1\n    Parameters: None')).toBe('Error executing SQL\n    Error: boom');
+    });
+
+    it('leaves a message without SQL unchanged', () => {
+        expect(StripExecutedSQL('boom')).toBe('boom');
+    });
+});
+
 describe('SaveErrorMessageForUser', () => {
     const msg = "Violation of UNIQUE KEY constraint 'UQ_x'. The duplicate key value is (a@example.com, 90000).";
 
@@ -111,6 +122,15 @@ describe('SaveErrorMessageForUser', () => {
 
     it('keeps the full message when field-level security is off for the entity', () => {
         expect(SaveErrorMessageForUser(msg, employees(false), user(STAFF_ROLE))).toBe(msg);
+    });
+
+    it('drops the executed SQL, which can carry stored values, for a caller denied a column', () => {
+        const withSQL = `Error executing SQL\n    Error: ${msg}\n    Query: EXEC spUpdate @FullRecordJSON=N'{"Salary":90000}'\n    Parameters: None`;
+        const out = SaveErrorMessageForUser(withSQL, employees(), user(STAFF_ROLE));
+        expect(out).toContain('UQ_x');
+        expect(out).not.toContain('Query:');
+        expect(out).not.toContain('90000');
+        expect(SaveErrorMessageForUser(withSQL, employees(), user(HR_ROLE))).toBe(withSQL);
     });
 
     it('redacts when there is no user to check against', () => {
