@@ -539,7 +539,8 @@ export class EntitySearchProvider extends BaseSearchProvider {
     ): SearchResultItem[] {
         const md = this.Provider;
         const entityInfo = md.EntityByName(entityName);
-        const queryLower = query.toLowerCase();
+        const queryLower = query.toLowerCase().trim();
+        const queryTokens = queryLower.split(/\s+/).filter(t => t.length >= 2);
 
         // Get searchable fields and classify them by importance
         const searchFields = entityInfo?.Fields.filter(f => f.IncludeInUserSearchAPI) ?? [];
@@ -559,7 +560,8 @@ export class EntitySearchProvider extends BaseSearchProvider {
             const title = this.extractTitle(record, entityInfo);
             const snippet = this.extractSnippet(record, entityInfo);
 
-            // Calculate relevance: how many fields match the query, and the best kind of match
+            // Calculate relevance: how many fields match the query (full phrase, or any token of a
+            // multi-word query), and the best kind of match. A token-only match ranks as 'contains'.
             let matchedFields = 0;
             const matchedFieldNames: string[] = [];
             let best: KeywordMatchKind | null = null;
@@ -567,7 +569,11 @@ export class EntitySearchProvider extends BaseSearchProvider {
             for (const field of searchFields) {
                 const val = record[field.Name];
                 if (val == null) continue;
-                const kind = ClassifyKeywordMatch(String(val).toLowerCase(), queryLower);
+                const valueLower = String(val).toLowerCase();
+                let kind = ClassifyKeywordMatch(valueLower, queryLower);
+                if (kind == null && queryTokens.length > 1 && queryTokens.some(tok => valueLower.includes(tok))) {
+                    kind = 'contains';
+                }
                 if (kind == null) continue;
                 matchedFields++;
                 matchedFieldNames.push(field.Name);

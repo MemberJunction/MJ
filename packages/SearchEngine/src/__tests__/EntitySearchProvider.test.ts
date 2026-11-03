@@ -909,6 +909,38 @@ describe('EntitySearchProvider', () => {
             expect(mockLogErrorEx).not.toHaveBeenCalled();
         });
     });
+
+    describe('multi-word token matching in convertResults', () => {
+        it('retains and scores records when multi-word query tokens match across separate fields (token match weighted equally with full match)', async () => {
+            mockEntities.push({
+                Name: 'Contacts',
+                AllowUserSearchAPI: true,
+                Fields: [
+                    { Name: 'ID', IncludeInUserSearchAPI: false, IsNameField: false, Sequence: 1 },
+                    { Name: 'FirstName', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 2 },
+                    { Name: 'LastName', IncludeInUserSearchAPI: true, IsNameField: false, Sequence: 3 },
+                ],
+                NameField: { Name: 'FirstName' },
+            });
+
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [
+                    // Neither field contains the full string "alice smith", but each field matches a token.
+                    // By design, a token match counts the same as a full match toward matchedFields (2/2 fields + nameBoost = 0.95).
+                    { ID: 'c-1', FirstName: 'Alice', LastName: 'Smith' },
+                    // Zero tokens match -> must still be dropped by `if (matchedFields === 0) return null`.
+                    { ID: 'c-2', FirstName: 'Bob', LastName: 'Jones' },
+                ],
+            });
+
+            const results = await provider.Search('Alice Smith', 10, undefined, contextUser);
+
+            expect(results).toHaveLength(1);
+            expect(results[0].RecordID).toBe('c-1');
+            expect(results[0].Score).toBe(0.95);
+        });
+    });
 });
 
 /**

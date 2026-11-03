@@ -15744,6 +15744,12 @@ export const MJContentSourceSchema = z.object({
         * * Display Name: Last Synced At
         * * SQL Data Type: datetimeoffset
         * * Description: When this source last completed a full Sync walk (reconciling removals). Stamped with the time a completed sync walk started. The shipped Sync Record Process selects sources by LastSyncedAt (LastSyncedAt IS NULL OR LastSyncedAt < DATEADD(day, -30, GETUTCDATE())), never by ForceDiscovery; to force a sync, set LastSyncedAt back or to NULL.`),
+    GraphID: z.string().nullable().describe(`
+        * * Field Name: GraphID
+        * * Display Name: Graph ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
+        * * Description: Optional target Semantic Graph (MJ: Graphs) that this Content Source populates when the Content Pipeline Graph overlay stage runs. Multiple Content Sources can share the same GraphID.`),
     ContentType: z.string().describe(`
         * * Field Name: ContentType
         * * Display Name: Content Type Name
@@ -15776,6 +15782,10 @@ export const MJContentSourceSchema = z.object({
         * * Field Name: ScheduledJob
         * * Display Name: Scheduled Job Name
         * * SQL Data Type: nvarchar(200)`),
+    Graph: z.string().nullable().describe(`
+        * * Field Name: Graph
+        * * Display Name: Graph
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJContentSourceEntityType = z.infer<typeof MJContentSourceSchema>;
@@ -18268,6 +18278,530 @@ export const MJDatasetSchema = z.object({
 });
 
 export type MJDatasetEntityType = z.infer<typeof MJDatasetSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Diagnostic Bundles
+ */
+export const MJDiagnosticBundleSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name of the diagnostic bundle.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description or summary notes attached to the bundle.`),
+    Direction: z.union([z.literal('Local'), z.literal('Received')]).describe(`
+        * * Field Name: Direction
+        * * Display Name: Direction
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Local
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Local
+    *   * Received
+        * * Description: Indicates whether this bundle was built locally on this instance (Local) or ingested via the MJAPI intake endpoint (Received).`),
+    DiagnosticSessionID: z.string().nullable().describe(`
+        * * Field Name: DiagnosticSessionID
+        * * Display Name: Diagnostic Session
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Diagnostic Sessions (vwDiagnosticSessions.ID)
+        * * Description: Source diagnostic session when built from a server session; NULL for client-only or received bundles.`),
+    Status: z.union([z.literal('Building'), z.literal('Expired'), z.literal('Failed'), z.literal('Ready'), z.literal('Receiving'), z.literal('Sending'), z.literal('Sent')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Building
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Building
+    *   * Expired
+    *   * Failed
+    *   * Ready
+    *   * Receiving
+    *   * Sending
+    *   * Sent
+        * * Description: Current lifecycle status of the diagnostic bundle.`),
+    ScrubLiterals: z.boolean().describe(`
+        * * Field Name: ScrubLiterals
+        * * Display Name: Scrub Literals
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: True when inline SQL and filter literals were normalized to ? placeholders in this bundle.`),
+    WindowStart: z.date().nullable().describe(`
+        * * Field Name: WindowStart
+        * * Display Name: Window Start
+        * * SQL Data Type: datetimeoffset
+        * * Description: Start of the time window covered by this bundle.`),
+    WindowEnd: z.date().nullable().describe(`
+        * * Field Name: WindowEnd
+        * * Display Name: Window End
+        * * SQL Data Type: datetimeoffset
+        * * Description: End of the time window covered by this bundle.`),
+    FileID: z.string().nullable().describe(`
+        * * Field Name: FileID
+        * * Display Name: File
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+        * * Description: Reference to MJ: Files when the bundle archive is persisted in MJStorage.`),
+    Data: z.string().nullable().describe(`
+        * * Field Name: Data
+        * * Display Name: Data
+        * * SQL Data Type: varbinary(MAX)
+        * * Description: Fallback binary storage for the .mjdiag archive when no MJStorage account is configured.`),
+    SizeBytes: z.number().describe(`
+        * * Field Name: SizeBytes
+        * * Display Name: Size (Bytes)
+        * * SQL Data Type: bigint
+        * * Default Value: 0
+        * * Description: Total size of the .mjdiag archive in bytes.`),
+    SHA256: z.string().nullable().describe(`
+        * * Field Name: SHA256
+        * * Display Name: SHA256
+        * * SQL Data Type: nchar(64)
+        * * Description: Hex-encoded SHA-256 digest of the unencrypted .mjdiag archive.`),
+    ManifestJSON: z.any().nullable().describe(`
+        * * Field Name: ManifestJSON
+        * * Display Name: Manifest JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJDiagnosticBundleEntity_IDiagnosticBundleManifest
+        * * Description: Parsed manifest.json contents including file inventory and SHA-256 digests.`),
+    ScrubReportJSON: z.any().nullable().describe(`
+        * * Field Name: ScrubReportJSON
+        * * Display Name: Scrub Report JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJDiagnosticBundleEntity_IDiagnosticScrubReport
+        * * Description: Summary counts of credential tokens scrubbed and literals normalized across all bundle entries.`),
+    FindingsJSON: z.any().nullable().describe(`
+        * * Field Name: FindingsJSON
+        * * Display Name: Findings JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJDiagnosticBundleEntity_IDiagnosticFinding>
+        * * Description: Automated rules-engine diagnostic findings extracted from this bundle.`),
+    FailureReason: z.string().nullable().describe(`
+        * * Field Name: FailureReason
+        * * Display Name: Failure Reason
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Error details when Status is Failed (e.g., build error, send failure, or malware/structural verification rejection).`),
+    CreatedByUserID: z.string().nullable().describe(`
+        * * Field Name: CreatedByUserID
+        * * Display Name: Created By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: User who built or uploaded this bundle; NULL for remotely ingested bundles.`),
+    ApprovedByUserID: z.string().nullable().describe(`
+        * * Field Name: ApprovedByUserID
+        * * Display Name: Approved By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: Administrator who approved sending this bundle externally.`),
+    ApprovedAt: z.date().nullable().describe(`
+        * * Field Name: ApprovedAt
+        * * Display Name: Approved At
+        * * SQL Data Type: datetimeoffset
+        * * Description: UTC timestamp when external transmission was approved.`),
+    Destination: z.union([z.literal('CustomerCollector'), z.literal('MJC'), z.literal('StorageAccount')]).nullable().describe(`
+        * * Field Name: Destination
+        * * Display Name: Destination
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * CustomerCollector
+    *   * MJC
+    *   * StorageAccount
+        * * Description: Target external destination when sending a bundle (MJC, CustomerCollector, or StorageAccount).`),
+    SentAt: z.date().nullable().describe(`
+        * * Field Name: SentAt
+        * * Display Name: Sent At
+        * * SQL Data Type: datetimeoffset
+        * * Description: UTC timestamp when the bundle was transmitted to Destination.`),
+    ExternalReferenceID: z.string().nullable().describe(`
+        * * Field Name: ExternalReferenceID
+        * * Display Name: External Reference ID
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Reference ID returned by the receiving collector intake endpoint.`),
+    SenderInstallID: z.string().nullable().describe(`
+        * * Field Name: SenderInstallID
+        * * Display Name: Sender Install ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: InstallID of the sender instance when Direction = Received.`),
+    SenderMJVersion: z.string().nullable().describe(`
+        * * Field Name: SenderMJVersion
+        * * Display Name: Sender MJ Version
+        * * SQL Data Type: nvarchar(50)
+        * * Description: MemberJunction version reported by the sender instance when Direction = Received.`),
+    ContactInfo: z.string().nullable().describe(`
+        * * Field Name: ContactInfo
+        * * Display Name: Contact Info
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Optional reporter or administrator contact information on received bundles.`),
+    ExpiresAt: z.date().nullable().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: UTC timestamp when this bundle becomes eligible for automatic retention purge.`),
+    CompanyID: z.string().nullable().describe(`
+        * * Field Name: CompanyID
+        * * Display Name: Company ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Companies (vwCompanies.ID)
+        * * Description: Optional tenant CompanyID scoping this diagnostic bundle.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    DiagnosticSession: z.string().nullable().describe(`
+        * * Field Name: DiagnosticSession
+        * * Display Name: Diagnostic Session Name
+        * * SQL Data Type: nvarchar(255)`),
+    File: z.string().nullable().describe(`
+        * * Field Name: File
+        * * Display Name: File Name
+        * * SQL Data Type: nvarchar(500)`),
+    CreatedByUser: z.string().nullable().describe(`
+        * * Field Name: CreatedByUser
+        * * Display Name: Created By User
+        * * SQL Data Type: nvarchar(100)`),
+    ApprovedByUser: z.string().nullable().describe(`
+        * * Field Name: ApprovedByUser
+        * * Display Name: Approved By User
+        * * SQL Data Type: nvarchar(100)`),
+    Company: z.string().nullable().describe(`
+        * * Field Name: Company
+        * * Display Name: Company
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJDiagnosticBundleEntityType = z.infer<typeof MJDiagnosticBundleSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Diagnostic Sender Registrations
+ */
+export const MJDiagnosticSenderRegistrationSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Unique identifier of the sender registration.`),
+    InstallID: z.string().describe(`
+        * * Field Name: InstallID
+        * * Display Name: Install ID
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Installation ID of the sending MemberJunction instance. Unique per registration.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name of the customer or installation that sends the bundles.`),
+    Status: z.union([z.literal('Active'), z.literal('Pending'), z.literal('Revoked')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Revoked
+        * * Description: Lifecycle status of the registration. Pending: created, waiting for the sender to enroll with its registration code. Active: enrolled, bundles are accepted. Revoked: bundles are refused.`),
+    KeyAlgorithm: z.literal('Ed25519').describe(`
+        * * Field Name: KeyAlgorithm
+        * * Display Name: Key Algorithm
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Ed25519
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Ed25519
+        * * Description: Signature algorithm of the sender public key.`),
+    KeyID: z.string().nullable().describe(`
+        * * Field Name: KeyID
+        * * Display Name: Key ID
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Identifier of the sender signing key. Set at enrollment; a key rotation replaces it.`),
+    PublicKeyBase64: z.string().nullable().describe(`
+        * * Field Name: PublicKeyBase64
+        * * Display Name: Public Key (Base64)
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Base64-encoded public key that verifies the sender signed requests. Set at enrollment.`),
+    RegistrationCodeHash: z.string().nullable().describe(`
+        * * Field Name: RegistrationCodeHash
+        * * Display Name: Registration Code Hash
+        * * SQL Data Type: nvarchar(128)
+        * * Description: SHA-256 hex digest of the one-time registration code. The plain code is never stored.`),
+    RegistrationCodeExpiresAt: z.date().nullable().describe(`
+        * * Field Name: RegistrationCodeExpiresAt
+        * * Display Name: Registration Code Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Time after which the one-time registration code can no longer be used to enroll.`),
+    EnrolledAt: z.date().nullable().describe(`
+        * * Field Name: EnrolledAt
+        * * Display Name: Enrolled At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Time the sender enrolled its public key.`),
+    RevokedAt: z.date().nullable().describe(`
+        * * Field Name: RevokedAt
+        * * Display Name: Revoked At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Time the registration was revoked.`),
+    LastSeenAt: z.date().nullable().describe(`
+        * * Field Name: LastSeenAt
+        * * Display Name: Last Seen At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Time of the last authenticated request from the sender.`),
+    MaxBundlesPerDay: z.number().describe(`
+        * * Field Name: MaxBundlesPerDay
+        * * Display Name: Max Bundles Per Day
+        * * SQL Data Type: int
+        * * Default Value: 20
+        * * Description: Maximum number of bundles the collector accepts from this sender per day.`),
+    Comments: z.string().nullable().describe(`
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Free-form administrator notes about the registration.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJDiagnosticSenderRegistrationEntityType = z.infer<typeof MJDiagnosticSenderRegistrationSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Diagnostic Session Chunks
+ */
+export const MJDiagnosticSessionChunkSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    DiagnosticSessionID: z.string().describe(`
+        * * Field Name: DiagnosticSessionID
+        * * Display Name: Diagnostic Session
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Diagnostic Sessions (vwDiagnosticSessions.ID)
+        * * Description: Owning diagnostic session for this chunk.`),
+    Source: z.union([z.literal('Client'), z.literal('Server')]).describe(`
+        * * Field Name: Source
+        * * Display Name: Source
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Client
+    *   * Server
+        * * Description: Origin tier that produced the chunk (Server or Client).`),
+    HostInstanceLabel: z.string().describe(`
+        * * Field Name: HostInstanceLabel
+        * * Display Name: Host Instance Label
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Process UUID, hostname, or browser tab identifier that flushed this chunk.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Description: Monotonically increasing sequence number per (DiagnosticSessionID, Source, HostInstanceLabel, ContentKind).`),
+    ContentKind: z.union([z.literal('App'), z.literal('Errors'), z.literal('Health'), z.literal('Logs'), z.literal('Network'), z.literal('SQL'), z.literal('Spans'), z.literal('Telemetry'), z.literal('Timeline')]).describe(`
+        * * Field Name: ContentKind
+        * * Display Name: Content Kind
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * App
+    *   * Errors
+    *   * Health
+    *   * Logs
+    *   * Network
+    *   * SQL
+    *   * Spans
+    *   * Telemetry
+    *   * Timeline
+        * * Description: Type of diagnostic data stored in this chunk.`),
+    Data: z.string().describe(`
+        * * Field Name: Data
+        * * Display Name: Data
+        * * SQL Data Type: varbinary(MAX)
+        * * Description: DEFLATE/gzip compressed NDJSON or JSON payload (~256 KB max per chunk).`),
+    EntryCount: z.number().describe(`
+        * * Field Name: EntryCount
+        * * Display Name: Entry Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of records or events contained in this chunk.`),
+    FirstEntryAt: z.date().nullable().describe(`
+        * * Field Name: FirstEntryAt
+        * * Display Name: First Entry At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the earliest event in this chunk.`),
+    LastEntryAt: z.date().nullable().describe(`
+        * * Field Name: LastEntryAt
+        * * Display Name: Last Entry At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the latest event in this chunk.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    DiagnosticSession: z.string().describe(`
+        * * Field Name: DiagnosticSession
+        * * Display Name: Diagnostic Session
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJDiagnosticSessionChunkEntityType = z.infer<typeof MJDiagnosticSessionChunkSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Diagnostic Sessions
+ */
+export const MJDiagnosticSessionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-readable label for the diagnostic session.`),
+    Reason: z.string().nullable().describe(`
+        * * Field Name: Reason
+        * * Display Name: Reason
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional explanation of why this diagnostic session was started (such as a ticket number or reproduction notes).`),
+    Status: z.union([z.literal('Active'), z.literal('Expired'), z.literal('Stopped')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Expired
+    *   * Stopped
+        * * Description: Current lifecycle status of the diagnostic session.`),
+    ScopeType: z.union([z.literal('APIKeys'), z.literal('BrowserSession'), z.literal('Instance'), z.literal('Operations'), z.literal('Users')]).describe(`
+        * * Field Name: ScopeType
+        * * Display Name: Scope Type
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: Users
+    * * Value List Type: List
+    * * Possible Values 
+    *   * APIKeys
+    *   * BrowserSession
+    *   * Instance
+    *   * Operations
+    *   * Users
+        * * Description: Determines which incoming requests are matched and captured by this session.`),
+    ScopeJSON: z.any().nullable().describe(`
+        * * Field Name: ScopeJSON
+        * * Display Name: Scope JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJDiagnosticSessionEntity_IDiagnosticSessionScope
+        * * Description: JSON specification of targeted UserIDs, APIKeyIDs, GraphQL/RemoteOperation names, or BrowserSessionID.`),
+    Level: z.union([z.literal('Debug'), z.literal('Standard'), z.literal('Verbose')]).describe(`
+        * * Field Name: Level
+        * * Display Name: Level
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Standard
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Debug
+    *   * Standard
+    *   * Verbose
+        * * Description: Capture verbosity level applied to requests matched by this session.`),
+    CategoriesJSON: z.string().nullable().describe(`
+        * * Field Name: CategoriesJSON
+        * * Display Name: Categories JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of diagnostic categories enabled for this session (e.g., Logs, SQL, Spans, Network, Telemetry).`),
+    ScrubLiterals: z.boolean().describe(`
+        * * Field Name: ScrubLiterals
+        * * Display Name: Scrub Literals
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, replaces inline SQL and filter string/number/UUID literals with ? placeholders in addition to mandatory credential scrubbing.`),
+    StartedAt: z.date().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()
+        * * Description: UTC timestamp when the diagnostic session became active.`),
+    EndsAt: z.date().describe(`
+        * * Field Name: EndsAt
+        * * Display Name: Ends At
+        * * SQL Data Type: datetimeoffset
+        * * Description: UTC timestamp when the diagnostic session automatically expires.`),
+    StoppedAt: z.date().nullable().describe(`
+        * * Field Name: StoppedAt
+        * * Display Name: Stopped At
+        * * SQL Data Type: datetimeoffset
+        * * Description: UTC timestamp when the diagnostic session was manually stopped.`),
+    MaxBytes: z.number().describe(`
+        * * Field Name: MaxBytes
+        * * Display Name: Max Bytes
+        * * SQL Data Type: bigint
+        * * Default Value: 52428800
+        * * Description: Maximum total compressed chunk bytes allowed for this session before capture stops (defaults to 50 MB).`),
+    CreatedByUserID: z.string().describe(`
+        * * Field Name: CreatedByUserID
+        * * Display Name: Created By User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: User who initiated the diagnostic session.`),
+    CompanyID: z.string().nullable().describe(`
+        * * Field Name: CompanyID
+        * * Display Name: Company
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Companies (vwCompanies.ID)
+        * * Description: Optional tenant CompanyID isolating session capture in multi-tenant deployments.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CreatedByUser: z.string().describe(`
+        * * Field Name: CreatedByUser
+        * * Display Name: Created By User Name
+        * * SQL Data Type: nvarchar(100)`),
+    Company: z.string().nullable().describe(`
+        * * Field Name: Company
+        * * Display Name: Company Name
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJDiagnosticSessionEntityType = z.infer<typeof MJDiagnosticSessionSchema>;
 
 /**
  * zod schema definition for the entity MJ: Duplicate Run Detail Matches
@@ -23896,6 +24430,620 @@ export const MJGeneratedCodeSchema = z.object({
 });
 
 export type MJGeneratedCodeEntityType = z.infer<typeof MJGeneratedCodeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Graph Authority Tiers
+ */
+export const MJGraphAuthorityTierSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique display name of the authority tier (e.g., Bylaws, Board Policy, Executive SOP, Department Practice, Reference, Inferred).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Plain-language description of what sources belong to this authority tier and how conflicts involving this tier should be resolved.`),
+    Rank: z.number().describe(`
+        * * Field Name: Rank
+        * * Display Name: Rank
+        * * SQL Data Type: int
+        * * Default Value: 20
+        * * Description: Numeric evidentiary precedence weight of the authority tier (higher numbers outrank lower numbers during conflict resolution, e.g., 100 for Bylaws vs 20 for Reference).`),
+    IconClass: z.string().nullable().describe(`
+        * * Field Name: IconClass
+        * * Display Name: Icon Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Optional Font Awesome CSS icon class used to render authority tier badges in the UI.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Operational status of the authority tier (Active or Inactive).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJGraphAuthorityTierEntityType = z.infer<typeof MJGraphAuthorityTierSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Graph Concept Types
+ */
+export const MJGraphConceptTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique name of the concept type (e.g., Policy, Metric, Process, Role, Domain, Term).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Plain-language definition and classification guidance describing what qualifies as a concept of this type.`),
+    Rank: z.number().describe(`
+        * * Field Name: Rank
+        * * Display Name: Rank
+        * * SQL Data Type: int
+        * * Default Value: 100
+        * * Description: Precedence and display rank order of this concept type (lower numbers represent higher-order institutional concepts such as Policy and Metric ahead of granular Terms).`),
+    IconClass: z.string().nullable().describe(`
+        * * Field Name: IconClass
+        * * Display Name: Icon Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Optional Font Awesome CSS icon class used to render concept nodes of this type in graph explorers and cards.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Operational status of the concept type (Active or Inactive).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJGraphConceptTypeEntityType = z.infer<typeof MJGraphConceptTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Graph Concepts
+ */
+export const MJGraphConceptSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    GraphID: z.string().describe(`
+        * * Field Name: GraphID
+        * * Display Name: Graph ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Concepts (vwGraphConcepts.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Canonical name of the concept, unique within its owning GraphID.`),
+    ConceptTypeID: z.string().describe(`
+        * * Field Name: ConceptTypeID
+        * * Display Name: Concept Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Concept Types (vwGraphConceptTypes.ID)
+        * * Description: Foreign key to GraphConceptType classifying the structural role and priority rank of this concept.`),
+    AuthorityTierID: z.string().nullable().describe(`
+        * * Field Name: AuthorityTierID
+        * * Display Name: Authority Tier ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Authority Tiers (vwGraphAuthorityTiers.ID)
+        * * Description: Optional foreign key to GraphAuthorityTier indicating the highest evidentiary authority tier backing this concept.`),
+    Description: z.string().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Concise 1-3 sentence definition (~100 tokens) injected into agent subgraphs and search results.`),
+    Specification: z.string().nullable().describe(`
+        * * Field Name: Specification
+        * * Display Name: Specification
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Structured markdown specification containing authoritative rules, thresholds, decision tables, exceptions, and chunk citations.`),
+    Synonyms: z.string().nullable().describe(`
+        * * Field Name: Synonyms
+        * * Display Name: Synonyms
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of alternative names, acronyms, and surface forms that resolve to this concept.`),
+    Status: z.union([z.literal('Approved'), z.literal('Deprecated'), z.literal('Draft'), z.literal('Proposed')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Deprecated
+    *   * Draft
+    *   * Proposed
+        * * Description: Governance lifecycle status of the concept: Draft, Proposed, Approved, or Deprecated.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Graph: z.string().describe(`
+        * * Field Name: Graph
+        * * Display Name: Graph
+        * * SQL Data Type: nvarchar(255)`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)`),
+    ConceptType: z.string().describe(`
+        * * Field Name: ConceptType
+        * * Display Name: Concept Type
+        * * SQL Data Type: nvarchar(100)`),
+    AuthorityTier: z.string().nullable().describe(`
+        * * Field Name: AuthorityTier
+        * * Display Name: Authority Tier
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJGraphConceptEntityType = z.infer<typeof MJGraphConceptSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Graph Edge Providers
+ */
+export const MJGraphEdgeProviderSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    GraphID: z.string().describe(`
+        * * Field Name: GraphID
+        * * Display Name: Graph ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name of this provider registration within the graph.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of which derived edges this provider projects into the graph.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: ClassFactory registration key of the BaseGraphEdgeProvider subclass.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Provider-specific JSON configuration object passed to the provider at query time.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Execution order of this provider relative to other providers on the same graph.`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, this provider participates in graph expansion queries; when 0, it is skipped.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Graph: z.string().describe(`
+        * * Field Name: Graph
+        * * Display Name: Graph
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJGraphEdgeProviderEntityType = z.infer<typeof MJGraphEdgeProviderSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Graph Edge Type Endpoints
+ */
+export const MJGraphEdgeTypeEndpointSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EdgeTypeID: z.string().describe(`
+        * * Field Name: EdgeTypeID
+        * * Display Name: Edge Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Edge Types (vwGraphEdgeTypes.ID)`),
+    Side: z.union([z.literal('Source'), z.literal('Target')]).describe(`
+        * * Field Name: Side
+        * * Display Name: Side
+        * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Source
+    *   * Target
+        * * Description: Which endpoint of the edge this entity constraint applies to (Source or Target).`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    EdgeType: z.string().describe(`
+        * * Field Name: EdgeType
+        * * Display Name: Edge Type
+        * * SQL Data Type: nvarchar(100)`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJGraphEdgeTypeEndpointEntityType = z.infer<typeof MJGraphEdgeTypeEndpointSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Graph Edge Types
+ */
+export const MJGraphEdgeTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    GraphID: z.string().nullable().describe(`
+        * * Field Name: GraphID
+        * * Display Name: Graph ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Forward-direction label of the edge type (e.g., Broader Than, Defines, SourcedFrom).`),
+    Description: z.string().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Plain-language definition of what this relationship type means when connecting two nodes.`),
+    IsDirected: z.boolean().describe(`
+        * * Field Name: IsDirected
+        * * Display Name: Is Directed
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, the edge is directed from Source to Target; when 0, the relationship is symmetric/undirected.`),
+    InverseName: z.string().nullable().describe(`
+        * * Field Name: InverseName
+        * * Display Name: Inverse Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Inverse label shown when traversing a directed edge from Target back to Source (e.g., Narrower Than for Broader Than).`),
+    DefaultWeight: z.number().describe(`
+        * * Field Name: DefaultWeight
+        * * Display Name: Default Weight
+        * * SQL Data Type: decimal(5, 4)
+        * * Default Value: 1.0
+        * * Description: Default retrieval weight (0.0000 to 1.0000) assigned to edges of this type during multi-hop graph expansion.`),
+    AllowStored: z.boolean().describe(`
+        * * Field Name: AllowStored
+        * * Display Name: Allow Stored
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, rows of this edge type may be persisted in GraphEdge; when 0, edges of this type are produced exclusively at read time by a GraphEdgeProvider.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Graph: z.string().nullable().describe(`
+        * * Field Name: Graph
+        * * Display Name: Graph
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJGraphEdgeTypeEntityType = z.infer<typeof MJGraphEdgeTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Graph Edges
+ */
+export const MJGraphEdgeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    GraphID: z.string().describe(`
+        * * Field Name: GraphID
+        * * Display Name: Graph ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)`),
+    EdgeTypeID: z.string().describe(`
+        * * Field Name: EdgeTypeID
+        * * Display Name: Edge Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Edge Types (vwGraphEdgeTypes.ID)`),
+    SourceEntityID: z.string().describe(`
+        * * Field Name: SourceEntityID
+        * * Display Name: Source Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+    SourceRecordID: z.string().describe(`
+        * * Field Name: SourceRecordID
+        * * Display Name: Source Record ID
+        * * SQL Data Type: nvarchar(400)
+        * * Description: Record ID of the source node (compact URL segment for composite primary keys), paired with SourceEntityID.`),
+    TargetEntityID: z.string().describe(`
+        * * Field Name: TargetEntityID
+        * * Display Name: Target Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+    TargetRecordID: z.string().describe(`
+        * * Field Name: TargetRecordID
+        * * Display Name: Target Record ID
+        * * SQL Data Type: nvarchar(400)
+        * * Description: Record ID of the target node (compact URL segment for composite primary keys), paired with TargetEntityID.`),
+    Weight: z.number().describe(`
+        * * Field Name: Weight
+        * * Display Name: Weight
+        * * SQL Data Type: decimal(5, 4)
+        * * Default Value: 1.0
+        * * Description: Retrieval pull weight (0.0000 to 1.0000) used when scoring multi-hop graph paths.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human-readable explanation or provenance summary for why this edge connects the source and target nodes.`),
+    Attributes: z.string().nullable().describe(`
+        * * Field Name: Attributes
+        * * Display Name: Attributes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON object holding structured edge metadata (such as citations, authority tiers, or conflict details).`),
+    Origin: z.union([z.literal('Declared'), z.literal('Inferred')]).describe(`
+        * * Field Name: Origin
+        * * Display Name: Origin
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Declared
+    *   * Inferred
+        * * Description: How this edge was created: Declared (explicitly authored by a human or seed metadata) or Inferred (proposed by an AI or content pipeline stage).`),
+    Status: z.union([z.literal('Approved'), z.literal('Proposed'), z.literal('Rejected')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Approved
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Proposed
+    *   * Rejected
+        * * Description: Governance lifecycle status of the edge: Proposed, Approved, or Rejected. Default graph traversal includes Approved edges only.`),
+    Confidence: z.number().nullable().describe(`
+        * * Field Name: Confidence
+        * * Display Name: Confidence
+        * * SQL Data Type: decimal(5, 4)
+        * * Description: Confidence score (0.0000 to 1.0000) for Inferred edges; NULL for Declared edges.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Graph: z.string().describe(`
+        * * Field Name: Graph
+        * * Display Name: Graph
+        * * SQL Data Type: nvarchar(255)`),
+    EdgeType: z.string().describe(`
+        * * Field Name: EdgeType
+        * * Display Name: Edge Type
+        * * SQL Data Type: nvarchar(100)`),
+    SourceEntity: z.string().describe(`
+        * * Field Name: SourceEntity
+        * * Display Name: Source Entity
+        * * SQL Data Type: nvarchar(255)`),
+    TargetEntity: z.string().describe(`
+        * * Field Name: TargetEntity
+        * * Display Name: Target Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJGraphEdgeEntityType = z.infer<typeof MJGraphEdgeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Graph Types
+ */
+export const MJGraphTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique display name of the graph type (e.g., Canon, Knowledge, Network, Custom).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Plain-language description of what graphs of this type represent and how agents should use them.`),
+    IsCanon: z.boolean().describe(`
+        * * Field Name: IsCanon
+        * * Display Name: Is Canon
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, graphs of this type feed governed institutional Canon (authoritative definitions, policies, metrics, and workflows); when 0, the graph is non-canonical (such as exploratory Knowledge or Network graphs).`),
+    Rank: z.number().describe(`
+        * * Field Name: Rank
+        * * Display Name: Rank
+        * * SQL Data Type: int
+        * * Default Value: 100
+        * * Description: Sort and priority rank order of the graph type (lower numbers have higher priority).`),
+    IconClass: z.string().nullable().describe(`
+        * * Field Name: IconClass
+        * * Display Name: Icon Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Optional Font Awesome CSS icon class used to render badges for graphs of this type in the UI.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Operational status of the graph type (Active or Inactive).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJGraphTypeEntityType = z.infer<typeof MJGraphTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Graphs
+ */
+export const MJGraphSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Unique name of the semantic graph partition (e.g., MJ Canon, Industry Research Graph).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Plain-language description of the domain, purpose, and governance scope of this graph.`),
+    GraphTypeID: z.string().describe(`
+        * * Field Name: GraphTypeID
+        * * Display Name: Graph Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Types (vwGraphTypes.ID)
+        * * Description: Foreign key to GraphType defining the semantic classification of this graph and whether it feeds institutional Canon.`),
+    LoadMode: z.union([z.literal('OnDemand'), z.literal('Preload')]).describe(`
+        * * Field Name: LoadMode
+        * * Display Name: Load Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Preload
+    * * Value List Type: List
+    * * Possible Values 
+    *   * OnDemand
+    *   * Preload
+        * * Description: Whether the graph is preloaded into memory at startup (Preload, for compact metadata/Canon graphs) or traversed on demand (OnDemand, for large data/document graphs).`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Operational status of the graph (Active or Disabled).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    GraphType: z.string().describe(`
+        * * Field Name: GraphType
+        * * Display Name: Graph Type
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJGraphEntityType = z.infer<typeof MJGraphSchema>;
 
 /**
  * zod schema definition for the entity MJ: Identity Claim Types
@@ -85948,6 +87096,47 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
      * implementation; other source types will follow the same pattern as their knobs grow.
      */
     Website?: MJContentSourceEntity_IContentSourceWebsiteConfiguration;
+    /**
+     * Optional Semantic Graph overlay configuration for the Content Pipeline `Graph` stage
+     * (`@RegisterClass(BasePipelineStage, 'Graph')`). When enabled on a Content Source that
+     * is linked to a `GraphID` (either a Canon graph or a shared/per-source Knowledge graph),
+     * the pipeline clusters ingested chunks into higher-level `MJ: Graph Concepts` and emits
+     * typed `MJ: Graph Edges` (`SourcedFrom`, `Mentions`, `Broader Than`, `Contradicts`, etc.).
+     */
+    GraphOverlay?: MJContentSourceEntity_IContentSourceGraphOverlayConfig;
+}
+
+/**
+ * Per-source Semantic Graph overlay configuration for the Content Pipeline `Graph` stage.
+ */
+export interface MJContentSourceEntity_IContentSourceGraphOverlayConfig {
+    /** Enable the Graph overlay stage after Embed for this Content Source. Default false. */
+    Enabled?: boolean;
+    /**
+     * Concept taxonomy mode:
+     * - 'constrained': only link chunks to existing approved/proposed GraphConcepts in the target Graph.
+     * - 'auto-grow': link to existing GraphConcepts when matched; synthesize new proposed GraphConcepts for unmatched clusters.
+     * - 'free-flow': synthesize and merge GraphConcepts across the target Graph without subtree restrictions.
+     */
+    ConceptTaxonomyMode?: 'constrained' | 'auto-grow' | 'free-flow';
+    /** Default evidentiary authority tier name (from MJ: Graph Authority Tiers) assigned to concepts synthesized from this Content Source. */
+    DefaultAuthorityTier?: string;
+    /** Optional default GraphAuthorityTier ID assigned to concepts synthesized from this Content Source. */
+    DefaultAuthorityTierID?: string;
+    /** Whether to synthesize higher-level GraphConcept records from chunk clusters. Default true when Enabled. */
+    SynthesizeConcepts?: boolean;
+    /** Minimum supporting chunks required to form a new concept seed cluster. Default 2. */
+    MinChunksForConceptCluster?: number;
+    /** Cosine similarity threshold (0.0-1.0) for clustering chunk vectors or matching existing concepts. Default 0.82. */
+    ConceptSimilarityThreshold?: number;
+    /**Confidence threshold (0.0-1.0) at or above which inferred edges/concepts are auto-approved; below routes to Proposed. Default 0.90. */
+    AutoApproveThreshold?: number;
+    /** Whether to detect and emit Contradicts edges when chunks conflict on thresholds, dates, or formulas. Default true. */
+    DetectContradictions?: boolean;
+    /** ClassFactory key for the BaseConceptSynthesizer implementation. Default 'DeterministicConceptSynthesizer'. */
+    SynthesizerKey?: string;
+    /** Maximum concept clusters synthesized by the LLM per pipeline run. NULL/unset = unlimited. */
+    MaxConceptsPerRun?: number;
 }
 
 /**
@@ -86408,6 +87597,20 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
 
     /**
+    * * Field Name: GraphID
+    * * Display Name: Graph ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
+    * * Description: Optional target Semantic Graph (MJ: Graphs) that this Content Source populates when the Content Pipeline Graph overlay stage runs. Multiple Content Sources can share the same GraphID.
+    */
+    get GraphID(): string | null {
+        return this.Get('GraphID');
+    }
+    set GraphID(value: string | null) {
+        this.Set('GraphID', value);
+    }
+
+    /**
     * * Field Name: ContentType
     * * Display Name: Content Type Name
     * * SQL Data Type: nvarchar(255)
@@ -86477,6 +87680,15 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     */
     get ScheduledJob(): string | null {
         return this.Get('ScheduledJob');
+    }
+
+    /**
+    * * Field Name: Graph
+    * * Display Name: Graph
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Graph(): string | null {
+        return this.Get('Graph');
     }
 }
 
@@ -93450,6 +94662,1386 @@ export class MJDatasetEntity extends BaseEntity<MJDatasetEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+export interface MJDiagnosticBundleEntity_IDiagnosticSessionScope {
+    userIds?: string[];
+    apiKeyIds?: string[];
+    operationNames?: string[];
+    remoteOperationKeys?: string[];
+    browserSessionId?: string;
+}
+
+export interface MJDiagnosticBundleEntity_IDiagnosticBundleFileDigest {
+    sha256: string;
+    sizeBytes: number;
+    uncompressedBytes: number;
+}
+
+export interface MJDiagnosticBundleEntity_IDiagnosticBundleManifest {
+    schemaVersion: '1.0';
+    bundleId: string;
+    sessionId?: string;
+    createdAt: string;
+    captureReason: string;
+    scrubberProfile: 'Standard' | 'FullRaw';
+    files: Record<string, MJDiagnosticBundleEntity_IDiagnosticBundleFileDigest>;
+}
+
+export interface MJDiagnosticBundleEntity_IDiagnosticScrubReport {
+    credentialsScrubbedCount: number;
+    sqlLiteralsNormalizedCount: number;
+    customPatternsAppliedCount: number;
+}
+
+export interface MJDiagnosticBundleEntity_IDiagnosticFinding {
+    id: string;
+    severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
+    category: string;
+    title: string;
+    summary: string;
+    recommendation: string;
+    relatedTraceIds: string[];
+    evidence: Record<string, unknown>;
+}
+
+/**
+ * MJ: Diagnostic Bundles - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: DiagnosticBundle
+ * * Base View: vwDiagnosticBundles
+ * * @description Assembled .mjdiag diagnostic bundles (both locally built bundles and external bundles received via MJAPI intake) with manifest, scrubbing report, automated findings, and MJStorage link.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Diagnostic Bundles')
+export class MJDiagnosticBundleEntity extends BaseEntity<MJDiagnosticBundleEntityType> {
+    /**
+    * Loads the MJ: Diagnostic Bundles record from the database
+    * @param ID: string - primary key value to load the MJ: Diagnostic Bundles record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJDiagnosticBundleEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the diagnostic bundle.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description or summary notes attached to the bundle.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Direction
+    * * Display Name: Direction
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Local
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Local
+    *   * Received
+    * * Description: Indicates whether this bundle was built locally on this instance (Local) or ingested via the MJAPI intake endpoint (Received).
+    */
+    get Direction(): 'Local' | 'Received' {
+        return this.Get('Direction');
+    }
+    set Direction(value: 'Local' | 'Received') {
+        this.Set('Direction', value);
+    }
+
+    /**
+    * * Field Name: DiagnosticSessionID
+    * * Display Name: Diagnostic Session
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Diagnostic Sessions (vwDiagnosticSessions.ID)
+    * * Description: Source diagnostic session when built from a server session; NULL for client-only or received bundles.
+    */
+    get DiagnosticSessionID(): string | null {
+        return this.Get('DiagnosticSessionID');
+    }
+    set DiagnosticSessionID(value: string | null) {
+        this.Set('DiagnosticSessionID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Building
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Building
+    *   * Expired
+    *   * Failed
+    *   * Ready
+    *   * Receiving
+    *   * Sending
+    *   * Sent
+    * * Description: Current lifecycle status of the diagnostic bundle.
+    */
+    get Status(): 'Building' | 'Expired' | 'Failed' | 'Ready' | 'Receiving' | 'Sending' | 'Sent' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Building' | 'Expired' | 'Failed' | 'Ready' | 'Receiving' | 'Sending' | 'Sent') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ScrubLiterals
+    * * Display Name: Scrub Literals
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: True when inline SQL and filter literals were normalized to ? placeholders in this bundle.
+    */
+    get ScrubLiterals(): boolean {
+        return this.Get('ScrubLiterals');
+    }
+    set ScrubLiterals(value: boolean) {
+        this.Set('ScrubLiterals', value);
+    }
+
+    /**
+    * * Field Name: WindowStart
+    * * Display Name: Window Start
+    * * SQL Data Type: datetimeoffset
+    * * Description: Start of the time window covered by this bundle.
+    */
+    get WindowStart(): Date | null {
+        return this.Get('WindowStart');
+    }
+    set WindowStart(value: Date | null) {
+        this.Set('WindowStart', value);
+    }
+
+    /**
+    * * Field Name: WindowEnd
+    * * Display Name: Window End
+    * * SQL Data Type: datetimeoffset
+    * * Description: End of the time window covered by this bundle.
+    */
+    get WindowEnd(): Date | null {
+        return this.Get('WindowEnd');
+    }
+    set WindowEnd(value: Date | null) {
+        this.Set('WindowEnd', value);
+    }
+
+    /**
+    * * Field Name: FileID
+    * * Display Name: File
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    * * Description: Reference to MJ: Files when the bundle archive is persisted in MJStorage.
+    */
+    get FileID(): string | null {
+        return this.Get('FileID');
+    }
+    set FileID(value: string | null) {
+        this.Set('FileID', value);
+    }
+
+    /**
+    * * Field Name: Data
+    * * Display Name: Data
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * Description: Fallback binary storage for the .mjdiag archive when no MJStorage account is configured.
+    */
+    get Data(): string | null {
+        return this.Get('Data');
+    }
+    set Data(value: string | null) {
+        this.Set('Data', value);
+    }
+
+    /**
+    * * Field Name: SizeBytes
+    * * Display Name: Size (Bytes)
+    * * SQL Data Type: bigint
+    * * Default Value: 0
+    * * Description: Total size of the .mjdiag archive in bytes.
+    */
+    get SizeBytes(): number {
+        return this.Get('SizeBytes');
+    }
+    set SizeBytes(value: number) {
+        this.Set('SizeBytes', value);
+    }
+
+    /**
+    * * Field Name: SHA256
+    * * Display Name: SHA256
+    * * SQL Data Type: nchar(64)
+    * * Description: Hex-encoded SHA-256 digest of the unencrypted .mjdiag archive.
+    */
+    get SHA256(): string | null {
+        return this.Get('SHA256');
+    }
+    set SHA256(value: string | null) {
+        this.Set('SHA256', value);
+    }
+
+    /**
+    * * Field Name: ManifestJSON
+    * * Display Name: Manifest JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJDiagnosticBundleEntity_IDiagnosticBundleManifest
+    * * Description: Parsed manifest.json contents including file inventory and SHA-256 digests.
+    */
+    get ManifestJSON(): string | null {
+        return this.Get('ManifestJSON');
+    }
+    set ManifestJSON(value: string | null) {
+        this.Set('ManifestJSON', value);
+    }
+
+    /**
+    * Typed accessor for ManifestJSON — a live view of the parsed JSON as MJDiagnosticBundleEntity_IDiagnosticBundleManifest.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying ManifestJSON field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ManifestJSONObject(): MJDiagnosticBundleEntity_IDiagnosticBundleManifest | null {
+        return this.GetJSONFieldObject<MJDiagnosticBundleEntity_IDiagnosticBundleManifest>('ManifestJSON');
+    }
+    set ManifestJSONObject(value: MJDiagnosticBundleEntity_IDiagnosticBundleManifest | null) {
+        this.SetJSONFieldObject<MJDiagnosticBundleEntity_IDiagnosticBundleManifest>('ManifestJSON', value);
+    }
+
+    /**
+    * * Field Name: ScrubReportJSON
+    * * Display Name: Scrub Report JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJDiagnosticBundleEntity_IDiagnosticScrubReport
+    * * Description: Summary counts of credential tokens scrubbed and literals normalized across all bundle entries.
+    */
+    get ScrubReportJSON(): string | null {
+        return this.Get('ScrubReportJSON');
+    }
+    set ScrubReportJSON(value: string | null) {
+        this.Set('ScrubReportJSON', value);
+    }
+
+    /**
+    * Typed accessor for ScrubReportJSON — a live view of the parsed JSON as MJDiagnosticBundleEntity_IDiagnosticScrubReport.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying ScrubReportJSON field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ScrubReportJSONObject(): MJDiagnosticBundleEntity_IDiagnosticScrubReport | null {
+        return this.GetJSONFieldObject<MJDiagnosticBundleEntity_IDiagnosticScrubReport>('ScrubReportJSON');
+    }
+    set ScrubReportJSONObject(value: MJDiagnosticBundleEntity_IDiagnosticScrubReport | null) {
+        this.SetJSONFieldObject<MJDiagnosticBundleEntity_IDiagnosticScrubReport>('ScrubReportJSON', value);
+    }
+
+    /**
+    * * Field Name: FindingsJSON
+    * * Display Name: Findings JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJDiagnosticBundleEntity_IDiagnosticFinding>
+    * * Description: Automated rules-engine diagnostic findings extracted from this bundle.
+    */
+    get FindingsJSON(): string | null {
+        return this.Get('FindingsJSON');
+    }
+    set FindingsJSON(value: string | null) {
+        this.Set('FindingsJSON', value);
+    }
+
+    /**
+    * Typed accessor for FindingsJSON — a live view of the parsed JSON as Array<MJDiagnosticBundleEntity_IDiagnosticFinding>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying FindingsJSON field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get FindingsJSONObject(): Array<MJDiagnosticBundleEntity_IDiagnosticFinding> | null {
+        return this.GetJSONFieldObject<Array<MJDiagnosticBundleEntity_IDiagnosticFinding>>('FindingsJSON');
+    }
+    set FindingsJSONObject(value: Array<MJDiagnosticBundleEntity_IDiagnosticFinding> | null) {
+        this.SetJSONFieldObject<Array<MJDiagnosticBundleEntity_IDiagnosticFinding>>('FindingsJSON', value);
+    }
+
+    /**
+    * * Field Name: FailureReason
+    * * Display Name: Failure Reason
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error details when Status is Failed (e.g., build error, send failure, or malware/structural verification rejection).
+    */
+    get FailureReason(): string | null {
+        return this.Get('FailureReason');
+    }
+    set FailureReason(value: string | null) {
+        this.Set('FailureReason', value);
+    }
+
+    /**
+    * * Field Name: CreatedByUserID
+    * * Display Name: Created By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: User who built or uploaded this bundle; NULL for remotely ingested bundles.
+    */
+    get CreatedByUserID(): string | null {
+        return this.Get('CreatedByUserID');
+    }
+    set CreatedByUserID(value: string | null) {
+        this.Set('CreatedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ApprovedByUserID
+    * * Display Name: Approved By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Administrator who approved sending this bundle externally.
+    */
+    get ApprovedByUserID(): string | null {
+        return this.Get('ApprovedByUserID');
+    }
+    set ApprovedByUserID(value: string | null) {
+        this.Set('ApprovedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ApprovedAt
+    * * Display Name: Approved At
+    * * SQL Data Type: datetimeoffset
+    * * Description: UTC timestamp when external transmission was approved.
+    */
+    get ApprovedAt(): Date | null {
+        return this.Get('ApprovedAt');
+    }
+    set ApprovedAt(value: Date | null) {
+        this.Set('ApprovedAt', value);
+    }
+
+    /**
+    * * Field Name: Destination
+    * * Display Name: Destination
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * CustomerCollector
+    *   * MJC
+    *   * StorageAccount
+    * * Description: Target external destination when sending a bundle (MJC, CustomerCollector, or StorageAccount).
+    */
+    get Destination(): 'CustomerCollector' | 'MJC' | 'StorageAccount' | null {
+        return this.Get('Destination');
+    }
+    set Destination(value: 'CustomerCollector' | 'MJC' | 'StorageAccount' | null) {
+        this.Set('Destination', value);
+    }
+
+    /**
+    * * Field Name: SentAt
+    * * Display Name: Sent At
+    * * SQL Data Type: datetimeoffset
+    * * Description: UTC timestamp when the bundle was transmitted to Destination.
+    */
+    get SentAt(): Date | null {
+        return this.Get('SentAt');
+    }
+    set SentAt(value: Date | null) {
+        this.Set('SentAt', value);
+    }
+
+    /**
+    * * Field Name: ExternalReferenceID
+    * * Display Name: External Reference ID
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Reference ID returned by the receiving collector intake endpoint.
+    */
+    get ExternalReferenceID(): string | null {
+        return this.Get('ExternalReferenceID');
+    }
+    set ExternalReferenceID(value: string | null) {
+        this.Set('ExternalReferenceID', value);
+    }
+
+    /**
+    * * Field Name: SenderInstallID
+    * * Display Name: Sender Install ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: InstallID of the sender instance when Direction = Received.
+    */
+    get SenderInstallID(): string | null {
+        return this.Get('SenderInstallID');
+    }
+    set SenderInstallID(value: string | null) {
+        this.Set('SenderInstallID', value);
+    }
+
+    /**
+    * * Field Name: SenderMJVersion
+    * * Display Name: Sender MJ Version
+    * * SQL Data Type: nvarchar(50)
+    * * Description: MemberJunction version reported by the sender instance when Direction = Received.
+    */
+    get SenderMJVersion(): string | null {
+        return this.Get('SenderMJVersion');
+    }
+    set SenderMJVersion(value: string | null) {
+        this.Set('SenderMJVersion', value);
+    }
+
+    /**
+    * * Field Name: ContactInfo
+    * * Display Name: Contact Info
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Optional reporter or administrator contact information on received bundles.
+    */
+    get ContactInfo(): string | null {
+        return this.Get('ContactInfo');
+    }
+    set ContactInfo(value: string | null) {
+        this.Set('ContactInfo', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: UTC timestamp when this bundle becomes eligible for automatic retention purge.
+    */
+    get ExpiresAt(): Date | null {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date | null) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: CompanyID
+    * * Display Name: Company ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Companies (vwCompanies.ID)
+    * * Description: Optional tenant CompanyID scoping this diagnostic bundle.
+    */
+    get CompanyID(): string | null {
+        return this.Get('CompanyID');
+    }
+    set CompanyID(value: string | null) {
+        this.Set('CompanyID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: DiagnosticSession
+    * * Display Name: Diagnostic Session Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DiagnosticSession(): string | null {
+        return this.Get('DiagnosticSession');
+    }
+
+    /**
+    * * Field Name: File
+    * * Display Name: File Name
+    * * SQL Data Type: nvarchar(500)
+    */
+    get File(): string | null {
+        return this.Get('File');
+    }
+
+    /**
+    * * Field Name: CreatedByUser
+    * * Display Name: Created By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CreatedByUser(): string | null {
+        return this.Get('CreatedByUser');
+    }
+
+    /**
+    * * Field Name: ApprovedByUser
+    * * Display Name: Approved By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ApprovedByUser(): string | null {
+        return this.Get('ApprovedByUser');
+    }
+
+    /**
+    * * Field Name: Company
+    * * Display Name: Company
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Company(): string | null {
+        return this.Get('Company');
+    }
+}
+
+
+/**
+ * MJ: Diagnostic Sender Registrations - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: DiagnosticSenderRegistration
+ * * Base View: vwDiagnosticSenderRegistrations
+ * * @description An installation that is allowed to send diagnostic bundles to this collector. Holds its enrollment state, the public key that verifies its signed requests, the hash of its one-time registration code, and its daily bundle quota.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Diagnostic Sender Registrations')
+export class MJDiagnosticSenderRegistrationEntity extends BaseEntity<MJDiagnosticSenderRegistrationEntityType> {
+    /**
+    * Loads the MJ: Diagnostic Sender Registrations record from the database
+    * @param ID: string - primary key value to load the MJ: Diagnostic Sender Registrations record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJDiagnosticSenderRegistrationEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the sender registration.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: InstallID
+    * * Display Name: Install ID
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Installation ID of the sending MemberJunction instance. Unique per registration.
+    */
+    get InstallID(): string {
+        return this.Get('InstallID');
+    }
+    set InstallID(value: string) {
+        this.Set('InstallID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the customer or installation that sends the bundles.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Pending
+    *   * Revoked
+    * * Description: Lifecycle status of the registration. Pending: created, waiting for the sender to enroll with its registration code. Active: enrolled, bundles are accepted. Revoked: bundles are refused.
+    */
+    get Status(): 'Active' | 'Pending' | 'Revoked' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Pending' | 'Revoked') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: KeyAlgorithm
+    * * Display Name: Key Algorithm
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Ed25519
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Ed25519
+    * * Description: Signature algorithm of the sender public key.
+    */
+    get KeyAlgorithm(): 'Ed25519' {
+        return this.Get('KeyAlgorithm');
+    }
+    set KeyAlgorithm(value: 'Ed25519') {
+        this.Set('KeyAlgorithm', value);
+    }
+
+    /**
+    * * Field Name: KeyID
+    * * Display Name: Key ID
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Identifier of the sender signing key. Set at enrollment; a key rotation replaces it.
+    */
+    get KeyID(): string | null {
+        return this.Get('KeyID');
+    }
+    set KeyID(value: string | null) {
+        this.Set('KeyID', value);
+    }
+
+    /**
+    * * Field Name: PublicKeyBase64
+    * * Display Name: Public Key (Base64)
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Base64-encoded public key that verifies the sender signed requests. Set at enrollment.
+    */
+    get PublicKeyBase64(): string | null {
+        return this.Get('PublicKeyBase64');
+    }
+    set PublicKeyBase64(value: string | null) {
+        this.Set('PublicKeyBase64', value);
+    }
+
+    /**
+    * * Field Name: RegistrationCodeHash
+    * * Display Name: Registration Code Hash
+    * * SQL Data Type: nvarchar(128)
+    * * Description: SHA-256 hex digest of the one-time registration code. The plain code is never stored.
+    */
+    get RegistrationCodeHash(): string | null {
+        return this.Get('RegistrationCodeHash');
+    }
+    set RegistrationCodeHash(value: string | null) {
+        this.Set('RegistrationCodeHash', value);
+    }
+
+    /**
+    * * Field Name: RegistrationCodeExpiresAt
+    * * Display Name: Registration Code Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Time after which the one-time registration code can no longer be used to enroll.
+    */
+    get RegistrationCodeExpiresAt(): Date | null {
+        return this.Get('RegistrationCodeExpiresAt');
+    }
+    set RegistrationCodeExpiresAt(value: Date | null) {
+        this.Set('RegistrationCodeExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: EnrolledAt
+    * * Display Name: Enrolled At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Time the sender enrolled its public key.
+    */
+    get EnrolledAt(): Date | null {
+        return this.Get('EnrolledAt');
+    }
+    set EnrolledAt(value: Date | null) {
+        this.Set('EnrolledAt', value);
+    }
+
+    /**
+    * * Field Name: RevokedAt
+    * * Display Name: Revoked At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Time the registration was revoked.
+    */
+    get RevokedAt(): Date | null {
+        return this.Get('RevokedAt');
+    }
+    set RevokedAt(value: Date | null) {
+        this.Set('RevokedAt', value);
+    }
+
+    /**
+    * * Field Name: LastSeenAt
+    * * Display Name: Last Seen At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Time of the last authenticated request from the sender.
+    */
+    get LastSeenAt(): Date | null {
+        return this.Get('LastSeenAt');
+    }
+    set LastSeenAt(value: Date | null) {
+        this.Set('LastSeenAt', value);
+    }
+
+    /**
+    * * Field Name: MaxBundlesPerDay
+    * * Display Name: Max Bundles Per Day
+    * * SQL Data Type: int
+    * * Default Value: 20
+    * * Description: Maximum number of bundles the collector accepts from this sender per day.
+    */
+    get MaxBundlesPerDay(): number {
+        return this.Get('MaxBundlesPerDay');
+    }
+    set MaxBundlesPerDay(value: number) {
+        this.Set('MaxBundlesPerDay', value);
+    }
+
+    /**
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Free-form administrator notes about the registration.
+    */
+    get Comments(): string | null {
+        return this.Get('Comments');
+    }
+    set Comments(value: string | null) {
+        this.Set('Comments', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Diagnostic Session Chunks - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: DiagnosticSessionChunk
+ * * Base View: vwDiagnosticSessionChunks
+ * * @description Compressed NDJSON capture chunks flushed by server instances and client browsers during a diagnostic session.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Diagnostic Session Chunks')
+export class MJDiagnosticSessionChunkEntity extends BaseEntity<MJDiagnosticSessionChunkEntityType> {
+    /**
+    * Loads the MJ: Diagnostic Session Chunks record from the database
+    * @param ID: string - primary key value to load the MJ: Diagnostic Session Chunks record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJDiagnosticSessionChunkEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: DiagnosticSessionID
+    * * Display Name: Diagnostic Session
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Diagnostic Sessions (vwDiagnosticSessions.ID)
+    * * Description: Owning diagnostic session for this chunk.
+    */
+    get DiagnosticSessionID(): string {
+        return this.Get('DiagnosticSessionID');
+    }
+    set DiagnosticSessionID(value: string) {
+        this.Set('DiagnosticSessionID', value);
+    }
+
+    /**
+    * * Field Name: Source
+    * * Display Name: Source
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Client
+    *   * Server
+    * * Description: Origin tier that produced the chunk (Server or Client).
+    */
+    get Source(): 'Client' | 'Server' {
+        return this.Get('Source');
+    }
+    set Source(value: 'Client' | 'Server') {
+        this.Set('Source', value);
+    }
+
+    /**
+    * * Field Name: HostInstanceLabel
+    * * Display Name: Host Instance Label
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Process UUID, hostname, or browser tab identifier that flushed this chunk.
+    */
+    get HostInstanceLabel(): string {
+        return this.Get('HostInstanceLabel');
+    }
+    set HostInstanceLabel(value: string) {
+        this.Set('HostInstanceLabel', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Description: Monotonically increasing sequence number per (DiagnosticSessionID, Source, HostInstanceLabel, ContentKind).
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: ContentKind
+    * * Display Name: Content Kind
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * App
+    *   * Errors
+    *   * Health
+    *   * Logs
+    *   * Network
+    *   * SQL
+    *   * Spans
+    *   * Telemetry
+    *   * Timeline
+    * * Description: Type of diagnostic data stored in this chunk.
+    */
+    get ContentKind(): 'App' | 'Errors' | 'Health' | 'Logs' | 'Network' | 'SQL' | 'Spans' | 'Telemetry' | 'Timeline' {
+        return this.Get('ContentKind');
+    }
+    set ContentKind(value: 'App' | 'Errors' | 'Health' | 'Logs' | 'Network' | 'SQL' | 'Spans' | 'Telemetry' | 'Timeline') {
+        this.Set('ContentKind', value);
+    }
+
+    /**
+    * * Field Name: Data
+    * * Display Name: Data
+    * * SQL Data Type: varbinary(MAX)
+    * * Binary Value: base64-encoded string. Decode with Base64ToBytes() — or Base64ToFloat32Vector() for an embedding — from @memberjunction/global.
+    * * Description: DEFLATE/gzip compressed NDJSON or JSON payload (~256 KB max per chunk).
+    */
+    get Data(): string {
+        return this.Get('Data');
+    }
+    set Data(value: string) {
+        this.Set('Data', value);
+    }
+
+    /**
+    * * Field Name: EntryCount
+    * * Display Name: Entry Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of records or events contained in this chunk.
+    */
+    get EntryCount(): number {
+        return this.Get('EntryCount');
+    }
+    set EntryCount(value: number) {
+        this.Set('EntryCount', value);
+    }
+
+    /**
+    * * Field Name: FirstEntryAt
+    * * Display Name: First Entry At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the earliest event in this chunk.
+    */
+    get FirstEntryAt(): Date | null {
+        return this.Get('FirstEntryAt');
+    }
+    set FirstEntryAt(value: Date | null) {
+        this.Set('FirstEntryAt', value);
+    }
+
+    /**
+    * * Field Name: LastEntryAt
+    * * Display Name: Last Entry At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the latest event in this chunk.
+    */
+    get LastEntryAt(): Date | null {
+        return this.Get('LastEntryAt');
+    }
+    set LastEntryAt(value: Date | null) {
+        this.Set('LastEntryAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: DiagnosticSession
+    * * Display Name: Diagnostic Session
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DiagnosticSession(): string {
+        return this.Get('DiagnosticSession');
+    }
+}
+
+
+export interface MJDiagnosticSessionEntity_IDiagnosticSessionScope {
+    userIds?: string[];
+    apiKeyIds?: string[];
+    operationNames?: string[];
+    remoteOperationKeys?: string[];
+    browserSessionId?: string;
+}
+
+export interface MJDiagnosticSessionEntity_IDiagnosticBundleFileDigest {
+    sha256: string;
+    sizeBytes: number;
+    uncompressedBytes: number;
+}
+
+export interface MJDiagnosticSessionEntity_IDiagnosticBundleManifest {
+    schemaVersion: '1.0';
+    bundleId: string;
+    sessionId?: string;
+    createdAt: string;
+    captureReason: string;
+    scrubberProfile: 'Standard' | 'FullRaw';
+    files: Record<string, MJDiagnosticSessionEntity_IDiagnosticBundleFileDigest>;
+}
+
+export interface MJDiagnosticSessionEntity_IDiagnosticScrubReport {
+    credentialsScrubbedCount: number;
+    sqlLiteralsNormalizedCount: number;
+    customPatternsAppliedCount: number;
+}
+
+export interface MJDiagnosticSessionEntity_IDiagnosticFinding {
+    id: string;
+    severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
+    category: string;
+    title: string;
+    summary: string;
+    recommendation: string;
+    relatedTraceIds: string[];
+    evidence: Record<string, unknown>;
+}
+
+/**
+ * MJ: Diagnostic Sessions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: DiagnosticSession
+ * * Base View: vwDiagnosticSessions
+ * * @description Bounded server and client diagnostic recording sessions with tenant isolation, scope targeting, and byte-budget controls.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Diagnostic Sessions')
+export class MJDiagnosticSessionEntity extends BaseEntity<MJDiagnosticSessionEntityType> {
+    /**
+    * Loads the MJ: Diagnostic Sessions record from the database
+    * @param ID: string - primary key value to load the MJ: Diagnostic Sessions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJDiagnosticSessionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable label for the diagnostic session.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Reason
+    * * Display Name: Reason
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional explanation of why this diagnostic session was started (such as a ticket number or reproduction notes).
+    */
+    get Reason(): string | null {
+        return this.Get('Reason');
+    }
+    set Reason(value: string | null) {
+        this.Set('Reason', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Expired
+    *   * Stopped
+    * * Description: Current lifecycle status of the diagnostic session.
+    */
+    get Status(): 'Active' | 'Expired' | 'Stopped' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Expired' | 'Stopped') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ScopeType
+    * * Display Name: Scope Type
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: Users
+    * * Value List Type: List
+    * * Possible Values 
+    *   * APIKeys
+    *   * BrowserSession
+    *   * Instance
+    *   * Operations
+    *   * Users
+    * * Description: Determines which incoming requests are matched and captured by this session.
+    */
+    get ScopeType(): 'APIKeys' | 'BrowserSession' | 'Instance' | 'Operations' | 'Users' {
+        return this.Get('ScopeType');
+    }
+    set ScopeType(value: 'APIKeys' | 'BrowserSession' | 'Instance' | 'Operations' | 'Users') {
+        this.Set('ScopeType', value);
+    }
+
+    /**
+    * * Field Name: ScopeJSON
+    * * Display Name: Scope JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJDiagnosticSessionEntity_IDiagnosticSessionScope
+    * * Description: JSON specification of targeted UserIDs, APIKeyIDs, GraphQL/RemoteOperation names, or BrowserSessionID.
+    */
+    get ScopeJSON(): string | null {
+        return this.Get('ScopeJSON');
+    }
+    set ScopeJSON(value: string | null) {
+        this.Set('ScopeJSON', value);
+    }
+
+    /**
+    * Typed accessor for ScopeJSON — a live view of the parsed JSON as MJDiagnosticSessionEntity_IDiagnosticSessionScope.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying ScopeJSON field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ScopeJSONObject(): MJDiagnosticSessionEntity_IDiagnosticSessionScope | null {
+        return this.GetJSONFieldObject<MJDiagnosticSessionEntity_IDiagnosticSessionScope>('ScopeJSON');
+    }
+    set ScopeJSONObject(value: MJDiagnosticSessionEntity_IDiagnosticSessionScope | null) {
+        this.SetJSONFieldObject<MJDiagnosticSessionEntity_IDiagnosticSessionScope>('ScopeJSON', value);
+    }
+
+    /**
+    * * Field Name: Level
+    * * Display Name: Level
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Standard
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Debug
+    *   * Standard
+    *   * Verbose
+    * * Description: Capture verbosity level applied to requests matched by this session.
+    */
+    get Level(): 'Debug' | 'Standard' | 'Verbose' {
+        return this.Get('Level');
+    }
+    set Level(value: 'Debug' | 'Standard' | 'Verbose') {
+        this.Set('Level', value);
+    }
+
+    /**
+    * * Field Name: CategoriesJSON
+    * * Display Name: Categories JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of diagnostic categories enabled for this session (e.g., Logs, SQL, Spans, Network, Telemetry).
+    */
+    get CategoriesJSON(): string | null {
+        return this.Get('CategoriesJSON');
+    }
+    set CategoriesJSON(value: string | null) {
+        this.Set('CategoriesJSON', value);
+    }
+
+    /**
+    * * Field Name: ScrubLiterals
+    * * Display Name: Scrub Literals
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, replaces inline SQL and filter string/number/UUID literals with ? placeholders in addition to mandatory credential scrubbing.
+    */
+    get ScrubLiterals(): boolean {
+        return this.Get('ScrubLiterals');
+    }
+    set ScrubLiterals(value: boolean) {
+        this.Set('ScrubLiterals', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    * * Description: UTC timestamp when the diagnostic session became active.
+    */
+    get StartedAt(): Date {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: EndsAt
+    * * Display Name: Ends At
+    * * SQL Data Type: datetimeoffset
+    * * Description: UTC timestamp when the diagnostic session automatically expires.
+    */
+    get EndsAt(): Date {
+        return this.Get('EndsAt');
+    }
+    set EndsAt(value: Date) {
+        this.Set('EndsAt', value);
+    }
+
+    /**
+    * * Field Name: StoppedAt
+    * * Display Name: Stopped At
+    * * SQL Data Type: datetimeoffset
+    * * Description: UTC timestamp when the diagnostic session was manually stopped.
+    */
+    get StoppedAt(): Date | null {
+        return this.Get('StoppedAt');
+    }
+    set StoppedAt(value: Date | null) {
+        this.Set('StoppedAt', value);
+    }
+
+    /**
+    * * Field Name: MaxBytes
+    * * Display Name: Max Bytes
+    * * SQL Data Type: bigint
+    * * Default Value: 52428800
+    * * Description: Maximum total compressed chunk bytes allowed for this session before capture stops (defaults to 50 MB).
+    */
+    get MaxBytes(): number {
+        return this.Get('MaxBytes');
+    }
+    set MaxBytes(value: number) {
+        this.Set('MaxBytes', value);
+    }
+
+    /**
+    * * Field Name: CreatedByUserID
+    * * Display Name: Created By User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: User who initiated the diagnostic session.
+    */
+    get CreatedByUserID(): string {
+        return this.Get('CreatedByUserID');
+    }
+    set CreatedByUserID(value: string) {
+        this.Set('CreatedByUserID', value);
+    }
+
+    /**
+    * * Field Name: CompanyID
+    * * Display Name: Company
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Companies (vwCompanies.ID)
+    * * Description: Optional tenant CompanyID isolating session capture in multi-tenant deployments.
+    */
+    get CompanyID(): string | null {
+        return this.Get('CompanyID');
+    }
+    set CompanyID(value: string | null) {
+        this.Set('CompanyID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CreatedByUser
+    * * Display Name: Created By User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CreatedByUser(): string {
+        return this.Get('CreatedByUser');
+    }
+
+    /**
+    * * Field Name: Company
+    * * Display Name: Company Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Company(): string | null {
+        return this.Get('Company');
     }
 }
 
@@ -108763,6 +111355,1535 @@ export class MJGeneratedCodeEntity extends BaseEntity<MJGeneratedCodeEntityType>
     */
     get LinkedEntity(): string | null {
         return this.Get('LinkedEntity');
+    }
+}
+
+
+/**
+ * MJ: Graph Authority Tiers - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GraphAuthorityTier
+ * * Base View: vwGraphAuthorityTiers
+ * * @description Configurable evidentiary authority tiers (such as Governing Charter / Bylaws, Board Policy, Executive SOP, Department Practice, Reference, or Inferred) with numeric precedence weight (Rank) used for Canon conflict resolution.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graph Authority Tiers')
+export class MJGraphAuthorityTierEntity extends BaseEntity<MJGraphAuthorityTierEntityType> {
+    /**
+    * Loads the MJ: Graph Authority Tiers record from the database
+    * @param ID: string - primary key value to load the MJ: Graph Authority Tiers record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphAuthorityTierEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique display name of the authority tier (e.g., Bylaws, Board Policy, Executive SOP, Department Practice, Reference, Inferred).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Plain-language description of what sources belong to this authority tier and how conflicts involving this tier should be resolved.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Rank
+    * * Display Name: Rank
+    * * SQL Data Type: int
+    * * Default Value: 20
+    * * Description: Numeric evidentiary precedence weight of the authority tier (higher numbers outrank lower numbers during conflict resolution, e.g., 100 for Bylaws vs 20 for Reference).
+    */
+    get Rank(): number {
+        return this.Get('Rank');
+    }
+    set Rank(value: number) {
+        this.Set('Rank', value);
+    }
+
+    /**
+    * * Field Name: IconClass
+    * * Display Name: Icon Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Optional Font Awesome CSS icon class used to render authority tier badges in the UI.
+    */
+    get IconClass(): string | null {
+        return this.Get('IconClass');
+    }
+    set IconClass(value: string | null) {
+        this.Set('IconClass', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Operational status of the authority tier (Active or Inactive).
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Graph Concept Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GraphConceptType
+ * * Base View: vwGraphConceptTypes
+ * * @description Configurable semantic concept classifications (such as Policy, Metric, Process, Role, Domain, or Term) with rank ordering and classification guidance, seeded via metadata and extensible per organization.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graph Concept Types')
+export class MJGraphConceptTypeEntity extends BaseEntity<MJGraphConceptTypeEntityType> {
+    /**
+    * Loads the MJ: Graph Concept Types record from the database
+    * @param ID: string - primary key value to load the MJ: Graph Concept Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphConceptTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name of the concept type (e.g., Policy, Metric, Process, Role, Domain, Term).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Plain-language definition and classification guidance describing what qualifies as a concept of this type.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Rank
+    * * Display Name: Rank
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Precedence and display rank order of this concept type (lower numbers represent higher-order institutional concepts such as Policy and Metric ahead of granular Terms).
+    */
+    get Rank(): number {
+        return this.Get('Rank');
+    }
+    set Rank(value: number) {
+        this.Set('Rank', value);
+    }
+
+    /**
+    * * Field Name: IconClass
+    * * Display Name: Icon Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Optional Font Awesome CSS icon class used to render concept nodes of this type in graph explorers and cards.
+    */
+    get IconClass(): string | null {
+        return this.Get('IconClass');
+    }
+    set IconClass(value: string | null) {
+        this.Set('IconClass', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Operational status of the concept type (Active or Inactive).
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Graph Concepts - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GraphConcept
+ * * Base View: vwGraphConcepts
+ * * @description Higher-level semantic concept nodes scoped to a Graph (referencing GraphConceptType and GraphAuthorityTier), serving as organizing hubs for Canon governance and Content Source GraphRAG overlays.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graph Concepts')
+export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
+    /**
+    * Loads the MJ: Graph Concepts record from the database
+    * @param ID: string - primary key value to load the MJ: Graph Concepts record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphConceptEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: GraphID
+    * * Display Name: Graph ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
+    */
+    get GraphID(): string {
+        return this.Get('GraphID');
+    }
+    set GraphID(value: string) {
+        this.Set('GraphID', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Concepts (vwGraphConcepts.ID)
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Canonical name of the concept, unique within its owning GraphID.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: ConceptTypeID
+    * * Display Name: Concept Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Concept Types (vwGraphConceptTypes.ID)
+    * * Description: Foreign key to GraphConceptType classifying the structural role and priority rank of this concept.
+    */
+    get ConceptTypeID(): string {
+        return this.Get('ConceptTypeID');
+    }
+    set ConceptTypeID(value: string) {
+        this.Set('ConceptTypeID', value);
+    }
+
+    /**
+    * * Field Name: AuthorityTierID
+    * * Display Name: Authority Tier ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Authority Tiers (vwGraphAuthorityTiers.ID)
+    * * Description: Optional foreign key to GraphAuthorityTier indicating the highest evidentiary authority tier backing this concept.
+    */
+    get AuthorityTierID(): string | null {
+        return this.Get('AuthorityTierID');
+    }
+    set AuthorityTierID(value: string | null) {
+        this.Set('AuthorityTierID', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Concise 1-3 sentence definition (~100 tokens) injected into agent subgraphs and search results.
+    */
+    get Description(): string {
+        return this.Get('Description');
+    }
+    set Description(value: string) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Specification
+    * * Display Name: Specification
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Structured markdown specification containing authoritative rules, thresholds, decision tables, exceptions, and chunk citations.
+    */
+    get Specification(): string | null {
+        return this.Get('Specification');
+    }
+    set Specification(value: string | null) {
+        this.Set('Specification', value);
+    }
+
+    /**
+    * * Field Name: Synonyms
+    * * Display Name: Synonyms
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of alternative names, acronyms, and surface forms that resolve to this concept.
+    */
+    get Synonyms(): string | null {
+        return this.Get('Synonyms');
+    }
+    set Synonyms(value: string | null) {
+        this.Set('Synonyms', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Deprecated
+    *   * Draft
+    *   * Proposed
+    * * Description: Governance lifecycle status of the concept: Draft, Proposed, Approved, or Deprecated.
+    */
+    get Status(): 'Approved' | 'Deprecated' | 'Draft' | 'Proposed' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Approved' | 'Deprecated' | 'Draft' | 'Proposed') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Graph
+    * * Display Name: Graph
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Graph(): string {
+        return this.Get('Graph');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: ConceptType
+    * * Display Name: Concept Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ConceptType(): string {
+        return this.Get('ConceptType');
+    }
+
+    /**
+    * * Field Name: AuthorityTier
+    * * Display Name: Authority Tier
+    * * SQL Data Type: nvarchar(100)
+    */
+    get AuthorityTier(): string | null {
+        return this.Get('AuthorityTier');
+    }
+}
+
+
+/**
+ * MJ: Graph Edge Providers - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GraphEdgeProvider
+ * * Base View: vwGraphEdgeProviders
+ * * @description Registers a BaseGraphEdgeProvider class on a Graph to project derived edges at read time without duplicating underlying relational data.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graph Edge Providers')
+export class MJGraphEdgeProviderEntity extends BaseEntity<MJGraphEdgeProviderEntityType> {
+    /**
+    * Loads the MJ: Graph Edge Providers record from the database
+    * @param ID: string - primary key value to load the MJ: Graph Edge Providers record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphEdgeProviderEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: GraphID
+    * * Display Name: Graph ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
+    */
+    get GraphID(): string {
+        return this.Get('GraphID');
+    }
+    set GraphID(value: string) {
+        this.Set('GraphID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of this provider registration within the graph.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Description of which derived edges this provider projects into the graph.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: ClassFactory registration key of the BaseGraphEdgeProvider subclass.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Provider-specific JSON configuration object passed to the provider at query time.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Execution order of this provider relative to other providers on the same graph.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, this provider participates in graph expansion queries; when 0, it is skipped.
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Graph
+    * * Display Name: Graph
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Graph(): string {
+        return this.Get('Graph');
+    }
+}
+
+
+/**
+ * MJ: Graph Edge Type Endpoints - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GraphEdgeTypeEndpoint
+ * * Base View: vwGraphEdgeTypeEndpoints
+ * * @description Optional endpoint constraints restricting which MJ Entities may appear on the Source or Target side of a GraphEdgeType.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graph Edge Type Endpoints')
+export class MJGraphEdgeTypeEndpointEntity extends BaseEntity<MJGraphEdgeTypeEndpointEntityType> {
+    /**
+    * Loads the MJ: Graph Edge Type Endpoints record from the database
+    * @param ID: string - primary key value to load the MJ: Graph Edge Type Endpoints record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphEdgeTypeEndpointEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EdgeTypeID
+    * * Display Name: Edge Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Edge Types (vwGraphEdgeTypes.ID)
+    */
+    get EdgeTypeID(): string {
+        return this.Get('EdgeTypeID');
+    }
+    set EdgeTypeID(value: string) {
+        this.Set('EdgeTypeID', value);
+    }
+
+    /**
+    * * Field Name: Side
+    * * Display Name: Side
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Source
+    *   * Target
+    * * Description: Which endpoint of the edge this entity constraint applies to (Source or Target).
+    */
+    get Side(): 'Source' | 'Target' {
+        return this.Get('Side');
+    }
+    set Side(value: 'Source' | 'Target') {
+        this.Set('Side', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: EdgeType
+    * * Display Name: Edge Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get EdgeType(): string {
+        return this.Get('EdgeType');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+}
+
+
+/**
+ * MJ: Graph Edge Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GraphEdgeType
+ * * Base View: vwGraphEdgeTypes
+ * * @description Defines relationship types for semantic graph edges (e.g., Broader Than, Describes, Defines, Measures, Implements, SourcedFrom, Mentions, Contradicts). Global when GraphID is NULL, or scoped to a specific Graph.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graph Edge Types')
+export class MJGraphEdgeTypeEntity extends BaseEntity<MJGraphEdgeTypeEntityType> {
+    /**
+    * Loads the MJ: Graph Edge Types record from the database
+    * @param ID: string - primary key value to load the MJ: Graph Edge Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphEdgeTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: GraphID
+    * * Display Name: Graph ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
+    */
+    get GraphID(): string | null {
+        return this.Get('GraphID');
+    }
+    set GraphID(value: string | null) {
+        this.Set('GraphID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Forward-direction label of the edge type (e.g., Broader Than, Defines, SourcedFrom).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Plain-language definition of what this relationship type means when connecting two nodes.
+    */
+    get Description(): string {
+        return this.Get('Description');
+    }
+    set Description(value: string) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: IsDirected
+    * * Display Name: Is Directed
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, the edge is directed from Source to Target; when 0, the relationship is symmetric/undirected.
+    */
+    get IsDirected(): boolean {
+        return this.Get('IsDirected');
+    }
+    set IsDirected(value: boolean) {
+        this.Set('IsDirected', value);
+    }
+
+    /**
+    * * Field Name: InverseName
+    * * Display Name: Inverse Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Inverse label shown when traversing a directed edge from Target back to Source (e.g., Narrower Than for Broader Than).
+    */
+    get InverseName(): string | null {
+        return this.Get('InverseName');
+    }
+    set InverseName(value: string | null) {
+        this.Set('InverseName', value);
+    }
+
+    /**
+    * * Field Name: DefaultWeight
+    * * Display Name: Default Weight
+    * * SQL Data Type: decimal(5, 4)
+    * * Default Value: 1.0
+    * * Description: Default retrieval weight (0.0000 to 1.0000) assigned to edges of this type during multi-hop graph expansion.
+    */
+    get DefaultWeight(): number {
+        return this.Get('DefaultWeight');
+    }
+    set DefaultWeight(value: number) {
+        this.Set('DefaultWeight', value);
+    }
+
+    /**
+    * * Field Name: AllowStored
+    * * Display Name: Allow Stored
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, rows of this edge type may be persisted in GraphEdge; when 0, edges of this type are produced exclusively at read time by a GraphEdgeProvider.
+    */
+    get AllowStored(): boolean {
+        return this.Get('AllowStored');
+    }
+    set AllowStored(value: boolean) {
+        this.Set('AllowStored', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Graph
+    * * Display Name: Graph
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Graph(): string | null {
+        return this.Get('Graph');
+    }
+}
+
+
+/**
+ * MJ: Graph Edges - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GraphEdge
+ * * Base View: vwGraphEdges
+ * * @description Persisted polymorphic graph edges connecting any two entity records within a Graph, carrying retrieval weight, origin (Declared vs Inferred), approval status, and confidence.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graph Edges')
+export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
+    /**
+    * Loads the MJ: Graph Edges record from the database
+    * @param ID: string - primary key value to load the MJ: Graph Edges record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphEdgeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: GraphID
+    * * Display Name: Graph ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
+    */
+    get GraphID(): string {
+        return this.Get('GraphID');
+    }
+    set GraphID(value: string) {
+        this.Set('GraphID', value);
+    }
+
+    /**
+    * * Field Name: EdgeTypeID
+    * * Display Name: Edge Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Edge Types (vwGraphEdgeTypes.ID)
+    */
+    get EdgeTypeID(): string {
+        return this.Get('EdgeTypeID');
+    }
+    set EdgeTypeID(value: string) {
+        this.Set('EdgeTypeID', value);
+    }
+
+    /**
+    * * Field Name: SourceEntityID
+    * * Display Name: Source Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    */
+    get SourceEntityID(): string {
+        return this.Get('SourceEntityID');
+    }
+    set SourceEntityID(value: string) {
+        this.Set('SourceEntityID', value);
+    }
+
+    /**
+    * * Field Name: SourceRecordID
+    * * Display Name: Source Record ID
+    * * SQL Data Type: nvarchar(400)
+    * * Description: Record ID of the source node (compact URL segment for composite primary keys), paired with SourceEntityID.
+    */
+    get SourceRecordID(): string {
+        return this.Get('SourceRecordID');
+    }
+    set SourceRecordID(value: string) {
+        this.Set('SourceRecordID', value);
+    }
+
+    /**
+    * * Field Name: TargetEntityID
+    * * Display Name: Target Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    */
+    get TargetEntityID(): string {
+        return this.Get('TargetEntityID');
+    }
+    set TargetEntityID(value: string) {
+        this.Set('TargetEntityID', value);
+    }
+
+    /**
+    * * Field Name: TargetRecordID
+    * * Display Name: Target Record ID
+    * * SQL Data Type: nvarchar(400)
+    * * Description: Record ID of the target node (compact URL segment for composite primary keys), paired with TargetEntityID.
+    */
+    get TargetRecordID(): string {
+        return this.Get('TargetRecordID');
+    }
+    set TargetRecordID(value: string) {
+        this.Set('TargetRecordID', value);
+    }
+
+    /**
+    * * Field Name: Weight
+    * * Display Name: Weight
+    * * SQL Data Type: decimal(5, 4)
+    * * Default Value: 1.0
+    * * Description: Retrieval pull weight (0.0000 to 1.0000) used when scoring multi-hop graph paths.
+    */
+    get Weight(): number {
+        return this.Get('Weight');
+    }
+    set Weight(value: number) {
+        this.Set('Weight', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable explanation or provenance summary for why this edge connects the source and target nodes.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Attributes
+    * * Display Name: Attributes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON object holding structured edge metadata (such as citations, authority tiers, or conflict details).
+    */
+    get Attributes(): string | null {
+        return this.Get('Attributes');
+    }
+    set Attributes(value: string | null) {
+        this.Set('Attributes', value);
+    }
+
+    /**
+    * * Field Name: Origin
+    * * Display Name: Origin
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Declared
+    *   * Inferred
+    * * Description: How this edge was created: Declared (explicitly authored by a human or seed metadata) or Inferred (proposed by an AI or content pipeline stage).
+    */
+    get Origin(): 'Declared' | 'Inferred' {
+        return this.Get('Origin');
+    }
+    set Origin(value: 'Declared' | 'Inferred') {
+        this.Set('Origin', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Approved
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Proposed
+    *   * Rejected
+    * * Description: Governance lifecycle status of the edge: Proposed, Approved, or Rejected. Default graph traversal includes Approved edges only.
+    */
+    get Status(): 'Approved' | 'Proposed' | 'Rejected' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Approved' | 'Proposed' | 'Rejected') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Confidence
+    * * Display Name: Confidence
+    * * SQL Data Type: decimal(5, 4)
+    * * Description: Confidence score (0.0000 to 1.0000) for Inferred edges; NULL for Declared edges.
+    */
+    get Confidence(): number | null {
+        return this.Get('Confidence');
+    }
+    set Confidence(value: number | null) {
+        this.Set('Confidence', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Graph
+    * * Display Name: Graph
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Graph(): string {
+        return this.Get('Graph');
+    }
+
+    /**
+    * * Field Name: EdgeType
+    * * Display Name: Edge Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get EdgeType(): string {
+        return this.Get('EdgeType');
+    }
+
+    /**
+    * * Field Name: SourceEntity
+    * * Display Name: Source Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SourceEntity(): string {
+        return this.Get('SourceEntity');
+    }
+
+    /**
+    * * Field Name: TargetEntity
+    * * Display Name: Target Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TargetEntity(): string {
+        return this.Get('TargetEntity');
+    }
+}
+
+
+/**
+ * MJ: Graph Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GraphType
+ * * Base View: vwGraphTypes
+ * * @description Configurable semantic graph classifications (such as Canon, Knowledge, Network, or Custom), defining whether graphs of this type participate in governed organizational Canon (IsCanon) and their precedence rank.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graph Types')
+export class MJGraphTypeEntity extends BaseEntity<MJGraphTypeEntityType> {
+    /**
+    * Loads the MJ: Graph Types record from the database
+    * @param ID: string - primary key value to load the MJ: Graph Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique display name of the graph type (e.g., Canon, Knowledge, Network, Custom).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Plain-language description of what graphs of this type represent and how agents should use them.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: IsCanon
+    * * Display Name: Is Canon
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, graphs of this type feed governed institutional Canon (authoritative definitions, policies, metrics, and workflows); when 0, the graph is non-canonical (such as exploratory Knowledge or Network graphs).
+    */
+    get IsCanon(): boolean {
+        return this.Get('IsCanon');
+    }
+    set IsCanon(value: boolean) {
+        this.Set('IsCanon', value);
+    }
+
+    /**
+    * * Field Name: Rank
+    * * Display Name: Rank
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Sort and priority rank order of the graph type (lower numbers have higher priority).
+    */
+    get Rank(): number {
+        return this.Get('Rank');
+    }
+    set Rank(value: number) {
+        this.Set('Rank', value);
+    }
+
+    /**
+    * * Field Name: IconClass
+    * * Display Name: Icon Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Optional Font Awesome CSS icon class used to render badges for graphs of this type in the UI.
+    */
+    get IconClass(): string | null {
+        return this.Get('IconClass');
+    }
+    set IconClass(value: string | null) {
+        this.Set('IconClass', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Operational status of the graph type (Active or Inactive).
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Graphs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Graph
+ * * Base View: vwGraphs
+ * * @description Named semantic graph partitions (such as MJ Canon, Knowledge Hub GraphRAG graphs, or Member Network graphs) that own concepts, edge types, derived edge providers, and stored edges.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graphs')
+export class MJGraphEntity extends BaseEntity<MJGraphEntityType> {
+    /**
+    * Loads the MJ: Graphs record from the database
+    * @param ID: string - primary key value to load the MJ: Graphs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Unique name of the semantic graph partition (e.g., MJ Canon, Industry Research Graph).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Plain-language description of the domain, purpose, and governance scope of this graph.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: GraphTypeID
+    * * Display Name: Graph Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Types (vwGraphTypes.ID)
+    * * Description: Foreign key to GraphType defining the semantic classification of this graph and whether it feeds institutional Canon.
+    */
+    get GraphTypeID(): string {
+        return this.Get('GraphTypeID');
+    }
+    set GraphTypeID(value: string) {
+        this.Set('GraphTypeID', value);
+    }
+
+    /**
+    * * Field Name: LoadMode
+    * * Display Name: Load Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Preload
+    * * Value List Type: List
+    * * Possible Values 
+    *   * OnDemand
+    *   * Preload
+    * * Description: Whether the graph is preloaded into memory at startup (Preload, for compact metadata/Canon graphs) or traversed on demand (OnDemand, for large data/document graphs).
+    */
+    get LoadMode(): 'OnDemand' | 'Preload' {
+        return this.Get('LoadMode');
+    }
+    set LoadMode(value: 'OnDemand' | 'Preload') {
+        this.Set('LoadMode', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Operational status of the graph (Active or Disabled).
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: GraphType
+    * * Display Name: Graph Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get GraphType(): string {
+        return this.Get('GraphType');
     }
 }
 
