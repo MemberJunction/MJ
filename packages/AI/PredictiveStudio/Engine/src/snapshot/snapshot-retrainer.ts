@@ -7,6 +7,7 @@
  * what is trained on), and the holdout metrics are compared, so a run can be shown to reproduce from what it stored. A
  * run that logged no trainer request is refused.
  */
+import { UUIDsEqual } from '@memberjunction/global';
 import type { MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import {
   PredictionUnit,
@@ -96,6 +97,7 @@ export class SnapshotRetrainer {
     const files = this.FileStore(deps);
     // Verified before the trainer is called: the trainer reads the same files through new downloads.
     await this.ReadVerifiedContent(snapshot, files);
+    SnapshotRetrainer.assertLoggedProtocolIsSnapshots(run, snapshot, trainerRun);
     const retrained = await this.RetrainThroughTrainer(run, snapshot, files, trainerRun, deps);
     return SnapshotRetrainer.compared(run, snapshot, TrainerContract.HoldoutMetricsOf(trainerRun.Result.holdout), retrained, tolerance);
   }
@@ -121,6 +123,18 @@ export class SnapshotRetrainer {
     const again = await deps.trainer.RunTrainer(await issue(), issue);
     if (again.status === 'failed') throw new Error(`Retraining run ${run.ID} failed at stage ${again.stage}: ${again.message}`);
     return TrainerContract.HoldoutMetricsOf(again.holdout);
+  }
+
+  /**
+   * The protocol a retraining runs under is the one the run logged; the snapshot's `EvaluationProtocolID` is covered by
+   * its verified content hash. A run whose log names another protocol (an edited run row) would retrain under rules the
+   * snapshot was not frozen for, so it is refused.
+   *
+   * @throws Error naming both protocols when they differ
+   */
+  private static assertLoggedProtocolIsSnapshots(run: MJMLTrainingRunEntity, snapshot: MJTrainingSnapshotEntity, logged: LoggedTrainerRun): void {
+    if (UUIDsEqual(logged.Request.evaluationProtocolId, snapshot.EvaluationProtocolID)) return;
+    throw new Error(`Training run ${run.ID} logged Evaluation Protocol ${logged.Request.evaluationProtocolId}, but its Training Snapshot ${snapshot.ID} was frozen under ${snapshot.EvaluationProtocolID}; it is not retrained`);
   }
 
   /** The Evaluation Protocol a run was trained under, read through `deps.protocols` (default: RunView on `deps.provider`). */

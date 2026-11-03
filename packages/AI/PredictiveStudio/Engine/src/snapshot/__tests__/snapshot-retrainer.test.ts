@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { MS_PER_DAY, TRAINING_RUN_RESULTS_SCHEMA, type TrainerRequest, type TrainerResult } from '@memberjunction/predictive-studio-core';
+import { MS_PER_DAY, TRAINING_RUN_RESULTS_SCHEMA, TrainingRunResultsParser, type TrainerRequest, type TrainerResult } from '@memberjunction/predictive-studio-core';
 import { SnapshotRetrainer } from '../snapshot-retrainer';
 import { SnapshotIntegrityError } from '../snapshot-manifest';
 import type { ITrainerEvaluator } from '../../training/types';
@@ -57,6 +57,27 @@ describe('SnapshotRetrainer.Retrain', () => {
     });
     await expect(new SnapshotRetrainer().Retrain(run.ID, deps)).rejects.toThrow(`Run ${run.ID} has no trainer request; only runs trained through /trainer are retrained`);
     expect(trainer.CallCount).toBe(1);
+  });
+
+  it('refuses a run whose logged protocol is not the snapshot\'s, naming both, before calling a trainer', async () => {
+    const trainer = new DeterministicTrainer();
+    const { deps, run, snapshots } = await trainedUnitRun(trainer);
+    const parsed = TrainingRunResultsParser.ParseTrainingRunResults(run.ValidationResults);
+    if (!parsed.Ok || parsed.Value.status !== 'completed' || parsed.Value.trainerRequest === null) throw new Error('the run logged no trainer request');
+    const other = '11111111-2222-3333-4444-555555555555';
+    run.ValidationResults = JSON.stringify({ ...parsed.Value, trainerRequest: { ...parsed.Value.trainerRequest, evaluationProtocolId: other } });
+    await expect(new SnapshotRetrainer().Retrain(run.ID, deps)).rejects.toThrow(`logged Evaluation Protocol ${other}, but its Training Snapshot ${snapshots[0].ID} was frozen under ${snapshots[0].EvaluationProtocolID}`);
+    expect(trainer.CallCount).toBe(1);
+  });
+
+  it('retrains a run whose logged protocol id differs from the snapshot\'s only in letter case', async () => {
+    const trainer = new DeterministicTrainer();
+    const { deps, run, snapshots } = await trainedUnitRun(trainer);
+    const parsed = TrainingRunResultsParser.ParseTrainingRunResults(run.ValidationResults);
+    if (!parsed.Ok || parsed.Value.status !== 'completed' || parsed.Value.trainerRequest === null) throw new Error('the run logged no trainer request');
+    const flipped = snapshots[0].EvaluationProtocolID === snapshots[0].EvaluationProtocolID.toUpperCase() ? snapshots[0].EvaluationProtocolID.toLowerCase() : snapshots[0].EvaluationProtocolID.toUpperCase();
+    run.ValidationResults = JSON.stringify({ ...parsed.Value, trainerRequest: { ...parsed.Value.trainerRequest, evaluationProtocolId: flipped } });
+    await expect(new SnapshotRetrainer().Retrain(run.ID, deps)).resolves.toMatchObject({ Reproduced: true });
   });
 
   it('refuses a snapshot whose stored matrix file no longer matches its SHA-256, naming the matrix file', async () => {
