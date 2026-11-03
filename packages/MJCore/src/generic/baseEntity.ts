@@ -7317,19 +7317,22 @@ export abstract class BaseEntity<T = unknown> {
         const rawChildRow = (typeof (matchedRecord as BaseEntity).GetAll === 'function'
             ? (matchedRecord as BaseEntity).GetAll()
             : matchedRecord) as Record<string, string | number | boolean | Date | object | null | undefined>;
-        const childRow = BaseEntity.omitInheritedParentFields(parent, childEntity, rawChildRow);
+        const childRow = BaseEntity.inheritedFieldsFromParent(parent, childEntity, rawChildRow);
         await parent.linkHydratedChildFromBatchRow(childEntity, childRow);
         outLinkedChildren.push(childEntity);
         return true;
     }
 
     /**
-     * Strips non-primary-key fields owned by `parent` (or its IS-A ancestors) from an in-memory
-     * child row before linking it downward onto `parent`. Keeps the freshly loaded parent row
-     * authoritative for its own columns even when an engine cache holds an older snapshot of the
-     * child view's joined parent columns.
+     * Replaces the non-primary-key fields owned by `parent` (or its IS-A ancestors) in an in-memory
+     * child row with `parent`'s own loaded values, before linking the row downward onto `parent`.
+     * Keeps the freshly loaded parent row authoritative for its own columns even when an engine
+     * cache holds an older snapshot of the child view's joined parent columns, and still hydrates
+     * the child's mirror fields: a mirror left NotLoaded would have no old value, so a later
+     * `child.Set()` of an inherited field would report it as changing from null in `GetAll(true)`
+     * (and so in Record Changes). A field the parent did not load stays out of the row.
      */
-    private static omitInheritedParentFields(
+    private static inheritedFieldsFromParent(
         parent: BaseEntity,
         childEntity: BaseEntity,
         childRow: Record<string, string | number | boolean | Date | object | null | undefined>
@@ -7376,15 +7379,22 @@ export abstract class BaseEntity<T = unknown> {
             return childRow;
         }
 
-        let copy: Record<string, string | number | boolean | Date | object | null | undefined> | null = null;
+        const copy: Record<string, string | number | boolean | Date | object | null | undefined> = {};
         for (const key of Object.keys(childRow)) {
             if (!inheritedLower.has(key.trim().toLowerCase())) {
-                continue;
+                copy[key] = childRow[key];
             }
-            copy ??= { ...childRow };
-            delete copy[key];
         }
-        return copy ?? childRow;
+        // GetAll() holds every field the parent chain loaded (NotLoaded ones are omitted), keyed
+        // by field name, with the authoritative current values. The parent was loaded in this
+        // same batch, so its current values are its loaded values.
+        const parentValues = parent.GetAll() as Record<string, string | number | boolean | Date | object | null | undefined>;
+        for (const name of childEntity.EntityInfo.ParentEntityFieldNames) {
+            if (!pkNamesLower.has(name.trim().toLowerCase()) && Object.prototype.hasOwnProperty.call(parentValues, name)) {
+                copy[name] = parentValues[name];
+            }
+        }
+        return copy;
     }
 
     private static async partitionParentsBySubtypeLoadHint(
