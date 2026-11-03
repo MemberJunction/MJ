@@ -2090,3 +2090,8 @@ function createMSSQLCompatPool(pgPool: import('pg').Pool): sql.ConnectionPool {
   return wrapper as unknown as sql.ConnectionPool;
 }
 
+
+// The magic-link service and its token helpers, for Open Apps that mint magic-link invites
+// themselves instead of carrying their own copy of the token format, hashing and invite write.
+// Exported under the names they have on later releases.
+export { MagicLinkService, hashToken as HashToken, generateRawToken as GenerateRawToken } from './auth/magicLink/index.js';
