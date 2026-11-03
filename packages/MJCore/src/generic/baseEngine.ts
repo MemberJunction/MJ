@@ -376,6 +376,11 @@ interface ExternalChangeReload {
 export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartupSink {
     private _loaded: boolean = false;
     private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
+    /**
+     * The forced reload queued behind the load that is running, shared by every `Load(…, true)`
+     * call that arrives before it starts. Null when none is queued. See {@link Load}.
+     */
+    private _forcedReloadAfterCurrent: Promise<void> | null = null;
     private _contextUser: UserInfo;
     /**
      * True once {@link ResolveContextUser} has put this engine on the MJ system user. Makes the
@@ -758,6 +763,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     /**
      * This method should be called by sub-classes to load up their specific metadata requirements. For more complex metadata
      * loading or for post-processing of metadata loading done here, overide the AdditionalLoading method to add your logic.
+     *
+     * When a load is already running, a call without `forceRefresh` waits for it and returns. A call
+     * with `forceRefresh` waits for it and then reads again, because the running load may have read
+     * before the caller's own writes. Forced calls that arrive while that reload is still queued share
+     * it, so a burst of `Config(true)` calls costs at most one extra read.
      * @param configs
      * @param contextUser
      * @returns
@@ -766,14 +776,14 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (this.ProviderToUse?.ProviderType === ProviderType.Database && !contextUser)
             throw new Error('For server-side use of all engine classes, you must provide the contextUser parameter')
         if (this._loadingSubject.value) {
-            return new Promise<void>((resolve) => {
-                const subscription = this._loadingSubject.subscribe((loading) => {
-                    if (!loading) {
-                        subscription.unsubscribe();
-                        resolve();
-                    }
-                });
+            if (!forceRefresh) {
+                return this.waitForCurrentLoad();
+            }
+            this._forcedReloadAfterCurrent ??= this.waitForCurrentLoad().then(() => {
+                this._forcedReloadAfterCurrent = null;
+                return this.Load(configs, provider, true, contextUser);
             });
+            return this._forcedReloadAfterCurrent;
         }
 
         if (!this._loaded || forceRefresh) {
@@ -840,6 +850,18 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 TelemetryManager.Instance.EndEvent(eventId);
             }
         }
+    }
+
+    /** Resolves when the load that is running finishes. */
+    private waitForCurrentLoad(): Promise<void> {
+        return new Promise<void>((resolve) => {
+            const subscription = this._loadingSubject.subscribe((loading) => {
+                if (!loading) {
+                    subscription.unsubscribe();
+                    resolve();
+                }
+            });
+        });
     }
 
     /**
