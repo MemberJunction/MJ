@@ -1999,7 +1999,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       const result = await listDetail.Save();
       if (!result) {
         LogErrorEx({
-          message: listDetail.LatestResult?.CompleteMessage
+          message: listDetail.LatestResult?.CompleteMessage ?? 'Save of list detail failed with no result recorded'
         });
       }
       // Update progress (0-80%)
@@ -2182,7 +2182,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       const result = await listDetail.Save();
       if (!result) {
         LogErrorEx({
-          message: listDetail.LatestResult?.CompleteMessage
+          message: listDetail.LatestResult?.CompleteMessage ?? 'Save of list detail failed with no result recorded'
         });
       }
       // Update progress (0-80%) via the helper so both the counter and the

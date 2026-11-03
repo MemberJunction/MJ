@@ -4137,9 +4137,10 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * Returns the most recent result from the result history. If there are no results in the history, this method will return null.
+     * Returns the most recent result from the result history, or `null` when there is none yet
+     * (e.g. a record that was loaded but not saved or deleted).
      */
-    public get LatestResult(): BaseEntityResult {
+    public get LatestResult(): BaseEntityResult | null {
         if (this._resultHistory.length > 0)
             return this._resultHistory[this._resultHistory.length - 1];
         else
@@ -8918,10 +8919,14 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * Resolves the recursive foreign key field for this entity. If `parentFieldName` is provided,
-     * finds that specific field. Otherwise defaults to 'ParentID' if present, or the first
-     * self-referencing foreign key field found on the entity.
+     * finds that specific field. Otherwise uses the field marked `IsHierarchy`, then 'ParentID'
+     * if present, then the first self-referencing foreign key field found on the entity.
+     *
+     * @param requireHierarchyColumns When true, the 'ParentID' and first-recursive-FK fallbacks
+     * are accepted only if the entity also exposes `Root<Field>` and `<Field>Depth` — the columns
+     * `GetDescendants` / `GetAncestors` filter on. Without them the query cannot succeed.
      */
-    protected getRecursiveForeignKeyField(parentFieldName?: string): EntityFieldInfo | null {
+    protected getRecursiveForeignKeyField(parentFieldName?: string, requireHierarchyColumns = false): EntityFieldInfo | null {
         if (!this.EntityInfo) return null;
         if (this.PrimaryKeys.length !== 1) {
             LogError(`BaseEntity hierarchy methods: Entity '${this.EntityInfo.Name}' has ${this.PrimaryKeys.length} primary key fields. MemberJunction hierarchy traversal requires a single-column primary key.`);
@@ -8936,12 +8941,21 @@ export abstract class BaseEntity<T = unknown> {
         const explicitHierarchyField = fields.find(f => f.IsHierarchy && (UUIDsEqual(f.RelatedEntityID, this.EntityInfo?.ID) || f.RelatedEntity === this.EntityInfo?.Name));
         if (explicitHierarchyField) return explicitHierarchyField;
 
+        const isRecursive = (f: EntityFieldInfo): boolean => UUIDsEqual(f.RelatedEntityID, this.EntityInfo?.ID) || f.RelatedEntity === this.EntityInfo?.Name;
+        const isUsable = (f: EntityFieldInfo): boolean => !requireHierarchyColumns || this.hasHierarchyColumns(f.Name);
+
         // Check for 'ParentID' self-referencing foreign key next
-        const parentIdField = fields.find(f => f.Name.toLowerCase() === 'parentid' && (UUIDsEqual(f.RelatedEntityID, this.EntityInfo?.ID) || f.RelatedEntity === this.EntityInfo?.Name));
+        const parentIdField = fields.find(f => f.Name.toLowerCase() === 'parentid' && isRecursive(f) && isUsable(f));
         if (parentIdField) return parentIdField;
 
         // Fall back to first recursive foreign key field
-        return fields.find(f => f.RelatedEntityID && (UUIDsEqual(f.RelatedEntityID, this.EntityInfo?.ID) || f.RelatedEntity === this.EntityInfo?.Name)) ?? null;
+        return fields.find(f => f.RelatedEntityID && isRecursive(f) && isUsable(f)) ?? null;
+    }
+
+    /** True when the entity exposes the `Root<Field>` and `<Field>Depth` columns CodeGen adds for a hierarchy FK. */
+    private hasHierarchyColumns(fkFieldName: string): boolean {
+        const names = new Set((this.EntityInfo?.Fields ?? []).map(f => f.Name.toLowerCase()));
+        return names.has(`root${fkFieldName}`.toLowerCase()) && names.has(`${fkFieldName}depth`.toLowerCase());
     }
 
     /**
@@ -8952,9 +8966,9 @@ export abstract class BaseEntity<T = unknown> {
     public async GetDescendants<T extends BaseEntity = this>(options?: { parentFieldName?: string; maxDepth?: number } | number): Promise<T[]> {
         const maxDepth = typeof options === 'number' ? options : options?.maxDepth;
         const parentFieldName = typeof options === 'object' ? options?.parentFieldName : undefined;
-        const fkField = this.getRecursiveForeignKeyField(parentFieldName);
+        const fkField = this.getRecursiveForeignKeyField(parentFieldName, true);
         if (!fkField) {
-            LogError(`BaseEntity.GetDescendants(): No recursive foreign key field found on entity ${this.EntityInfo?.Name}`);
+            LogError(`BaseEntity.GetDescendants(): No recursive foreign key field with hierarchy columns (Root<Field>, <Field>Depth) found on entity ${this.EntityInfo?.Name}`);
             return [];
         }
         const pkName = this.FirstPrimaryKey.Name; // first-pk-ok: getRecursiveForeignKeyField already gates hierarchy traversal to single-column keys
@@ -8974,7 +8988,11 @@ export abstract class BaseEntity<T = unknown> {
             OrderBy: `${depthFieldName} ASC`,
         }, this._contextCurrentUser);
 
-        return result.Success ? (result.Results ?? []) : [];
+        if (!result.Success) {
+            LogError(`BaseEntity.GetDescendants(): query failed on entity ${this.EntityInfo.Name} (filter: ${filter}): ${result.ErrorMessage}`);
+            return [];
+        }
+        return result.Results ?? [];
     }
 
     /**
@@ -8983,9 +9001,9 @@ export abstract class BaseEntity<T = unknown> {
      * @returns Array of ancestor entity instances ordered from root down to parent.
      */
     public async GetAncestors<T extends BaseEntity = this>(parentFieldName?: string): Promise<T[]> {
-        const fkField = this.getRecursiveForeignKeyField(parentFieldName);
+        const fkField = this.getRecursiveForeignKeyField(parentFieldName, true);
         if (!fkField) {
-            LogError(`BaseEntity.GetAncestors(): No recursive foreign key field found on entity ${this.EntityInfo?.Name}`);
+            LogError(`BaseEntity.GetAncestors(): No recursive foreign key field with hierarchy columns (Root<Field>, <Field>Depth) found on entity ${this.EntityInfo?.Name}`);
             return [];
         }
         const pkName = this.FirstPrimaryKey.Name; // first-pk-ok: getRecursiveForeignKeyField already gates hierarchy traversal to single-column keys
@@ -9000,13 +9018,18 @@ export abstract class BaseEntity<T = unknown> {
 
         const rv = new RunView(this.RunViewProviderToUse);
         const idList = rawIds.map(id => `'${id}'`).join(',');
+        const filter = `${pkName} IN (${idList})`;
         const result = await rv.RunView<T>({
             EntityName: this.EntityInfo.Name,
-            ExtraFilter: `${pkName} IN (${idList})`,
+            ExtraFilter: filter,
             OrderBy: `${depthFieldName} ASC`,
         }, this._contextCurrentUser);
 
-        return result.Success ? (result.Results ?? []) : [];
+        if (!result.Success) {
+            LogError(`BaseEntity.GetAncestors(): query failed on entity ${this.EntityInfo.Name} (filter: ${filter}): ${result.ErrorMessage}`);
+            return [];
+        }
+        return result.Results ?? [];
     }
 
     /**
@@ -9030,7 +9053,11 @@ export abstract class BaseEntity<T = unknown> {
             ExtraFilter: `${fkField.Name} = '${currentId}'`,
         }, this._contextCurrentUser);
 
-        return result.Success ? (result.Results ?? []) : [];
+        if (!result.Success) {
+            LogError(`BaseEntity.GetChildren(): query failed on entity ${this.EntityInfo.Name} (filter: ${fkField.Name} = '${currentId}'): ${result.ErrorMessage}`);
+            return [];
+        }
+        return result.Results ?? [];
     }
 }
 
