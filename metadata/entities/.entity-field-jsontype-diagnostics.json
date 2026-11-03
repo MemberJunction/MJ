@@ -1,0 +1,66 @@
+[
+  {
+    "fields": {
+      "Name": "MJ: Diagnostic Sessions"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IDiagnosticSessionScope",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IDiagnosticTypes.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Diagnostic Sessions&Name=ScopeJSON"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Diagnostic Sessions"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Diagnostic Bundles"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IDiagnosticBundleManifest",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IDiagnosticTypes.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Diagnostic Bundles&Name=ManifestJSON"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "IDiagnosticScrubReport",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IDiagnosticTypes.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Diagnostic Bundles&Name=ScrubReportJSON"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "IDiagnosticFinding",
+            "JSONTypeIsArray": true,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IDiagnosticTypes.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Diagnostic Bundles&Name=FindingsJSON"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Diagnostic Bundles"
+    }
+  }
+]
