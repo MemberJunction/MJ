@@ -943,14 +943,11 @@ Until it runs, only the API tier reflects the change.
 
 ## 5. Operational notes
 
-- **There is currently no UI for the entity flag.** `Enable Field Level Security` is not exposed on
-  the Entity form in Explorer — the custom form that entity uses does not render it, and the flag is
-  the *only* thing standing between a configured rule and an enforced one. Until that is added
-  ([#4297](https://github.com/MemberJunction/MJ/issues/4297)), turn it on the way the integration
-  tests do: save `EnableFieldLevelSecurity` through the entity layer (`MJ: Entities`), which is also
-  what runs the snapshot. Editing the column with direct SQL is **not** equivalent — it commits the
-  flag without the rows, and on an enabled entity a field with no rows is denied, so it locks every
-  user out of every field on that entity.
+- **Turn the flag on from the Entity form** (Permissions section, "Field-level security"), or by
+  saving `EnableFieldLevelSecurity` through the entity layer (`MJ: Entities`) as the integration
+  tests do. Both run the snapshot. Editing the column with direct SQL is **not** equivalent — it
+  commits the flag without the rows, and on an enabled entity a field with no rows is denied, so it
+  locks every user out of every field on that entity.
 - **Enabling field security on an entity is safe and reversible** (§1.1). It snapshots current
   access, so nothing changes until you tighten a field; switching it off keeps your rules for
   later. You do not maintain the rows by hand — MJ reconciles them as the schema and

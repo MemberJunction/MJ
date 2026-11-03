@@ -109,6 +109,7 @@ import { AISkillSharingPanel } from "../panels/ai-skill-sharing/ai-skill-sharing
 import { EntityFormChromeEditorComponent } from "../panels/form-chrome/entity-form-chrome-editor.component";
 import { EntityRelationshipFormRolePanel } from "../panels/form-chrome/entity-relationship-form-role.panel";
 import { EntityCloneConfigEditorComponent } from "../panels/record-clone/entity-clone-config-editor.component";
+import { EntityFieldSecurityPanelComponent } from "../panels/field-security/entity-field-security-panel.component";
 import { ClonePlanTreeComponent } from "@memberjunction/ng-record-clone";
 import { ResourcePermissionsModule } from "@memberjunction/ng-resource-permissions";
 import { MLModelFormComponentExtended, LoadMLModelFormComponentExtended } from "./MLModels/ml-model-form.component";
@@ -197,6 +198,7 @@ import { BrandKitGenerationPolicyPanelComponent } from "../panels/brand-kits/bra
         EntityFormChromeEditorComponent,
         EntityRelationshipFormRolePanel,
         EntityCloneConfigEditorComponent,
+        EntityFieldSecurityPanelComponent,
         MJFileFormComponentExtended,
         MLModelFormComponentExtended,
         BrandKitAssetsPanelComponent,
