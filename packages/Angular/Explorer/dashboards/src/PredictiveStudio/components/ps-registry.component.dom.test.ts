@@ -63,6 +63,12 @@ describe('PSRegistryComponent (DOM)', () => {
     expect(query(fixture, '[data-testid="ps-registry-detail"]')?.textContent).toContain('0.850');
   });
 
+  it("labels each master-list row's score with its metric, so a loss never reads as an unnamed number", () => {
+    const fixture = render([makeModel({ Metrics: '{}', HoldoutMetrics: '{"log-loss":0.41}' })]);
+    const cell = (query(fixture, '[data-testid="ps-registry-row"] .auc .v')?.textContent || '').replace(/\s+/g, ' ').trim();
+    expect(cell).toBe('Log Loss 0.410');
+  });
+
   it('offers Validate (not Archive) for a Draft model', () => {
     const fixture = render([makeModel({ Status: 'Draft' })]);
     expect(query(fixture, '[data-testid="ps-registry-validate"]')).not.toBeNull();

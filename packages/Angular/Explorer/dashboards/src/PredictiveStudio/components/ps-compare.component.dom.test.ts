@@ -73,14 +73,16 @@ describe('PSCompareComponent (DOM)', () => {
     expect(layout?.textContent).toContain('Ridge');
   });
 
-  it('only lists sessions with ≥2 scored iterations in the picker', () => {
-    const fixture = render(
-      makeEngine({
-        s1: [scoredRow('i1', 0.9, 'XGBoost'), scoredRow('i2', 0.8, 'Ridge')],
-        s2: [scoredRow('i3', 0.7, 'MLP')], // only one scored → excluded
-      }),
-    );
-    expect(queryAll(fixture, '[data-testid="ps-compare-session"] option').length).toBe(1);
+  it('only lists sessions whose stored ranking holds ≥2 of their iterations, and counts the ranked ones', () => {
+    const engine = {
+      Sessions: [
+        { ID: 's1', Name: 'Session s1', Leaderboard: rankingOf('i1', 'i2'), PlanSpec: rmsePlan },
+        { ID: 's2', Name: 'Session s2', Leaderboard: rankingOf('i3'), PlanSpec: rmsePlan }, // one ranked → excluded
+      ],
+      IterationRowsForSession: (id: string) => (id === 's1' ? [scoredRow('i1', 0.9, 'XGBoost'), scoredRow('i2', 0.8, 'Ridge')] : [scoredRow('i3', 0.7, 'MLP'), scoredRow('i4', 0.6, 'GLM')]),
+    } as unknown as PredictiveStudioEngine;
+    const options = queryAll(render(engine), '[data-testid="ps-compare-session"] option').map((o) => (o.textContent || '').replace(/\s+/g, ' ').trim());
+    expect(options).toEqual(['Session s1 · 2 ranked']);
   });
 
   it('shows an RMSE run on its own scale, never as a negated score', () => {
@@ -91,8 +93,10 @@ describe('PSCompareComponent (DOM)', () => {
     expect(fixture.nativeElement.textContent).toContain('leads on rmse at 2.500');
   });
 
-  it('has no columns when the session has no stored ranking', () => {
+  it('does not list a session with raw scores but no stored ranking: it shows the empty state, not a pick with no columns', () => {
     const fixture = render(makeEngine({ s1: [scoredRow('i1', 0.9, 'XGBoost'), scoredRow('i2', 0.8, 'Ridge')] }));
     expect(query(fixture, '[data-testid="ps-compare-layout-side"]')).toBeNull();
+    expect(query(fixture, '[data-testid="ps-compare-session"]')).toBeNull();
+    expect(query(fixture, '[data-testid="ps-compare-empty"]')).not.toBeNull();
   });
 });

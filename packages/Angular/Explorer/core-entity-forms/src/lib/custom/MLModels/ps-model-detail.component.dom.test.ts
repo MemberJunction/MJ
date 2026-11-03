@@ -85,6 +85,13 @@ describe('PSModelDetailComponent (DOM) — the performance tiles', () => {
     expect(shown.join(' ')).not.toContain('AUC');
   });
 
+  it("never shows another metric's number under the primary metric's title when the train metrics lack it", () => {
+    // Holdout stores only log-loss, so the tiles are titled Log Loss; the train metrics store AUC alone.
+    const shown = tiles(makeModel({ Metrics: '{"AUC":0.9}', HoldoutMetrics: '{"log-loss":0.3674}' }));
+    expect(shown[0]).toContain('Train Log Loss | —');
+    expect(shown[0]).not.toContain('0.900');
+  });
+
   it("captions the train tile of a model trained under an Evaluation Protocol as the inner-CV estimate", () => {
     const shown = tiles(makeModel({ Metrics: '{"mase":0.9}', HoldoutMetrics: '{"mase":0.82}', Lineage: JSON.stringify({ evaluationProtocolId: 'EP-1' }) }));
     expect(shown[0]).toContain('inner-CV estimate');

@@ -77,7 +77,7 @@ interface ModelRowVM {
                           <div class="ln2 ps-muted ps-small">v{{ m.version }} &bull; {{ m.algorithm }}</div>
                         </div>
                         <div class="auc">
-                          <div class="v">{{ m.holdoutScore }}</div>
+                          <div class="v">{{ m.scoreLabel }} {{ m.holdoutScore }}</div>
                           <div class="st" [class]="StatusClass(m.status)">{{ m.status }}</div>
                         </div>
                       </div>

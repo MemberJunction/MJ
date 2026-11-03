@@ -407,6 +407,18 @@ describe('ExperimentOrchestrator.runSession', () => {
     expect(byLabel.get('C')!.Rationale).toContain('Pruned');
   });
 
+  it("writes a pruned iteration's rationale on each score's own metric scale, labelled with the metric, never a negated loss", async () => {
+    const factory = new FakeFactory();
+    // RMSE is lower-is-better: the leaderboard holds the negated losses -10 (A) and -20 (B); B is pruned by top-1.
+    const trainer = new FakeTrainer({ A: -10, B: -20 });
+    const rmsePlan: ModelingPlanSpec = { ...plan([experiment('A', 1), experiment('B', 2)]), TargetDefinition: { EntityName: 'Members', TargetVariable: 'Y', ProblemType: 'regression', SuccessMetric: 'rmse' } };
+    await new ExperimentOrchestrator().runSession(rmsePlan, deps(factory, trainer, new FakeClock()), { concurrency: 2, keepTopK: 1 });
+    const pruned = factory.Iterations.find((it) => it.Label === 'B')!;
+    expect(pruned.Status).toBe('Pruned');
+    expect(pruned.Rationale).toContain('Pruned: dominated branch, scored rmse 20 (top-ranked so far: rmse 10).');
+    expect(pruned.Rationale).not.toMatch(/-10|-20|best/);
+  });
+
   it('prunes via a relative threshold (below 80% of the best)', async () => {
     const factory = new FakeFactory();
     const clock = new FakeClock();

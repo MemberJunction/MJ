@@ -16,14 +16,16 @@ import {
 interface SessionOption {
   id: string;
   name: string;
-  scoredCount: number;
+  /** The session's iterations its stored ranking holds: the runs the panel can line up. */
+  rankedCount: number;
 }
 
 /**
  * Compare Runs panel — a live side-by-side comparison of the top scored iterations (training runs)
  * within a selected experiment session. Fully live:
  *
- * - A session picker lists every session that has ≥2 scored iterations (only those are comparable).
+ * - A session picker lists every session whose stored ranking holds ≥2 of its iterations (only those are comparable;
+ *   a raw iteration `Score` says nothing about which metric it is on, so it never makes a session comparable).
  * - The top runs of the selected session are derived via {@link DeriveCompareColumns} and rendered as
  *   side-by-side columns; the real metric rows (holdout score, compute cost) come from
  *   {@link BuildCompareMetricRows}, with the best column per row highlighted.
@@ -51,7 +53,7 @@ interface SessionOption {
             <label>Session to compare</label>
             <select class="ps-input" data-testid="ps-compare-session" [(ngModel)]="selectedSessionId" (ngModelChange)="rebuild()">
               @for (s of sessionOptions; track s.id) {
-                <option [value]="s.id">{{ s.name }} · {{ s.scoredCount }} scored</option>
+                <option [value]="s.id">{{ s.name }} · {{ s.rankedCount }} ranked</option>
               }
             </select>
           </div>
@@ -62,7 +64,7 @@ interface SessionOption {
         @if (runs.length < 2) {
           <div class="ps-callout info">
             <i class="fa-solid fa-circle-info"></i>
-            <div class="ps-small">This session has fewer than two scored iterations — pick another session to compare.</div>
+            <div class="ps-small">This session's ranking holds fewer than two iterations — pick another session to compare.</div>
           </div>
         } @else {
           <div class="ps-card" data-testid="ps-compare-layout-side">
@@ -103,7 +105,7 @@ interface SessionOption {
 export class PSCompareComponent implements OnInit {
   @Input() engine!: PredictiveStudioEngine;
 
-  /** Sessions with ≥2 scored iterations — the comparable set. */
+  /** Sessions whose stored ranking holds ≥2 of their iterations — the comparable set. */
   public SessionOptions: SessionOption[] = [];
 
   /** @deprecated Use {@link SessionOptions}. */
@@ -151,15 +153,16 @@ export class PSCompareComponent implements OnInit {
     this.Rebuild();
   }
 
-  /** List sessions that have at least two scored iterations (the only ones worth comparing). */
+  /** List sessions whose stored ranking holds at least two of their iterations — exactly the columns Rebuild can draw. */
   private buildSessionOptions(): void {
     const sessions = this.engine?.Sessions ?? [];
     this.SessionOptions = sessions
       .map((s) => {
-        const scoredCount = this.engine.IterationRowsForSession(s.ID).filter((it) => it.Score != null).length;
-        return { id: s.ID, name: s.Name, scoredCount };
+        const ranked = ParseSessionLeaderboard(s.Leaderboard, SessionSuccessMetric(s.PlanSpec));
+        const rankedCount = DeriveCompareColumns(this.engine.IterationRowsForSession(s.ID), ranked, Number.POSITIVE_INFINITY).length;
+        return { id: s.ID, name: s.Name, rankedCount };
       })
-      .filter((o) => o.scoredCount >= 2);
+      .filter((o) => o.rankedCount >= 2);
   }
 
   /** Derive the compare columns + metric rows for the selected session. */

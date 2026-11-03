@@ -151,7 +151,8 @@ export class PSModelDetailComponent {
     if (score && trainMetrics[score.key] != null) {
       return FormatMetricValue(score.key, trainMetrics[score.key]!);
     }
-    return trainMetrics.AUC != null ? trainMetrics.AUC.toFixed(3) : '—';
+    // No value of the primary metric: say so, never another metric's number under the primary metric's title.
+    return '—';
   }
 
   public get HoldoutPrimaryScore(): string {
@@ -161,7 +162,8 @@ export class PSModelDetailComponent {
     if (score && holdoutMetrics[score.key] != null) {
       return FormatMetricValue(score.key, holdoutMetrics[score.key]!);
     }
-    return holdoutMetrics.AUC != null ? holdoutMetrics.AUC.toFixed(3) : '—';
+    // No value of the primary metric: say so, never another metric's number under the primary metric's title.
+    return '—';
   }
 
   public get SecondaryMetrics(): PSMetricDisplay[] {

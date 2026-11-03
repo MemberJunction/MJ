@@ -519,7 +519,8 @@ export class ExperimentOrchestrator {
     for (const id of prunedIds) {
       const iteration = iterations.find((it) => UUIDsEqual(it.ID, id));
       if (iteration && iteration.Status === 'Completed') {
-        const saved = await this.markPruned(iteration, best, deps);
+        const entry = leaderboard.find((e) => UUIDsEqual(e.IterationID, id)) ?? null;
+        const saved = await this.markPruned(iteration, entry, best, deps);
         if (saved) {
           persisted.add(id);
         }
@@ -542,12 +543,16 @@ export class ExperimentOrchestrator {
    */
   private async markPruned(
     iteration: MJExperimentSessionIterationEntity,
+    entry: ExperimentLeaderboardEntry | null,
     best: ExperimentLeaderboardEntry | null,
     _deps: ExperimentDeps,
   ): Promise<boolean> {
     iteration.Status = 'Pruned';
-    const bestNote = best ? ` (best so far scored ${best.Metric})` : '';
-    iteration.Rationale = `${iteration.Rationale ?? ''}\nPruned: dominated branch, scored ${iteration.Score ?? 'n/a'}${bestNote}.`.trim();
+    // Each score on its own metric's scale and labelled with it: the leaderboard holds normalized (higher-is-better)
+    // numbers, which read as a negated loss if written raw.
+    const scored = entry ? ExperimentScores.OnOwnScale(entry.Metric, entry.ScoreMetric) : 'n/a';
+    const topNote = best ? ` (top-ranked so far: ${ExperimentScores.OnOwnScale(best.Metric, best.ScoreMetric)})` : '';
+    iteration.Rationale = `${iteration.Rationale ?? ''}\nPruned: dominated branch, scored ${scored}${topNote}.`.trim();
     const ok = await iteration.Save();
     if (!ok) {
       LogError(
