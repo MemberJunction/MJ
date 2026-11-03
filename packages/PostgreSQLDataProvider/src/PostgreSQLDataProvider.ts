@@ -715,6 +715,11 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      * keyword, producing `syntax error at or near "ESCAPE"`). PostgreSQL's default
      * backslash-escape behavior in LIKE makes the explicit ESCAPE clause unnecessary,
      * so we emit plain quoted literals with no `N` prefix and no `ESCAPE`.
+     *
+     * PostgreSQL compares text case-sensitively, unlike SQL Server's default collation, so
+     * both sides are lowercased: the column through {@link buildUserSearchColumnExpression},
+     * the term with `LOWER('…')` (issue #5833). A `LOWER(col) varchar_pattern_ops` expression
+     * index keeps Exact and BeginsWith index-seekable.
      */
     protected override buildPerFieldSearchPredicate(field: EntityFieldInfo, escapedTerm: string, rawSafeTerm: string): string {
         if (field.UserSearchParamFormatAPI && field.UserSearchParamFormatAPI.length > 0) {
@@ -726,15 +731,26 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         const pred = (field.UserSearchPredicateAPI ?? 'Contains').trim();
         switch (pred) {
             case 'Exact':
-                return ` = '${rawSafeTerm}'`;
+                return ` = LOWER('${rawSafeTerm}')`;
             case 'BeginsWith':
-                return ` LIKE '${escapedTerm}%'`;
+                return ` LIKE LOWER('${escapedTerm}%')`;
             case 'EndsWith':
-                return ` LIKE '%${escapedTerm}'`;
+                return ` LIKE LOWER('%${escapedTerm}')`;
             case 'Contains':
             default:
-                return ` LIKE '%${escapedTerm}%'`;
+                return ` LIKE LOWER('%${escapedTerm}%')`;
         }
+    }
+
+    /**
+     * `LOWER("Col")` for a text field searched by the built-in predicates, so user search is
+     * case-insensitive as on SQL Server (issue #5833). A field with a
+     * `UserSearchParamFormatAPI` keeps the plain column: its format is the caller's own SQL.
+     */
+    protected override buildUserSearchColumnExpression(field: EntityFieldInfo): string {
+        const column = this.QuoteIdentifier(field.Name);
+        if (field.UserSearchParamFormatAPI && field.UserSearchParamFormatAPI.length > 0) return column;
+        return this.isTextSearchableType(field) ? `LOWER(${column})` : column;
     }
 
     /**

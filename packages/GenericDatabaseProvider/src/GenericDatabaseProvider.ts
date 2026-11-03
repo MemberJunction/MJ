@@ -3724,7 +3724,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 const sParam = this.buildPerFieldSearchPredicate(field, escapedTerm, safeUserSearchString);
                 if (!sParam) continue;
                 if (sUserSearchSQL.length > 0) sUserSearchSQL += ' OR ';
-                sUserSearchSQL += `(${this.QuoteIdentifier(field.Name)} ${sParam})`;
+                sUserSearchSQL += `(${this.buildUserSearchColumnExpression(field)} ${sParam})`;
             }
             if (sUserSearchSQL.length > 0) {
                 sUserSearchSQL = '(' + sUserSearchSQL + ')';
@@ -3880,6 +3880,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * to nvarchar. Unbounded (MAX/ntext/text) columns are rejected because the
      * LIKE path cannot seek them; FTX is the right tool for those.
      */
+    /**
+     * Left-hand side of a user-search predicate: the quoted column. A provider whose
+     * comparisons are case-sensitive overrides this (with {@link buildPerFieldSearchPredicate})
+     * to compare a case-folded column, e.g. PostgreSQL's `LOWER("Name")`.
+     */
+    protected buildUserSearchColumnExpression(field: EntityFieldInfo): string {
+        return this.QuoteIdentifier(field.Name);
+    }
+
     protected isTextSearchableType(field: EntityFieldInfo): boolean {
         const t = (field.Type ?? '').toLowerCase();
         if (t !== 'nvarchar' && t !== 'varchar' && t !== 'char' && t !== 'nchar') return false;
