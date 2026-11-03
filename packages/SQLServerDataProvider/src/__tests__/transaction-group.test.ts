@@ -50,6 +50,19 @@ function makeProviderStub() {
 }
 type ProviderStub = ReturnType<typeof makeProviderStub>;
 
+/**
+ * Widgets with `ExternalID` made a foreign key back to Widgets: a `Use` variable may set only a
+ * foreign key to its `Define` item's entity (#5622).
+ */
+function makeSelfReferencingWidgetEntityInfo() {
+  const entityInfo = makeWidgetEntityInfo();
+  const externalID = entityInfo.Fields.find((f) => f.Name === 'ExternalID');
+  if (externalID) {
+    externalID.RelatedEntityID = entityInfo.ID;
+  }
+  return entityInfo;
+}
+
 function makeItem(
   entity: BaseEntity,
   operationType: 'Create' | 'Update' | 'Delete',
@@ -186,7 +199,7 @@ describe('SQLServerTransactionGroup.Submit', () => {
   });
 
   it('variables: a Define result flows into a later Use item and its instruction is regenerated through the provider', async () => {
-    const entityInfo = makeWidgetEntityInfo();
+    const entityInfo = makeSelfReferencingWidgetEntityInfo();
     const definer = makeSavedWidgetEntity(entityInfo, TEST_USER);
     const consumer = makeSavedWidgetEntity(entityInfo, TEST_USER);
     const group = new SQLServerTransactionGroup();
@@ -219,7 +232,7 @@ describe('SQLServerTransactionGroup.Submit', () => {
   });
 
   it('variables: a Use without a matching Define rolls the transaction back and never commits', async () => {
-    const entityInfo = makeWidgetEntityInfo();
+    const entityInfo = makeSelfReferencingWidgetEntityInfo();
     const orphan = makeSavedWidgetEntity(entityInfo, TEST_USER);
     const group = new SQLServerTransactionGroup();
     const a = makeItem(orphan, 'Create', 'EXEC [dbo].spCreateWidget -- orphan', pool);
