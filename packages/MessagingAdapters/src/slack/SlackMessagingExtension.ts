@@ -43,7 +43,7 @@
 import express, { Application, Request, Response, Router } from 'express';
 import { WebClient } from '@slack/web-api';
 import { rateLimit } from 'express-rate-limit';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, SanitizeForLog } from '@memberjunction/global';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { SocketModeClient } from '@slack/socket-mode';
 import {
@@ -57,6 +57,11 @@ import { SlackAdapter } from './SlackAdapter.js';
 import { MessagingAdapterSettings, RequestWithRawBody, WebhookRateLimitSettings } from '../base/types.js';
 import { VerifySlackSignature } from './slack-routes.js';
 import { HandleSlackInteraction } from './slack-interactivity.js';
+
+/** Returns a request-supplied value as one length-capped line for a log message. */
+function logValue(value: unknown): string {
+    return SanitizeForLog(String(value));
+}
 
 /**
  * Server Extension that registers Slack webhook routes and delegates
@@ -436,7 +441,7 @@ export class SlackMessagingExtension extends BaseServerExtension {
     private async handleSlashCommand(req: Request, res: Response): Promise<void> {
         const { command, text, user_id, user_name, channel_id } = req.body as Record<string, string>;
 
-        LogStatus(`Slack slash command: command=${command}, text="${text}", user=${user_id}, channel=${channel_id}`);
+        LogStatus(`Slack slash command: command=${logValue(command)}, text="${logValue(text)}", user=${logValue(user_id)}, channel=${logValue(channel_id)}`);
 
         // Look up the agent for this command
         const agentName = this.resolveSlashCommandAgent(command);
@@ -578,17 +583,17 @@ export class SlackMessagingExtension extends BaseServerExtension {
         }
 
         const eventType = event.type as string;
-        LogStatus(`Slack event received: type=${eventType}, channel=${event.channel}, user=${event.user}`);
+        LogStatus(`Slack event received: type=${logValue(eventType)}, channel=${logValue(event.channel)}, user=${logValue(event.user)}`);
 
         // Only handle message and app_mention events
         if (eventType !== 'message' && eventType !== 'app_mention') {
-            LogStatus(`Slack: ignoring event type '${eventType}'`);
+            LogStatus(`Slack: ignoring event type '${logValue(eventType)}'`);
             return;
         }
 
         // Skip bot messages (prevent loops) and message edits/deletes
         if (event.bot_id || event.subtype) {
-            LogStatus(`Slack: skipping bot/subtype message (bot_id=${event.bot_id}, subtype=${event.subtype})`);
+            LogStatus(`Slack: skipping bot/subtype message (bot_id=${logValue(event.bot_id)}, subtype=${logValue(event.subtype)})`);
             return;
         }
 
