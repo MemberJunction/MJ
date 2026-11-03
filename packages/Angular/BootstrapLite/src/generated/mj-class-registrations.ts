@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (466 classes)
+// @memberjunction/core-entities (467 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -367,6 +367,7 @@ import {
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
+    MJProjectEntityExtended,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
     MJQueryDependencyEntity,
@@ -1088,6 +1089,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
+    MJProjectEntityExtended,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
     MJQueryDependencyEntity,
@@ -1145,11 +1147,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
     MJSearchProviderEntity,
-    MJSearchScopeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
     MJSearchScopeExternalIndexEntity,
     MJSearchScopePermissionEntity,
@@ -1349,11 +1351,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJEntityFormComponentExtended,
     MJFileFormComponentExtended,
     MJListFormComponentExtended,
-    MJQueryFormComponentExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MJQueryFormComponentExtended,
     MJRubricBandFormComponentExtended,
     MJRubricCategoryFormComponentExtended,
     MJRubricCriterionFormComponentExtended,
@@ -1410,7 +1412,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 642;
+export const CLASS_REGISTRATIONS_COUNT = 643;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
