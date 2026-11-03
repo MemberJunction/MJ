@@ -584,15 +584,16 @@ function featureChips(label: string | null): string[] {
 }
 
 /**
- * Format the Δ-from-best string for a scored card: against the best entry on the card's own metric (normalized scores,
- * so a Δ below zero is worse). The overall best reads "Δ best —"; the best of a fallback metric names that metric.
+ * The gap-from-best string for a scored card, against the best entry on the card's own metric: how far behind it is, as
+ * an unsigned magnitude on that metric's scale (the normalized gap's size is the on-scale gap's size for every
+ * direction), so a worse rmse never reads as a signed, improving-looking Δ. The overall best reads "Δ best —"; the
+ * best of a fallback metric names that metric.
  */
 function scoreDelta(entry: PSRankedScore | undefined, groupBest: PSRankedScore | undefined, status: 'Best' | 'Completed' | 'Pruned'): string {
   if (status === 'Best') return 'Δ best —';
   if (entry === undefined || groupBest === undefined) return '';
   if (UUIDsEqual(entry.IterationID, groupBest.IterationID)) return `Δ best on ${entry.ScoreMetric} —`;
-  const delta = entry.Metric - groupBest.Metric;
-  return `Δ ${delta >= 0 ? '+' : '−'}${Math.abs(delta).toFixed(3)}`;
+  return `${Math.abs(groupBest.Metric - entry.Metric).toFixed(3)} behind best`;
 }
 
 // ---------------------------------------------------------------------------

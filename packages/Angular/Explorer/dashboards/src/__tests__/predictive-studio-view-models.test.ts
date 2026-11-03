@@ -255,10 +255,10 @@ describe('GroupIterationsToKanban', () => {
     expect(best[0].score).toBe(0.86);
   });
 
-  it('computes Δ-from-best for non-best completed', () => {
+  it('says how far a non-best completed card is behind the best, on its metric, with no sign', () => {
     const k = GroupIterationsToKanban(rows, ranked);
     const challenger = k.Completed.find((c) => c.score === 0.84);
-    expect(challenger?.ScoreDelta).toBe('Δ −0.020');
+    expect(challenger?.ScoreDelta).toBe('0.020 behind best');
   });
 
   it('handles an empty set', () => {

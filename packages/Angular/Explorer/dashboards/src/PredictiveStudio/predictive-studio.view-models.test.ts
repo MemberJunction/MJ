@@ -85,7 +85,9 @@ describe('the experiment leaderboard over the stored session ranking', () => {
     const k = GroupIterationsToKanban(rows, ParseSessionLeaderboard(stored, 'RMSE'));
     const card = (algo: string) => k.Completed.find((c) => c.Algorithm === algo);
     expect([card('XGBoost')?.Status, card('LightGBM')?.Status, card('GLM')?.Status]).toEqual(['Best', 'Completed', 'Completed']);
-    expect([card('LightGBM')?.ScoreMetric, card('LightGBM')?.score, card('LightGBM')?.ScoreDelta]).toEqual(['rmse', 13, 'Δ −0.500']);
+    expect([card('LightGBM')?.ScoreMetric, card('LightGBM')?.score, card('LightGBM')?.ScoreDelta]).toEqual(['rmse', 13, '0.500 behind best']);
+    // rmse 13 is worse than the best rmse 12.5: the gap reads as how far behind, never as a signed (improving-looking) Δ.
+    expect(card('LightGBM')?.ScoreDelta).not.toMatch(/[−+-]/);
     expect([card('GLM')?.ScoreMetric, card('GLM')?.score, card('GLM')?.ScoreDelta]).toEqual(['log-loss', 0.3, 'Δ best on log-loss —']);
   });
 });
