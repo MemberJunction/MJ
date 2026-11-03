@@ -104,6 +104,31 @@ const VERBOSE_RECORD_EVENTS: ReadonlySet<SyncLogEvent> = new Set<SyncLogEvent>([
 const VERBOSE_RECORD_LOGS_ENABLED = process.env.MJ_INTEGRATION_VERBOSE_RECORD_LOGS === 'true';
 
 /**
+ * How many times one warning CODE is reported verbatim in a run before the rest are rolled up.
+ *
+ * A warning is a per-object, per-batch or per-map condition, and one root cause reaches many of
+ * them: a credential that stopped working, a connector that ignores the batch size, a layer whose
+ * parents were never fetched. Live that produced a 90-warning cascade from a single cause, which
+ * buries every OTHER warning in the run — the cascade is not more information than its first few
+ * instances, it is the same information 90 times.
+ *
+ * Five rather than one: the first instances are where the operator sees WHICH objects are affected,
+ * and a rollup that says "90 of these" without naming any is a different kind of useless.
+ */
+const WARNING_VERBATIM_LIMIT = 5;
+/** How many distinct stages a rollup names before it summarises the remainder as a count. */
+const WARNING_ROLLUP_STAGE_SAMPLE = 10;
+/**
+ * How many rolled-up occurrences keep their own data in the rollup. A warning's data is what names
+ * the specific thing — the field maps that cannot bind, the batch that was short — and the stage
+ * name alone does not; past this many the rollup says how many more there were.
+ */
+const WARNING_ROLLUP_DATA_LIMIT = 100;
+
+/** Per-run tally for one warning code: how often it fired, where, and what the rolled-up ones said. */
+type WarningTally = { count: number; stages: string[]; suppressed: Array<{ stage: string; data?: Record<string, unknown> }> };
+
+/**
  * Light wrapper that prepends an ISO timestamp + the per-run context to every
  * line.  Writes to console.log (or console.error for fail events) so the line
  * lands in whatever stream the wrapper script is teeing to disk.
@@ -111,6 +136,8 @@ const VERBOSE_RECORD_LOGS_ENABLED = process.env.MJ_INTEGRATION_VERBOSE_RECORD_LO
 export class SyncLogger {
     private readonly ctx: SyncLoggerContext;
     private emitter?: IntegrationProgressEmitter;
+    /** Warning tallies for this run, keyed by warning code — see {@link WARNING_VERBATIM_LIMIT}. */
+    private readonly warningTallies = new Map<string, WarningTally>();
 
     constructor(ctx: SyncLoggerContext) {
         this.ctx = ctx;
@@ -175,9 +202,69 @@ export class SyncLogger {
      * available (the silent-empty). Forwarded to the durable artifact as a SyncWarning so the
      * condition is visible over GraphQL instead of a swallowed console.warn, WITHOUT affecting
      * run success. Goes to console.warn so it's also greppable in the tee'd log.
+     *
+     * ROLLED UP BY CODE. The first {@link WARNING_VERBATIM_LIMIT} occurrences of a code are emitted
+     * as they happen, carrying `occurrence`; after that the code is counted and
+     * {@link FlushWarningRollups} emits ONE summary at the end of the run. The count, the affected
+     * stages and each rolled-up occurrence's own data survive (up to {@link WARNING_ROLLUP_DATA_LIMIT}
+     * of them), so an operator can still tell WHICH maps or batches the later ones were about — and
+     * one root cause can no longer bury every other warning the run raised.
      */
     public Warning(stage: string, code: string, message: string, data?: Record<string, unknown>): void {
-        this.Emit('sync.warning', { stage, code, message, warningData: data });
+        const tally = this.warningTallies.get(code) ?? { count: 0, stages: [], suppressed: [] };
+        tally.count++;
+        if (!tally.stages.includes(stage)) tally.stages.push(stage);
+        this.warningTallies.set(code, tally);
+        if (tally.count > WARNING_VERBATIM_LIMIT) {
+            // Counted above and reported by the rollup, with what it said.
+            if (tally.suppressed.length < WARNING_ROLLUP_DATA_LIMIT) tally.suppressed.push({ stage, data });
+            return;
+        }
+        this.Emit('sync.warning', { stage, code, message, warningData: data, occurrence: tally.count });
+    }
+
+    /**
+     * Emits one rollup warning per code that fired more often than {@link WARNING_VERBATIM_LIMIT},
+     * and clears the tallies. Called by the engine at the END of a run — on the success path and the
+     * failure path alike — BEFORE the terminal run event, so the rollup lands inside the run's own
+     * artifact stream rather than after its terminal write.
+     *
+     * A code at or under the limit produces nothing: every one of its occurrences was already
+     * reported verbatim, and a rollup saying "3 of 3" is noise.
+     *
+     * @returns the number of rollup warnings emitted (0 when no code exceeded the limit).
+     */
+    public FlushWarningRollups(): number {
+        let emitted = 0;
+        for (const [code, tally] of this.warningTallies) {
+            const suppressed = tally.count - WARNING_VERBATIM_LIMIT;
+            if (suppressed <= 0) continue;
+            const sample = tally.stages.slice(0, WARNING_ROLLUP_STAGE_SAMPLE).join(', ');
+            const more = tally.stages.length > WARNING_ROLLUP_STAGE_SAMPLE
+                ? `, and ${tally.stages.length - WARNING_ROLLUP_STAGE_SAMPLE} more`
+                : '';
+            this.Emit('sync.warning', {
+                stage: 'run',
+                code,
+                message:
+                    `${code} fired ${tally.count} time(s) this run across ${tally.stages.length} object(s) ` +
+                    `(${sample}${more}). The first ${WARNING_VERBATIM_LIMIT} are reported individually above; ` +
+                    `the remaining ${suppressed} were rolled up into this one line because a repeat of the same ` +
+                    `code is the same finding, and a cascade of them hides every other warning in the run.`,
+                warningData: {
+                    rollup: true,
+                    occurrences: tally.count,
+                    reportedVerbatim: WARNING_VERBATIM_LIMIT,
+                    rolledUp: suppressed,
+                    stages: tally.stages,
+                    rolledUpOccurrences: tally.suppressed,
+                    rolledUpOccurrencesOmitted: suppressed - tally.suppressed.length,
+                },
+            });
+            emitted++;
+        }
+        this.warningTallies.clear();
+        return emitted;
     }
 
     /** @deprecated Use {@link Warning}. */
@@ -258,6 +345,13 @@ export class SyncLogger {
                         succeeded: this.num(data.recordsCreated) + this.num(data.recordsUpdated),
                         failed: this.num(data.recordsErrored),
                         skipped: this.num(data.recordsSkipped),
+                    }, {
+                        // The quartet folds created and updated into `succeeded`. History has to
+                        // show them apart, and the run row records only TotalRecords, so this event
+                        // is the only place the split can survive.
+                        mjEntity: data.mjEntity ?? null,
+                        recordsCreated: this.num(data.recordsCreated),
+                        recordsUpdated: this.num(data.recordsUpdated),
                     });
                     break;
                 case 'sync.push.response':

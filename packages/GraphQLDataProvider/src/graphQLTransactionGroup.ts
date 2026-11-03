@@ -1,4 +1,4 @@
-import { BaseEntity, BaseEntityResult, DataObjectParams, EntityField, TransactionGroupBase, TransactionItem, TransactionResult } from "@memberjunction/core";
+import { BaseEntity, BaseEntityResult, DataObjectParams, TransactionGroupBase, TransactionItem, TransactionResult } from "@memberjunction/core";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
 import { SafeJSONParse } from "@memberjunction/global";
@@ -8,20 +8,6 @@ export class GraphQLTransactionGroup extends TransactionGroupBase {
     constructor(provider: GraphQLDataProvider) {
         super();
         this._provider = provider;
-    }
-
-    /**
-     * Checks whether `field` is dirty on `entity` or, for IS-A child entities where parent
-     * fields are mirrored as virtual fields, on any ancestor in the `ISAParent` chain.
-     */
-    private isFieldDirtyOnChain(entity: BaseEntity, field: EntityField): boolean {
-        if (entity.ISAParent && entity.EntityInfo?.ParentEntityFieldNames?.has(field.Name)) {
-            const parentField = entity.ISAParent.Fields.find(pf => pf.Name === field.Name);
-            if (parentField) {
-                return this.isFieldDirtyOnChain(entity.ISAParent, parentField) || field.Dirty;
-            }
-        }
-        return field.Dirty;
     }
 
     /**
@@ -38,32 +24,36 @@ export class GraphQLTransactionGroup extends TransactionGroupBase {
      */
     private async serializeTransactionItemEntity(pt: TransactionItem): Promise<string> {
         const entity = pt.BaseEntity;
-        const ignoreDirty = Boolean((pt.ExtraData as { ignoreDirtyState?: boolean } | undefined)?.ignoreDirtyState);
-        const dirtyFiltered = pt.OperationType === 'Update' && !ignoreDirty;
-        const denied = this.deniedReadFieldNames(entity);
-        if (denied.size === 0 && !dirtyFiltered) {
-            // Nothing to leave out: serialize without walking (and so building) the field objects.
-            return await entity.GetDataObjectJSON();
+        try {
+            const ignoreDirty = Boolean((pt.ExtraData as { ignoreDirtyState?: boolean } | undefined)?.ignoreDirtyState);
+            const dirtyFiltered = pt.OperationType === 'Update' && !ignoreDirty;
+            const denied = this.deniedReadFieldNames(entity);
+            if (denied.size === 0 && !dirtyFiltered) {
+                // Nothing to leave out: serialize without walking (and so building) the field objects.
+                return await entity.GetDataObjectJSON();
+            }
+            const fields = Array.isArray(entity.Fields) ? entity.Fields : [];
+            const excludeFields = fields
+                .filter(f => !f.IsPrimaryKey && (
+                    denied.has(f.Name.trim().toLowerCase()) ||
+                    (dirtyFiltered && (f.ReadOnly || f.NotLoaded || !this._provider.IsFieldDirtyOnChain(entity, f)))
+                ))
+                .map(f => f.Name);
+            if (excludeFields.length === 0) {
+                return await entity.GetDataObjectJSON();
+            }
+            const params: DataObjectParams = {
+                oldValues: false,
+                omitNullValues: false,
+                omitEmptyStrings: false,
+                excludeFields,
+                includeRelatedEntityData: false,
+                relatedEntityList: []
+            };
+            return await entity.GetDataObjectJSON(params);
+        } finally {
+            this._provider.ClearISAParentPreSaveSnapshots(entity);
         }
-        const fields = Array.isArray(entity.Fields) ? entity.Fields : [];
-        const excludeFields = fields
-            .filter(f => !f.IsPrimaryKey && (
-                denied.has(f.Name.trim().toLowerCase()) ||
-                (dirtyFiltered && (f.ReadOnly || f.NotLoaded || !this.isFieldDirtyOnChain(entity, f)))
-            ))
-            .map(f => f.Name);
-        if (excludeFields.length === 0) {
-            return await entity.GetDataObjectJSON();
-        }
-        const params: DataObjectParams = {
-            oldValues: false,
-            omitNullValues: false,
-            omitEmptyStrings: false,
-            excludeFields,
-            includeRelatedEntityData: false,
-            relatedEntityList: []
-        };
-        return await entity.GetDataObjectJSON(params);
     }
 
     /** The denied set for an entity without field security or a provider with no user. */

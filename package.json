@@ -22,6 +22,7 @@
     "packages/AI/DatabaseDesigner/*",
     "packages/AI/FormBuilder/*",
     "packages/AI/PredictiveStudio/*",
+    "packages/AI/VideoStudio/*",
     "packages/AI/AICLI",
     "packages/Communication/*",
     "packages/Communication/providers/*",
@@ -38,6 +39,7 @@
     "packages/ExternalDataSources/*",
     "packages/ExternalDataSources/Providers/*",
     "packages/APIKeys/*",
+    "packages/OfficeAddins/*",
     "packages/OpenApp/*",
     "packages/Integration/*",
     "packages/Archiving/*",
@@ -146,7 +148,9 @@
     "check:citizen-builder-template": "node .github/scripts/check-citizen-builder-template.mjs",
     "check:citizen-builder-template:test": "node .github/scripts/check-citizen-builder-template.mjs --self-test",
     "check:ai-model-ranks": "node .github/scripts/check-ai-model-ranks.mjs",
-    "check:ai-model-ranks:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-ai-model-ranks"
+    "check:ai-model-ranks:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-ai-model-ranks",
+    "check:prompt-model-routes": "node .github/scripts/check-prompt-model-routes.mjs",
+    "check:prompt-model-routes:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-prompt-model-routes"
   },
   "repository": {
     "type": "git",

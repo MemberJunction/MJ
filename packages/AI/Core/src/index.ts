@@ -20,6 +20,7 @@ export * from './generic/baseSpeechToText';
 export * from './generic/baseVideo';
 export * from './generic/baseRealtime';
 export * from './generic/realtimeUsage';
+export * from './generic/turnDetectionSettings';
 export * from './generic/modelConfiguration';
 export * from './generic/transcriptContinuation';
 export * from './generic/realtimeDroppedInputReporter';

@@ -1,0 +1,33 @@
+{
+  "kind": "dataflow",
+  "title": "How do I get CE credit for sessions at the annual meeting?",
+  "stages": [
+    { "id": "attend", "label": "Attend" },
+    { "id": "capture", "label": "Capture" },
+    { "id": "verify", "label": "Verify" },
+    { "id": "record", "label": "Record" },
+    { "id": "use", "label": "Use" }
+  ],
+  "nodes": [
+    { "id": "scan", "lane": "attend", "row": 0, "kind": "task", "label": "Badge scan", "sublabel": "session door", "detail": "Ushers scan your conference badge when you enter and exit the room." },
+    { "id": "app", "lane": "attend", "row": 1, "kind": "task", "label": "Meeting app", "sublabel": "session code", "detail": "Alternatively, enter the 4-digit session code announced at the end of the talk." },
+    { "id": "log", "lane": "capture", "row": 0, "kind": "database", "label": "Attendance log", "sublabel": "per session", "detail": "Raw badge scans and app check-ins are matched to your member record." },
+    { "id": "verify", "lane": "verify", "row": 0, "kind": "decision", "label": "Time check", "sublabel": "45+ minutes", "detail": "Sessions require at least 45 minutes of verified attendance to earn CE credit." },
+    { "id": "transcript", "lane": "record", "row": 0, "kind": "database", "label": "CE transcript", "sublabel": "member record", "detail": "Approved credits post to your official member CE transcript within 2 weeks." },
+    { "id": "portal", "lane": "use", "row": 0, "kind": "task", "label": "Member portal", "sublabel": "certificates", "detail": "Download attendance certificates or apply credits directly toward renewal." },
+    { "id": "board", "lane": "use", "row": 1, "kind": "external", "label": "Cert board", "sublabel": "monthly report", "detail": "The association sends a monthly export of earned credits to the certification board." }
+  ],
+  "flows": [
+    { "id": "f1", "from": "scan", "to": "log", "label": "scan in and out", "data": "badge ID" },
+    { "id": "f2", "from": "app", "to": "log", "label": "code entered", "data": "member ID" },
+    { "id": "f3", "from": "log", "to": "verify", "label": "time in room", "role": "emphasis" },
+    { "id": "f4", "from": "verify", "to": "transcript", "label": "approved credits", "role": "emphasis" },
+    { "id": "f5", "from": "transcript", "to": "portal", "label": "credits shown" },
+    { "id": "f6", "from": "transcript", "to": "board", "label": "monthly export", "data": "certified members" }
+  ],
+  "mainPath": ["scan", "log", "verify", "transcript", "portal"],
+  "cards": [
+    { "id": "earning", "tone": "success", "title": "Earning session credit", "body": "Scan your badge at the door or enter the session code in the app, and stay at least 45 minutes.", "nodes": ["scan", "app", "log", "verify"] },
+    { "id": "posting", "tone": "accent", "title": "Where credits appear", "body": "Credits show in the member portal within 2 weeks and export to the certification board monthly.", "nodes": ["transcript", "portal", "board"] }
+  ]
+}

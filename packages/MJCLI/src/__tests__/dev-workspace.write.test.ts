@@ -26,7 +26,6 @@ const FILES: GeneratedFile[] = [
   { Name: 'pnpm-workspace.yaml', Content: 'yaml-content\n' },
   { Name: '.npmrc', Content: 'npmrc-content\n' },
   { Name: 'package.json', Content: '{"private":true}\n' },
-  { Name: 'turbo.json', Content: '{"tasks":{}}\n' },
 ];
 
 describe('AssertParentDirSafe', () => {
@@ -89,7 +88,8 @@ describe('WriteWorkspaceFiles', () => {
 describe('FindExistingFiles', () => {
   it('reports which of the workspace files already exist', () => {
     parent = CreateFixtureParent({});
-    writeFileSync(path.join(parent, 'turbo.json'), '{}', 'utf8');
-    expect(FindExistingFiles(parent, WORKSPACE_FILE_NAMES)).toEqual(['turbo.json']);
+    writeFileSync(path.join(parent, '.npmrc'), '', 'utf8');
+    writeFileSync(path.join(parent, 'turbo.json'), '{}', 'utf8'); // no longer a workspace file (#4913)
+    expect(FindExistingFiles(parent, WORKSPACE_FILE_NAMES)).toEqual(['.npmrc']);
   });
 });

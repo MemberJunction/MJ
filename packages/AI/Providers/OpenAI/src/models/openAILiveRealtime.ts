@@ -4,6 +4,8 @@ import {
     BaseRealtimeModel,
     RealtimeDiagLog,
     RealtimeDroppedInputReporter,
+    RealtimeDriverFactsOf,
+    type RealtimeDriverFacts,
     IRealtimeSession,
     RealtimeSessionCapabilities,
     RealtimeSessionParams,
@@ -237,7 +239,12 @@ export class OpenAILiveSession implements IRealtimeSession {
     private _interruptionHandlers: Array<() => void> = [];
     private _closeHandlers: Array<() => void> = [];
 
-    constructor(socket: ILiveWebSocketLike, params: RealtimeSessionParams, options: OpenAILiveSessionOptions = {}) {
+    constructor(
+        socket: ILiveWebSocketLike,
+        params: RealtimeSessionParams,
+        options: OpenAILiveSessionOptions = {},
+        driverFacts: Readonly<RealtimeDriverFacts> = OpenAILiveRealtime.DriverFacts,
+    ) {
         this._socket = socket;
         this._params = params;
         this._options = options;
@@ -249,6 +256,7 @@ export class OpenAILiveSession implements IRealtimeSession {
         this.AudioFormat = { Codec: codec, SampleRate: rate };
 
         this.Capabilities = {
+            ...driverFacts,
             CanReconfigureTurnMode: false,
             SupportedReasoningPlanes: ['local', 'remote'],
             CanReconfigureDelegationMode: false,
@@ -942,6 +950,9 @@ export class OpenAILiveSession implements IRealtimeSession {
  */
 @RegisterClass(BaseRealtimeModel, 'OpenAILiveRealtime')
 export class OpenAILiveRealtime extends BaseRealtimeModel {
+    /** GPT-Live's session ceiling is not documented in-repo, so it stays unknown. */
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {};
+
     public static override readonly SupportsDynamicToolSet = true;
 
     private _endpoint: string;
@@ -1049,7 +1060,7 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
             backchannelPolicy: typeof config?.['backchannelPolicy'] === 'string' ? config['backchannelPolicy'] : undefined,
         };
 
-        const session = new OpenAILiveSession(socket, params, options);
+        const session = new OpenAILiveSession(socket, params, options, RealtimeDriverFactsOf(this));
         await session.WaitForStarted();
         return session;
     }
@@ -1235,6 +1246,7 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
             EphemeralToken: brokerUrl,
             ExpiresAt: ticket.ExpiresAt,
             SessionConfig: sessionPayload as JSONObject,
+            MaxSessionSeconds: this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds),
         };
     }
 

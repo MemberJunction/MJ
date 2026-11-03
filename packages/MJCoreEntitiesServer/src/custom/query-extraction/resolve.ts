@@ -11,12 +11,13 @@ import {
     EntityInfo,
     FindAlternateBaseViewByPhysicalName,
     IMetadataProvider,
+    LogStatus,
     TypeScriptTypeFromSQLType,
 } from "@memberjunction/core";
 import { MJQueryEntityExtended, MJQueryFieldEntity, MJQueryDependencyEntity, QueryEngine } from "@memberjunction/core-entities";
 import { QueryCompositionEngine } from "@memberjunction/generic-database-provider";
 import { UUIDsEqual } from "@memberjunction/global";
-import { SQLParser } from "@memberjunction/sql-parser";
+import { MatchCompositionPath, SQLParser } from "@memberjunction/sql-parser";
 import { GetDialect } from "@memberjunction/sql-dialect";
 import type { MJParameterInfo, SQLSelectColumn, SQLTableReference } from "@memberjunction/sql-parser";
 
@@ -89,27 +90,27 @@ export function ResolveCompositionReferences(
 }
 
 /**
- * Resolves a query by name and optional category path segments from the metadata cache.
- * Tries category-qualified lookup first, then falls back to name-only (if unambiguous).
+ * Resolves a query the way a composition reference names it: by its full category path and name,
+ * or by a path that is a whole-segment suffix of exactly one same-named query's category path
+ * (`Demos/Active Users` finds `MJ/Demos/Active Users`; a warning is logged, and saving such a
+ * reference is refused by the template validation). Names and path segments compare ignoring case
+ * and surrounding spaces. There is no name-only fallback: a reference with a wrong path, or with no
+ * path for a query that has a category, resolves to nothing, and so does a partial path that is a
+ * suffix of more than one query's path.
  */
 export function ResolveQueryByNameAndCategory(
     queryName: string,
     categorySegments: string[],
     allQueries: MJQueryEntityExtended[]
 ): MJQueryEntityExtended | undefined {
-    const queryNameLower = queryName.toLowerCase();
-
-    if (categorySegments.length > 0) {
-        const expectedPath = `/${categorySegments.join('/')}/`;
-        const match = allQueries.find(q =>
-            q.Name.toLowerCase() === queryNameLower &&
-            q.CategoryPath.toLowerCase() === expectedPath.toLowerCase()
-        );
-        if (match) return match;
-    }
-
-    const nameMatches = allQueries.filter(q => q.Name.toLowerCase() === queryNameLower);
-    return nameMatches.length === 1 ? nameMatches[0] : undefined;
+    const match = MatchCompositionPath(categorySegments, queryName, allQueries);
+    if (match.Kind === 'Exact') return match.Target;
+    if (match.Kind !== 'PartialPath') return undefined;
+    LogStatus(
+        `Warning (MJQ_COMPOSITION_PARTIAL_PATH): the composition reference "${[...categorySegments, queryName].join('/')}" ` +
+        `names the query at "${match.FullPath}" by part of its category path; write the full path {{query:"${match.FullPath}"}}.`
+    );
+    return match.Target;
 }
 
 /**

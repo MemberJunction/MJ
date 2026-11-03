@@ -117,6 +117,13 @@ describe('GeminiRealtime client-direct (CreateClientSession)', () => {
         expect(expires).toBeLessThanOrEqual(after + 30 * 60 * 1000);
     });
 
+    it('carries the effective session cap: 1800 by default, the smaller host cap otherwise', async () => {
+        const driver = new ClientDirectTestable('k');
+        expect((await driver.CreateClientSession(makeParams())).MaxSessionSeconds).toBe(1800);
+        expect((await driver.CreateClientSession(makeParams({ MaxSessionSeconds: 900 }))).MaxSessionSeconds).toBe(900);
+        expect((await driver.CreateClientSession(makeParams({ MaxSessionSeconds: 5000 }))).MaxSessionSeconds).toBe(1800);
+    });
+
     it('locks the server-built connect config into the token via liveConnectConstraints', async () => {
         const driver = new ClientDirectTestable('k');
         await driver.CreateClientSession(makeParams({
@@ -129,13 +136,14 @@ describe('GeminiRealtime client-direct (CreateClientSession)', () => {
 
         const mintConfig = driver.MintParams?.config;
         expect(mintConfig).toBeDefined();
-        expect(mintConfig?.uses).toBe(1);
         expect(mintConfig?.lockAdditionalFields).toEqual([]);
         expect(typeof mintConfig?.expireTime).toBe('string');
-        expect(typeof mintConfig?.newSessionExpireTime).toBe('string');
-        // The new-session window precedes the token expiry.
-        expect(new Date(mintConfig!.newSessionExpireTime!).getTime())
-            .toBeLessThan(new Date(mintConfig!.expireTime!).getTime());
+        // Gemini ends a Live connection after about 10 minutes, and the browser resumes on the SAME token, which Gemini
+        // counts as a new session (live runs: a single-use token is refused "Token has been used too many times", a
+        // 10-minute new-session window "new_session_expire_time deadline exceeded"). So the token must open new
+        // sessions until it expires, and allow at least one connection per 10 minutes of the cap the mint reports.
+        expect(mintConfig?.newSessionExpireTime).toBe(mintConfig?.expireTime);
+        expect(mintConfig?.uses).toBeGreaterThanOrEqual(Math.ceil(1800 / 600));
 
         const constraints = mintConfig?.liveConnectConstraints;
         expect(constraints?.model).toBe('gemini-live-2.5-flash-preview');
@@ -148,6 +156,23 @@ describe('GeminiRealtime client-direct (CreateClientSession)', () => {
         expect(locked.tools).toBeUndefined();
         expect(locked.inputAudioTranscription).toBeUndefined();
         expect(locked.outputAudioTranscription).toBeUndefined();
+    });
+
+    // The token is a credential the browser holds: it must not outlive the session cap the host set, or a guest with
+    // a 5-minute cap could keep talking to Gemini directly for the token's full 30 minutes.
+    it('bounds the token by the session cap: expiry and connection count follow a short host cap', async () => {
+        const driver = new ClientDirectTestable('k');
+        const before = Date.now();
+        const cfg = await driver.CreateClientSession(makeParams({ MaxSessionSeconds: 300 }));
+        const mintConfig = driver.MintParams!.config!;
+        const expiresMs = new Date(mintConfig.expireTime!).getTime();
+        expect(cfg.MaxSessionSeconds).toBe(300);
+        expect(expiresMs).toBeLessThanOrEqual(Date.now() + (300 + 60) * 1000);
+        expect(expiresMs).toBeGreaterThanOrEqual(before + 300 * 1000);
+        expect(mintConfig.newSessionExpireTime).toBe(mintConfig.expireTime);
+        expect(cfg.ExpiresAt).toBe(mintConfig.expireTime);
+        expect(mintConfig.uses).toBeLessThan(6);
+        expect(mintConfig.uses).toBeGreaterThanOrEqual(2);
     });
 
     it('carries the same model + config in SessionConfig for the client to pass at connect', async () => {
@@ -2047,72 +2072,5 @@ describe("live avatars: the mint says whether the avatar shows, and why not", ()
         expect(enterprise.SupportsAvatarOutput('gemini-3.1-flash-live-preview')).toBe(false);
         expect(developer.SupportsAvatarOutput('gemini-3.8-live')).toBe(false);
         expect(developer.SupportsAvatarOutput('gemini-3.1-flash-live-preview')).toBe(false);
-    });
-});
-
-describe('normalized turn detection → automatic activity detection', () => {
-    const activityDetectionOf = (config: Record<string, unknown>): Record<string, unknown> | undefined =>
-        (config['realtimeInputConfig'] as Record<string, unknown> | undefined)?.['automaticActivityDetection'] as Record<string, unknown> | undefined;
-    const turnLines = (warnings: string[]): string[] => warnings.filter((line) => line.includes('Turn-detection setting(s) not applied'));
-
-    it('maps SilenceDurationMs and Eagerness, bridged and minted, with no warning', async () => {
-        const params = makeParams({ Model: 'gemini-3.8-live', Config: { turnDetection: { SilenceDurationMs: 800, Eagerness: 'low' } } });
-        const bridged = await startWithWarnings(new TestGeminiRealtime('k'), params);
-        const minted = await mintWithWarnings(new ClientDirectTestable('k'), params);
-        for (const [path, run] of [['bridged', bridged], ['minted', minted]] as const) {
-            expect(activityDetectionOf(run.config), path).toEqual({ silenceDurationMs: 800, endOfSpeechSensitivity: 'END_SENSITIVITY_LOW' });
-            expect(turnLines(run.warnings), path).toEqual([]);
-        }
-    });
-
-    it("maps Eagerness 'high' to END_SENSITIVITY_HIGH and sends nothing for 'auto'", () => {
-        expect(GeminiRealtime.MapEagernessToEndSensitivity('high')).toBe('END_SENSITIVITY_HIGH');
-        expect(GeminiRealtime.MapEagernessToEndSensitivity('low')).toBe('END_SENSITIVITY_LOW');
-        expect(GeminiRealtime.MapEagernessToEndSensitivity('auto')).toBeUndefined();
-        expect(GeminiRealtime.MapEagernessToEndSensitivity(undefined)).toBeUndefined();
-    });
-
-    it('warns at launch for Threshold and Mode, which it cannot express, and still applies the rest', async () => {
-        const { config, warnings } = await startWithWarnings(new TestGeminiRealtime('k'), makeParams({
-            Model: 'gemini-3.8-live',
-            Config: { turnDetection: { Mode: 'serverVad', Threshold: 0.6, SilenceDurationMs: 700, Coverage: 'audioActivityOnly' } },
-        }));
-        expect(activityDetectionOf(config)).toEqual({ silenceDurationMs: 700 });
-        const lines = turnLines(warnings);
-        expect(lines).toHaveLength(1);
-        expect(lines[0]).toContain('[GeminiRealtime]');
-        expect(lines[0]).toContain('Mode="serverVad"');
-        expect(lines[0]).toContain('Threshold=0.6');
-        expect(lines[0]).not.toContain('SilenceDurationMs');
-        expect(lines[0]).not.toContain('Coverage');
-    });
-
-    it('lets automaticActivityDetection fields from the config bag win over the mapped ones', async () => {
-        const { config } = await startWithWarnings(new TestGeminiRealtime('k'), makeParams({
-            Model: 'gemini-3.8-live',
-            Config: {
-                turnDetection: { SilenceDurationMs: 800, Eagerness: 'high' },
-                realtimeInputConfig: { automaticActivityDetection: { silenceDurationMs: 1200 } },
-            },
-        }));
-        expect(activityDetectionOf(config)).toEqual({ silenceDurationMs: 1200, endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH' });
-    });
-
-    it('maps nothing in meeting mode, where detection is disabled, and names every requested setting', async () => {
-        const { config, warnings } = await startWithWarnings(new TestGeminiRealtime('k'), makeParams({
-            Model: 'gemini-3.8-live',
-            Config: { disableAutoResponse: true, turnDetection: { SilenceDurationMs: 800, Eagerness: 'low' } },
-        }));
-        expect(activityDetectionOf(config)).toEqual({ disabled: true });
-        const lines = turnLines(warnings);
-        expect(lines).toHaveLength(1);
-        expect(lines[0]).toContain('meeting mode');
-        expect(lines[0]).toContain('SilenceDurationMs=800');
-        expect(lines[0]).toContain('Eagerness="low"');
-    });
-
-    it('applies the same mapping on Gemini Enterprise, which inherits the connect config', async () => {
-        const { config } = await startWithWarnings(new EnterpriseBridged('k'), makeParams({ Model: 'gemini-3.8-live', Config: { turnDetection: { SilenceDurationMs: 900 } } }));
-        expect(activityDetectionOf(config)).toEqual({ silenceDurationMs: 900 });
     });
 });

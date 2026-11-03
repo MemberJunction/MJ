@@ -265,6 +265,22 @@ describe('ProviderBase Request Deduplication', () => {
     });
 
     describe('Bypass Conditions', () => {
+        it('should NOT dedup or serve a linger hit when CacheLocal is false (the server-side cache opt-out)', async () => {
+            // CacheLocal:false opts a read out of the RunView cache. A linger hit would return rows
+            // that an earlier, cacheable call obtained — possibly from that very cache — so the
+            // opt-out has to cover the dedup window as well.
+            await provider.RunViews([makeParams({})]);
+            expect(provider.internalRunViewsCallCount).toBe(1);
+            await provider.RunViews([makeParams({ CacheLocal: false })]); // same request, inside the linger window
+            expect(provider.internalRunViewsCallCount).toBe(2);
+            const [a, b] = await Promise.all([
+                provider.RunViews([makeParams({ CacheLocal: false })]),
+                provider.RunViews([makeParams({ CacheLocal: false })]),
+            ]);
+            expect(a[0].Success && b[0].Success).toBe(true);
+            expect(provider.internalRunViewsCallCount).toBe(4);
+        });
+
         it('should NOT dedup when SaveViewResults is true', async () => {
             const params = makeParams({ SaveViewResults: true });
 

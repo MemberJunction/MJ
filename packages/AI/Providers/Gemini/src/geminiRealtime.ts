@@ -22,18 +22,15 @@ import {
     type ActivityEnd,
     TurnCoverage,
     ThinkingLevel,
-    EndSensitivity,
-    type AutomaticActivityDetection,
 } from '@google/genai';
 
 // MemberJunction AI core contract
 import {
     BaseRealtimeModel,
     RealtimeDiagLog,
-    RealtimeDroppedInputReporter,
-    ReadRealtimeTurnDetection,
-    DescribeUnappliedTurnDetection,
+    NormalizeTurnDetectionSettings,
     type RealtimeTurnDetectionSettings,
+    RealtimeDroppedInputReporter,
     type ClientRealtimeSessionConfig,
     type IRealtimeSession,
     type RealtimeSessionParams,
@@ -61,6 +58,8 @@ import {
     type RealtimeAvatarUnavailableReason,
     type RealtimeVideoFrame,
     type RealtimeTurnCoverage,
+    RealtimeDriverFactsOf,
+    type RealtimeDriverFacts,
 } from '@memberjunction/ai';
 import {
     ResolveGeminiLiveProfile,
@@ -75,6 +74,7 @@ import {
 } from './geminiLiveProfiles';
 import { GeminiBridgedAvatarOutput } from './geminiBridgedAvatar';
 import { ResolveGeminiAvatarVideoBitrateBps } from './geminiAvatarVideoBitrate';
+import { MapGeminiActivityDetection } from './geminiActivityDetection';
 import { RegisterClass } from '@memberjunction/global';
 
 /**
@@ -96,7 +96,8 @@ type GeminiSharedKeyShape = 'object' | 'named effort';
 /**
  * The keys in `REALTIME_SHARED_CONFIG_KEYS` that this driver applies after the config-bag merge, reading them from the
  * original bag in `applyModelLegality`, with the value each must hold: `turnDetection` (its `Coverage` sets the turn
- * coverage; `SilenceDurationMs` and `Eagerness` tune automatic activity detection), `reasoning` (the thinking level and thought summaries), and `effortLevel` or `reasoningEffort` (a named
+ * coverage; `SilenceDurationMs`, `Eagerness` and `Threshold` map onto `automaticActivityDetection`, where `Threshold` is
+ * lossy: below 0.5 is START_SENSITIVITY_HIGH, 0.5 or more is START_SENSITIVITY_LOW; `Mode` has no Gemini field), `reasoning` (the thinking level and thought summaries), and `effortLevel` or `reasoningEffort` (a named
  * thinking level). The scrub in `BuildConnectConfig` keeps them out of the merge without calling them non-Gemini
  * (#5334). The other shared keys the driver applies (`voice`, `disableAutoResponse`, `tooling`, `toolBehavior`) are
  * consumed before the scrub.
@@ -115,11 +116,16 @@ const GEMINI_MEETING_RESPONSE_WATCHDOG_MS = 5000;
 const MAX_HELD_INPUT_AUDIO_BYTES = 16000 * 2 * 2;
 
 /**
- * Window (ms) within which a client-direct browser must OPEN its Live session using a minted
- * ephemeral token. After this the token can no longer start a NEW session (an already-open
- * session continues until {@link GEMINI_CLIENT_TOKEN_EXPIRY_MS}).
+ * How long Gemini keeps one Live connection open (about 10 minutes, observed live). The browser then resumes on the
+ * SAME token, which Gemini counts as a new session: a single-use token is refused "Token has been used too many times".
  */
-const GEMINI_CLIENT_TOKEN_NEW_SESSION_WINDOW_MS = 10 * 60 * 1000;
+const GEMINI_LIVE_CONNECTION_SECONDS = 600;
+
+/** Extra connections a token allows beyond one per {@link GEMINI_LIVE_CONNECTION_SECONDS}: resumes after a dropped network or a `goAway`. */
+const GEMINI_CLIENT_TOKEN_RESUME_MARGIN = 3;
+
+/** Slack past the session cap before the token dies, so the browser's own deadline alarm ends the call first. */
+const GEMINI_CLIENT_TOKEN_CAP_SKEW_SECONDS = 60;
 
 /**
  * Total lifetime (ms) of a minted client-direct ephemeral token: messages on a Live session
@@ -226,6 +232,12 @@ interface GeminiOpenedConnection {
  */
 @RegisterClass(BaseRealtimeModel, 'GeminiRealtime')
 export class GeminiRealtime extends BaseRealtimeModel {
+    /** The ephemeral token MJ mints lives 30 minutes (GEMINI_CLIENT_TOKEN_EXPIRY_MS) and may open one connection per ~10 minutes of the cap plus a resume margin, so session resumption continues a conversation past Gemini's ~10-minute connection, and the token bounds the session. */
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {
+        ProviderMaxSessionSeconds: 1800,
+        SupportedTurnSettings: { Eagerness: 'approximate', SilenceDurationMs: 'exact', Threshold: 'approximate', Coverage: 'exact' },
+    };
+
     private geminiClient: GoogleGenAI | null = null;
     private geminiTokenClient: GoogleGenAI | null = null;
 
@@ -280,7 +292,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
      */
     public async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
         const profile = ResolveGeminiLiveProfile(params.Model, this.Endpoint);
-        const session = new GeminiRealtimeSession(profile);
+        const session = new GeminiRealtimeSession(profile, RealtimeDriverFactsOf(this));
         session.SetConnectTimeTools(params.Tools ?? []);
         const config = this.BuildConnectConfig(this.withoutAvatarOnServer(params));
         session.SetAvatar(this.serverAvatarStatus(params, config), profile.AvatarOutputEncoding);
@@ -349,23 +361,30 @@ export class GeminiRealtime extends BaseRealtimeModel {
      * because the SDK still expects the client to pass a model/config at `live.connect` time; the
      * token-side lock is what makes the server's prompt and tool set authoritative.
      *
-     * Expiry: the browser must open its session within
-     * {@link GEMINI_CLIENT_TOKEN_NEW_SESSION_WINDOW_MS}; the token (and thus the session's
-     * ability to send messages) dies at {@link GEMINI_CLIENT_TOKEN_EXPIRY_MS}.
+     * Expiry: the token opens connections (the first, and each resume, which Gemini counts as a new
+     * session) until the session cap plus {@link GEMINI_CLIENT_TOKEN_CAP_SKEW_SECONDS} (at most
+     * {@link GEMINI_CLIENT_TOKEN_EXPIRY_MS}), one per {@link GEMINI_LIVE_CONNECTION_SECONDS} of the cap plus
+     * {@link GEMINI_CLIENT_TOKEN_RESUME_MARGIN}; the session's ability to send messages dies with it.
      *
      * @param params Session configuration (model, system prompt, tools, config bag).
      * @returns The minted {@link ClientRealtimeSessionConfig} the browser authenticates + applies.
      */
     public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
         const config = this.BuildConnectConfig(params);
+        const maxSessionSeconds = this.ClampSessionSeconds(RealtimeDriverFactsOf(this).ProviderMaxSessionSeconds, params.MaxSessionSeconds);
+        // The token is a credential the browser holds, so it lives no longer than the session cap (plus a little slack)
+        // and opens only enough connections for that cap: a leaked token cannot outlast the host's deadline.
+        const capSeconds = maxSessionSeconds ?? GEMINI_CLIENT_TOKEN_EXPIRY_MS / 1000;
+        const lifetimeMs = Math.min(GEMINI_CLIENT_TOKEN_EXPIRY_MS, (capSeconds + GEMINI_CLIENT_TOKEN_CAP_SKEW_SECONDS) * 1000);
+        const uses = Math.ceil(capSeconds / GEMINI_LIVE_CONNECTION_SECONDS) + GEMINI_CLIENT_TOKEN_RESUME_MARGIN;
         const now = Date.now();
-        const expireTime = new Date(now + GEMINI_CLIENT_TOKEN_EXPIRY_MS).toISOString();
-        const newSessionExpireTime = new Date(now + GEMINI_CLIENT_TOKEN_NEW_SESSION_WINDOW_MS).toISOString();
+        const expireTime = new Date(now + lifetimeMs).toISOString();
         const token = await this.mintAuthToken({
             config: {
-                uses: 1,
+                uses,
                 expireTime,
-                newSessionExpireTime,
+                // Each resume is a new session to Gemini, so the window to open one lasts as long as the token.
+                newSessionExpireTime: expireTime,
                 // Lock the model + the MASK-SAFE config subset into the token
                 // (lockAdditionalFields: [] means "lock exactly the fields set in
                 // liveConnectConstraints.config"). The token API only accepts a SUBSET of
@@ -392,6 +411,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
             // values authoritative even if a client tampers.
             SessionConfig: this.SessionPactFor(params.Model, config),
             ...(avatarStatus ? { AvatarStatus: avatarStatus } : {}),
+            MaxSessionSeconds: maxSessionSeconds,
         };
     }
 
@@ -999,6 +1019,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
             bag['includeThoughts'] === true ||
             bag['includeThoughtSummaries'] === true;
         const coverageSetting = GeminiRealtime.readString(turnDetection?.['Coverage']);
+        const turnSettings = NormalizeTurnDetectionSettings(turnDetection);
 
         // C1 — affective dialogue is REMOVED from the API on the 3.8 family; sending it errors. The
         // SDK still declares `enableAffectiveDialog` (it remains valid for 3.1), so it will not stop
@@ -1039,7 +1060,7 @@ export class GeminiRealtime extends BaseRealtimeModel {
         }
 
         GeminiRealtime.applyTurnCoverage(config, coverageSetting, profile, params.Model);
-        GeminiRealtime.applyTurnDetection(config, ReadRealtimeTurnDetection(bag['turnDetection']));
+        GeminiRealtime.applyActivityDetection(config, turnSettings, params.Model);
 
         // C5 / C5a / C5b — state behavior on every declaration, whatever its origin.
         // Drops the !SupportsBlockingExecution gate so 3.8-live bag tools are stated too.
@@ -1110,71 +1131,26 @@ export class GeminiRealtime extends BaseRealtimeModel {
     }
 
     /**
-     * Maps the normalized turn-detection request onto Gemini's automatic activity detection
-     * (`realtimeInputConfig.automaticActivityDetection`), and logs one line naming what it could not apply:
+     * Merges the mapped silence, eagerness and threshold into `automaticActivityDetection`. Gemini has no field for
+     * `Mode`; a `serverVad` or `semanticVad` request gets one line and the mapped fields still apply.
      *
-     * - `SilenceDurationMs` → `silenceDurationMs`, the same quantity (non-speech required before end of speech);
-     * - `Eagerness` → `endOfSpeechSensitivity`: `low` (waits longer) → `END_SENSITIVITY_LOW`, `high` →
-     *   `END_SENSITIVITY_HIGH`, `auto` → nothing sent, so the endpoint's own default applies;
-     * - `Threshold` is not applied: it is a 0–1 level and `startOfSpeechSensitivity` is a two-value enum, so any cut
-     *   point would be invented;
-     * - `Mode` is not applied: Gemini has one automatic detector, not a choice of server or semantic VAD.
-     *
-     * Fields the config bag sets on `automaticActivityDetection` itself win, since they are Gemini's own vocabulary. In
-     * meeting mode the detector is disabled and the bridge drives turns, so nothing is mapped and every requested
-     * setting is named.
-     *
-     * @param config The connect config being built.
-     * @param requested The bag's normalized `turnDetection`, if any.
+     * In meeting mode (`disabled: true`) nothing is merged: Gemini Live refuses a setup that sets any of these fields
+     * next to `disabled: true` (close 1007), and with activity detection off they would change nothing.
      */
-    private static applyTurnDetection(config: LiveConnectConfig, requested: RealtimeTurnDetectionSettings | undefined): void {
-        if (!requested) {
+    private static applyActivityDetection(config: LiveConnectConfig, settings: RealtimeTurnDetectionSettings | undefined, model: string): void {
+        if (settings?.Mode === 'serverVad' || settings?.Mode === 'semanticVad') {
+            console.warn(`[GeminiRealtime] Turn-detection Mode "${settings.Mode}" has no Gemini Live equivalent for ${model}; Gemini ignores Mode; its own activity detection decides turns. SilenceDurationMs, Eagerness and Threshold still apply.`);
+        }
+        const mapped = MapGeminiActivityDetection(settings);
+        if (Object.keys(mapped).length === 0) {
             return;
         }
-        const existing = config.realtimeInputConfig?.automaticActivityDetection;
-        if (existing?.disabled === true) {
-            const warning = DescribeUnappliedTurnDetection('GeminiRealtime', requested, ['Mode', 'Eagerness', 'Threshold', 'SilenceDurationMs'],
-                'automatic activity detection is disabled for this session (meeting mode), so the bridge decides when turns end');
-            if (warning) {
-                console.warn(warning);
-            }
+        const existing = config.realtimeInputConfig ?? {};
+        if (existing.automaticActivityDetection?.disabled === true) {
+            console.warn(`[GeminiRealtime] Activity detection is disabled (meeting mode) for ${model}; SilenceDurationMs, Eagerness and Threshold are not sent, because Gemini refuses them next to disabled.`);
             return;
         }
-        const mapped: AutomaticActivityDetection = {};
-        if (requested.SilenceDurationMs !== undefined) {
-            mapped.silenceDurationMs = requested.SilenceDurationMs;
-        }
-        const endSensitivity = GeminiRealtime.MapEagernessToEndSensitivity(requested.Eagerness);
-        if (endSensitivity) {
-            mapped.endOfSpeechSensitivity = endSensitivity;
-        }
-        if (Object.keys(mapped).length > 0) {
-            config.realtimeInputConfig = {
-                ...(config.realtimeInputConfig ?? {}),
-                automaticActivityDetection: { ...mapped, ...(existing ?? {}) },
-            };
-        }
-        const warning = DescribeUnappliedTurnDetection('GeminiRealtime', requested, ['Mode', 'Threshold'],
-            'Gemini Live has one automatic activity detector, and its start-of-speech sensitivity is two-valued rather than a 0–1 threshold');
-        if (warning) {
-            console.warn(warning);
-        }
-    }
-
-    /**
-     * Maps MJ's normalized `Eagerness` onto Gemini's end-of-speech sensitivity. `auto` (and absent) returns `undefined`
-     * so the endpoint default applies — the SDK documents that default as different on Gemini Live and Gemini
-     * Enterprise.
-     */
-    public static MapEagernessToEndSensitivity(eagerness: RealtimeTurnDetectionSettings['Eagerness']): EndSensitivity | undefined {
-        switch (eagerness) {
-            case 'low':
-                return EndSensitivity.END_SENSITIVITY_LOW;
-            case 'high':
-                return EndSensitivity.END_SENSITIVITY_HIGH;
-            default:
-                return undefined;
-        }
+        config.realtimeInputConfig = { ...existing, automaticActivityDetection: { ...existing.automaticActivityDetection, ...mapped } };
     }
 
     /** Maps MJ's turn coverage onto the SDK's {@link TurnCoverage} wire value. */
@@ -1328,8 +1304,15 @@ class GeminiRealtimeSession implements IRealtimeSession {
     private live: GeminiLiveSession | null = null;
     private profile: GeminiLiveModelProfile;
 
-    constructor(profile?: GeminiLiveModelProfile) {
+    private readonly driverFacts: Readonly<RealtimeDriverFacts>;
+
+    /**
+     * @param driverFacts The creating driver's static facts, passed in so a subclass driver's own
+     * ceiling wins; direct construction defaults to Gemini's.
+     */
+    constructor(profile?: GeminiLiveModelProfile, driverFacts: Readonly<RealtimeDriverFacts> = GeminiRealtime.DriverFacts) {
         this.profile = profile ?? GEMINI_LIVE_FALLBACK_PROFILE;
+        this.driverFacts = driverFacts;
     }
 
     private outputHandler: ((chunk: ArrayBuffer) => void) | null = null;
@@ -1558,6 +1541,7 @@ class GeminiRealtimeSession implements IRealtimeSession {
             outbound.push({ Modality: 'video', Direction: 'outbound', ...(this.avatarEncoding ? { Encoding: this.avatarEncoding } : {}) });
         }
         return {
+            ...this.driverFacts,
             CanReconfigureTurnMode: false,
             // Proactive audio is permanently on for the 3.8 line: the model listens while speaking and decides
             // for itself when to speak. A meeting-mode session (auto activity detection off) is turn-based.

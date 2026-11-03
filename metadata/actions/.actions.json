@@ -1705,6 +1705,9 @@
   {
     "fields": {
       "Name": "Web Search",
+      "Config": {
+        "outputTrustLevel": "Untrusted"
+      },
       "Description": "Searches the open web through whichever provider the administrator has configured, and returns ranked results with titles, URLs and snippets. This is the provider-neutral entry point: which vendor serves the request (Brave, Tavily, Perplexity, or a fallback when the first choice is rate-limited) is decided by the MJ: Web Search Providers records and their Priority, not by the caller. Use this for any question needing current information from outside this MemberJunction instance. For content MJ holds, use Search instead.",
       "DriverClass": "__WebSearch",
       "Type": "Custom",
@@ -2259,6 +2262,9 @@
   {
     "fields": {
       "Name": "Web Page Content",
+      "Config": {
+        "outputTrustLevel": "Untrusted"
+      },
       "Description": "Fetches the content of a specific URL and converts it to text/markdown/JSON. Use when you already have a URL (from Web Search, a user-supplied link, or an API endpoint) and need its content. Handles HTML, PDF, DOCX, XML, CSV, and JSON automatically with format detection.",
       "DriverClass": "__WebPageContent",
       "Type": "Custom",
@@ -2693,6 +2699,9 @@
   {
     "fields": {
       "Name": "URL Metadata Extractor",
+      "Config": {
+        "outputTrustLevel": "Untrusted"
+      },
       "Description": "Extracts comprehensive metadata from web pages including OpenGraph, Twitter Cards, Schema.org structured data, and standard HTML meta tags",
       "DriverClass": "__URLMetadataExtractor",
       "Type": "Custom",

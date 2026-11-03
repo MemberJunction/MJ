@@ -1,0 +1,3 @@
+# @memberjunction/video-studio-core
+
+`@memberjunction/video-studio-core` contains the shared TypeScript contracts (`VideoGenerationSpec`, `VideoBeatTemplate`, `VideoPacing`, and the render worker wire protocol) and pure stage-aware validators for MemberJunction Video Studio. Because this package is imported by both Angular browser clients (`@memberjunction/ng-artifacts`), server-side engines (`@memberjunction/video-studio`), and the isolated render worker (`@memberjunction/video-studio-render-worker`), it must remain strictly environment-agnostic and must never import Node built-ins (`fs`, `path`, `node:*`), database drivers, or server-only MemberJunction packages. See [plans/video-studio.md](../../../../plans/video-studio.md) for the full specification.

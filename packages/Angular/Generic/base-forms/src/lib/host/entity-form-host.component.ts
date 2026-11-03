@@ -8,6 +8,7 @@ import {
 import { MJGlobal } from '@memberjunction/global';
 import { Subscription } from 'rxjs';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { IsPhoneViewport } from '../chrome/phone-viewport';
 
 import { BaseFormComponent } from '../base-form-component';
 import { BaseFormSectionComponent } from '../base-form-section-component';
@@ -275,6 +276,17 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
 
   ngOnDestroy(): void {
     this.teardown();
+  }
+
+  // ── Standard-form switch strip ─────────────────────────────────────────────
+
+  /**
+   * At phone width the mode strip is hidden; the switch moves into the toolbar's View
+   * bottom sheet instead so the 375px header stays clean while the user's chosen form
+   * (custom or standard) still mounts.
+   */
+  public get HidesModeStrip(): boolean {
+    return IsPhoneViewport();
   }
 
   // ── Public API (driven by dialog/slide-in chrome) ─────────────────────────
@@ -626,6 +638,10 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       this._record = null; // force a fresh load against the new variant
       this.reload();
     };
+    // ShowFormModeSwitch is the host's opt-out for the strip; the phone View sheet honours it too.
+    instance.FormModeSwitch = this.ShowFormModeSwitch && this.HasStandardFormAlternative
+      ? { Mode: this._formMode, Switch: (m) => this.SwitchFormMode(m) }
+      : null;
   }
 
   /** Subscribe to the form's outputs and re-emit them through the host. */

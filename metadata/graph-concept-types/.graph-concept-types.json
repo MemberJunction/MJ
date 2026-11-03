@@ -1,0 +1,86 @@
+[
+  {
+    "fields": {
+      "Name": "Policy",
+      "Description": "Governing rule, threshold, requirement, compliance mandate, or exception criterion.",
+      "Rank": 10,
+      "IconClass": "fa-solid fa-gavel",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "25B4B503-6623-4266-9C2A-E2F96F4A47BC"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Metric",
+      "Description": "Quantifiable KPI, formula, financial measure, retention rate, or operational score.",
+      "Rank": 20,
+      "IconClass": "fa-solid fa-chart-line",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "93D22E29-54F7-4B02-93D2-6B231944027D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Process",
+      "Description": "Repeatable business workflow, operational SOP, lifecycle transition, or approval sequence.",
+      "Rank": 30,
+      "IconClass": "fa-solid fa-gears",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "E5459B71-EF30-453A-9A2C-D3050EEBD7B2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Role",
+      "Description": "Organizational persona, steward, committee office, or decision-making authority.",
+      "Rank": 40,
+      "IconClass": "fa-solid fa-user-shield",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "60905F1F-EBEF-4955-9972-AB974189C33E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Domain",
+      "Description": "High-level subject area, functional department, or taxonomy umbrella grouping related concepts.",
+      "Rank": 50,
+      "IconClass": "fa-solid fa-layer-group",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "56FE6257-2FA9-4176-BFE8-D75FCE58B02E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Term",
+      "Description": "Canonical vocabulary term, acronym, entity cohort definition, or domain glossary entry.",
+      "Rank": 60,
+      "IconClass": "fa-solid fa-book-bookmark",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "C037123B-AE2A-4A4B-A1D8-5F279FBD6BF7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Custom",
+      "Description": "Organization-defined custom concept classification.",
+      "Rank": 100,
+      "IconClass": "fa-solid fa-circle-dot",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "FA303758-455B-45B1-8728-CCF2CDFE9FE4"
+    }
+  }
+]
