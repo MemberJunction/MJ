@@ -451,9 +451,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     private _configRefreshGeneration: Map<string, number> = new Map();
 
     /**
-     * Per-property generation of the newest full refresh that has committed its rows. A refresh
-     * that is no longer the latest started may still commit while nothing newer has, so a caller
-     * awaiting it never gets back rows older than its own read. See {@link mayCommitConfigRefresh}.
+     * Per-property generation of the newest full refresh that has committed rows. A failed read
+     * commits none, so it never counts. A refresh that is no longer the latest started may still
+     * commit while nothing newer has, so a caller awaiting it never gets back rows older than its
+     * own read. See {@link mayCommitConfigRefresh}.
      */
     private _configCommittedGeneration: Map<string, number> = new Map();
 
@@ -2301,19 +2302,24 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
-     * True when a refresh holding `generation` may commit its rows: it is the latest started, or
-     * nothing newer has committed yet. A superseded refresh that commits first is overwritten when
-     * the newer one lands, so the property never goes backwards, and the superseded refresh's
-     * caller (a forced `Load`, `RefreshItem`) still returns with rows at least as new as its read.
-     * Dropping them instead would leave the property on its previous rows until the newer refresh
-     * landed, which can be after that caller has returned, or never when that refresh fails.
+     * True when a refresh holding `generation` may apply its result: it is the latest started, or
+     * its read succeeded and nothing newer has committed rows yet. A superseded refresh that
+     * commits first is overwritten when the newer one lands, so the property never goes
+     * backwards, and the superseded refresh's caller (a forced `Load`, `RefreshItem`) still
+     * returns with rows at least as new as its read. Dropping them instead would leave the
+     * property on its previous rows until the newer refresh landed, which can be after that
+     * caller has returned, or never when that refresh fails. A superseded refresh whose read
+     * failed applies nothing: the newer one owns the property's load state.
      */
-    protected mayCommitConfigRefresh(propertyName: string, generation: number): boolean {
+    protected mayCommitConfigRefresh(propertyName: string, generation: number, succeeded: boolean): boolean {
         return this.isLatestConfigRefresh(propertyName, generation)
-            || (this._configCommittedGeneration.get(propertyName) ?? 0) < generation;
+            || (succeeded && (this._configCommittedGeneration.get(propertyName) ?? 0) < generation);
     }
 
-    /** Records that the refresh holding `generation` committed `propertyName`'s rows. */
+    /**
+     * Records that the refresh holding `generation` committed `propertyName`'s rows. Call it only
+     * for a successful read: a failed one leaves the held rows as they were.
+     */
     protected markConfigRefreshCommitted(propertyName: string, generation: number): void {
         if ((this._configCommittedGeneration.get(propertyName) ?? 0) < generation) {
             this._configCommittedGeneration.set(propertyName, generation);
@@ -2383,16 +2389,19 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             this.decrementInFlightFullRefresh(config.PropertyName);
         }
 
-        // A newer full refresh that has already committed superseded us while we awaited — drop
-        // this (staler) snapshot rather than clobber the newer one. The newer refresh owns the
-        // assignment, the observer notification, and (on failure) the retry, so bailing here
-        // leaves no observer un-notified. When the newer one hasn't committed yet, ours commits
-        // and the newer one overwrites it when it lands (see mayCommitConfigRefresh).
-        if (!this.mayCommitConfigRefresh(config.PropertyName, generation)) {
+        // A newer full refresh superseded us while we awaited. When it has already committed rows,
+        // or our read failed, drop this result rather than clobber the newer one: the newer
+        // refresh owns the assignment, the observer notification, and (on failure) the retry, so
+        // bailing here leaves no observer un-notified. When our read succeeded and the newer one
+        // hasn't committed yet, ours commits and the newer one overwrites it when it lands (see
+        // mayCommitConfigRefresh).
+        if (!this.mayCommitConfigRefresh(config.PropertyName, generation, result.Success)) {
             return;
         }
 
-        this.markConfigRefreshCommitted(config.PropertyName, generation);
+        if (result.Success) {
+            this.markConfigRefreshCommitted(config.PropertyName, generation);
+        }
         this.HandleSingleViewResult(config, result, contextUser);
         if (!suppressEmit) {
             // A caller that rebuilds derived state afterwards emits itself, once, AFTER the
@@ -2560,10 +2569,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             // Process results and record entity loads for redundancy detection
             const entityNames: string[] = [];
             for (let i = 0; i < configs.length; i++) {
-                if (!this.mayCommitConfigRefresh(configs[i].PropertyName, generations[i])) {
-                    continue; // a newer refresh of this property has already committed
+                if (!this.mayCommitConfigRefresh(configs[i].PropertyName, generations[i], results[i]?.Success === true)) {
+                    continue; // a newer refresh of this property owns it
                 }
-                this.markConfigRefreshCommitted(configs[i].PropertyName, generations[i]);
+                if (results[i]?.Success === true) {
+                    this.markConfigRefreshCommitted(configs[i].PropertyName, generations[i]);
+                }
                 this.HandleSingleViewResult(configs[i], results[i], contextUser);
                 this.emitPropertyChange(configs[i].PropertyName);
                 if (configs[i].EntityName) {

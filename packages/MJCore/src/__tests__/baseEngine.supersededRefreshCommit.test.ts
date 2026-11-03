@@ -45,12 +45,13 @@ class TestEngine extends BaseEngine<TestEngine> {
 
 /** Answers every read, batched or single, in call order, each after its own delay. */
 class DelayedProvider {
-    public responses: Array<{ items: BaseEntity[]; delayMs: number }> = [];
+    public responses: Array<{ items: BaseEntity[]; delayMs: number; fail?: boolean }> = [];
     private call = 0;
 
     private next(): Promise<RunViewResult> {
         const response = this.responses[this.call++] ?? { items: [], delayMs: 0 };
-        return new Promise((resolve) => setTimeout(() => resolve(makeResult(response.items)), response.delayMs));
+        const result = response.fail ? makeFailure() : makeResult(response.items);
+        return new Promise((resolve) => setTimeout(() => resolve(result), response.delayMs));
     }
 
     public RunView<T = unknown>(_params: RunViewParams, _contextUser?: UserInfo): Promise<RunViewResult<T>> {
@@ -78,6 +79,14 @@ function makeResult(items: BaseEntity[]): RunViewResult {
     return {
         Success: true, Results: items, RowCount: items.length, TotalRowCount: items.length,
         ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '',
+    } as unknown as RunViewResult;
+}
+
+/** A transient read failure: not a permission denial, so the property is marked not loaded. */
+function makeFailure(): RunViewResult {
+    return {
+        Success: false, Results: [], RowCount: 0, TotalRowCount: 0,
+        ExecutionTime: 0, ErrorMessage: 'connection reset', UserViewRunID: '',
     } as unknown as RunViewResult;
 }
 
@@ -167,5 +176,63 @@ describe('BaseEngine: a superseded full refresh', () => {
         await vi.advanceTimersByTimeAsync(200);
         await second;
         expect(ids(engine._items)).toEqual(['second']);
+    });
+
+    it('a newer refresh that failed does not stop an older successful one from committing', async () => {
+        vi.useFakeTimers();
+        const { engine, provider, config } = setup();
+        provider.responses = [
+            { items: [makeItem('load')], delayMs: 200 },        // started first, succeeds last
+            { items: [], delayMs: 50, fail: true },              // started second, fails first
+        ];
+
+        const load = engine.BatchLoadForTest(config);
+        const event = engine.RefreshForTest(config);
+        await vi.advanceTimersByTimeAsync(300);
+        await Promise.all([load, event]);
+
+        expect(ids(engine._items)).toEqual(['load']);
+        expect(engine.IsPropertyLoaded('_items')).toBe(true);
+    });
+
+    it('a newer full load that failed does not stop an older successful refresh from committing', async () => {
+        vi.useFakeTimers();
+        const { engine, provider, config } = setup();
+        provider.responses = [
+            { items: [makeItem('event')], delayMs: 200 },        // started first, succeeds last
+            { items: [], delayMs: 50, fail: true },              // the full load, started second, fails first
+        ];
+
+        const event = engine.RefreshForTest(config);
+        const load = engine.BatchLoadForTest(config);
+        await vi.advanceTimersByTimeAsync(300);
+        await Promise.all([event, load]);
+
+        expect(ids(engine._items)).toEqual(['event']);
+        expect(engine.IsPropertyLoaded('_items')).toBe(true);
+    });
+
+    it('a superseded refresh whose read failed leaves the property as it was', async () => {
+        vi.useFakeTimers();
+        const { engine, provider, config } = setup();
+        provider.responses = [
+            { items: [makeItem('loaded')], delayMs: 0 },        // a first, completed load
+            { items: [], delayMs: 50, fail: true },              // superseded, fails while the newer one runs
+            { items: [makeItem('newer')], delayMs: 200 },
+        ];
+        await Promise.all([engine.RefreshForTest(config), vi.advanceTimersByTimeAsync(1)]);
+        expect(engine.IsPropertyLoaded('_items')).toBe(true);
+
+        const failing = engine.RefreshForTest(config);
+        const newer = engine.RefreshForTest(config);
+        await vi.advanceTimersByTimeAsync(60);
+        await failing;
+        // The newer refresh owns the load state; the superseded failure must not mark it failed.
+        expect(ids(engine._items)).toEqual(['loaded']);
+        expect(engine.IsPropertyLoaded('_items')).toBe(true);
+
+        await vi.advanceTimersByTimeAsync(200);
+        await newer;
+        expect(ids(engine._items)).toEqual(['newer']);
     });
 });
