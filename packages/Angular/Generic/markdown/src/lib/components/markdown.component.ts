@@ -634,13 +634,16 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   }
 
   /**
-   * Stamp `target="_blank"` and `rel="noopener noreferrer"` on rendered links when
+   * Stamp `target="_blank"` and `rel="noopener noreferrer"` on rendered HTML links when
    * {@link OpenLinksInNewTab} is enabled. In-page fragment links (`#section`), non-navigational
-   * protocol-handler links (`mailto:`, `tel:`, `sms:`), and anchors that already declare an
-   * explicit `target` keep their behaviour.
+   * protocol-handler links (`mailto:`, `tel:`, `sms:`), SVG diagram links, and anchors that
+   * already declare an explicit `target` keep their behaviour.
    */
   private applyLinkTargets(container: HTMLElement): void {
     container.querySelectorAll<HTMLAnchorElement>('a[href]').forEach((anchor) => {
+      if (anchor.closest('svg')) {
+        return;
+      }
       const href = (anchor.getAttribute('href') || '').trim();
       if (!href || href.startsWith('#') || /^(mailto|tel|sms|javascript|vbscript|data):/i.test(href)) {
         return;

@@ -2,7 +2,15 @@ import '@angular/compiler';
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
+import type { ChangeDetectorRef, ElementRef } from '@angular/core';
 import { MessageListComponent } from '../lib/components/message/message-list.component';
+
+function makeList(): MessageListComponent {
+  return new MessageListComponent(
+    { markForCheck: () => {}, detectChanges: () => {} } as unknown as ChangeDetectorRef,
+    { nativeElement: {} as HTMLElement } as ElementRef<HTMLElement>
+  );
+}
 
 function entry(id: string) {
   return {
@@ -16,12 +24,12 @@ function entry(id: string) {
 
 describe('MessageListComponent.OpenLinksInNewTab', () => {
   it('defaults to true until a host sets it', () => {
-    expect((Object.create(MessageListComponent.prototype) as MessageListComponent).OpenLinksInNewTab).toBe(true);
+    expect(makeList().OpenLinksInNewTab).toBe(true);
   });
 
   it('pushes the value into rendered message items and marks them for check', () => {
     const a = entry('A');
-    const list = Object.create(MessageListComponent.prototype) as MessageListComponent;
+    const list = makeList();
     (list as unknown as Record<string, unknown>)['_renderedMessages'] = new Map<string, unknown>([
       ['A', a],
       ['X', { kind: 'embedded', ref: {} }],
@@ -64,7 +72,7 @@ describe('OpenLinksInNewTab template wiring contract', () => {
     expect(chatAreaHtml.slice(overlayStart, overlayEnd)).toContain('[OpenLinksInNewTab]="OpenLinksInNewTab"');
   });
 
-  it('binds OpenLinksInNewTab on mj-markdown in message-item and realtime-session-thread', () => {
+  it('binds OpenLinksInNewTab on mj-markdown in message-item, realtime-session-overlay, and realtime-session-thread', () => {
     expect(messageItemHtml).toContain('[OpenLinksInNewTab]="OpenLinksInNewTab"');
     expect(realtimeOverlayHtml).toContain('[OpenLinksInNewTab]="OpenLinksInNewTab"');
     expect(realtimeThreadHtml).toContain('[OpenLinksInNewTab]="OpenLinksInNewTab"');

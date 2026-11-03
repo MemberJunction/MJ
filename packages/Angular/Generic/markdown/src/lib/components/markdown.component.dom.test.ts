@@ -237,8 +237,8 @@ describe('MarkdownComponent (DOM)', () => {
 
   describe('OpenLinksInNewTab', () => {
     const SAMPLE_MARKDOWN =
-      'You can access the AQHA invoices site directly at https://invoices.aqha.com/.\n' +
-      'Most of your billing and invoice needs can be managed through your online account via the [myAQHA Member Portal](https://www.aqha.com/myaqha).';
+      'You can access the invoices site directly at https://invoices.example.com/.\n' +
+      'Most of your billing and invoice needs can be managed through your online account via the [Member Portal](https://portal.example.com/account).';
 
     it('leaves links in the current tab by default (OpenLinksInNewTab=false)', () => {
       const f = render({ data: SAMPLE_MARKDOWN });
@@ -253,11 +253,11 @@ describe('MarkdownComponent (DOM)', () => {
       const f = render({ data: SAMPLE_MARKDOWN, OpenLinksInNewTab: true });
       const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
       expect(links).toHaveLength(2);
-      expect(links[0].getAttribute('href')).toBe('https://invoices.aqha.com/');
+      expect(links[0].getAttribute('href')).toBe('https://invoices.example.com/');
       expect(links[0].getAttribute('target')).toBe('_blank');
       expect(links[0].getAttribute('rel')).toBe('noopener noreferrer');
-      expect(links[1].getAttribute('href')).toBe('https://www.aqha.com/myaqha');
-      expect(links[1].textContent).toBe('myAQHA Member Portal');
+      expect(links[1].getAttribute('href')).toBe('https://portal.example.com/account');
+      expect(links[1].textContent).toBe('Member Portal');
       expect(links[1].getAttribute('target')).toBe('_blank');
       expect(links[1].getAttribute('rel')).toBe('noopener noreferrer');
     });
@@ -265,21 +265,21 @@ describe('MarkdownComponent (DOM)', () => {
     it('leaves in-page fragment links (#section) and mailto:/tel:/sms: links in the current tab even when OpenLinksInNewTab=true', () => {
       const f = render({
         data:
-          'Jump to [Overview](#overview), email billing@aqha.com or [Support](mailto:support@aqha.com), ' +
-          'call [AQHA](tel:+18063764811), or visit [AQHA](https://www.aqha.com/myaqha).',
+          'Jump to [Overview](#overview), email billing@example.com or [Support](mailto:support@example.com), ' +
+          'call [Help Desk](tel:+15550100), or visit [Portal](https://portal.example.com/account).',
         OpenLinksInNewTab: true,
       });
       const links = Array.from(container(f).querySelectorAll<HTMLAnchorElement>('a'));
       expect(links).toHaveLength(5);
       expect(links[0].getAttribute('href')).toBe('#overview');
       expect(links[0].hasAttribute('target')).toBe(false);
-      expect(links[1].getAttribute('href')).toBe('mailto:billing@aqha.com');
+      expect(links[1].getAttribute('href')).toBe('mailto:billing@example.com');
       expect(links[1].hasAttribute('target')).toBe(false);
-      expect(links[2].getAttribute('href')).toBe('mailto:support@aqha.com');
+      expect(links[2].getAttribute('href')).toBe('mailto:support@example.com');
       expect(links[2].hasAttribute('target')).toBe(false);
-      expect(links[3].getAttribute('href')).toBe('tel:+18063764811');
+      expect(links[3].getAttribute('href')).toBe('tel:+15550100');
       expect(links[3].hasAttribute('target')).toBe(false);
-      expect(links[4].getAttribute('href')).toBe('https://www.aqha.com/myaqha');
+      expect(links[4].getAttribute('href')).toBe('https://portal.example.com/account');
       expect(links[4].getAttribute('target')).toBe('_blank');
       expect(links[4].getAttribute('rel')).toBe('noopener noreferrer');
     });
@@ -356,13 +356,13 @@ describe('MarkdownComponent (DOM)', () => {
 
       expect(clickedLinks).toEqual([
         {
-          href: 'https://invoices.aqha.com/',
+          href: 'https://invoices.example.com/',
           target: '_blank',
           rel: 'noopener noreferrer',
           defaultPrevented: true,
         },
         {
-          href: 'https://www.aqha.com/myaqha',
+          href: 'https://portal.example.com/account',
           target: '_blank',
           rel: 'noopener noreferrer',
           defaultPrevented: true,

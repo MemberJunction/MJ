@@ -6,9 +6,9 @@ import { renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { MessageListComponent } from './message-list.component';
 import type { MessageItemComponent } from './message-item.component';
 
-const AQHA_MESSAGE =
-  'You can access the AQHA invoices site directly at https://invoices.aqha.com/.\n' +
-  'Most of your billing and invoice needs can be managed through your online account via the [myAQHA Member Portal](https://www.aqha.com/myaqha).';
+const SAMPLE_MESSAGE =
+  'You can access the invoices site directly at https://invoices.example.com/.\n' +
+  'Most of your billing and invoice needs can be managed through your online account via the [Member Portal](https://portal.example.com/account).';
 
 const makeListComponent = () =>
   new MessageListComponent(
@@ -48,18 +48,32 @@ describe('MessageListComponent — OpenLinksInNewTab real-instance defaults and 
   it('clicking rendered message links opens in a new tab by default and in the current tab when OpenLinksInNewTab=false', async () => {
     const list = makeListComponent();
     const item = { OpenLinksInNewTab: list.OpenLinksInNewTab } as MessageItemComponent;
-    (list as unknown as Record<string, unknown>)['_renderedMessages'] = new Map<string, unknown>([
-      ['m1', { kind: 'component', ref: { instance: item, changeDetectorRef: { markForCheck: () => {} } } }],
-    ]);
-
     const fixture = renderComponentFixture(MarkdownComponent, {
       imports: [CommonModule],
       declarations: [MarkdownComponent],
       inputs: {
-        data: AQHA_MESSAGE,
+        data: SAMPLE_MESSAGE,
         OpenLinksInNewTab: item.OpenLinksInNewTab,
       },
     });
+
+    (list as unknown as Record<string, unknown>)['_renderedMessages'] = new Map<string, unknown>([
+      [
+        'm1',
+        {
+          kind: 'component',
+          ref: {
+            instance: item,
+            changeDetectorRef: {
+              markForCheck: () => {
+                fixture.componentRef.setInput('OpenLinksInNewTab', item.OpenLinksInNewTab);
+                fixture.detectChanges();
+              },
+            },
+          },
+        },
+      ],
+    ]);
 
     const root = fixture.nativeElement.querySelector('.mj-markdown-container') as HTMLElement;
     const clicked: Array<{ href: string | null; target: string; rel: string }> = [];
@@ -81,15 +95,13 @@ describe('MessageListComponent — OpenLinksInNewTab real-instance defaults and 
     defaultLinks[1].click();
 
     expect(clicked).toEqual([
-      { href: 'https://invoices.aqha.com/', target: '_blank', rel: 'noopener noreferrer' },
-      { href: 'https://www.aqha.com/myaqha', target: '_blank', rel: 'noopener noreferrer' },
+      { href: 'https://invoices.example.com/', target: '_blank', rel: 'noopener noreferrer' },
+      { href: 'https://portal.example.com/account', target: '_blank', rel: 'noopener noreferrer' },
     ]);
 
     // Host flips OpenLinksInNewTab to false on MessageListComponent -> restamps item -> updates mj-markdown
     clicked.length = 0;
     list.OpenLinksInNewTab = false;
-    fixture.componentRef.setInput('OpenLinksInNewTab', item.OpenLinksInNewTab);
-    fixture.detectChanges();
     await Promise.resolve();
     await Promise.resolve();
 
@@ -99,8 +111,8 @@ describe('MessageListComponent — OpenLinksInNewTab real-instance defaults and 
     sameTabLinks[1].click();
 
     expect(clicked).toEqual([
-      { href: 'https://invoices.aqha.com/', target: '', rel: '' },
-      { href: 'https://www.aqha.com/myaqha', target: '', rel: '' },
+      { href: 'https://invoices.example.com/', target: '', rel: '' },
+      { href: 'https://portal.example.com/account', target: '', rel: '' },
     ]);
   });
 });

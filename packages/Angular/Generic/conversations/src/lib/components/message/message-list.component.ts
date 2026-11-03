@@ -319,14 +319,14 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    */
   @Input()
   public set OpenLinksInNewTab(value: boolean) {
-    if (value === this.OpenLinksInNewTab) {
+    if (value === this._openLinksInNewTab) {
       return;
     }
     this._openLinksInNewTab = value;
     this.restampAssistantIdentity();
   }
   public get OpenLinksInNewTab(): boolean {
-    return this._openLinksInNewTab ?? true;
+    return this._openLinksInNewTab;
   }
   private _openLinksInNewTab = true;
 
