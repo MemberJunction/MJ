@@ -259,12 +259,15 @@ export type WizardStep = 'goal' | 'features' | 'preprocessing' | 'algorithm';
                 <div class="recipe-details">
                   <h4>Missing Value Imputation</h4>
                   <p class="ps-small ps-muted">Strategy for filling null or missing entries in numeric columns. Text columns always get their own "missing" category.</p>
-                  <select class="mj-input" [(ngModel)]="ImputeStrategy">
+                  <select class="mj-input" data-testid="ps-wizard-impute-strategy" [(ngModel)]="ImputeStrategy" [disabled]="!HasNumericFeature">
                     <option value="median">Median (Robust against numeric outliers)</option>
                     <option value="mean">Mean (Standard arithmetic average)</option>
                     <option value="mode">Mode (Most frequent value)</option>
                     <option value="constant">Constant (Zero)</option>
                   </select>
+                  @if (!HasNumericFeature) {
+                    <p class="ps-small ps-muted" data-testid="ps-wizard-impute-note">No numeric feature is selected, so there is nothing to impute and no strategy is saved.</p>
+                  }
                 </div>
               </div>
             </div>
@@ -526,6 +529,14 @@ export class PSPipelineWizardComponent implements OnInit {
 
   public get SelectedFeaturesCount(): number {
     return this.FieldItems.filter((i) => i.selected && !i.isDenyList && !i.isTarget).length;
+  }
+
+  /**
+   * True when a selected feature is numeric to the trainer. The imputation strategy is saved only as impute steps on
+   * such columns, so without one the select is disabled: a choice there would be saved nowhere.
+   */
+  public get HasNumericFeature(): boolean {
+    return this.selectedNumericColumns().length > 0;
   }
 
   public get DenyListCount(): number {

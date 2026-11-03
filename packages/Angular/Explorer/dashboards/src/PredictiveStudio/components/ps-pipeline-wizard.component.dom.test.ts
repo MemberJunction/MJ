@@ -282,6 +282,27 @@ describe('PSPipelineWizardComponent (DOM) — every control round-trips', () => 
     expect(steps(captured.Saved[0]).filter((st) => st.Kind === 'impute').map((st) => st.Kind === 'impute' ? st.Column : null)).toEqual(['Score', 'Tenure']);
   });
 
+  it('disables the imputation strategy, saying why, while no numeric feature is selected: there is nothing for it to apply to', async () => {
+    vi.spyOn(PipelineWizardBindings, 'ReadClassLabels').mockResolvedValue(['A', 'B', 'C']);
+    const fixture = saveable();
+    await goalStep(fixture, 'Segment');
+    const c = fixture.componentInstance;
+    const imputeSelect = async (): Promise<{ Disabled: boolean | 'no select'; Note: string | null }> => {
+      c.GoToStep('preprocessing');
+      await settle(fixture); // ngModel applies [disabled] after a tick
+      const select = Query(fixture, '[data-testid="ps-wizard-impute-strategy"]');
+      const note = Query(fixture, '[data-testid="ps-wizard-impute-note"]')?.textContent?.replace(/\s+/g, ' ').trim() ?? null;
+      return { Disabled: select instanceof HTMLSelectElement ? select.disabled : 'no select', Note: note };
+    };
+    expect(await imputeSelect()).toEqual({ Disabled: false, Note: null });
+    const tenure = c.FieldItems.find((i) => i.field.Name === 'Tenure');
+    if (tenure) tenure.selected = false;
+    expect(await imputeSelect()).toEqual({
+      Disabled: true,
+      Note: 'No numeric feature is selected, so there is nothing to impute and no strategy is saved.',
+    });
+  });
+
   it('offers no encoding or scaling choice, and says the trainer standardizes numerics and one-hot encodes text every time', async () => {
     const fixture = renderWizard();
     fixture.componentInstance.GoToStep('preprocessing');
