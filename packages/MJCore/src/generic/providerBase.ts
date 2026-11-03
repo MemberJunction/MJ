@@ -306,6 +306,14 @@ type RowProjectionPlans = {
  */
 type SavedViewSortSource = BaseEntity & { OrderByClause?: string | null };
 
+/** One caller's RunViews waiting in the coalesce window, settled with only its own slice of results. */
+type CoalesceQueueEntry = {
+    params: RunViewParams[];
+    contextUser?: UserInfo;
+    resolve: (results: RunViewResult[]) => void;
+    reject: (err: unknown) => void;
+};
+
 /**
  * Base class for all metadata providers in MemberJunction.
  * Implements common functionality for metadata caching, refresh, and dataset management.
@@ -426,12 +434,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Each entry tracks the original params, contextUser, and a resolver
      * so the caller's promise resolves with only their slice of results.
      */
-    private _coalesceQueue: Array<{
-        params: RunViewParams[];
-        contextUser?: UserInfo;
-        resolve: (results: RunViewResult[]) => void;
-        reject: (err: unknown) => void;
-    }> = [];
+    private _coalesceQueue: CoalesceQueueEntry[] = [];
 
     /** Timer handle for the coalesce flush */
     private _coalesceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1795,18 +1798,27 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         this._coalesceTimer = null;
 
         // Grab and clear the queue atomically
-        const queue = this._coalesceQueue.splice(0);
-        if (queue.length === 0) return;
+        const allEntries = this._coalesceQueue.splice(0);
+        if (allEntries.length === 0) return;
 
-        // If only one caller, no merging needed
-        if (queue.length === 1) {
-            const entry = queue[0];
-            try {
-                const results = await this.runViewsUncoalesced(entry.params, entry.contextUser);
-                entry.resolve(results);
-            } catch (err) {
-                entry.reject(err);
+        // A caller naming an entity this provider does not know would fail the whole merged batch
+        // (#6278, #6061). Run such callers on their own so only they see the error.
+        const queue: CoalesceQueueEntry[] = [];
+        const isolated: Promise<void>[] = [];
+        for (const entry of allEntries) {
+            if (this.namesUnknownEntity(entry.params)) {
+                isolated.push(this.runCoalesceEntryAlone(entry));
+            } else {
+                queue.push(entry);
             }
+        }
+
+        // If at most one caller remains, no merging needed
+        if (queue.length <= 1) {
+            if (queue.length === 1) {
+                isolated.push(this.runCoalesceEntryAlone(queue[0]));
+            }
+            await Promise.all(isolated);
             return;
         }
 
@@ -1872,11 +1884,32 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         } catch (err) {
             TelemetryManager.Instance.EndEvent(eventId, { success: false, error: String(err) });
 
-            // If the mega-batch fails, reject all callers
+            // The merged batch failed as a whole, which says nothing about which caller caused it.
+            // Re-run each caller on its own so each gets its own result or its own error (#6278).
             for (const entry of queue) {
-                entry.reject(err);
+                isolated.push(this.runCoalesceEntryAlone(entry));
             }
         }
+        await Promise.all(isolated);
+    }
+
+    /** Runs one coalesce-queue caller's params as their own batch and settles that caller's promise. */
+    private async runCoalesceEntryAlone(entry: CoalesceQueueEntry): Promise<void> {
+        try {
+            const results = await this.runViewsUncoalesced(entry.params, entry.contextUser);
+            entry.resolve(results);
+        } catch (err) {
+            entry.reject(err);
+        }
+    }
+
+    /**
+     * True when any param names an `EntityName` this provider has no metadata for — the same lookup
+     * `EntityStatusCheck` fails on. Params resolved only through a view are not checked here (that
+     * needs a query); a failure they cause is handled by re-running each caller on its own.
+     */
+    private namesUnknownEntity(params: RunViewParams[]): boolean {
+        return params.some(p => !!p.EntityName && !this.EntityByName(p.EntityName));
     }
 
     /**
