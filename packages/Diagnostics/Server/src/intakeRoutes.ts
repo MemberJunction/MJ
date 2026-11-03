@@ -217,7 +217,9 @@ async function handleEnrol(req: ExpressReq, res: ExpressRes): Promise<void> {
     return;
   }
   const outcome = await intake.EnrolSender(body);
-  if (outcome.Ok === false) {
+  if (outcome.Ok === false && outcome.Status === 503) {
+    res.status(503).json(UNAVAILABLE);
+  } else if (outcome.Ok === false) {
     rejectAuthFailure(req, res, outcome.Status, { error: 'Enrolment refused.' });
   } else {
     res.status(200).json({ ...outcome.Body });

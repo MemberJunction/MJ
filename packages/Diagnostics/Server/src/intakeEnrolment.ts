@@ -39,7 +39,7 @@ export interface CollectorKeys {
 
 export type EnrolOutcome =
   | { Ok: true; Body: EnrolResponseBody }
-  | { Ok: false; Status: 400 | 401; Reason: string };
+  | { Ok: false; Status: 400 | 401 | 503; Reason: string };
 
 /** Returns the lower-case hex SHA-256 of a registration code. */
 export function HashRegistrationCode(code: string): string {
@@ -101,7 +101,7 @@ async function activateRegistration(row: MJDiagnosticSenderRegistrationEntity, b
   return false;
 }
 
-function reject(installId: string, reason: string, status: 400 | 401 = 401): EnrolOutcome {
+function reject(installId: string, reason: string, status: 400 | 401 | 503 = 401): EnrolOutcome {
   LogError(`Diagnostics enrolment refused for '${SanitizeForLog(installId, 200)}': ${reason}`);
   return { Ok: false, Status: status, Reason: reason };
 }
@@ -122,7 +122,7 @@ export async function EnrolSenderAtCollector(
 ): Promise<EnrolOutcome> {
   const row = await LoadSenderRegistrationRow(body.installId, data);
   if (row === undefined) {
-    return reject(body.installId, 'the registration could not be loaded', 400);
+    return reject(body.installId, 'the registration could not be loaded', 503);
   }
   if (!row) {
     return reject(body.installId, 'no registration exists for this install');

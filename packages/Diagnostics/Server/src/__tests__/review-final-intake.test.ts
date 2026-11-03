@@ -16,6 +16,7 @@ type ExpressAppParam = Parameters<typeof RegisterIntakeRoutes>[0];
 const PUBLIC_BASE = 'https://collector.test/api';
 const AUD = `${PUBLIC_BASE}/diagnostics/intake/v1`;
 const BUNDLES_PATH = '/api/diagnostics/intake/v1/bundles';
+const ENROL_PATH = '/api/diagnostics/intake/v1/enroll';
 const INSTALL_ID = '6B1D7C70-2C1E-4A55-9C1E-7D2E0B9A1F02';
 const DB_ERROR = 'Connection pool exhausted on sql-prod-7';
 
@@ -82,6 +83,15 @@ async function postBundles(handlers: Map<string, RouteHandler>, headers: Record<
     return res;
 }
 
+async function postEnrol(handlers: Map<string, RouteHandler>, body: string): Promise<FakeResponse> {
+    const handler = handlers.get(`POST ${ENROL_PATH}`);
+    if (!handler) throw new Error('No enrol route');
+    const res = createFakeResponse();
+    handler(new FakeRequest('POST', ENROL_PATH, { 'content-type': 'application/json' }, new TextEncoder().encode(body)), res);
+    await res.Done;
+    return res;
+}
+
 async function signedHeaders(key: DiagnosticKeyPair, body: string): Promise<Record<string, string>> {
     const signed = await SignSenderRequest({
         Method: 'POST',
@@ -115,6 +125,7 @@ describe('diagnostics intake routes: failed registration lookup', () => {
         const intake = DiagnosticIntakeService.Instance;
         intake.ResetForTests();
         intake.RegisterKeyPair(collectorKey);
+        intake.RegisterSigningKeyPair(await GenerateDiagnosticKeyPair('Ed25519', 'collector-signing-1'));
         intake.Configure({ enabled: true, contextUser: systemUser, provider: failRegistrationLookups() });
         handlers = registerRoutes();
     });
@@ -137,6 +148,25 @@ describe('diagnostics intake routes: failed registration lookup', () => {
         const statuses: number[] = [];
         for (let i = 0; i < 80; i++) {
             statuses.push((await postBundles(handlers, await signedHeaders(senderKey, body), body)).StatusCode);
+        }
+
+        expect(statuses.every((code) => code === 503)).toBe(true);
+        expect(DiagnosticIntakeService.Instance.IpFailureLimitReached('ip:203.0.113.9')).toBe(false);
+    });
+
+    it('answers 503 to an enrolment whose registration lookup fails, without counting it against the IP', async () => {
+        const body = JSON.stringify({
+            installId: INSTALL_ID,
+            registrationCode: 'CODE-123',
+            keyId: senderKey.keyId,
+            publicKeyBase64: senderKey.publicKeyBase64,
+            proof: 'proof',
+        });
+        const statuses: number[] = [];
+        for (let i = 0; i < 80; i++) {
+            const res = await postEnrol(handlers, body);
+            expect(JSON.stringify(res.Body)).not.toContain(DB_ERROR);
+            statuses.push(res.StatusCode);
         }
 
         expect(statuses.every((code) => code === 503)).toBe(true);
