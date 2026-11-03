@@ -515,6 +515,21 @@ describe('PSPipelineWizardComponent (DOM) — every control round-trips', () => 
     expect(notify.mock.calls.map(([message]) => message).filter((m) => m.includes(String(unit?.Name)))).toHaveLength(1);
   });
 
+  it('clones the legacy array form of FeatureSteps as its steps: the saved selection and strategy, not the defaults', async () => {
+    vi.spyOn(PipelineWizardBindings, 'ReadClassLabels').mockResolvedValue(['A', 'B', 'C']);
+    const legacy: MJMLTrainingPipelineEntity = Object.assign(pipelineDouble(), {
+      Name: 'Legacy', Description: '', TargetEntityID: 'W1', TargetVariable: 'Segment', ProblemType: 'classification', ValidationStrategy: null, LeakageGuard: null,
+      FeatureSteps: JSON.stringify([
+        { Id: 'step_select', Kind: 'select', Inputs: ['src_primary'], Columns: ['Tenure', 'Region'] },
+        { Id: 'step_impute_Tenure', Kind: 'impute', Inputs: ['step_select'], Column: 'Tenure', Strategy: 'mean' },
+      ]),
+    });
+    const fixture = saveable(legacy);
+    await settle(fixture);
+    const c = fixture.componentInstance;
+    expect([c.FieldItems.filter((i) => i.selected).map((i) => i.field.Name), c.ImputeStrategy]).toEqual([['Tenure', 'Region'], 'mean']);
+  });
+
   it('keeps the defaults, and does not throw, when the cloned FeatureSteps or ValidationStrategy is unreadable', async () => {
     vi.spyOn(PipelineWizardBindings, 'ReadClassLabels').mockResolvedValue(['A', 'B', 'C']);
     const broken: MJMLTrainingPipelineEntity = Object.assign(pipelineDouble(), {

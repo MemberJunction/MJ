@@ -23,6 +23,7 @@ import {
   DOMINANCE_THRESHOLD_DEFAULT,
   JsonParse,
   type JsonObject,
+  type JsonValue,
   type SourceBinding,
   type FeatureStep,
   type AsOfStrategy,
@@ -956,8 +957,7 @@ export class PSPipelineWizardComponent implements OnInit {
    * honours). Unreadable JSON, or a graph without a select step, leaves every default; every other step is ignored.
    */
   private restoreClonedFeatureSteps(json: string | null): void {
-    const graph = this.jsonObject(json);
-    const steps = graph === null ? null : JsonParse.JsonArrayField(graph, 'Steps');
+    const steps = this.featureStepList(json);
     if (steps === null) return;
     const objects = steps.filter((st): st is JsonObject => JsonParse.IsJsonObject(st));
     const kind = (st: JsonObject): string | null => JsonParse.JsonString(st, 'Kind');
@@ -974,6 +974,17 @@ export class PSPipelineWizardComponent implements OnInit {
     const impute = objects.find((st) => kind(st) === 'impute');
     const strategy = impute === undefined ? null : JsonParse.JsonString(impute, 'Strategy');
     if (strategy === 'mean' || strategy === 'median' || strategy === 'mode' || strategy === 'constant') this.ImputeStrategy = strategy;
+  }
+
+  /**
+   * The steps of a stored FeatureSteps column: the `Steps` of the object form, or the legacy array form itself (as the
+   * pipelines editor reads it); null when the JSON is unreadable or holds neither.
+   */
+  private featureStepList(json: string | null): JsonValue[] | null {
+    const parsed = JsonParse.ParseJsonText(json, 'FeatureSteps');
+    if (!parsed.Ok) return null;
+    if (Array.isArray(parsed.Value)) return parsed.Value;
+    return JsonParse.IsJsonObject(parsed.Value) ? JsonParse.JsonArrayField(parsed.Value, 'Steps') : null;
   }
 
   /**
