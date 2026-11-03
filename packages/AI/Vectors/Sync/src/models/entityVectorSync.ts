@@ -22,6 +22,21 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
+import { PlanRecordDocumentPrune, PrunableRecordDocument, RecordDocumentVectorTarget, RemoveRecordDocuments, SplitDuplicateRecordDocuments } from './entityRecordDocumentPruner';
+
+/**
+ * Runs in progress in this process, by entity document. A second run of the same document waits for
+ * the first: two at once can both create the Entity Record Document row for a record (#417).
+ * Runs on other servers are not covered; the duplicate cleanup on the next run removes what they leave.
+ */
+const runsInProgress = new Map<string, Promise<unknown>>();
+
+/** The paging loop's account of a run: every RecordID it paged, and whether it reached the end. */
+type PagingState = {
+  SeenRecordIDs: Set<string>;
+  /** True only when paging ended because the last page was short; false after an error or a halted cursor. */
+  Completed: boolean;
+};
 
 /**
  * Class that specializes in vectorizing entities using embedding models and upserting them into Vector Databases 
@@ -53,6 +68,8 @@ export class EntityVectorSyncer extends VectorBase {
   private _embedErrors: { RecordID: string; Message: string }[] = [];
   /** Accumulates vector-DB upsert errors across batches so a failed upsert is reflected in the run's success flag */
   private _upsertErrors: { RecordID: string; Message: string }[] = [];
+  /** The current run's vector database, index and provider config; duplicate and orphan rows are removed through it. */
+  private _vectorTarget: RecordDocumentVectorTarget = { VectorDB: null };
 
   /**
    * Returns the active metadata provider — explicit override (via `this.Provider = ...`)
@@ -103,6 +120,27 @@ export class EntityVectorSyncer extends VectorBase {
     if (!contextUser) {
       throw new Error('ContextUser is required to vectorize the entity');
     }
+    // One run per entity document per process: a second call waits for the first, then runs.
+    const guardKey = String(params.entityDocumentID ?? `entity:${params.entityID}`).toLowerCase();
+    const previous = runsInProgress.get(guardKey);
+    const run = (async (): Promise<VectorizeEntityResponse> => {
+      if (previous) {
+        this.vlog(guardKey, 'waiting for a run of the same entity document to finish');
+        await previous.catch(() => undefined);
+      }
+      return this.vectorizeEntityRun(params, contextUser);
+    })();
+    runsInProgress.set(guardKey, run);
+    try {
+      return await run;
+    } finally {
+      if (runsInProgress.get(guardKey) === run) {
+        runsInProgress.delete(guardKey);
+      }
+    }
+  }
+
+  private async vectorizeEntityRun(params: VectorizeEntityParams, contextUser: UserInfo): Promise<VectorizeEntityResponse> {
 
     const startTime: number = new Date().getTime();
     super.CurrentUser = contextUser;
@@ -164,11 +202,15 @@ export class EntityVectorSyncer extends VectorBase {
     // other drivers can read driver-specific settings (e.g. namespaceField).
     const vectorIndexProviderConfig = this.parseProviderConfig(vectorIndexEntity.ProviderConfig);
 
+    const providerIndexName = AIEngine.Instance.GetProviderIndexName(vectorIndexEntity);
     const vectorUpserter = this.createVectorUpserter(
-      entityDocument, templateContent, obj.vectorDB, AIEngine.Instance.GetProviderIndexName(vectorIndexEntity), delayTimeMS,
+      entityDocument, templateContent, obj.vectorDB, providerIndexName, delayTimeMS,
       params.UpsertBatchCount || pipelineConfig?.upsertBatchSize,
       vectorIndexProviderConfig
     );
+    // Where this run's vectors live: duplicate Entity Record Documents found while upserting, and
+    // orphans found at the end, are removed together with their vectors.
+    this._vectorTarget = { VectorDB: obj.vectorDB, IndexName: providerIndexName, ProviderConfig: vectorIndexProviderConfig };
 
     const erdUpserter = new AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData>({
       BatchSize: 10,
@@ -247,7 +289,8 @@ export class EntityVectorSyncer extends VectorBase {
       originalEndStream();
     };
 
-    this.startDataPaging(dataStream, params, md, entity, template, vectorIndexEntity, entityDocument, pageSize);
+    const pagingState: PagingState = { SeenRecordIDs: new Set<string>(), Completed: false };
+    this.startDataPaging(dataStream, params, md, entity, template, vectorIndexEntity, entityDocument, pageSize, pagingState);
 
     this.vlog(entityDocument.Name, 'pipeline started');
     // Terminal sink: a Writable that discards each chunk after the
@@ -268,6 +311,16 @@ export class EntityVectorSyncer extends VectorBase {
         write(_chunk, _encoding, callback) { callback(); },
       })
     );
+
+    // Orphan prune (#5201): only after a full, completed pass over the document's records, so the
+    // seen set is the complete list of records the document still covers.
+    let prunedRecords = 0;
+    if (ShouldPruneAfterRun(params, pagingState, pipelineConfig?.pruneOrphans)) {
+      prunedRecords = await this.PruneOrphanedRecordDocuments(entityDocument, pagingState.SeenRecordIDs, this._vectorTarget, contextUser);
+      if (prunedRecords > 0) {
+        LogStatus(`[${entityDocument.Name}] removed ${prunedRecords} orphaned or duplicate Entity Record Document(s) and their vectors`);
+      }
+    }
 
     const elapsedMs: number = new Date().getTime() - startTime;
     const elapsedSeconds = elapsedMs / 1000;
@@ -300,7 +353,100 @@ export class EntityVectorSyncer extends VectorBase {
       processedRecords,
       errorCount: allErrors.length,
       elapsedMs,
+      prunedRecords,
     };
+  }
+
+  /**
+   * Removes every Entity Record Document (and its vector) stored for the given records of an entity,
+   * across all of the entity's documents. Used when records are deleted (#406). Returns the number of
+   * rows removed. A document whose vector database cannot be resolved is skipped and logged.
+   */
+  public async RemoveRecordVectors(entityID: string, recordIDs: string[], contextUser: UserInfo): Promise<number> {
+    if (recordIDs.length === 0) return 0;
+    const inClause = recordIDs.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
+    const stored = await super.RunView.RunView<PrunableRecordDocument & { EntityDocumentID: string }>({
+      EntityName: 'MJ: Entity Record Documents',
+      ExtraFilter: `EntityID='${entityID}' AND RecordID IN (${inClause})`,
+      Fields: ['ID', 'RecordID', 'VectorID', 'EntityDocumentID'],
+      ResultType: 'simple',
+      IgnoreMaxRows: true,
+      BypassCache: true,
+    }, contextUser);
+    if (!stored.Success) {
+      LogError(`RemoveRecordVectors: could not read Entity Record Documents for entity ${entityID}: ${stored.ErrorMessage}`);
+      return 0;
+    }
+
+    const byDocument = new Map<string, PrunableRecordDocument[]>();
+    for (const row of stored.Results) {
+      const key = String(row.EntityDocumentID).toLowerCase();
+      const list = byDocument.get(key);
+      if (list) list.push(row); else byDocument.set(key, [row]);
+    }
+
+    let removed = 0;
+    for (const [entityDocumentID, rows] of byDocument) {
+      try {
+        const target = await this.resolveVectorTarget(entityDocumentID);
+        const result = await RemoveRecordDocuments(rows, target, contextUser, this.Provider);
+        removed += result.RemovedRows;
+      } catch (e) {
+        LogError(`RemoveRecordVectors: skipped entity document ${entityDocumentID}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    return removed;
+  }
+
+  /** The vector database, provider index name and provider config for an entity document. */
+  private async resolveVectorTarget(entityDocumentID: string): Promise<RecordDocumentVectorTarget> {
+    const entityDocument = await this.GetEntityDocument(entityDocumentID);
+    const vectorIndexEntity = this.getVectorIndexForEntityDocument(entityDocument);
+    const obj = await this.GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(entityDocumentID, false, vectorIndexEntity);
+    return {
+      VectorDB: obj.vectorDB,
+      IndexName: AIEngine.Instance.GetProviderIndexName(vectorIndexEntity),
+      ProviderConfig: this.parseProviderConfig(vectorIndexEntity.ProviderConfig),
+    };
+  }
+
+  /**
+   * Removes the document's Entity Record Documents (and their vectors) whose RecordID the run did not
+   * page — deleted, re-keyed, or now outside the record filter — plus duplicate rows for one RecordID.
+   * Returns the number of rows removed. Never throws.
+   */
+  protected async PruneOrphanedRecordDocuments(
+    entityDocument: MJEntityDocumentEntity,
+    seenRecordIDs: ReadonlySet<string>,
+    target: RecordDocumentVectorTarget,
+    contextUser: UserInfo
+  ): Promise<number> {
+    try {
+      const stored = await super.RunView.RunView<PrunableRecordDocument>({
+        EntityName: 'MJ: Entity Record Documents',
+        ExtraFilter: `EntityDocumentID='${entityDocument.ID}'`,
+        Fields: ['ID', 'RecordID', 'VectorID', '__mj_UpdatedAt'],
+        ResultType: 'simple',
+        IgnoreMaxRows: true,
+        BypassCache: true,
+      }, contextUser);
+      if (!stored.Success) {
+        LogError(`[${entityDocument.Name}] orphan prune skipped: could not read Entity Record Documents: ${stored.ErrorMessage}`);
+        return 0;
+      }
+      const plan = PlanRecordDocumentPrune(stored.Results, seenRecordIDs);
+      if (plan.Remove.length === 0) {
+        return 0;
+      }
+      const result = await RemoveRecordDocuments(plan.Remove, target, contextUser, this.Provider, plan.KeepVectorIDs);
+      if (result.Failed > 0) {
+        LogError(`[${entityDocument.Name}] orphan prune: ${result.Failed} removal(s) failed; the next full run retries them`);
+      }
+      return result.RemovedRows;
+    } catch (e) {
+      LogError(`[${entityDocument.Name}] orphan prune failed: ${e instanceof Error ? e.message : String(e)}`);
+      return 0;
+    }
   }
 
   /**
@@ -1007,7 +1153,8 @@ export class EntityVectorSyncer extends VectorBase {
     template: MJTemplateEntityExtended,
     vectorIndexEntity: MJVectorIndexEntity,
     entityDocument: MJEntityDocumentEntity,
-    pageSize: number
+    pageSize: number,
+    pagingState?: PagingState
   ): void {
     const getData = async (): Promise<void> => {
       // Prefer keyset (seek) pagination for entities with a single-column orderable PK.
@@ -1057,6 +1204,7 @@ export class EntityVectorSyncer extends VectorBase {
           const typedRecord = record as Record<string, unknown>;
           const templateData: Record<string, unknown> = await this.GetTemplateData(entity, typedRecord, template, relatedData);
           templateData.__mj_recordID = this.BuildRecordID(entity, typedRecord);
+          pagingState?.SeenRecordIDs.add(String(templateData.__mj_recordID));
           templateData.__mj_compositeKey = entity.PrimaryKeys.map((key) => `${key.Name}|${typedRecord[key.Name]}`).join('||');
           templateData.VectorIndexID = vectorIndexEntity.ID;
           templateData.TemplateContent = template.Content[0].TemplateText;
@@ -1067,6 +1215,8 @@ export class EntityVectorSyncer extends VectorBase {
         dataStream.addPage(items);
         if (recordsPage.length < pageSize) {
           hasMore = false;
+          // The only normal end of paging; the halts below and the catch leave Completed false.
+          if (pagingState) pagingState.Completed = true;
           break;
         }
 
@@ -1621,10 +1771,15 @@ export class EntityVectorSyncer extends VectorBase {
     for (let gi = 0; gi < groupList.length; gi++) {
       const { items } = groupList[gi];
       const result = existenceReads[gi] as RunViewResult<MJEntityRecordDocumentEntity>;
-      const existingByRecordID = new Map<string, MJEntityRecordDocumentEntity>();
+      let existingByRecordID = new Map<string, MJEntityRecordDocumentEntity>();
       if (result?.Success) {
-        for (const er of result.Results) {
-          existingByRecordID.set(String(er.RecordID), er);
+        // Several rows for one record (#417): keep the newest, remove the rest with their vectors
+        // unless the kept row uses the same vector.
+        const { Keep, Duplicates } = SplitDuplicateRecordDocuments(result.Results);
+        existingByRecordID = Keep;
+        if (Duplicates.length > 0) {
+          const keepVectorIDs = new Set([...Keep.values()].map(k => k.VectorID).filter((v): v is string => !!v));
+          await RemoveRecordDocuments(Duplicates, this._vectorTarget, contextUser, md, keepVectorIDs);
         }
       } else {
         LogError('Error getting existing Entity Record Documents', undefined, result?.ErrorMessage);
@@ -1752,4 +1907,18 @@ export class EntityVectorSyncer extends VectorBase {
       )`;
     }
   }
+}
+
+/**
+ * Whether a finished run may prune orphaned Entity Record Documents. Only a run that paged every
+ * record the document covers can tell an orphan from a record it did not look at: not a list run,
+ * not one that started at an offset, not one whose paging stopped early, and not when the document
+ * opts out with `Configuration.pipeline.pruneOrphans: false`.
+ */
+export function ShouldPruneAfterRun(
+  params: Pick<VectorizeEntityParams, 'listID' | 'StartingOffset'>,
+  pagingState: Pick<PagingState, 'Completed'>,
+  pruneOrphans: boolean | undefined
+): boolean {
+  return !params.listID && !params.StartingOffset && pagingState.Completed && pruneOrphans !== false;
 }

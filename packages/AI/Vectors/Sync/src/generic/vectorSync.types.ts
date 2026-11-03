@@ -79,6 +79,8 @@ export type VectorizeEntityResponse = {
     errorCount?: number;
     /** Wall-clock duration of this entity's vectorization, in milliseconds. */
     elapsedMs?: number;
+    /** Orphaned or duplicate Entity Record Documents removed after the run (see `pipeline.pruneOrphans`). */
+    prunedRecords?: number;
 }
 
 export type EmbeddingData = {
