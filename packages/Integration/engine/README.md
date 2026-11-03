@@ -208,3 +208,15 @@ Bound the data sample used to build a column corpus + lightweight PK guess (NOT 
 | `MJ_INTEGRATION_FULL_PUSH_MAX_RECORDS` | unset = unbounded | Cap on records pushed in a single full push. |
 | `MJ_INTEGRATION_MAX_RUNS_PER_CI` | 100 | Run-history rows retained per CompanyIntegration (≤0 disables pruning). |
 | `MJ_INTEGRATION_VERBOSE_RECORD_LOGS` | off | When `true`, emits per-record console logs (structured artifacts are unaffected either way). |
+
+## Connection Configuration keys (sync limits)
+
+Set in `CompanyIntegration.Configuration` (JSON) for one connection. Only positive whole numbers are honoured; anything else falls back to the default.
+
+| Key | Default | Effect |
+|---|---|---|
+| `batchSize` | engine `MaxBatchSize` (200) | Records asked of the source per page. The memory governor may still shrink it under pressure. |
+| `maxBatchesPerMap` | 5000 | Most pages one object may fetch in a run. Reaching it records a Critical `BATCH_CAP_REACHED` error, marks the object incomplete and ends the run `Failed`. For an object larger than `batchSize × maxBatchesPerMap` rows, raise `batchSize` first. |
+| `watermarkLookbackSeconds` | connector's `WatermarkLookbackSeconds` (0; 300 for external-data-source connectors) | For connectors whose watermark is a monotonic timestamp, the next incremental's fetch filter starts this many seconds before the saved watermark, so rows that commit late are still fetched. The saved watermark is unchanged. `0` turns the overlap off. Ignored for non-timestamp watermarks. |
+
+A run also ends `Failed` when an object stops on a missing or stale CRUD routine (`SchemaNotGeneratedError`, reason `Missing` or `Stale`): the first write that fails with "could not find stored procedure", "too many arguments specified" or "expects parameter ... which was not supplied" stops that object with one Critical error, and the fix is to run CodeGen for the entity.

@@ -36,6 +36,8 @@ export type SyncErrorCode =
     | 'WATERMARK_INVALID'
     | 'CONFIGURATION_ERROR'
     | 'OBJECT_UNAVAILABLE'
+    /** An object reached the per-run page cap (`maxBatchesPerMap`) before the source said it was done. */
+    | 'BATCH_CAP_REACHED'
     | 'UNKNOWN_ERROR';
 
 /** Severity level of a sync error */

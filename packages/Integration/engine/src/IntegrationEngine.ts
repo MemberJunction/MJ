@@ -173,18 +173,32 @@ const FULL_PUSH_MAX_RECORDS = (() => {
 export class SchemaNotGeneratedError extends Error {
     public readonly EntityName: string;
     public readonly StoredProcedureName: string;
+    /**
+     * `Missing` — the CRUD routine does not exist (CodeGen never ran for this entity).
+     * `Stale` — it exists but its signature no longer matches the entity's fields (columns were
+     * added or removed after the last CodeGen), so every write fails the same way (#4433).
+     */
+    public readonly Reason: SchemaNotGeneratedReason;
 
-    constructor(entityName: string, storedProcedureName: string) {
+    constructor(entityName: string, storedProcedureName: string, reason: SchemaNotGeneratedReason = 'Missing') {
         super(
-            `Schema not generated for entity '${entityName}': stored procedure ` +
-            `'${storedProcedureName}' does not exist in the database. ` +
-            `Run CodeGen for this entity to create the destination tables/views/procs, then re-sync.`
+            reason === 'Stale'
+                ? `Schema out of date for entity '${entityName}': the signature of stored procedure ` +
+                  `'${storedProcedureName}' does not match the entity's fields. ` +
+                  `Run CodeGen for this entity to regenerate its procedures, then re-sync.`
+                : `Schema not generated for entity '${entityName}': stored procedure ` +
+                  `'${storedProcedureName}' does not exist in the database. ` +
+                  `Run CodeGen for this entity to create the destination tables/views/procs, then re-sync.`
         );
         this.name = 'SchemaNotGeneratedError';
         this.EntityName = entityName;
         this.StoredProcedureName = storedProcedureName;
+        this.Reason = reason;
     }
 }
+
+/** Why a destination entity's CRUD routines cannot be used — see {@link SchemaNotGeneratedError.Reason}. */
+export type SchemaNotGeneratedReason = 'Missing' | 'Stale';
 
 /**
  * Thrown by a connector when the vendor says THIS account cannot serve an object it nonetheless
@@ -274,17 +288,6 @@ const INTEGER_SQL_BOUNDS: Record<string, { min: number; max: number }> = {
 };
 
 /**
- * Returns a SchemaNotGeneratedError if the given Save() failure message matches the
- * "CRUD routine doesn't exist yet" pattern for either dialect, otherwise null. When
- * CodeGen hasn't created the spCreate/spUpdate/spDelete for an entity, BaseEntity.Save()
- * returns false and the routine-not-found error lands in LatestResult.CompleteMessage:
- *   - SQL Server: `Could not find stored procedure '<schema>.<name>'`
- *   - PostgreSQL: `function <schema>.<name>(<args>) does not exist` (SQLSTATE 42883)
- * The PG form is what a connector entity in a custom schema hits before its CRUD
- * functions are generated, so it must be classified too (else the run produces
- * per-record errors instead of one fail-fast SchemaNotGeneratedError).
- */
-/**
  * The one primary-key shape a TransactionGroup cannot carry: a SINGLE auto-increment column.
  *
  * An enrolled `Save()` returns true immediately and the row lands at `Submit()`, so the caller
@@ -303,9 +306,28 @@ function IsIdentityOnlyPrimaryKey(primaryKeys: ReadonlyArray<{ AutoIncrement?: b
     return pks.length === 1 && pks[0]?.AutoIncrement === true;
 }
 
-function detectSchemaNotGenerated(entityName: string, errorMessage: string): SchemaNotGeneratedError | null {
+/**
+ * Returns a SchemaNotGeneratedError if the given Save() failure message shows the entity's CRUD
+ * routine is missing or stale for either dialect, otherwise null. When CodeGen hasn't created the
+ * spCreate/spUpdate/spDelete for an entity, BaseEntity.Save() returns false and the
+ * routine-not-found error lands in LatestResult.CompleteMessage:
+ *   - SQL Server: `Could not find stored procedure '<schema>.<name>'`
+ *   - PostgreSQL: `function <schema>.<name>(<args>) does not exist` (SQLSTATE 42883)
+ * The PG form is what a connector entity in a custom schema hits before its CRUD
+ * functions are generated, so it must be classified too (else the run produces
+ * per-record errors instead of one fail-fast SchemaNotGeneratedError).
+ *
+ * A STALE routine (#4433) — one generated before columns were added to or removed from the entity —
+ * fails every write identically too, so it is classified the same way (Reason 'Stale'):
+ *   - SQL Server: `Procedure or function '<name>' has too many arguments specified`
+ *   - SQL Server: `Procedure or function '<name>' expects parameter '@x', which was not supplied`
+ *   - PostgreSQL: a wrong-arity call already surfaces as `function ... does not exist` above.
+ */
+export function DetectSchemaNotGenerated(entityName: string, errorMessage: string): SchemaNotGeneratedError | null {
     const sqlServer = errorMessage.match(/Could not find stored procedure '([^']+)'/i);
     if (sqlServer) return new SchemaNotGeneratedError(entityName, sqlServer[1]);
+    const staleArity = errorMessage.match(/Procedure or function '([^']+)' (?:has too many arguments specified|expects parameter '[^']+', which was not supplied)/i);
+    if (staleArity) return new SchemaNotGeneratedError(entityName, staleArity[1], 'Stale');
     const postgres = errorMessage.match(/function\s+([^(\s]+)\s*\([^)]*\)\s+does not exist/i);
     if (postgres) return new SchemaNotGeneratedError(entityName, postgres[1]);
     return null;
@@ -328,6 +350,35 @@ function detectSchemaNotGenerated(entityName: string, errorMessage: string): Sch
  */
 export function PositiveInt(v: unknown): number | undefined {
     return typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : undefined;
+}
+
+/** Default safety cap on pages fetched per object per run; Configuration `maxBatchesPerMap` overrides it. */
+export const DEFAULT_MAX_BATCHES_PER_MAP = 5000;
+
+/** Operator message for an object that hit the per-run page cap (#4823). Names the two settings that fix it. */
+export function BuildBatchCapMessage(objectName: string, cap: number, batchSize: number): string {
+    return `Safety limit reached: ${cap} batches of ${batchSize} for '${objectName}'. The object was not fully ` +
+        `fetched, so the run is marked failed and its watermark is held. Raise 'batchSize' or 'maxBatchesPerMap' ` +
+        `in this connection's Configuration if the object really holds more than ${cap * batchSize} rows.`;
+}
+
+/**
+ * A run failed when any record errored OR any Critical error was recorded. The second half matters
+ * for errors that stop a whole object without failing a record — a missing or stale CRUD routine
+ * (#4433), or the page cap (#4823) — which previously let the run end `Success`.
+ */
+export function RunFailed(result: Pick<SyncResult, 'RecordsErrored' | 'Errors'>): boolean {
+    return result.RecordsErrored > 0 || result.Errors.some(e => e.Severity === 'Critical');
+}
+
+/**
+ * Moves an ISO timestamp watermark back by `seconds` (#3085). An unparseable value is returned unchanged:
+ * the overlap is an optimisation for late commits, never a reason to fail or widen to a full fetch.
+ */
+export function SubtractWatermarkSeconds(watermark: string, seconds: number): string {
+    const ms = Date.parse(watermark);
+    if (Number.isNaN(ms)) return watermark;
+    return new Date(ms - seconds * 1000).toISOString();
 }
 
 /**
@@ -2040,7 +2091,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                         { reason: plan.Reason, levers: plan.Levers.map(l => l.Code), exhausted: plan.Exhausted }
                     )
             },
-            this.MaxBatchSize
+            // Configuration `batchSize` (#4823) wins over the engine-wide default.
+            this.getConfigOverrides(config).batchSize ?? this.MaxBatchSize
         );
 
         // Second-layer silent-empty detection state (see checkSecondLayerEmpty): a per-IO running
@@ -2627,6 +2679,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     private getConfigOverrides(config: RunConfiguration): {
         maxConcurrency?: number; rateLimitTokensPerSec?: number; rateLimitBurst?: number; discoveryTimeBudgetMs?: number;
         fetchTimeoutMs?: number; fetchConcurrency?: number;
+        batchSize?: number; maxBatchesPerMap?: number; watermarkLookbackSeconds?: number;
     } {
         try {
             const raw = config.companyIntegration.Configuration;
@@ -2640,8 +2693,45 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 fetchTimeoutMs: PositiveInt(p.fetchTimeoutMs),
                 // Ceiling on SIMULTANEOUS vendor fetches for this connection (see getFetchGate).
                 fetchConcurrency: PositiveInt(p.fetchConcurrency),
+                // Page size asked of the connector for this connection (#4823). Starts the run's
+                // governor here instead of at the engine-wide MaxBatchSize.
+                batchSize: PositiveInt(p.batchSize),
+                // Safety cap on pages per object per run (#4823). Reaching it FAILS the run.
+                maxBatchesPerMap: PositiveInt(p.maxBatchesPerMap),
+                // Overlap for monotonic timestamp watermarks (#3085). 0 is a real value (no overlap).
+                watermarkLookbackSeconds: p.watermarkLookbackSeconds === 0 ? 0 : PositiveInt(p.watermarkLookbackSeconds),
             };
         } catch { return {}; }
+    }
+
+    /**
+     * #3085 — the watermark the FETCH filter uses, moved back by the lookback window for a connector
+     * whose watermark is a monotonic max timestamp. Such a connector narrows the next incremental to
+     * exactly the last max seen, so a row that commits late with a LOWER timestamp than that max is
+     * never fetched. Re-reading a short overlap is cheap (the upsert is idempotent and content-hash
+     * skips unchanged rows).
+     *
+     * Source order: Configuration `watermarkLookbackSeconds` → connector `WatermarkLookbackSeconds`.
+     * Non-monotonic connectors and non-timestamp watermarks are returned unchanged.
+     */
+    private applyWatermarkLookback(
+        config: RunConfiguration,
+        entityMap: ICompanyIntegrationEntityMap,
+        watermarkType: string,
+        watermark: string | null
+    ): string | null {
+        if (!watermark || !config.connector.MonotonicWatermark) return watermark;
+        const lookbackSeconds = this.getConfigOverrides(config).watermarkLookbackSeconds
+            ?? config.connector.WatermarkLookbackSeconds;
+        if (!lookbackSeconds || lookbackSeconds <= 0) return watermark;
+        if (watermarkType !== 'Timestamp') {
+            console.debug(
+                `[IntegrationEngine] ${entityMap.ExternalObjectName}: watermark lookback skipped — ` +
+                `watermark type '${watermarkType}' is not a timestamp.`
+            );
+            return watermark;
+        }
+        return SubtractWatermarkSeconds(watermark, lookbackSeconds);
     }
 
     private getRateLimiter(config: RunConfiguration): RateLimiter {
@@ -2934,6 +3024,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         let hasMore = true;
         let currentWatermark = initialWatermark;
+        // #3085: the FETCH filter may start a little before the saved watermark so a row that
+        // committed late with a lower timestamp is still picked up. Only the filter moves; the
+        // value compared and persisted below is still `initialWatermark` / `currentWatermark`.
+        const fetchWatermark = this.applyWatermarkLookback(config, entityMap, watermark?.WatermarkType ?? 'Timestamp', initialWatermark);
         // §10 — the watermark ALWAYS advances to the max value seen on a clean fetch; it is NEVER held back
         // by a per-record failure. A failed record is classified: a PROVABLY-TRANSIENT save error is retried
         // inline within the batch (ApplyRecords); a PERMANENT (or retry-exhausted) failure is dead-lettered —
@@ -2985,7 +3079,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
          * governor moved it would skip or re-read a page.
          */
         const askedBatchSize = (): number => config.memoryControl?.BatchSize ?? this.MaxBatchSize;
-        const MAX_BATCHES_PER_MAP = 5000;
+        const MAX_BATCHES_PER_MAP = this.getConfigOverrides(config).maxBatchesPerMap ?? DEFAULT_MAX_BATCHES_PER_MAP;
         const EMPTY_BATCH_WARN_THRESHOLD = 5; // warn once after this many empty-but-HasMore batches in a row
         const fetchedExternalIDs = new Set<string>(); // Track all IDs seen during this pull for orphan detection
         let orphanTrackingOverflowed = false; // set if the ID set exceeds ORPHAN_DETECTION_MAX_IDS → skip the sweep, don't OOM
@@ -3023,10 +3117,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
             batchCount++;
             if (batchCount > MAX_BATCHES_PER_MAP) {
-                console.error(
-                    `[IntegrationEngine] Safety limit reached: ${MAX_BATCHES_PER_MAP} batches for ` +
-                    `${entityMap.ExternalObjectName}. Stopping to prevent infinite loop.`
-                );
+                // #4823: this used to log and stop, and the run reported success — a snapshot
+                // connector then restarted from the top every run and never finished the object.
+                // It is now a Critical error, so the run ends Failed and the watermark is held.
+                const capMessage = BuildBatchCapMessage(entityMap.ExternalObjectName, MAX_BATCHES_PER_MAP, askedBatchSize());
+                console.error(`[IntegrationEngine] ${capMessage}`);
+                result.Errors.push({
+                    ExternalID: entityMap.ExternalObjectName,
+                    ChangeType: 'Skip',
+                    ErrorMessage: capMessage,
+                    ErrorCode: 'BATCH_CAP_REACHED',
+                    Severity: 'Critical',
+                });
+                this.markIncomplete(result, entityMap.ExternalObjectName ?? entityMap.ID);
                 fetchCompletedCleanly = false;
                 break;
             }
@@ -3046,7 +3149,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // visited it. Observed live (ACR dev, 2026-09-07): a Vendor Bill full scan collapsed
                 // to 707 of 23,558 rows — an id-ascending-AND-modstamp-ascending subsequence — with
                 // the run still reporting success. `currentWatermark` remains persistence bookkeeping.
-                WatermarkValue: initialWatermark,
+                WatermarkValue: fetchWatermark,
                 BatchSize: requestedThisBatch,
                 ContextUser: contextUser,
                 CurrentPage: currentPage,
@@ -5564,7 +5667,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const saved = await entity.Save(this.syncSaveOptions);
         if (!saved) {
             const errMsg = entity.LatestResult?.CompleteMessage ?? 'unknown error';
-            const schemaErr = detectSchemaNotGenerated(record.MJEntityName, errMsg);
+            const schemaErr = DetectSchemaNotGenerated(record.MJEntityName, errMsg);
             if (schemaErr) throw schemaErr;
             throw new Error(`Failed to ${existed ? 'update' : 'create'} ${record.MJEntityName} record: ${errMsg}`);
         }
@@ -5755,7 +5858,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const saved = await entity.Save(this.syncSaveOptions);
         if (!saved) {
             const errMsg = entity.LatestResult?.CompleteMessage ?? 'unknown error';
-            const schemaErr = detectSchemaNotGenerated(record.MJEntityName, errMsg);
+            const schemaErr = DetectSchemaNotGenerated(record.MJEntityName, errMsg);
             if (schemaErr) throw schemaErr;
             throw new Error(`Failed to update ${record.MJEntityName} record ${record.MatchedMJRecordID}: ${errMsg}`);
         }
@@ -6722,7 +6825,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             terminalStatus = 'Cancelled';
             run.ErrorLog = result.ErrorMessage ?? 'Sync cancelled by user';
         } else {
-            terminalStatus = result.RecordsErrored > 0 ? 'Failed' : 'Success';
+            terminalStatus = RunFailed(result) ? 'Failed' : 'Success';
             if (result.Errors.length > 0) {
                 run.ErrorLog = JSON.stringify(result.Errors.slice(0, 100));
             }
