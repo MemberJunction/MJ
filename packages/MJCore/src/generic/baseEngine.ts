@@ -3652,6 +3652,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             clearTimeout(this._expirationTimers.get(propertyName));
         }
         const timer = setTimeout(() => this.RefreshItem(propertyName), expiration);
+        // A cache-refresh timer must never keep a Node process alive on its own (CLI tools and
+        // test runners load engines and then expect to exit). Browsers return a number: no-op.
+        if (typeof timer === 'object' && timer !== null && 'unref' in timer && typeof timer.unref === 'function') {
+            timer.unref();
+        }
         this._expirationTimers.set(propertyName, timer as unknown as number);
     }
 

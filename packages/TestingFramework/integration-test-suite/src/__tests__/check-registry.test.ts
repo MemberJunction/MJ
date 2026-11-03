@@ -462,7 +462,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'runview-matrix': 19,
         'scheduled-jobs': 2,
         'scheduling-concurrency': 3,
-        'scope-enforcement': 5,
+        'scope-enforcement': 6,
         'scoped-anon-elevation': 6,
         'search': 8,
         'search-origin-gate': 4,
