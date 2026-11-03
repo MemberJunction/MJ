@@ -8,9 +8,13 @@
 import { CompositeKey, RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJEvaluationProtocolEntity, MJMLTrainingPipelineEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
 import {
-  LegacyPipelines, PredictionUnit, ProtocolRows, TaskTypeRules, UtcDay,
-  type Actor, type LegacyProtocolOutcome, type LegacyStop, type PredictionUnitSpec, type UnitDraft,
+  ADVERSE_CLASS_HOLD_REASON, LegacyPipelines, PredictionUnit, ProtocolRows, TaskTypeRules, UtcDay,
+  type Actor, type LegacyProtocolOutcome, type LegacyStop, type OutcomeConfig, type PredictionUnitSpec, type UnitDraft,
 } from '@memberjunction/predictive-studio-core';
+
+/** Why the wizard will not save a two-class target it cannot tell the adverse class of, naming the control that fixes it. */
+export const WIZARD_ADVERSE_CLASS_REASON =
+  'the target has two classes and neither its name nor its settings say which one is the adverse outcome: choose it under "Adverse outcome class" in step 1 (Goal & Target)';
 
 /** Rows per label page: an explicit page size, since a client view without one returns only the entity's default page. */
 const LABEL_PAGE_ROWS = 50_000;
@@ -53,6 +57,28 @@ export class PipelineWizardBindings {
     const protocol = LegacyPipelines.LegacyProtocolInputs(p.ValidationStrategy, p.LeakageGuard, unit.DateColumn, []);
     if (protocol.Kind !== 'protocol') return protocol;
     return { Kind: 'plan', Unit: unit.Draft, Protocol: protocol };
+  }
+
+  /**
+   * The two classes the user must choose the adverse one from: a two-class target whose name, styles and outcome config
+   * decide nothing (the case `Plan` holds). Empty when no choice is needed: a regression, a single class, three or more
+   * classes, or a target whose adverse class is already decided. Classes in the order the unit's task uses.
+   */
+  public static AdverseClassChoices(p: WizardPipelineFields, labels: readonly string[]): readonly string[] {
+    if (p.ProblemType !== 'classification') return [];
+    const [first, second, ...rest] = [...new Set(labels.map((l) => l.trim()).filter((l) => l.length > 0))].sort();
+    if (first === undefined || second === undefined || rest.length > 0) return [];
+    const candidates = LegacyPipelines.LegacyOutcomeCandidates({
+      FeatureSteps: p.FeatureSteps, Hyperparameters: p.Hyperparameters, ModelLineage: null, TargetVariable: p.TargetVariable, ProblemType: p.ProblemType,
+    });
+    return LegacyPipelines.LegacyAdverseClass([first, second], candidates).Kind === 'undetermined' ? [first, second] : [];
+  }
+
+  /** The outcome config that declares `adverse` the adverse class of a two-class target: styled red, the other green. */
+  public static AdverseClassOutcomeConfig(adverse: string, classes: readonly string[]): OutcomeConfig {
+    const styles: NonNullable<OutcomeConfig['OutcomeStyles']> = {};
+    for (const c of classes) styles[c] = { BadgeColor: c === adverse ? 'red' : 'green' };
+    return { OutcomeStyles: styles };
   }
 
   /**
@@ -107,7 +133,7 @@ export class PipelineWizardBindings {
       Hyperparameters: pipeline.Hyperparameters, TargetEntity: targetEntity,
     };
     const plan = PipelineWizardBindings.Plan(fields, await PipelineWizardBindings.ReadClassLabels(fields, provider, user), UtcDay.UtcDayIso(new Date()));
-    if (plan.Kind !== 'plan') return { Ok: false, Reason: `${plan.Kind === 'hold' ? 'the pipeline cannot be bound to a Prediction Unit yet' : 'the pipeline has no Prediction Unit form'}: ${plan.Reason}` };
+    if (plan.Kind !== 'plan') return { Ok: false, Reason: PipelineWizardBindings.stopReason(plan) };
     const author: Actor = { kind: 'human', userId: user ? user.ID : provider.CurrentUser.ID };
     const unit = await PipelineWizardBindings.saveUnit(plan.Unit, author, provider, user);
     if (unit.Ok === false) return unit;
@@ -116,6 +142,12 @@ export class PipelineWizardBindings {
     PipelineWizardBindings.bind(pipeline, unit.Spec, unit.Row.ID, protocol.Row.ID);
     if (await pipeline.Save()) return { Ok: true };
     return PipelineWizardBindings.undo([protocol.Row, unit.Row], `saving the pipeline: ${pipeline.LatestResult?.CompleteMessage || 'save failed'}`);
+  }
+
+  /** Why a pipeline gets no binding, in the wizard's words: an undecided adverse class names the control that decides it. */
+  private static stopReason(stop: LegacyStop): string {
+    if (stop.Kind === 'hold' && stop.Reason === ADVERSE_CLASS_HOLD_REASON) return WIZARD_ADVERSE_CLASS_REASON;
+    return `${stop.Kind === 'hold' ? 'the pipeline cannot be bound to a Prediction Unit yet' : 'the pipeline has no Prediction Unit form'}: ${stop.Reason}`;
   }
 
   /** Points the pipeline at both versions, with the target columns the server derives from the unit. */

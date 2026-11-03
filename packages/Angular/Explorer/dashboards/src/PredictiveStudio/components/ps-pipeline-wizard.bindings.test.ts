@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { IMetadataProvider, RunViewParams, RunViewResult } from '@memberjunction/core';
 import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import { ADVERSE_CLASS_HOLD_REASON, TIME_INDEX_HOLD_REASON } from '@memberjunction/predictive-studio-core';
-import { PipelineWizardBindings, type WizardPipelineFields } from './ps-pipeline-wizard.bindings';
+import { PipelineWizardBindings, WIZARD_ADVERSE_CLASS_REASON, type WizardPipelineFields } from './ps-pipeline-wizard.bindings';
 
 type Cell = string | number | boolean | Date | null;
 
@@ -107,6 +107,29 @@ describe('PipelineWizardBindings.Plan', () => {
   });
   it('holds a binary target nothing declares the adverse class of', () => {
     expect(PipelineWizardBindings.Plan(fields({ TargetVariable: 'Segment' }), ['A', 'B'], '2026-10-31')).toEqual({ Kind: 'hold', Reason: ADVERSE_CLASS_HOLD_REASON });
+  });
+});
+
+describe('PipelineWizardBindings — choosing the adverse class of a two-class target', () => {
+  it('offers the two classes when nothing decides the adverse one, and nothing when the name or the classes do', () => {
+    expect(PipelineWizardBindings.AdverseClassChoices(fields({ TargetVariable: 'Segment' }), ['B', ' A', 'A', 'B'])).toEqual(['A', 'B']);
+    expect(PipelineWizardBindings.AdverseClassChoices(fields({ TargetVariable: 'Renewed' }), ['1', '0'])).toEqual([]);
+    expect(PipelineWizardBindings.AdverseClassChoices(fields({ TargetVariable: 'Segment' }), ['A', 'B', 'C'])).toEqual([]);
+    expect(PipelineWizardBindings.AdverseClassChoices(fields({ TargetVariable: 'Segment', ProblemType: 'regression' }), ['A', 'B'])).toEqual([]);
+  });
+  it('binds a two-class target to the adverse class the user chose', () => {
+    for (const adverse of ['A', 'B']) {
+      const steps = JSON.stringify({ Steps: [], OutcomeConfig: PipelineWizardBindings.AdverseClassOutcomeConfig(adverse, ['A', 'B']) });
+      const plan = PipelineWizardBindings.Plan(fields({ TargetVariable: 'Segment', FeatureSteps: steps }), ['A', 'B'], '2026-10-31');
+      if (plan.Kind !== 'plan' || plan.Unit.TaskType.kind !== 'binary') throw new Error('expected a binary plan');
+      expect(plan.Unit.TaskType.classOrder[plan.Unit.TaskType.adverseIndex]).toBe(adverse);
+    }
+  });
+  it('tells the wizard user which control decides the adverse class, not to run an Action', async () => {
+    const w = world(['A', 'B']);
+    const r = await PipelineWizardBindings.SaveWithBindings(newPipeline(w, 'Segment'), 'Members', w.Provider, undefined);
+    expect(r).toEqual({ Ok: false, Reason: WIZARD_ADVERSE_CLASS_REASON });
+    expect(WIZARD_ADVERSE_CLASS_REASON).toContain('"Adverse outcome class"');
   });
 });
 

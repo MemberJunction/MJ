@@ -21,6 +21,8 @@ import {
 } from '@memberjunction/core-entities';
 import {
   DOMINANCE_THRESHOLD_DEFAULT,
+  JsonParse,
+  type JsonObject,
   type SourceBinding,
   type FeatureStep,
   type AsOfStrategy,
@@ -29,7 +31,13 @@ import {
   type ProblemType,
 } from '@memberjunction/predictive-studio-core';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
-import { PipelineWizardBindings } from './ps-pipeline-wizard.bindings';
+import { PipelineWizardBindings, type WizardPipelineFields } from './ps-pipeline-wizard.bindings';
+
+/** The wizard's tree hyperparameter inputs and the estimator keyword each one sets. */
+const HYPERPARAMETER_INPUTS = { Estimators: 'n_estimators', MaxDepth: 'max_depth', LearningRate: 'learning_rate' } as const;
+
+/** One of the wizard's hyperparameter inputs. */
+type HyperparameterInput = keyof typeof HYPERPARAMETER_INPUTS;
 
 export interface FieldSelectionItem {
   field: EntityFieldInfo;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
@@ -114,7 +122,7 @@ export type WizardStep = 'goal' | 'features' | 'preprocessing' | 'algorithm';
 
                 <div class="ps-field">
                   <label for="target-variable">Target Variable (Label Column) <span class="req">*</span></label>
-                  <select id="target-variable" class="mj-input" [(ngModel)]="TargetVariable" [disabled]="!SelectedEntity">
+                  <select id="target-variable" class="mj-input" [ngModel]="TargetVariable" (ngModelChange)="OnTargetVariableChanged($event)" [disabled]="!SelectedEntity">
                     <option [value]="''" disabled>-- Select Label Field --</option>
                     @for (f of AvailableFields; track f.Name) {
                       <option [value]="f.Name">{{ f.Name }} ({{ f.Type }})</option>
@@ -141,6 +149,19 @@ export type WizardStep = 'goal' | 'features' | 'preprocessing' | 'algorithm';
                   </select>
                 </div>
               </div>
+
+              @if (AdverseClassChoices.length > 0) {
+                <div class="ps-field" data-testid="ps-wizard-adverse-class">
+                  <label for="adverse-class">Adverse outcome class <span class="req">*</span></label>
+                  <select id="adverse-class" class="mj-input" [(ngModel)]="AdverseClass">
+                    <option [value]="''" disabled>-- Which class is the outcome to act on? --</option>
+                    @for (c of AdverseClassChoices; track c) {
+                      <option [value]="c">{{ c }}</option>
+                    }
+                  </select>
+                  <span class="ps-muted ps-small">The target's name does not say which of its two classes is the adverse one (the outcome the model flags as risk).</span>
+                </div>
+              }
 
               <div class="ps-card as-of-box">
                 <div class="ps-card-head">
@@ -289,20 +310,30 @@ export type WizardStep = 'goal' | 'features' | 'preprocessing' | 'algorithm';
                   <h4>Algorithm Hyperparameters</h4>
                 </div>
                 <div class="ps-card-body">
-                  <div class="ps-grid-3">
-                    <div class="ps-field">
-                      <label>Estimators (Trees)</label>
-                      <input class="mj-input" type="number" min="10" max="1000" step="10" [(ngModel)]="HyperparamEstimators" />
+                  @if (AlgorithmTakesAnyHyperparameterInput) {
+                    <div class="ps-grid-3">
+                      @if (AlgorithmTakes('Estimators')) {
+                        <div class="ps-field">
+                          <label for="hp-estimators">Estimators (Trees)</label>
+                          <input id="hp-estimators" class="mj-input" type="number" min="10" max="1000" step="10" [(ngModel)]="HyperparamEstimators" />
+                        </div>
+                      }
+                      @if (AlgorithmTakes('MaxDepth')) {
+                        <div class="ps-field">
+                          <label for="hp-max-depth">Max Depth</label>
+                          <input id="hp-max-depth" class="mj-input" type="number" min="1" max="20" [(ngModel)]="HyperparamMaxDepth" />
+                        </div>
+                      }
+                      @if (AlgorithmTakes('LearningRate')) {
+                        <div class="ps-field">
+                          <label for="hp-learning-rate">Learning Rate</label>
+                          <input id="hp-learning-rate" class="mj-input" type="number" min="0.001" max="1" step="0.01" [(ngModel)]="HyperparamLearningRate" />
+                        </div>
+                      }
                     </div>
-                    <div class="ps-field">
-                      <label>Max Depth</label>
-                      <input class="mj-input" type="number" min="1" max="20" [(ngModel)]="HyperparamMaxDepth" />
-                    </div>
-                    <div class="ps-field">
-                      <label>Learning Rate</label>
-                      <input class="mj-input" type="number" min="0.001" max="1" step="0.01" [(ngModel)]="HyperparamLearningRate" />
-                    </div>
-                  </div>
+                  } @else {
+                    <p class="ps-muted ps-small">This algorithm takes none of these settings; it trains with its catalog defaults.</p>
+                  }
                 </div>
               </div>
 
@@ -412,6 +443,15 @@ export class PSPipelineWizardComponent implements OnInit {
 
   public EvaluationMetric = 'AUC';
 
+  /** The two classes of a target whose adverse class nothing declares; empty when the user need not choose. */
+  public AdverseClassChoices: readonly string[] = [];
+
+  /** The class the user chose as the adverse outcome; empty until chosen. */
+  public AdverseClass = '';
+
+  /** Bumped per label read, so a slower earlier read cannot overwrite the choices for a newer target. */
+  private labelReadSeq = 0;
+
 
   // Step 2: Features
   public FieldItems: FieldSelectionItem[] = [];
@@ -481,6 +521,37 @@ export class PSPipelineWizardComponent implements OnInit {
     return this.FieldItems.filter((item) => item.field.Name.toLowerCase().includes(q) || item.field.Type?.toLowerCase().includes(q));
   }
 
+  /** The selected algorithm's hyperparameter keywords: its schema's properties, else its default hyperparameters' keys. */
+  public get AlgorithmHyperparameterKeys(): readonly string[] {
+    const algo = this.AvailableAlgorithms.find((a) => UUIDsEqual(a.ID, this.SelectedAlgorithmId));
+    if (!algo) return [];
+    const schema = this.jsonObject(algo.HyperparameterSchema);
+    const properties = schema === null ? null : JsonParse.JsonObjectField(schema, 'properties');
+    if (properties !== null) return Object.keys(properties);
+    return Object.keys(this.jsonObject(algo.DefaultHyperparameters) || {});
+  }
+
+  /** Whether the selected algorithm takes the keyword one of the wizard's hyperparameter inputs sets. */
+  public AlgorithmTakes(input: HyperparameterInput): boolean {
+    return this.AlgorithmHyperparameterKeys.includes(HYPERPARAMETER_INPUTS[input]);
+  }
+
+  public get AlgorithmTakesAnyHyperparameterInput(): boolean {
+    return (Object.keys(HYPERPARAMETER_INPUTS) as HyperparameterInput[]).some((k) => this.AlgorithmTakes(k));
+  }
+
+  /** The hyperparameters the pipeline saves: the inputs the selected algorithm takes, by its keyword. */
+  public get SelectedHyperparameters(): Record<string, number> {
+    const values: Record<HyperparameterInput, number> = {
+      Estimators: this.HyperparamEstimators, MaxDepth: this.HyperparamMaxDepth, LearningRate: this.HyperparamLearningRate,
+    };
+    const out: Record<string, number> = {};
+    for (const input of Object.keys(HYPERPARAMETER_INPUTS) as HyperparameterInput[]) {
+      if (this.AlgorithmTakes(input)) out[HYPERPARAMETER_INPUTS[input]] = values[input];
+    }
+    return out;
+  }
+
   public get SelectedFeaturesCount(): number {
     return this.FieldItems.filter((i) => i.selected && !i.isDenyList && !i.isTarget).length;
   }
@@ -489,16 +560,74 @@ export class PSPipelineWizardComponent implements OnInit {
     return this.FieldItems.filter((i) => i.isDenyList).length;
   }
 
+  /** A new entity clears the target, so the target's adverse-class choice goes with it (and any read still in flight). */
   public OnEntitySelected(entityId: string): void {
     this.SelectedEntityId = entityId;
     this.TargetVariable = '';
     this.populateFieldItems();
+    void this.refreshAdverseClassChoices();
     this.cdr.detectChanges();
   }
 
   public OnProblemTypeChange(): void {
     this.EvaluationMetric = this.ProblemType === 'classification' ? 'AUC' : 'RMSE';
+    void this.refreshAdverseClassChoices();
     this.cdr.detectChanges();
+  }
+
+  /** The target column is the label, never a feature: it is marked, unchecked and locked; the previous target is freed. */
+  public OnTargetVariableChanged(name: string): void {
+    this.TargetVariable = name;
+    const target = name.toLowerCase();
+    for (const item of this.FieldItems) {
+      const isTarget = item.field.Name.toLowerCase() === target;
+      if (isTarget) item.selected = false;
+      else if (item.isTarget) item.selected = !item.isDenyList && !this.isSystemField(item.field.Name);
+      item.isTarget = isTarget;
+    }
+    void this.refreshAdverseClassChoices();
+    this.cdr.detectChanges();
+  }
+
+  /** Reads the target's class labels and offers the adverse-class choice when nothing else decides it. */
+  private async refreshAdverseClassChoices(): Promise<void> {
+    const seq = ++this.labelReadSeq;
+    const fields = this.wizardFields();
+    let choices: readonly string[] = [];
+    if (fields !== null && fields.ProblemType === 'classification') {
+      try {
+        const labels = await PipelineWizardBindings.ReadClassLabels(fields, this.providerToUse, this.CurrentUser || undefined);
+        choices = PipelineWizardBindings.AdverseClassChoices(fields, labels);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        this.notifications.CreateSimpleNotification(`Could not read the target's classes: ${msg}`, 'error', 5000);
+      }
+    }
+    if (seq !== this.labelReadSeq) return;
+    this.AdverseClassChoices = choices;
+    if (!choices.includes(this.AdverseClass)) this.AdverseClass = '';
+    this.cdr.detectChanges();
+  }
+
+  /** The pipeline fields the label read and the adverse-class rule take; null until an entity and a target are chosen. */
+  private wizardFields(): WizardPipelineFields | null {
+    const entity = this.SelectedEntity;
+    if (!entity || !this.TargetVariable) return null;
+    return {
+      Name: this.PipelineName, TargetVariable: this.TargetVariable, ProblemType: this.ProblemType, AsOfStrategy: null,
+      ValidationStrategy: null, LeakageGuard: null, FeatureSteps: null, Hyperparameters: null, TargetEntity: entity.Name,
+    };
+  }
+
+  /** The bound provider, else the global one. `??` (not `||`): the provider-fallback form the multi-provider guard accepts. */
+  private get providerToUse(): IMetadataProvider {
+    return this.provider ?? Metadata.Provider;
+  }
+
+  /** A JSON object column's value, or null when it is empty or not an object. */
+  private jsonObject(json: string | null): JsonObject | null {
+    const parsed = JsonParse.ParseJsonText(json, 'wizard JSON');
+    return parsed.Ok && JsonParse.IsJsonObject(parsed.Value) ? parsed.Value : null;
   }
 
   public OnAlgorithmSelected(algoId: string): void {
@@ -542,7 +671,7 @@ export class PSPipelineWizardComponent implements OnInit {
   public IsStepDone(step: WizardStep): boolean {
     switch (step) {
       case 'goal':
-        return Boolean(this.PipelineName.trim() && this.SelectedEntityId && this.TargetVariable);
+        return Boolean(this.PipelineName.trim() && this.SelectedEntityId && this.TargetVariable) && this.AdverseClassDecided;
       case 'features':
         return this.SelectedFeaturesCount > 0;
       case 'preprocessing':
@@ -562,8 +691,14 @@ export class PSPipelineWizardComponent implements OnInit {
       Boolean(this.SelectedEntityId) &&
       Boolean(this.TargetVariable) &&
       Boolean(this.SelectedAlgorithmId) &&
-      this.SelectedFeaturesCount > 0
+      this.SelectedFeaturesCount > 0 &&
+      this.AdverseClassDecided
     );
+  }
+
+  /** True unless the target needs an adverse-class choice the user has not made. */
+  public get AdverseClassDecided(): boolean {
+    return this.AdverseClassChoices.length === 0 || this.AdverseClassChoices.includes(this.AdverseClass);
   }
 
   public GoToStep(step: WizardStep): void {
@@ -615,7 +750,7 @@ export class PSPipelineWizardComponent implements OnInit {
     this.cdr.detectChanges();
 
     try {
-      const prov = this.provider ?? Metadata.Provider;
+      const prov = this.providerToUse;
       const p = await prov.GetEntityObject<MJMLTrainingPipelineEntity>('MJ: ML Training Pipelines', this.CurrentUser ?? undefined);
       p.NewRecord();
       p.Name = this.PipelineName.trim();
@@ -698,7 +833,13 @@ export class PSPipelineWizardComponent implements OnInit {
         }
       }
 
-      p.FeatureSteps = JSON.stringify({ Steps: steps });
+      p.FeatureSteps = JSON.stringify(
+        this.AdverseClassChoices.length > 0
+          ? { Steps: steps, OutcomeConfig: PipelineWizardBindings.AdverseClassOutcomeConfig(this.AdverseClass, this.AdverseClassChoices) }
+          : { Steps: steps },
+      );
+      const hyperparameters = this.SelectedHyperparameters;
+      p.Hyperparameters = Object.keys(hyperparameters).length > 0 ? JSON.stringify(hyperparameters) : null;
 
       // As-Of Strategy
       const asOf: AsOfStrategy = { Mode: 'none' };
@@ -771,6 +912,8 @@ export class PSPipelineWizardComponent implements OnInit {
       if (cp.AlgorithmID) this.SelectedAlgorithmId = cp.AlgorithmID;
 
       this.populateFieldItems();
+      this.readClonedHyperparameters(cp.Hyperparameters);
+      void this.refreshAdverseClassChoices();
 
       // Read leakage guard
       try {
@@ -796,6 +939,24 @@ export class PSPipelineWizardComponent implements OnInit {
     }
   }
 
+  /** The cloned pipeline's saved values for the wizard's hyperparameter inputs. */
+  private readClonedHyperparameters(json: string | null): void {
+    const saved = this.jsonObject(json);
+    if (saved === null) return;
+    const read = (key: string, fallback: number): number => {
+      const v = saved[key];
+      return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+    };
+    this.HyperparamEstimators = read(HYPERPARAMETER_INPUTS.Estimators, this.HyperparamEstimators);
+    this.HyperparamMaxDepth = read(HYPERPARAMETER_INPUTS.MaxDepth, this.HyperparamMaxDepth);
+    this.HyperparamLearningRate = read(HYPERPARAMETER_INPUTS.LearningRate, this.HyperparamLearningRate);
+  }
+
+  private isSystemField(name: string): boolean {
+    const n = name.toLowerCase();
+    return n === 'id' || n.startsWith('__mj') || n.includes('created') || n.includes('updated');
+  }
+
   private populateFieldItems(): void {
     if (!this.SelectedEntity) {
       this.FieldItems = [];
@@ -803,13 +964,8 @@ export class PSPipelineWizardComponent implements OnInit {
     }
     const targetLower = (this.TargetVariable || '').toLowerCase();
     this.FieldItems = this.SelectedEntity.Fields.map((f) => {
-      const nameLower = f.Name.toLowerCase();
-      const isTarget = Boolean(targetLower && nameLower === targetLower);
-      const isSystem =
-        nameLower === 'id' ||
-        nameLower.startsWith('__mj') ||
-        nameLower.includes('created') ||
-        nameLower.includes('updated');
+      const isTarget = Boolean(targetLower && f.Name.toLowerCase() === targetLower);
+      const isSystem = this.isSystemField(f.Name);
       return {
         field: f,
         selected: !isTarget && !isSystem,
