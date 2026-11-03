@@ -171,14 +171,14 @@ async function consumeCodeAndActivate(
 ): Promise<EnrolOutcome | null> {
   const fresh = await data.Provider.GetEntityObject<MJDiagnosticSenderRegistrationEntity>(SENDER_REGISTRATION_ENTITY, data.ContextUser);
   if (!(await fresh.Load(registrationId)) || !UUIDsEqual(fresh.ID, registrationId)) {
-    return reject(body.installId, 'the registration could not be reloaded', 400);
+    return reject(body.installId, 'the registration could not be reloaded', 503);
   }
   const failure = codeFailure(fresh, body.registrationCode, now);
   if (failure) {
     return reject(body.installId, failure);
   }
   if (!(await activateRegistration(fresh, body, now))) {
-    return reject(body.installId, 'the registration could not be saved', 400);
+    return reject(body.installId, 'the registration could not be saved', 503);
   }
   return null;
 }

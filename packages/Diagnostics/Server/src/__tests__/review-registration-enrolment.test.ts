@@ -52,6 +52,38 @@ describe('registration code consumption', () => {
     });
 });
 
+describe('enrolment database faults after a valid code and proof', () => {
+    async function enrolWithFaultyReload(fault: 'load' | 'save') {
+        const store = CreateFakeRegistrationStore();
+        SeedRegistration(store, {
+            Status: 'Pending',
+            KeyID: null,
+            PublicKeyBase64: null,
+            RegistrationCodeHash: CodeHash('CODE-123'),
+            RegistrationCodeExpiresAt: new Date(Date.now() + 60_000),
+        });
+        const createRow = store.Provider.GetEntityObject.bind(store.Provider);
+        vi.spyOn(store.Provider, 'GetEntityObject').mockImplementation(async (...args: Parameters<typeof createRow>) => {
+            const row = await createRow(...args);
+            if (fault === 'load') row.Load = async () => false;
+            else row.Save = async () => false;
+            return row;
+        });
+        const enrol = await NewEnrolBody('CODE-123', 'sender-key-a');
+        return EnrolSenderAtCollector(enrol.Body, AUDIENCE, COLLECTOR_KEYS, { ContextUser: SystemUser, Provider: store.Provider });
+    }
+
+    it('answers 503 when the registration cannot be reloaded', async () => {
+        const outcome = await enrolWithFaultyReload('load');
+        expect(outcome.Ok ? 200 : outcome.Status).toBe(503);
+    });
+
+    it('answers 503 when the activated registration cannot be saved', async () => {
+        const outcome = await enrolWithFaultyReload('save');
+        expect(outcome.Ok ? 200 : outcome.Status).toBe(503);
+    });
+});
+
 describe('sender lookup failures', () => {
     it('does not cache an install as unknown when the registration query fails', async () => {
         const data = { ContextUser: SystemUser, Provider: CreateFakeRegistrationStore().Provider };
