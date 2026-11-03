@@ -144,6 +144,24 @@ describe('InstallState', () => {
     });
   });
 
+  describe('ResolvedTag', () => {
+    it('is undefined on a fresh state', () => {
+      expect(new InstallState(dir, 'latest').ResolvedTag).toBeUndefined();
+    });
+
+    it('round-trips through Save and Load', async () => {
+      const state = new InstallState(dir, 'latest');
+      state.SetResolvedTag('v6.1.2');
+      await state.Save();
+      const written = mockedFs.writeFile.mock.calls[0][1] as string;
+      mockedFs.readFile.mockResolvedValue(written);
+
+      const loaded = await InstallState.Load(dir);
+      expect(loaded?.Tag).toBe('latest');
+      expect(loaded?.ResolvedTag).toBe('v6.1.2');
+    });
+  });
+
   describe('ToJSON', () => {
     it('should return a deep clone (mutating clone does not affect original)', () => {
       const state = new InstallState(dir, tag);

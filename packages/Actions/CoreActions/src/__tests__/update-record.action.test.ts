@@ -210,6 +210,9 @@ describe('UpdateRecordAction', () => {
 
             expect(r.Success).toBe(false);
             expect(r.ResultCode).toBe('PERMISSION_DENIED');
+            expect(r.ErrorRecovery).toMatchObject({
+                Retryable: false,
+            });
         });
     });
 
@@ -350,6 +353,51 @@ describe('UpdateRecordAction', () => {
             expect(r.ResultCode).toBe('INVALID_FIELD_NAMES');
             expect(r.Message).toMatch(/Valid updatable fields: Status$/);
         });
+
+        it('populates ErrorRecovery with fuzzy SuggestedValues on INVALID_FIELD_NAMES and ENTITY_NOT_FOUND', async () => {
+            const entity = new FakeEntity(['Status', 'Description'], { ID: '1', Status: 'Draft', Description: 'A' });
+            const entityInfo = makeEntityInfo(['Status', 'Description']);
+            const provider = {
+                ...makeProvider({ entityInfo, entity }),
+                Entities: [{ Name: 'Widgets' }, { Name: 'Widget Categories' }],
+            };
+
+            const badFieldParams = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'Widgets' },
+                    { Name: 'PrimaryKey', Value: { ID: '1' } },
+                    { Name: 'Fields', Value: { Statuz: 'Active' } },
+                ],
+                provider
+            );
+            const badFieldResult = await action.InternalRunAction(badFieldParams);
+            expect(badFieldResult.ResultCode).toBe('INVALID_FIELD_NAMES');
+            expect(badFieldResult.Message).toContain('did you mean: Status?');
+            expect(badFieldResult.Message).toMatch(/Valid updatable fields: Status, Description$/);
+            expect(badFieldResult.ErrorRecovery).toMatchObject({
+                Retryable: true,
+                SuggestedValues: ['Status'],
+                InvalidParams: [{ ParamName: 'Fields.Statuz' }],
+            });
+
+            provider.EntityByName.mockReturnValueOnce(undefined);
+            const badEntityParams = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'Widgits' },
+                    { Name: 'PrimaryKey', Value: { ID: '1' } },
+                    { Name: 'Fields', Value: { Status: 'Active' } },
+                ],
+                provider
+            );
+            const badEntityResult = await action.InternalRunAction(badEntityParams);
+            expect(badEntityResult.ResultCode).toBe('ENTITY_NOT_FOUND');
+            expect(badEntityResult.Message).toContain('Did you mean: Widgets?');
+            expect(badEntityResult.ErrorRecovery).toMatchObject({
+                Retryable: true,
+                SuggestedValues: ['Widgets'],
+                InvalidParams: [{ ParamName: 'EntityName' }],
+            });
+        });
     });
 
     describe('save failure (Save() returning false must never be a silent success)', () => {
@@ -413,6 +461,9 @@ describe('UpdateRecordAction', () => {
 
             expect(r.Success).toBe(false);
             expect(r.ResultCode).toBe('PERMISSION_DENIED');
+            expect(r.ErrorRecovery).toMatchObject({
+                Retryable: false,
+            });
         });
     });
 

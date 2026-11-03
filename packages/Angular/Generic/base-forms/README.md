@@ -240,9 +240,19 @@ export class CustomPersonPreviewPopoverComponent extends MjRecordPreviewPopoverC
 }
 ```
 
+## Anchored Record Comments (`<mj-record-comments>`)
+
+Every saved record form automatically provides threaded conversations (`MJ: Conversations` + `MJ: Conversation Details`) anchored at the **Record**, **Field**, **Section**, **Group (Left-Nav Tab)**, or **Contribution** level:
+
+- **Form Toolbar Action (`RecordCommentsToolbarAction`, key `'comments'`)**: Displays the total open comment count across the record and toggles the slide-over Record Comments Drawer.
+- **Field-Level Trigger & Badge (`<mj-form-field>`)**: Shows an inline comment count badge on fields with active threads (or a hover trigger to start a thread), capturing a `quotedValue` snapshot of the field's value at the time of commenting. Fields with open comments are never collapsed away as empty in read mode.
+- **Section & Left-Nav Rail Rollup (`<mj-collapsible-panel>`, `<mj-record-form-container>`, `FormSectionIndicators`)**: Open field and section comments roll up into section header chips and left-nav group badges. Clicking any anchor chip in the drawer or popover expands the target group/section, scrolls the field into view, and pulses it.
+- **RLS & FLS Security + `@Mention` Notifications**: Enforces Row-Level Security and Field-Level Security (including write-time restricted-field classification and `AnchorMetadataObject.restrictedFields` stamping) and dispatches `MJ: User Notifications` on `@mention` only to users permitted to read both the record and the anchored/referenced fields.
+
 ## Related docs
 
 - **Architecture (read first):** [/guides/FORMS_ARCHITECTURE_GUIDE.md](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md)
+- **Anchored Conversations & Record Commenting:** [/guides/ANCHORED_CONVERSATIONS_AND_RECORD_COMMENTS_GUIDE.md](../../../../guides/ANCHORED_CONVERSATIONS_AND_RECORD_COMMENTS_GUIDE.md)
 - **Inject custom sections into a form:** [PANELS.md](./PANELS.md)
 - **Form chrome (rail / More / inclusion):** [Forms Architecture §7d](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7d-form-chrome--accordion-left-nav-and-more)
 - **Pluggable toolbar actions & Record Links:** [Forms Architecture §7e–§7g](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7e-pluggable-form-toolbar-actions-baseformtoolbaraction--registerformtoolbaraction)

@@ -120,6 +120,26 @@
             "lastModified": "2026-02-13T21:09:23.332Z",
             "checksum": "035a11491e2249b2a75c1ec416c1e4d5bb6a0f645f9c5abfd80afcde8106e8f8"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Render Architecture Diagram",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C739D84F-6E1B-4A37-9C5A-93FA4EBD6233"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Architecture Diagram Reference",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D84AE950-7F2C-4B48-AD6B-A40B5FCE7344"
+          }
         }
       ],
       "MJ: AI Agent Rubrics": [
