@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEntity, IMetadataProvider, UserInfo, RunView, BaseEnginePropertyConfig } from "@memberjunction/core";
 import { EntityChangeContext } from './EntityChangeContext';
-import { MJActionCategoryEntity, MJActionEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJEntityActionEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
+import { MJActionCategoryEntity, MJActionEntity, MJActionEntity_IActionConfiguration, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJEntityActionEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { MJActionEntityExtended } from "./MJActionEntityExtended";
 import type { ActionRunAudience } from "./ActionAudience";
 
@@ -81,6 +81,40 @@ export interface AIDirective {
 }
 
 /**
+ * Trust classification for an action's output when returned to an AI agent, derived from
+ * the generated `MJActionEntity_IActionConfiguration['outputTrustLevel']` type in `@memberjunction/core-entities`.
+ * - `'Trusted'`: Internal structured data or platform-validated output (default).
+ * - `'SemiTrusted'`: Output that may contain user-authored or partner content and should be wrapped in a data envelope.
+ * - `'Untrusted'`: External content (web pages, search results, emails, webhooks, MCP tools) that must be wrapped in
+ *   `<untrusted_external_data>`, have `AIDirectives` stripped, and mark the agent run as tainted.
+ */
+export type ActionOutputTrustLevel = NonNullable<MJActionEntity_IActionConfiguration['outputTrustLevel']>;
+
+/**
+ * Structured recovery guidance returned by an action when it fails, enabling an AI agent
+ * to self-heal on retryable parameter errors or stop immediately on non-retryable failures.
+ */
+export interface ActionErrorRecovery {
+    /** Whether retrying the action with modified parameters can succeed in this run. */
+    Retryable: boolean;
+    /** Actionable human/LLM-readable explanation of how to recover or why retry is futile. */
+    RecoverySuggestion: string;
+    /** Optional fuzzy-matched candidate values (e.g., closest entity or field names). */
+    SuggestedValues?: string[];
+    /** Optional breakdown of specific parameters that failed validation. */
+    InvalidParams?: Array<{
+        ParamName: string;
+        Reason: string;
+        ExpectedFormat?: string;
+        AllowedValues?: string[];
+    }>;
+    /** Optional example of a valid parameter payload. */
+    ValidParameterExample?: Record<string, unknown>;
+    /** Optional names of alternative actions to call instead or beforehand. */
+    SuggestedNextActions?: string[];
+}
+
+/**
  * Class that has the result of the individual action execution and used by the engine or other caller
  */
 
@@ -112,6 +146,11 @@ export class ActionResultSimple {
     * (instruction, constraint, context, suggestion) and priority level.
     */
    public AIDirectives?: AIDirective[];
+
+   /**
+    * Optional structured error recovery guidance when `Success` is `false`.
+    */
+   public ErrorRecovery?: ActionErrorRecovery;
 }
 
 /**
@@ -171,6 +210,12 @@ export class ActionResult {
     * Propagated from ActionResultSimple.AIDirectives returned by the action implementation.
     */
    public AIDirectives?: AIDirective[];
+
+   /**
+    * Optional structured error recovery guidance when `Success` is `false`.
+    * Propagated from ActionResultSimple.ErrorRecovery returned by the action implementation.
+    */
+   public ErrorRecovery?: ActionErrorRecovery;
 }
 
 /**
@@ -816,6 +861,13 @@ export interface ActionRunScope {
    PrimaryScopeRecordID: string | null;
    /** The run's secondary dimensions (with the agent's configured defaults applied), or `null` when it has none. */
    SecondaryScopes?: Record<string, ActionRunScopeValue> | null;
+   /**
+    * The search scopes the run's host assigned (`ExecuteAgentParams.SearchScopeIDs`); absent when it assigned none.
+    * When set, Scoped Search searches only these, and the host's assignment stands in for the calling agent's own
+    * `SearchScopeAccess` and assigned-scope list, and the plain Search action refuses. The user's own permission on the
+    * scope still applies.
+    */
+   SearchScopeIDs?: string[];
 }
 
 /**

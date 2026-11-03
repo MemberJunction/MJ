@@ -1,0 +1,7 @@
+{
+    "taskComplete": false,
+    "message": "Pre-Production blocked a requested generation asset before spend. Asking the user how to proceed.",
+    "nextStep": {
+        "type": "Chat"
+    }
+}

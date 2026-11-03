@@ -88,15 +88,85 @@
             <span class="button-text">Refresh</span>
           </button>
         }
-        <!-- Export Button (predefined) -->
-        @if (ShowExportButton) {
+        <!-- Unified Excel / Export Toolbar Control (predefined) -->
+        @if (ShowExportButton && CanOpenInExcel) {
+          <div
+            class="toolbar-excel-dropdown"
+            (click)="$event.stopPropagation()"
+            (keydown.escape)="OnExcelMenuEscape($event)">
+            <button
+              #excelMenuTrigger
+              type="button"
+              class="toolbar-button excel-menu-trigger"
+              [class.active]="ShowExcelMenu"
+              title="Excel &amp; export options"
+              [disabled]="IsPreparingExport || IsOpeningInExcel"
+              [attr.aria-expanded]="ShowExcelMenu"
+              [attr.aria-controls]="ExcelMenuId"
+              (click)="ToggleExcelMenu()">
+              <i
+                class="fa-solid"
+                [class.fa-file-excel]="!IsPreparingExport && !IsOpeningInExcel"
+                [class.fa-spinner]="IsPreparingExport || IsOpeningInExcel"
+                [class.fa-spin]="IsPreparingExport || IsOpeningInExcel"></i>
+              <span class="button-text">Export</span>
+              <i class="fa-solid fa-chevron-down excel-menu-caret" [class.rotated]="ShowExcelMenu"></i>
+            </button>
+            @if (ShowExcelMenu) {
+              <div class="excel-action-menu" [id]="ExcelMenuId">
+                <button
+                  type="button"
+                  class="excel-action-item open-in-excel-button"
+                  [title]="OpenInExcelTooltip"
+                  [disabled]="IsOpeningInExcel"
+                  (click)="OnOpenInExcelFromMenu()">
+                  <span class="excel-action-icon excel-action-icon-live">
+                    <i class="fa-solid fa-table-cells"></i>
+                  </span>
+                  <span class="excel-action-copy">
+                    <span class="excel-action-title">
+                      <span>Open in Excel</span>
+                      <span class="excel-live-pill">Live</span>
+                    </span>
+                    <span class="excel-action-desc">{{ OpenInExcelDescription }}</span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  class="excel-action-item export-snapshot-button"
+                  title="Download a static Excel, CSV, or JSON file"
+                  [disabled]="IsPreparingExport"
+                  (click)="OnExportSnapshotFromMenu()">
+                  <span class="excel-action-icon">
+                    <i class="fa-solid fa-file-arrow-down"></i>
+                  </span>
+                  <span class="excel-action-copy">
+                    <span class="excel-action-title">Export Snapshot…</span>
+                    <span class="excel-action-desc">Download a static Excel, CSV, or JSON file</span>
+                  </span>
+                </button>
+              </div>
+            }
+          </div>
+        } @else if (ShowExportButton) {
           <button
-            class="toolbar-button"
+            type="button"
+            class="toolbar-button export-snapshot-button"
             title="Export"
             [disabled]="IsPreparingExport"
             (click)="onExportClick()">
             <i class="fa-solid" [class.fa-file-excel]="!IsPreparingExport" [class.fa-spinner]="IsPreparingExport" [class.fa-spin]="IsPreparingExport"></i>
             <span class="button-text">Export</span>
+          </button>
+        } @else if (CanOpenInExcel && !showExportInOverflow) {
+          <button
+            type="button"
+            class="toolbar-button open-in-excel-button"
+            [title]="OpenInExcelTooltip"
+            [disabled]="IsOpeningInExcel"
+            (click)="OnOpenInExcelClick()">
+            <i class="fa-solid" [class.fa-file-excel]="!IsOpeningInExcel" [class.fa-spinner]="IsOpeningInExcel" [class.fa-spin]="IsOpeningInExcel"></i>
+            <span class="button-text">Open in Excel</span>
           </button>
         }
         <!-- Delete Button (predefined) -->
@@ -240,11 +310,22 @@
             </button>
             @if (showOverflowMenu) {
               <div class="overflow-menu" [@fadeIn]>
-                <!-- Export (if in overflow) -->
+                <!-- Export / Open in Excel (if in overflow) -->
                 @if (showExportInOverflow) {
-                  <button class="overflow-item" (click)="onExportClick(); closeOverflowMenu()">
+                  @if (CanOpenInExcel) {
+                    <button
+                      type="button"
+                      class="overflow-item open-in-excel-button"
+                      [disabled]="IsOpeningInExcel"
+                      [title]="OpenInExcelTooltip"
+                      (click)="OnOpenInExcelClick(); closeOverflowMenu()">
+                      <i class="fa-solid fa-table-cells"></i>
+                      <span>Open in Excel</span>
+                    </button>
+                  }
+                  <button type="button" class="overflow-item" (click)="onExportClick(); closeOverflowMenu()">
                     <i class="fa-solid fa-file-excel"></i>
-                    <span>Export</span>
+                    <span>Export Snapshot…</span>
                   </button>
                 }
                 <!-- Entity Actions -->

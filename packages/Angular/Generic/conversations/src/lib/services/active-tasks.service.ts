@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { RunView, UserInfo, Metadata, IMetadataProvider, LogStatusEx } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import { ConversationEngine } from '@memberjunction/core-entities';
 
@@ -266,6 +267,22 @@ export class ActiveTasksService {
   /** @deprecated Use {@link RemoveByAgentRunId}. */
   removeByAgentRunId(agentRunId: string): boolean {
     return this.RemoveByAgentRunId(agentRunId);
+  }
+
+  /**
+   * True when at least one active task is currently tracked for `conversationId`
+   * (case-insensitive UUID comparison).
+   */
+  public HasActiveTasksForConversation(conversationId: string | null | undefined): boolean {
+    if (!conversationId) {
+      return false;
+    }
+    for (const task of this._tasks$.value.values()) {
+      if (UUIDsEqual(task.conversationId, conversationId)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

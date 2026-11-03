@@ -113,7 +113,14 @@ describe('streaming introspect + persist', () => {
         ContextUser: {},
         // The catalog scope and the classify stage read through the catalog writer, which queries per
         // call; this connection's catalog is empty, so every read succeeds with no rows.
-        Provider: { RunView: async () => ({ Success: true, Results: [] }) },
+        Provider: {
+            // The persist stage first confirms the connection still exists; it does. Every other
+            // read (catalog scope, classify) succeeds with no rows.
+            RunView: async (p: { EntityName: string }) =>
+                p.EntityName === 'MJ: Company Integrations'
+                    ? { Success: true, Results: [{ ID: 'CI-1' }] }
+                    : { Success: true, Results: [] },
+        },
         ArtifactRootDir: rootDir,
         DeactivateAbsent: deactivateAbsent,
     } as unknown as ConnectorCreationPipelineOptions);

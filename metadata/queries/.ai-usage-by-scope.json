@@ -13,13 +13,313 @@
       "UsesTemplate": true,
       "IsMaterialized": false
     },
-    "relatedEntities": {},
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/ai-usage-by-scope.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "7CFB9D70-0841-49F7-B07C-258EA7EE74D2"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T22:16:26.379Z",
+            "checksum": "b5268dc4f58aa6be4eebfd9f35c749bc8adf98f0fc3d80ffeb06799b78ddedec"
+          }
+        }
+      ]
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "scopeEntityId",
+            "Type": "string",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "The uniqueidentifier of the primary scope entity to filter the AI usage facts. Guarded by truthiness check.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "FF860027-CD2F-4EA7-A1DB-3E325C9FE770"
+          }
+        },
+        {
+          "fields": {
+            "Name": "scopeRecordId",
+            "Type": "string",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "The record ID within the scope entity to filter the AI usage facts. Guarded by truthiness check.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "670459E6-65F9-42B5-8F75-E43A19363877"
+          }
+        },
+        {
+          "fields": {
+            "Name": "start",
+            "Type": "date",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "The start date/time range filter for when the AI run occurred. Guarded by truthiness check.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "46FF0A4D-1BF6-4639-80D4-A6DE8B3776FD"
+          }
+        },
+        {
+          "fields": {
+            "Name": "end",
+            "Type": "date",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "The end date/time range filter for when the AI run occurred. Guarded by truthiness check.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E1FA78DC-7F15-4647-80F4-F882584C9384"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "PrimaryScopeEntityID",
+            "Description": "The uniqueidentifier of the entity defining the tenant scope",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "F922C5B3-93A4-452A-B61B-827D4CB89389"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PrimaryScopeRecordID",
+            "Description": "The ID of the specific record defining the tenant scope",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "283C91D0-424B-4C6E-9621-363A463AC9FF"
+          }
+        },
+        {
+          "fields": {
+            "Name": "CostCurrency",
+            "Description": "The currency code used for pricing and cost calculation",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "1270410A-72F9-49CD-9E8C-0969AC14EA78"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Runs",
+            "Description": "Total count of completed AI runs (excluding parallel parent runs)",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "C5E894DF-4563-4030-B552-1B36D774C4CF"
+          }
+        },
+        {
+          "fields": {
+            "Name": "SucceededRuns",
+            "Description": "Total count of successful completed AI runs (excluding parallel parent runs)",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 AND x.Success = 1 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "A97BD9E1-040F-4040-8EFF-D9510DE2762C"
+          }
+        },
+        {
+          "fields": {
+            "Name": "FailedRuns",
+            "Description": "Total count of failed AI runs (excluding parallel parent runs)",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 AND x.Success = 0 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "C7414653-562D-4306-BBCB-16906F3525EE"
+          }
+        },
+        {
+          "fields": {
+            "Name": "PricedRuns",
+            "Description": "Total count of AI runs that carried a cost (excluding parallel parent runs)",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 AND x.IsPriced = 1 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "D7EBC405-2F02-4466-B503-1D18716B2E54"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UnpricedRuns",
+            "Description": "Total count of free or unpriced AI runs (excluding parallel parent runs)",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 AND x.IsPriced = 0 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "DC3D3020-CA14-4D69-AE85-0E7557C8A715"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UnmeasuredRuns",
+            "Description": "Total count of AI runs that were not measured for token usage (excluding parallel parent runs)",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 AND x.IsUnmeasured = 1 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "F5481133-A375-4F83-920A-F4E32FA3339A"
+          }
+        },
+        {
+          "fields": {
+            "Name": "ParallelParents",
+            "Description": "Total count of parallel parent runs",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 1 THEN 1 ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "ADF8F840-CD61-426B-9144-AE6BFBBFBBCC"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TokensPrompt",
+            "Description": "Sum of prompt tokens consumed (excluding parallel parent runs)",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 THEN x.TokensPrompt ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "3B1DB3D7-054B-4A8E-9974-0BF178C9E36C"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TokensCompletion",
+            "Description": "Sum of completion tokens consumed (excluding parallel parent runs)",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 THEN x.TokensCompletion ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "13511355-CA84-44A6-954E-6006E0DE2E0D"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TokensCacheRead",
+            "Description": "Sum of cache read tokens consumed (excluding parallel parent runs)",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 THEN x.TokensCacheRead ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "42B6F2CD-C3FC-4778-8917-3A44E922FC77"
+          }
+        },
+        {
+          "fields": {
+            "Name": "TokensCacheWrite",
+            "Description": "Sum of cache write tokens consumed (excluding parallel parent runs)",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 THEN x.TokensCacheWrite ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "08F202E4-A585-40F2-9D14-0BF631324639"
+          }
+        },
+        {
+          "fields": {
+            "Name": "OwnCost",
+            "Description": "Total cost accumulated by priced runs (excluding parallel parent runs)",
+            "IsSummary": true,
+            "ComputationDescription": "SUM(CASE WHEN x.IsParallelParent = 0 AND x.IsPriced = 1 THEN x.OwnCost ELSE 0 END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E9A0F98A-8636-48CC-8270-666DC6C883BA"
+          }
+        },
+        {
+          "fields": {
+            "Name": "LatencyP50",
+            "Description": "50th percentile (median) execution latency in milliseconds for non-parallel parent runs",
+            "IsSummary": true,
+            "ComputationDescription": "MAX(x.LatencyP50) where LatencyP50 is calculated using PERCENTILE_CONT(0.5) in the subquery",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "03D435D7-9596-44C3-A45D-1BA0F5FF159B"
+          }
+        },
+        {
+          "fields": {
+            "Name": "LatencyP95",
+            "Description": "95th percentile execution latency in milliseconds for non-parallel parent runs",
+            "IsSummary": true,
+            "ComputationDescription": "MAX(x.LatencyP95) where LatencyP95 is calculated using PERCENTILE_CONT(0.95) in the subquery",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "EE29B0DB-1009-4629-BACE-81FAEE934924"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AvgFirstTokenMS",
+            "Description": "Average time to first token in milliseconds (excluding parallel parent runs)",
+            "IsSummary": true,
+            "ComputationDescription": "AVG(CASE WHEN x.IsParallelParent = 0 THEN x.FirstTokenTime END)",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "FE7A5B65-66D1-45BB-A5D8-4B1A5037E996"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "EBF9166E-DEA4-4CEE-8D1F-56A903D0D1E6"
     },
     "sync": {
-      "lastModified": "2026-09-29T19:19:43.090Z",
-      "checksum": "34d988f11ce398ed18f49722954aa1d93fe79be2a97da8debed083a4473d168e"
+      "lastModified": "2026-10-28T22:14:01.525Z",
+      "checksum": "c28afdb981c2c57d9c717394bb8a5131a2aeef35ccf8bc6f46f4bc5c68683858"
     }
   }
 ]

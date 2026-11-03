@@ -1,0 +1,9 @@
+{
+  "fields": [
+    { "name": "CustomerName", "description": "The customer's display name." },
+    { "name": "OrderCount", "description": "Number of orders the customer placed in the selected period." }
+  ],
+  "parameters": [
+    { "name": "Region", "description": "Sales region to report on; when left out, every region is included." }
+  ]
+}

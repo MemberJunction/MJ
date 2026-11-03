@@ -116,8 +116,14 @@ const RESULT_SUMMARY_MAX_LENGTH = 4000;
 /** Normalized outcome of executing a routine's target, independent of target type. */
 interface RoutineTargetOutcome {
     Success: boolean;
-    /** Raw result content — summarized (capped) into ResultSummary and hashed for OnChange detection. */
+    /** Raw result content — hashed for OnChange detection, and the ResultSummary when there is no {@link Summary}. */
     ResultContent: string;
+    /**
+     * Human-readable result, preferred over ResultContent for the run's ResultSummary (and so the
+     * notification body). For an Agent target it is the agent's final message: the payload is
+     * often just the wake state the agent was handed.
+     */
+    Summary?: string | null;
     ErrorMessage: string | null;
     AgentRunID: string | null;
     PromptRunID: string | null;
@@ -125,10 +131,23 @@ interface RoutineTargetOutcome {
 }
 
 /** Per-routine bookkeeping returned from an isolated routine execution. */
-interface RoutineExecutionSummary {
+export interface RoutineExecutionSummary {
     RoutineID: string;
     RunStatus: MJUserRoutineRunEntity['Status'];
     Notified: boolean;
+}
+
+/**
+ * What one routine's execution needs from its caller. The sweep passes its full
+ * {@link ScheduledJobExecutionContext}; a manual run ({@link UserRoutineDispatcherDriver.RunRoutineNow})
+ * passes only these.
+ */
+export interface RoutineRunContext {
+    /** The bookkeeping user: run rows and routine roll-up are saved as this user (the scheduler's system user). */
+    ContextUser: UserInfo;
+    heartbeat?: ScheduledJobExecutionContext['heartbeat'];
+    /** True for a run the user asked for by hand: the wake gate is not consulted. */
+    BypassWakeGate?: boolean;
 }
 
 /**
@@ -356,6 +375,28 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
     }
 
     // ========================================================================
+    // Manual run
+    // ========================================================================
+
+    /**
+     * Run one routine now, on request, without touching its schedule.
+     *
+     * The sweep claims a routine before running it, which advances `NextRunAt` or, for a one-shot,
+     * clears it, and a cleared one-shot is Disabled after the run. A "Wake Now" implemented as
+     * "set NextRunAt to now" therefore SPENDS a one-shot: the reminder wanted tomorrow fires today
+     * and never fires again. This path skips the claim, so after the run `NextRunAt` still holds
+     * the scheduled time and the roll-up leaves the routine Active. It also skips the wake gate:
+     * the person asked for the run, so "nothing changed since last time" is not a reason to skip.
+     *
+     * `contextUser` is the bookkeeping identity (run row, routine roll-up), normally the scheduler's
+     * system user; the target still executes as the routine's owner, exactly as on the sweep.
+     * Ownership of the routine is the caller's check (see the `Run User Routine Now` action).
+     */
+    public async RunRoutineNow(routine: MJUserRoutineEntity, contextUser: UserInfo): Promise<RoutineExecutionSummary> {
+        return this.executeRoutine(routine, { ContextUser: contextUser, BypassWakeGate: true });
+    }
+
+    // ========================================================================
     // Per-routine execution
     // ========================================================================
 
@@ -374,13 +415,13 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
      */
     private async executeRoutine(
         routine: MJUserRoutineEntity,
-        context: ScheduledJobExecutionContext
+        context: RoutineRunContext
     ): Promise<RoutineExecutionSummary> {
         const contextUser = context.ContextUser;
         const ownerUser = await this.resolveRoutineOwnerUser(routine, contextUser);
 
         let gateResult: WakeGateEvaluationResult | undefined;
-        if (routine.WakeConfiguration || routine.WakeConfigurationObject) {
+        if (!context.BypassWakeGate && (routine.WakeConfiguration || routine.WakeConfigurationObject)) {
             gateResult = await this.wakeGateEvaluator.Evaluate(routine, ownerUser, new Date());
             routine.LastCheckedAt = new Date();
             if (!gateResult.shouldWake) {
@@ -440,7 +481,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
     private async runAndRecord(
         routine: MJUserRoutineEntity,
         run: MJUserRoutineRunEntity,
-        context: ScheduledJobExecutionContext,
+        context: RoutineRunContext,
         ownerUser?: UserInfo,
         gateResult?: WakeGateEvaluationResult
     ): Promise<RoutineExecutionSummary> {
@@ -605,8 +646,9 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
 
     /** Compact, capped text describing the outcome — the run row's human-readable summary. */
     private buildResultSummary(outcome: RoutineTargetOutcome): string {
+        const text = outcome.Summary?.trim() || outcome.ResultContent.trim();
         const base = outcome.Success
-            ? (outcome.ResultContent.trim().length > 0 ? outcome.ResultContent.trim() : 'Completed successfully.')
+            ? (text.length > 0 ? text : 'Completed successfully.')
             : `Failed: ${outcome.ErrorMessage ?? 'unknown error'}`;
         return base.length > RESULT_SUMMARY_MAX_LENGTH ? `${base.substring(0, RESULT_SUMMARY_MAX_LENGTH - 1)}…` : base;
     }
@@ -694,13 +736,20 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         };
 
         const conversationId = await this.EnsureRoutineConversation(routine, contextUser);
+        // A wake's payload is the wake state it was handed (workstream, reason, resume state), not
+        // something the user asked for, so it is not turned into a "<Agent> Payload" artifact.
+        // Files and media the run generates are still saved.
+        const conversationOptions = routine.RoutineType === 'AgentWake'
+            ? { conversationId, userMessage, createArtifacts: false }
+            : { conversationId, userMessage };
         const result = conversationId
-            ? (await runner.RunAgentInConversation(baseParams, { conversationId, userMessage })).agentResult
+            ? (await runner.RunAgentInConversation(baseParams, conversationOptions)).agentResult
             : await runner.RunAgent(baseParams);
 
         return {
             Success: result.success,
             ResultContent: result.payload != null ? JSON.stringify(result.payload) : '',
+            Summary: result.agentRun?.Message ?? null,
             ErrorMessage: result.agentRun?.ErrorMessage ?? null,
             AgentRunID: result.agentRun?.ID ?? null,
             PromptRunID: null,
@@ -1023,7 +1072,12 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         run: MJUserRoutineRunEntity,
         contextUser: UserInfo
     ): Promise<boolean> {
-        const resourceConfiguration = { type: 'UserRoutine', routineId: routine.ID, runId: run.ID };
+        // The run's reply lives in the routine's own conversation, which the main chat list hides;
+        // the notification carries it so a click can open the reply rather than the routine row.
+        const resourceConfiguration: Record<string, string> = { type: 'UserRoutine', routineId: routine.ID, runId: run.ID };
+        if (routine.ConversationID) {
+            resourceConfiguration['conversationId'] = routine.ConversationID;
+        }
         try {
             await NotificationEngine.Instance.Config(false, contextUser);
             const result = await NotificationEngine.Instance.SendNotification({

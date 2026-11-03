@@ -164,6 +164,47 @@ export interface IContentSourceConfiguration {
      * implementation; other source types will follow the same pattern as their knobs grow.
      */
     Website?: IContentSourceWebsiteConfiguration;
+    /**
+     * Optional Semantic Graph overlay configuration for the Content Pipeline `Graph` stage
+     * (`@RegisterClass(BasePipelineStage, 'Graph')`). When enabled on a Content Source that
+     * is linked to a `GraphID` (either a Canon graph or a shared/per-source Knowledge graph),
+     * the pipeline clusters ingested chunks into higher-level `MJ: Graph Concepts` and emits
+     * typed `MJ: Graph Edges` (`SourcedFrom`, `Mentions`, `Broader Than`, `Contradicts`, etc.).
+     */
+    GraphOverlay?: IContentSourceGraphOverlayConfig;
+}
+
+/**
+ * Per-source Semantic Graph overlay configuration for the Content Pipeline `Graph` stage.
+ */
+export interface IContentSourceGraphOverlayConfig {
+    /** Enable the Graph overlay stage after Embed for this Content Source. Default false. */
+    Enabled?: boolean;
+    /**
+     * Concept taxonomy mode:
+     * - 'constrained': only link chunks to existing approved/proposed GraphConcepts in the target Graph.
+     * - 'auto-grow': link to existing GraphConcepts when matched; synthesize new proposed GraphConcepts for unmatched clusters.
+     * - 'free-flow': synthesize and merge GraphConcepts across the target Graph without subtree restrictions.
+     */
+    ConceptTaxonomyMode?: 'constrained' | 'auto-grow' | 'free-flow';
+    /** Default evidentiary authority tier name (from MJ: Graph Authority Tiers) assigned to concepts synthesized from this Content Source. */
+    DefaultAuthorityTier?: string;
+    /** Optional default GraphAuthorityTier ID assigned to concepts synthesized from this Content Source. */
+    DefaultAuthorityTierID?: string;
+    /** Whether to synthesize higher-level GraphConcept records from chunk clusters. Default true when Enabled. */
+    SynthesizeConcepts?: boolean;
+    /** Minimum supporting chunks required to form a new concept seed cluster. Default 2. */
+    MinChunksForConceptCluster?: number;
+    /** Cosine similarity threshold (0.0-1.0) for clustering chunk vectors or matching existing concepts. Default 0.82. */
+    ConceptSimilarityThreshold?: number;
+    /**Confidence threshold (0.0-1.0) at or above which inferred edges/concepts are auto-approved; below routes to Proposed. Default 0.90. */
+    AutoApproveThreshold?: number;
+    /** Whether to detect and emit Contradicts edges when chunks conflict on thresholds, dates, or formulas. Default true. */
+    DetectContradictions?: boolean;
+    /** ClassFactory key for the BaseConceptSynthesizer implementation. Default 'DeterministicConceptSynthesizer'. */
+    SynthesizerKey?: string;
+    /** Maximum concept clusters synthesized by the LLM per pipeline run. NULL/unset = unlimited. */
+    MaxConceptsPerRun?: number;
 }
 
 /**

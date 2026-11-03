@@ -44,7 +44,7 @@ export async function DispatchRemoteOperationInProcess<TInput = unknown, TOutput
         };
     }
 
-    const user = options.user ?? fallbackUser;
+    const user = options?.user ?? fallbackUser;
     if (!user) {
         return {
             Success: false,
@@ -53,11 +53,24 @@ export async function DispatchRemoteOperationInProcess<TInput = unknown, TOutput
         };
     }
 
+    const requestedFingerprint = options?.contractFingerprint?.trim();
+    if (requestedFingerprint && op.ContractFingerprint && requestedFingerprint !== op.ContractFingerprint) {
+        return {
+            Success: false,
+            ResultCode: 'CONTRACT_MISMATCH',
+            ErrorMessage: `Contract fingerprint mismatch for operation '${operationKey}' (client='${requestedFingerprint}', server='${op.ContractFingerprint}')`,
+        };
+    }
+
     const context: RemoteOpServerContext = {
         provider,
         user,
         emitProgress: (progress) => options.onProgress?.(progress),
-        handle: undefined,
+        handle: options.handle,
+        requestOrigin: options.requestOrigin,
+        clientIp: options.clientIp,
+        sessionId: options.sessionId,
+        apiKeyHash: options.apiKeyHash,
     };
     return op.ExecuteServer(input, context);
 }

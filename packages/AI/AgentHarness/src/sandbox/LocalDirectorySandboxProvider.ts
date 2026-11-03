@@ -38,6 +38,7 @@ export class LocalDirectorySandboxProvider implements ISandboxProvider {
         await mkdir(workspacePath, { recursive: true });
         return {
             WorkspacePath: workspacePath,
+            HostWorkspacePath: workspacePath,
             Key: key,
             Ephemeral: key.Scope === 'run',
             // Runs directly on the MJAPI host. The workspace path is a host path here, which is the
