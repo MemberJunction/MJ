@@ -52,6 +52,7 @@ import { ReadCapExceededError } from './read-cap-error';
 import { type DatedRow, ResolveAsOfDate, DaysSinceLastActivityAsOf, ActivityCountAsOf } from './as-of';
 import { LeakageGuardEnforcer } from './leakage-guard';
 import { VisionFeatureExtractor, type IVisionPromptRunner } from './vision-llm';
+import { ClassifySelectColumn, UnusableFeatureColumnError } from './select-column-kind';
 
 /**
  * Resolves a {@link VisionLLMFeatureStep}'s `Prompt` (id/name/inline) into the
@@ -205,6 +206,9 @@ export class FeatureAssemblyExecutor {
 
     // 3. Build the ordered RAW column plan (schema) from the data-assembly steps.
     const columnPlan = await this.buildColumnPlan(dataSteps, params, guard, dataAccess);
+
+    // 3b. A categorical `select` column (#3104) is one-hot encoded; the sidecar would otherwise read its text as 0.
+    this.addImplicitOneHotOps(columnPlan, preprocessing);
 
     // 3a. ANTI-SKEW (the train/serve parity guarantee). On-demand/scheduled scoring receives its
     //     target records from an upstream scope that may have loaded them with a NARROW field
@@ -461,7 +465,7 @@ export class FeatureAssemblyExecutor {
     for (const step of dataSteps) {
       switch (step.Kind) {
         case 'select':
-          this.planSelectColumns(step.Columns, guard, schema, emitters, plannedCols);
+          this.planSelectColumns(step.Columns, guard, schema, emitters, plannedCols, params);
           break;
         case 'embedding':
           this.planEmbeddingColumns(step, guard, schema, emitters, plannedCols);
@@ -504,21 +508,56 @@ export class FeatureAssemblyExecutor {
     return { schema, emitters };
   }
 
-  /** Plan plain `select` columns (raw passthrough from the target row). */
+  /**
+   * Plan plain `select` columns (raw passthrough from the target row). Each column's kind comes from its field on the
+   * target entity (#3104): numbers and booleans are numeric, a string with a value list (or a `onehot` step) is
+   * categorical. A date or free-text column would be a constant 0, so a TRAINING run refuses it; scoring keeps the old
+   * numeric treatment, because a model already trained with such a column expects it.
+   */
   private planSelectColumns(
     columns: string[],
     guard: LeakageGuardEnforcer,
     schema: FeatureSchemaEntry[],
     emitters: ColumnEmitter[],
     plannedCols: Set<string>,
+    params: FeatureAssemblyParams,
   ): void {
+    // Only a training run classifies: scoring replays the model's frozen schema and fitted preprocessing, so the
+    // columns a trained model expects keep exactly the treatment they had.
+    const entity = params.context === 'train' ? params.provider.EntityByName(params.targetEntityName) : undefined;
+    const oneHot = OneHotColumns(params.steps);
+    const refusals: Array<{ Column: string; Reason: string }> = [];
     for (const col of guard.partitionColumns(columns).allowed) {
       if (plannedCols.has(col)) {
         continue;
       }
+      const field = entity?.Fields.find((f) => f.Name.toLowerCase() === col.toLowerCase());
+      const kind = ClassifySelectColumn(col, field, oneHot);
+      if (kind.Kind === 'refused' && params.context === 'train') {
+        refusals.push({ Column: col, Reason: kind.Reason });
+        continue;
+      }
       plannedCols.add(col);
-      schema.push({ Name: col, Kind: 'numeric' });
+      schema.push({ Name: col, Kind: kind.Kind === 'categorical' ? 'categorical' : 'numeric' });
       emitters.push({ column: col, kind: 'select', sourceColumn: col });
+    }
+    if (refusals.length > 0) {
+      throw new UnusableFeatureColumnError(params.targetEntityName, refusals);
+    }
+  }
+
+  /**
+   * Appends a `onehot` op for every categorical `select` column no step already encodes. Other categorical sources
+   * (vision, LLM-derived) keep the encoding their pipeline declares.
+   */
+  private addImplicitOneHotOps(plan: ColumnPlan, preprocessing: PreprocessingOp[]): void {
+    const encoded = new Set(preprocessing.filter((op) => op.op === 'onehot' && op.col).map((op) => (op.col as string).toLowerCase()));
+    const selected = new Set(plan.emitters.filter((e) => e.kind === 'select').map((e) => e.column));
+    for (const entry of plan.schema) {
+      if (entry.Kind === 'categorical' && selected.has(entry.Name) && !encoded.has(entry.Name.toLowerCase())) {
+        preprocessing.push({ op: 'onehot', col: entry.Name });
+        encoded.add(entry.Name.toLowerCase());
+      }
     }
   }
 
@@ -835,6 +874,17 @@ type ColumnEmitter =
 
 /** Internal — dated rows indexed by source entity → record PK → rows. */
 type DatedIndex = Map<string, Map<string, DatedRow[]>>;
+
+/** Columns a `onehot` step of the graph encodes, lower-cased. */
+export function OneHotColumns(graph: FeatureStepGraph): Set<string> {
+  const cols = new Set<string>();
+  for (const step of graph.Steps) {
+    if (step.Kind === 'onehot') {
+      cols.add(step.Column.toLowerCase());
+    }
+  }
+  return cols;
+}
 
 /** Coerce a loose source value into a matrix cell value. */
 function normalizeValue(value: unknown): string | number | boolean | null {

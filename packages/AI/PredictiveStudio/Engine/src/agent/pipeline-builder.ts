@@ -16,6 +16,8 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { RunView, type IMetadataProvider, type UserInfo, type EntityInfo, LogError } from '@memberjunction/core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity } from '@memberjunction/core-entities';
 import { type ModelingPlanSpec, TrustVerdicts, type TrustVerdict, type FeatureStepWarning } from '@memberjunction/predictive-studio-core';
+import { ClassifySelectColumn, UnusableFeatureColumnError } from '../feature-assembly/select-column-kind';
+import { OneHotColumns } from '../feature-assembly/feature-assembly-executor';
 
 import { ModelingPlanToPipelineConfig, type PipelineConfig } from './modeling-plan-to-pipeline';
 import { trainModelViaEngine, wasTrainingLeakageFlagged } from '../operations/delegation';
@@ -418,6 +420,28 @@ export class PredictiveStudioPipelineBuilder {
       throw new Error(
         `The plan references field(s) that don't exist on '${entity.Name}': ${missing.join(', ')}. Available fields include: ${available}.`,
       );
+    }
+    this.validateSelectColumnKinds(config, entity);
+  }
+
+  /**
+   * #3104 — a `select` column the model cannot use (a date/time, or free text with no value list and no `onehot` step)
+   * would train as a constant 0. Refuse it here, naming the column and the fix, so no run starts with a dead column.
+   */
+  private validateSelectColumnKinds(config: PipelineConfig, entity: EntityInfo): void {
+    const graph = config.featureSteps ?? { Steps: [] };
+    const oneHot = OneHotColumns(graph);
+    const refusals: Array<{ Column: string; Reason: string }> = [];
+    for (const step of graph.Steps) {
+      if (step.Kind !== 'select') continue;
+      for (const col of step.Columns) {
+        const field = entity.Fields.find((f) => f.Name.toLowerCase() === col.toLowerCase());
+        const kind = ClassifySelectColumn(col, field, oneHot);
+        if (kind.Kind === 'refused') refusals.push({ Column: col, Reason: kind.Reason });
+      }
+    }
+    if (refusals.length > 0) {
+      throw new UnusableFeatureColumnError(entity.Name, refusals);
     }
   }
 

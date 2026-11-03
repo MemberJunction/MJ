@@ -197,6 +197,8 @@ export interface TrainModelResult {
   model: MJMLModelEntity;
   /** The `MJ: ML Training Runs` row recording this attempt. */
   run: MJMLTrainingRunEntity;
+  /** Feature columns that were constant across every training row (also noted on the run). */
+  constantFeatures?: string[];
 }
 
 /**
