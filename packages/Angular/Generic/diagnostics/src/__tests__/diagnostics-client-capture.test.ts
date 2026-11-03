@@ -203,6 +203,46 @@ describe('MJDiagnosticsService client capture', () => {
             expect(ParseBundleDataFromArchive(await VerifyBundleArchive(built.zipBytes)).repro.breadcrumbs).toHaveLength(1);
         });
 
+        it('keeps a running recording\'s entries when the server reports capture as off', async () => {
+            mockStatus({ CaptureEnabled: false });
+            service.StartRecording('srv-rec', 'Standard');
+            const kept = logEntry('during the recording');
+            service.RecordLogEntry(kept);
+
+            service.Initialize();
+            await service.LoadServerStatus();
+
+            expect(doc.listenerCount).toBe(0);
+            const data = ParseBundleDataFromArchive(await VerifyBundleArchive((await service.BuildClientBundle()).zipBytes));
+            expect(data.clientLogs).toEqual([kept]);
+            service.StopRecording();
+        });
+
+        it('does not restart background capture after Dispose when the known status has capture off', async () => {
+            mockStatus({ CaptureEnabled: false });
+            service.Initialize();
+            await service.LoadServerStatus();
+
+            service.Dispose();
+            service.Initialize();
+
+            expect(doc.listenerCount).toBe(0);
+        });
+
+        it('builds a client bundle when the status read never answers', async () => {
+            vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+            vi.spyOn(DiagnosticsGetMySessionStatusOperation.prototype, 'Execute').mockReturnValue(new Promise(() => undefined));
+            service.Initialize();
+            service.RecordRouteBreadcrumb('/app/stuck');
+
+            const pending = service.BuildClientBundle({ scrubberProfile: 'FullRaw' });
+            await vi.advanceTimersByTimeAsync(10_000);
+            const built = await pending;
+
+            expect(built.manifest.scrubberProfile).toBe('FullRaw');
+            expect(doc.listenerCount).toBeGreaterThan(0);
+        });
+
         it('listens for clicks once the server reports capture as enabled', async () => {
             mockStatus({ CaptureEnabled: true });
             service.Initialize();
@@ -230,6 +270,18 @@ describe('MJDiagnosticsService client capture', () => {
 
             expect(DescribeClickTarget(link)).toBe('a#open-record[role=menuitem]');
             expect(DescribeClickTarget(field)).toBe('input[type=email][name=email][data-testid=contact-email]');
+        });
+
+        it('leaves out an identifier that is not a plain identifier', () => {
+            const row = element('TR', { id: 'row-alice@example.com' }, '');
+
+            expect(DescribeClickTarget(row)).toBe('tr');
+        });
+
+        it('leaves out an identifier that contains the element text', () => {
+            const button = element('BUTTON', { 'data-testid': 'contact-Alice Smith' }, 'Alice Smith');
+
+            expect(DescribeClickTarget(button)).toBe('button');
         });
 
         it('leaves out an identifier attribute that repeats the element text', () => {

@@ -19,25 +19,38 @@ const CONTROL_SELECTOR = [
 ].join(', ');
 const MAX_MESSAGE_LENGTH = 300;
 const MAX_ATTRIBUTE_LENGTH = 60;
+/** A plain identifier: a letter, then letters, digits, `_`, `:`, `.` or `-`. */
+const PLAIN_IDENTIFIER = /^[A-Za-z][\w:.-]*$/;
 /** Attributes a click breadcrumb may name, after `#id`. None of them holds visible text. */
 const DESCRIBED_ATTRIBUTES = ['role', 'type', 'name', 'data-testid', 'data-test-id'];
 
 /**
  * Names a clicked element for a breadcrumb as `tag#id[role=…][type=…][name=…][data-testid=…]`.
  * A click inside a control names the control. Visible text, labels, titles, placeholders, classes
- * and field values are never recorded; an identifier that repeats the element's text is left out.
+ * and field values are never recorded; an identifier that is not a plain identifier, or contains
+ * the element's text, is left out.
  */
 export function DescribeClickTarget(clicked: Element): string {
     const target = clicked.closest(CONTROL_SELECTOR) ?? clicked;
     const text = (target.textContent ?? '').replace(/\s+/g, ' ').trim();
-    const usable = (value: string | null): value is string =>
-        !!value && value.length <= MAX_ATTRIBUTE_LENGTH && value.trim() !== text;
+    const usable = (value: string | null): value is string => isSafeIdentifier(value, text);
     const id = usable(target.id) ? `#${target.id}` : '';
     const attributes = DESCRIBED_ATTRIBUTES.map((name) => {
         const value = target.getAttribute(name);
         return usable(value) ? `[${name}=${value}]` : '';
     }).join('');
     return `${target.tagName.toLowerCase()}${id}${attributes}`;
+}
+
+/**
+ * True for a plain identifier of 60 characters or fewer that does not contain the element's text.
+ * A value with `@`, whitespace or other punctuation can hold record data, so it is left out.
+ */
+function isSafeIdentifier(value: string | null, elementText: string): value is string {
+    if (!value || value.length > MAX_ATTRIBUTE_LENGTH || !PLAIN_IDENTIFIER.test(value)) {
+        return false;
+    }
+    return !elementText || !value.toLowerCase().includes(elementText.toLowerCase());
 }
 
 /** The breadcrumb for a click, or `null` when the click did not hit an element. */

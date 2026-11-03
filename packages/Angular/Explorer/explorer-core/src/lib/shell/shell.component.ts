@@ -935,7 +935,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       throw new Error('No current user found');
     }
 
-    // Background diagnostics capture starts only when the server reports it enabled for this user
+    // Diagnostics capture runs in memory until this status arrives; a status with capture off stops it
     void this.diagnosticsService?.LoadServerStatus();
 
     // Check the current URL to determine if we're loading from a URL-based navigation

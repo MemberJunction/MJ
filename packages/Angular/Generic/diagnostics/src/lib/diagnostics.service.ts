@@ -64,6 +64,9 @@ import { RegisterBreadcrumbListeners, RouteBreadcrumb } from './breadcrumbs';
  */
 export const DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE: DiagnosticScrubberProfile = 'Standard';
 
+/** Longest time a bundle build waits for a pending server status read. */
+const SERVER_STATUS_WAIT_MS = 3_000;
+
 /** Shortest time between two uploads to one server watch session. */
 const TRIGGER_UPLOAD_INTERVAL_MS = 30_000;
 
@@ -255,7 +258,8 @@ export class MJDiagnosticsService {
 
     /**
      * Starts listening for the server's `X-MJ-Diagnostic-Trigger` header, starts background capture
-     * into memory and, when a user is signed in, reads the server status (see {@link LoadServerStatus}).
+     * into memory (unless a known status has capture off) and, when a user is signed in, reads the
+     * server status (see {@link LoadServerStatus}).
      * Entries captured before the status is known stay in memory; only the user's own download or Submit sends them.
      */
     public Initialize(): void {
@@ -268,7 +272,9 @@ export class MJDiagnosticsService {
                 this.onResponseHeaders(headers);
             });
         });
-        this.startBackgroundCapture();
+        if (!this.serverStatus || this.serverStatus.CaptureEnabled === true) {
+            this.startBackgroundCapture();
+        }
         if (this.signedInProvider()) {
             void this.LoadServerStatus();
         }
@@ -277,7 +283,8 @@ export class MJDiagnosticsService {
     /**
      * Reads the server's diagnostics status for the signed-in user. Call it after sign-in.
      * When the status reports `CaptureEnabled === true`, background capture continues. When it
-     * reports capture off (or leaves it out), capture stops and every buffered entry is cleared.
+     * reports capture off (or leaves it out), capture stops and every buffered entry is cleared,
+     * unless a recording runs.
      * When the status cannot be read, capture continues into memory only.
      * `RequireLiteralScrubbing` forces the `Standard` profile.
      */
@@ -315,10 +322,27 @@ export class MJDiagnosticsService {
         }
     }
 
-    /** The profile a bundle is built with: `Standard` when the server requires literal scrubbing. */
+    /**
+     * The profile a bundle is built with: `Standard` when the server requires literal scrubbing.
+     * Waits up to {@link SERVER_STATUS_WAIT_MS} for a pending status read; a read that takes longer
+     * counts as failed.
+     */
     private async effectiveProfile(requested: DiagnosticScrubberProfile | undefined): Promise<DiagnosticScrubberProfile> {
-        await this.serverStatusLoad;
+        await this.waitForServerStatus();
         return this.LiteralScrubbingRequired ? 'Standard' : requested ?? DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE;
+    }
+
+    private async waitForServerStatus(): Promise<void> {
+        const load = this.serverStatusLoad;
+        if (!load) {
+            return;
+        }
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timeout = new Promise<void>((resolve) => {
+            timer = setTimeout(resolve, SERVER_STATUS_WAIT_MS);
+        });
+        await Promise.race([load, timeout]);
+        clearTimeout(timer);
     }
 
     private applyCaptureSwitch(enabled: boolean): void {
@@ -326,7 +350,9 @@ export class MJDiagnosticsService {
             this.startBackgroundCapture();
         } else if (!enabled) {
             this.stopBackgroundCapture();
-            this.clearCapturedEntries();
+            if (!this.recordingStateSubject.value.isRecording) {
+                this.clearCapturedEntries();
+            }
         }
     }
 
