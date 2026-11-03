@@ -544,4 +544,46 @@ describe('AutotagWebsite', () => {
             expect(a.checksum).not.toBe(b.checksum);
         });
     });
+
+    describe('Autotag contentSourceIDs filtering', () => {
+        it('filters content sources case-insensitively via FilterByUUIDs when contentSourceIDs is provided', async () => {
+            const sourceA = {
+                ID: 'AAAAAAAA-1111-2222-3333-444444444444',
+                Name: 'Source A',
+                URL: 'https://a.example.com',
+                ContentTypeID: 'ct-1',
+                ContentFileTypeID: 'cft-1',
+                ContentSourceTypeID: 'cst-1',
+                ConfigurationObject: null,
+            };
+            const sourceB = {
+                ID: 'BBBBBBBB-1111-2222-3333-444444444444',
+                Name: 'Source B',
+                URL: 'https://b.example.com',
+                ContentTypeID: 'ct-1',
+                ContentFileTypeID: 'cft-1',
+                ContentSourceTypeID: 'cst-1',
+                ConfigurationObject: null,
+            };
+            mockEngineInstance.getAllContentSources.mockResolvedValueOnce([sourceA, sourceB]);
+
+            const streamedSources: unknown[][] = [];
+            const streamSpy = vi.spyOn(subject, 'streamContentItemsToProcess').mockImplementation(async function*(sources) {
+                streamedSources.push(sources);
+            });
+            mockEngineInstance.ExtractTextAndProcessWithLLM.mockImplementationOnce(async (iterable: AsyncIterable<unknown>) => {
+                for await (const _ of iterable) { /* drain */ }
+            });
+
+            await subject.Autotag(
+                {} as never,
+                undefined,
+                ['bbbbbbbb-1111-2222-3333-444444444444'],
+            );
+
+            expect(streamedSources).toHaveLength(1);
+            expect(streamedSources[0]).toEqual([sourceB]);
+            streamSpy.mockRestore();
+        });
+    });
 });
