@@ -281,7 +281,7 @@ export type WizardStep = 'goal' | 'features' | 'preprocessing' | 'algorithm';
                 <div class="recipe-details">
                   <h4>Numeric Standardization</h4>
                   <p class="ps-small ps-muted">Scales numeric features to prevent large magnitudes from dominating.</p>
-                  <select class="mj-input" [(ngModel)]="StandardizeStrategy">
+                  <select class="mj-input" data-testid="ps-wizard-standardize" [(ngModel)]="StandardizeStrategy">
                     <option value="standard">Standard Scaling (Z-score: mean 0, variance 1)</option>
                     <option value="none">None (Native tree-based scaling)</option>
                   </select>
@@ -448,6 +448,9 @@ export class PSPipelineWizardComponent implements OnInit {
   /** The class the user chose as the adverse outcome; empty until chosen. */
   public AdverseClass = '';
 
+  /** A cloned pipeline's adverse class, applied once the target's class read resolves and offers it. */
+  private clonedAdverseClass = '';
+
   /** Bumped per label read, so a slower earlier read cannot overwrite the choices for a newer target. */
   private labelReadSeq = 0;
 
@@ -604,7 +607,8 @@ export class PSPipelineWizardComponent implements OnInit {
     }
     if (seq !== this.labelReadSeq) return;
     this.AdverseClassChoices = choices;
-    if (!choices.includes(this.AdverseClass)) this.AdverseClass = '';
+    if (!choices.includes(this.AdverseClass)) this.AdverseClass = choices.includes(this.clonedAdverseClass) ? this.clonedAdverseClass : '';
+    this.clonedAdverseClass = '';
     this.cdr.detectChanges();
   }
 
@@ -915,6 +919,7 @@ export class PSPipelineWizardComponent implements OnInit {
       this.readClonedHyperparameters(cp.Hyperparameters);
       this.restoreClonedFeatureSteps(cp.FeatureSteps);
       this.restoreClonedValidation(cp.ValidationStrategy);
+      this.clonedAdverseClass = PipelineWizardBindings.AdverseClassFromFeatureSteps(cp.FeatureSteps);
       void this.refreshAdverseClassChoices();
 
       // Read leakage guard

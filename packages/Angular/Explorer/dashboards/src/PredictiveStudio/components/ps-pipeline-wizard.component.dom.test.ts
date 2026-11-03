@@ -241,8 +241,7 @@ describe('PSPipelineWizardComponent (DOM) — every control round-trips', () => 
     const fixture = renderWizard();
     fixture.componentInstance.GoToStep('preprocessing');
     await settle(fixture);
-    const selects = QueryAll(fixture, '[data-testid="ps-wizard-step-preprocessing"] select');
-    const scaling = selects[2];
+    const scaling = Query(fixture, '[data-testid="ps-wizard-standardize"]');
     expect(scaling instanceof HTMLSelectElement ? Array.from(scaling.options).map((o) => o.value) : null).toEqual(['standard', 'none']);
   });
 
@@ -272,6 +271,23 @@ describe('PSPipelineWizardComponent (DOM) — every control round-trips', () => 
     expect(pipelineB?.FeatureSteps).toEqual(pipelineA?.FeatureSteps);
     expect(pipelineB?.ValidationStrategy).toEqual(pipelineA?.ValidationStrategy);
     expect(steps(pipelineA).some((st) => st.Kind === 'standardize')).toBe(false);
+  });
+
+  it('clones the adverse class of a two-class target: B saves without a re-pick and equals A, OutcomeConfig included', async () => {
+    vi.spyOn(PipelineWizardBindings, 'ReadClassLabels').mockResolvedValue(['A', 'B']);
+    const captured = captureSave();
+    const first = saveable();
+    await goalStep(first, 'Segment', 'W1');
+    choose(first, '#adverse-class', 'B');
+    await first.componentInstance.SaveDraft();
+
+    const second = saveable(captured.Saved[0]);
+    await settle(second);
+    const b = second.componentInstance;
+    expect([b.AdverseClass, b.AdverseClassChoices, b.CanSave()]).toEqual(['B', ['A', 'B'], true]);
+    await b.SaveDraft();
+    expect(captured.Saved[1]?.FeatureSteps).toEqual(captured.Saved[0]?.FeatureSteps);
+    expect(JSON.parse(captured.Saved[1]?.FeatureSteps || '{}').OutcomeConfig.OutcomeStyles).toEqual({ A: { BadgeColor: 'green' }, B: { BadgeColor: 'red' } });
   });
 
   it('clones a train/test split and the native categorical handling', async () => {

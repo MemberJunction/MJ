@@ -8,7 +8,7 @@
 import { CompositeKey, RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJEvaluationProtocolEntity, MJMLTrainingPipelineEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
 import {
-  ADVERSE_CLASS_HOLD_REASON, LegacyPipelines, PredictionUnit, ProtocolRows, TaskTypeRules, UtcDay,
+  ADVERSE_CLASS_HOLD_REASON, JsonParse, LegacyPipelines, PredictionUnit, ProtocolRows, TaskTypeRules, UtcDay,
   type Actor, type LegacyProtocolOutcome, type LegacyStop, type OutcomeConfig, type PredictionUnitSpec, type UnitDraft,
 } from '@memberjunction/predictive-studio-core';
 
@@ -79,6 +79,19 @@ export class PipelineWizardBindings {
     const styles: NonNullable<OutcomeConfig['OutcomeStyles']> = {};
     for (const c of classes) styles[c] = { BadgeColor: c === adverse ? 'red' : 'green' };
     return { OutcomeStyles: styles };
+  }
+
+  /** The adverse class a saved FeatureSteps column declares (the class styled red), or '' when it declares none. */
+  public static AdverseClassFromFeatureSteps(featureSteps: string | null): string {
+    const parsed = JsonParse.ParseJsonText(featureSteps, 'FeatureSteps');
+    if (!parsed.Ok || !JsonParse.IsJsonObject(parsed.Value)) return '';
+    const config = JsonParse.JsonObjectField(parsed.Value, 'OutcomeConfig');
+    const styles = config === null ? null : JsonParse.JsonObjectField(config, 'OutcomeStyles');
+    if (styles === null) return '';
+    for (const [label, style] of Object.entries(styles)) {
+      if (JsonParse.IsJsonObject(style) && JsonParse.JsonString(style, 'BadgeColor') === 'red') return label;
+    }
+    return '';
   }
 
   /**

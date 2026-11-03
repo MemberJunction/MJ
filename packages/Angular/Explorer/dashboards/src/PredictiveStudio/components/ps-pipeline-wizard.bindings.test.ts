@@ -125,6 +125,15 @@ describe('PipelineWizardBindings — choosing the adverse class of a two-class t
       expect(plan.Unit.TaskType.classOrder[plan.Unit.TaskType.adverseIndex]).toBe(adverse);
     }
   });
+  it('reads the adverse class back from the saved feature steps, and none from anything else', () => {
+    for (const adverse of ['A', 'B']) {
+      const steps = JSON.stringify({ Steps: [], OutcomeConfig: PipelineWizardBindings.AdverseClassOutcomeConfig(adverse, ['A', 'B']) });
+      expect(PipelineWizardBindings.AdverseClassFromFeatureSteps(steps)).toBe(adverse);
+    }
+    for (const unreadable of [null, '{not json', '{"Steps":[]}', '{"OutcomeConfig":{"OutcomeStyles":{"A":{"BadgeColor":"green"}}}}']) {
+      expect(PipelineWizardBindings.AdverseClassFromFeatureSteps(unreadable)).toBe('');
+    }
+  });
   it('tells the wizard user which control decides the adverse class, not to run an Action', async () => {
     const w = world(['A', 'B']);
     const r = await PipelineWizardBindings.SaveWithBindings(newPipeline(w, 'Segment'), 'Members', w.Provider, undefined);
