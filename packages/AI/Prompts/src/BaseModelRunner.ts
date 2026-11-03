@@ -350,7 +350,7 @@ export abstract class BaseModelRunner {
    * 2. Prompt-Model specific: AIPromptModel.CredentialID
    * 3. Model-Vendor specific: AIModelVendor.CredentialID
    * 4. Vendor default: AIVendor.CredentialID
-   * 5. Legacy: params.apiKeys[] array
+   * 5. Legacy: params.apiKeys[] array, then params.APIKeyResolver
    * 6. Legacy: AI_VENDOR_API_KEY__<DRIVER> environment variables
    *
    * IMPORTANT: When ANY credential ID is found (priorities 1-4), the system uses
@@ -394,8 +394,28 @@ export abstract class BaseModelRunner {
       this.logStatus(`   Using legacy API key resolution for driver ${driverClass}`, true, params);
     }
 
-    // Priority 6 & 7: Legacy apiKeys array and environment variables (the latter only if the scope allows)
-    return GetAIAPIKey(driverClass, params.apiKeys, verbose, params.CredentialScope);
+    // Priority 6 & 7: Legacy apiKeys array (then the run's key resolver) and environment variables (the latter only if the scope allows)
+    return this.resolveLegacyAPIKey(driverClass, params, verbose);
+  }
+
+  /**
+   * The legacy tier of credential resolution: the explicit {@link AIPromptParams.apiKeys} entry for
+   * the driver class, then {@link AIPromptParams.APIKeyResolver}, then the environment key when the
+   * run's {@link AIPromptParams.CredentialScope} allows it. Explicit keys win over the resolver; the
+   * resolver's answer is a runtime credential, so it applies under `'RuntimeOnly'` as well.
+   */
+  private resolveLegacyAPIKey(driverClass: string, params: AIPromptParams | undefined, verbose: boolean | undefined): string | undefined {
+    const hasExplicitKey = params?.apiKeys?.some(k => k.driverClass === driverClass) ?? false;
+    if (!hasExplicitKey && params?.APIKeyResolver) {
+      const resolved = params.APIKeyResolver(driverClass);
+      if (resolved) {
+        if (verbose) {
+          this.logStatus(`   Using the run's API key resolver for driver class: ${driverClass}`, true, params);
+        }
+        return resolved;
+      }
+    }
+    return GetAIAPIKey(driverClass, params?.apiKeys, verbose, params?.CredentialScope);
   }
 
   /**
@@ -474,7 +494,7 @@ export abstract class BaseModelRunner {
    * 3. ModelVendor bindings: AICredentialBinding WHERE BindingType='ModelVendor'
    * 4. Vendor bindings: AICredentialBinding WHERE BindingType='Vendor'
    * 5. Type-based default: Credential.IsDefault=1 matching AIVendor.CredentialTypeID
-   * 6. Legacy: params.apiKeys[] array
+   * 6. Legacy: params.apiKeys[] array, then params.APIKeyResolver
    * 7. Legacy: AI_VENDOR_API_KEY__<DRIVER> environment variables
    *
    * Each tier counts only if {@link CredentialScopeAllows} the run's scope to use its source: under
@@ -507,7 +527,7 @@ export abstract class BaseModelRunner {
     }
 
     // Priority 6 & 7: Legacy methods - check if API key is available (the environment only if the scope allows)
-    const apiKey = GetAIAPIKey(driverClass, params?.apiKeys, params?.verbose, params?.CredentialScope);
+    const apiKey = this.resolveLegacyAPIKey(driverClass, params, params?.verbose);
     return this.isValidAPIKey(apiKey);
   }
 
