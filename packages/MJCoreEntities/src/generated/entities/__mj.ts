@@ -9886,10 +9886,11 @@ export const MJActionSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
         * * Description: Default prompt for compacting/summarizing this action's results when used by agents with CompactMode=AISummary. Action designers define how their specific results should be summarized. Can be overridden per agent in AIAgentAction.CompactPromptID.`),
-    Config_: z.string().nullable().describe(`
+    Config_: z.any().nullable().describe(`
         * * Field Name: Config
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJActionEntity_IActionConfiguration
         * * Description: Optional JSON configuration for the action. For integration actions, contains routing info: integrationName, objectName, verb, and optional connectorConfig. Non-integration actions leave this NULL.`),
     RuntimeActionConfiguration: z.any().nullable().describe(`
         * * Field Name: RuntimeActionConfiguration
@@ -17050,6 +17051,49 @@ export const MJConversationSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
         * * Description: Conversation-altitude returning-visitor chain (R2). Self-foreign-key to the visitor's immediately prior Conversation (found by VisitorKey or the resolved LinkedEntityID/LinkedRecordID pair at mint time). History and memory are conversation-scoped, so the chain lives here — NOT on AIAgentSession.LastSessionID, which owns reconnect/resume semantics and is walked by the replay viewer. Named to mirror AIAgentSession.LastSessionID. NULL for a brand-new visitor's first conversation.`),
+    AnchorType: z.union([z.literal('Contribution'), z.literal('DocBlock'), z.literal('Field'), z.literal('Group'), z.literal('Record'), z.literal('Section'), z.literal('SheetRange'), z.literal('SlideRegion')]).nullable().describe(`
+        * * Field Name: AnchorType
+        * * Display Name: Anchor Type
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Contribution
+    *   * DocBlock
+    *   * Field
+    *   * Group
+    *   * Record
+    *   * Section
+    *   * SheetRange
+    *   * SlideRegion
+        * * Description: Fine-grained anchor discriminator when this conversation acts as an inline comment thread on a linked record or artifact. NULL for standard chat conversations. Allowed values: Record (whole-record comment), Field (anchored to an EntityField), Section (anchored to a CollapsiblePanel section), Group (anchored to a left-nav rail group/tab), Contribution (anchored to a related-entity grid or form contribution), DocBlock (anchored to a document block in MJ Docs), SlideRegion (anchored to a slide or element in MJ Slides), SheetRange (anchored to a cell range in MJ Sheets). Requires LinkedEntityID and LinkedRecordID when non-null.`),
+    AnchorKey: z.string().nullable().describe(`
+        * * Field Name: AnchorKey
+        * * Display Name: Anchor Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Identifier of the specific element within the linked record to which this conversation is anchored. For AnchorType = 'Field', stores EntityField.Name (for example 'AnnualRevenue'). For 'Section', stores the CollapsiblePanel SectionKey. For 'Group', stores the form nav GroupKey. For 'Contribution', stores the contribution or related-grid key. For 'DocBlock', 'SlideRegion', or 'SheetRange', stores the block ID, slide/region key, or A1 cell range. NULL when AnchorType is NULL or 'Record'.`),
+    AnchorMetadata: z.any().nullable().describe(`
+        * * Field Name: AnchorMetadata
+        * * Display Name: Anchor Metadata
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJConversationEntity_IConversationAnchorMetadata
+        * * Description: JSON payload (IConversationAnchorMetadata) capturing display labels, parent section/group keys for badge rollup, quoted field value snapshot at comment creation time, FLS restrictedFields referenced by the thread, or document/slide/sheet selection coordinates.`),
+    IsResolved: z.boolean().describe(`
+        * * Field Name: IsResolved
+        * * Display Name: Is Resolved
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this anchored comment thread has been marked resolved. Defaults to 0 (open). Resolved threads remain queryable for audit and history but are hidden from open-comment count badges on form fields, sections, and navigation rails.`),
+    ResolvedByUserID: z.string().nullable().describe(`
+        * * Field Name: ResolvedByUserID
+        * * Display Name: Resolved By User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: User who most recently marked this anchored conversation thread as resolved. NULL when IsResolved = 0.`),
+    ResolvedAt: z.date().nullable().describe(`
+        * * Field Name: ResolvedAt
+        * * Display Name: Resolved At
+        * * SQL Data Type: datetimeoffset
+        * * Description: UTC timestamp when this anchored conversation thread was most recently marked resolved. NULL when IsResolved = 0.`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -17090,6 +17134,10 @@ export const MJConversationSchema = z.object({
         * * Field Name: LastConversation
         * * Display Name: Last Conversation
         * * SQL Data Type: nvarchar(255)`),
+    ResolvedByUser: z.string().nullable().describe(`
+        * * Field Name: ResolvedByUser
+        * * Display Name: Resolved By User
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJConversationEntityType = z.infer<typeof MJConversationSchema>;
@@ -71060,6 +71108,46 @@ export class MJActionResultCodeEntity extends BaseEntity<MJActionResultCodeEntit
 
 
 /**
+ * Configuration stored on Action.Config (`Config_` in TypeScript): the per-action settings that
+ * need neither a foreign key nor an index, so they live in one evolvable JSON bag instead of a
+ * column each. New optional keys can be added without a schema migration.
+ *
+ * Two kinds of setting share it today:
+ *
+ *  - Integration routing, written by IntegrationActionGenerator for actions with
+ *    DriverClass='IntegrationActionExecutor' and read by that executor to dispatch the call.
+ *  - Output trust, read by the agent runtime (BaseAgent.resolveActionTrustLevel) to decide
+ *    how far to trust what the action returns.
+ *
+ * NULL for actions that need neither.
+ */
+export interface MJActionEntity_IActionConfiguration {
+    /** Integration routing: the MJ: Integrations record the generated action calls. */
+    IntegrationName?: string;
+
+    /** Integration routing: the external object (table, endpoint, resource) the action operates on. */
+    ObjectName?: string;
+
+    /** Integration routing: the operation the action performs on the object (Get, List, Create, Update, Upsert, Delete, ...). */
+    Verb?: string;
+
+    /** Integration routing: connector-specific options passed through to the integration connector. */
+    connectorConfig?: Record<string, unknown>;
+
+    /**
+     * How far the agent runtime trusts this action's output. The action's metadata is the source
+     * of truth; a per-agent or per-run override lives in AgentTypePromptParams.
+     *
+     *  - 'Trusted' (the default when absent): internal structured data or platform-validated output.
+     *  - 'SemiTrusted': may carry user-authored or partner content; wrapped in a data envelope.
+     *  - 'Untrusted': content fetched from outside MJ (web pages, search results, mail, feeds,
+     *    arbitrary HTTP responses, MCP tool output). Wrapped in <untrusted_external_data>, its
+     *    AIDirectives are dropped, and the run is marked tainted so its memory writes land Pending.
+     */
+    outputTrustLevel?: 'Trusted' | 'SemiTrusted' | 'Untrusted';
+}
+
+/**
  * Configuration stored on Action.RuntimeActionConfiguration when Action.Type='Runtime'.
  *
  * Runtime actions are JavaScript payloads executed inside MJ's isolated-vm
@@ -71671,6 +71759,7 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     * * Field Name: Config
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJActionEntity_IActionConfiguration
     * * Description: Optional JSON configuration for the action. For integration actions, contains routing info: integrationName, objectName, verb, and optional connectorConfig. Non-integration actions leave this NULL.
     * * NOTE: Property renamed to `Config_` to avoid conflict with BaseEntity.Config
     */
@@ -71679,6 +71768,21 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     }
     set Config_(value: string | null) {
         this.Set('Config', value);
+    }
+
+    /**
+    * Typed accessor for Config — a live view of the parsed JSON as MJActionEntity_IActionConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Config field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get Config_Object(): MJActionEntity_IActionConfiguration | null {
+        return this.GetJSONFieldObject<MJActionEntity_IActionConfiguration>('Config');
+    }
+    set Config_Object(value: MJActionEntity_IActionConfiguration | null) {
+        this.SetJSONFieldObject<MJActionEntity_IActionConfiguration>('Config', value);
     }
 
     /**
@@ -90292,6 +90396,114 @@ export class MJConversationWidgetInstanceEntity extends BaseEntity<MJConversatio
 
 
 /**
+ * Structured anchor payload stored on `MJ: Conversations.AnchorMetadata` (`AnchorMetadataObject`)
+ * when a conversation acts as an inline comment thread anchored to a record, form field,
+ * form section, left-nav rail group, contribution grid, or document/slide/sheet element.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+export interface MJConversationEntity_IConversationAnchorMetadata {
+    /**
+     * Human-readable display label of the anchored target at the time the thread was created
+     * (for example "Annual Revenue" for a Field anchor, "Financial Summary" for a Section anchor,
+     * or "Overview" for a Group anchor).
+     */
+    anchorDisplayName?: string;
+
+    /**
+     * Optional field name (`EntityField.Name`) when `AnchorType === 'Field'`.
+     * Mirrors `Conversation.AnchorKey` for convenience in self-contained metadata inspection.
+     */
+    fieldName?: string;
+
+    /**
+     * Optional section key (`CollapsiblePanel.SectionKey`) into which a Field or Section anchor belongs,
+     * enabling section-level and left-nav rail group rollup even when a field is not currently mounted in the DOM.
+     */
+    sectionKey?: string;
+
+    /**
+     * Optional human-readable title of the parent collapsible section containing the anchored field.
+     */
+    sectionDisplayName?: string;
+
+    /**
+     * Optional left-nav rail group key (`GroupKey`) containing the anchored section or field,
+     * used to roll up open comment counts onto the left-nav rail and collapsed spine.
+     */
+    groupKey?: string;
+
+    /**
+     * Optional human-readable title of the parent left-nav rail group.
+     */
+    groupDisplayName?: string;
+
+    /**
+     * Snapshot of the field's formatted value at the moment the comment thread was opened
+     * (for example "$145,000" or "Pending Approval"). Enables the UI to show a diff indicator
+     * ("Commented when value was X") if the field's live value subsequently changes.
+     */
+    quotedValue?: string;
+
+    /**
+     * Optional `MJ: Record Changes.ID` capturing the exact version of the record when the thread was created.
+     */
+    recordChangeId?: string;
+
+    /**
+     * Field names (`EntityField.Name`) on the linked entity that are governed by Field-Level Security (FLS)
+     * and referenced or discussed within this conversation thread.
+     *
+     * Populated deterministically when `AnchorType === 'Field'` on a restricted field, or by the
+     * write-time FLS restricted-field detector when a comment posted at the Record/Section/Group level
+     * references a restricted field's name, label, or value. Read-path security projectors hide the
+     * entire thread from any user who is denied read access to any field in `restrictedFields`.
+     */
+    restrictedFields?: string[];
+
+    /**
+     * Document block identifier (`BlockID`) when `AnchorType === 'DocBlock'` (MJ Docs).
+     */
+    blockId?: string;
+
+    /**
+     * Quoted document text selection when `AnchorType === 'DocBlock'` (MJ Docs).
+     */
+    quotedText?: string;
+
+    /**
+     * Base64-encoded Y.RelativePosition start anchor when `AnchorType === 'DocBlock'` (MJ Docs).
+     */
+    yjsRelativeStart?: string;
+
+    /**
+     * Base64-encoded Y.RelativePosition end anchor when `AnchorType === 'DocBlock'` (MJ Docs).
+     */
+    yjsRelativeEnd?: string;
+
+    /**
+     * Slide identifier when `AnchorType === 'SlideRegion'` (MJ Slides).
+     */
+    slideId?: string;
+
+    /**
+     * Optional region/element identifier or bounding box key when `AnchorType === 'SlideRegion'` (MJ Slides).
+     */
+    regionId?: string;
+
+    /**
+     * Worksheet identifier when `AnchorType === 'SheetRange'` (MJ Sheets).
+     */
+    sheetId?: string;
+
+    /**
+     * A1-notation cell or range reference (for example "B4:D12") when `AnchorType === 'SheetRange'` (MJ Sheets).
+     */
+    cellRange?: string;
+}
+
+/**
  * MJ: Conversations - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Conversation
@@ -90758,6 +90970,112 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     }
 
     /**
+    * * Field Name: AnchorType
+    * * Display Name: Anchor Type
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Contribution
+    *   * DocBlock
+    *   * Field
+    *   * Group
+    *   * Record
+    *   * Section
+    *   * SheetRange
+    *   * SlideRegion
+    * * Description: Fine-grained anchor discriminator when this conversation acts as an inline comment thread on a linked record or artifact. NULL for standard chat conversations. Allowed values: Record (whole-record comment), Field (anchored to an EntityField), Section (anchored to a CollapsiblePanel section), Group (anchored to a left-nav rail group/tab), Contribution (anchored to a related-entity grid or form contribution), DocBlock (anchored to a document block in MJ Docs), SlideRegion (anchored to a slide or element in MJ Slides), SheetRange (anchored to a cell range in MJ Sheets). Requires LinkedEntityID and LinkedRecordID when non-null.
+    */
+    get AnchorType(): 'Contribution' | 'DocBlock' | 'Field' | 'Group' | 'Record' | 'Section' | 'SheetRange' | 'SlideRegion' | null {
+        return this.Get('AnchorType');
+    }
+    set AnchorType(value: 'Contribution' | 'DocBlock' | 'Field' | 'Group' | 'Record' | 'Section' | 'SheetRange' | 'SlideRegion' | null) {
+        this.Set('AnchorType', value);
+    }
+
+    /**
+    * * Field Name: AnchorKey
+    * * Display Name: Anchor Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Identifier of the specific element within the linked record to which this conversation is anchored. For AnchorType = 'Field', stores EntityField.Name (for example 'AnnualRevenue'). For 'Section', stores the CollapsiblePanel SectionKey. For 'Group', stores the form nav GroupKey. For 'Contribution', stores the contribution or related-grid key. For 'DocBlock', 'SlideRegion', or 'SheetRange', stores the block ID, slide/region key, or A1 cell range. NULL when AnchorType is NULL or 'Record'.
+    */
+    get AnchorKey(): string | null {
+        return this.Get('AnchorKey');
+    }
+    set AnchorKey(value: string | null) {
+        this.Set('AnchorKey', value);
+    }
+
+    /**
+    * * Field Name: AnchorMetadata
+    * * Display Name: Anchor Metadata
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJConversationEntity_IConversationAnchorMetadata
+    * * Description: JSON payload (IConversationAnchorMetadata) capturing display labels, parent section/group keys for badge rollup, quoted field value snapshot at comment creation time, FLS restrictedFields referenced by the thread, or document/slide/sheet selection coordinates.
+    */
+    get AnchorMetadata(): string | null {
+        return this.Get('AnchorMetadata');
+    }
+    set AnchorMetadata(value: string | null) {
+        this.Set('AnchorMetadata', value);
+    }
+
+    /**
+    * Typed accessor for AnchorMetadata — a live view of the parsed JSON as MJConversationEntity_IConversationAnchorMetadata.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying AnchorMetadata field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get AnchorMetadataObject(): MJConversationEntity_IConversationAnchorMetadata | null {
+        return this.GetJSONFieldObject<MJConversationEntity_IConversationAnchorMetadata>('AnchorMetadata');
+    }
+    set AnchorMetadataObject(value: MJConversationEntity_IConversationAnchorMetadata | null) {
+        this.SetJSONFieldObject<MJConversationEntity_IConversationAnchorMetadata>('AnchorMetadata', value);
+    }
+
+    /**
+    * * Field Name: IsResolved
+    * * Display Name: Is Resolved
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this anchored comment thread has been marked resolved. Defaults to 0 (open). Resolved threads remain queryable for audit and history but are hidden from open-comment count badges on form fields, sections, and navigation rails.
+    */
+    get IsResolved(): boolean {
+        return this.Get('IsResolved');
+    }
+    set IsResolved(value: boolean) {
+        this.Set('IsResolved', value);
+    }
+
+    /**
+    * * Field Name: ResolvedByUserID
+    * * Display Name: Resolved By User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: User who most recently marked this anchored conversation thread as resolved. NULL when IsResolved = 0.
+    */
+    get ResolvedByUserID(): string | null {
+        return this.Get('ResolvedByUserID');
+    }
+    set ResolvedByUserID(value: string | null) {
+        this.Set('ResolvedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ResolvedAt
+    * * Display Name: Resolved At
+    * * SQL Data Type: datetimeoffset
+    * * Description: UTC timestamp when this anchored conversation thread was most recently marked resolved. NULL when IsResolved = 0.
+    */
+    get ResolvedAt(): Date | null {
+        return this.Get('ResolvedAt');
+    }
+    set ResolvedAt(value: Date | null) {
+        this.Set('ResolvedAt', value);
+    }
+
+    /**
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
@@ -90845,6 +91163,15 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     */
     get LastConversation(): string | null {
         return this.Get('LastConversation');
+    }
+
+    /**
+    * * Field Name: ResolvedByUser
+    * * Display Name: Resolved By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ResolvedByUser(): string | null {
+        return this.Get('ResolvedByUser');
     }
 }
 
@@ -95911,12 +96238,48 @@ export interface MJEntityEntity_IEntityConfiguration {
     Clone?: MJEntityEntity_IEntityCloneConfiguration;
 
     /**
+     * Optional anchored record commenting configuration for this entity.
+     * Controls whether anchored conversations (`MJ: Conversations` with `AnchorType` set)
+     * are permitted on records of this entity and which permissions/roles may post or resolve comments.
+     */
+    Comments?: MJEntityEntity_IEntityCommentsConfiguration;
+
+    /**
      * Controls which columns a save operation (`spCreate` / `spUpdate`) returns from the database.
      * - `'full'` (default when omitted): Re-queries `SELECT * FROM <BaseView>` after `INSERT`/`UPDATE`.
      * - `'datestamps_only'`: Selects only the primary key(s) and `__mj_CreatedAt`/`__mj_UpdatedAt`
      *   directly from `<BaseTable>`, preserving in-memory field values on the saved entity.
      */
     SaveReturnMode?: MJEntityEntity_EntitySaveReturnMode;
+}
+
+/**
+ * Configuration for entity-level anchored record comments (`MJ: Conversations`).
+ */
+export interface MJEntityEntity_IEntityCommentsConfiguration {
+    /**
+     * Master switch for anchored record commenting on this entity.
+     * Defaults to `true` when omitted. Set to `false` to disable record, field, and section
+     * commenting on this entity in both the form UI and server-side validation.
+     */
+    Enabled?: boolean;
+
+    /**
+     * Minimum entity permission required on this entity to create, reply to, or resolve
+     * anchored comments on its records:
+     * - `'Read'` (default): Any user who can read the record (including RLS) can participate
+     *   in anchored discussions on it without needing column-level `Update` rights.
+     * - `'Update'`: Only users with `Update` permission on the entity can post or resolve
+     *   comments; users with `Read`-only permission can still view existing comments.
+     */
+    RequiredPermission?: 'Read' | 'Update';
+
+    /**
+     * Optional list of role names (`MJ: Roles.Name`, case-insensitive) allowed to post or
+     * resolve comments on this entity. When omitted or empty, any user meeting
+     * {@link RequiredPermission} may comment.
+     */
+    AllowedRoles?: string[];
 }
 
 /**

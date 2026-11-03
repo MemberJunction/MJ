@@ -618,6 +618,16 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
+     * True when the named config property has finished loading with valid data (not failed and
+     * not skipped due to permission denial), even if other configs on the same engine are still
+     * loading.
+     */
+    public IsPropertyLoaded(propertyName: string): boolean {
+        const entry = this._dataMap.get(propertyName);
+        return entry?.loadedSuccessfully === true && !entry.readDenied && !entry.permissionDenied;
+    }
+
+    /**
      * List of entity names that were skipped due to permission denial.
      * Empty if not permission-constrained. Useful for logging/diagnostics.
      */
@@ -1886,7 +1896,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             if (!fresh) {
                 return null;
             }
-            await fresh.LoadFromData(source.GetAll());
+            await BaseEntity.CloneEntityWithISAChain(source, fresh, provider, this._contextUser);
             return fresh;
         }
         catch (e) {
