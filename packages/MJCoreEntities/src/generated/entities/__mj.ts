@@ -95493,12 +95493,28 @@ export interface MJEntityEntity_IEntityConfiguration {
     Clone?: MJEntityEntity_IEntityCloneConfiguration;
 
     /**
+     * Optional anchored record commenting configuration for this entity.
+     * Controls whether anchored conversations (`MJ: Conversations` with `AnchorType` set)
+     * are permitted on records of this entity and which permissions/roles may post or resolve comments.
+     */
+    Comments?: MJEntityEntity_IEntityCommentsConfiguration;
+
+    /**
      * Controls which columns a save operation (`spCreate` / `spUpdate`) returns from the database.
      * - `'full'` (default when omitted): Re-queries `SELECT * FROM <BaseView>` after `INSERT`/`UPDATE`.
      * - `'datestamps_only'`: Selects only the primary key(s) and `__mj_CreatedAt`/`__mj_UpdatedAt`
      *   directly from `<BaseTable>`, preserving in-memory field values on the saved entity.
      */
     SaveReturnMode?: MJEntityEntity_EntitySaveReturnMode;
+}
+
+/**
+ * Configuration for entity-level anchored record comments (`MJ: Conversations`).
+ */
+export interface MJEntityEntity_IEntityCommentsConfiguration {
+    Enabled?: boolean;
+    RequiredPermission?: 'Read' | 'Update';
+    AllowedRoles?: string[];
 }
 
 /**

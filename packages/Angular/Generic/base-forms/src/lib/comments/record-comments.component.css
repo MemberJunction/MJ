@@ -44,6 +44,26 @@
   color: var(--mj-text-primary);
 }
 
+.mj-record-comments-drawer--resizing {
+  user-select: none;
+}
+
+.mj-record-comments-drawer__resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 2;
+  transition: background-color 0.15s ease;
+}
+
+.mj-record-comments-drawer__resize-handle:hover,
+.mj-record-comments-drawer--resizing .mj-record-comments-drawer__resize-handle {
+  background: var(--mj-brand-primary);
+}
+
 .mj-record-comments-popover {
   position: fixed;
   z-index: 1046;
@@ -53,9 +73,18 @@
   box-shadow: var(--mj-shadow-xl, 0 20px 25px -5px rgba(0, 0, 0, 0.18));
   display: flex;
   flex-direction: column;
-  max-height: 440px;
-  overflow: hidden;
+  min-width: 340px;
+  min-height: 260px;
+  max-width: min(820px, calc(100vw - 32px));
+  max-height: min(82vh, 760px);
+  resize: both;
+  overflow: auto;
   color: var(--mj-text-primary);
+}
+
+.mj-record-comments-popover--expanded {
+  min-height: 440px;
+  max-height: min(85vh, 760px);
 }
 
 /* Header */
@@ -325,12 +354,63 @@
   padding: 12px 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .mj-record-comments__body--popover {
   padding: 10px 12px;
-  max-height: 240px;
+  flex: 1;
+  min-height: 120px;
+  max-height: none;
+  overflow-y: auto;
+}
+
+/* Section Group Organization (Drawer Mode) */
+.mj-record-comments__section-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mj-record-comments__section-group-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mj-text-secondary);
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.mj-record-comments__section-group-icon {
+  color: var(--mj-brand-primary);
+  font-size: 12px;
+}
+
+.mj-record-comments__section-group-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mj-record-comments__section-group-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--mj-radius-full, 9999px);
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-subtle);
+  color: var(--mj-text-secondary);
+  font-size: 10px;
+  font-weight: 600;
 }
 
 .mj-record-comments__empty {

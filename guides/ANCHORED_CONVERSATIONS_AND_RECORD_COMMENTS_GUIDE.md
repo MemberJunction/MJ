@@ -95,6 +95,23 @@ On every `MJConversationDetailEntityServer.Save()` belonging to an anchored conv
    - If the **author** is denied read access to a matched restricted field, the save is **rejected** so a restricted user cannot probe or discuss restricted fields.
    - If the **author** is authorized to read the field, the save succeeds and the matched field names are stamped into `conversation.AnchorMetadataObject.restrictedFields` and persisted on `MJ: Conversations`. All subsequent reads filter the thread deterministically in 0ms via `IsConversationHiddenByFieldSecurity()`.
 
+### 3.4 Entity-Level Commenting Control (`MJ: Entities.Configuration.Comments`)
+Administrators can enable, disable, or restrict record commenting per entity via `MJ: Entities.Configuration` (`IEntityConfiguration.Comments?: IEntityCommentsConfiguration`):
+
+```json
+{
+  "Comments": {
+    "Enabled": true,
+    "RequiredPermission": "Read",
+    "AllowedRoles": ["Developer", "Reviewer"]
+  }
+}
+```
+
+- **`Enabled`** (`boolean`, default `true`): Set to `false` to completely hide commenting affordances (`<mj-form-field>`, `<mj-collapsible-panel>`, `<mj-form-toolbar>`, `<mj-record-form-container>`) and reject server-side anchored conversation saves for that entity (`EntityInfo.AllowRecordComments === false`).
+- **`RequiredPermission`** (`'Read' | 'Update'`, default `'Read'`): Controls whether a user only needs `CanRead` on the entity (default) or must also have `CanUpdate` permission (`EntityInfo.CanUserComment(user)`).
+- **`AllowedRoles`** (`string[]`, optional): When populated, restricts commenting to users holding at least one of the listed role names or role IDs.
+
 ---
 
 ## 4. `@Mention` Notifications with FLS/RLS Gating
@@ -119,7 +136,9 @@ Anchored commenting is built directly into `<mj-record-form-container>`, `<mj-fo
    - Displays a clickable comment badge in the panel header (`OnOpenSectionComments`) and reveals an add-comment icon button on header hover.
 3. **Left-Nav Rail & Collapsed Spine (`<mj-record-form-container>`)**:
    - Because `CommentCount` is part of `FormSectionIndicators` and summed by `SumSectionIndicators()`, open comment counts roll up automatically to left-nav rail tabs, the `More` folder, and the collapsed rail spine.
-4. **Toolbar Action & Slide-In Drawer (`RecordCommentsToolbarAction` + `<mj-record-comments Mode="drawer">`)**:
-   - Registers `Key: 'comments'` (`Mode: 'both'`, `Pinnable: true`) on `<mj-form-toolbar>` with a live open-thread count badge.
+4. **Toolbar Action & Organized Side-Rail Drawer (`<mj-form-toolbar>` + `RecordCommentsToolbarAction` + `<mj-record-comments Mode="drawer">`)**:
+   - Registers `Key: 'comments'` (`Mode: 'both'`, `Pinnable: true`, not in `DEFAULT_PINNED_TOOLBAR_ACTIONS`) on `<mj-form-toolbar>` so **Comments** appears in the **More (`...`)** menu by default with a live open-thread count badge, and can be pinned/unpinned to the main toolbar by any user via `UserInfoEngine`.
+   - When opened from the toolbar (or via the **"View all record comments in side rail"** button in the inline popover header), the side-rail drawer organizes all threads across the record into section groups (`Details`, `System Metadata`, `General Record Comments`, etc.) so comments across every tab and section can be reviewed in one place.
+   - Both the inline popover dialog (`.mj-record-comments-popover`) and the side-rail drawer (`.mj-record-comments-drawer`) are resizable—the popover provides an **Expand / Restore** header toggle button (`400px` ↔ `560px`) as well as native drag-resizing (`resize: both`), and the drawer includes a left-edge drag resize handle (`340px`–`860px`).
    - The drawer supports filtering by `Open` / `Resolved` / `All` and by target anchor, displays `quotedValue` live-diff indicators when a field's value has changed since the comment was posted, displays an `FLS` shield badge when restricted fields are stamped on a thread, and jumps/expands/scrolls/pulses the target field or section when an anchor chip is clicked.
    - Comment composers implement IME-safe `Enter`-to-submit (checking `event.isComposing`, `keyCode === 229`, and Safari's `compositionend` timestamp window) and `@mention` autocomplete for both active Users and AI Agents.

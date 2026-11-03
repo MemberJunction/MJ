@@ -17,16 +17,20 @@ import {
     Key: 'comments',
     EntityScope: '*',
     MenuLabel: 'Comments',
-    Description: 'View and add comments on this record',
+    Description: 'View all comments on this record',
     Icon: 'fa-regular fa-comment-dots',
-    Mode: 'both',
+    Mode: 'read',
     Placement: 'actions',
     Order: 62,
     Pinnable: true
 })
 export class RecordCommentsToolbarAction extends BaseFormToolbarAction {
     public override IsApplicable(ctx: FormToolbarActionLifecycleContext): boolean {
-        return Boolean(ctx.Record?.IsSaved && ctx.EntityInfo);
+        return Boolean(
+            ctx.Record?.IsSaved &&
+            ctx.EntityInfo &&
+            ctx.EntityInfo.AllowRecordComments !== false
+        );
     }
 
     public override OnPrewarm(ctx: FormToolbarActionLifecycleContext): void {

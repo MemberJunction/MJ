@@ -382,6 +382,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     return Boolean(
       this.commentsCoordinator &&
       this.Record?.IsSaved &&
+      this.Record?.EntityInfo?.AllowRecordComments !== false &&
       this.IsFieldReadableByUser &&
       this.FieldName
     );

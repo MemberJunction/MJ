@@ -52,11 +52,24 @@ export interface RecordCommentThreadView {
     AnchorKey: string | null;
     AnchorBadgeLabel: string;
     AnchorIcon: string;
+    SectionGroupKey: string;
+    SectionGroupTitle: string;
+    SectionGroupIcon: string;
     QuotedValue: string | null;
     CurrentLiveValue: string | null;
     HasValueChangedSinceComment: boolean;
     RestrictedFields: readonly string[];
     Messages: readonly MJConversationDetailEntity[];
+}
+
+/**
+ * Group of anchored comment threads organized by form section / location in the side-rail drawer.
+ */
+export interface RecordCommentSectionGroup {
+    GroupKey: string;
+    GroupTitle: string;
+    GroupIcon: string;
+    Threads: readonly RecordCommentThreadView[];
 }
 
 const JSON_MENTION_REGEX = /@\{[^{}]+\}/g;
@@ -95,6 +108,9 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
     public SubmittingReplyConversationId: string | null = null;
     public ResolvingConversationId: string | null = null;
     public ErrorBannerMessage: string | null = null;
+    public IsPopoverExpanded = false;
+    public IsResizingDrawer = false;
+    private drawerResizeCleanup: (() => void) | null = null;
 
     // @Mention autocomplete state
     public MentionCandidates: CommentMentionCandidate[] = [];
@@ -143,6 +159,17 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
     public ngOnDestroy(): void {
         this.coordinatorSub?.unsubscribe();
         this.coordinatorSub = null;
+        this.drawerResizeCleanup?.();
+        this.drawerResizeCleanup = null;
+    }
+
+    public get CanUserPostComments(): boolean {
+        const entityInfo = this.Record?.EntityInfo;
+        if (!entityInfo) return true;
+        if (entityInfo.AllowRecordComments === false) return false;
+        const user = this.Coordinator?.CurrentUser ?? this.ProviderToUse?.CurrentUser;
+        if (!user) return true;
+        return entityInfo.CanUserComment(user);
     }
 
     @HostListener('document:keydown.escape', ['$event'])
@@ -165,13 +192,17 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
 
     public get PopoverStyle(): Record<string, string> {
         const rect = this.PopoverTarget?.AnchorRect;
+        const cardWidth = this.IsPopoverExpanded ? 560 : 400;
+        const cardMaxHeight = this.IsPopoverExpanded ? 640 : 480;
         if (!rect || typeof window === 'undefined') {
-            return { top: '96px', right: '24px' };
+            return {
+                top: '96px',
+                right: '24px',
+                width: `${cardWidth}px`
+            };
         }
         const viewportW = window.innerWidth || 1280;
         const viewportH = window.innerHeight || 800;
-        const cardWidth = 360;
-        const cardMaxHeight = 440;
 
         let left = rect.left;
         if (left + cardWidth + 16 > viewportW) {
@@ -179,12 +210,46 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
         }
         let top = rect.bottom + 8;
         if (top + cardMaxHeight > viewportH && rect.top - cardMaxHeight - 8 > 16) {
-            top = Math.max(16, rect.top - Math.min(cardMaxHeight, 320) - 8);
+            top = Math.max(16, rect.top - Math.min(cardMaxHeight, 340) - 8);
+        } else if (top + 280 > viewportH) {
+            top = Math.max(16, viewportH - Math.min(cardMaxHeight, viewportH - 32));
         }
         return {
             top: `${Math.round(top)}px`,
             left: `${Math.round(left)}px`,
             width: `${cardWidth}px`
+        };
+    }
+
+    public OnTogglePopoverExpand(): void {
+        this.IsPopoverExpanded = !this.IsPopoverExpanded;
+        this.cdr.markForCheck();
+    }
+
+    public OnDrawerResizeStart(event: MouseEvent): void {
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof window === 'undefined') return;
+
+        this.IsResizingDrawer = true;
+        const onMouseMove = (moveEvent: MouseEvent) => {
+            const viewportW = window.innerWidth || 1280;
+            const desiredWidth = viewportW - moveEvent.clientX;
+            this.WidthPx = Math.max(340, Math.min(860, Math.round(desiredWidth)));
+            this.cdr.markForCheck();
+        };
+        const onMouseUp = () => {
+            this.IsResizingDrawer = false;
+            this.drawerResizeCleanup?.();
+            this.drawerResizeCleanup = null;
+            this.cdr.markForCheck();
+        };
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+        this.drawerResizeCleanup = () => {
+            window.removeEventListener('mousemove', onMouseMove);
+            window.removeEventListener('mouseup', onMouseUp);
         };
     }
 
@@ -236,6 +301,34 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
         return out;
     }
 
+    /**
+     * Organizes `VisibleThreads` into logical section groups (`Details / Model Overview`,
+     * `System Metadata`, `Record Comments`, etc.) so the side-rail drawer shows all record
+     * comments clearly organized in one place.
+     */
+    public get GroupedVisibleThreads(): RecordCommentSectionGroup[] {
+        const threads = this.VisibleThreads;
+        if (threads.length === 0) return [];
+
+        const groupsByKey = new Map<string, { GroupKey: string; GroupTitle: string; GroupIcon: string; Threads: RecordCommentThreadView[] }>();
+        for (const thread of threads) {
+            const key = thread.SectionGroupKey;
+            let group = groupsByKey.get(key);
+            if (!group) {
+                group = {
+                    GroupKey: key,
+                    GroupTitle: thread.SectionGroupTitle,
+                    GroupIcon: thread.SectionGroupIcon,
+                    Threads: []
+                };
+                groupsByKey.set(key, group);
+            }
+            group.Threads.push(thread);
+        }
+
+        return Array.from(groupsByKey.values());
+    }
+
     public OnStatusFilterChange(status: 'open' | 'resolved' | 'all'): void {
         this.Coordinator?.SetDrawerStatusFilter(status);
     }
@@ -245,8 +338,8 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
     }
 
     public OnSwitchPopoverToDrawer(): void {
-        const target = this.PopoverTarget;
-        this.Coordinator?.SetDrawerOpen(true, target);
+        this.IsPopoverExpanded = false;
+        this.Coordinator?.SetDrawerOpen(true, null);
     }
 
     public OnClose(): void {
@@ -553,6 +646,7 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
         const anchorKey = conv.AnchorKey ?? null;
         const badgeLabel = this.resolveAnchorBadgeLabel(anchorType, anchorKey, meta);
         const icon = this.resolveAnchorIcon(anchorType);
+        const sectionGroup = this.resolveSectionGroup(anchorType, anchorKey, meta);
 
         const quotedValue = meta?.quotedValue ?? null;
         let currentLiveValue: string | null = null;
@@ -578,11 +672,83 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
             AnchorKey: anchorKey,
             AnchorBadgeLabel: badgeLabel,
             AnchorIcon: icon,
+            SectionGroupKey: sectionGroup.GroupKey,
+            SectionGroupTitle: sectionGroup.GroupTitle,
+            SectionGroupIcon: sectionGroup.GroupIcon,
             QuotedValue: quotedValue,
             CurrentLiveValue: currentLiveValue,
             HasValueChangedSinceComment: hasValueChanged,
             RestrictedFields: meta?.restrictedFields ?? [],
             Messages: messages
+        };
+    }
+
+    private resolveSectionGroup(
+        anchorType: ConversationAnchorType,
+        anchorKey: string | null,
+        meta: ConversationAnchorMetadata | null
+    ): { GroupKey: string; GroupTitle: string; GroupIcon: string } {
+        if (meta?.sectionDisplayName || meta?.sectionKey) {
+            const title = (
+                meta.sectionDisplayName ||
+                (anchorType === 'Section' ? meta.anchorDisplayName : undefined) ||
+                meta.sectionKey ||
+                'Section'
+            ).trim();
+            const key = (meta.sectionKey || title).trim().toLowerCase().replace(/\s+/g, '');
+            return {
+                GroupKey: `section:${key}`,
+                GroupTitle: title,
+                GroupIcon: key.includes('system') ? 'fa-solid fa-database' : 'fa-solid fa-layer-group'
+            };
+        }
+        if (anchorType === 'Section') {
+            const title = (meta?.anchorDisplayName || meta?.sectionDisplayName || anchorKey || 'Section').trim();
+            const key = (anchorKey || title).toLowerCase().replace(/\s+/g, '');
+            return {
+                GroupKey: `section:${key}`,
+                GroupTitle: title,
+                GroupIcon: key.includes('system') ? 'fa-solid fa-database' : 'fa-solid fa-layer-group'
+            };
+        }
+        if (anchorType === 'Field') {
+            const fName = (anchorKey || meta?.fieldName || '').trim();
+            if (fName.startsWith('__mj_') || fName.toLowerCase() === 'id') {
+                return {
+                    GroupKey: 'section:systemmetadata',
+                    GroupTitle: 'System Metadata',
+                    GroupIcon: 'fa-solid fa-database'
+                };
+            }
+            const fInfo = this.Record?.EntityInfo?.Fields.find(
+                (f) => f.Name.toLowerCase() === fName.toLowerCase()
+            );
+            const category = fInfo?.Category?.trim();
+            if (category) {
+                return {
+                    GroupKey: `section:${category.toLowerCase()}`,
+                    GroupTitle: category,
+                    GroupIcon: 'fa-solid fa-layer-group'
+                };
+            }
+            return {
+                GroupKey: 'section:details',
+                GroupTitle: 'Details',
+                GroupIcon: 'fa-solid fa-circle-info'
+            };
+        }
+        if (anchorType === 'Group') {
+            const title = (meta?.groupDisplayName || anchorKey || 'Section Group').trim();
+            return {
+                GroupKey: `group:${title.toLowerCase()}`,
+                GroupTitle: title,
+                GroupIcon: 'fa-solid fa-table-columns'
+            };
+        }
+        return {
+            GroupKey: 'record:general',
+            GroupTitle: 'General Record Comments',
+            GroupIcon: 'fa-regular fa-comment-dots'
         };
     }
 

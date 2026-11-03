@@ -84,7 +84,20 @@ export class MJConversationDetailEntityServer extends MJConversationDetailEntity
 
             const entityInfo =
                 provider.Entities?.find((e) => UUIDsEqual(e.ID, conversation.LinkedEntityID)) ?? null;
-            if (!entityInfo || !entityInfo.FieldLevelSecurityApplies) {
+            if (!entityInfo) {
+                return null;
+            }
+
+            if (conversation.AnchorType && !WellKnownUserSource.Instance.IsSystemUser(user)) {
+                if (entityInfo.AllowRecordComments === false) {
+                    return `Record commenting is disabled for ${entityInfo.DisplayNameOrName}.`;
+                }
+                if (!entityInfo.CanUserComment(user)) {
+                    return `You do not have permission to post comments on ${entityInfo.DisplayNameOrName} records.`;
+                }
+            }
+
+            if (!entityInfo.FieldLevelSecurityApplies) {
                 return null;
             }
 

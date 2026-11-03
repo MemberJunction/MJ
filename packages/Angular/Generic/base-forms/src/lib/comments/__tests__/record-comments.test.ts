@@ -21,8 +21,8 @@ function makeEntityInfo(deniedFields: string[] = []): EntityInfo {
         IsFieldReadableByUser: vi.fn((fieldName: string) => !deniedSet.has(fieldName.toLowerCase())),
         Fields: [
             { Name: 'ID', IsPrimaryKey: true, DisplayNameOrName: 'ID' },
-            { Name: 'Email', IsPrimaryKey: false, DisplayNameOrName: 'Email' },
-            { Name: 'Salary', IsPrimaryKey: false, DisplayNameOrName: 'Salary' }
+            { Name: 'Email', IsPrimaryKey: false, DisplayNameOrName: 'Email', Category: 'Contact Info' },
+            { Name: 'Salary', IsPrimaryKey: false, DisplayNameOrName: 'Salary', Category: 'Compensation' }
         ]
     } as unknown as EntityInfo;
 }
@@ -183,6 +183,16 @@ describe('RecordCommentsToolbarAction', () => {
         commentCount = 0;
         action.OnRecordRefreshed(ctx);
         expect(badgeVal).toBeUndefined();
+
+        // When AllowRecordComments is false on EntityInfo, IsApplicable returns false
+        const disabledEntity = makeEntityInfo();
+        Object.defineProperty(disabledEntity, 'AllowRecordComments', { get: () => false });
+        const disabledCtx: FormToolbarActionLifecycleContext = {
+            ...ctx,
+            EntityInfo: disabledEntity,
+            Record: makeRecord(disabledEntity, true)
+        };
+        expect(action.IsApplicable(disabledCtx)).toBe(false);
     });
 });
 
@@ -304,5 +314,62 @@ describe('MjRecordCommentsComponent', () => {
             'new'
         );
         expect(submitSpy).toHaveBeenCalledOnce();
+    });
+
+    it('groups visible threads by section/category in GroupedVisibleThreads and supports expanding popover size', async () => {
+        const entityInfo = makeEntityInfo();
+        const record = makeRecord(entityInfo, true);
+        const cField = makeConv({
+            ID: 'C-FIELD',
+            AnchorType: 'Field',
+            AnchorKey: 'Email',
+            AnchorMetadataObject: { fieldName: 'Email' }
+        });
+        const cSection = makeConv({
+            ID: 'C-SEC',
+            AnchorType: 'Section',
+            AnchorKey: 'systemMetadata',
+            AnchorMetadataObject: { sectionKey: 'systemMetadata', anchorDisplayName: 'System Metadata' }
+        });
+        const cRecord = makeConv({
+            ID: 'C-REC',
+            AnchorType: 'Record',
+            AnchorKey: null,
+            AnchorMetadataObject: {}
+        });
+
+        const loadConvSpy = vi
+            .spyOn(ConversationEngine.Instance, 'LoadAnchoredConversations')
+            .mockResolvedValue([cField, cSection, cRecord]);
+        const loadDetailsSpy = vi
+            .spyOn(ConversationEngine.Instance, 'LoadAnchoredConversationDetails')
+            .mockResolvedValue(new Map<string, MJConversationDetailEntity[]>());
+
+        try {
+            const coordinator = new FormRecordCommentsCoordinatorService();
+            await coordinator.LoadForRecord(record, { CurrentUser: { ID: 'u1' } } as unknown as IMetadataProvider);
+
+            const comp = Object.assign(Object.create(MjRecordCommentsComponent.prototype), {
+                Coordinator: coordinator,
+                Record: record,
+                Mode: 'drawer' as const,
+                IsPopoverExpanded: false,
+                cdr: { markForCheck: vi.fn() }
+            }) as MjRecordCommentsComponent;
+
+            const groups = comp.GroupedVisibleThreads;
+            expect(groups).toHaveLength(3);
+            expect(groups[0].GroupTitle).toBe('Contact Info');
+            expect(groups[1].GroupTitle).toBe('System Metadata');
+            expect(groups[2].GroupTitle).toBe('General Record Comments');
+
+            expect(comp.PopoverStyle.width).toBe('400px');
+            comp.OnTogglePopoverExpand();
+            expect(comp.IsPopoverExpanded).toBe(true);
+            expect(comp.PopoverStyle.width).toBe('560px');
+        } finally {
+            loadConvSpy.mockRestore();
+            loadDetailsSpy.mockRestore();
+        }
     });
 });

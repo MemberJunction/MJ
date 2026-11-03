@@ -44,6 +44,27 @@ export async function UserMayWriteConversation(
     const isOwner = Boolean(conversation.UserID && UUIDsEqual(conversation.UserID, user.ID));
 
     if (conversation.AnchorType != null && conversation.LinkedEntityID && conversation.LinkedRecordID) {
+        const entityInfo =
+            provider.Entities?.find((e) => UUIDsEqual(e.ID, conversation.LinkedEntityID)) ?? null;
+        if (entityInfo) {
+            if (entityInfo.AllowRecordComments === false) {
+                return {
+                    Allowed: false,
+                    Reason: `Record commenting is disabled for ${entityInfo.DisplayNameOrName}.`,
+                    IsOwner: isOwner,
+                    Loaded: true
+                };
+            }
+            if (!entityInfo.CanUserComment(user)) {
+                return {
+                    Allowed: false,
+                    Reason: `You do not have permission to post comments on ${entityInfo.DisplayNameOrName} records.`,
+                    IsOwner: isOwner,
+                    Loaded: true
+                };
+            }
+        }
+
         const recordAccess = await UserCanReadLinkedRecord(
             provider,
             user,

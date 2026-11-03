@@ -563,7 +563,12 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   }
 
   public get CanCommentOnSection(): boolean {
-    return Boolean(this.commentsCoordinator && this.FieldPanelForm?.record?.IsSaved && this.SectionKey);
+    return Boolean(
+      this.commentsCoordinator &&
+      this.FieldPanelForm?.record?.IsSaved &&
+      this.FieldPanelForm?.record?.EntityInfo?.AllowRecordComments !== false &&
+      this.SectionKey
+    );
   }
 
   public OnOpenSectionComments(event: MouseEvent): void {

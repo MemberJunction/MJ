@@ -2092,6 +2092,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   private ensureToolbarActions(): BaseFormToolbarAction[] {
+    if (_BUILTIN_TOOLBAR_ACTIONS.length === 0) {
+      return [];
+    }
     const entityInfo = this.EffectiveEntityInfo;
     const entityName = entityInfo?.Name ?? null;
     if (entityName !== this.toolbarActionsEntityName) {
@@ -2213,7 +2216,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       },
       SetRecordCommentsDrawerOpen: (open: boolean) => {
         this.ShowRecordComments = open;
-        this.CommentsCoordinator.SetDrawerOpen(open);
+        this.CommentsCoordinator.SetDrawerOpen(open, null);
       },
       IsRecordCommentsDrawerOpen: () => this.ShowRecordComments,
       GetRecordCommentCount: () => this.CommentCount,
@@ -3129,7 +3132,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   OnToggleRecordComments(): void {
     const nextOpen = !this.ShowRecordComments;
     this.ShowRecordComments = nextOpen;
-    this.CommentsCoordinator.SetDrawerOpen(nextOpen);
+    this.CommentsCoordinator.SetDrawerOpen(nextOpen, null);
     this.cdr.detectChanges();
   }
 

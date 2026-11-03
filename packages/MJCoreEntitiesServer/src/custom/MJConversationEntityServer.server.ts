@@ -59,6 +59,10 @@ export class MJConversationEntityServer extends MJConversationEntity {
         const entityInfo =
             provider?.Entities?.find((e) => UUIDsEqual(e.ID, this.LinkedEntityID)) ?? null;
 
+        if (this.AnchorType && entityInfo && entityInfo.AllowRecordComments === false) {
+            return `Record commenting is disabled for ${entityInfo.DisplayNameOrName}.`;
+        }
+
         // Auto-stamp restrictedFields when anchored directly to an FLS-governed field
         if (entityInfo?.FieldLevelSecurityApplies && this.AnchorType === 'Field' && this.AnchorKey) {
             const targetLower = this.AnchorKey.trim().toLowerCase();
@@ -95,6 +99,15 @@ export class MJConversationEntityServer extends MJConversationEntity {
         );
         if (!recordAccess.Allowed) {
             return recordAccess.Reason ?? 'You do not have access to the linked record.';
+        }
+
+        if (
+            this.AnchorType &&
+            recordAccess.EntityInfo &&
+            typeof recordAccess.EntityInfo.CanUserComment === 'function' &&
+            !recordAccess.EntityInfo.CanUserComment(user)
+        ) {
+            return `You do not have permission to post or modify comments on ${recordAccess.EntityInfo.DisplayNameOrName} records.`;
         }
 
         // fls-guard: block creating or updating a conversation anchored to a restricted field the user cannot read
