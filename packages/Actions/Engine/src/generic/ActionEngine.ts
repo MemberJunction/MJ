@@ -35,6 +35,22 @@ import type { BridgeHandlerMap } from "@memberjunction/code-execution";
 export const ACTION_PREVENTED_BY_FILTER_MESSAGE =
    'Filters were run and the result indicated this action should not be executed. This is a Success condition as filters returning false is not considered an error.';
 
+/**
+ * Result codes for outcomes the engine decides itself, before or around the action's own code (#4690). They are
+ * plain text on `ActionExecutionLog.ResultCode`, not `MJ: Action Result Codes` rows: no action declares them, and a
+ * NULL code would hide why an action did not run.
+ */
+export const ENGINE_RESULT_CODES = {
+   /** `ValidateInputs` refused the parameters; the action did not run. */
+   InputValidationFailed: 'INPUT_VALIDATION_FAILED',
+   /** A filter returned false; the action did not run (a success condition). */
+   PreventedByFilter: 'PREVENTED_BY_FILTER',
+   /** The action exceeded its wall-clock limit (`MaxExecutionTimeMS` or the engine default). */
+   Timeout: 'TIMEOUT',
+   /** The caller's signal aborted the run. */
+   Aborted: 'ABORTED',
+} as const;
+
 /** Why `CheckAudience` refuses every action under a malformed audience (the refusal message's closing clause). */
 const MALFORMED_AUDIENCE_REASON = 'the audience naming them is malformed, so who they are cannot be checked';
 
@@ -288,6 +304,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
             const result: ActionResult = {
                Success: false,
                Message: "Input validation failed. This is a failure condition.",
+               ResultCode: ENGINE_RESULT_CODES.InputValidationFailed,
                LogEntry: null,
                Params: params.Params,
                RunParams: params
@@ -306,6 +323,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
             const result: ActionResult = {
                Success: true,
                Message: ACTION_PREVENTED_BY_FILTER_MESSAGE,
+               ResultCode: ENGINE_RESULT_CODES.PreventedByFilter,
                LogEntry: null, // initially null
                Params: params.Params,
                RunParams: params
@@ -360,9 +378,11 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          }
       }
 
-      // Wall-clock timeout.
+      // Wall-clock timeout. Remembered so the result can say TIMEOUT rather than ABORTED.
+      let timedOut = false;
       const timeoutId = setTimeout(() => {
          if (!controller.signal.aborted) {
+            timedOut = true;
             controller.abort(`Action '${params.Action.Name}' exceeded MaxExecutionTimeMS (${actionTimeoutMS}ms)`);
          }
       }, actionTimeoutMS);
@@ -385,10 +405,8 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          try {
             return await Promise.race([this.InternalRunAction(params, inputSnapshot), timeoutPromise]);
          } catch (err) {
-            // Timeout or upstream abort — return a standard TIMEOUT result.
-            // Result is left undefined (we don't guarantee a 'TIMEOUT' ActionResultCode
-            // exists on every action; the Success flag + Message are the canonical
-            // failure signal for timeouts).
+            // Timeout or upstream abort. `Result` is left undefined (no action declares these codes as
+            // metadata rows); `ResultCode` carries TIMEOUT or ABORTED as text so the log row says why (#4690).
             if (controller.signal.aborted) {
                const message =
                   typeof controller.signal.reason === 'string'
@@ -397,6 +415,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
                const timeoutResult: ActionResult = {
                   Success: false,
                   Message: message,
+                  ResultCode: timedOut ? ENGINE_RESULT_CODES.Timeout : ENGINE_RESULT_CODES.Aborted,
                   LogEntry: null,
                   Params: params.Params,
                   RunParams: params,

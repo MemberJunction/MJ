@@ -135,7 +135,8 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
       throw new Error('CompanyID parameter is required');
     }
 
-    const integration = await this.getCompanyIntegration(companyId, contextUser);
+    const companyIntegrationId = this.getParamValue(this.params, 'CompanyIntegrationID') as string | undefined;
+    const integration = await this.getCompanyIntegration(companyId, contextUser, companyIntegrationId);
     const credentials = await this.getAPICredentials(integration);
 
     if (!credentials.apiKey) {

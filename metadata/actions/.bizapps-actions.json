@@ -32,6 +32,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "64C271DC-6F34-48BD-9A48-9DD20F393EF6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "Email",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -629,6 +643,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (HubSpot connection) to use. Required when the company has more than one active HubSpot connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9D52A30A-F78E-4183-8AAF-85B376772169"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "ContactId",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -812,6 +840,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:10.470Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (HubSpot connection) to use. Required when the company has more than one active HubSpot connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "75AF130B-8554-4AE3-AFA3-D2F13C168742"
           }
         },
         {
@@ -1001,6 +1043,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:11.011Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (HubSpot connection) to use. Required when the company has more than one active HubSpot connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "475A9E55-18EC-4FF4-8EDB-2047D474A864"
           }
         },
         {
@@ -1235,6 +1291,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (HubSpot connection) to use. Required when the company has more than one active HubSpot connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1C3F8AA3-2F25-47E7-BA09-9576125B6AAE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "ContactId",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -1423,6 +1493,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:12.042Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B75BD614-B6D3-4358-933F-0E651985B2DE"
           }
         },
         {
@@ -1682,6 +1766,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AD11C6CC-A890-426F-BC1C-9959EE503D86"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "UserID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -1839,6 +1937,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:12.294Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C3E47F80-A5B3-407B-B743-DDC612B0351E"
           }
         },
         {
@@ -2092,6 +2204,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:12.431Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "329E65CE-EBFB-4044-AC1B-D7F3BE2884FF"
           }
         },
         {
@@ -2513,6 +2639,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E23A6D9D-E446-4228-9274-5B448209B8A1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "CourseID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -2694,6 +2834,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9F4F1524-5C63-4DAC-9FE1-9387673534CD"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "UserID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -2869,6 +3023,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:12.721Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0D056F1B-402D-492E-A7F9-641F6BF4ADBA"
           }
         },
         {
@@ -3119,6 +3287,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:12.867Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0DB7F774-6490-4044-9FC3-929A967B957E"
           }
         },
         {
@@ -3394,6 +3576,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "84A99731-BA0B-48BD-BE9E-E2D7122BE1C1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "CourseID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -3603,6 +3799,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:13.129Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F218B3ED-DEB0-4D2A-8A35-5ED67D2946D4"
           }
         },
         {
@@ -3909,6 +4119,20 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:13.264Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F370BFDE-A37A-48BA-B8ED-5CB90AE83408"
           }
         },
         {
@@ -4240,6 +4464,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8D6B01C0-AE83-4D49-9DA3-19E06CC550B9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "UserID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -4382,6 +4620,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "19BE3EF5-DB56-4894-B802-71517D1B5B1E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "UserID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -4519,6 +4771,20 @@
           "sync": {
             "lastModified": "2026-02-27T03:51:06.278Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D05ED9EC-07AC-4B5D-B12A-C38808A4D29C"
           }
         },
         {
@@ -4807,6 +5073,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "48ED068B-6185-401C-A3E2-9DA6C91142CD"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "SearchText",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -4944,6 +5224,20 @@
           "sync": {
             "lastModified": "2026-02-27T03:51:06.547Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8378769A-47D5-4791-B826-9CE681843611"
           }
         },
         {
@@ -5318,6 +5612,20 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4EC01F18-BC30-4AD2-8BC0-783D35B87F3F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "Email",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -5473,6 +5781,20 @@
           "sync": {
             "lastModified": "2026-02-27T03:51:06.892Z",
             "checksum": "99ec4d6d044ea522cdbfd01b4e0bf0d8b48c4246ca716b8f87d52869f47f4153"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the company integration (LearnWorlds connection) to use. Required when the company has more than one active LearnWorlds connection",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "02C4C2FF-D1D4-4886-BC60-F2630E00C4E3"
           }
         },
         {
