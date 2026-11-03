@@ -43,7 +43,8 @@ export interface EnrolSenderResult {
  * Enrols this installation with the collector at `Diagnostics.External.CollectorUrl`: generates an
  * Ed25519 sender key, proves possession to `POST /enroll` with the registration code, then stores
  * the private key in `MJ: Credentials` and records the key ID and the collector's keys.
- * The previous sender key credential, if any, is marked inactive.
+ * The previous sender key credential, if any, is marked inactive. When a collector signing key is
+ * already pinned, the response must carry the same key or the enrolment fails before anything is stored.
  */
 export async function EnrolSender(options: EnrolSenderOptions): Promise<EnrolSenderResult> {
   const registrationCode = options.RegistrationCode?.trim();
@@ -55,6 +56,7 @@ export async function EnrolSender(options: EnrolSenderOptions): Promise<EnrolSen
   const installId = await settings.EnsureInstallID(options.ContextUser);
   const keyPair = await GenerateDiagnosticKeyPair('Ed25519', BuildSenderKeyID(installId, options.Now ?? new Date()));
   const response = await postEnrolment(audience, installId, registrationCode, keyPair);
+  assertPinnedSigningKey(settings, response);
   const previousCredentialId = settings.ExternalSenderCredentialID;
   const credentialId = await storeSenderKey(keyPair, options.ContextUser);
   await saveEnrolment(settings, credentialId, keyPair.keyId, response, options.ContextUser);
@@ -151,6 +153,21 @@ function checkEnrolResponse(json: CollectorEnrolResponse, installId: string, key
     throw new Error('The collector enrolment response has no collector public keys.');
   }
   return json;
+}
+
+/**
+ * Throws when a collector signing key is already pinned and the enrolment response carries a
+ * different one. An administrator clears the pinned setting first to switch collectors.
+ */
+function assertPinnedSigningKey(settings: DiagnosticsSettings, response: CollectorEnrolResponse): void {
+  const pinned = settings.ExternalCollectorSigningPublicKeyBase64.trim();
+  if (pinned && pinned !== response.collectorSigningPublicKeyBase64.trim()) {
+    const key = DIAGNOSTICS_SETTING_KEYS.ExternalCollectorSigningPublicKeyBase64;
+    throw new Error(
+      `The collector answered with a signing key that differs from the one pinned in ${key}. ` +
+        `To switch collectors, an administrator must clear ${key} first, then enrol again.`
+    );
+  }
 }
 
 async function storeSenderKey(keyPair: DiagnosticKeyPair, contextUser: UserInfo): Promise<string> {
