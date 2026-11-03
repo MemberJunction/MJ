@@ -6759,14 +6759,6 @@ export abstract class BaseEntity<T = unknown> {
         this.replaceChildParentChain(childEntity);
         this._childEntity = childEntity;
 
-        // Same rule as LoadFromDataBatchAsISAParent applies to the parent: a subclass that
-        // customises LoadFromData gets it called with the row, at the cost of in-place batch
-        // hydration for this one record.
-        if (IsMemberOverridden(childEntity, 'LoadFromData', BaseEntity)) {
-            await childEntity.LoadFromData(childRow);
-            return;
-        }
-
         const narrowed = childEntity.narrowHydrationSource(childRow);
         childEntity.init();
         childEntity.SetMany(childEntity.ownedFieldsFrom(narrowed), true, true, true);
