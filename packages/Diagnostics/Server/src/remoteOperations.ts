@@ -56,6 +56,7 @@ import {
   MarkBundleSending,
   MarkBundleSent
 } from './bundleStore.js';
+import { LocalBundleCache } from './bundleCache.js';
 import { BundleDownloadUrl, GetDiagnosticsApiRoute } from './apiRoute.js';
 import { EnrolSender, LoadEnrolledSender } from './senderEnrolment.js';
 import { CurrentBrowserSessionId, SessionTargetsCaller } from './clientCapture.js';
@@ -84,17 +85,11 @@ export async function AuthorizeDiagnosticsUser(
   try {
     const md = provider ?? Metadata.Provider;
     const authInfo = md.Authorizations?.find((a) => a.Name === authorizationName);
-    if (authInfo && authInfo.UserCanExecute(user)) {
-      return true;
-    }
+    return Boolean(authInfo?.UserCanExecute(user));
   } catch {
-    // Fallback to role check if Metadata is not initialized
+    // Metadata is not loaded: refuse.
+    return false;
   }
-  return user.UserRoles?.some(
-    (r) =>
-      r.Role?.trim().toLowerCase() === 'developer' ||
-      r.Role?.trim().toLowerCase() === 'administrator'
-  ) ?? false;
 }
 
 interface InMemoryBundleStoreItem {
@@ -114,10 +109,17 @@ interface InMemoryBundleStoreItem {
   sentAt?: string;
 }
 
-const inMemoryBundles = new Map<string, InMemoryBundleStoreItem>();
+/** Built bundles held in memory. See `LocalBundleCache` for the idle time and size bounds. */
+const inMemoryBundles = new LocalBundleCache<InMemoryBundleStoreItem>();
 
+/** Returns a built bundle held in memory, or `undefined` when it is missing or was evicted. */
 export function GetInMemoryDiagnosticBundle(bundleId: string): InMemoryBundleStoreItem | undefined {
-  return inMemoryBundles.get(bundleId);
+  return inMemoryBundles.Get(bundleId);
+}
+
+/** Drops a built bundle's bytes from memory. Returns true when they were held. */
+export function RemoveInMemoryDiagnosticBundle(bundleId: string): boolean {
+  return inMemoryBundles.Delete(bundleId);
 }
 
 type SessionScopeInput = DiagnosticsStartSessionInput['Scope'];
@@ -151,6 +153,18 @@ async function isSelfServiceAllowed(user: UserInfo | undefined, provider?: IMeta
   return settings.SelfServiceRecording;
 }
 
+/** Largest `MaxBytes` a session may have: 50 MB. */
+const MAX_SESSION_BYTES = 52_428_800;
+/** Largest `MaxBytes` a self-service session may have: 10 MB. */
+const MAX_SELF_SERVICE_SESSION_BYTES = 10_485_760;
+
+/** The session byte cap: the requested value (or the cap) clamped to 1 byte up to the cap for this kind of session. */
+function clampSessionMaxBytes(requested: number | undefined, selfService: boolean): number {
+  const cap = selfService ? MAX_SELF_SERVICE_SESSION_BYTES : MAX_SESSION_BYTES;
+  if (requested === undefined || !Number.isFinite(requested)) return cap;
+  return Math.min(Math.max(Math.floor(requested), 1), cap);
+}
+
 /**
  * Authorizes work on one session: the user holds `Diagnostics: Run Sessions`, or self-service
  * recording is on and the user started this self-only session.
@@ -167,8 +181,12 @@ async function authorizeOwnSession(user: UserInfo, session: ActiveDiagnosticSess
   return isSelfServiceAllowed(user, provider);
 }
 
-/** Throws when an external send is not allowed by the `Diagnostics.External.*` settings. */
-function assertExternalSendAllowed(settings: DiagnosticsSettings, destination: DiagnosticsSendBundleInput['Destination']): void {
+/** Throws when an external send of this bundle is not allowed by the `Diagnostics.External.*` settings. */
+function assertExternalSendAllowed(
+  settings: DiagnosticsSettings,
+  destination: DiagnosticsSendBundleInput['Destination'],
+  scrubLiterals: boolean
+): void {
   if (!settings.ExternalEnabled) {
     throw new Error(`Sending bundles to an external collector is disabled (${DIAGNOSTICS_SETTING_KEYS.ExternalEnabled} is false).`);
   }
@@ -176,18 +194,32 @@ function assertExternalSendAllowed(settings: DiagnosticsSettings, destination: D
   if (allowed.length > 0 && !allowed.includes(destination)) {
     throw new Error(`Destination '${destination}' is not in ${DIAGNOSTICS_SETTING_KEYS.ExternalDestinations}.`);
   }
+  if (!scrubLiterals && !settings.ExternalAllowUnscrubbedSend) {
+    throw new Error(
+      'A bundle sent to an external collector must be built with SQL & filter literal scrubbing. Rebuild it with ' +
+        `scrubbing on, or set ${DIAGNOSTICS_SETTING_KEYS.ExternalAllowUnscrubbedSend} to true to allow unscrubbed bundles.`
+    );
+  }
 }
 
 @RegisterClass(BaseRemotableOperation, 'Diagnostics.StartSession')
 export class DiagnosticsStartSessionServerOperation extends DiagnosticsStartSessionOperation {
+  /**
+   * True when `Authorize` allowed the call only as self-service recording. `InternalExecute` of the
+   * same call reads it; `ExecuteServer` runs both steps on one instance.
+   */
+  private selfService = false;
+
   protected override async Authorize(
     input: DiagnosticsStartSessionInput,
     user: UserInfo,
     context?: RemoteOpServerContext
   ): Promise<boolean> {
+    this.selfService = false;
     if (await AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions', context?.provider)) {
       return true;
     }
+    this.selfService = true;
     return isSelfOnlyScope(input.ScopeType, input.Scope, user) && isSelfServiceAllowed(user, context?.provider);
   }
 
@@ -226,7 +258,7 @@ export class DiagnosticsStartSessionServerOperation extends DiagnosticsStartSess
       scrubLiterals: settings.RequireLiteralScrubbing || (input.ScrubLiterals ?? false),
       startedAtMs: nowMs,
       endsAtMs: nowMs + durationMinutes * 60_000,
-      maxBytes: input.MaxBytes ?? 52_428_800,
+      maxBytes: clampSessionMaxBytes(input.MaxBytes, this.selfService),
       createdByUserId: user.ID,
       bytesWritten: 0
     };
@@ -280,6 +312,7 @@ export class DiagnosticsGetMySessionStatusServerOperation extends DiagnosticsGet
   ): Promise<DiagnosticsGetMySessionStatusOutput> {
     const settings = await DiagnosticsSettings.Load(user, provider);
     const selfServiceAllowed = settings.CaptureEnabled && settings.SelfServiceRecording;
+    const instanceFlags = { CaptureEnabled: settings.CaptureEnabled, RequireLiteralScrubbing: settings.RequireLiteralScrubbing };
     const activeSessions = DiagnosticSessionManager.Instance.GetAllActiveSessions();
     const matched = activeSessions.find(
       (s) => s.scopeType === 'Instance' || SessionTargetsCaller(s, user.ID, input.BrowserSessionID)
@@ -288,7 +321,8 @@ export class DiagnosticsGetMySessionStatusServerOperation extends DiagnosticsGet
     if (!matched) {
       return {
         Active: false,
-        SelfServiceRecordingAllowed: selfServiceAllowed
+        SelfServiceRecordingAllowed: selfServiceAllowed,
+        ...instanceFlags
       };
     }
 
@@ -299,7 +333,8 @@ export class DiagnosticsGetMySessionStatusServerOperation extends DiagnosticsGet
       EndsAt: new Date(matched.endsAtMs).toISOString(),
       Level: matched.level,
       ScrubLiterals: matched.scrubLiterals,
-      SelfServiceRecordingAllowed: selfServiceAllowed
+      SelfServiceRecordingAllowed: selfServiceAllowed,
+      ...instanceFlags
     };
   }
 }
@@ -398,7 +433,7 @@ export class DiagnosticsUploadClientCaptureServerOperation extends DiagnosticsUp
     const mgr = DiagnosticSessionManager.Instance;
 
     stageClientCapture(mgr, sessionId, input);
-    const saved = await mgr.SaveSessionChunks(sessionId, user, provider);
+    const saved = await mgr.SaveSessionChunks(sessionId, user, provider, { IncludeQueuedSaves: true });
     if (!input.SessionID) {
       await this.endCallerSession(sessionId, user, provider);
     }
@@ -477,7 +512,7 @@ export class DiagnosticsBuildBundleServerOperation extends DiagnosticsBuildBundl
       provider
     );
     const item = await this.assembleIntoRow(row, input, scrubLiterals, user, provider);
-    inMemoryBundles.set(item.bundleId, item);
+    inMemoryBundles.Set(item.bundleId, item, item.sizeBytes);
 
     const downloadToken = DiagnosticSessionManager.Instance.MintDownloadToken(item.bundleId, user.ID);
     return {
@@ -549,7 +584,7 @@ export class DiagnosticsGetBundlePreviewServerOperation extends DiagnosticsGetBu
     user: UserInfo,
     context?: RemoteOpServerContext
   ): Promise<boolean> {
-    const local = inMemoryBundles.get(input.BundleID);
+    const local = inMemoryBundles.Get(input.BundleID);
     if (isReceivedBundle(input.BundleID, local)) {
       return AuthorizeDiagnosticsUser(user, 'Diagnostics: Manage Intake', context?.provider);
     }
@@ -562,7 +597,7 @@ export class DiagnosticsGetBundlePreviewServerOperation extends DiagnosticsGetBu
     _provider: IMetadataProvider,
     user: UserInfo
   ): Promise<DiagnosticsGetBundlePreviewOutput> {
-    const local = inMemoryBundles.get(input.BundleID);
+    const local = inMemoryBundles.Get(input.BundleID);
     if (local) {
       const token = input.MintDownloadToken
         ? DiagnosticSessionManager.Instance.MintDownloadToken(local.bundleId, user.ID)
@@ -621,7 +656,7 @@ export class DiagnosticsSendBundleServerOperation extends DiagnosticsSendBundleO
     provider: IMetadataProvider,
     user: UserInfo
   ): Promise<DiagnosticsSendBundleOutput> {
-    const local = inMemoryBundles.get(input.BundleID);
+    const local = inMemoryBundles.Get(input.BundleID);
     if (!local) {
       throw new Error(`Bundle '${input.BundleID}' not found.`);
     }
@@ -629,7 +664,7 @@ export class DiagnosticsSendBundleServerOperation extends DiagnosticsSendBundleO
     const settings = await DiagnosticsSettings.Load(user, provider);
     const collectorUrl = settings.ExternalCollectorUrl;
     if (collectorUrl) {
-      assertExternalSendAllowed(settings, input.Destination);
+      assertExternalSendAllowed(settings, input.Destination, local.scrubLiterals);
     }
 
     const row = await LoadBundleRow(local.bundleId, user, provider);

@@ -13,6 +13,7 @@ import {
 import { MJDiagnosticBundleEntity, MJDiagnosticSessionEntity, MJScheduledJobEntity } from '@memberjunction/core-entities';
 import { DiagnosticsSettings } from './settings.js';
 import { BundleFileRemover } from './bundleFileRemover.js';
+import { RemoveInMemoryDiagnosticBundle } from './remoteOperations.js';
 
 export interface DiagnosticRetentionJobConfiguration extends ScheduledJobConfiguration {
   LocalRetentionDays?: number;
@@ -57,10 +58,18 @@ interface ConfigurationError {
 /** Work done before a record's own delete. Returns `null` to go on, or why the record must be kept. */
 type BeforeDelete<T> = (record: T) => Promise<string | null>;
 
+/** Work done around each record's delete. */
+interface PurgeHooks<T> {
+  BeforeDelete?: BeforeDelete<T>;
+  /** Runs after the record was deleted. */
+  AfterDelete?: (record: T) => void;
+}
+
 /**
  * Deletes expired diagnostic bundles and finished diagnostic sessions.
  * A bundle's stored file (object and `MJ: Files` row) is deleted first; a bundle whose file
- * cannot be deleted is kept. Session chunks go with their session through the FK's ON DELETE CASCADE.
+ * cannot be deleted is kept. A deleted bundle's bytes are also dropped from memory.
+ * Session chunks go with their session through the FK's ON DELETE CASCADE.
  * Rows that fail are skipped for the rest of the run and reported in `Details.Failures`.
  */
 @RegisterClass(BaseScheduledJob, 'DiagnosticRetentionScheduledJobDriver')
@@ -142,7 +151,10 @@ export class DiagnosticRetentionScheduledJobDriver extends BaseScheduledJob {
   ): Promise<{ DeletedBundles: number; DeletedSessions: number }> {
     const removeFile = this.fileRemoval(new BundleFileRemover(contextUser, provider), tally);
     for (const target of bundleTargets) {
-      await this.purge<MJDiagnosticBundleEntity>(target, tally, contextUser, provider, removeFile);
+      await this.purge<MJDiagnosticBundleEntity>(target, tally, contextUser, provider, {
+        BeforeDelete: removeFile,
+        AfterDelete: (bundle) => RemoveInMemoryDiagnosticBundle(bundle.ID)
+      });
     }
     const deletedBundles = tally.Deleted;
     await this.purge<MJDiagnosticSessionEntity>(sessionTarget, tally, contextUser, provider);
@@ -224,7 +236,7 @@ export class DiagnosticRetentionScheduledJobDriver extends BaseScheduledJob {
     tally: PurgeTally,
     contextUser: UserInfo,
     provider: IMetadataProvider,
-    beforeDelete?: BeforeDelete<T>
+    hooks: PurgeHooks<T> = {}
   ): Promise<void> {
     while (tally.Remaining > 0 && tally.AttemptsLeft > 0) {
       const batchSize = Math.min(tally.Remaining, tally.AttemptsLeft);
@@ -233,7 +245,7 @@ export class DiagnosticRetentionScheduledJobDriver extends BaseScheduledJob {
         return;
       }
       for (const record of rows.slice(0, batchSize)) {
-        await this.deleteOne(target.EntityName, record, tally, beforeDelete);
+        await this.deleteOne(target.EntityName, record, tally, hooks);
       }
       if (rows.length < batchSize) {
         return;
@@ -279,10 +291,10 @@ export class DiagnosticRetentionScheduledJobDriver extends BaseScheduledJob {
     entityName: string,
     record: T,
     tally: PurgeTally,
-    beforeDelete?: BeforeDelete<T>
+    hooks: PurgeHooks<T>
   ): Promise<void> {
     tally.AttemptsLeft--;
-    const blocked = beforeDelete ? await beforeDelete(record) : null;
+    const blocked = hooks.BeforeDelete ? await hooks.BeforeDelete(record) : null;
     if (blocked) {
       this.recordFailure(record.ID, `${entityName} ${record.ID} kept: ${blocked}`, tally);
       return;
@@ -290,6 +302,7 @@ export class DiagnosticRetentionScheduledJobDriver extends BaseScheduledJob {
     if (await record.Delete()) {
       tally.Remaining--;
       tally.Deleted++;
+      hooks.AfterDelete?.(record);
       return;
     }
     const message = record.LatestResult?.CompleteMessage ?? 'unknown error';

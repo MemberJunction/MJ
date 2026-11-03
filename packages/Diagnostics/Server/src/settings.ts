@@ -10,6 +10,7 @@ export const DIAGNOSTICS_SETTING_KEYS = {
   ExternalEnabled: 'Diagnostics.External.Enabled',
   ExternalDestinations: 'Diagnostics.External.Destinations',
   ExternalCollectorUrl: 'Diagnostics.External.CollectorUrl',
+  ExternalAllowUnscrubbedSend: 'Diagnostics.External.AllowUnscrubbedSend',
   MaxSessionMinutes: 'Diagnostics.MaxSessionMinutes',
   RetentionDays: 'Diagnostics.RetentionDays',
   IntakeEnabled: 'Diagnostics.Intake.Enabled',
@@ -90,6 +91,11 @@ export class DiagnosticsSettings {
 
   public get ExternalCollectorUrl(): string {
     return this.getString(keys.ExternalCollectorUrl);
+  }
+
+  /** True when a bundle built without literal scrubbing may be sent to an external collector. */
+  public get ExternalAllowUnscrubbedSend(): boolean {
+    return this.engine.GetBoolean(keys.ExternalAllowUnscrubbedSend, false);
   }
 
   public get MaxSessionMinutes(): number {
