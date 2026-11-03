@@ -178,7 +178,12 @@ interface AssemblyState { readonly Coverage: CoverageByField; readonly Histories
  * the assembly's day, read only where the history does not reach the day (no history, or one that starts after it); a
  * history that reaches it but cannot be replayed leaves the row uncovered.
  */
-interface ReplaySources { readonly History: EntityHistory; readonly Stored: ReadonlyMap<string, SourceRow> }
+interface ReplaySources {
+  readonly History: EntityHistory;
+  readonly Stored: ReadonlyMap<string, SourceRow>;
+  /** `__mj_CreatedAt` by lower-cased key, only for records whose history has no Create row (the one creation rule's second source). */
+  readonly CreatedAt: ReadonlyMap<string, CellValue>;
+}
 
 /** The level the least frequent categories beyond a column's cardinality cap fold into. */
 export const OTHER_CATEGORY_LEVEL = '__other';
@@ -479,7 +484,23 @@ export class AsOfFeatureAssembler {
     const keysOf = (rs: readonly AssemblyRowRef[]): string[] => rs.map((r) => keyOf(r)).filter((k): k is string => k !== null);
     const history = await AsOfFeatureAssembler.loadHistory(entity, keysOf(input.Rows), [source.field], input, state);
     const stored = today.length > 0 ? await AsOfFeatureAssembler.storedValues(entity, keysOf(today), source.field, input) : new Map<string, SourceRow>();
-    return AsOfFeatureAssembler.throughJoin(spec, join, this.replayReader(spec, source, entity, keyOf, { History: history, Stored: stored }, input), input);
+    const createdAt = await AsOfFeatureAssembler.storedCreatedAts(entity, history, keysOf(input.Rows), input);
+    return AsOfFeatureAssembler.throughJoin(spec, join, this.replayReader(spec, source, entity, keyOf, { History: history, Stored: stored, CreatedAt: createdAt }, input), input);
+  }
+
+  /**
+   * `__mj_CreatedAt` of the records whose history gives no creation instant (it starts with a Snapshot, or is empty),
+   * read by key in one read; empty, with no read, when the entity does not list the column or every history starts
+   * with a Create row.
+   */
+  private static async storedCreatedAts(entity: AssemblyEntityInfo, history: EntityHistory, keys: readonly string[], input: AsOfAssemblyInput): Promise<ReadonlyMap<string, CellValue>> {
+    const none = new Map<string, CellValue>();
+    if (!AsOfFeatureAssembler.hasField(entity, '__mj_CreatedAt')) return none;
+    const unknown = AsOfFeatureAssembler.uniqueKeys(keys).filter((k) => history.CreatedAt(k) === null);
+    if (unknown.length === 0) return none;
+    const read = await KeyedReader.ReadByKeys(input.DataAccess, entity.Name, entity.PrimaryKey, unknown.map((k) => k.toLowerCase()), ['__mj_CreatedAt']);
+    if (read.Status === 'refused') throw new AssemblyRefused(read.Refusal);
+    return new Map([...read.Rows].map(([k, row]) => [k, row.__mj_CreatedAt] as const));
   }
 
   /**
@@ -560,7 +581,7 @@ export class AsOfFeatureAssembler {
       if (hv.Status === 'uncovered') {
         const unreached = hv.Reason === 'no-history' || hv.Reason === 'before-history-start';
         if (unreached && AsOfFeatureAssembler.onAssemblyDayOrLater(row, input)) return AsOfFeatureAssembler.storedOnDecisionDay(spec, source, entity, key, reads.Stored, input);
-        if (AsOfFeatureAssembler.createdAfter(history, key, asOf, null)) return AsOfFeatureAssembler.missingValue(spec, AsOfFeatureAssembler.fieldRef(entity, key, source.field), 'created-after-decision', input);
+        if (AsOfFeatureAssembler.createdAfter(history, key, asOf, reads.CreatedAt.get(key.toLowerCase()) ?? null)) return AsOfFeatureAssembler.missingValue(spec, AsOfFeatureAssembler.fieldRef(entity, key, source.field), 'created-after-decision', input);
         return { Uncovered: true, Entity: entity.Name, Field: source.field, HistoryStart: history.Coverage.historyStart };
       }
       return {

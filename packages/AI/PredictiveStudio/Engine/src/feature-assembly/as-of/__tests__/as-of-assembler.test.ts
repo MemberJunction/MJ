@@ -793,3 +793,50 @@ describe('AsOfFeatureAssembler — an invalid timestamp in a record\'s history',
     expect(out).toEqual({ Status: 'refused', Refusal: { kind: 'invalid-date-in-history', entity: 'People', field: 'Status', value: bad } });
   });
 });
+
+describe('replay reader — creation rule', () => {
+  const tier: FeatureColumnSpec = { name: 'Tier', source: { kind: 'record-changes', entity: 'Tiers', field: 'Tier', keyField: null }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } };
+  const lateRow: AssemblyRowRef[] = [{ RowID: 'y2', EntityKey: 'y2', DecisionDate: new Date('2023-12-01T00:00:00Z'), Period: null }];
+  const tiersWith = (createdAt: Date | null): Record<string, SourceRow[]> => ({ ...tables, Tiers: [{ ID: 'y2', Tier: 'Silver', ...(createdAt ? { __mj_CreatedAt: createdAt } : {}) }] });
+  const snapshotStart: Record<string, RecordChangeRow[]> = { ...changes, Tiers: [rc('ts-2', 'y2', 'Snapshot', '2024-02-01T00:00:00Z', { ID: 'y2', Tier: 'Silver' })] };
+  const createStart: Record<string, RecordChangeRow[]> = { ...changes, Tiers: [rc('tc-2', 'y2', 'Create', '2022-01-01T00:00:00Z', { ID: 'y2', Tier: 'Silver' })] };
+
+  /** Records every field list the assembly reads by key, so a test sees which reads were issued. */
+  class SpyDataAccess extends TableDataAccess {
+    public readonly FieldReads: (readonly string[] | undefined)[] = [];
+    public override async fetchRows(p: Parameters<TableDataAccess['fetchRows']>[0]): ReturnType<TableDataAccess['fetchRows']> {
+      if (p.EntityName === 'Tiers') this.FieldReads.push(p.Fields);
+      return super.fetchRows(p);
+    }
+    public get CreatedAtReads(): number { return this.FieldReads.filter((f) => f?.includes('__mj_CreatedAt')).length; }
+  }
+  const assemble = (data: Record<string, SourceRow[]>, rowChanges: Record<string, RecordChangeRow[]>, tiers: AssemblyEntityInfo = entities.Tiers) => {
+    const spy = new SpyDataAccess(data);
+    const base = input([tier], { Tables: data, Changes: rowChanges, Rows: lateRow });
+    const withTiers: IAssemblyMetadata = { Entity: (n) => (n === 'Tiers' ? tiers : metadata.Entity(n)) };
+    return new AsOfFeatureAssembler().Assemble({ ...base, DataAccess: spy, Metadata: withTiers }).then((out) => ({ out, spy }));
+  };
+
+  it('reads a record whose history starts with a Snapshot as missing when its __mj_CreatedAt is after the decision', async () => {
+    const { out } = await assemble(tiersWith(new Date('2024-01-01T00:00:00Z')), snapshotStart);
+    expect(out.Status).toBe('assembled');
+    if (out.Status !== 'assembled') return;
+    expect(out.Rows[0].Values[0]).toBeNull();
+    expect(out.Rows[0].Provenance[0]).toMatchObject({ sourceRef: 'Tiers/y2/Tier', sourceVersion: 'created-after-decision' });
+  });
+  it('stays uncovered when the record was created before the decision, so the refusal is unchanged', async () => {
+    const { out } = await assemble(tiersWith(new Date('2023-01-01T00:00:00Z')), snapshotStart);
+    expect(out).toMatchObject({ Status: 'refused', Refusal: { kind: 'decision-date-before-change-history', entity: 'Tiers', field: 'Tier' } });
+  });
+  it('stays uncovered and issues no __mj_CreatedAt read for an entity without the column', async () => {
+    const noColumn: AssemblyEntityInfo = { ...entities.Tiers, Fields: entities.Tiers.Fields.filter((f) => f.Name !== '__mj_CreatedAt') };
+    const { out, spy } = await assemble(tiersWith(null), snapshotStart, noColumn);
+    expect(out).toMatchObject({ Status: 'refused', Refusal: { kind: 'decision-date-before-change-history' } });
+    expect(spy.CreatedAtReads).toBe(0);
+  });
+  it('issues no __mj_CreatedAt read for a history that starts with a Create row', async () => {
+    const { out, spy } = await assemble(tiersWith(new Date('2022-01-01T00:00:00Z')), createStart);
+    expect(out.Status).toBe('assembled');
+    expect(spy.CreatedAtReads).toBe(0);
+  });
+});
