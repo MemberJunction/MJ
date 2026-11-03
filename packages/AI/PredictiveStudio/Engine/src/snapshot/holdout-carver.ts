@@ -1,7 +1,8 @@
 /**
  * @module snapshot/holdout-carver
  *
- * Assigns each assembled row its manifest role before the snapshot is written; the roles are part of the manifest,
+ * Assigns each row its manifest role: training carves the unit rows before anything is validated or assembled, and
+ * carves the assembled rows again before the snapshot is written; the roles are part of the manifest,
  * so they are part of the snapshot's fingerprint. The locked holdout is the one the bound Evaluation Protocol declares
  * ({@link HoldoutCarvers.CarverForProtocol}, the one place a holdout kind maps to a carver): a date carve on the
  * declared column, a seeded row-hash carve, or a forecast's rolling-origin test periods. Each carve returns the roles
@@ -38,19 +39,22 @@ export interface HoldoutCarveOutcome {
   readonly Summary: HoldoutCarveSummary;
 }
 
+/** A row a carve assigns a role to: only its id is read; everything else comes from its unit row. */
+export type CarvedRowRef = Pick<AssembledRow, 'RowID'>;
+
 /**
- * Assigns the assembled rows their manifest roles and records what it carved. The carve reads only the unit rows'
- * dates, keys and labels and the protocol, never the order the rows arrive in.
+ * Assigns rows their manifest roles and records what it carved. The carve reads only the unit rows' dates, keys and
+ * labels and the protocol, never the order the rows arrive in.
  */
 export interface IHoldoutCarver {
   /**
    * The roles of the rows kept in the snapshot and the carve's summary.
    *
-   * @param rows the assembled rows
+   * @param rows the rows to carve (unit rows before assembly, or the assembled rows)
    * @param unitRows the unit row behind each assembled row, by row id
    * @throws TrainingRefusedError (`carve` stage) when the holdout cannot be carved
    */
-  AssignRoles(rows: readonly AssembledRow[], unitRows: ReadonlyMap<string, UnitRow>): HoldoutCarveOutcome;
+  AssignRoles(rows: readonly CarvedRowRef[], unitRows: ReadonlyMap<string, UnitRow>): HoldoutCarveOutcome;
 }
 
 /**
@@ -69,7 +73,7 @@ export class DateCarvedCarver implements IHoldoutCarver {
   constructor(private readonly holdout: DateCarved, private readonly period: DecisionSpec['period']) {}
 
   /** @throws TrainingRefusedError (`carve` stage) for a row without a readable carve date, or a carve that leaves no development or no holdout row */
-  public AssignRoles(rows: readonly AssembledRow[], unitRows: ReadonlyMap<string, UnitRow>): HoldoutCarveOutcome {
+  public AssignRoles(rows: readonly CarvedRowRef[], unitRows: ReadonlyMap<string, UnitRow>): HoldoutCarveOutcome {
     const carve = HoldoutCarve.CarveLockedHoldout(rows.map((a) => this.carveRow(HoldoutCarvers.UnitRowOf(unitRows, a.RowID))), this.holdout);
     if (carve.Ok === false) throw new TrainingRefusedError({ stage: 'carve', reason: carve.Refusal });
     const d = carve.Deployment;
@@ -118,7 +122,7 @@ export class SeededRandomCarver implements IHoldoutCarver {
   constructor(private readonly fraction: number, private readonly seed: number) {}
 
   /** @throws TrainingRefusedError (`carve` stage, `seeded-random-side-empty`) when the carve leaves no holdout or no development row */
-  public AssignRoles(rows: readonly AssembledRow[], unitRows: ReadonlyMap<string, UnitRow>): HoldoutCarveOutcome {
+  public AssignRoles(rows: readonly CarvedRowRef[], unitRows: ReadonlyMap<string, UnitRow>): HoldoutCarveOutcome {
     const carve = HoldoutCarve.SeededRandomCarve(rows.map((r) => r.RowID), this.fraction, this.seed);
     this.refuseEmptySide(carve.HoldoutRowIDs.length, carve.DevelopmentRowIDs.length);
     const summary: HoldoutCarveSummary = {
@@ -160,7 +164,7 @@ export class RollingOriginCarver implements IHoldoutCarver {
   constructor(private readonly holdout: RollingOrigin) {}
 
   /** @throws TrainingRefusedError (`carve` stage) for a row without a period, or a series too short for the design */
-  public AssignRoles(rows: readonly AssembledRow[], unitRows: ReadonlyMap<string, UnitRow>): HoldoutCarveOutcome {
+  public AssignRoles(rows: readonly CarvedRowRef[], unitRows: ReadonlyMap<string, UnitRow>): HoldoutCarveOutcome {
     const periodRows = rows.map((r) => {
       const period = HoldoutCarvers.UnitRowOf(unitRows, r.RowID).Period;
       if (period === null) throw new TrainingRefusedError({ stage: 'carve', reason: { kind: 'missing-carve-date', rowId: r.RowID, column: 'Period' } });

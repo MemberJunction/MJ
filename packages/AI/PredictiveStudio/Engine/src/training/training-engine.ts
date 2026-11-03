@@ -97,7 +97,7 @@ import { UnitTargetValidator } from '../prediction-unit/target-validation';
 import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
 import { DecisionDateAdvance } from '../prediction-unit/decision-date-advance';
 import { TrainingRefusedError } from './training-refusal';
-import { HoldoutCarvers } from '../snapshot/holdout-carver';
+import { HoldoutCarvers, type CarvedRowRef, type HoldoutCarveOutcome } from '../snapshot/holdout-carver';
 import { TrainingSnapshotBuilder, type BuiltSnapshot } from '../snapshot/snapshot-builder';
 import type { ISnapshotFileStore } from '../snapshot/snapshot-file-store';
 import { RunViewTrainingSnapshotStore } from '../snapshot/training-snapshot-store';
@@ -149,6 +149,29 @@ export interface UnitAssemblyInputs {
    * never trains; only its standalone assembly runs).
    */
   readonly ProtocolExclusions: ProtocolExclusions | null;
+  /**
+   * A training run's carve of the unit rows: only its kept rows are assembled, and the categorical fold counts only the
+   * development rows. Absent (an assembly outside a training run), every unit row is assembled and counted.
+   */
+  readonly Carve?: TrainingRowCarve;
+}
+
+/**
+ * The bound protocol's carve over a training run's unit rows, made before the target is validated or anything is
+ * assembled, so the rows training may not use never shape what it fits: rows a date carve leaves out (on or after
+ * `holdoutEnd`) are neither validated nor assembled, and locked-holdout rows are assembled for scoring but never
+ * counted by target validation or the categorical fold.
+ */
+export interface TrainingRowCarve {
+  /** The unit rows the carve keeps: development and locked holdout. */
+  readonly Kept: readonly UnitRow[];
+  /** The development rows among them: the only rows target validation reads. */
+  readonly Development: readonly UnitRow[];
+  /**
+   * The same carve over the given rows (the assembled ones) plus the rows it left out, so the summary still counts
+   * them: the roles and summary the snapshot freezes, and the development rows the categorical fold counts.
+   */
+  CarveRows(rows: readonly CarvedRowRef[]): HoldoutCarveOutcome;
 }
 
 /**
@@ -308,15 +331,17 @@ export class TrainingEngine {
       if (mismatch !== null) throw new TrainingRefusedError({ stage: 'pipeline', reason: mismatch });
       const seams = this.unitSeams(deps);
       const unitRead = await this.readUnitRows(unit, seams, deps);
-      const validation = UnitTargetValidator.ValidateUnitTargets(unitRead.Rows, unit.label.outcome, unitRead.Counts);
+      // Carve first: validation and assembly see only the rows training may use.
+      const rowCarve = TrainingEngine.CarveUnitRows(protocol.Protocol, unit, unitRead);
+      const validation = UnitTargetValidator.ValidateUnitTargets(rowCarve.Development, unit.label.outcome, unitRead.Counts);
       if (validation.status === 'refused') throw new TrainingRefusedError({ stage: 'unit', reason: validation.reason });
 
       const assembly = await this.AssembleForTraining(resolved.pipeline.ID, deps, {
         Resolved: resolved, Unit: unit, UnitRead: unitRead, DataAccess: seams.DataAccess, Metadata: seams.Metadata, SliceFields: protocol.Protocol.slices.subgroups,
-        ProtocolExclusions: protocol.Protocol.exclusions,
+        ProtocolExclusions: protocol.Protocol.exclusions, Carve: rowCarve,
       });
       if (assembly.Assembled.Status === 'refused') throw new TrainingRefusedError({ stage: 'assembly', reason: assembly.Assembled.Refusal });
-      const { Snapshot: snapshot, Carve: carve } = await this.freezeSnapshot(resolved, assembly, assembly.Assembled, snapshotFiles, protocol, deps);
+      const { Snapshot: snapshot, Carve: carve } = await this.freezeSnapshot(resolved, assembly, assembly.Assembled, rowCarve, snapshotFiles, protocol, deps);
       run.TrainingSnapshotID = snapshot.Entity.ID;
       const unitResolved: ResolvedPipeline = { ...resolved, targetEntityName: unitRead.RowEntity.Name, targetVariable: LABEL_COLUMN, problemType: TaskTypeRules.LegacyProblemTypeForTask(unit.label.outcome) };
       const model = await this.trainThroughTrainer({
@@ -399,9 +424,28 @@ export class TrainingEngine {
   }
 
   /**
-   * Freeze the assembled rows into a Training Snapshot: each row gets its manifest role from the carver the bound
-   * protocol declares ({@link HoldoutCarvers.CarverForProtocol}); rows the carve
-   * leaves out (a date carve's rows on or after `holdoutEnd`) are not in the snapshot. Identical content reuses the
+   * The bound protocol's carve over a run's unit rows ({@link TrainingRowCarve}), by the carver the protocol declares
+   * ({@link HoldoutCarvers.CarverForProtocol}).
+   *
+   * @throws TrainingRefusedError (`carve` stage) when the protocol's holdout cannot be carved from the unit rows
+   */
+  public static CarveUnitRows(protocol: EvaluationProtocolSpec, unit: PredictionUnitSpec, unitRead: UnitRowsRead): TrainingRowCarve {
+    const carver = HoldoutCarvers.CarverForProtocol(protocol, unit);
+    const byId = new Map(unitRead.Rows.map((r) => [r.RowID, r]));
+    const roles = carver.AssignRoles(unitRead.Rows, byId).Roles;
+    const kept = unitRead.Rows.filter((r) => roles.has(r.RowID));
+    const leftOut = unitRead.Rows.filter((r) => !roles.has(r.RowID));
+    return {
+      Kept: kept,
+      Development: kept.filter((r) => roles.get(r.RowID) === 'development'),
+      CarveRows: (rows) => carver.AssignRoles([...rows, ...leftOut], byId),
+    };
+  }
+
+  /**
+   * Freeze the assembled rows into a Training Snapshot: each row gets its manifest role from the run's carve
+   * ({@link TrainingRowCarve.CarveRows} over the assembled rows); rows the carve leaves out (a date carve's rows on or
+   * after `holdoutEnd`, never assembled) are not in the snapshot and are counted in the summary. Identical content reuses the
    * snapshot that already holds it. The bound protocol decides the evaluation columns: the incumbent-score column when
    * it declares an incumbent-heuristic baseline and the unit has a rule to score it, and one slice column per subgroup
    * field it declares. Returns the snapshot and the carve's summary.
@@ -409,11 +453,11 @@ export class TrainingEngine {
    * @throws TrainingRefusedError (`carve` stage) when the protocol's holdout cannot be carved from the rows
    */
   private async freezeSnapshot(
-    resolved: ResolvedPipeline, assembly: UnitTrainingAssembly, assembled: AsOfAssembledMatrix, files: ISnapshotFileStore,
+    resolved: ResolvedPipeline, assembly: UnitTrainingAssembly, assembled: AsOfAssembledMatrix, rowCarve: TrainingRowCarve, files: ISnapshotFileStore,
     loaded: LoadedProtocol, deps: TrainingDeps,
   ): Promise<FrozenSnapshot> {
     const protocol = loaded.Protocol;
-    const carve = HoldoutCarvers.CarverForProtocol(protocol, assembly.Unit).AssignRoles(assembled.Rows, new Map(assembly.UnitRead.Rows.map((r) => [r.RowID, r])));
+    const carve = rowCarve.CarveRows(assembled.Rows);
     const snapshots = deps.snapshots || new RunViewTrainingSnapshotStore(this.requireProvider(deps), deps.contextUser);
     const snapshot = await new TrainingSnapshotBuilder().Build({
       PipelineID: resolved.pipeline.ID,
@@ -755,7 +799,9 @@ export class TrainingEngine {
    * assembly function training uses; the scoring path calls the same assembler with the columns and levels training
    * stored. With `prepared` (a training run) the pipeline, unit and rows already read are reused; without it (a check
    * that only needs the matrix) the pipeline, its bound protocol's exclusions, the unit and its rows are read here, and
-   * a pipeline without a unit is refused (`unit-required`).
+   * a pipeline without a unit is refused (`unit-required`). A training run's carve ({@link UnitAssemblyInputs.Carve})
+   * limits the assembled rows to the ones it keeps and the categorical fold to its development rows; the series history
+   * lags read from is still built from every unit row.
    *
    * @param pipelineId the `MJ: ML Training Pipelines` row
    * @param deps the training deps (provider, user and the unit seams; `history` defaults to complete Record Changes reads)
@@ -774,11 +820,12 @@ export class TrainingEngine {
     if (unresolvedSlice !== undefined) {
       return { Unit: unit, UnitRead: unitRead, Features: [], Assembled: { Status: 'refused', Refusal: { kind: 'unresolved-column', entity: unit.name, field: unresolvedSlice } } };
     }
+    const carve = inputs.Carve;
     const assembled = await new AsOfFeatureAssembler().Assemble({
       Context: 'train',
       Unit: unit,
       RowEntity: unitRead.RowEntity,
-      Rows: unitRead.Rows.map((r) => ({ RowID: r.RowID, EntityKey: r.EntityKey, DecisionDate: r.DecisionDate, Period: r.Period })),
+      Rows: (carve ? carve.Kept : unitRead.Rows).map((r) => ({ RowID: r.RowID, EntityKey: r.EntityKey, DecisionDate: r.DecisionDate, Period: r.Period })),
       Features: resolution.Columns,
       SeriesHistory: TrainingEngine.SeriesHistoryFor(unit, unitRead.Rows),
       Read: { mode: 'complete' },
@@ -787,8 +834,14 @@ export class TrainingEngine {
       Metadata: inputs.Metadata,
       AssembledAt: deps.now?.() || new Date(),
       ExplicitOps: resolution.ExplicitOps,
+      ...(carve ? { DevelopmentRowsOf: (rows: readonly CarvedRowRef[]) => TrainingEngine.developmentIds(carve.CarveRows(rows)) } : {}),
     });
     return { Unit: unit, UnitRead: unitRead, Features: resolution.Columns, Assembled: assembled };
+  }
+
+  /** The ids a carve assigned the development role. */
+  private static developmentIds(carve: HoldoutCarveOutcome): Set<string> {
+    return new Set([...carve.Roles].filter(([, role]) => role === 'development').map(([id]) => id));
   }
 
   /**

@@ -106,6 +106,13 @@ export interface AsOfAssemblyInput {
    * computed from the assembled rows.
    */
   readonly CategoryLevels?: ReadonlyMap<string, readonly string[]>;
+  /**
+   * Training only: the ids of the rows, among the assembled ones, whose values the categorical fold counts its levels
+   * over (the carve's development rows). The other rows (the locked holdout) are folded to those levels as scoring folds
+   * a row, so a level seen only there becomes `__other` and never enters the kept levels. Absent, every assembled row
+   * is counted.
+   */
+  readonly DevelopmentRowsOf?: (rows: readonly AssembledRow[]) => ReadonlySet<string>;
 }
 
 export type AsOfAssemblyResult =
@@ -230,7 +237,8 @@ export class AsOfFeatureAssembler {
     if (input.Unit.history.onUncoveredRow === 'refuse' && first) {
       throw new AssemblyRefused({ kind: 'decision-date-before-change-history', entity: first.Entity, field: first.Field, historyStart: first.HistoryStart, rowsAffected: first.Rows });
     }
-    const folded = AsOfFeatureAssembler.foldCategoricals(columns, input.Features, assembled.Rows, input.CategoryLevels, input.Context);
+    const counted = input.DevelopmentRowsOf ? input.DevelopmentRowsOf(assembled.Rows) : null;
+    const folded = AsOfFeatureAssembler.foldCategoricals(columns, input.Features, assembled.Rows, counted, input.CategoryLevels, input.Context);
     return {
       Status: 'assembled',
       Columns: columns,
@@ -253,12 +261,14 @@ export class AsOfFeatureAssembler {
 
   /**
    * Caps every categorical column's levels. With training's kept levels for a column (`given`), every other value becomes
-   * `__other`. Otherwise, when a column has more distinct non-missing levels than its cap, the levels beyond the cap
-   * (count descending, then value ascending, so the fold is deterministic) become `__other`. Returns the kept levels of
-   * every categorical column and the fold of each column that folded anything.
+   * `__other`. Otherwise the levels are counted over the `counted` rows (every row when null) and the most frequent
+   * `cap` of them are kept (count descending, then value ascending, so the fold is deterministic); every value of any
+   * row outside the kept levels becomes `__other` and is listed as folded. Returns the kept levels of every categorical
+   * column and the fold of each column that folded anything.
    */
   private static foldCategoricals(
-    columns: readonly AssembledColumn[], features: readonly FeatureColumnSpec[], rows: readonly AssembledRow[], given: ReadonlyMap<string, readonly string[]> | undefined, context: AsOfAssemblyInput['Context'],
+    columns: readonly AssembledColumn[], features: readonly FeatureColumnSpec[], rows: readonly AssembledRow[], counted: ReadonlySet<string> | null,
+    given: ReadonlyMap<string, readonly string[]> | undefined, context: AsOfAssemblyInput['Context'],
   ): { readonly Rows: AssembledRow[]; readonly Folds: Map<string, CategoryFold>; readonly Levels: Map<string, readonly string[]> } {
     const byFeature = new Map(features.map((f) => [f.name, f]));
     const folds = new Map<string, CategoryFold>();
@@ -269,7 +279,10 @@ export class AsOfFeatureAssembler {
       if (c.Encoding !== 'categorical' || !encoding || encoding.kind !== 'categorical') return;
       const values = rows.map((r) => r.Values[i]);
       AsOfFeatureAssembler.assertFoldable(c.Name, values, given, context);
-      const fold = AsOfFeatureAssembler.levelFold(values, encoding.cardinalityCap, given?.get(c.Name));
+      // The kept levels: training's, else those of the counted rows; every row is then folded to them, as scoring folds.
+      const countedValues = counted === null ? null : rows.filter((r) => counted.has(r.RowID)).map((r) => r.Values[i]);
+      const keptLevels = given?.get(c.Name) || (countedValues === null ? undefined : AsOfFeatureAssembler.levelFold(countedValues, encoding.cardinalityCap, undefined).kept);
+      const fold = AsOfFeatureAssembler.levelFold(values, encoding.cardinalityCap, keptLevels);
       levels.set(c.Name, fold.kept);
       folds.set(c.Name, fold);
       if (fold.folded.length > 0) kept.set(i, new Set(fold.kept));

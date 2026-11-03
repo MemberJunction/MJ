@@ -135,6 +135,8 @@ export class FakeTrainingSnapshot extends FakeEntity {
   public EvaluationProtocolID: string | null = null;
   /** The data cutoff day at UTC midnight (the builder sets it). */
   public DataCutoff = new Date(0);
+  /** The assembly's per-column provenance JSON (the builder sets it). */
+  public ColumnProvenance = '';
 
   public override async Save(): Promise<boolean> {
     const ok = await super.Save();

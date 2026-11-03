@@ -217,11 +217,14 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     const statusOf = (person: number, cycle: number) => sent.find((r) => r.EventsAttended === UnitYearsWorld.EventsAttended(person, cycle))?.Status;
     // The lapsed person's stored Status is Lapsed, but on the 2024 decision date it was still Active.
     expect(statusOf(2, 2024)).toBe('Active');
-    expect(statusOf(2, 2025)).toBe('Lapsed');
+    // On the 2025 decision date it was Lapsed, a level only that locked-holdout row has: the kept levels are counted on
+    // the 2024 development rows, so the holdout row folds it as scoring would, and the fold names it.
+    expect(statusOf(2, 2025)).toBe('__other');
+    expect(JSON.parse(snapshots[0].ColumnProvenance).find((c: { column: string }) => c.column === 'Status').categoryFold).toEqual({ kept: ['Active'], folded: ['Lapsed'] });
     for (const p of [0, 1, 3]) for (const c of [2024, 2025]) expect(statusOf(p, c)).toBe('Active');
     const lineage = JSON.parse(models[0].Lineage!);
     expect(lineage.featureSpec.map((f: { name: string }) => f.name)).toEqual(['EventsAttended', 'Status']);
-    expect(lineage.categoryLevels).toEqual({ Status: ['Active', 'Lapsed'] });
+    expect(lineage.categoryLevels).toEqual({ Status: ['Active'] });
   });
 
   it('refuses a text column declared numeric at the assembly stage, naming the column, before calling the trainer', async () => {
@@ -302,7 +305,7 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
 
   it('round-trips the stored lineage: the scoring path reads back what training wrote and assembles the same values', async () => {
     const steps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }, { Id: 's2', Kind: 'select', Entity: 'People', KeyField: 'PersonID', Columns: ['Status'] }] };
-    const { engine, deps, pipeline, models } = TrainingHarness.ForUnit(years, unitColumns, steps);
+    const { engine, deps, pipeline, models, files, snapshots } = TrainingHarness.ForUnit(years, unitColumns, steps);
     await engine.trainModel({ pipelineId: pipeline.ID }, deps);
     const trained = models[0];
     trained.Status = 'Validated';
@@ -323,11 +326,15 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     };
     const context: RecordProcessorContext = { ContextUser: fakeUser, Provider: fakeProvider };
     const scored = await new MLModelInferenceProcessor({ modelId: trained.ID, deps: scoringDeps }).AssembleForScoring([{ ID: 'y2024-2' }, { ID: 'y2025-2' }], context, 'unit-rule');
-    const training = await engine.AssembleForTraining(pipeline.ID, deps);
     expect(scored.Status).toBe('assembled');
-    if (scored.Status !== 'assembled' || training.Assembled.Status !== 'assembled') return;
-    const byId = new Map(training.Assembled.Rows.map((r) => [r.RowID, r.Values]));
-    expect(scored.Rows.map((r) => r.Values)).toEqual([byId.get('y2024-2'), byId.get('y2025-2')]);
+    if (scored.Status !== 'assembled') return;
+    // The run's own matrix (the snapshot), development row y2024-2 and locked-holdout row y2025-2 included.
+    const sent = snapshotRows(await storedContent(files, snapshots[0]));
+    const snapshotValues = (person: number, cycle: number) => {
+      const r = sent.find((x) => x.EventsAttended === UnitYearsWorld.EventsAttended(person, cycle));
+      return r ? [r.EventsAttended, r.Status] : null;
+    };
+    expect(scored.Rows.map((r) => r.Values)).toEqual([snapshotValues(2, 2024), snapshotValues(2, 2025)]);
     expect(scored.Rows[0].Values[1]).toBe('Active');
   });
 
@@ -1046,5 +1053,55 @@ describe('TrainingEngine — the gate decision decides what ships', () => {
     expect(TrainingEngine.MemberDriverKey({ kind: 'naive' }, { kind: 'forecast', valueKind: 'continuous' })).toBe('naive');
     expect(TrainingEngine.MemberDriverKey({ kind: 'seasonal-naive', season: 12 }, { kind: 'forecast', valueKind: 'continuous' })).toBe('seasonal-naive');
     expect(() => TrainingEngine.MemberDriverKey({ kind: 'dummy', name: 'base-rate' }, binary)).toThrow('a dummy baseline is a yardstick and never ships as an artifact');
+  });
+});
+
+describe('TrainingEngine — the carve decides which rows training sees', () => {
+  // Decided 334 days after StartDate: development 2024-11-30, locked holdout 2025-01-29, after holdoutEnd 2025-11-30.
+  const row = (id: string, person: number, start: string, region: string, renewed: boolean): SourceRow =>
+    ({ ID: id, PersonID: `p${person}`, StartDate: start, EventsAttended: person, Region: region, Renewed: renewed });
+  const dev = (renewed: readonly boolean[]): SourceRow[] => renewed.map((r, p) => row(`d${p}`, p, '2024-01-01', p % 2 === 0 ? 'EU' : 'US', r));
+  const holdout = [row('h0', 0, '2024-03-01', 'HOLD', true), row('h1', 1, '2024-03-01', 'EU', false)];
+  const late = [row('l0', 0, '2025-01-01', 'LATE', true), row('l1', 1, '2025-01-01', 'LATE', false)];
+  const unitColumns = { ...UnitYearsWorld.UnitColumns(), Censoring: JSON.stringify({ rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2026-06-01' } }) };
+  const protocolRow = ProtocolRowFixture.Row({
+    MinMinorityClassRows: 1,
+    Holdout: JSON.stringify({ kind: 'date-carved', dateColumn: 'DecisionDate', cutoff: '2025-01-01', holdoutEnd: '2025-06-01', newEntityReport: null }),
+  });
+  const harnessFor = (years: SourceRow[], steps: FeatureStepGraph) => {
+    const h = TrainingHarness.ForUnit(years, unitColumns, steps);
+    h.deps.protocols = new FakeEvaluationProtocolStore([protocolRow]);
+    return h;
+  };
+  const regionSteps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended', 'Region'] }] };
+
+  it('keeps the levels of development rows only, and folds a level first seen on a holdout row as scoring would', async () => {
+    const { engine, deps, pipeline, models, files, snapshots } = harnessFor([...dev([true, false, true, false]), ...holdout, ...late], regionSteps);
+    await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    expect(JSON.parse(models[0].Lineage!).categoryLevels).toEqual({ Region: ['EU', 'US'] });
+    const sent = snapshotRows(await storedContent(files, snapshots[0]));
+    expect(sent.map((r) => [r.EventsAttended, r.Region]).sort()).toEqual([[0, 'EU'], [0, '__other'], [1, 'EU'], [1, 'US'], [2, 'EU'], [3, 'US']]);
+  });
+
+  it('validates the target over the development rows: one outcome there refuses, whatever the holdout and later rows hold', async () => {
+    const { engine, deps, pipeline, trainer } = harnessFor([...dev([true, true, true, true]), ...holdout, ...late], regionSteps);
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toMatchObject({ Refusal: { stage: 'unit', reason: { kind: 'single-valued-target', value: '1', rows: 4 } } });
+    expect(trainer.Requests).toHaveLength(0);
+  });
+
+  it('does not assemble rows decided after holdoutEnd, so one whose history is not covered does not refuse the run', async () => {
+    const years = [...dev([true, false, true, false]), ...holdout, row('l9', 9, '2025-01-01', 'LATE', true)];
+    const steps: FeatureStepGraph = { Steps: [{ Id: 's1', Kind: 'select', Columns: ['EventsAttended'] }, { Id: 's2', Kind: 'select', Entity: 'People', KeyField: 'PersonID', Columns: ['Status'] }] };
+    const h = harnessFor(years, steps);
+    const tables = UnitYearsWorld.Tables(years);
+    // p9's history starts with a Snapshot after its only row's decision day: that row cannot be read as of its day.
+    tables.People = [...tables.People, { ID: 'p9', Status: 'Active' }];
+    tables['MJ: Record Changes'] = [...tables['MJ: Record Changes'], {
+      ID: 'rc-snap-p9', EntityID: UnitYearsWorld.PeopleEntity.ID, Status: 'Complete', RecordID: 'ID|p9', Type: 'Snapshot', Source: 'Internal',
+      ChangedAt: new Date('2026-01-01T00:00:00Z'), ChangesJSON: '{}', FullRecordJSON: JSON.stringify({ ID: 'p9', Status: 'Active' }),
+    }];
+    h.deps.dataAccess = new TableDataAccess(tables);
+    const trained = await h.engine.trainModel({ pipelineId: h.pipeline.ID }, h.deps);
+    expect(storedResults(trained.run.ValidationResults)).toMatchObject({ status: 'completed', carve: { developmentRowCount: 4, holdoutRowCount: 2, excludedAfterHoldoutEnd: 1 } });
   });
 });
