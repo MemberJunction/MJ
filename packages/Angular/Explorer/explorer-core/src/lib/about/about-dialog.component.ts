@@ -121,10 +121,16 @@ import { ServerConnectivityService } from '../services/server-connectivity.servi
                 <div class="mj-about__diag-row"><span class="k">Theme</span><span class="v">{{ ThemeLabel }}</span></div>
                 <div class="mj-about__diag-row"><span class="k">Browser</span><span class="v">{{ BrowserLabel }}</span></div>
             </div>
-            <button class="mj-about__copy-btn" type="button" (click)="CopyDiagnostics()">
-                <i class="fa-solid" [class.fa-clipboard]="!CopyConfirmed" [class.fa-check]="CopyConfirmed"></i>
-                {{ CopyConfirmed ? 'Copied!' : 'Copy diagnostics' }}
-            </button>
+            <div class="mj-about__diag-actions">
+                <button class="mj-about__copy-btn" type="button" (click)="CopyDiagnostics()">
+                    <i class="fa-solid" [class.fa-clipboard]="!CopyConfirmed" [class.fa-check]="CopyConfirmed"></i>
+                    {{ CopyConfirmed ? 'Copied!' : 'Copy diagnostics' }}
+                </button>
+                <button class="mj-about__copy-btn mj-about__bundle-btn" type="button" (click)="OpenDiagnosticBundleDialog()">
+                    <i class="fa-solid fa-box-archive"></i>
+                    Diagnostic Bundle...
+                </button>
+            </div>
             </div>
           </ng-template>
         </mj-accordion-panel>
@@ -385,9 +391,13 @@ img.mj-about__user-avatar { background: var(--mj-bg-surface-card); }
 .mj-about__success { color: var(--mj-status-success) !important; }
 .mj-about__error   { color: var(--mj-status-error)   !important; }
 
-.mj-about__copy-btn {
-    width: 100%;
+.mj-about__diag-actions {
+    display: flex;
+    gap: 8px;
     margin-top: 12px;
+}
+.mj-about__copy-btn {
+    flex: 1;
     padding: 10px;
     border: 1px dashed var(--mj-border-strong);
     background: transparent;
@@ -401,6 +411,11 @@ img.mj-about__user-avatar { background: var(--mj-bg-surface-card); }
     gap: 8px;
     transition: border-color 0.15s, color 0.15s, background 0.15s;
     font-family: inherit;
+}
+.mj-about__bundle-btn {
+    border-style: solid;
+    color: var(--mj-brand-primary);
+    border-color: color-mix(in srgb, var(--mj-brand-primary) 45%, var(--mj-border-strong));
 }
 .mj-about__copy-btn:hover {
     border-color: var(--mj-brand-primary);
@@ -488,6 +503,7 @@ img.mj-about__user-avatar { background: var(--mj-bg-surface-card); }
 })
 export class AboutDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     @Output() CloseRequested = new EventEmitter<void>();
+    @Output() ReportProblemRequested = new EventEmitter<void>();
 
     /** Optional avatar image URL — passed in from the shell where it's already resolved. */
     @Input() AvatarUrl: string | null = null;
@@ -624,6 +640,10 @@ export class AboutDialogComponent extends BaseAngularComponent implements OnInit
 
     public OnCloseClick(): void {
         this.CloseRequested.emit();
+    }
+
+    public OpenDiagnosticBundleDialog(): void {
+        this.ReportProblemRequested.emit();
     }
 
     public OnLogoClick(): void {
