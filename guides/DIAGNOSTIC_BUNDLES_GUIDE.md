@@ -71,7 +71,7 @@ Diagnostic logs and telemetry spans rarely contain raw PII, and aggressive regex
      - Cloud & AI provider keys (`sk-...`, `AKIA...`, `AIza...`, `ghp_...`, `xoxb-...`)
      - URI credentials: `postgres://user:pass@host/db` becomes `postgres://[REDACTED_CREDENTIALS]@host/db`. The scheme, host, port and path stay. The user is redacted too, because it can be an email address.
      - Unquoted connection-string secrets (`Server=...;Password=...;`) and URL query secrets (for example AWS signed-URL parameters `X-Amz-Credential`, `X-Amz-Signature`, `X-Amz-Security-Token`)
-     - `name=value`, JSON `"name":"value"` (plain or escaped `\"name\":\"value\"`) and `name: value` pairs (header lines, YAML, log text) whose name is sensitive
+     - JSON `"name":"value"` pairs (plain, then escaped `\"name\":\"value\"`), then `name=value` pairs, then `name: value` pairs (header lines, YAML, log text), each when the name is sensitive
    - **Sensitive names.** A key, header or `name:`/`name=` name is sensitive when its normalized form (lower case, without `-`, `_`, `.` or spaces) contains `password`, `passwd`, `pwd`, `secret`, `token`, `apikey`, `privatekey`, `accesskey`, `accountkey`, `signingkey`, `encryptionkey`, `masterkey`, `sharedkey`, `credential`, `signature`, `connectionstring` or `connstr`. These exact names are sensitive too: `authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `sig`, `pass`. A header is also sensitive when its name ends in `-token`, `-key`, `-secret`, `-signature` or `-credential(s)`.
    - **Names that keep their value:**
      - names that end in `Id`/`ID` after a lower-case letter or a digit (`apiKeyId`, `keyID`), or after a separator `_`, `-`, `.` or space (`API_KEY_ID`). An all-caps name such as `AUTH_TOKEN_VALID` is redacted.
@@ -173,7 +173,7 @@ Users and administrators can launch diagnostic capture or download a `.mjdiag` b
 
 ### Remote Operations
 
-The operations are metadata-registered under the `Diagnostics` category. Each one checks a `Diagnostics: *` authorization and, for API keys, a `diagnostics:*` scope.
+The operations are metadata-registered under the `Diagnostics` category. Every operation except `Diagnostics.GetMySessionStatus` checks a `Diagnostics: *` authorization (table below). Every operation except `Diagnostics.GetMySessionStatus` and `Diagnostics.UploadClientCapture` has a `diagnostics:*` API scope (`diagnostics:manage`, `diagnostics:read` for `GetBundlePreview`, `diagnostics:send` for `SendBundle`).
 
 **Who has access.** A user passes a diagnostics check when the user is an Owner (`Type = 'Owner'`) or holds the named `Diagnostics: *` authorization. The roles Developer and Administrator do not grant access on their own. When the authorization record is missing or metadata is not loaded, the check fails. Inactive users and magic-link or scope-limited principals always fail.
 
@@ -182,7 +182,7 @@ The operations are metadata-registered under the `Diagnostics` category. Each on
 | `Diagnostics.StartSession` | `Diagnostics: Run Sessions`, or self-service recording for the user's own session (`Diagnostics.SelfServiceRecording`) |
 | `Diagnostics.StopSession` | `Diagnostics: Run Sessions`, or the user's own self-service session |
 | `Diagnostics.GetMySessionStatus` | Any active, signed-in user. Returns `CaptureEnabled` and `RequireLiteralScrubbing` from the instance settings. |
-| `Diagnostics.UploadClientCapture` | `Diagnostics: Run Sessions`, a session that targets the caller, or self-service recording when no session is named |
+| `Diagnostics.UploadClientCapture` | `Diagnostics: Run Sessions`, a session that targets the caller, the caller's own self-service session, or self-service recording when no session is named |
 | `Diagnostics.BuildBundle` | `Diagnostics: Run Sessions`, or the user's own self-service session |
 | `Diagnostics.GetBundlePreview` | `Diagnostics: Run Sessions` or access to its session for a local bundle; `Diagnostics: Manage Intake` for a received bundle. With `MintDownloadToken` it returns a link with a 60-second, single-use, user-bound HMAC-SHA256 token for `GET /diagnostics/bundles/:bundleId/download?token=...`. |
 | `Diagnostics.SendBundle` | `Diagnostics: Send Externally` |
@@ -202,7 +202,7 @@ The server telemetry queries (`GetServerTelemetry*` in MJServer's `TelemetryReso
 - **Saves.** Server buffers are saved to `MJ: Diagnostic Session Chunks` when a session's buffers reach 1 MB (a background save), on Stop, upload and build, and when a session expires (as the system user). Without a system user, the unsaved entries of an expired session are dropped and one error line is logged.
 - **Failed saves.** When a chunk save fails, that chunk and all later chunks stay in memory and the next save tries them first. A background save waits 30 seconds after a failure. Kept chunks still count toward `MaxBytes`. When this process no longer holds the session, its kept chunks are dropped 15 minutes later, with one error line.
 - **Restart.** After a restart, a live session's saved byte counts are read back from its chunks, so `MaxBytes` still holds.
-- **Built bundles.** A built bundle stays in server memory until it has not been used for 2 hours, or until the total of built bundles passes 256 MB (least recently used first). A retention purge of the bundle row also removes it. After that, rebuild the bundle; the download answers 410.
+- **Built bundles.** A built bundle stays in server memory until it has not been used for 2 hours (a prune timer runs every 10 minutes, so an idle bundle is dropped within about 10 minutes after that), or until the total of built bundles passes 256 MB (least recently used first). A retention purge of the bundle row also removes it. After that, rebuild the bundle; the download answers 410.
 
 ### Submission Instance Configuration (`MJ: Instance Configurations`)
 
@@ -210,7 +210,7 @@ The server reads these settings through `DiagnosticsSettings` (`@memberjunction/
 
 | Configuration Key | Default | Description |
 | --- | --- | --- |
-| `Diagnostics.Capture.Enabled` | `true` | When `false`, `Diagnostics.StartSession` refuses, the middleware does not attach requests to sessions, and the server capture hooks are removed. After sign-in the browser also stops capture and clears its buffers. |
+| `Diagnostics.Capture.Enabled` | `true` | When `false`, `Diagnostics.StartSession` refuses, the middleware does not attach requests to sessions, and the server capture hooks are removed. After sign-in the browser also stops capture and clears its buffers, unless a recording runs. |
 | `Diagnostics.SelfServiceRecording` | `false` | When `true`, a user without `Diagnostics: Run Sessions` may start a session scoped to their own user ID only. |
 | `Diagnostics.RequireLiteralScrubbing` | `false` | Forces `ScrubLiterals = true` (Stage 2) on every session and bundle. |
 | `Diagnostics.MaxSessionMinutes` | `60` | Upper limit for a session's `DurationMinutes`. |
@@ -302,7 +302,7 @@ For self-hosted, Docker, or Kubernetes deployments running a ClamAV REST sidecar
 #### Option C: Cryptographic + Structural Verification (`None` / `StructuralOnlyMalwareScanner`)
 Even when no external antivirus daemon is configured, the intake pipeline **always** enforces:
 1. **`MJDB` v1 Magic Header & Key ID Pre-Check** before writing to quarantine (`InspectEncryptedBundleEnvelope`) — rejects random junk uploads immediately at the HTTP edge.
-2. **X25519 + HKDF-SHA256 + AES-256-GCM AEAD Decryption** with AAD binding (`bundleId`, `manifestSha256`, `ticketNumber`, `keyId`) — proves the payload was encrypted specifically for this collector and was not tampered with in transit.
+2. **X25519 + HKDF-SHA256 + AES-256-GCM AEAD Decryption** with the whole envelope prefix bound as AAD: the `MJDB` magic bytes, the version byte, the header length and the header JSON (`version`, `algorithm`, `recipientKeyId`, `ephemeralPublicKeyBase64`, `hkdfSaltBase64`, `ivBase64`, `createdAt`, and when present `senderEnvironmentId`, `senderKeyId`, `senderSignatureBase64` and `manifestSha256`) — proves the payload was encrypted specifically for this collector and was not tampered with in transit.
 3. **`VerifyBundleArchive` Structural Verification**:
    - Rejects non-ZIP files, path-traversal entries (`..`, a leading `/` or a backslash), symbolic links, duplicate entries, more than 128 entries, compression-ratio zip bombs (`> 25:1` per entry), and oversized archives (`> 100 MB` uncompressed). Inflation stops at each entry's declared uncompressed size.
    - Requires each local file header to repeat the central directory's file name, compression method, CRC-32, compressed size and uncompressed size (`CORRUPT_ZIP_STRUCTURE`).
@@ -389,8 +389,8 @@ npx mj diag slow ./bundle.mjdiag --threshold 250
 # 3. View chronological merged timeline of client spans, server spans, SQL queries and breadcrumbs
 npx mj diag timeline ./bundle.mjdiag --limit 100
 
-# 4. Re-scrub an existing bundle at strict tier before sharing externally
-npx mj diag scrub ./bundle.mjdiag --tier strict -o ./bundle.strict.mjdiag
+# 4. Re-scrub an existing bundle with the Standard profile (literal scrubbing) before sharing externally
+npx mj diag scrub ./bundle.mjdiag --profile Standard -o ./bundle.scrubbed.mjdiag
 
 # 5. Export traces to Perfetto (https://ui.perfetto.dev) or OpenTelemetry OTLP JSON
 npx mj diag export ./bundle.mjdiag --perfetto -o ./trace.perfetto.json

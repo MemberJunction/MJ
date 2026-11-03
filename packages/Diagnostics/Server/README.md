@@ -6,7 +6,7 @@ Server-side diagnostic capture, session orchestration, bundle assembly, outbound
 
 - **`DiagnosticSessionManager`**: Singleton coordinator managing active diagnostic sessions (`Record` and `Watch` modes), `AsyncLocalStorage` request/session context propagation (`RunWithContext`, `RunDetached`, `WithoutDiagnosticCapture`), `RegisterLoggerSink` + deduplicated console tap, SQL observer (`ISqlObserver`), chunk buffering/draining (`MJ: Diagnostic Session Chunks`), health snapshots, `.mjdiag` bundle assembly, outbound encrypted MJC submission, and single-use HMAC-SHA256 download tokens.
 - **`DiagnosticsServerMiddleware`**: `BaseServerMiddleware` subclass wiring:
-  - **Stage 1 (Pre-Auth)**: Attaches request IDs, propagates `x-mj-diag-session` / `x-mj-diag-trace` headers, and wraps requests in `AsyncLocalStorage`.
+  - **Stage 1 (Pre-Auth)**: Attaches request IDs, reads the `X-MJ-Diagnostic-Session`, `X-Session-ID` and W3C `traceparent` headers, sets `X-MJ-Trace-ID` on the response, and wraps requests in `AsyncLocalStorage`.
   - **Stage 2 (Post-Auth)**: Matches the authenticated request to active sessions by their `Users` or `Operations` scope.
   - **Stage 3 (Apollo Plugin)**: Captures GraphQL operation spans, variables (structural or scrubbed), and errors.
   - **REST Routes**: Single-use bundle download (`/diagnostics/bundles/:bundleId/download`) and standard MJAPI intake (`/diagnostics/intake/v1/*`).
@@ -17,7 +17,7 @@ Server-side diagnostic capture, session orchestration, bundle assembly, outbound
     - `CloudObjectTagMalwareScanner` (AWS GuardDuty S3 Malware Protection, Azure Defender for Storage, GCP Cloud Storage)
     - `ClamAvWebhookMalwareScanner` (HTTP scanning microservice / ClamAV REST bridge)
     - `StructuralOnlyMalwareScanner` (cryptographic + ZIP/JSON structural verification)
-- **Remote Operations** (`Diagnostics.StartSession`, `StopSession`, `GetMySessionStatus`, `UploadClientCapture`, `BuildBundle`, `GetBundlePreview`, `SendBundle`, `IssueSenderRegistrationCode`, `EnrolSender`, `RevokeSender`, `ReactivateSender`). Each checks a `Diagnostics: *` authorization (`Run Sessions`, `Send Externally` or `Manage Intake`). An Owner passes every check. The roles Developer and Administrator do not grant access on their own, and a missing authorization record or unloaded metadata fails the check.
+- **Remote Operations** (`Diagnostics.StartSession`, `StopSession`, `GetMySessionStatus`, `UploadClientCapture`, `BuildBundle`, `GetBundlePreview`, `SendBundle`, `IssueSenderRegistrationCode`, `EnrolSender`, `RevokeSender`, `ReactivateSender`). Each one except `GetMySessionStatus` checks a `Diagnostics: *` authorization (`Run Sessions`, `Send Externally` or `Manage Intake`); `GetMySessionStatus` needs only an active, signed-in user. Each one except `GetMySessionStatus` and `UploadClientCapture` has a `diagnostics:*` API scope. An Owner passes every check. The roles Developer and Administrator do not grant access on their own, and a missing authorization record or unloaded metadata fails the check.
 - **`MJDiagnosticSenderRegistrationEntityServer`**: Server entity class for `MJ: Diagnostic Sender Registrations` that guards direct writes (see below).
 - **`DiagnosticRetentionScheduledJobDriver`**: Scheduled job driver (`BaseScheduledJob`) that purges expired `MJ: Diagnostic Bundles` (and their underlying `MJStorage` objects and in-memory bytes) and expired `MJ: Diagnostic Sessions`.
 
