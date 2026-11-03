@@ -3,9 +3,14 @@ import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { Metadata, RunView } from "@memberjunction/core";
 import { MJListEntity, MJListDetailEntity } from "@memberjunction/core-entities";
+import { ListRecordIDError } from "./_action-helpers";
 
 /**
  * Action to add one or more records to a list.
+ *
+ * Each entry of `RecordIDs` is written as `ListDetail.RecordID`, the compact `CompositeKey`
+ * segment: the record's key value for a single-column primary key, `Field1|value1||Field2|value2`
+ * for a composite one. A single value for an entity with a composite key is refused.
  *
  * @example
  * ```typescript
@@ -64,6 +69,27 @@ export class AddRecordsToListAction extends BaseAction {
           Success: false,
           ResultCode: 'LIST_NOT_FOUND',
           Message: `List with ID '${listId}' not found`
+        };
+      }
+
+      // RecordID holds the compact key segment; refuse ids that cannot name a record of this
+      // list's entity before writing anything (#4221).
+      const listEntity = md.EntityByID(listResult.Results[0].EntityID);
+      if (!listEntity) {
+        return {
+          Success: false,
+          ResultCode: 'ENTITY_NOT_FOUND',
+          Message: `Entity '${listResult.Results[0].EntityID}' of list '${listId}' is not in metadata`
+        };
+      }
+      const invalidIds = recordIds
+        .map((id: string) => ListRecordIDError(listEntity.PrimaryKeys.length, String(id)))
+        .filter((e: string | null): e is string => e !== null);
+      if (invalidIds.length > 0) {
+        return {
+          Success: false,
+          ResultCode: 'INVALID_RECORD_ID',
+          Message: invalidIds.join('; ')
         };
       }
 

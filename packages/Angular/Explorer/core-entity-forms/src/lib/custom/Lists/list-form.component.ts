@@ -1353,26 +1353,42 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         this.cdr.detectChanges();
 
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const sourceEntityInfo = this.metadata.EntityByID(this.record.EntityID);
+        if (!sourceEntityInfo) {
+            LogError(`Add from view: entity ${this.record.EntityID} of list ${this.record.ID} is not in metadata`);
+            this.ShowAddFromViewLoader = false;
+            this.FetchingRecordsToSave = false;
+            this.cdr.detectChanges();
+            return;
+        }
 
-        // Collect all unique record IDs from selected views
-        const recordIdSet = new Set<string>();
+        // ListDetail.RecordID is the compact CompositeKey segment (the raw value for a single-column
+        // key, "F1|v1||F2|v2" for a composite one). Read every primary key field, not `ID`, so an
+        // entity keyed on another column or on several gets the right RecordID (#4221).
+        // Keyed by the normalized segment for de-duplication; the value is the segment as written.
+        const recordsBySegment = new Map<string, string>();
 
         for (const userView of this.UserViewsToAdd) {
-            const runViewResult = await rv.RunView({
+            const runViewResult = await rv.RunView<Record<string, unknown>>({
                 ViewID: userView.ID,
                 ViewEntity: userView,
-                Fields: ['ID']
+                Fields: sourceEntityInfo.PrimaryKeys.map(pk => pk.Name),
+                ResultType: 'simple'
             }, this.metadata.CurrentUser);
 
             if (runViewResult.Success) {
-                const records = runViewResult.Results as Array<Record<string, string>>;
-                records.forEach(r => recordIdSet.add(NormalizeUUID(r.ID)));
+                for (const row of runViewResult.Results) {
+                    const segment = CompositeKey.FromEntityRecord(sourceEntityInfo, row).ToCompactURLSegment();
+                    recordsBySegment.set(NormalizeUUID(segment), segment);
+                }
             }
         }
 
         // Filter out records already in the list
         await this.loadExistingListDetailIds();
-        const recordsToAdd = [...recordIdSet].filter(id => !this.ExistingListDetailIds.has(id));
+        const recordsToAdd = [...recordsBySegment.entries()]
+            .filter(([normalized]) => !this.ExistingListDetailIds.has(normalized))
+            .map(([, segment]) => segment);
 
         this.AddFromViewTotal = recordsToAdd.length;
         this.AddFromViewProgress = 0;
