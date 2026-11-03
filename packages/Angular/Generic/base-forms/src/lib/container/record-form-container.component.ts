@@ -46,9 +46,14 @@ import {
   ResolveFormToolbarActionsForEntity,
 } from '../toolbar/base-form-toolbar-action';
 import { RecordLinksToolbarAction } from '../toolbar/actions/record-links-toolbar-action';
+import { RecordCommentsToolbarAction } from '../toolbar/actions/record-comments-toolbar-action';
+import {
+  FormRecordCommentsCoordinatorService,
+  type FormCommentAnchorNavigationRequest,
+} from '../comments/form-record-comments-coordinator.service';
 
-// Ensure built-in RecordLinksToolbarAction is never tree-shaken before ClassFactory registration
-const _BUILTIN_TOOLBAR_ACTIONS = [RecordLinksToolbarAction];
+// Ensure built-in toolbar actions are never tree-shaken before ClassFactory registration
+const _BUILTIN_TOOLBAR_ACTIONS = [RecordLinksToolbarAction, RecordCommentsToolbarAction];
 void _BUILTIN_TOOLBAR_ACTIONS;
 import type { FormChromeSpec } from '../chrome/form-chrome';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
@@ -113,6 +118,7 @@ import { FormFieldEditCoordinator } from '../form-field-edit.coordinator';
 import type { DuplicateEntryCandidate } from '@memberjunction/graphql-dataprovider';
 import { FormSectionIndicatorCoordinator } from '../section-indicators/form-section-indicator-coordinator.service';
 import {
+  DescribeSectionComments,
   DescribeSectionDirty,
   DescribeSectionErrors,
   DescribeSectionWarnings,
@@ -175,7 +181,14 @@ export interface VariantPickerItem {
   // viewProviders) so projected related-entity grids and slot-mounted panels
   // can inject them.
   // FormFieldEditCoordinator likewise, so every mj-form-field in the form reports its edits.
-  providers: [FormSlotCoordinator, FormChromeCoordinator, FormRecordRefreshCoordinator, FormSectionIndicatorCoordinator, FormFieldEditCoordinator],
+  providers: [
+    FormSlotCoordinator,
+    FormChromeCoordinator,
+    FormRecordRefreshCoordinator,
+    FormSectionIndicatorCoordinator,
+    FormFieldEditCoordinator,
+    FormRecordCommentsCoordinatorService,
+  ],
 })
 export class MjRecordFormContainerComponent extends BaseAngularComponent implements AfterContentInit, DoCheck, OnDestroy  {
   private cdr = inject(ChangeDetectorRef);
@@ -184,6 +197,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   private chrome = inject(FormChromeCoordinator);
   private sectionIndicators = inject(FormSectionIndicatorCoordinator);
   private slots = inject(FormSlotCoordinator);
+  public readonly CommentsCoordinator = inject(FormRecordCommentsCoordinatorService);
   private panelAdmin = inject(FormPanelAdminService);
   private recordRefresh = inject(FormRecordRefreshCoordinator);
   private fieldEdits = inject(FormFieldEditCoordinator);
@@ -243,6 +257,16 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /** Structured summary of outgoing + incoming links for the AI agent context */
   LinksSummary: FormAgentLinksSummary | null = null;
+
+  /** Controls visibility of anchored record comments slide-in drawer */
+  ShowRecordComments = false;
+
+  /** Persisted comments panel width */
+  CommentsPanelWidth = 0;
+  private static readonly COMMENTS_WIDTH_KEY = 'MJ_CommentsPanel_Width';
+
+  /** Number of open anchored comment threads on this record */
+  CommentCount = 0;
 
   /** Active historical version being previewed inline across form fields (Time-Travel Preview) */
   ActiveVersionPreview: FormVersionPreviewState | null = null;
@@ -807,9 +831,11 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   // ---- Lifecycle ----
 
   ngAfterContentInit(): void {
-    // Load saved tags panel width
+    // Load saved tags and comments panel widths
     const savedWidth = UserInfoEngine.Instance.GetSetting(MjRecordFormContainerComponent.TAGS_WIDTH_KEY);
     if (savedWidth) this.TagsPanelWidth = parseInt(savedWidth, 10) || 0;
+    const savedCommentsWidth = UserInfoEngine.Instance.GetSetting(MjRecordFormContainerComponent.COMMENTS_WIDTH_KEY);
+    if (savedCommentsWidth) this.CommentsPanelWidth = parseInt(savedCommentsWidth, 10) || 0;
 
     // Subscribe to panel Navigate events and relay them
     this.subscribeToPanelNavigateEvents();
@@ -870,6 +896,14 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     });
     this.recordRefresh.SingleFieldRestoreRequested$.pipe(takeUntil(this.destroy$)).subscribe((req) => {
       void this.onSingleFieldRestoreRequested(req);
+    });
+    this.CommentsCoordinator.Changed$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.ShowRecordComments = this.CommentsCoordinator.IsDrawerOpen;
+      this.CommentCount = this.CommentsCoordinator.Rollup.TotalOpenCount;
+      this.cdr.markForCheck();
+    });
+    this.CommentsCoordinator.NavigateToAnchor$.pipe(takeUntil(this.destroy$)).subscribe((req) => {
+      this.OnNavigateToCommentAnchor(req);
     });
   }
 
@@ -1009,6 +1043,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   public RailWarningTitle(count: number, where: string): string {
     return DescribeSectionWarnings(count, where);
+  }
+
+  public RailCommentTitle(count: number, where: string): string {
+    return DescribeSectionComments(count, where);
   }
 
   /** Sum of the row counts of every section in More (shown on the collapsed folder). */
@@ -2090,7 +2128,23 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.badgeCountsLoaded = true;
     // Fire and forget — counts land while the form renders; nothing awaits them.
     void this.loadFormCounts(record);
+    void this.prewarmRecordComments(record);
     void this.PrewarmToolbarActions(record);
+  }
+
+  private async prewarmRecordComments(record: BaseEntity): Promise<void> {
+    if (!record?.IsSaved || !record.EntityInfo) return;
+    await this.CommentsCoordinator.LoadForRecord(record, this.ProviderToUse);
+    if (this.destroyed) return;
+    const actions = this.ensureToolbarActions();
+    const commentsAction = actions.find((a) => a.Metadata.Key === 'comments');
+    if (commentsAction) {
+      const ctx = this.buildToolbarActionContext(commentsAction, record);
+      if (commentsAction.IsApplicable(ctx)) {
+        await commentsAction.OnPrewarm(ctx);
+      }
+    }
+    this.cdr.markForCheck();
   }
 
   /**
@@ -2101,6 +2155,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   private ensureToolbarActions(): BaseFormToolbarAction[] {
+    if (_BUILTIN_TOOLBAR_ACTIONS.length === 0) {
+      return [];
+    }
     const entityInfo = this.EffectiveEntityInfo;
     const entityName = entityInfo?.Name ?? null;
     if (entityName !== this.toolbarActionsEntityName) {
@@ -2156,6 +2213,13 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         if (this.LinkCount > 0) {
           action.Badge = this.LinkCount;
         }
+      }
+      if (keyLower === 'comments' && this.EffectiveToolbarConfig.ShowCommentsButton === false) {
+        continue;
+      }
+      if (keyLower === 'comments') {
+        action.IsActive = this.ShowRecordComments;
+        action.Badge = this.CommentCount > 0 ? this.CommentCount : undefined;
       }
       const ctx = this.buildToolbarActionContext(action, record);
       if (!action.IsApplicable(ctx)) continue;
@@ -2213,6 +2277,12 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         this.LinkCount = summary.TotalCount;
         this.scheduleChromeResolve();
       },
+      SetRecordCommentsDrawerOpen: (open: boolean) => {
+        this.ShowRecordComments = open;
+        this.CommentsCoordinator.SetDrawerOpen(open, null);
+      },
+      IsRecordCommentsDrawerOpen: () => this.ShowRecordComments,
+      GetRecordCommentCount: () => this.CommentCount,
       RequestChangeDetection: () => {
         this.cdr.markForCheck();
       },
@@ -3120,6 +3190,116 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   OnLinkCountChanged(count: number): void {
     this.LinkCount = count;
     this.cdr.markForCheck();
+  }
+
+  OnToggleRecordComments(): void {
+    const nextOpen = !this.ShowRecordComments;
+    this.ShowRecordComments = nextOpen;
+    this.CommentsCoordinator.SetDrawerOpen(nextOpen, null);
+    this.cdr.detectChanges();
+  }
+
+  OnRecordCommentsClosed(): void {
+    this.ShowRecordComments = false;
+    this.CommentsCoordinator.SetDrawerOpen(false);
+    this.cdr.detectChanges();
+  }
+
+  OnCommentCountChanged(count: number): void {
+    this.CommentCount = count;
+    this.cdr.markForCheck();
+  }
+
+  OnCommentsPanelWidthChanged(width: number): void {
+    this.CommentsPanelWidth = width;
+    UserInfoEngine.Instance.SetSettingDebounced(MjRecordFormContainerComponent.COMMENTS_WIDTH_KEY, String(width));
+  }
+
+  /**
+   * Navigates the form to the field, section, or left-nav rail group targeted by a comment anchor:
+   * switches the active left-nav rail group if needed, expands the target collapsible section,
+   * scrolls the element into view, and applies a brief highlight pulse.
+   */
+  public OnNavigateToCommentAnchor(req: FormCommentAnchorNavigationRequest): void {
+    const hostEl = this.host?.nativeElement;
+    if (!hostEl) return;
+
+    let targetSectionKey = (req.SectionKey ?? '').trim();
+    if (!targetSectionKey && req.AnchorType === 'Section' && req.AnchorKey) {
+      targetSectionKey = req.AnchorKey.trim();
+    }
+    if (!targetSectionKey && req.AnchorType === 'Field' && req.AnchorKey) {
+      const fKeyLower = req.AnchorKey.trim().toLowerCase();
+      for (const panel of this.allChromePanels()) {
+        if (panel.ClaimableFieldNames.some((n) => n.toLowerCase() === fKeyLower)) {
+          targetSectionKey = panel.SectionKey;
+          break;
+        }
+      }
+      if (!targetSectionKey) {
+        const escapedField = req.AnchorKey.trim().replace(/["\\]/g, '\\$&');
+        const fieldEl = hostEl.querySelector(`[data-field-name="${escapedField}"]`);
+        const closestPanel = fieldEl?.closest('mj-collapsible-panel[data-section-key]');
+        if (closestPanel) {
+          targetSectionKey = closestPanel.getAttribute('data-section-key')?.trim() ?? '';
+        }
+      }
+    }
+
+    // 1. Activate left-nav rail group if applicable
+    if (this.ChromeLayout === 'left-nav') {
+      const groupKey = (req.GroupKey ?? '').trim();
+      const firstClassMatch = this.ChromeFirstClassGroups.find(
+        (g) =>
+          (groupKey && g.Key.toLowerCase() === groupKey.toLowerCase()) ||
+          (targetSectionKey && g.SectionKeys.some((k) => k.toLowerCase() === targetSectionKey.toLowerCase()))
+      );
+      if (firstClassMatch) {
+        this.OnChromeGroupActivate(firstClassMatch.Key);
+      } else {
+        const moreMatch = this.ChromeMoreItems.find(
+          (g) =>
+            (groupKey && g.Key.toLowerCase() === groupKey.toLowerCase()) ||
+            (targetSectionKey && g.SectionKeys.some((k) => k.toLowerCase() === targetSectionKey.toLowerCase()))
+        );
+        if (moreMatch) {
+          if (!this.MoreExpanded) {
+            this.chrome.ToggleMoreFolder();
+          }
+          this.OnChromeGroupActivate(moreMatch.Key);
+        }
+      }
+    }
+
+    // 2. Expand target collapsible section if collapsed
+    if (targetSectionKey) {
+      this.Fc?.SetSectionExpanded?.(targetSectionKey, true);
+    }
+
+    this.cdr.detectChanges();
+
+    // 3. Scroll and pulse target element
+    setTimeout(() => {
+      if (this.destroyed) return;
+      let targetEl: HTMLElement | null = null;
+      if (req.AnchorType === 'Field' && req.AnchorKey) {
+        const escaped = req.AnchorKey.trim().replace(/["\\]/g, '\\$&');
+        targetEl = hostEl.querySelector(`mj-form-field[data-field-name="${escaped}"] .mj-forms-field`)
+          ?? hostEl.querySelector(`[data-field-name="${escaped}"]`);
+      } else if (targetSectionKey) {
+        const escaped = targetSectionKey.replace(/["\\]/g, '\\$&');
+        targetEl = hostEl.querySelector(`mj-collapsible-panel[data-section-key="${escaped}"] .mj-forms-panel`)
+          ?? hostEl.querySelector(`[data-section-key="${escaped}"]`);
+      }
+
+      if (targetEl) {
+        targetEl.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+        targetEl.classList.add('mj-forms-comment-anchor-pulse');
+        setTimeout(() => {
+          targetEl?.classList.remove('mj-forms-comment-anchor-pulse');
+        }, 1800);
+      }
+    }, 60);
   }
 
   OnLinksSummaryChanged(summary: FormAgentLinksSummary): void {

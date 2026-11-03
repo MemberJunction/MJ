@@ -141,5 +141,55 @@ describe('UserMayWriteConversation', () => {
             Loaded: false,
         });
     });
+
+    it('enforces AllowRecordComments and CanUserComment on anchored record-comment threads', async () => {
+        const disabledEntityProvider = {
+            ProviderType: 'Database',
+            Entities: [
+                {
+                    ID: 'e-locked',
+                    Name: 'Locked Entity',
+                    DisplayNameOrName: 'Locked Entity',
+                    AllowRecordComments: false,
+                    CanUserComment: () => false,
+                },
+            ],
+            GetEntityObject: async () => ({
+                UserID: 'other',
+                AnchorType: 'Field',
+                LinkedEntityID: 'e-locked',
+                LinkedRecordID: 'r-1',
+                Load: async () => true,
+            }),
+        } as never;
+
+        const deniedDisabled = await UserMayWriteConversation(disabledEntityProvider, user, 'c-anchored-1');
+        expect(deniedDisabled.Allowed).toBe(false);
+        expect(deniedDisabled.Reason).toMatch(/disabled/i);
+
+        const roleDeniedProvider = {
+            ProviderType: 'Database',
+            Entities: [
+                {
+                    ID: 'e-role-gated',
+                    Name: 'Role Gated Entity',
+                    DisplayNameOrName: 'Role Gated Entity',
+                    AllowRecordComments: true,
+                    CanUserComment: () => false,
+                },
+            ],
+            GetEntityObject: async () => ({
+                UserID: 'other',
+                AnchorType: 'Field',
+                LinkedEntityID: 'e-role-gated',
+                LinkedRecordID: 'r-1',
+                Load: async () => true,
+            }),
+        } as never;
+
+        const deniedRole = await UserMayWriteConversation(roleDeniedProvider, user, 'c-anchored-2');
+        expect(deniedRole.Allowed).toBe(false);
+        expect(deniedRole.Reason).toMatch(/permission to post comments/i);
+    });
 });
 
