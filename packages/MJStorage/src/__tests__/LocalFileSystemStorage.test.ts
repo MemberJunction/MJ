@@ -65,6 +65,16 @@ describe('LocalFileSystemStorage', () => {
     }
   });
 
+  it('reports a directory as no object, and its files as objects', async () => {
+    await store.PutObject('folder/inner.txt', Buffer.from('x'));
+    await mkdir(join(root, 'empty-folder'));
+    expect(await store.ObjectExists('folder')).toBe(false);
+    expect(await store.ObjectExists('empty-folder')).toBe(false);
+    expect(await store.ObjectExists('folder/inner.txt')).toBe(true);
+    expect(await store.ObjectExists('folder/missing.txt')).toBe(false);
+    expect(await store.DirectoryExists('folder')).toBe(true);
+  });
+
   it('refuses an escaping destination in MoveObject and CopyObject', async () => {
     await store.PutObject('in.txt', Buffer.from('x'));
     await expect(store.MoveObject('in.txt', '../moved.txt')).rejects.toBeInstanceOf(StorageRootEscapeError);

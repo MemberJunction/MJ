@@ -358,9 +358,10 @@ export class LocalFileSystemStorage extends FileStorageBase {
     return true;
   }
 
-  /** Whether a file exists under the root. */
+  /** Whether a file exists under the root; a directory is not an object, so its key answers `false`. */
   public async ObjectExists(objectName: string): Promise<boolean> {
-    return existsSync(await this.pathOf(objectName, 'Object'));
+    const full = await this.pathOf(objectName, 'Object');
+    return existsSync(full) && (await stat(full)).isFile();
   }
 
   /** Whether a directory exists under the root. */
