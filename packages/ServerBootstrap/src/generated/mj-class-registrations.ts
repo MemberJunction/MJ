@@ -246,7 +246,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (463 classes)
+// @memberjunction/core-entities (472 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -512,6 +512,15 @@ import {
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJGraphAuthorityTierEntity,
+    MJGraphConceptEntity,
+    MJGraphConceptTypeEntity,
+    MJGraphEdgeEntity,
+    MJGraphEdgeProviderEntity,
+    MJGraphEdgeTypeEndpointEntity,
+    MJGraphEdgeTypeEntity,
+    MJGraphEntity,
+    MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -1335,18 +1344,21 @@ import {
     RecordProcessRunNowServerOperation,
 } from '@memberjunction/record-set-processor';
 
-// @memberjunction/content-pipeline (17 classes)
+// @memberjunction/content-pipeline (20 classes)
 import {
     ArchiveExtractor,
     CredentialAccessDriver,
     DeleteContentItemStage,
     DeleteStage,
+    DeterministicConceptSynthesizer,
     DiscoverStage,
     EmbedContentItemStage,
     EmbedStage,
     ExtractStage,
+    GraphStage,
     HtmlExtractor,
     ManagedPromptClassifier,
+    ManagedPromptConceptSynthesizer,
     NoOpStage,
     PdfExtractor,
     PlainTextExtractor,
@@ -2130,6 +2142,15 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJGraphAuthorityTierEntity,
+    MJGraphConceptEntity,
+    MJGraphConceptTypeEntity,
+    MJGraphEdgeEntity,
+    MJGraphEdgeProviderEntity,
+    MJGraphEdgeTypeEndpointEntity,
+    MJGraphEdgeTypeEntity,
+    MJGraphEntity,
+    MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -2182,6 +2203,10 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJOAuthClientRegistrationEntity,
     MJOAuthTokenEntity,
     MJOpenAppDependencyEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJOpenAppEntity,
     MJOpenAppInstallHistoryEntity,
     MJOutputDeliveryTypeEntity,
@@ -2191,10 +2216,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJProjectEntityExtended,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
@@ -2386,6 +2407,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetBusinessCentralDimensionsAction,
     GetBusinessCentralGLAccountsAction,
     GetBusinessCentralGeneralLedgerEntriesAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     GetBusinessCentralSalesInvoicesAction,
     GetChartOfAccountsAction,
     GetCustomersAction,
@@ -2395,10 +2420,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetQuickBooksDimensionsAction,
     GetQuickBooksGLCodesAction,
     GetQuickBooksTransactionsAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     GetSalesInvoicesAction,
     AssociateContactToCompanyAction,
     GetActivitiesByContactAction,
@@ -2590,6 +2611,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PagedContentSegmenter,
     PlainTextContentCleaner,
     SemanticTextSegmenter,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     StructuralTextSegmenter,
     TranscriptSegmenter,
     DecisionReasoningProvider,
@@ -2599,10 +2624,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AutotagCloudStorage,
     AutotagEntity,
     AutotagLocalFileSystem,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     AutotagRSSFeed,
     AutotagUpload,
     AutotagWebsite,
@@ -2691,12 +2712,15 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CredentialAccessDriver,
     DeleteContentItemStage,
     DeleteStage,
+    DeterministicConceptSynthesizer,
     DiscoverStage,
     EmbedContentItemStage,
     EmbedStage,
     ExtractStage,
+    GraphStage,
     HtmlExtractor,
     ManagedPromptClassifier,
+    ManagedPromptConceptSynthesizer,
     NoOpStage,
     PdfExtractor,
     PlainTextExtractor,
@@ -2791,6 +2815,10 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     MJMaterializedResultEntityServer,
     MJProjectEntityServer,
     MJQueryEntityServer,
@@ -2803,10 +2831,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJRubricBandEntityServer,
     MJRubricCriterionEntityServer,
     MJRubricCriterionLevelEntityServer,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     MJRubricEvaluationEntityServer,
     MJRubricEvaluationScoreEntityServer,
     MJRubricScaleEntityServer,
@@ -2995,6 +3019,10 @@ const CLASS_REGISTRATIONS_5: any[] = [
     RunDecisionAction,
     RunRecordProcessAction,
     RunStoredQueryAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
     ScheduleNextAgentWakeAction,
     ScheduledGeocodingAction,
     ScopedSearchAction,
@@ -3007,10 +3035,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     SendSingleMessageAction,
     SendToAudienceAction,
     ShareListAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
     SlackWebhookAction,
     SummarizeContentAction,
     SyncMCPToolsAction,
@@ -3075,7 +3099,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1247;
+export const CLASS_REGISTRATIONS_COUNT = 1259;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
