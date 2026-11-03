@@ -37,8 +37,17 @@ export interface EntityHistory {
   readonly Coverage: ChangeHistoryCoverage;
   /** The field's value in force strictly before `before`. */
   ValueAt(recordKey: string, field: string, before: Date): HistoryValue;
-  /** Update rows that changed `field` at or after `after`. */
-  UpdatesAfter(recordKey: string, field: string, after: Date): number;
+  /**
+   * Change rows at or after `after` that changed `field` or replaced the record: an Update that lists the field, a
+   * Delete, and a row of any type whose recorded value of the field differs from the row before it (a Create or
+   * Snapshot written after an untracked change carries the new value without listing it).
+   */
+  ChangesAfter(recordKey: string, field: string, after: Date): number;
+  /**
+   * The number of the record's change rows strictly before `before`. Every verdict the history gives at `before` is
+   * fixed by this count, so callers judging many instants can judge each distinct count once.
+   */
+  RowsBefore(recordKey: string, before: Date): number;
   /**
    * When the record's history starts with its own Create row, the instant of that row: the record did not exist before
    * it. Null when the history starts with a Snapshot (the record is older than its history) or there is no history.
@@ -97,8 +106,8 @@ export class RecordHistory {
         onUncoveredRow: policy.onUncoveredRow,
       },
       ValueAt: (recordKey, field, before) => RecordHistory.valueAt(byKey, start, continuity.Mismatched, policy, recordKey, field, before),
-      UpdatesAfter: (recordKey, field, after) =>
-        (byKey.get(recordKey.toLowerCase()) || []).filter((c) => c.Type === 'Update' && c.ChangedAt.getTime() >= after.getTime() && RecordHistory.changedFields(c.ChangesJSON).has(field)).length,
+      ChangesAfter: (recordKey, field, after) => RecordHistory.changesAfter(byKey.get(recordKey.toLowerCase()) || [], field, after),
+      RowsBefore: (recordKey, before) => RecordHistory.rowsBefore(byKey.get(recordKey.toLowerCase()) || [], before),
       CreatedAt: (recordKey) => created.get(recordKey.toLowerCase()) || null,
     };
   }
@@ -236,6 +245,30 @@ export class RecordHistory {
       }
     }
     return { Mismatched: mismatched, Replayed: replayed, RecordsMismatched: new Set([...mismatched].map((x) => x.split('|')[0])).size };
+  }
+
+  /** See {@link EntityHistory.ChangesAfter}; `list` is one record's rows in ChangedAt order. */
+  private static changesAfter(list: readonly RecordChangeRow[], field: string, after: Date): number {
+    let n = 0;
+    list.forEach((c, i) => {
+      if (c.ChangedAt.getTime() < after.getTime()) return;
+      const listsField = c.Type === 'Update' && RecordHistory.changedFields(c.ChangesJSON).has(field);
+      const valueMoved = i > 0 && RecordHistory.comparable(RecordHistory.fieldOf(c.FullRecordJSON, field)) !== RecordHistory.comparable(RecordHistory.fieldOf(list[i - 1].FullRecordJSON, field));
+      if (listsField || c.Type === 'Delete' || valueMoved) n++;
+    });
+    return n;
+  }
+
+  /** The number of rows of `list` (ChangedAt order) strictly before `before`, by binary search. */
+  private static rowsBefore(list: readonly RecordChangeRow[], before: Date): number {
+    let lo = 0;
+    let hi = list.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (list[mid].ChangedAt.getTime() < before.getTime()) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
   }
 
   /** The value in force strictly before `before`, or why it cannot be replayed. Today's value never fills a gap. */

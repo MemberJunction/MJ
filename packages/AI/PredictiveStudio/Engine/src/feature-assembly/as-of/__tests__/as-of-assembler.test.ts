@@ -720,3 +720,64 @@ describe('AsOfFeatureAssembler — a decision day on or after the assembly day r
     expect(out.Status === 'assembled' ? out.Rows.map((r) => r.Values[0]) : out).toEqual([12]);
   });
 });
+
+describe('AsOfFeatureAssembler — a stored value changed after the decision by a change row of any type', () => {
+  const sourced = (row: RecordChangeRow, source: RecordChangeRow['Source']): RecordChangeRow => ({ ...row, Source: source });
+  const one: AssemblyRowRef[] = [{ RowID: 'y1', EntityKey: 'y1', DecisionDate: new Date('2022-12-01T00:00:00Z'), Period: null }];
+  const data: Record<string, SourceRow[]> = { Years: [{ ID: 'y1', PersonID: 'P1' }], People: [{ ID: 'P1', Status: 'Lapsed' }] };
+  const stored: FeatureColumnSpec = { name: 'Status', source: { kind: 'immutable-field', entity: 'People', field: 'Status', keyField: 'PersonID' }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } };
+
+  it('refuses when an external Create row after the decision carries a new value of the field (history started by a Snapshot)', async () => {
+    const out = await new AsOfFeatureAssembler().Assemble(input([stored], { Rows: one, Tables: data, Changes: { People: [
+      rc('s0', 'P1', 'Snapshot', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }),
+      sourced(rc('c1', 'P1', 'Create', '2023-06-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }), 'External'),
+    ] } }));
+    expect(out).toEqual({ Status: 'refused', Refusal: { kind: 'select-changes-after-decision-date', entity: 'People', field: 'Status', changesAfter: 1 } });
+  });
+
+  it('refuses when a later Snapshot row carries a new value of the field', async () => {
+    const out = await new AsOfFeatureAssembler().Assemble(input([stored], { Rows: one, Tables: data, Changes: { People: [
+      rc('c0', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Active' }),
+      rc('s1', 'P1', 'Snapshot', '2023-06-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }),
+    ] } }));
+    expect(out.Status === 'refused' ? out.Refusal.kind : out.Status).toBe('select-changes-after-decision-date');
+  });
+
+  it('refuses when the record was deleted and re-created after the decision', async () => {
+    const out = await new AsOfFeatureAssembler().Assemble(input([stored], { Rows: one, Tables: data, Changes: { People: [
+      rc('c0', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }),
+      rc('d1', 'P1', 'Delete', '2023-06-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }),
+      rc('c2', 'P1', 'Create', '2023-07-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }),
+    ] } }));
+    expect(out.Status === 'refused' ? out.Refusal.kind : out.Status).toBe('select-changes-after-decision-date');
+  });
+
+  it('keeps the stored value when a later Snapshot or Create row carries the same value of the field', async () => {
+    const out = await new AsOfFeatureAssembler().Assemble(input([stored], { Rows: one, Tables: data, Changes: { People: [
+      rc('s0', 'P1', 'Snapshot', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }),
+      rc('s1', 'P1', 'Snapshot', '2023-06-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }),
+    ] } }));
+    expect(out.Status === 'assembled' && out.Rows[0].Values).toEqual(['Lapsed']);
+  });
+});
+
+describe('AsOfFeatureAssembler — child rows are judged at each unit row\'s own decision instant', () => {
+  it('makes only the later row uncovered when an external row on a child arrives between the two rows\' decision days', async () => {
+    const two: AssemblyRowRef[] = [
+      { RowID: 'y1', EntityKey: 'P1', DecisionDate: new Date('2022-01-01T00:00:00Z'), Period: null },
+      { RowID: 'y2', EntityKey: 'P1', DecisionDate: new Date('2024-01-01T00:00:00Z'), Period: null },
+    ];
+    const data: Record<string, SourceRow[]> = { Years: [{ ID: 'y1', PersonID: 'P1' }, { ID: 'y2', PersonID: 'P1' }], Gifts: [{ ID: 'g1', PersonID: 'P1', GivenOn: '2021-06-01', Amount: 10 }] };
+    const g1 = { ID: 'g1', PersonID: 'P1', GivenOn: '2021-06-01', Amount: 10 };
+    const sum: FeatureColumnSpec = { name: 'Given', source: { kind: 'windowed-aggregate', childEntity: 'Gifts', foreignKey: 'PersonID', ownerKeyField: null, dateField: 'GivenOn', endDateField: null, voidedAtField: null, aggregate: 'sum', valueField: 'Amount', windowDays: null, filter: [] }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } };
+    const counting: PredictionUnitSpec = { ...unit, history: { onUncoveredRow: 'exclude-and-count', externalSourceRows: 'ineligible' } };
+    const out = await new AsOfFeatureAssembler().Assemble(input([sum], { Rows: two, Tables: data, Unit: counting, Changes: { Gifts: [
+      rc('gc', 'g1', 'Create', '2021-06-01T00:00:00Z', g1),
+      { ...rc('gx', 'g1', 'Snapshot', '2023-01-01T00:00:00Z', g1), Source: 'External' },
+    ] } }));
+    expect(out.Status).toBe('assembled');
+    if (out.Status !== 'assembled') return;
+    expect(out.Rows.map((r) => [r.RowID, r.Values[0]])).toEqual([['y1', 10]]);
+    expect(out.UncoveredRowsExcluded).toEqual([{ entity: 'Gifts', field: 'PersonID', rows: 1 }]);
+  });
+});

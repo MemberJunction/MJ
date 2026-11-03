@@ -146,8 +146,18 @@ interface AssembledRows { readonly Rows: AssembledRow[]; readonly Excluded: Set<
 interface StableRead { readonly Key: string; readonly Rows: readonly AssemblyRowRef[] }
 /** The rule's verdict on a stored record; `changed` and `uncovered` refuse the assembly and are never returned. */
 type StableOutcome = 'stable' | 'created-after' | 'changed' | 'uncovered' | 'excluded';
-/** The verdicts of a stable-value check, aligned with its reads, the history it read (null when none was) and where it starts. */
-interface StableValues { readonly Outcomes: readonly StableOutcome[]; readonly History: EntityHistory | null; readonly HistoryStart: string | null }
+/**
+ * The verdicts of a stable-value check, aligned with its reads, the history it read (null when none was) and where it
+ * starts. `ExcludedInstants` holds every decision instant (epoch ms) at which at least one read is `excluded`.
+ */
+interface StableValues {
+  readonly Outcomes: readonly StableOutcome[];
+  readonly ExcludedInstants: ReadonlySet<number>;
+  readonly History: EntityHistory | null;
+  readonly HistoryStart: string | null;
+}
+/** How severe a verdict is: a read's verdict is its most severe one over its rows' decision instants. */
+const STABLE_OUTCOME_SEVERITY: Readonly<Record<StableOutcome, number>> = { 'created-after': 0, stable: 1, excluded: 2, uncovered: 3, changed: 4 };
 type CategoryFold = NonNullable<ColumnProvenance['categoryFold']>;
 /** Coverage per entity and field (`entity|field`): one entry for every history the assembly read. */
 type CoverageByField = Map<string, ChangeHistoryCoverage>;
@@ -591,9 +601,12 @@ export class AsOfFeatureAssembler {
   /**
    * The stable-value rule for values read from stored rows: a field, the key field a row joins through, or the fields a
    * windowed aggregate reads from its child rows. Each read is one stored record and the unit rows whose values its
-   * stored fields stand for; it is judged at the earliest of those rows' decision instants at which the record existed.
+   * stored fields stand for; it is judged at each of those rows' decision instants, and its verdict is the most severe
+   * one (`changed`, then `uncovered`, `excluded`, `stable`, and `created-after` only when the record existed at none).
+   * The instants at which a read is `excluded` are reported, so a caller can mark only the rows decided then.
    * The stored value stands (`stable`) when the field is declared not updatable, or the entity tracks Record Changes,
-   * the history covers that instant and no update to the field follows it. A record created after a row's decision
+   * the history covers that instant and no change row follows it that changed the field or replaced the record (an
+   * Update listing it, a Delete, or a row of any type recording a different value). A record created after a row's decision
    * instant did not exist then (`created-after`); one the history cannot replay for another reason (a continuity
    * mismatch, a deletion, an ineligible external row) is `excluded`, as a replayed field treats it. An update after the
    * instant refuses `select-changes-after-decision-date`; a history that starts after it with a Snapshot, or no history,
@@ -609,7 +622,7 @@ export class AsOfFeatureAssembler {
   ): Promise<StableValues> {
     const info = entity.Fields.find((f) => f.Name === field);
     if (!info) throw new AssemblyRefused({ kind: 'unresolved-column', entity: entity.Name, field });
-    const unread: StableValues = { Outcomes: reads.map(() => 'stable'), History: null, HistoryStart: null };
+    const unread: StableValues = { Outcomes: reads.map(() => 'stable'), ExcludedInstants: new Set<number>(), History: null, HistoryStart: null };
     if (reads.length === 0) return unread;
     if (!entity.TrackRecordChanges) {
       if (info.AllowUpdateAPI === false) return unread;
@@ -620,25 +633,39 @@ export class AsOfFeatureAssembler {
     }
     const history = await AsOfFeatureAssembler.loadHistory(entity, reads.map((r) => r.Key), [field], input, state);
     const onDayOrLater = AsOfFeatureAssembler.asOfInstant(input.AssembledAt).getTime();
-    const judge = (key: string, at: Date): StableOutcome => {
+    const judgeOnce = (key: string, at: Date): StableOutcome => {
       if (info.AllowUpdateAPI === false) return AsOfFeatureAssembler.createdAfter(history, key, at, storedCreatedAt(key)) ? 'created-after' : 'stable';
       const verdict = AsOfFeatureAssembler.judgeStoredValue(history, key, field, at, storedCreatedAt(key));
       // The replay rule: only a history that does not reach a day on or after the assembly's reads the stored value.
       return verdict === 'uncovered' && at.getTime() >= onDayOrLater ? 'stable' : verdict;
     };
+    // A verdict depends on the instant only through the change rows before it, whether the record existed then and
+    // whether the instant is on or after the assembly's day; judging each such combination once keeps a child read,
+    // judged at every unit row's instant, linear in the instants.
+    const verdicts = new Map<string, StableOutcome>();
+    const judge = (key: string, at: Date): StableOutcome => {
+      const existed = !AsOfFeatureAssembler.createdAfter(history, key, at, storedCreatedAt(key));
+      const signature = `${key.toLowerCase()}|${history.RowsBefore(key, at)}|${existed}|${at.getTime() >= onDayOrLater}`;
+      const known = verdicts.get(signature);
+      if (known !== undefined) return known;
+      const verdict = judgeOnce(key, at);
+      verdicts.set(signature, verdict);
+      return verdict;
+    };
     const instants = AsOfFeatureAssembler.instantsOf(reads);
-    const outcomes = reads.map((r) => AsOfFeatureAssembler.outcomeOf(r, AsOfFeatureAssembler.instantsFor(instants, r.Rows), judge));
+    const excludedInstants = new Set<number>();
+    const outcomes = reads.map((r) => AsOfFeatureAssembler.outcomeOf(r, AsOfFeatureAssembler.instantsFor(instants, r.Rows), judge, excludedInstants));
     const changed = AsOfFeatureAssembler.affectedRows(reads, outcomes, 'changed', judge);
     if (changed > 0) throw new AssemblyRefused({ kind: 'select-changes-after-decision-date', entity: entity.Name, field, changesAfter: changed });
     const uncovered = AsOfFeatureAssembler.affectedRows(reads, outcomes, 'uncovered', judge);
     if (uncovered > 0) throw new AssemblyRefused({ kind: 'decision-date-before-change-history', entity: entity.Name, field, historyStart: history.Coverage.historyStart, rowsAffected: uncovered });
-    return { Outcomes: outcomes, History: history, HistoryStart: history.Coverage.historyStart };
+    return { Outcomes: outcomes, ExcludedInstants: excludedInstants, History: history, HistoryStart: history.Coverage.historyStart };
   }
 
   /** The rule's verdict on one stored record at one instant (the order of the checks is the order of the doc above). */
   private static judgeStoredValue(history: EntityHistory, key: string, field: string, at: Date, storedCreatedAt: CellValue): StableOutcome {
     if (AsOfFeatureAssembler.createdAfter(history, key, at, storedCreatedAt)) return 'created-after';
-    if (history.UpdatesAfter(key, field, at) > 0) return 'changed';
+    if (history.ChangesAfter(key, field, at) > 0) return 'changed';
     const hv = history.ValueAt(key, field, at);
     if (hv.Status === 'value') return 'stable';
     return hv.Reason === 'before-history-start' || hv.Reason === 'no-history' ? 'uncovered' : 'excluded';
@@ -670,13 +697,18 @@ export class AsOfFeatureAssembler {
     return created === null || created.getTime() < at.getTime();
   }
 
-  /** A read's verdict: at the earliest of its instants at which the record existed, or `created-after` when it never did. */
-  private static outcomeOf(read: StableRead, instants: readonly Date[], judge: (key: string, at: Date) => StableOutcome): StableOutcome {
+  /**
+   * A read's verdict: the most severe of its verdicts at each of its instants, or `created-after` when the record
+   * existed at none. Every instant at which the read is `excluded` is added to `excludedInstants`.
+   */
+  private static outcomeOf(read: StableRead, instants: readonly Date[], judge: (key: string, at: Date) => StableOutcome, excludedInstants: Set<number>): StableOutcome {
+    let worst: StableOutcome = 'created-after';
     for (const at of instants) {
       const outcome = judge(read.Key, at);
-      if (outcome !== 'created-after') return outcome;
+      if (outcome === 'excluded') excludedInstants.add(at.getTime());
+      if (STABLE_OUTCOME_SEVERITY[outcome] > STABLE_OUTCOME_SEVERITY[worst]) worst = outcome;
     }
-    return 'created-after';
+    return worst;
   }
 
   /** The distinct unit rows whose own decision instant gives `outcome`, over the reads whose verdict it is. */
@@ -769,13 +801,13 @@ export class AsOfFeatureAssembler {
     const { Child: child, Index: index, Keys: keys, CreatedAt: createdAt } = await this.childIndex(source, input);
     // The contract: a null owner key field means the row's entity key.
     const join = await this.keyResolver(source.ownerKeyField, input, (row) => row.EntityKey, state);
-    const excluded = await this.assertStableChildRows(child, source, keys, (key) => createdAt.get(key.toLowerCase()) || null, input, state);
+    const excludedFor = await this.assertStableChildRows(child, source, keys, (key) => createdAt.get(key.toLowerCase()) || null, input, state);
     const history = child.TrackRecordChanges && keys.length > 0 ? await AsOfFeatureAssembler.loadHistory(child, keys, [source.foreignKey], input, state) : null;
     const existedAt = (c: ChildRow, at: Date): boolean => AsOfFeatureAssembler.existedBefore(AsOfFeatureAssembler.creationInstant(history, c.Id, createdAt.get(c.Id.toLowerCase())), at);
     const values = new Map<AssemblyRowRef, RawValue>();
     let dropped = 0;
     for (const row of input.Rows) {
-      if (join.CreatedAfter(row) || join.UncoveredFor(row) !== null) continue;
+      if (join.CreatedAfter(row) || join.UncoveredFor(row) !== null || excludedFor(row) !== null) continue;
       const owner = join.KeyOf(row);
       if (owner === null) {
         values.set(row, AsOfFeatureAssembler.aggregateValue(spec, source, null, row, [], null, input));
@@ -786,8 +818,9 @@ export class AsOfFeatureAssembler {
       values.set(row, AsOfFeatureAssembler.aggregateValue(spec, source, owner, row, agg.Contributors, agg.Value, input));
     }
     // A column whose every row is uncovered read no window, so it has no drop count to report.
-    if (excluded === null) state.LateEntered.set(spec.name, dropped);
+    if (!(input.Rows.length > 0 && input.Rows.every((row) => excludedFor(row) !== null))) state.LateEntered.set(spec.name, dropped);
     return AsOfFeatureAssembler.throughJoin(spec, join, (row) => {
+      const excluded = excludedFor(row);
       if (excluded) return excluded;
       const v = values.get(row);
       if (!v) throw new Error(`Windowed aggregate ${spec.name}: row ${row.RowID} was not computed`);
@@ -814,22 +847,27 @@ export class AsOfFeatureAssembler {
 
   /**
    * Every child row the index was built from passes the stable-value rule for the fields that decide what an aggregate
-   * reads, judged for the whole batch (each read stands for every unit row): a child row re-owned or re-dated after a
-   * decision day can move between owners, so none is exempt for contributing to no row. Every field is judged, so a
-   * later field's refusal is never hidden by an earlier field's exclusion. A child row the rule excludes makes every
-   * unit row uncovered for that field, since its owner on a past day cannot be trusted; the first such field's marker
-   * is returned, else null.
+   * reads, judged at every unit row's decision instant (each read stands for every unit row): a child row re-owned or
+   * re-dated after a decision day can move between owners, so none is exempt for contributing to no row. Every field is
+   * judged, so a later field's refusal is never hidden by an earlier field's exclusion. A child row the rule excludes
+   * at a unit row's decision instant makes that row uncovered for that field, since the child's owner on that day cannot
+   * be trusted; rows decided at instants where every child row is stable are read. Returns, per unit row, the first
+   * such field's marker, else null.
    */
   private async assertStableChildRows(
     child: AssemblyEntityInfo, source: WindowedAggregateSource, keys: readonly string[], storedCreatedAt: (key: string) => CellValue, input: AsOfAssemblyInput, state: AssemblyState,
-  ): Promise<Uncovered | null> {
+  ): Promise<(row: AssemblyRowRef) => Uncovered | null> {
     const reads: StableRead[] = keys.map((k) => ({ Key: k, Rows: input.Rows }));
-    let excluded: Uncovered | null = null;
+    const excludedByField: { readonly Instants: ReadonlySet<number>; readonly Marker: Uncovered }[] = [];
     for (const field of AsOfFeatureAssembler.childStableFields(source)) {
       const stable = await this.assertStableCurrentValue(child, field, reads, storedCreatedAt, input, state);
-      if (excluded === null && stable.Outcomes.includes('excluded')) excluded = { Uncovered: true, Entity: child.Name, Field: field, HistoryStart: stable.HistoryStart };
+      if (stable.ExcludedInstants.size > 0) excludedByField.push({ Instants: stable.ExcludedInstants, Marker: { Uncovered: true, Entity: child.Name, Field: field, HistoryStart: stable.HistoryStart } });
     }
-    return excluded;
+    return (row) => {
+      const at = AsOfFeatureAssembler.asOfInstant(row.DecisionDate).getTime();
+      const hit = excludedByField.find((e) => e.Instants.has(at));
+      return hit ? hit.Marker : null;
+    };
   }
 
   /** One aggregate value; a row with no owner key has no child rows ('' would read the bucket of ownerless child rows). */

@@ -39,8 +39,8 @@ describe('BuildEntityHistory', () => {
     expect(h.Coverage).toMatchObject({ entity: 'People', historyStart: null, continuity: { recordsReplayed: 2, recordsMismatched: 1 } });
   });
   it('counts updates of a field after an instant (the immutable-field confirmation)', () => {
-    expect(h.UpdatesAfter('P1', 'Status', new Date('2022-01-01T00:00:00Z'))).toBe(1);
-    expect(h.UpdatesAfter('P1', 'Status', new Date('2024-01-01T00:00:00Z'))).toBe(0);
+    expect(h.ChangesAfter('P1', 'Status', new Date('2022-01-01T00:00:00Z'))).toBe(1);
+    expect(h.ChangesAfter('P1', 'Status', new Date('2024-01-01T00:00:00Z'))).toBe(0);
   });
   it('tells the instant a record was created only from its own Create row, never from a snapshot or no history', () => {
     expect(h.CreatedAt('P1')).toEqual(new Date('2021-01-01T00:00:00Z'));
