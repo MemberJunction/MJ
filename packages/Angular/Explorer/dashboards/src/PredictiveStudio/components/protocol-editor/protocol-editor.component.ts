@@ -27,7 +27,9 @@ import {
           <label for="ps-end">Test set ends (optional)</label><input class="mj-input" id="ps-end" type="date" name="end" [(ngModel)]="Form.HoldoutEnd" (ngModelChange)="Recompute()" />
         }
         <label for="ps-folds">Folds</label><input class="mj-input" id="ps-folds" type="number" min="2" name="folds" [(ngModel)]="Form.Folds" (ngModelChange)="Recompute()" />
-        <label for="ps-repeats">Repeats</label><input class="mj-input" id="ps-repeats" type="number" min="1" name="repeats" [(ngModel)]="Form.Repeats" (ngModelChange)="Recompute()" />
+        @if (HasRepeats) {
+          <label for="ps-repeats">Repeats</label><input class="mj-input" id="ps-repeats" type="number" min="1" name="repeats" [(ngModel)]="Form.Repeats" (ngModelChange)="Recompute()" />
+        }
         <label for="ps-metric">Primary score</label>
         <select class="mj-input" id="ps-metric" name="metric" data-testid="ps-protocol-metric" [(ngModel)]="Form.PrimaryMetric" (ngModelChange)="Recompute()">
           @for (m of Metrics; track m) { <option [value]="m">{{ m }}</option> }
@@ -96,6 +98,11 @@ export class PSProtocolEditorComponent {
 
   public get IsDateCarved(): boolean {
     return this._base !== null && this._base.holdout.kind === 'date-carved';
+  }
+
+  /** Whether the inner validation repeats its folds: a blocked-time split has no repeats, so the form offers none to edit. */
+  public get HasRepeats(): boolean {
+    return this._base !== null && this._base.innerValidation.kind !== 'blocked-time';
   }
 
   /** Re-applies the form to the base version and previews the server's refusals. */

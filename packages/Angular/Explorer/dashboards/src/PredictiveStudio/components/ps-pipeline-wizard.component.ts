@@ -141,12 +141,8 @@ export type WizardStep = 'goal' | 'features' | 'preprocessing' | 'algorithm';
                 </div>
 
                 <div class="ps-field">
-                  <label for="eval-metric">Primary Evaluation Metric</label>
-                  <select id="eval-metric" class="mj-input" [(ngModel)]="EvaluationMetric">
-                    @for (m of AvailableMetrics; track m) {
-                      <option [value]="m">{{ m }}</option>
-                    }
-                  </select>
+                  <label>Primary score</label>
+                  <p class="ps-muted ps-small" data-testid="ps-wizard-metric-note">The pipeline's Evaluation Protocol names the score its runs are ranked and gated on.</p>
                 </div>
               </div>
 
@@ -440,8 +436,6 @@ export class PSPipelineWizardComponent implements OnInit {
 
   public ProblemType: ProblemType = 'classification';
 
-  public EvaluationMetric = 'AUC';
-
   /** The two classes of a target whose adverse class nothing declares; empty when the user need not choose. */
   public AdverseClassChoices: readonly string[] = [];
 
@@ -506,13 +500,6 @@ export class PSPipelineWizardComponent implements OnInit {
     return this.SelectedEntity?.Fields ?? [];
   }
 
-  public get AvailableMetrics(): string[] {
-    if (this.ProblemType === 'classification') {
-      return ['AUC', 'Accuracy', 'F1', 'Log Loss', 'Precision', 'Recall'];
-    }
-    return ['RMSE', 'MAE', 'R2', 'MSE'];
-  }
-
   public get AvailableAlgorithms(): MJMLAlgorithmEntity[] {
     return this.engine?.Algorithms ?? [];
   }
@@ -573,7 +560,6 @@ export class PSPipelineWizardComponent implements OnInit {
   }
 
   public OnProblemTypeChange(): void {
-    this.EvaluationMetric = this.ProblemType === 'classification' ? 'AUC' : 'RMSE';
     void this.refreshAdverseClassChoices();
     this.cdr.detectChanges();
   }

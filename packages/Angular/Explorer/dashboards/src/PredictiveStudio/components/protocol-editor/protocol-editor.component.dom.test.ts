@@ -47,6 +47,19 @@ describe('PSProtocolEditorComponent (DOM)', () => {
     return PSDomQueries.HostElement(fixture);
   }
 
+  it('offers Repeats only when the inner validation repeats: a blocked-time protocol has no repeats to save', async () => {
+    const blocked: EvaluationProtocolSpec = { ...base, innerValidation: { kind: 'blocked-time', folds: 4, gapPeriods: 1, groupKey: null } };
+    const blockedHost = PSDomQueries.HostElement(await render(human, blocked));
+    expect(blockedHost.querySelector('#ps-repeats')).toBeNull();
+    expect(blockedHost.querySelector('#ps-folds')).not.toBeNull();
+  });
+
+  it('offers Repeats for a repeated k-fold inner validation', async () => {
+    const host = PSDomQueries.HostElement(await render(human, base));
+    expect(base.innerValidation.kind).not.toBe('blocked-time');
+    expect(host.querySelector('#ps-repeats')).not.toBeNull();
+  });
+
   it('lists only the scores of the protocol family and emits the next version draft on save', async () => {
     const fixture = await render(human, base);
     const host = PSDomQueries.HostElement(fixture);

@@ -118,6 +118,16 @@ describe('PSPipelineWizardComponent (DOM) — the target column', () => {
   });
 });
 
+describe('PSPipelineWizardComponent (DOM) — the primary score', () => {
+  it('offers no evaluation-metric choice it would not save: the Evaluation Protocol names the score a run ranks by', async () => {
+    vi.spyOn(PipelineWizardBindings, 'ReadClassLabels').mockResolvedValue(['A', 'B']);
+    const fixture = renderWizard();
+    await goalStep(fixture, 'Region');
+    expect(Query(fixture, '#eval-metric')).toBeNull();
+    expect(Query(fixture, '[data-testid="ps-wizard-metric-note"]')?.textContent).toContain('Evaluation Protocol');
+  });
+});
+
 describe('PSPipelineWizardComponent (DOM) — the adverse class of a two-class target', () => {
   it('asks which class is adverse when the target name says nothing, and saves only once it is chosen', async () => {
     vi.spyOn(PipelineWizardBindings, 'ReadClassLabels').mockResolvedValue(['B', 'A', 'A']);
