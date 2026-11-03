@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "keyId": {
+      "type": "string",
+      "title": "Key ID",
+      "description": "Recipient key ID senders encrypt to",
+      "isSecret": false,
+      "order": 0
+    },
+    "publicKey": {
+      "type": "string",
+      "title": "Public Key",
+      "description": "X25519 public key (SPKI, base64)",
+      "isSecret": false,
+      "order": 1
+    },
+    "privateKey": {
+      "type": "string",
+      "title": "Private Key",
+      "description": "X25519 private key (PKCS#8, base64)",
+      "isSecret": true,
+      "order": 2
+    },
+    "signingPublicKey": {
+      "type": "string",
+      "title": "Signing Public Key",
+      "description": "Ed25519 public key (SPKI, base64) that senders pin",
+      "isSecret": false,
+      "order": 3
+    },
+    "signingPrivateKey": {
+      "type": "string",
+      "title": "Signing Private Key",
+      "description": "Ed25519 private key (PKCS#8, base64) that signs the public key",
+      "isSecret": true,
+      "order": 4
+    }
+  },
+  "required": [
+    "keyId",
+    "publicKey",
+    "privateKey",
+    "signingPublicKey",
+    "signingPrivateKey"
+  ]
+}
