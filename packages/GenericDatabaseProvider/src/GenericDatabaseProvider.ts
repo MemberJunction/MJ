@@ -343,6 +343,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      */
     private _lastDatasetStatusByName = new Map<string, { status: DatasetStatusResultType; timestamp: number }>();
 
+    protected override invalidateInflightViewsForEntity(lowerEntityName: string): void {
+        super.invalidateInflightViewsForEntity(lowerEntityName);
+        this._lastDatasetStatusByName.clear();
+    }
+
+    public override async ClearDatasetCache(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<void> {
+        const statusKey = this.buildDatasetStatusCacheKey(datasetName, itemFilters);
+        this._lastDatasetStatusByName.delete(statusKey);
+        await super.ClearDatasetCache(datasetName, itemFilters);
+    }
+
     /**************************************************************************/
     // SQL Logging — Session Management & Statement Logging
     /**************************************************************************/
@@ -7809,6 +7820,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         const uncachedItems: Record<string, unknown>[] = [];
         // Track fingerprints for uncached items so we can write-through after SQL
         const uncachedFingerprints: string[] = [];
+        // Track per-entity mutation versions before SQL execution so an in-flight read does not
+        // overwrite LocalCacheManager with pre-mutation rows if a save/delete lands mid-fetch.
+        const uncachedMutationVersions: number[] = [];
 
         let cacheHitCount = 0;
         let cacheMissCount = 0;
@@ -7928,7 +7942,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 } catch (statusErr) {
                     LogError(`GetDatasetByName("${datasetName}"): status verification failed: ${statusErr instanceof Error ? statusErr.message : String(statusErr)}`);
                 }
-            } else if (recorded?.status?.Success) {
+            } else if (
+                recorded?.status?.Success &&
+                this.ServerCacheVerificationTTLMs > 0 &&
+                (Date.now() - recorded.timestamp) <= this.ServerCacheVerificationTTLMs
+            ) {
                 liveStatus = recorded.status;
             }
         }
@@ -8028,6 +8046,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             uncachedItems.push(item);
             // A narrowed read (the caller is denied fields) is never written to the shared slot.
             uncachedFingerprints.push(deniedFields.size === 0 ? fingerprint : '');
+            uncachedMutationVersions.push(provider.GetEntityMutationVersion(entityName));
         }
 
         // Phase 2: Execute SQL only for cache misses
@@ -8093,8 +8112,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
             const latestUpdateDate = this.computeLatestUpdateDate(itemData, dateFieldToCheck, item);
 
-            // Write-through: cache this result for future requests (including empty results)
-            if (cacheAvailable && uncachedFingerprints[i]) {
+            // Write-through: cache this result for future requests (including empty results),
+            // unless the entity was mutated while ExecuteSQLBatch / PostProcessRows was in flight.
+            const mutatedDuringFetch = provider.GetEntityMutationVersion(entityName) !== uncachedMutationVersions[i];
+            if (cacheAvailable && uncachedFingerprints[i] && !mutatedDuringFetch) {
                 const maxUpdatedAt = itemData.length > 0
                     ? this.extractMaxUpdatedAtFromRows(itemData, dateFieldToCheck)
                     : new Date(0).toISOString();

@@ -39,7 +39,7 @@ vi.mock('@memberjunction/aiengine', () => ({
     },
 }));
 
-import { ContentVectorInfrastructure } from '../Engine/generic/ContentVectorInfrastructure';
+import { ContentVectorInfrastructure, UpsertVectorRecords, type ResolvedVectorInfrastructure } from '../Engine/generic/ContentVectorInfrastructure';
 
 function groupKeyFor(sourceID: string, typeID: string): string {
     const infra = new ContentVectorInfrastructure({} as never, {} as never) as unknown as {
@@ -197,6 +197,22 @@ describe('vector infrastructure cascade', () => {
                 ContentTypeID: 'T-NO-IDX',
             }),
         ).toBeNull();
+    });
+
+    it('UpsertVectorRecords short-circuits when infra.vectorDB.IsReadOnly is true without calling CreateRecords', async () => {
+        const createRecordsSpy = vi.fn();
+        const readOnlyInfra = {
+            vectorDB: {
+                IsReadOnly: true,
+                CreateRecords: createRecordsSpy,
+            },
+            indexName: 'idx',
+        } as unknown as ResolvedVectorInfrastructure;
+
+        const resp = await UpsertVectorRecords([{ id: 'v1', values: [0.1, 0.2], metadata: {} }], readOnlyInfra);
+
+        expect(resp.success).toBe(true);
+        expect(createRecordsSpy).not.toHaveBeenCalled();
     });
 });
 

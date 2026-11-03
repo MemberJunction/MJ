@@ -75,6 +75,10 @@ export {
   LoadVisualizeResource
 } from './KnowledgeHub/components/visualize/visualize-resource.component';
 export { TagCloudComponent } from './KnowledgeHub/components/visualize/tag-cloud/tag-cloud.component';
+export {
+  SemanticGraphExplorerComponent,
+  LoadSemanticGraphExplorerComponent
+} from './KnowledgeHub/components/visualize/semantic-graph/semantic-graph-explorer.component';
 export { RecordDrilldownComponent } from './KnowledgeHub/components/visualize/record-drilldown/record-drilldown.component';
 export {
   AnalyticsResourceComponent,

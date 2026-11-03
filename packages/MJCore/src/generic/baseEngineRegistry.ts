@@ -207,6 +207,11 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
     public UnregisterEngine(engine: unknown): void {
         const name = (engine as object).constructor.name;
         this._engines.delete(name);
+        for (const [k, v] of this._engines) {
+            if (v.instance === engine) {
+                this._engines.delete(k);
+            }
+        }
     }
 
     /**
@@ -333,6 +338,20 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
     private checkEngineLoaded(engine: unknown): boolean {
         if (engine && typeof engine === 'object' && 'Loaded' in engine) {
             return Boolean((engine as { Loaded: boolean }).Loaded);
+        }
+        return false;
+    }
+
+    /**
+     * True when a specific property on a `BaseEngine` has already finished `HandleSingleViewResult`
+     * with `loadedSuccessfully === true` (and was not permission-denied), even if other properties
+     * on the same engine are still loading.
+     */
+    private checkEnginePropertyLoaded(engineObj: Record<string, unknown>, propertyName: string | undefined): boolean {
+        if (!propertyName) return false;
+        const isPropertyLoaded = engineObj['IsPropertyLoaded'];
+        if (typeof isPropertyLoaded === 'function') {
+            return Boolean(isPropertyLoaded.call(engineObj, propertyName));
         }
         return false;
     }
@@ -681,14 +700,16 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
         for (const [className, info] of this._engines) {
             const engine = info.instance;
             if (!engine || typeof engine !== 'object') continue;
-            // Only loaded engines have data to offer.
-            if (!this.checkEngineLoaded(engine)) continue;
+            const engineLoaded = this.checkEngineLoaded(engine);
 
             const engineObj = engine as Record<string, unknown>;
             const configs = this.readEngineConfigs(engineObj);
             if (!configs) continue;
 
             for (const cfg of configs) {
+                // Only loaded engines or properties already populated in _dataMap have data to offer.
+                if (!engineLoaded && !this.checkEnginePropertyLoaded(engineObj, cfg.PropertyName)) continue;
+
                 // Only entity configs (Type defaults to 'entity') with a matching EntityName.
                 if ((cfg.Type ?? 'entity') !== 'entity') continue;
                 if (!cfg.EntityName || cfg.EntityName.trim().toLowerCase() !== target) continue;

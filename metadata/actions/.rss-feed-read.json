@@ -2,6 +2,9 @@
   {
     "fields": {
       "Name": "Read RSS Feed",
+      "Config": {
+        "outputTrustLevel": "Untrusted"
+      },
       "Description": "Reads one or more RSS/Atom feeds and returns their articles, filtered by age and keywords. Every count that shaped the result is surfaced as an output param, so an empty answer is explainable without re-running.",
       "DriverClass": "Read RSS Feed",
       "Type": "Custom",
