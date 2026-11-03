@@ -6658,6 +6658,57 @@ export abstract class BaseEntity<T = unknown> {
         }
     }
 
+    /**
+     * Clones `source` into `target` (already instantiated and bound to the destination provider/user)
+     * while preserving an existing in-memory `ISAChild` chain without issuing redundant database
+     * discovery or load queries. When `source` is a disjoint IS-A parent without an attached
+     * `ISAChild`, delegates child resolution to `hydrateISAChildrenForLevel` so `BaseEngine`
+     * caches are consulted before falling back to the provider.
+     */
+    public static async CloneEntityWithISAChain(
+        source: BaseEntity,
+        target: BaseEntity,
+        md: IMetadataProvider,
+        contextUser?: UserInfo
+    ): Promise<void> {
+        if (
+            source.EntityInfo?.IsParentType &&
+            !source.EntityInfo.AllowMultipleSubtypes &&
+            !IsMemberOverridden(target, 'LoadFromData', BaseEntity)
+        ) {
+            const allPksSet = await target.hydrateSingleISAParentPeer(source);
+            if (!allPksSet) {
+                return;
+            }
+            if (source.ISAChild) {
+                const deniedChildLogged = new Set<string>();
+                let currParent: BaseEntity = target;
+                let currSourceChild: BaseEntity | null = source.ISAChild;
+                while (currSourceChild) {
+                    const linked: BaseEntity[] = [];
+                    const ok = await BaseEntity.linkSingleParentFromRawOrEntityRecord(
+                        currParent,
+                        currSourceChild.EntityInfo.Name,
+                        currSourceChild,
+                        linked,
+                        deniedChildLogged
+                    );
+                    currParent._childEntityDiscoveryDone = true;
+                    if (!ok || linked.length === 0) {
+                        break;
+                    }
+                    currParent = linked[0];
+                    currSourceChild = currSourceChild.ISAChild;
+                }
+                currParent._childEntityDiscoveryDone = true;
+            } else {
+                await BaseEntity.hydrateISAChildrenForLevel([target], md, contextUser);
+            }
+            return;
+        }
+        await target.LoadFromData(source.GetAll());
+    }
+
     private async hydrateSingleISAParentPeer(
         rawData: BaseEntity | Record<string, string | number | boolean | Date | object | null | undefined>
     ): Promise<boolean> {
