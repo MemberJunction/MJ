@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (466 classes)
+// @memberjunction/core-entities (475 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -303,6 +303,15 @@ import {
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJGraphAuthorityTierEntity,
+    MJGraphConceptEntity,
+    MJGraphConceptTypeEntity,
+    MJGraphEdgeEntity,
+    MJGraphEdgeProviderEntity,
+    MJGraphEdgeTypeEndpointEntity,
+    MJGraphEdgeTypeEntity,
+    MJGraphEntity,
+    MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -1024,6 +1033,15 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJGraphAuthorityTierEntity,
+    MJGraphConceptEntity,
+    MJGraphConceptTypeEntity,
+    MJGraphEdgeEntity,
+    MJGraphEdgeProviderEntity,
+    MJGraphEdgeTypeEndpointEntity,
+    MJGraphEdgeTypeEntity,
+    MJGraphEntity,
+    MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -1137,6 +1155,10 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSQLDialectEntity,
     MJScheduledJobEntity,
     MJScheduledJobRunEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
     MJScopedNotificationConfigEntity,
@@ -1146,10 +1168,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchProviderEntity,
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJSearchScopeExternalIndexEntity,
     MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
@@ -1341,6 +1359,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJAIAgentRubricFormComponentExtended,
     MJAIAgentRunFormComponentExtended,
     MJAIAgentSessionFormComponentExtended,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     MJAIPromptFormComponentExtended,
     MJAIPromptRunFormComponentExtended,
     MJActionExecutionLogFormComponentExtended,
@@ -1350,10 +1372,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJFileFormComponentExtended,
     MJListFormComponentExtended,
     MJQueryFormComponentExtended,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     MJRubricBandFormComponentExtended,
     MJRubricCategoryFormComponentExtended,
     MJRubricCriterionFormComponentExtended,
@@ -1410,7 +1428,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 642;
+export const CLASS_REGISTRATIONS_COUNT = 651;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
