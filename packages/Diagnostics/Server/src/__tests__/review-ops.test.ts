@@ -11,7 +11,9 @@ import {
     DiagnosticsStartSessionServerOperation,
     DiagnosticsUploadClientCaptureServerOperation,
     GetInMemoryDiagnosticBundle,
+    ResetInMemoryDiagnosticBundlesForTests,
 } from '../remoteOperations.js';
+import { LocalBundleCache } from '../bundleCache.js';
 import { DiagnosticSessionManager } from '../sessionManager.js';
 import { SetDiagnosticsApiRoute } from '../apiRoute.js';
 import { DiagnosticRetentionScheduledJobDriver } from '../retentionJobDriver.js';
@@ -99,6 +101,7 @@ describe('diagnostics remote operations (review fixes)', () => {
     beforeEach(() => {
         manager.Initialize({ enableConsoleTap: false, enablePolling: false });
         manager.ResetForTests();
+        ResetInMemoryDiagnosticBundlesForTests();
         mockInstanceSettings();
         SetDiagnosticsApiRoute((subpath: string) => subpath);
     });
@@ -147,6 +150,26 @@ describe('diagnostics remote operations (review fixes)', () => {
             vi.setSystemTime(Date.now() + 2 * HOUR_MS + 1);
 
             expect(GetInMemoryDiagnosticBundle(bundleId)).toBeUndefined();
+        });
+
+        it('finds a bundle by an ID in another letter case', async () => {
+            mockAssembly(1024);
+            const fake = createFakeProvider();
+            const bundleId = await buildBundle(fake.Provider);
+
+            expect(GetInMemoryDiagnosticBundle(bundleId.toLowerCase())).toBeDefined();
+        });
+
+        it('drops idle bundles on a timer, with no reads or writes', () => {
+            vi.useFakeTimers();
+            const cache = new LocalBundleCache<string>(HOUR_MS, 10 * MB);
+            cache.Set('B1', 'bytes', 1024);
+
+            vi.advanceTimersByTime(HOUR_MS + 15 * 60_000);
+
+            expect(cache.Size).toBe(0);
+            expect(cache.TotalBytes).toBe(0);
+            cache.Clear();
         });
 
         it('evicts the least recently used bundle when the total passes 256 MB', async () => {
@@ -252,6 +275,7 @@ describe('diagnostics remote operations (review fixes)', () => {
                 { provider: fake.Provider, user: ownerUser }
             );
             expect(optedIn.ErrorMessage ?? '').not.toMatch(/AllowUnscrubbedSend/);
+            expect(fake.Saved('MJ: Diagnostic Bundles').some((r) => r['Status'] === 'Sending')).toBe(true);
         });
     });
 

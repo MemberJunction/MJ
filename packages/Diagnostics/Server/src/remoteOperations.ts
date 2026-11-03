@@ -122,6 +122,11 @@ export function RemoveInMemoryDiagnosticBundle(bundleId: string): boolean {
   return inMemoryBundles.Delete(bundleId);
 }
 
+/** Removes every built bundle from memory. For tests. */
+export function ResetInMemoryDiagnosticBundlesForTests(): void {
+  inMemoryBundles.Clear();
+}
+
 type SessionScopeInput = DiagnosticsStartSessionInput['Scope'];
 
 /** True when a `Users` scope names no one but the given user. A browser session in the scope only narrows it. */
@@ -219,8 +224,9 @@ export class DiagnosticsStartSessionServerOperation extends DiagnosticsStartSess
     if (await AuthorizeDiagnosticsUser(user, 'Diagnostics: Run Sessions', context?.provider)) {
       return true;
     }
-    this.selfService = true;
-    return isSelfOnlyScope(input.ScopeType, input.Scope, user) && isSelfServiceAllowed(user, context?.provider);
+    const allowed = isSelfOnlyScope(input.ScopeType, input.Scope, user) && (await isSelfServiceAllowed(user, context?.provider));
+    this.selfService = allowed;
+    return allowed;
   }
 
   protected override async InternalExecute(
