@@ -259,17 +259,13 @@ describe('PSPipelineWizardComponent (DOM) — every control round-trips', () => 
     ]);
   });
 
-  it('saves the standardize and one-hot steps that describe what the trainer does', async () => {
+  it('saves only the steps that change training: select and one impute per numeric column, no standardize or one-hot', async () => {
     vi.spyOn(PipelineWizardBindings, 'ReadClassLabels').mockResolvedValue(['A', 'B', 'C']);
     const captured = captureSave();
     const fixture = saveable();
     await goalStep(fixture, 'Segment', 'W1');
     await fixture.componentInstance.SaveDraft();
-    const saved = steps(captured.Saved[0]);
-    expect([
-      saved.filter((st) => st.Kind === 'standardize').map((st) => st.Kind === 'standardize' ? st.Columns : null),
-      saved.filter((st) => st.Kind === 'onehot').map((st) => st.Kind === 'onehot' ? st.Column : null),
-    ]).toEqual([[['Tenure', 'Spend', 'Age']], ['Region', 'Tier']]);
+    expect(steps(captured.Saved[0]).map((st) => st.Id)).toEqual(['step_select', 'step_impute_Tenure', 'step_impute_Spend', 'step_impute_Age']);
   });
 
   it('clones every saved setting: save A with non-default choices, clone it, and B saves the same steps and validation', async () => {
@@ -296,7 +292,7 @@ describe('PSPipelineWizardComponent (DOM) — every control round-trips', () => 
     const pipelineB = captured.Saved[1];
     expect(pipelineB?.FeatureSteps).toEqual(pipelineA?.FeatureSteps);
     expect(pipelineB?.ValidationStrategy).toEqual(pipelineA?.ValidationStrategy);
-    expect(steps(pipelineA).some((st) => st.Kind === 'standardize')).toBe(true);
+    expect(steps(pipelineA).map((st) => st.Kind)).toEqual(['select', 'impute', 'impute']);
   });
 
   it('clones the adverse class of a two-class target: B saves without a re-pick and equals A, OutcomeConfig included', async () => {

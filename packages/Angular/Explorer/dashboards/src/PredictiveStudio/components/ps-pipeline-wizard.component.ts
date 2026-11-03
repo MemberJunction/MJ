@@ -776,28 +776,8 @@ export class PSPipelineWizardComponent implements OnInit {
         });
       }
 
-      // The trainer one-hot encodes every text column and standardizes every numeric column, every time
-      // (as-of-assembler.ts BuildPreprocessingOps, Sidecar encoding.py): these steps describe that, they are not a choice.
-      for (const c of this.selectedTextColumns()) {
-        steps.push({
-          Id: `step_onehot_${c}`,
-          Kind: 'onehot',
-          Label: `One-Hot ${c}`,
-          Inputs: ['step_select'],
-          Column: c,
-        });
-      }
-
-      const numCols = this.selectedNumericColumns();
-      if (numCols.length > 0) {
-        steps.push({
-          Id: 'step_standardize',
-          Kind: 'standardize',
-          Label: 'Standardize Numerics',
-          Inputs: ['step_select'],
-          Columns: numCols,
-        });
-      }
+      // No onehot or standardize step: the trainer one-hot encodes every text column and standardizes every numeric
+      // column regardless (as-of-assembler.ts BuildPreprocessingOps, Sidecar encoding.py), so such a step changes nothing.
 
       p.FeatureSteps = JSON.stringify(
         this.AdverseClassChoices.length > 0
@@ -906,17 +886,6 @@ export class PSPipelineWizardComponent implements OnInit {
         // Ignore
       }
     }
-  }
-
-  /** The selected feature columns of a text type, which the trainer one-hot encodes. */
-  private selectedTextColumns(): string[] {
-    return this.FieldItems
-      .filter((i) => i.selected && !i.isDenyList && !i.isTarget)
-      .filter((i) => {
-        const t = i.field.Type?.toLowerCase() ?? '';
-        return t.includes('char') || t.includes('text') || t.includes('string');
-      })
-      .map((i) => i.field.Name);
   }
 
   /** The selected feature columns the trainer treats as numeric. */
