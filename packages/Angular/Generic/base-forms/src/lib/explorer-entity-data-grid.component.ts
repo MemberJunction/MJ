@@ -10,8 +10,10 @@ import {
     AfterDataLoadEventArgs,
     GridToolbarConfig,
     GridSelectionMode,
+    GridColumnConfig,
     buildCompositeKey
 } from '@memberjunction/ng-entity-viewer';
+import { ViewGridState } from '@memberjunction/core-entities';
 import { EntityInfo } from '@memberjunction/core';
 import { FormNavigationEvent } from './types/navigation-events';
 import { RELATED_GRID_DEFAULT_MAX_PX, RelatedGridHeightPx } from './related-grid-height';
@@ -31,6 +33,8 @@ import { RELATED_GRID_DEFAULT_MAX_PX, RelatedGridHeightPx } from './related-grid
         <mj-entity-data-grid
             #innerGrid
             [Params]="Params"
+            [Columns]="Columns"
+            [GridState]="GridState"
             [NewRecordValues]="NewRecordValues"
             [AllowLoad]="EffectiveAllowLoad"
             [ShowToolbar]="EffectiveShowToolbar"
@@ -147,6 +151,29 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     @Input() MaxHeight: number | null = RELATED_GRID_DEFAULT_MAX_PX;
     @Input() ToolbarConfig: GridToolbarConfig = {};
     @Input() SelectionMode: GridSelectionMode = 'single';
+
+    private _columns: GridColumnConfig[] = [];
+    /**
+     * Columns to show, in order, with any host formatting. Empty means the inner grid picks
+     * them from the entity's metadata. Forwarded to the inner grid's `Columns`.
+     */
+    @Input()
+    set Columns(value: GridColumnConfig[] | null) {
+        this._columns = value ?? [];
+    }
+    get Columns(): GridColumnConfig[] {
+        return this._columns;
+    }
+
+    private _gridState: ViewGridState | null = null;
+    /** Saved column layout and sort for the inner grid. Forwarded to the inner grid's `GridState`. */
+    @Input()
+    set GridState(value: ViewGridState | null) {
+        this._gridState = value ?? null;
+    }
+    get GridState(): ViewGridState | null {
+        return this._gridState;
+    }
 
     /**
      * Related-entity grids (accordion and left-nav) and explicit fit-content grids

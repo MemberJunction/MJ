@@ -74,11 +74,13 @@ import {
 } from 'ag-grid-community';
 // Use the existing HighlightUtil from entity-viewer package
 import { HighlightUtil } from '../utils/highlight.util';
+import { ApplyHostColumnOptions, HostColumnFormat } from './host-column-options';
 import {
   GridSelectionMode,
   GridEditMode,
   GridLinesMode,
   GridColumnConfig,
+  GridColumnType,
   GridToolbarConfig,
   GridToolbarButton,
   DataGridSortState,
@@ -3415,8 +3417,15 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         this.registerAutoWidthColumn(colDef);
       }
 
-      // Add type-specific formatters with optional custom format
-      this.applyFieldFormatter(colDef, field, colConfig.format);
+      // Add type-specific formatters with optional custom format. A saved state that carries no
+      // format of its own falls back to the host's declared one, so a resize or sort (which saves
+      // the state) does not turn a host-typed number column back into a name-guessed currency.
+      const format = colConfig.format ?? (declared ? HostColumnFormat(declared) : undefined);
+      this.applyFieldFormatter(colDef, field, format, declared?.type);
+      // The host's formatter, classes and templates outlive a saved state too.
+      if (declared) {
+        ApplyHostColumnOptions(colDef, declared);
+      }
 
       cols.push(colDef);
     }
@@ -3463,9 +3472,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         f.Name.toLowerCase() === col.field.toLowerCase()
       );
       if (field) {
-        this.applyFieldFormatter(colDef, field);
+        this.applyFieldFormatter(colDef, field, HostColumnFormat(col), col.type);
       }
     }
+
+    // Host options last, so they win over the field defaults.
+    ApplyHostColumnOptions(colDef, col);
 
     return colDef;
   }
@@ -3588,7 +3600,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     return parts.join('\n');
   }
 
-  private applyFieldFormatter(colDef: ColDef, field: EntityFieldInfo, customFormat?: ColumnFormat): void {
+  /**
+   * @param declaredType The type a host column declared (`GridColumnConfig.type`). When set, it
+   * replaces the field-name guess for currency, so a `number` column named like `TotalEntries` is
+   * not rendered as money.
+   */
+  private applyFieldFormatter(colDef: ColDef, field: EntityFieldInfo, customFormat?: ColumnFormat, declaredType?: GridColumnType): void {
     // Store type info for use in cell renderer
     const fieldType = field.TSType;
     const fieldNameLower = field.Name.toLowerCase();
@@ -3596,11 +3613,14 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     const vc = this.EffectiveVisualConfig;
 
     // Determine special field types using ExtendedType metadata first, then field name patterns as fallback
-    const isCurrency = customFormat?.type === 'currency' ||
-                       fieldNameLower.includes('amount') ||
-                       fieldNameLower.includes('price') ||
-                       fieldNameLower.includes('cost') ||
-                       fieldNameLower.includes('total');
+    // An explicit format type or host-declared type decides; the name guess runs only without one.
+    const explicitType = customFormat?.type && customFormat.type !== 'auto' ? customFormat.type : declaredType;
+    const isCurrency = explicitType
+      ? explicitType === 'currency'
+      : fieldNameLower.includes('amount') ||
+        fieldNameLower.includes('price') ||
+        fieldNameLower.includes('cost') ||
+        fieldNameLower.includes('total');
     // Use ExtendedType='Email' from metadata, fallback to field name pattern
     const isEmail = extendedType === 'email' ||
                     (!extendedType && fieldNameLower.includes('email'));

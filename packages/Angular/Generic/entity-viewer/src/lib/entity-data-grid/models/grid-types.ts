@@ -67,7 +67,12 @@ export type GridColumnType =
 // ========================================
 
 /**
- * Configuration for a single grid column
+ * Configuration for a single grid column.
+ *
+ * Honored by `mj-entity-data-grid`: the layout fields, `type` + `format`, `align`, `headerAlign`,
+ * `cellClass`, `headerClass`, `cellStyle`, `formatter`, `cellTemplate` and `headerTemplate`. These
+ * are applied after the field's own defaults, so they win, and they survive a saved grid state.
+ * Not wired yet: `editorTemplate`, `tooltip`, `showTooltip`.
  */
 export interface GridColumnConfig {
   /** Field name on the entity */
@@ -103,10 +108,17 @@ export interface GridColumnConfig {
   /** Column is reorderable */
   reorderable?: boolean;
 
-  /** Data type for formatting and editing */
+  /**
+   * Data type for formatting. When set it replaces the field-name guess, so a `number` column
+   * named like `TotalAmount` is not shown as currency.
+   */
   type?: GridColumnType;
 
-  /** Format string (e.g., 'yyyy-MM-dd' for dates, '#,##0.00' for numbers) */
+  /**
+   * Format string. For `number` / `currency` / `percent`, spreadsheet notation: '#,##0.00' gives
+   * two decimals with grouping. For `date` / `datetime`, a preset: 'short', 'medium', 'long',
+   * optionally with '-weekday'. Other strings are ignored and the field's default format applies.
+   */
   format?: string;
 
   /** Text alignment */
@@ -121,25 +133,25 @@ export interface GridColumnConfig {
   /** CSS class for header */
   headerClass?: string;
 
-  /** Custom cell template reference */
+  /** Custom cell template reference. Replaces the field's renderer (including foreign-key links). */
   cellTemplate?: TemplateRef<GridCellTemplateContext>;
 
   /** Custom header template reference */
   headerTemplate?: TemplateRef<GridHeaderTemplateContext>;
 
-  /** Custom editor template reference */
+  /** Custom editor template reference (not wired yet) */
   editorTemplate?: TemplateRef<GridEditorTemplateContext>;
 
-  /** Cell value formatter function */
+  /** Cell value formatter function. Its text replaces the field's renderer (including foreign-key links and search highlighting). */
   formatter?: (value: unknown, row: Record<string, unknown>, column: GridColumnConfig) => string;
 
   /** Cell style function */
   cellStyle?: (row: Record<string, unknown>, column: GridColumnConfig) => Record<string, string>;
 
-  /** Whether to show tooltip on hover */
+  /** Whether to show tooltip on hover (not wired yet) */
   showTooltip?: boolean;
 
-  /** Custom tooltip content */
+  /** Custom tooltip content (not wired yet) */
   tooltip?: string | ((row: Record<string, unknown>, column: GridColumnConfig) => string);
 
   /** Frozen column position (alias for pinned, for backward compatibility) */
