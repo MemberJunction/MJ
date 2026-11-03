@@ -1,7 +1,15 @@
 import { Injectable } from '@angular/core';
-import { ConversationEngine, ConversationScope, MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import {
+  ConversationEngine,
+  ConversationScope,
+  MJConversationEntity,
+  MJConversationDetailEntity,
+  MJConversationDetailArtifactEntity,
+  MJArtifactVersionEntity,
+  MJArtifactEntity
+} from '@memberjunction/core-entities';
 import { RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 
 export type ExportFormat = 'json' | 'markdown' | 'html' | 'text';
 
@@ -85,7 +93,48 @@ export interface ExportOptions {
   themeMode?: 'light' | 'dark';
   /** Branding (tokens / logo / title) applied to the export — see {@link ExportBranding}. */
   branding?: ExportBranding;
+  /**
+   * Write the artifacts each message produced under that message: name, type, version, a link
+   * when {@link artifactLink} is set, and the stored content as text. File-backed versions
+   * (PDF, spreadsheets, images) carry their MIME type instead of content. Default true.
+   */
+  includeArtifacts?: boolean;
+  /**
+   * Builds a link that opens an exported artifact in the app. This package has no router, so
+   * the host supplies it; without it (or when it returns null) the export carries IDs only.
+   * Only `http(s)` links are written.
+   */
+  artifactLink?: (target: ExportArtifactLinkTarget) => string | null;
 }
+
+/** What {@link ExportOptions.artifactLink} receives for each exported artifact. */
+export interface ExportArtifactLinkTarget {
+  ConversationID: string;
+  ArtifactID: string;
+  VersionID: string;
+  VersionNumber: number;
+}
+
+/** One artifact version a message produced, as an export writes it. */
+export interface ExportArtifact {
+  ArtifactID: string;
+  VersionID: string;
+  Name: string;
+  /** The artifact type's name (e.g. "Component", "Report"). */
+  Type: string;
+  VersionNumber: number;
+  /** Stored text content; null for a file-backed version. */
+  Content: string | null;
+  MimeType: string | null;
+  /** True when the version's content lives in a file rather than as text. */
+  FileBacked: boolean;
+}
+
+/**
+ * Longest artifact content the Markdown, HTML and text formats write; longer content is cut
+ * with a marker line. JSON carries content as stored.
+ */
+export const EXPORT_ARTIFACT_CONTENT_LIMIT = 20000;
 
 /**
  * Tokens captured by the theme auto-snapshot — exactly the custom properties the
@@ -114,10 +163,26 @@ export interface ExportConversationData {
    * in Main.
    */
   fork?: string | null;
+  /**
+   * The output artifacts of each message, keyed by lower-cased message ID, in creation order.
+   * Absent or empty when the messages produced none.
+   */
+  artifacts?: Map<string, ExportArtifact[]>;
 }
 
-/** Internal: options with defaults applied (branding stays optional). */
-type ResolvedExportOptions = Required<Omit<ExportOptions, 'branding'>> & Pick<ExportOptions, 'branding'>;
+/** Internal: options with defaults applied (branding and the link builder stay optional). */
+type ResolvedExportOptions = Required<Omit<ExportOptions, 'branding' | 'artifactLink'>> &
+  Pick<ExportOptions, 'branding' | 'artifactLink'>;
+
+/** The junction columns the export reads. */
+type ExportArtifactLinkRow = Pick<MJConversationDetailArtifactEntity, 'ConversationDetailID' | 'ArtifactVersionID'>;
+/** The version columns the export reads. */
+type ExportArtifactVersionRow = Pick<
+  MJArtifactVersionEntity,
+  'ID' | 'ArtifactID' | 'VersionNumber' | 'Name' | 'Content' | 'FileID' | 'MimeType'
+>;
+/** The artifact columns the export reads. */
+type ExportArtifactRow = Pick<MJArtifactEntity, 'ID' | 'Name' | 'Type'>;
 
 /** Internal: the theme pieces resolved once per HTML export. */
 interface ResolvedExportTheme {
@@ -158,7 +223,7 @@ export class ExportService {
     currentUser: UserInfo,
     options: ExportOptions = {}
   ): Promise<void> {
-    const conversation = await this.loadConversationData(conversationId, scope, currentUser);
+    const conversation = await this.loadConversationData(conversationId, scope, currentUser, options.includeArtifacts ?? true);
     const { content, filename, mimeType } = await this.BuildExportContent(conversation, format, options);
     this.downloadFile(content, filename, mimeType);
   }
@@ -195,7 +260,9 @@ export class ExportService {
       includeCSS: options.includeCSS ?? true,
       includeTheme: options.includeTheme ?? false,
       themeMode: options.themeMode ?? 'light',
-      branding: options.branding
+      includeArtifacts: options.includeArtifacts ?? true,
+      branding: options.branding,
+      artifactLink: options.artifactLink
     };
     const baseName = `conversation-${data.conversation.Name}-${this.getTimestamp()}`;
 
@@ -407,7 +474,8 @@ export class ExportService {
   private async loadConversationData(
     conversationId: string,
     scope: ConversationScope,
-    currentUser: UserInfo
+    currentUser: UserInfo,
+    includeArtifacts: boolean
   ): Promise<ExportConversationData> {
     if (!UUIDsEqual(scope.ConversationID, conversationId)) {
       throw new Error(`Conversation ${conversationId} cannot be exported with the scope of conversation ${scope.ConversationID}`);
@@ -437,8 +505,139 @@ export class ExportService {
     return {
       conversation: conversationResult.Results[0] as MJConversationEntity,
       details,
-      fork: this.forkLabel(scope, details)
+      fork: this.forkLabel(scope, details),
+      artifacts: includeArtifacts ? await this.loadOutputArtifacts(details, currentUser) : undefined
     };
+  }
+
+  /**
+   * The output artifacts of the exported messages, keyed by lower-cased message ID. Reads run as
+   * the current user, so row-level security decides what an export carries. A failed read
+   * exports the messages without artifacts.
+   */
+  private async loadOutputArtifacts(
+    details: ReadonlyArray<MJConversationDetailEntity>,
+    currentUser: UserInfo
+  ): Promise<Map<string, ExportArtifact[]>> {
+    const byDetail = new Map<string, ExportArtifact[]>();
+    if (details.length === 0) {
+      return byDetail;
+    }
+    const rv = RunView.FromMetadataProvider(this.Provider);
+    const inList = (ids: Iterable<string>): string => [...ids].map(id => `'${EscapeSQLString(id)}'`).join(',');
+
+    const links = await rv.RunView<ExportArtifactLinkRow>({
+      EntityName: 'MJ: Conversation Detail Artifacts',
+      ExtraFilter: `ConversationDetailID IN (${inList(details.map(d => d.ID))}) AND Direction='Output'`,
+      Fields: ['ConversationDetailID', 'ArtifactVersionID'],
+      OrderBy: '__mj_CreatedAt ASC',
+      ResultType: 'simple'
+    }, currentUser);
+    const linkRows = links.Success ? links.Results ?? [] : [];
+    if (!links.Success) {
+      console.error('Failed to load artifacts for the export:', links.ErrorMessage);
+    }
+    if (linkRows.length === 0) {
+      return byDetail;
+    }
+
+    const versionIds = new Set(linkRows.map(l => l.ArtifactVersionID));
+    const versions = await rv.RunView<ExportArtifactVersionRow>({
+      EntityName: 'MJ: Artifact Versions',
+      ExtraFilter: `ID IN (${inList(versionIds)})`,
+      Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Name', 'Content', 'FileID', 'MimeType'],
+      ResultType: 'simple'
+    }, currentUser);
+    const versionRows = versions.Success ? versions.Results ?? [] : [];
+    if (versionRows.length === 0) {
+      return byDetail;
+    }
+
+    const artifacts = await rv.RunView<ExportArtifactRow>({
+      EntityName: 'MJ: Artifacts',
+      ExtraFilter: `ID IN (${inList(new Set(versionRows.map(v => v.ArtifactID)))})`,
+      Fields: ['ID', 'Name', 'Type'],
+      ResultType: 'simple'
+    }, currentUser);
+    const artifactById = new Map((artifacts.Success ? artifacts.Results ?? [] : []).map(a => [a.ID.toLowerCase(), a]));
+    const versionById = new Map(versionRows.map(v => [v.ID.toLowerCase(), v]));
+
+    for (const link of linkRows) {
+      const version = versionById.get(link.ArtifactVersionID.toLowerCase());
+      // A version the user cannot read, or whose artifact they cannot read, is left out.
+      const artifact = version ? artifactById.get(version.ArtifactID.toLowerCase()) : undefined;
+      if (!version || !artifact) {
+        continue;
+      }
+      const key = link.ConversationDetailID.toLowerCase();
+      const list = byDetail.get(key) ?? [];
+      list.push({
+        ArtifactID: artifact.ID,
+        VersionID: version.ID,
+        Name: version.Name || artifact.Name || 'Untitled artifact',
+        Type: artifact.Type,
+        VersionNumber: version.VersionNumber,
+        Content: version.FileID ? null : version.Content,
+        MimeType: version.MimeType,
+        FileBacked: !!version.FileID
+      });
+      byDetail.set(key, list);
+    }
+    return byDetail;
+  }
+
+  /** The artifacts to write under one message: none when artifacts are off or it produced none. */
+  private artifactsFor(
+    data: ExportConversationData,
+    detail: MJConversationDetailEntity,
+    options: ResolvedExportOptions
+  ): ExportArtifact[] {
+    if (!options.includeArtifacts || !data.artifacts) {
+      return [];
+    }
+    return data.artifacts.get(detail.ID.toLowerCase()) ?? [];
+  }
+
+  /** The host's link for an artifact, when it builds one and the link is http(s). */
+  private artifactUrl(
+    data: ExportConversationData,
+    artifact: ExportArtifact,
+    options: ResolvedExportOptions
+  ): string | null {
+    const url = options.artifactLink?.({
+      ConversationID: data.conversation.ID,
+      ArtifactID: artifact.ArtifactID,
+      VersionID: artifact.VersionID,
+      VersionNumber: artifact.VersionNumber
+    })?.trim();
+    return url && /^https?:\/\//i.test(url) ? url : null;
+  }
+
+  /** "Type, version N" plus the MIME type of a file-backed version. */
+  private artifactSummary(artifact: ExportArtifact): string {
+    const mime = artifact.FileBacked && artifact.MimeType ? `, ${artifact.MimeType}` : '';
+    return `${artifact.Type}, version ${artifact.VersionNumber}${mime}`;
+  }
+
+  /**
+   * Text content for the Markdown, HTML and text formats, cut at
+   * {@link EXPORT_ARTIFACT_CONTENT_LIMIT} with a marker line. Null when there is none.
+   */
+  private artifactText(artifact: ExportArtifact): string | null {
+    const content = artifact.Content;
+    if (artifact.FileBacked || content == null || content.length === 0) {
+      return null;
+    }
+    if (content.length <= EXPORT_ARTIFACT_CONTENT_LIMIT) {
+      return content;
+    }
+    return `${content.slice(0, EXPORT_ARTIFACT_CONTENT_LIMIT)}\n[truncated: ${EXPORT_ARTIFACT_CONTENT_LIMIT} of ${content.length} characters shown]`;
+  }
+
+  /** A Markdown code fence longer than any backtick run inside the content. */
+  private markdownFence(content: string): string {
+    const longest = Math.max(0, ...(content.match(/`+/g) ?? []).map(run => run.length));
+    return '`'.repeat(Math.max(3, longest + 1));
   }
 
   /** The header name of the scope's fork: its display name; null in Main. */
@@ -499,6 +698,28 @@ export class ExportService {
           message.timestamp = detail.__mj_CreatedAt;
         }
 
+        const artifacts = this.artifactsFor(data, detail, options);
+        if (artifacts.length > 0) {
+          message.artifacts = artifacts.map(artifact => {
+            const entry: Record<string, unknown> = {
+              id: artifact.ArtifactID,
+              versionId: artifact.VersionID,
+              name: artifact.Name,
+              type: artifact.Type,
+              version: artifact.VersionNumber
+            };
+            if (artifact.FileBacked) {
+              entry.mimeType = artifact.MimeType;
+            }
+            const link = this.artifactUrl(data, artifact, options);
+            if (link) {
+              entry.link = link;
+            }
+            entry.content = artifact.Content;
+            return entry;
+          });
+        }
+
         return message;
       });
     }
@@ -541,6 +762,19 @@ export class ExportService {
         md += `## ${this.capitalizeRole(detail.Role || 'Unknown')}\n\n`;
         md += `${detail.Message}\n\n`;
 
+        for (const artifact of this.artifactsFor(data, detail, options)) {
+          md += `**Artifact:** ${artifact.Name} (${this.artifactSummary(artifact)})\n\n`;
+          const link = this.artifactUrl(data, artifact, options);
+          if (link) {
+            md += `[Open in the app](${link})\n\n`;
+          }
+          const text = this.artifactText(artifact);
+          if (text) {
+            const fence = this.markdownFence(text);
+            md += `${fence}\n${text}\n${fence}\n\n`;
+          }
+        }
+
         if (options.includeMetadata) {
           md += `*${this.formatDate(detail.__mj_CreatedAt)}*\n\n`;
         }
@@ -576,7 +810,11 @@ export class ExportService {
     .message.assistant { background: var(--mj-bg-surface-card, #f5f5f5); }
     .role { font-weight: 600; color: var(--mj-brand-primary, #007bff); margin-bottom: 10px; }
     .content { white-space: pre-wrap; }
-    .timestamp { color: var(--mj-text-disabled, #999); font-size: 12px; margin-top: 10px; }${theme.logoDataUri ? `
+    .timestamp { color: var(--mj-text-disabled, #999); font-size: 12px; margin-top: 10px; }${this.hasArtifacts(data, options) ? `
+    .artifact { margin-top: 12px; padding: 12px; border: 1px solid var(--mj-border-default, #ddd); border-radius: var(--mj-radius-md, 8px); background: var(--mj-bg-page, #fff); }
+    .artifact-name { font-weight: 600; }
+    .artifact-meta { color: var(--mj-text-secondary, #666); font-size: 12px; }
+    .artifact-content { white-space: pre-wrap; overflow-x: auto; font-size: 13px; margin: 8px 0 0; }` : ''}${theme.logoDataUri ? `
     .brand-logo { display: block; max-height: 48px; margin-bottom: 12px; }` : ''}${trademark ? `
     .brand-trademark { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--mj-border-default, #ddd); color: var(--mj-text-secondary, #666); font-size: 12px; text-align: center; }` : ''}
   </style>${theme.rootBlock}` : '';
@@ -614,6 +852,17 @@ export class ExportService {
   <div class="message ${roleClass}">
     <div class="role">${this.capitalizeRole(detail.Role || 'Unknown')}</div>
     <div class="content">${this.escapeHtml(detail.Message || '')}</div>`;
+
+        for (const artifact of this.artifactsFor(data, detail, options)) {
+          const link = this.artifactUrl(data, artifact, options);
+          const text = this.artifactText(artifact);
+          html += `
+    <div class="artifact">
+      <div class="artifact-name">${this.escapeHtml(artifact.Name)}</div>
+      <div class="artifact-meta">${this.escapeHtml(this.artifactSummary(artifact))}${link ? ` · <a href="${this.escapeAttr(link)}">Open in the app</a>` : ''}</div>${text ? `
+      <pre class="artifact-content">${this.escapeHtml(text)}</pre>` : ''}
+    </div>`;
+        }
 
         if (options.includeMetadata) {
           html += `
@@ -664,6 +913,18 @@ export class ExportService {
         text += `[${this.capitalizeRole(detail.Role || 'Unknown')}]\n`;
         text += `${detail.Message}\n`;
 
+        for (const artifact of this.artifactsFor(data, detail, options)) {
+          text += `\n[Artifact] ${artifact.Name} (${this.artifactSummary(artifact)})\n`;
+          const link = this.artifactUrl(data, artifact, options);
+          if (link) {
+            text += `Link: ${link}\n`;
+          }
+          const content = this.artifactText(artifact);
+          if (content) {
+            text += `${content}\n`;
+          }
+        }
+
         if (options.includeMetadata) {
           text += `(${this.formatDate(detail.__mj_CreatedAt)})\n`;
         }
@@ -678,6 +939,11 @@ export class ExportService {
     }
 
     return text;
+  }
+
+  /** True when any exported message carries an artifact (the HTML adds its rules only then). */
+  private hasArtifacts(data: ExportConversationData, options: ResolvedExportOptions): boolean {
+    return options.includeMessages && data.details.some(d => this.artifactsFor(data, d, options).length > 0);
   }
 
   private downloadFile(content: string, filename: string, mimeType: string): void {
