@@ -7757,6 +7757,13 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateContentSource]
     @CleanerKey nvarchar(100) = NULL,
     @ScheduledJobID_Clear bit = 0,
     @ScheduledJobID uniqueidentifier = NULL,
+    @FieldConfidence_Clear bit = 0,
+    @FieldConfidence nvarchar(MAX) = NULL,
+    @ForceDiscovery bit = NULL,
+    @LastDiscoveredAt_Clear bit = 0,
+    @LastDiscoveredAt datetimeoffset = NULL,
+    @LastSyncedAt_Clear bit = 0,
+    @LastSyncedAt datetimeoffset = NULL,
     @GraphID_Clear bit = 0,
     @GraphID uniqueidentifier = NULL
 AS
@@ -7783,6 +7790,10 @@ BEGIN
                 [SegmenterKey],
                 [CleanerKey],
                 [ScheduledJobID],
+                [FieldConfidence],
+                [ForceDiscovery],
+                [LastDiscoveredAt],
+                [LastSyncedAt],
                 [GraphID]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
@@ -7802,6 +7813,10 @@ BEGIN
                 CASE WHEN @SegmenterKey_Clear = 1 THEN NULL ELSE ISNULL(@SegmenterKey, NULL) END,
                 CASE WHEN @CleanerKey_Clear = 1 THEN NULL ELSE ISNULL(@CleanerKey, NULL) END,
                 CASE WHEN @ScheduledJobID_Clear = 1 THEN NULL ELSE ISNULL(@ScheduledJobID, NULL) END,
+                CASE WHEN @FieldConfidence_Clear = 1 THEN NULL ELSE ISNULL(@FieldConfidence, NULL) END,
+                ISNULL(@ForceDiscovery, 0),
+                CASE WHEN @LastDiscoveredAt_Clear = 1 THEN NULL ELSE ISNULL(@LastDiscoveredAt, NULL) END,
+                CASE WHEN @LastSyncedAt_Clear = 1 THEN NULL ELSE ISNULL(@LastSyncedAt, NULL) END,
                 CASE WHEN @GraphID_Clear = 1 THEN NULL ELSE ISNULL(@GraphID, NULL) END
             )
     END
@@ -7823,6 +7838,10 @@ BEGIN
                 [SegmenterKey],
                 [CleanerKey],
                 [ScheduledJobID],
+                [FieldConfidence],
+                [ForceDiscovery],
+                [LastDiscoveredAt],
+                [LastSyncedAt],
                 [GraphID]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
@@ -7841,6 +7860,10 @@ BEGIN
                 CASE WHEN @SegmenterKey_Clear = 1 THEN NULL ELSE ISNULL(@SegmenterKey, NULL) END,
                 CASE WHEN @CleanerKey_Clear = 1 THEN NULL ELSE ISNULL(@CleanerKey, NULL) END,
                 CASE WHEN @ScheduledJobID_Clear = 1 THEN NULL ELSE ISNULL(@ScheduledJobID, NULL) END,
+                CASE WHEN @FieldConfidence_Clear = 1 THEN NULL ELSE ISNULL(@FieldConfidence, NULL) END,
+                ISNULL(@ForceDiscovery, 0),
+                CASE WHEN @LastDiscoveredAt_Clear = 1 THEN NULL ELSE ISNULL(@LastDiscoveredAt, NULL) END,
+                CASE WHEN @LastSyncedAt_Clear = 1 THEN NULL ELSE ISNULL(@LastSyncedAt, NULL) END,
                 CASE WHEN @GraphID_Clear = 1 THEN NULL ELSE ISNULL(@GraphID, NULL) END
             )
     END
@@ -7899,6 +7922,13 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateContentSource]
     @CleanerKey nvarchar(100) = NULL,
     @ScheduledJobID_Clear bit = 0,
     @ScheduledJobID uniqueidentifier = NULL,
+    @FieldConfidence_Clear bit = 0,
+    @FieldConfidence nvarchar(MAX) = NULL,
+    @ForceDiscovery bit = NULL,
+    @LastDiscoveredAt_Clear bit = 0,
+    @LastDiscoveredAt datetimeoffset = NULL,
+    @LastSyncedAt_Clear bit = 0,
+    @LastSyncedAt datetimeoffset = NULL,
     @GraphID_Clear bit = 0,
     @GraphID uniqueidentifier = NULL
 AS
@@ -7920,6 +7950,10 @@ BEGIN
         [SegmenterKey] = CASE WHEN @SegmenterKey_Clear = 1 THEN NULL ELSE ISNULL(@SegmenterKey, [SegmenterKey]) END,
         [CleanerKey] = CASE WHEN @CleanerKey_Clear = 1 THEN NULL ELSE ISNULL(@CleanerKey, [CleanerKey]) END,
         [ScheduledJobID] = CASE WHEN @ScheduledJobID_Clear = 1 THEN NULL ELSE ISNULL(@ScheduledJobID, [ScheduledJobID]) END,
+        [FieldConfidence] = CASE WHEN @FieldConfidence_Clear = 1 THEN NULL ELSE ISNULL(@FieldConfidence, [FieldConfidence]) END,
+        [ForceDiscovery] = ISNULL(@ForceDiscovery, [ForceDiscovery]),
+        [LastDiscoveredAt] = CASE WHEN @LastDiscoveredAt_Clear = 1 THEN NULL ELSE ISNULL(@LastDiscoveredAt, [LastDiscoveredAt]) END,
+        [LastSyncedAt] = CASE WHEN @LastSyncedAt_Clear = 1 THEN NULL ELSE ISNULL(@LastSyncedAt, [LastSyncedAt]) END,
         [GraphID] = CASE WHEN @GraphID_Clear = 1 THEN NULL ELSE ISNULL(@GraphID, [GraphID]) END
     WHERE
         [ID] = @ID
