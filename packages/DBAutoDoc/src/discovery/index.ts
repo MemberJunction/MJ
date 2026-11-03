@@ -6,5 +6,6 @@
 export * from './DiscoveryTriggerAnalyzer.js';
 export * from './DiscoveryEngine.js';
 export * from './PKDetector.js';
+export * from './ApplyPrimaryKeys.js';
 export * from './FKDetector.js';
 export * from './EnumCandidateGate.js';
