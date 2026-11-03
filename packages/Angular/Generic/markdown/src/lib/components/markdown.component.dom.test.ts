@@ -521,12 +521,86 @@ describe('MarkdownComponent (DOM)', () => {
         '</g></svg>';
       const markdownMessage = `Here is how certification renewal works:\n\n\`\`\`svg\n${svg}\n\`\`\`\n\nClick any step above to inspect deadlines.`;
       const c = container(render({ data: markdownMessage, enableSvgRenderer: true }));
-      await Promise.resolve();
+      await new Promise((r) => setTimeout(r, 20));
       expect(c.querySelector('.mjd-shell')).not.toBeNull();
       expect(c.querySelector('.mjd-toolbar')).toBeNull();
       expect(c.querySelector('.mjd-stage')).not.toBeNull();
       expect(c.querySelector('.mjd-panel')).not.toBeNull();
       expect(c.querySelector('svg[data-mj-diagram="1"]')).not.toBeNull();
+    });
+
+    it('renders a ```mj-diagram JSON fence into an interactive diagram viewer with intact CSS custom properties', async () => {
+      const spec = JSON.stringify({
+        kind: 'lifecycle',
+        title: 'Invoice Lifecycle',
+        lanes: [{ id: 'billing', label: 'Billing' }],
+        nodes: [
+          { id: 'draft', lane: 'billing', kind: 'start', label: 'Draft' },
+          { id: 'paid', lane: 'billing', kind: 'success', label: 'Paid' },
+        ],
+        edges: [{ from: 'draft', to: 'paid', label: 'Pay', role: 'emphasis' }],
+      });
+      const markdownMessage = `Here is the lifecycle:\n\n\`\`\`mj-diagram\n${spec}\n\`\`\``;
+      const f = render({ data: '', enableSvgRenderer: true, enableSmartypants: true });
+      const done = new Promise<void>((resolve) => {
+        const sub = f.componentInstance.Rendered.subscribe(() => {
+          sub.unsubscribe();
+          resolve();
+        });
+      });
+      f.componentRef.setInput('data', markdownMessage);
+      f.detectChanges();
+      await done;
+      const c = container(f);
+      expect(c.querySelector('.mjd-shell')).not.toBeNull();
+      const svg = c.querySelector('svg[data-mj-diagram="1"]');
+      expect(svg).not.toBeNull();
+      const styleText = svg?.querySelector('style')?.textContent ?? '';
+      expect(styleText).toContain('--bg:var(--mj-bg-surface,#fff)');
+      expect(styleText).not.toContain('\u2013');
+    });
+
+    it('cancels pending diagram viewer upgrades when destroyed before async post-render processing settles', async () => {
+      const spec = JSON.stringify({
+        kind: 'workflow',
+        title: 'Quick Flow',
+        lanes: [{ id: 'l', label: 'L' }],
+        nodes: [
+          { id: 'a', lane: 'l', label: 'A' },
+          { id: 'b', lane: 'l', label: 'B' },
+        ],
+        edges: [{ from: 'a', to: 'b' }],
+      });
+      const comp = render({ data: `\`\`\`mj-diagram\n${spec}\n\`\`\``, enableSvgRenderer: true });
+      const c = container(comp);
+      comp.destroy();
+      await new Promise((r) => setTimeout(r, 20));
+      expect(c.querySelector('.mjd-shell')).toBeNull();
+    });
+
+    it('continues post-render processing and mounts inline SVGs when the diagram renderer chunk fails to load', async () => {
+      const inlineSvg =
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" data-mj-diagram="1">' +
+        '<g class="nodes"><g class="node" data-node-id="n1" data-label="Step 1"><rect x="10" y="10" width="80" height="40"/></g></g>' +
+        '</svg>';
+      const markdownMessage = `\`\`\`mj-diagram\n{"kind":"workflow"}\n\`\`\`\n\n\`\`\`svg\n${inlineSvg}\n\`\`\``;
+      const f = render({ data: '', enableSvgRenderer: true });
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      vi.spyOn(f.componentInstance, 'LoadDiagramRenderer').mockRejectedValueOnce(new Error('ChunkLoadError'));
+      const done = new Promise<void>((resolve) => {
+        const sub = f.componentInstance.Rendered.subscribe(() => {
+          sub.unsubscribe();
+          resolve();
+        });
+      });
+      f.componentRef.setInput('data', markdownMessage);
+      f.detectChanges();
+      await done;
+      warnSpy.mockRestore();
+
+      const c = container(f);
+      expect(c.querySelector('code.language-mj-diagram')).not.toBeNull();
+      expect(c.querySelector('.mjd-shell')).not.toBeNull();
     });
 
     it('does not skip the Angular sanitizer just because a message contains the diagram marker', () => {
@@ -535,4 +609,5 @@ describe('MarkdownComponent (DOM)', () => {
     });
   });
 });
+
 
