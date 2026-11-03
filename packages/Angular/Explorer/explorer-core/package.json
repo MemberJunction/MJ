@@ -61,6 +61,7 @@
     "@memberjunction/ng-conversations": "6.2.0-edge.7",
     "@memberjunction/ng-dashboard-viewer": "6.2.0-edge.7",
     "@memberjunction/ng-dashboards": "6.2.0-edge.7",
+    "@memberjunction/ng-diagnostics": "6.2.0-edge.7",
     "@memberjunction/ng-entity-form-dialog": "6.2.0-edge.7",
     "@memberjunction/ng-entity-permissions": "6.2.0-edge.7",
     "@memberjunction/ng-entity-viewer": "6.2.0-edge.7",
