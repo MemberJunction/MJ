@@ -7367,13 +7367,18 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * Replaces the non-primary-key fields owned by `parent` (or its IS-A ancestors) in an in-memory
-     * child row with `parent`'s own loaded values, before linking the row downward onto `parent`.
-     * Keeps the freshly loaded parent row authoritative for its own columns even when an engine
-     * cache holds an older snapshot of the child view's joined parent columns, and still hydrates
-     * the child's mirror fields: a mirror left NotLoaded would have no old value, so a later
-     * `child.Set()` of an inherited field would report it as changing from null in `GetAll(true)`
-     * (and so in Record Changes). A field the parent did not load stays out of the row.
+     * Replaces the fields `parent` (or its IS-A ancestors) owns in an in-memory child row with
+     * `parent`'s own loaded values, before linking the row downward onto `parent`. Keeps the
+     * freshly loaded parent row authoritative for its own columns even when an engine cache holds
+     * an older snapshot of the child view's joined parent columns, and still hydrates the child's
+     * mirror fields: a mirror left NotLoaded would have no old value, so a later `child.Set()` of
+     * an inherited field would report it as changing from null in `GetAll(true)` (and so in
+     * Record Changes).
+     *
+     * "Owned by an ancestor" means the mirrored columns (`ParentEntityFieldNames`) and the
+     * ancestors' virtual columns, which the child view also carries. The shared key and `__mj_`
+     * timestamps are not: the child view's timestamps are its own table's. A replaced field the
+     * parent did not load stays out of the row.
      */
     private static inheritedFieldsFromParent(
         parent: BaseEntity,
@@ -7385,55 +7390,50 @@ export abstract class BaseEntity<T = unknown> {
         }
 
         const pkNamesLower = new Set<string>();
-        for (const pk of childEntity.EntityInfo.PrimaryKeys) {
-            pkNamesLower.add(pk.Name.trim().toLowerCase());
-            if (pk.CodeName) pkNamesLower.add(pk.CodeName.trim().toLowerCase());
-        }
-        for (const pk of parent.EntityInfo.PrimaryKeys) {
+        for (const pk of [...childEntity.EntityInfo.PrimaryKeys, ...parent.EntityInfo.PrimaryKeys]) {
             pkNamesLower.add(pk.Name.trim().toLowerCase());
             if (pk.CodeName) pkNamesLower.add(pk.CodeName.trim().toLowerCase());
         }
 
-        const inheritedLower = new Set<string>();
-        for (const name of childEntity.EntityInfo.ParentEntityFieldNames) {
+        // Canonical field name → its lowercased name and code name, for every replaced field.
+        const replaced = new Map<string, string[]>();
+        const addReplaced = (name: string, codeName: string | undefined): void => {
             const lower = name.trim().toLowerCase();
-            if (!pkNamesLower.has(lower)) {
-                inheritedLower.add(lower);
+            if (pkNamesLower.has(lower) || lower.startsWith('__mj_')) {
+                return;
             }
+            replaced.set(name, codeName ? [lower, codeName.trim().toLowerCase()] : [lower]);
+        };
+        for (const name of childEntity.EntityInfo.ParentEntityFieldNames) {
+            addReplaced(name, childEntity.EntityInfo.Fields.find(f => f.Name === name)?.CodeName);
         }
-        let ancestor: BaseEntity | null = parent;
-        while (ancestor) {
-            for (const f of ancestor.EntityInfo.Fields) {
-                const nameLower = f.Name.trim().toLowerCase();
-                if (!pkNamesLower.has(nameLower)) {
-                    inheritedLower.add(nameLower);
-                }
-                if (f.CodeName) {
-                    const codeLower = f.CodeName.trim().toLowerCase();
-                    if (!pkNamesLower.has(codeLower)) {
-                        inheritedLower.add(codeLower);
-                    }
+        for (const ancestorInfo of childEntity.EntityInfo.ParentChain) {
+            for (const f of ancestorInfo.Fields) {
+                if (f.IsVirtual) {
+                    addReplaced(f.Name, f.CodeName);
                 }
             }
-            ancestor = ancestor.ISAParent;
         }
-
-        if (inheritedLower.size === 0) {
+        if (replaced.size === 0) {
             return childRow;
         }
 
+        const replacedLower = new Set<string>();
+        for (const keys of replaced.values()) {
+            for (const k of keys) replacedLower.add(k);
+        }
         const copy: Record<string, string | number | boolean | Date | object | null | undefined> = {};
         for (const key of Object.keys(childRow)) {
-            if (!inheritedLower.has(key.trim().toLowerCase())) {
+            if (!replacedLower.has(key.trim().toLowerCase())) {
                 copy[key] = childRow[key];
             }
         }
-        // GetAll() holds every field the parent chain loaded (NotLoaded ones are omitted), keyed
-        // by field name, with the authoritative current values. The parent was loaded in this
-        // same batch, so its current values are its loaded values.
+        // GetAll() holds every field the parent loaded (NotLoaded ones are omitted), keyed by
+        // field name, with its current values. The parent was loaded in this same batch, so its
+        // current values are its loaded values.
         const parentValues = parent.GetAll() as Record<string, string | number | boolean | Date | object | null | undefined>;
-        for (const name of childEntity.EntityInfo.ParentEntityFieldNames) {
-            if (!pkNamesLower.has(name.trim().toLowerCase()) && Object.prototype.hasOwnProperty.call(parentValues, name)) {
+        for (const name of replaced.keys()) {
+            if (Object.prototype.hasOwnProperty.call(parentValues, name)) {
                 copy[name] = parentValues[name];
             }
         }

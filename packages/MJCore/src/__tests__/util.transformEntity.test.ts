@@ -1412,6 +1412,50 @@ describe('TransformSimpleObjectToEntityObject batched IS-A hydration & 1-query C
         }
     });
 
+    it('keeps an engine-cached child\'s own __mj_ timestamps and its ancestors\' virtual columns when linking it', async () => {
+        // Products carries a virtual join column; both tables carry their own __mj_ timestamps.
+        batchedProvider = new BatchedLoadHintTestProvider(BuildLoadHintEntities({
+            MirrorParentFields: true,
+            ExtraFields: {
+                Products: [{ Name: 'ProductTypeName', Type: 'nvarchar', Length: 100, IsVirtual: true }, { Name: '__mj_CreatedAt', Type: 'datetimeoffset' }],
+                Meetings: [{ Name: '__mj_CreatedAt', Type: 'datetimeoffset' }],
+            },
+        }), store, user);
+        Metadata.Provider = batchedProvider as object as IMetadataProvider;
+        BaseEntity.Provider = batchedProvider.AsEntityDataProvider;
+        const productsInfo = batchedProvider.EntityByName('Products')!;
+        const meetingsInfo = batchedProvider.EntityByName('Meetings')!;
+        const id = 'c4000000-0000-0000-0000-000000000001';
+        const productCreated = new Date('2020-01-01T00:00:00Z');
+        const meetingCreated = new Date('2024-06-01T00:00:00Z');
+        store.Insert('Products', { ID: id, Name: 'Timestamped', ProductTypeID: MEETING_TYPE_ID, ProductTypeName: 'Meeting', __mj_CreatedAt: productCreated });
+        store.Insert('Meetings', { ID: id, Venue: 'Hall T', __mj_CreatedAt: meetingCreated });
+
+        const engine = {
+            Loaded: true,
+            Meetings: [store.ViewRow(meetingsInfo, id)!],
+            ReadonlyConfigs: [{ PropertyName: 'Meetings', EntityName: 'Meetings', Type: 'entity', ResultType: 'simple' }],
+        };
+        BaseEngineRegistry.Instance.RegisterEngine(engine);
+
+        try {
+            const [parent] = await TransformSimpleObjectToEntityObject<BaseEntity>(
+                batchedProvider as object as IMetadataProvider, 'Products', [store.ViewRow(productsInfo, id)!], user
+            );
+            const child = parent.ISAChild!;
+            expect(batchedProvider.RunViewsBatchCalls).toBe(0);
+
+            // The child's own table timestamp, as the per-row load of the child view gives it.
+            expect(child.GetFieldByName('__mj_CreatedAt')!.NotLoaded).toBe(false);
+            expect(child.Get('__mj_CreatedAt')).toEqual(meetingCreated);
+            // The ancestor's virtual column, mirrored on the child view.
+            expect(child.GetFieldByName('ProductTypeName')!.NotLoaded).toBe(false);
+            expect(child.Get('ProductTypeName')).toBe('Meeting');
+        } finally {
+            BaseEngineRegistry.Instance.UnregisterEngine(engine);
+        }
+    });
+
     describe('a parent whose subtype is already known falls back to the DB when the child engine cache lacks its row', () => {
         const LAGGING_ID = 'c2000000-0000-0000-0000-000000000000';
         let laggingEngine: object | null = null;
