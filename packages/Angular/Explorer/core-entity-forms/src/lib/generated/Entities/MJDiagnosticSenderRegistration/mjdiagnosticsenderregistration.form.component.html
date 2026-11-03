@@ -44,6 +44,14 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="MaxBundlesPerDay"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="Comments"
             Type="textarea"
             [EditMode]="EditMode"
@@ -52,11 +60,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Security and Authentication Section -->
+    <!-- Security and Keys Section -->
     <mj-collapsible-panel
-        SectionKey="securityAndAuthentication"
-        SectionName="Security and Authentication"
-        Icon="fa fa-shield-alt"
+        SectionKey="securityAndKeys"
+        SectionName="Security and Keys"
+        Icon="fa fa-lock"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -94,11 +102,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Activity and Limits Section -->
+    <!-- Timeline and Activity Section -->
     <mj-collapsible-panel
-        SectionKey="activityAndLimits"
-        SectionName="Activity and Limits"
-        Icon="fa fa-tachometer-alt"
+        SectionKey="timelineAndActivity"
+        SectionName="Timeline and Activity"
+        Icon="fa fa-clock"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -130,14 +138,6 @@
             [ShowLabel]="true"
             FieldName="LastSeenAt"
             Type="datepicker"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="MaxBundlesPerDay"
-            Type="number"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>

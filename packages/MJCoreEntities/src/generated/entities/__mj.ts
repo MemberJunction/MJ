@@ -18301,7 +18301,7 @@ export const MJDiagnosticBundleSchema = z.object({
         * * Description: Fallback binary storage for the .mjdiag archive when no MJStorage account is configured.`),
     SizeBytes: z.number().describe(`
         * * Field Name: SizeBytes
-        * * Display Name: Size Bytes
+        * * Display Name: Size (Bytes)
         * * SQL Data Type: bigint
         * * Default Value: 0
         * * Description: Total size of the .mjdiag archive in bytes.`),
@@ -18312,19 +18312,19 @@ export const MJDiagnosticBundleSchema = z.object({
         * * Description: Hex-encoded SHA-256 digest of the unencrypted .mjdiag archive.`),
     ManifestJSON: z.any().nullable().describe(`
         * * Field Name: ManifestJSON
-        * * Display Name: Manifest JSON
+        * * Display Name: Manifest
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJDiagnosticBundleEntity_IDiagnosticBundleManifest
         * * Description: Parsed manifest.json contents including file inventory and SHA-256 digests.`),
     ScrubReportJSON: z.any().nullable().describe(`
         * * Field Name: ScrubReportJSON
-        * * Display Name: Scrub Report JSON
+        * * Display Name: Scrub Report
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJDiagnosticBundleEntity_IDiagnosticScrubReport
         * * Description: Summary counts of credential tokens scrubbed and literals normalized across all bundle entries.`),
     FindingsJSON: z.any().nullable().describe(`
         * * Field Name: FindingsJSON
-        * * Display Name: Findings JSON
+        * * Display Name: Findings
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: Array<MJDiagnosticBundleEntity_IDiagnosticFinding>
         * * Description: Automated rules-engine diagnostic findings extracted from this bundle.`),
@@ -18541,7 +18541,7 @@ export const MJDiagnosticSessionChunkSchema = z.object({
         * * Default Value: newsequentialid()`),
     DiagnosticSessionID: z.string().describe(`
         * * Field Name: DiagnosticSessionID
-        * * Display Name: Diagnostic Session ID
+        * * Display Name: Diagnostic Session
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Diagnostic Sessions (vwDiagnosticSessions.ID)
         * * Description: Owning diagnostic session for this chunk.`),
@@ -93933,7 +93933,7 @@ export class MJDiagnosticBundleEntity extends BaseEntity<MJDiagnosticBundleEntit
 
     /**
     * * Field Name: SizeBytes
-    * * Display Name: Size Bytes
+    * * Display Name: Size (Bytes)
     * * SQL Data Type: bigint
     * * Default Value: 0
     * * Description: Total size of the .mjdiag archive in bytes.
@@ -93960,7 +93960,7 @@ export class MJDiagnosticBundleEntity extends BaseEntity<MJDiagnosticBundleEntit
 
     /**
     * * Field Name: ManifestJSON
-    * * Display Name: Manifest JSON
+    * * Display Name: Manifest
     * * SQL Data Type: nvarchar(MAX)
     * * JSON Type: MJDiagnosticBundleEntity_IDiagnosticBundleManifest
     * * Description: Parsed manifest.json contents including file inventory and SHA-256 digests.
@@ -93989,7 +93989,7 @@ export class MJDiagnosticBundleEntity extends BaseEntity<MJDiagnosticBundleEntit
 
     /**
     * * Field Name: ScrubReportJSON
-    * * Display Name: Scrub Report JSON
+    * * Display Name: Scrub Report
     * * SQL Data Type: nvarchar(MAX)
     * * JSON Type: MJDiagnosticBundleEntity_IDiagnosticScrubReport
     * * Description: Summary counts of credential tokens scrubbed and literals normalized across all bundle entries.
@@ -94018,7 +94018,7 @@ export class MJDiagnosticBundleEntity extends BaseEntity<MJDiagnosticBundleEntit
 
     /**
     * * Field Name: FindingsJSON
-    * * Display Name: Findings JSON
+    * * Display Name: Findings
     * * SQL Data Type: nvarchar(MAX)
     * * JSON Type: Array<MJDiagnosticBundleEntity_IDiagnosticFinding>
     * * Description: Automated rules-engine diagnostic findings extracted from this bundle.
@@ -94567,7 +94567,7 @@ export class MJDiagnosticSessionChunkEntity extends BaseEntity<MJDiagnosticSessi
 
     /**
     * * Field Name: DiagnosticSessionID
-    * * Display Name: Diagnostic Session ID
+    * * Display Name: Diagnostic Session
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Diagnostic Sessions (vwDiagnosticSessions.ID)
     * * Description: Owning diagnostic session for this chunk.

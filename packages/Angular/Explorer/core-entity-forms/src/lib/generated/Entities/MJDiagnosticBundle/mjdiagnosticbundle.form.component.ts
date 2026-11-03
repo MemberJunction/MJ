@@ -15,7 +15,16 @@ export class MJDiagnosticBundleFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true }
+            { sectionKey: 'bundleDetails', sectionName: 'Bundle Details', isExpanded: true },
+            { sectionKey: 'securityAndScrubbing', sectionName: 'Security and Scrubbing', isExpanded: true },
+            { sectionKey: 'timelineAndScope', sectionName: 'Timeline and Scope', isExpanded: true },
+            { sectionKey: 'storageAndArchive', sectionName: 'Storage and Archive', isExpanded: true },
+            { sectionKey: 'analysisAndFindings', sectionName: 'Analysis and Findings', isExpanded: true },
+            { sectionKey: 'statusAndErrorTracking', sectionName: 'Status and Error Tracking', isExpanded: true },
+            { sectionKey: 'ownershipAndApproval', sectionName: 'Ownership and Approval', isExpanded: true },
+            { sectionKey: 'transmissionDetails', sectionName: 'Transmission Details', isExpanded: true },
+            { sectionKey: 'senderInformation', sectionName: 'Sender Information', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
 }

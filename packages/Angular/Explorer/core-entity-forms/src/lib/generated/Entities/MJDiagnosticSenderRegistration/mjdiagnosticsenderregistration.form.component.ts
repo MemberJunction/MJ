@@ -16,8 +16,8 @@ export class MJDiagnosticSenderRegistrationFormComponent extends BaseFormCompone
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'registrationDetails', sectionName: 'Registration Details', isExpanded: true },
-            { sectionKey: 'securityAndAuthentication', sectionName: 'Security and Authentication', isExpanded: true },
-            { sectionKey: 'activityAndLimits', sectionName: 'Activity and Limits', isExpanded: true },
+            { sectionKey: 'securityAndKeys', sectionName: 'Security and Keys', isExpanded: true },
+            { sectionKey: 'timelineAndActivity', sectionName: 'Timeline and Activity', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

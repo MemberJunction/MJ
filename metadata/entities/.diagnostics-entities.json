@@ -1,0 +1,46 @@
+[
+  {
+    "_comments": [
+      "Sessions are read through the diagnostics operations, not cached or searched"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Diagnostic Sessions"
+    },
+    "fields": {
+      "Name": "MJ: Diagnostic Sessions",
+      "AllowCaching": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    }
+  },
+  {
+    "_comments": [
+      "Binary capture chunks: no change tracking and no caching, so a chunk's data is never copied"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Diagnostic Session Chunks"
+    },
+    "fields": {
+      "Name": "MJ: Diagnostic Session Chunks",
+      "TrackRecordChanges": false,
+      "AllowCaching": false,
+      "Icon": "fa fa-layer-group"
+    }
+  },
+  {
+    "_comments": [
+      "Bundle rows can hold the archive bytes: no change tracking, caching or search"
+    ],
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Diagnostic Bundles"
+    },
+    "fields": {
+      "Name": "MJ: Diagnostic Bundles",
+      "TrackRecordChanges": false,
+      "AllowCaching": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false,
+      "Icon": "fa fa-box-open"
+    }
+  }
+]
