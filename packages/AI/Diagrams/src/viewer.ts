@@ -12,6 +12,8 @@
  * @module @memberjunction/ai-diagrams/viewer
  */
 
+import { DIAGRAM_CSS } from './spec.js';
+
 export interface DiagramViewerState {
     Selected: string | null;
     SelectedEdge: string | null;
@@ -38,6 +40,7 @@ interface EdgeRecord {
     role: string;
     main: boolean;
     order: number;
+    hasOrder: boolean;
     label: string;
 }
 
@@ -168,6 +171,7 @@ const SHELL_CSS = `
   overflow: hidden;
   clip: rect(0 0 0 0);
 }
+${DIAGRAM_CSS}
 svg.mjd .node, svg.mjd .card, svg.mjd .edge {
   cursor: pointer;
   transition: opacity .16s ease;
@@ -192,10 +196,14 @@ svg.mjd .node.lit > polygon {
   stroke: var(--accent);
   stroke-width: 2.4px;
 }
-svg.mjd .edge.lit path, svg.mjd .edge.sel path {
+svg.mjd .edge.lit path:not(.mjd-hit), svg.mjd .edge.sel path:not(.mjd-hit) {
   stroke: var(--accent);
   stroke-width: 2.75px;
   stroke-dasharray: none;
+}
+svg.mjd .edge.lit[data-edge-role="error"] path:not(.mjd-hit),
+svg.mjd .edge.sel[data-edge-role="error"] path:not(.mjd-hit) {
+  stroke: var(--error);
 }
 svg.mjd .edge path.mjd-hit {
   stroke: transparent;
@@ -203,10 +211,61 @@ svg.mjd .edge path.mjd-hit {
   fill: none;
   pointer-events: stroke;
 }
+svg.mjd .flow-layer { pointer-events: none; }
+svg.mjd .flow-layer .comet {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 7px;
+  stroke-linecap: round;
+  opacity: .9;
+  filter: drop-shadow(0 0 6px var(--accent));
+}
+svg.mjd .flow-layer .core {
+  fill: none;
+  stroke: var(--bg);
+  stroke-width: 2px;
+  stroke-linecap: round;
+}
+svg.mjd .flow-layer .token {
+  fill: var(--accent);
+  stroke: var(--bg);
+  stroke-width: 2px;
+  filter: drop-shadow(0 0 5px var(--accent));
+}
+svg.mjd .flow-layer .error.comet {
+  stroke: var(--error);
+  filter: drop-shadow(0 0 5px var(--error));
+}
+svg.mjd .flow-layer .error.token {
+  fill: var(--error);
+  filter: drop-shadow(0 0 4px var(--error));
+}
+svg.mjd .mjv-lit { fill: var(--accent); }
+svg.mjd .mjv-lit-error { fill: var(--error); }
+svg.mjd .node.arrive > rect:not(.step-pill),
+svg.mjd .node.arrive > polygon {
+  animation: mjv-arrive .7s ease-out;
+}
+@keyframes mjv-arrive {
+  0% { filter: none; }
+  35% { filter: drop-shadow(0 0 10px var(--accent)); }
+  100% { filter: none; }
+}
 `;
 
-/** Adds the shell CSS once per document, or once per shadow root, since document styles do not reach inside one. */
+/**
+ * Adds the shell CSS once per document (or shadow root) and repairs any inline `<style>` inside `svg`
+ * whose `--` custom properties or quotes were converted to en-dashes/curly quotes by markdown smartypants.
+ */
 function ensureStylesInjected(svg: SVGSVGElement): void {
+    svg.querySelectorAll('style').forEach((s) => {
+        if (s.textContent && /[\u2013\u2014\u2018\u2019\u201C\u201D]/.test(s.textContent)) {
+            s.textContent = s.textContent
+                .replace(/[\u2013\u2014]/g, '--')
+                .replace(/[\u2018\u2019]/g, "'")
+                .replace(/[\u201C\u201D]/g, '"');
+        }
+    });
     const doc = svg.ownerDocument;
     const root = svg.getRootNode();
     const target = root.nodeType === root.DOCUMENT_FRAGMENT_NODE ? (root as ShadowRoot) : doc;
@@ -286,6 +345,7 @@ function indexDiagramElements(svg: SVGSVGElement): IndexedDiagram {
             role: el.dataset.edgeRole || 'default',
             main: el.dataset.mainPath === 'true',
             order: Number(el.dataset.edgeOrder ?? edges.length),
+            hasOrder: el.dataset.edgeOrder !== undefined,
             label: el.querySelector('text')?.textContent?.trim() || '',
         };
         edges.push(rec);
@@ -453,33 +513,203 @@ function buildCardPanelDom(card: SVGGElement, nodeIds: string[], index: IndexedD
 
 type HighlightSet = Set<string> | null;
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const STEP_MS = 720;
+const COMET_LEN = 46;
+let viewerMarkerSeq = 0;
+
+interface FlowStep {
+    edge: EdgeRecord;
+    order: number;
+}
+
+interface FlowRun {
+    step: FlowStep;
+    path: SVGPathElement;
+    core: SVGPathElement;
+    token: SVGPathElement;
+    len: number;
+    start: number;
+    landed: boolean;
+}
+
+function deriveMarkerPrefix(svg: SVGSVGElement): string {
+    const root = svg.getRootNode() as Document | ShadowRoot;
+    const existing = svg.querySelector('marker[id$="-mk-line"]')?.getAttribute('id');
+    const base = existing ? existing.slice(0, -'-mk-line'.length) : 'mjv';
+    const candidate = `${base}-mk-lit`;
+    if (typeof root.getElementById === 'function' && !root.getElementById(candidate)) {
+        return base;
+    }
+    return `mjv-${++viewerMarkerSeq}`;
+}
+
+function ensureLitMarkers(svg: SVGSVGElement, prefix: string): void {
+    const doc = svg.ownerDocument;
+    let defs = svg.querySelector('defs');
+    if (!defs) {
+        defs = doc.createElementNS(SVG_NS, 'defs');
+        svg.insertBefore(defs, svg.firstChild);
+    }
+    for (const [id, cls] of [[`${prefix}-mk-lit`, 'mjv-lit'], [`${prefix}-mk-lit-error`, 'mjv-lit-error']] as const) {
+        if (defs.querySelector(`[id="${id}"]`)) continue;
+        const marker = doc.createElementNS(SVG_NS, 'marker');
+        marker.setAttribute('id', id);
+        marker.setAttribute('viewBox', '0 0 10 10');
+        marker.setAttribute('refX', '9');
+        marker.setAttribute('refY', '5');
+        marker.setAttribute('markerUnits', 'userSpaceOnUse');
+        marker.setAttribute('markerWidth', '10');
+        marker.setAttribute('markerHeight', '10');
+        marker.setAttribute('orient', 'auto-start-reverse');
+        const path = doc.createElementNS(SVG_NS, 'path');
+        path.setAttribute('class', cls);
+        path.setAttribute('d', 'M0 0L10 5L0 10z');
+        marker.appendChild(path);
+        defs.appendChild(marker);
+    }
+}
+
+function computeBeats(subset: EdgeRecord[], starts: string[], dir: 'down' | 'up' = 'down'): FlowStep[] {
+    if (subset.length === 0) return [];
+    if (subset.every((e) => e.hasOrder)) {
+        const sorted = [...subset].sort((a, b) => (dir === 'down' ? a.order - b.order : b.order - a.order));
+        return sorted.map((edge, idx) => ({ edge, order: idx }));
+    }
+    const dist = new Map<string, number>(starts.map((id) => [id, 0]));
+    const queue = [...starts];
+    const steps: FlowStep[] = [];
+    while (steps.length < subset.length) {
+        if (queue.length === 0) {
+            const nextEdge = subset.find((e) => !steps.some((s) => s.edge === e));
+            if (!nextEdge) break;
+            const seed = dir === 'down' ? nextEdge.from : nextEdge.to;
+            const nextBeat = steps.length ? Math.max(...steps.map((s) => s.order)) + 1 : 0;
+            dist.set(seed, nextBeat);
+            queue.push(seed);
+        }
+        const cur = queue.shift()!;
+        const d = dist.get(cur) ?? 0;
+        for (const e of subset) {
+            const [a, b] = dir === 'down' ? [e.from, e.to] : [e.to, e.from];
+            if (a !== cur || steps.some((s) => s.edge === e)) continue;
+            steps.push({ edge: e, order: d });
+            if (!dist.has(b)) {
+                dist.set(b, d + 1);
+                queue.push(b);
+            }
+        }
+    }
+    if (dir === 'up') {
+        const max = Math.max(0, ...steps.map((s) => s.order));
+        steps.forEach((s) => { s.order = max - s.order; });
+    }
+    return steps;
+}
+
+function sourcesOf(subset: EdgeRecord[]): string[] {
+    const froms = [...new Set(subset.map((e) => e.from))];
+    const roots = froms.filter((id) => !subset.some((e) => e.to === id));
+    return roots.length > 0 ? roots : subset.slice(0, 1).map((e) => e.from);
+}
+
+function mainSteps(edges: EdgeRecord[]): FlowStep[] {
+    const main = edges.filter((e) => e.main);
+    const subset = main.length > 0 ? main : edges;
+    return computeBeats(subset, sourcesOf(subset), 'down');
+}
+
+function createFlowRun(doc: Document, layer: SVGGElement, step: FlowStep, t0: number): FlowRun | null {
+    const orig = step.edge.el.querySelector<SVGPathElement>('path:not(.mjd-hit)');
+    if (!orig || typeof orig.getTotalLength !== 'function') return null;
+    let len = 0;
+    try { len = orig.getTotalLength(); } catch { return null; }
+    if (!(len > 0)) return null;
+
+    const isErr = step.edge.role === 'error';
+    const path = orig.cloneNode(false) as SVGPathElement;
+    path.removeAttribute('marker-end');
+    path.removeAttribute('data-mark');
+    path.setAttribute('class', isErr ? 'comet error' : 'comet');
+
+    const core = path.cloneNode(false) as SVGPathElement;
+    core.setAttribute('class', 'core');
+
+    const token = doc.createElementNS(SVG_NS, 'path');
+    token.setAttribute('d', 'M-9 -7.5L8 0L-9 7.5L-4.5 0Z');
+    token.setAttribute('class', isErr ? 'token error' : 'token');
+
+    layer.append(path, core, token);
+    path.style.strokeDasharray = core.style.strokeDasharray = `${COMET_LEN} ${len + COMET_LEN}`;
+    path.style.opacity = core.style.opacity = token.style.opacity = '0';
+    return { step, path, core, token, len, start: t0 + step.order * STEP_MS, landed: false };
+}
+
+function stepFlowRun(r: FlowRun, now: number, period: number, onArrive: (id: string) => void): void {
+    const elapsed = now - r.start;
+    const ms = elapsed >= 0 ? elapsed % period : elapsed;
+    const t = ms / STEP_MS;
+    if (t < 0 || t > 1) {
+        r.path.style.opacity = r.core.style.opacity = r.token.style.opacity = '0';
+        if (t > 1 && !r.landed) {
+            r.landed = true;
+            onArrive(r.step.edge.to);
+        }
+        return;
+    }
+    if (r.landed) {
+        r.landed = false;
+        if (r.step.order === 0) onArrive(r.step.edge.from);
+    }
+    const k = t < 0.5 ? 2 * t * t : 1 - Math.pow(2 - 2 * t, 2) / 2;
+    const d = k * r.len;
+    const p = r.path.getPointAtLength(d);
+    const a = r.path.getPointAtLength(Math.max(0, d - 1));
+    const b = r.path.getPointAtLength(Math.min(r.len, d + 1));
+    const angle = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+    r.token.setAttribute('transform', `translate(${p.x} ${p.y}) rotate(${angle})`);
+    r.path.style.strokeDashoffset = r.core.style.strokeDashoffset = String(COMET_LEN - d);
+    r.path.style.opacity = r.core.style.opacity = r.token.style.opacity = String(Math.min(1, t * 8, (1 - t) * 8));
+}
+
 /** The interactive controller around one rendered `<svg data-mj-diagram="1">`. */
 class DiagramViewer implements DiagramViewerInstance {
     private readonly shell: HTMLDivElement;
     private readonly stage: HTMLDivElement;
     private readonly panel: HTMLElement;
     private readonly live: HTMLDivElement;
+    private readonly flowLayer: SVGGElement;
     private readonly index: IndexedDiagram;
     private readonly events: AbortController;
+    private readonly markerPrefix: string;
     private readonly listeners = new Set<(s: DiagramViewerState) => void>();
     private selected: string | null = null;
     private selectedEdge: string | null = null;
     private activeCard: string | null = null;
     private highlighted = new Set<string>();
+    private raf = 0;
 
     constructor(public readonly Svg: SVGSVGElement) {
         // The document's own realm: jsdom and iframes reject a signal from another window.
         this.events = new (Svg.ownerDocument.defaultView ?? globalThis).AbortController();
+        Svg.classList.add('mjd');
         ensureStylesInjected(Svg);
+        this.markerPrefix = deriveMarkerPrefix(Svg);
+        ensureLitMarkers(Svg, this.markerPrefix);
         const dom = buildShellDom(Svg);
         this.shell = dom.shell;
         this.stage = dom.stage;
         this.panel = dom.panel;
         this.live = dom.live;
         this.index = indexDiagramElements(Svg);
+        this.flowLayer = Svg.ownerDocument.createElementNS(SVG_NS, 'g');
+        this.flowLayer.setAttribute('class', 'flow-layer');
+        this.flowLayer.setAttribute('aria-hidden', 'true');
+        Svg.appendChild(this.flowLayer);
         const viewBoxWidth = Number(Svg.getAttribute('viewBox')?.split(/[\s,]+/)[2]);
         if (viewBoxWidth > 0) this.shell.style.setProperty('--mjd-min-w', `${Math.round(viewBoxWidth * MIN_SCALE)}px`);
         this.bindEvents();
+        this.playFlow(mainSteps(this.index.edges));
     }
 
     public Clear(): void {
@@ -487,6 +717,7 @@ class DiagramViewer implements DiagramViewerInstance {
         this.highlight(null, null);
         this.panel.dataset.empty = 'true';
         this.panel.replaceChildren();
+        this.playFlow(mainSteps(this.index.edges));
     }
 
     public Select(id: string | null): void {
@@ -497,10 +728,18 @@ class DiagramViewer implements DiagramViewerInstance {
         this.setSelection(id, null, null);
         const nodes = new Set<string>([id]);
         const edges = new Set<string>();
-        (this.index.adjOut.get(id) || []).forEach((e) => { edges.add(e.id); nodes.add(e.to); });
-        (this.index.adjIn.get(id) || []).forEach((e) => { edges.add(e.id); nodes.add(e.from); });
+        const inc = this.index.adjIn.get(id) || [];
+        const out = this.index.adjOut.get(id) || [];
+        out.forEach((e) => { edges.add(e.id); nodes.add(e.to); });
+        inc.forEach((e) => { edges.add(e.id); nodes.add(e.from); });
         this.highlight(nodes, edges);
-        this.showPanel(buildNodePanelDom(id, this.index.nodes.get(id)!, this.index));
+        const nodeEl = this.index.nodes.get(id)!;
+        this.showPanel(buildNodePanelDom(id, nodeEl, this.index));
+        nodeEl.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+        this.playFlow([
+            ...inc.map((edge) => ({ edge, order: 0 })),
+            ...out.map((edge) => ({ edge, order: inc.length > 0 ? 1 : 0 })),
+        ]);
         this.live.textContent = `Selected ${getNodeLabel(this.index, id)}`;
     }
 
@@ -510,10 +749,13 @@ class DiagramViewer implements DiagramViewerInstance {
             this.Clear();
             return;
         }
+        this.setRovingEdge(edge.el);
         this.setSelection(null, edge.id, null);
         this.highlight(new Set([edge.from, edge.to]), new Set([edge.id]));
         this.showPanel(buildEdgePanelDom(edge, this.index));
-        this.live.textContent = `Selected connection ${edge.label || `${edge.from} to ${edge.to}`}`;
+        edge.el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+        this.playFlow([{ edge, order: 0 }]);
+        this.live.textContent = `Selected connection ${edge.label || `${getNodeLabel(this.index, edge.from)} to ${getNodeLabel(this.index, edge.to)}`}`;
     }
 
     public Trace(id: string, dir: 'up' | 'down' | 'both' = 'both'): void {
@@ -522,6 +764,9 @@ class DiagramViewer implements DiagramViewerInstance {
         const { nodeSet, edgeSet } = traverseGraph(id, dir, this.index);
         this.highlight(nodeSet, edgeSet);
         this.showPanel(buildNodePanelDom(id, this.index.nodes.get(id)!, this.index));
+        const subset = this.index.edges.filter((e) => edgeSet.has(e.id));
+        const starts = dir === 'both' ? sourcesOf(subset) : [id];
+        this.playFlow(computeBeats(subset, starts, dir === 'up' ? 'up' : 'down'));
     }
 
     public OnState(fn: (state: DiagramViewerState) => void): () => void {
@@ -531,8 +776,12 @@ class DiagramViewer implements DiagramViewerInstance {
 
     public Destroy(): void {
         this.listeners.clear();
-        this.Clear();
+        this.stopFlow();
+        this.setSelection(null, null, null);
+        this.highlight(null, null);
         this.events.abort();
+        this.flowLayer.remove();
+        this.Svg.querySelectorAll(`[id="${this.markerPrefix}-mk-lit"], [id="${this.markerPrefix}-mk-lit-error"]`).forEach((m) => m.remove());
         this.Svg.querySelectorAll('path.mjd-hit').forEach((hit) => hit.remove());
         if (this.shell.parentNode) {
             this.shell.parentNode.insertBefore(this.Svg, this.shell);
@@ -549,8 +798,10 @@ class DiagramViewer implements DiagramViewerInstance {
         this.setSelection(null, null, cid);
         const ids = (card.dataset.cardNodes || '').split(/\s+/).filter((id) => this.index.nodes.has(id));
         const nodes = new Set(ids);
-        this.highlight(nodes, new Set(this.index.edges.filter((e) => nodes.has(e.from) && nodes.has(e.to)).map((e) => e.id)));
+        const subset = this.index.edges.filter((e) => nodes.has(e.from) && nodes.has(e.to));
+        this.highlight(nodes, new Set(subset.map((e) => e.id)));
         this.showPanel(buildCardPanelDom(card, ids, this.index));
+        this.playFlow(computeBeats(subset, sourcesOf(subset), 'down'));
     }
 
     private setSelection(node: string | null, edge: string | null, card: string | null): void {
@@ -564,6 +815,47 @@ class DiagramViewer implements DiagramViewerInstance {
         this.panel.replaceChildren(...content);
     }
 
+    private stopFlow(): void {
+        const win = this.Svg.ownerDocument.defaultView ?? globalThis;
+        if (this.raf && typeof win.cancelAnimationFrame === 'function') {
+            win.cancelAnimationFrame(this.raf);
+        }
+        this.raf = 0;
+        this.flowLayer.replaceChildren();
+        this.index.nodes.forEach((n) => n.classList.remove('arrive'));
+    }
+
+    private arriveNode(id: string): void {
+        const n = this.index.nodes.get(id);
+        if (!n) return;
+        n.classList.remove('arrive');
+        n.classList.add('arrive');
+    }
+
+    private playFlow(steps: FlowStep[]): void {
+        this.stopFlow();
+        const win = this.Svg.ownerDocument.defaultView ?? globalThis;
+        if (!steps.length || typeof win.requestAnimationFrame !== 'function') return;
+        if (win.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+
+        const doc = this.Svg.ownerDocument;
+        const t0 = (win.performance?.now() ?? Date.now()) + 120;
+        const runs = steps
+            .map((s) => createFlowRun(doc, this.flowLayer, s, t0))
+            .filter((r): r is FlowRun => r !== null);
+        if (!runs.length) return;
+
+        const beats = Math.max(...steps.map((s) => s.order)) + 1;
+        const period = beats * STEP_MS + 1100;
+        const tick = (now: number): void => {
+            for (const r of runs) {
+                stepFlowRun(r, now, period, (id) => this.arriveNode(id));
+            }
+            this.raf = win.requestAnimationFrame(tick);
+        };
+        this.raf = win.requestAnimationFrame(tick);
+    }
+
     private highlight(nodeSet: HighlightSet, edgeSet: HighlightSet): void {
         const filtered = nodeSet !== null && nodeSet.size > 0;
         this.index.nodes.forEach((el, id) => {
@@ -573,9 +865,21 @@ class DiagramViewer implements DiagramViewerInstance {
         });
         this.index.edges.forEach((e) => {
             const onPath = edgeSet?.has(e.id) ?? false;
-            e.el.classList.toggle('sel', this.selectedEdge === e.id);
-            e.el.classList.toggle('lit', filtered && onPath);
+            const isSel = this.selectedEdge === e.id;
+            const isLit = filtered && onPath;
+            e.el.classList.toggle('sel', isSel);
+            e.el.classList.toggle('lit', isLit);
             e.el.classList.toggle('dim', filtered && !onPath);
+            const p = e.el.querySelector<SVGPathElement>('path:not(.mjd-hit)');
+            if (p) {
+                if (isSel || isLit) {
+                    if (!p.dataset.mark) p.dataset.mark = p.getAttribute('marker-end') ?? '';
+                    p.setAttribute('marker-end', `url(#${this.markerPrefix}-mk-lit${e.role === 'error' ? '-error' : ''})`);
+                } else if (p.dataset.mark !== undefined) {
+                    p.setAttribute('marker-end', p.dataset.mark);
+                    delete p.dataset.mark;
+                }
+            }
         });
         this.index.cards.forEach((c) => c.classList.toggle('sel', this.activeCard === c.dataset.cardId));
         this.highlighted = nodeSet ? new Set(nodeSet) : new Set();
@@ -588,8 +892,13 @@ class DiagramViewer implements DiagramViewerInstance {
         this.listeners.forEach((fn) => fn(snapshot));
     }
 
+    private setRovingEdge(activeEl: SVGGElement): void {
+        this.index.edges.forEach((e) => e.el.setAttribute('tabindex', e.el === activeEl ? '0' : '-1'));
+    }
+
     private bindEvents(): void {
         const signal = this.events.signal;
+        if (this.index.edges.length > 0) this.setRovingEdge(this.index.edges[0].el);
         const onActivate = (el: Element, act: () => void): void => {
             el.addEventListener('click', (e) => { e.stopPropagation(); act(); }, { signal });
             el.addEventListener('keydown', (e) => {
@@ -598,7 +907,17 @@ class DiagramViewer implements DiagramViewerInstance {
             }, { signal });
         };
         this.index.nodes.forEach((el, id) => onActivate(el, () => (this.selected === id ? this.Clear() : this.Select(id))));
-        this.index.edges.forEach((edge) => onActivate(edge.el, () => (this.selectedEdge === edge.id ? this.Clear() : this.SelectEdge(edge.id))));
+        this.index.edges.forEach((edge, idx) => {
+            onActivate(edge.el, () => (this.selectedEdge === edge.id ? this.Clear() : this.SelectEdge(edge.id)));
+            edge.el.addEventListener('keydown', (e) => {
+                const delta = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+                if (!delta) return;
+                e.preventDefault();
+                const next = this.index.edges[(idx + delta + this.index.edges.length) % this.index.edges.length];
+                this.setRovingEdge(next.el);
+                next.el.focus();
+            }, { signal });
+        });
         this.index.cards.forEach((card) => onActivate(card, () => this.selectCard(card)));
         this.stage.addEventListener('click', (e) => {
             const t = e.target as Element;
@@ -615,7 +934,6 @@ class DiagramViewer implements DiagramViewerInstance {
         if (target.dataset.act === 'close-panel') return this.close();
         if (target.dataset.jump) {
             this.Select(target.dataset.jump);
-            this.index.nodes.get(target.dataset.jump)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
         } else if (target.dataset.trace && this.selected) {
             this.Trace(this.selected, target.dataset.trace as 'up' | 'down');
         }
@@ -632,7 +950,7 @@ class DiagramViewer implements DiagramViewerInstance {
         const edge = this.selectedEdge ? this.index.edgeById.get(this.selectedEdge) : undefined;
         const origin = this.index.nodes.get(this.selected ?? '') ?? edge?.el ?? this.index.cards.find((c) => c.dataset.cardId === this.activeCard);
         this.Clear();
-        origin?.focus();
+        origin?.focus({ preventScroll: true });
     }
 }
 

@@ -227,7 +227,8 @@ When a downstream task should only run if an upstream task's output meets a cond
 
 **Simple Question** → Answer directly
 - Navigation help, MemberJunction explanations, clarifications
-- Quick tasks you can handle with your own actions (scheduling, image generation, etc.)
+- Quick tasks you can handle with your own actions (scheduling, image generation, interactive workflow/lifecycle/sequence/dataflow diagrams via `Render Architecture Diagram`, etc.)
+- When the user asks to draw or visualize a workflow, state lifecycle, sequence diagram, or dataflow diagram in chat, handle it yourself: call `Render Architecture Diagram` (`DiagramType`, `SpecJSON`), then complete your turn (`taskComplete: true`) and place the validated `SpecJSON` inside a ```` ```mj-diagram ```` fenced code block in `message` so `<mj-markdown>` renders the interactive diagram in chat.
 - Answerable in 2-3 sentences
 
 {% if __agentTypePromptParams.includeResponseTypeDefinition.handoff %}
