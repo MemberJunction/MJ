@@ -1575,6 +1575,43 @@ describe('TransformSimpleObjectToEntityObject batched IS-A hydration & 1-query C
         expect(messages.filter(m => m.includes('Error in BaseEntity.Load(Meetings') && m.includes(hiddenRow))).toHaveLength(1);
     });
 
+    it('does not report a hinted child whose read failed as a load that found no row', async () => {
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const warnSpy = vi.spyOn(logging, 'LogWarning');
+        const productsInfo = batchedProvider.EntityByName('Products')!;
+        productsInfo.SubtypeSelector = JSON.stringify({ Path: 'ProductTypeID.ProductExtensionEntity', UseForLoadedRecords: true });
+        const ptInfo = batchedProvider.EntityByName('Product Types')!;
+        const typeEntities = await TransformSimpleObjectToEntityObject<LoadHintTestEntity>(
+            batchedProvider as object as IMetadataProvider,
+            'Product Types',
+            [MEETING_TYPE_ID, PUB_TYPE_ID].map(id => store.ViewRow(ptInfo, id)!),
+            user
+        );
+        registeredEngine = new FakeProductTypeEngine(typeEntities);
+        BaseEngineRegistry.Instance.RegisterEngine(registeredEngine);
+        const id = 'c2000000-0000-0000-0000-000000000000'; // typed Meetings, and has its Meetings row
+
+        // Every Meetings read fails: the hinted read and the read after discovery.
+        const origRunViews = batchedProvider.RunViews.bind(batchedProvider);
+        vi.spyOn(batchedProvider, 'RunViews').mockImplementation(async <T>(params: RunViewParams[]) => {
+            const res = await origRunViews<T>(params);
+            return res.map((r, i) =>
+                params[i]?.EntityName === 'Meetings' ? { ...r, Success: false, ErrorMessage: 'Simulated Meetings read failure', Results: [] } : r
+            );
+        });
+
+        const [result] = await TransformSimpleObjectToEntityObject<BaseEntity>(
+            batchedProvider as object as IMetadataProvider, 'Products', [store.ViewRow(productsInfo, id)!], user
+        );
+
+        expect(result.ISAChild).toBeNull();
+        // The failure is reported as a failure...
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("batched IS-A child load of 'Meetings' failed (Simulated Meetings read failure)"), 'IS-A');
+        // ...and not as a hinted row that came back empty, which is what this message means.
+        const messages = errors.mock.calls.map(c => c.map(String).join(' '));
+        expect(messages.filter(m => m.includes('Error in BaseEntity.Load(Meetings') && m.includes(id))).toEqual([]);
+    });
+
     it('narrows field-level security denied columns when linking an IS-A child from a system-user engine cache', async () => {
         const productsInfo = batchedProvider.EntityByName('Products')!;
         const meetingsInfo = batchedProvider.EntityByName('Meetings')!;

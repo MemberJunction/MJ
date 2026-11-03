@@ -5954,9 +5954,11 @@ export abstract class BaseEntity<T = unknown> {
 
         // 2) Batch-load hinted child rows (from unfiltered memory caches first, then at most 1 RunViews call);
         //    any missing/failed row falls back to discovery
-        let unlinkedFromHints: BaseEntity[] = [];
+        // Hinted parents whose child read succeeded and had no row (as opposed to a read that
+        // failed or was not tried): only those are hint misses, as in the per-row path.
+        const hintNotFound = new Set<BaseEntity>();
         if (hintedByChild.size > 0) {
-            unlinkedFromHints = await BaseEntity.batchLoadAndLinkDisjointChildren(
+            const unlinkedFromHints = await BaseEntity.batchLoadAndLinkDisjointChildren(
                 hintedByChild,
                 md,
                 entityProvider,
@@ -5964,7 +5966,8 @@ export abstract class BaseEntity<T = unknown> {
                 effectiveUser,
                 nextLevelChildren,
                 deniedChildLogged,
-                batchUnfilteredCache
+                batchUnfilteredCache,
+                hintNotFound
             );
             needsDiscovery.push(...unlinkedFromHints);
         }
@@ -5983,7 +5986,7 @@ export abstract class BaseEntity<T = unknown> {
                 deniedChildLogged,
                 batchUnfilteredCache
             );
-            for (const p of unlinkedFromHints) {
+            for (const p of hintNotFound) {
                 BaseEntity.reportBatchSubtypeLoadHintMiss(p, hintedNameByParent.get(p), discoveredByParent.get(p) ?? null);
             }
         }
@@ -6537,7 +6540,8 @@ export abstract class BaseEntity<T = unknown> {
         contextUser: UserInfo | undefined,
         outLinkedChildren: BaseEntity[],
         deniedChildLogged: Set<string> = new Set<string>(),
-        batchUnfilteredCache?: ReadonlyMap<string, ReadonlyArray<BaseEntity | Record<string, unknown>>>
+        batchUnfilteredCache?: ReadonlyMap<string, ReadonlyArray<BaseEntity | Record<string, unknown>>>,
+        outNotFound: Set<BaseEntity> = new Set<BaseEntity>()
     ): Promise<BaseEntity[]> {
         const unlinkedParents: BaseEntity[] = [];
 
@@ -6597,6 +6601,7 @@ export abstract class BaseEntity<T = unknown> {
                     const linked = await p.createAndLinkChildEntity(childName);
                     if (!linked) {
                         unlinkedParents.push(p);
+                        outNotFound.add(p);
                     }
                 }
             }
@@ -6627,7 +6632,8 @@ export abstract class BaseEntity<T = unknown> {
                 batchResults[sIdx],
                 unlinkedParents,
                 outLinkedChildren,
-                deniedChildLogged
+                deniedChildLogged,
+                outNotFound
             );
         }
 
@@ -6711,7 +6717,8 @@ export abstract class BaseEntity<T = unknown> {
         res: { Success?: boolean; Results?: Array<Record<string, string | number | boolean | Date | object | null | undefined>>; ErrorMessage?: string } | undefined,
         unlinkedParents: BaseEntity[],
         outLinkedChildren: BaseEntity[],
-        deniedChildLogged: Set<string>
+        deniedChildLogged: Set<string>,
+        outNotFound: Set<BaseEntity>
     ): Promise<void> {
         if (!res?.Success || !Array.isArray(res.Results)) {
             // Not silent: the per-row path surfaced a failed child load; here the parents stay
@@ -6734,6 +6741,7 @@ export abstract class BaseEntity<T = unknown> {
             const childRow = rowByPk.get(pkKey);
             if (!childRow) {
                 unlinkedParents.push(p);
+                outNotFound.add(p);
                 continue;
             }
             const childEntity = await p.createChildEntityObject(slice.childName);
