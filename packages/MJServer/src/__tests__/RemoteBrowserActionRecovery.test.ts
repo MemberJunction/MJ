@@ -49,11 +49,17 @@ const startSessionMock = vi.fn<[], Promise<FakeSession>>(async () => deadSession
 // documented outcome for anything that is not a dead handle, so it is the default: the pre-existing
 // error-reporting contract must survive untouched for every ordinary failure.
 const recoverDeadSessionMock = vi.fn<[], Promise<FakeSession | null>>(async () => null);
+const endSessionMock = vi.fn(async (_agentSessionID: string) => true);
+const restrictMock = vi.fn(async (_agentSessionID: string, _allowedHosts: string[]) => undefined);
 vi.mock('@memberjunction/remote-browser-server', () => ({
+  NormalizeInstanceKey: (key?: string) => key?.trim() || null,
   RemoteBrowserEngine: {
     Instance: {
       StartSessionForAgentSession: (...args: unknown[]) => startSessionMock(...(args as [])),
       RecoverDeadAgentSession: (...args: unknown[]) => recoverDeadSessionMock(...(args as [])),
+      EndSessionForAgentSession: (agentSessionID: string) => endSessionMock(agentSessionID),
+      RestrictPrivateNetworkForAgentSession: (agentSessionID: string, allowedHosts: string[]) => restrictMock(agentSessionID, allowedHosts),
+      GetSessionForAgentSession: () => undefined,
     },
   },
 }));
@@ -71,7 +77,12 @@ vi.mock('@memberjunction/ai-core-plus', async (importOriginal) => ({
   AIPromptParams: class {},
 }));
 
+// The resolver reads its conversation-browser settings from the server config; off, as by default.
+vi.mock('../config.js', () => ({ configInfo: { realtime: { conversationBrowser: { enabled: false } } } }));
+
 import { RemoteBrowserActionResolver } from '../resolvers/RemoteBrowserActionResolver.js';
+import { ConversationBrowserLedger } from '../agentSessions/conversationBrowsers.js';
+import type { ConversationBrowserConfig } from '../config.js';
 
 /** Bypasses the ownership/provider plumbing (covered elsewhere) so the recovery branch stands alone. */
 class TestableResolver extends RemoteBrowserActionResolver {
@@ -169,5 +180,281 @@ describe('RemoteBrowserActionResolver — dead-handle recovery on the action pat
     // One recovery per fault: a retry that dies too is a broken provider, and the engine's own budget is
     // what bounds that — the resolver must not open a second loop around it.
     expect(recoverDeadSessionMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('RemoteBrowserActionResolver — conversation-scoped ownership & structured text actions', () => {
+  const userID = 'a1a1a1a1-0000-4000-8000-000000000001';
+  const otherUserID = 'c3c3c3c3-0000-4000-8000-000000000003';
+  const convID = 'b2b2b2b2-0000-4000-8000-000000000002';
+
+  const ENABLED: ConversationBrowserConfig = { enabled: true, allowAnonymous: false, maxPerUser: 2, maxAnonymousTotal: 4, idleMinutes: 15, allowedPrivateHosts: ['localhost:4200'] };
+
+  /**
+   * A resolver whose provider has no agent session by that ID, only conversations owned by `ownerID`
+   * (stamped with `externalID`, an anonymous guest's scope id), called by `caller`, under `settings`.
+   */
+  function conversationResolver(
+    ownerID: string,
+    caller: Record<string, unknown> = { ID: userID },
+    externalID: string | null = null,
+    settings: ConversationBrowserConfig = ENABLED,
+  ): RemoteBrowserActionResolver {
+    const getEntityObject = vi.fn(async (entityName: string) => {
+      if (entityName !== 'MJ: Conversations') {
+        return { Load: vi.fn(async () => false) };
+      }
+      const conversation = { ID: '', UserID: ownerID, ExternalID: externalID, Load: vi.fn(async (id: string) => {
+        conversation.ID = id;
+        return id.startsWith('b2b2b2b2');
+      }) };
+      return conversation;
+    });
+    class OwnershipResolver extends RemoteBrowserActionResolver {
+      protected override requireUserAndProvider() {
+        return { contextUser: caller, provider: { GetEntityObject: getEntityObject } } as never;
+      }
+      protected override ConversationBrowserSettings(): ConversationBrowserConfig {
+        return settings;
+      }
+    }
+    return new OwnershipResolver();
+  }
+
+  beforeEach(() => {
+    recoverDeadSessionMock.mockReset().mockResolvedValue(null);
+    for (const id of [convID, convID2, convID3]) {
+      ConversationBrowserLedger.Instance.Release(id);
+    }
+  });
+  const convID2 = 'b2b2b2b2-0000-4000-8000-000000000012';
+  const convID3 = 'b2b2b2b2-0000-4000-8000-000000000013';
+
+  it('refuses an instance key for a conversation, which would key a second, uncounted browser', async () => {
+    startSessionMock.mockReset();
+    const resolver = conversationResolver(userID);
+    await expect(
+      resolver.ExecuteRemoteBrowserAction(convID, 'inspect', ctx, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, 'x'),
+    ).rejects.toThrow('instanceKey is not accepted');
+    await expect(resolver.EndRemoteBrowserSession(convID, ctx, 'x')).rejects.toThrow('instanceKey is not accepted');
+    expect(startSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('applies the network policy when the browser starts, not on every poll', async () => {
+    deadSession = makeSession();
+    startSessionMock.mockReset().mockResolvedValue(deadSession);
+    restrictMock.mockClear();
+    const resolver = conversationResolver(userID);
+    await resolver.RemoteBrowserSnapshot(convID, ctx);
+    expect(restrictMock).not.toHaveBeenCalled();
+    await resolver.ExecuteRemoteBrowserAction(convID, 'inspect', ctx);
+    expect(restrictMock).toHaveBeenCalledWith(convID, ['localhost:4200']);
+  });
+
+  it('after the idle reaper ends a browser, the next open streams the new one instead of answering "already streaming"', async () => {
+    const streamingSession = { ...makeSession(), StartScreencast: vi.fn(async () => undefined) };
+    startSessionMock.mockReset().mockResolvedValue(streamingSession as never);
+    endSessionMock.mockClear();
+    const resolver = conversationResolver(userID, { ID: userID }, null, { ...ENABLED, idleMinutes: -1 });
+    const pubSub = { publish: vi.fn() } as never;
+
+    expect((await resolver.StartRemoteBrowserScreencast(convID, ctx, pubSub)).Streaming).toBe(true);
+    expect(await ConversationBrowserLedger.Instance.ReapIdle()).toBe(1);
+    expect(endSessionMock).toHaveBeenCalledWith(convID);
+
+    expect((await resolver.StartRemoteBrowserScreencast(convID, ctx, pubSub)).Streaming).toBe(true);
+    expect(streamingSession.StartScreencast).toHaveBeenCalledTimes(2);
+  });
+
+  it('caps each anonymous guest on its own, not every guest as one shared Anonymous user', async () => {
+    deadSession = makeSession();
+    startSessionMock.mockReset().mockResolvedValue(deadSession);
+    const settings = { ...ENABLED, allowAnonymous: true, maxPerUser: 1 };
+    const guestA = { ID: userID, IsMagicLinkAnonymous: true, AnonymousVisitorID: 'visitor-a' };
+    const guestB = { ID: userID, IsMagicLinkAnonymous: true, AnonymousVisitorID: 'visitor-b' };
+    expect((await conversationResolver(userID, guestA, 'visitor-a', settings).ExecuteRemoteBrowserAction(convID, 'inspect', ctx)).Success).toBe(true);
+    expect((await conversationResolver(userID, guestB, 'visitor-b', settings).ExecuteRemoteBrowserAction(convID2, 'inspect', ctx)).Success).toBe(true);
+  });
+
+  it('caps all anonymous guests together, since a guest can start a new scope cheaply; signed-in users are not counted', async () => {
+    deadSession = makeSession();
+    startSessionMock.mockReset().mockResolvedValue(deadSession);
+    const settings = { ...ENABLED, allowAnonymous: true, maxPerUser: 1, maxAnonymousTotal: 2 };
+    const guest = (visitor: string) => ({ ID: userID, IsMagicLinkAnonymous: true, AnonymousVisitorID: visitor });
+    const open = (visitor: string, conversationID: string) =>
+      conversationResolver(userID, guest(visitor), visitor, settings).ExecuteRemoteBrowserAction(conversationID, 'inspect', ctx);
+    expect((await open('visitor-a', convID)).Success).toBe(true);
+    expect((await open('visitor-b', convID2)).Success).toBe(true);
+    const third = await open('visitor-c', convID3);
+    expect(third.Success).toBe(false);
+    expect(third.Detail).toContain('allows for guests is in use');
+    expect((await conversationResolver(userID, { ID: userID }, null, settings).ExecuteRemoteBrowserAction(convID3, 'inspect', ctx)).Success).toBe(true);
+  });
+
+  it('every refusal carries the REMOTE_BROWSER_REFUSED code, so a client stops asking', async () => {
+    deadSession = makeSession();
+    startSessionMock.mockReset().mockResolvedValue({ ...deadSession, StartScreencast: vi.fn(async () => undefined) } as never);
+    const refused = { extensions: { code: 'REMOTE_BROWSER_REFUSED' } };
+    const guest = { ID: userID, IsMagicLinkAnonymous: true, AnonymousVisitorID: 'visitor-a' };
+    const pubSub = { publish: vi.fn() } as never;
+    await expect(conversationResolver(userID, { ID: userID }, null, { ...ENABLED, enabled: false }).RemoteBrowserSnapshot(convID, ctx)).rejects.toMatchObject(refused);
+    await expect(conversationResolver(userID, guest, 'visitor-a').RemoteBrowserSnapshot(convID, ctx)).rejects.toMatchObject(refused);
+    await expect(conversationResolver(userID).EndRemoteBrowserSession(convID, ctx, 'x')).rejects.toMatchObject(refused);
+    await expect(conversationResolver(otherUserID).RemoteBrowserSnapshot(convID, ctx)).rejects.toMatchObject(refused);
+    await expect(conversationResolver(userID).RemoteBrowserSnapshot('d4d4d4d4-0000-4000-8000-000000000004', ctx)).rejects.toMatchObject(refused);
+    const capped = conversationResolver(userID, { ID: userID }, null, { ...ENABLED, maxPerUser: 1 });
+    await capped.StartRemoteBrowserScreencast(convID, ctx, pubSub);
+    await expect(capped.StartRemoteBrowserScreencast(convID2, ctx, pubSub)).rejects.toMatchObject(refused);
+  });
+
+  it('forgets where a stopped stream went, so a browser that never ends cannot leak its targets', async () => {
+    const streamingSession = { ...makeSession(), StartScreencast: vi.fn(async () => undefined) };
+    startSessionMock.mockReset().mockResolvedValue(streamingSession as never);
+    const resolver = conversationResolver(userID);
+    const pubSub = { publish: vi.fn() } as never;
+    const targets = (resolver as unknown as { streamTargets: Map<string, unknown> }).streamTargets;
+
+    await resolver.StartRemoteBrowserScreencast(convID, ctx, pubSub);
+    await resolver.StopRemoteBrowserScreencast(convID, ctx);
+    await resolver.StartRemoteBrowserScreencast(convID2, ctx, pubSub);
+    expect(targets.size).toBe(1);
+  });
+
+  it('a reloaded tab (a new push session) takes the frames over instead of hearing "already streaming"', async () => {
+    let onFrame: ((frame: { DataBase64: string; Width: number; Height: number; SequenceNumber: number }) => void) | null = null;
+    const streamingSession = { ...makeSession(), StartScreencast: vi.fn(async (cb: typeof onFrame) => { onFrame = cb; }) };
+    startSessionMock.mockReset().mockResolvedValue(streamingSession as never);
+    const resolver = conversationResolver(userID);
+    const publish = vi.spyOn(resolver as unknown as { PublishStatusUpdate: (...args: unknown[]) => void }, 'PublishStatusUpdate').mockImplementation(() => undefined);
+    const pubSub = { publish: vi.fn() } as never;
+    const tab = (sessionId: string) => ({ userPayload: { sessionId }, providers: {} }) as never;
+
+    await resolver.StartRemoteBrowserScreencast(convID, tab('push-A'), pubSub);
+    await resolver.StartRemoteBrowserScreencast(convID, tab('push-B'), pubSub);
+    expect(streamingSession.StartScreencast).toHaveBeenCalledTimes(1);
+    onFrame!({ DataBase64: 'f', Width: 1, Height: 1, SequenceNumber: 1 });
+    expect(publish.mock.calls[0][1]).toBe('push-B');
+  });
+
+  it('a cap refusal on opening the live view reaches the client as an error, not a silent "not streaming"', async () => {
+    deadSession = makeSession();
+    startSessionMock.mockReset().mockResolvedValue({ ...deadSession, StartScreencast: vi.fn(async () => undefined) } as never);
+    const resolver = conversationResolver(userID, { ID: userID }, null, { ...ENABLED, maxPerUser: 1 });
+    const pubSub = { publish: vi.fn() } as never;
+    expect((await resolver.StartRemoteBrowserScreencast(convID, ctx, pubSub)).Streaming).toBe(true);
+    await expect(resolver.StartRemoteBrowserScreencast(convID2, ctx, pubSub)).rejects.toThrow('the most this server allows');
+  });
+
+  it('refuses every conversation operation while the server has not enabled conversation browsers', async () => {
+    startSessionMock.mockReset();
+    const off = conversationResolver(userID, { ID: userID }, null, { ...ENABLED, enabled: false });
+    await expect(off.ExecuteRemoteBrowserAction(convID, 'inspect', ctx)).rejects.toThrow('not enabled');
+    expect(startSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses an anonymous guest its own conversation browser unless anonymous use is enabled', async () => {
+    deadSession = makeSession();
+    startSessionMock.mockReset().mockResolvedValue(deadSession);
+    const guest = { ID: userID, IsMagicLinkAnonymous: true, AnonymousVisitorID: 'visitor-a' };
+    await expect(conversationResolver(userID, guest, 'visitor-a').ExecuteRemoteBrowserAction(convID, 'inspect', ctx)).rejects.toThrow('anonymous');
+    expect(startSessionMock).not.toHaveBeenCalled();
+    const allowed = conversationResolver(userID, guest, 'visitor-a', { ...ENABLED, allowAnonymous: true });
+    expect((await allowed.ExecuteRemoteBrowserAction(convID, 'inspect', ctx)).Success).toBe(true);
+  });
+
+  it('caps the conversation browsers one user holds, keeps it off the private network, and refuses goal runs', async () => {
+    deadSession = makeSession();
+    startSessionMock.mockReset().mockResolvedValue(deadSession);
+    restrictMock.mockClear();
+    const resolver = conversationResolver(userID);
+    expect((await resolver.ExecuteRemoteBrowserAction(convID, 'inspect', ctx)).Success).toBe(true);
+    expect((await resolver.ExecuteRemoteBrowserAction(convID2, 'inspect', ctx)).Success).toBe(true);
+    expect((await resolver.ExecuteRemoteBrowserAction(convID, 'inspect', ctx)).Success).toBe(true); // already held
+    const third = await resolver.ExecuteRemoteBrowserAction(convID3, 'inspect', ctx);
+    expect(third.Success).toBe(false);
+    expect(third.Detail).toContain('the most this server allows');
+    expect(startSessionMock).toHaveBeenCalledTimes(3);
+    expect(restrictMock).toHaveBeenCalledWith(convID, ['localhost:4200']);
+
+    const goal = await resolver.ExecuteRemoteBrowserGoal(convID, 'buy the thing', ctx);
+    expect(goal.Success).toBe(false);
+    expect(goal.Detail).toContain('not available in a text conversation');
+  });
+
+  it('acts on a conversation the caller owns', async () => {
+    deadSession = makeSession();
+    deadSession.ExecuteAction.mockResolvedValue({
+      Success: true,
+      CurrentUrl: 'https://httpbin.org/forms/post',
+      Detail: 'Inspected',
+      Observation: { ObservationID: 'obs-1', Url: 'https://httpbin.org/forms/post', Title: 'Order Form', Text: '', Fields: [], Actions: [], Links: [] },
+    });
+    startSessionMock.mockReset().mockResolvedValue(deadSession);
+
+    const res = await conversationResolver(userID).ExecuteRemoteBrowserAction(convID, 'inspect', ctx);
+    expect(res.Success).toBe(true);
+    expect(JSON.parse(res.ObservationJson!).ObservationID).toBe('obs-1');
+  });
+
+  it("refuses another user's conversation, for actions and for ending its browser", async () => {
+    startSessionMock.mockReset();
+    endSessionMock.mockClear();
+    const resolver = conversationResolver(otherUserID);
+    await expect(resolver.ExecuteRemoteBrowserAction(convID, 'inspect', ctx)).rejects.toThrow('Not authorized');
+    await expect(resolver.EndRemoteBrowserSession(convID, ctx)).rejects.toThrow('Not authorized');
+    expect(startSessionMock).not.toHaveBeenCalled();
+    expect(endSessionMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses an anonymous guest another guest's conversation, though both share the Anonymous user", async () => {
+    startSessionMock.mockReset();
+    const guest = { ID: userID, IsMagicLinkAnonymous: true, AnonymousVisitorID: 'visitor-b' };
+    await expect(conversationResolver(userID, guest, 'visitor-a').ExecuteRemoteBrowserAction(convID, 'inspect', ctx)).rejects.toThrow('Not authorized');
+    expect(startSessionMock).not.toHaveBeenCalled();
+  });
+
+  it("ends the caller's own conversation browser", async () => {
+    endSessionMock.mockClear();
+    await expect(conversationResolver(userID).EndRemoteBrowserSession(convID, ctx)).resolves.toBe(true);
+    expect(endSessionMock).toHaveBeenCalledWith(convID);
+  });
+
+  it('maps a fill values object to field inputs and returns FilledJson + ObservationJson; any other shape is refused', async () => {
+    const resolver = new TestableResolver();
+    deadSession = makeSession();
+    deadSession.ExecuteAction.mockResolvedValue({
+      Success: true,
+      CurrentUrl: 'https://httpbin.org/forms/post',
+      Detail: 'Filled 1 field(s).',
+      Filled: [{ Ref: 'f1', Label: 'Customer name', Value: 'Colin' }],
+      Observation: { ObservationID: 'obs-2', Url: 'https://httpbin.org/forms/post', Title: 'Order Form', Text: '', Fields: [], Actions: [], Links: [] },
+    });
+    startSessionMock.mockReset().mockResolvedValue(deadSession);
+    const fill = (valuesJson: string) =>
+      resolver.ExecuteRemoteBrowserAction('sess-1', 'fill', ctx, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined, valuesJson);
+
+    const res = await fill(JSON.stringify({ f1: 'Colin', f9: true }));
+    expect(res.Success).toBe(true);
+    expect(deadSession.ExecuteAction).toHaveBeenCalledWith({ Kind: 'fill', Values: [{ Target: 'f1', Value: 'Colin' }, { Target: 'f9', Value: true }] });
+    expect(JSON.parse(res.FilledJson!)).toEqual([{ Ref: 'f1', Label: 'Customer name', Value: 'Colin' }]);
+
+    expect((await fill(JSON.stringify([{ ref: 'f1', value: 'Colin' }]))).Success).toBe(false);
+    expect((await fill('not json')).Success).toBe(false);
+  });
+
+  it('maps getPageText and a ref/text click', async () => {
+    const resolver = new TestableResolver();
+    deadSession = makeSession();
+    deadSession.ExecuteAction.mockResolvedValue({ Success: true, CurrentUrl: 'https://example.com/', Detail: 'Example Domain' });
+    startSessionMock.mockReset().mockResolvedValue(deadSession);
+
+    expect((await resolver.ExecuteRemoteBrowserAction('sess-1', 'getPageText', ctx)).Success).toBe(true);
+    expect(deadSession.ExecuteAction).toHaveBeenCalledWith({ Kind: 'getPageText' });
+
+    const clickRes = await resolver.ExecuteRemoteBrowserAction(
+      'sess-1', 'click', ctx, undefined, undefined, undefined, undefined, 'Learn more', undefined, undefined, undefined, undefined, undefined, 'a1',
+    );
+    expect(clickRes.Success).toBe(true);
+    expect(deadSession.ExecuteAction).toHaveBeenLastCalledWith({ Kind: 'click', Selector: undefined, Ref: 'a1', Text: 'Learn more', X: undefined, Y: undefined });
   });
 });

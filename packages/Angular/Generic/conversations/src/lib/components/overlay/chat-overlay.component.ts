@@ -18,17 +18,26 @@ import {
     Component,
     EventEmitter,
     Input,
+    OnChanges,
     OnDestroy,
     OnInit,
     Output,
+    SimpleChanges,
     ChangeDetectorRef,
     inject
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { takeUntil } from 'rxjs/operators';
-import { UserInfo, Metadata, CompositeKey } from '@memberjunction/core';
-import { MJConversationEntity, MJTaskEntity, MJEnvironmentEntityExtended, UserInfoEngine } from '@memberjunction/core-entities';
+import { UserInfo, CompositeKey } from '@memberjunction/core';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import {
+    ConversationEngine,
+    MJConversationEntity,
+    MJTaskEntity,
+    MJEnvironmentEntityExtended,
+    UserInfoEngine
+} from '@memberjunction/core-entities';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
 import { ConversationBridgeService, ConversationSwitchEvent } from '../../services/conversation-bridge.service';
@@ -75,7 +84,7 @@ interface OverlayPrefs {
     templateUrl: './chat-overlay.component.html',
     styleUrls: ['./chat-overlay.component.css']
 })
-export class ChatAgentsOverlayComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
+export class ChatAgentsOverlayComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy  {
     private cdr = inject(ChangeDetectorRef);
     private bridge = inject(ConversationBridgeService);
     private agentClient = inject(AgentClientService);
@@ -215,6 +224,14 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
     /** Pending attachments to send after conversation creation */
     public PendingAttachments: PendingAttachment[] | null = null;
 
+    /** Non-anchored AI conversations bound to the currently open record form */
+    public RecordConversations: MJConversationEntity[] = [];
+
+    /** Tracks the `(entityId:recordId)` currently bound to the overlay */
+    private currentBoundRecordKey: string | null = null;
+    private recordBindingGeneration = 0;
+    private stashedGeneralConversationId: string | null = null;
+
     /** Resize drag state */
     private isResizing = false;
     private resizeEdge: 'left' | 'top' | 'top-left' | null = null;
@@ -240,6 +257,13 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
         this.loadPreferences();
         this.subscribeToBridgeEvents();
         this.subscribeToToolEvents();
+        void this.syncActiveRecordBinding();
+    }
+
+    ngOnChanges(changes: SimpleChanges): void {
+        if (changes['AppContext']) {
+            void this.syncActiveRecordBinding();
+        }
     }
 
     ngOnDestroy(): void {
@@ -268,6 +292,7 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
             this.IsHidden = false;
             this.savePreferences();
         }
+        void this.syncActiveRecordBinding();
         this.State = 'expanded';
         this.UnreadCount = 0;
         this.bridge.NotifyOverlayActive(true);
@@ -316,8 +341,44 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
         this._conversationId = event.conversation.ID;
         this.Conversation = event.conversation;
         this.IsNewConversation = false;
-        this.bridge.SetActiveFromOverlay(event.conversation.ID);
+
+        const isRecordBound = Boolean(
+            event.conversation.LinkedEntityID ||
+            (this.ActiveRecordEntityId && this.ActiveLinkedRecordId)
+        );
+        if (isRecordBound) {
+            if (!this.RecordConversations.some((c) => UUIDsEqual(c.ID, event.conversation.ID))) {
+                this.RecordConversations = [event.conversation, ...this.RecordConversations];
+            }
+            // Keep record-bound conversations off the global workspace bridge so navigating
+            // to the general-purpose Chat app does not hijack the workspace with a record chat.
+            this.bridge.SetActiveFromOverlay(null);
+        } else {
+            this.bridge.SetActiveFromOverlay(event.conversation.ID);
+        }
         this.emitConversationSwitched(prevId, event.conversation.ID);
+    }
+
+    /** Switch between existing AI conversations bound to the currently open record */
+    public OnSelectRecordConversation(conversationId: string): void {
+        if (!conversationId || UUIDsEqual(conversationId, this._conversationId)) {
+            return;
+        }
+        const match = this.RecordConversations.find((c) => UUIDsEqual(c.ID, conversationId)) ?? null;
+        const prevId = this._conversationId;
+        this._conversationId = conversationId;
+        this.Conversation = match;
+        this.IsNewConversation = false;
+        this.bridge.SetActiveFromOverlay(null);
+        this.emitConversationSwitched(prevId, conversationId);
+        this.cdr.detectChanges();
+    }
+
+    public OnSelectRecordConversationChange(event: Event): void {
+        const selectEl = event.target as HTMLSelectElement | null;
+        if (selectEl?.value) {
+            this.OnSelectRecordConversation(selectEl.value);
+        }
     }
 
     /** Handle pending message consumed by chat area */
@@ -607,7 +668,114 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
         };
     }
 
+    /**
+     * Resolves the `MJ: Entities` ID for the currently active record form (`ActiveRecordContext.Entity`),
+     * or `null` when no saved record form is active.
+     */
+    public get ActiveRecordEntityId(): string | null {
+        const ctx = this.ActiveRecordContext;
+        if (!ctx?.Entity || !ctx.RecordPrimaryKey) {
+            return null;
+        }
+        const md = this.ProviderToUse;
+        const entityNameLower = ctx.Entity.trim().toLowerCase();
+        const entityInfo = md?.Entities?.find((e) => e.Name.trim().toLowerCase() === entityNameLower);
+        return entityInfo?.ID ?? null;
+    }
+
+    /**
+     * Normalizes `ActiveRecordContext.RecordPrimaryKey` into the `LinkedRecordID` value stored
+     * on `MJ: Conversations` (stripping a single-key `"ID|"` prefix while preserving multi-key segments).
+     */
+    public get ActiveLinkedRecordId(): string | null {
+        const rawKey = this.ActiveRecordContext?.RecordPrimaryKey?.trim();
+        if (!rawKey) {
+            return null;
+        }
+        if (!rawKey.includes('||') && rawKey.includes('|')) {
+            const pipeIdx = rawKey.indexOf('|');
+            const val = rawKey.slice(pipeIdx + 1).trim();
+            if (val) {
+                return val;
+            }
+        }
+        return rawKey;
+    }
+
     // --- Private Methods ---
+
+    /**
+     * Synchronizes the overlay's active conversation when the user opens, switches between,
+     * or leaves an entity record form so "Ask AI" chats stay bound to their record.
+     */
+    private async syncActiveRecordBinding(): Promise<void> {
+        const entityId = this.ActiveRecordEntityId;
+        const recordId = this.ActiveLinkedRecordId;
+        const nextRecordKey = entityId && recordId ? `${NormalizeUUID(entityId)}:${recordId}` : null;
+
+        if (nextRecordKey === this.currentBoundRecordKey) {
+            return;
+        }
+        const previousRecordKey = this.currentBoundRecordKey;
+        this.currentBoundRecordKey = nextRecordKey;
+        const generation = ++this.recordBindingGeneration;
+
+        if (nextRecordKey && entityId && recordId) {
+            // Entering a record from a non-record view: stash any active general conversation ID
+            if (!previousRecordKey && !this.Conversation?.LinkedEntityID) {
+                this.stashedGeneralConversationId = this._conversationId;
+            }
+            // Clear the global bridge so record chats never leak into the general Chat workspace on route changes
+            this.bridge.SetActiveFromOverlay(null);
+
+            this.resolveDefaults();
+            if (!this.CurrentUser) {
+                return;
+            }
+
+            const recordConvos = await ConversationEngine.Instance.LoadRecordConversations(
+                entityId,
+                recordId,
+                this.CurrentUser,
+                this.EnvironmentId,
+                this.ProviderToUse
+            );
+            if (generation !== this.recordBindingGeneration) {
+                return;
+            }
+
+            this.RecordConversations = recordConvos;
+            const prevId = this._conversationId;
+            if (recordConvos.length > 0) {
+                const latest = recordConvos[0];
+                this._conversationId = latest.ID;
+                this.Conversation = latest;
+                this.IsNewConversation = false;
+                this.emitConversationSwitched(prevId, latest.ID);
+            } else {
+                this._conversationId = null;
+                this.Conversation = null;
+                this.IsNewConversation = true;
+                this.emitConversationSwitched(prevId, null);
+            }
+            this.cdr.detectChanges();
+            return;
+        }
+
+        // Leaving a record view back to a non-record screen
+        this.RecordConversations = [];
+        if (previousRecordKey) {
+            const prevId = this._conversationId;
+            const restoredId = this.stashedGeneralConversationId;
+            this.stashedGeneralConversationId = null;
+            this._conversationId = restoredId;
+            this.Conversation = restoredId ? (ConversationEngine.Instance.GetConversation(restoredId) ?? null) : null;
+            this.IsNewConversation = restoredId === null;
+            this.bridge.SetActiveFromOverlay(restoredId);
+            this.emitConversationSwitched(prevId, restoredId);
+            this.cdr.detectChanges();
+        }
+    }
 
     /** Auto-resolve CurrentUser and EnvironmentId from Metadata when not provided as inputs */
     private resolveDefaults(): void {

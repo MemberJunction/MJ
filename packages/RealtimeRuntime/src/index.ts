@@ -68,7 +68,7 @@ export {
     type RealtimeSessionStreamEvent,
     type RealtimeSessionVerificationSnapshot,
 } from './session/session-event-hub';
-export { ClientSessionDeadline } from './session/client-session-deadline';
+export { ClientSessionDeadline, type SessionDeadlineOptions } from './session/client-session-deadline';
 export { DescribeCallEnd, REALTIME_CALL_TIME_LIMIT_END, type RealtimeCallEndDescription } from './session/call-end';
 export {
     REALTIME_CAPTURES_OFF,

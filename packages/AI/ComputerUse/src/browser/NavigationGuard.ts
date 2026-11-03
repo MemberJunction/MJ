@@ -17,6 +17,13 @@
 
 import { NavigationDecision } from '../types/browser.js';
 
+/**
+ * Name suffixes that only resolve inside a private network: `localhost` subdomains, the Docker
+ * (`host.docker.internal`), cloud-metadata (`metadata.google.internal`) and Kubernetes (`*.svc`) names,
+ * and the usual home and office ones. None is a public top-level domain.
+ */
+const PRIVATE_NAME_SUFFIXES = ['.localhost', '.localdomain', '.internal', '.local', '.lan', '.corp', '.home', '.home.arpa', '.intranet', '.private', '.svc'];
+
 export class NavigationGuard {
     private allowedDomains: string[];
     private blockedDomains: string[];
@@ -95,6 +102,60 @@ export class NavigationGuard {
         }
 
         return actual === pattern;
+    }
+
+    /**
+     * Whether `hostname` NAMES this machine or a private network: `localhost` (and `*.localhost`), a
+     * dotless intranet name, or a loopback, private, shared, link-local or unique-local IP literal.
+     * Pass a parsed URL's `hostname`, so numeric IPv4 forms arrive normalized.
+     * ponytail: best effort, a hostname test only. A name that RESOLVES to a private address
+     * (`127.0.0.1.nip.io`, `localtest.me`, DNS rebinding) passes; real isolation is network egress
+     * rules on the machine the browser runs on.
+     */
+    public static IsPrivateNetworkHost(hostname: string): boolean {
+        // A trailing dot names the same host (`localhost.`, `127.0.0.1.`).
+        const host = hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+        if (host.includes(':')) {
+            return NavigationGuard.isPrivateIPv6(host);
+        }
+        if (host === 'localhost' || !host.includes('.') || PRIVATE_NAME_SUFFIXES.some((s) => host.endsWith(s))) {
+            return true;
+        }
+        return /^\d+\.\d+\.\d+\.\d+$/.test(host) && NavigationGuard.isPrivateIPv4(host);
+    }
+
+    /** Loopback, private, shared, link-local and special-use IPv4 ranges. */
+    private static isPrivateIPv4(host: string): boolean {
+        const [a, b, c] = host.split('.').map(Number);
+        return (
+            a === 0 || a === 10 || a === 127 ||
+            (a === 100 && b >= 64 && b <= 127) ||
+            (a === 169 && b === 254) ||
+            (a === 172 && b >= 16 && b <= 31) ||
+            (a === 192 && b === 168) ||
+            (a === 192 && b === 0 && c === 0) ||
+            (a === 198 && (b === 18 || b === 19))
+        );
+    }
+
+    /**
+     * An IPv6 literal (as a URL writes it: compressed, IPv4 tails in hex): loopback, unspecified,
+     * unique-local, link-local, site-local, IPv4-mapped and IPv4-compatible, or NAT64 carrying a private
+     * IPv4. The prefix patterns only mean anything here, never on a name like fda.gov.
+     */
+    private static isPrivateIPv6(host: string): boolean {
+        if (host === '::' || host === '::1' || /^f[cd]/.test(host) || /^fe[89a-f]/.test(host) || host.startsWith('::ffff:')) {
+            return true;
+        }
+        const tail = /^(::|64:ff9b::)([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(host);
+        if (!tail) {
+            return false;
+        }
+        if (tail[1] === '::') {
+            return true; // IPv4-compatible: deprecated, never a public destination
+        }
+        const [hi, lo] = [parseInt(tail[2], 16), parseInt(tail[3], 16)];
+        return NavigationGuard.isPrivateIPv4(`${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`);
     }
 
     /**

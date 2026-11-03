@@ -1,0 +1,12 @@
+[
+  {
+    "fields": {
+      "Name": "Diagnostics",
+      "Description": "Diagnostic recording sessions, client flight-recorder uploads, .mjdiag bundle assembly, bundle preview, and encrypted external bundle transmission.",
+      "ParentID": null
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-206000000001"
+    }
+  }
+]
