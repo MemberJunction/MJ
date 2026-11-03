@@ -385,6 +385,9 @@ export async function UpsertVectorRecords(
     infra: ResolvedVectorInfrastructure,
     limiter?: RateLimiter,
 ): Promise<BaseResponse> {
+    if (infra.vectorDB.IsReadOnly) {
+        return { success: true, message: '', data: null };
+    }
     const calls: Promise<BaseResponse>[] = [];
     for (let i = 0; i < records.length; i += UPSERT_BATCH_SIZE) {
         await limiter?.Acquire();

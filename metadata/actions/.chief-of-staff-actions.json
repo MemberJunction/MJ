@@ -1515,6 +1515,9 @@
   {
     "fields": {
       "Name": "Manage My Email Inbox and Drafts",
+      "Config": {
+        "outputTrustLevel": "Untrusted"
+      },
       "Description": "Lists messages, searches threads, reads single messages, creates email drafts, or replies/forwards in the calling user's personal mailbox or dedicated agent utility mailbox. Hard-pinned to ContextUser.Email or the user's AIBridgeAgentIdentity and gated by EmailChannelMode.",
       "DriverClass": "__ManageMyEmailInbox",
       "Type": "Custom",

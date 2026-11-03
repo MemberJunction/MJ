@@ -372,23 +372,23 @@
 
     <!-- Conversations Section -->
     <mj-collapsible-panel
-        SectionKey="mJConversations"
+        SectionKey="mJConversationsUserID"
         SectionName="Conversations"
         Icon="fa-regular fa-comments"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJConversations')"
+        [BadgeCount]="GetSectionRowCount('mJConversationsUserID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversations','UserID')"
                 [NewRecordValues]="NewRecordValues('MJ: Conversations','UserID')"
-                [AllowLoad]="IsSectionExpanded('mJConversations')"
+                [AllowLoad]="IsSectionExpanded('mJConversationsUserID')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJConversations', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJConversationsUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -3339,6 +3339,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIBridgeAgentIdentities', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Conversations (Resolved By User) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJConversationsResolvedByUserID"
+        SectionName="Conversations (Resolved By User)"
+        Icon="fa-regular fa-comments"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJConversationsResolvedByUserID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversations','ResolvedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversations','ResolvedByUserID')"
+                [AllowLoad]="IsSectionExpanded('mJConversationsResolvedByUserID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJConversationsResolvedByUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

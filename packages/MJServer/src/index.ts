@@ -300,6 +300,7 @@ export * from './multiTenancy/index.js';
 export * from './middleware/index.js';
 
 import { RegisterDataHook } from '@memberjunction/core';
+import { EnsureAnchoredConversationReadHookRegistered } from '@memberjunction/core-entities-server';
 import type { RequestHandler, ErrorRequestHandler } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
 import type { GraphQLSchema } from 'graphql';
@@ -1005,6 +1006,7 @@ const setupComplete$ = new ReplaySubject(1);
       RegisterDataHook('PostRunView', mw.PostRunView.bind(mw));
       RegisterDataHook('PreSave', mw.PreSave.bind(mw));
   }
+  EnsureAnchoredConversationReadHookRegistered();
 
   // ─── Resolve middleware-contributed resolver paths and merge into resolvers ───
   let allResolvers = resolvers;
