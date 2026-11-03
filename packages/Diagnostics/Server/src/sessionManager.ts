@@ -3,7 +3,7 @@ import * as crypto from 'node:crypto';
 import * as os from 'node:os';
 import * as zlib from 'node:zlib';
 import { monitorEventLoopDelay, IntervalHistogram } from 'node:perf_hooks';
-import { Base64ToBytes, BaseSingleton, EscapeSQLString, MJGlobal } from '@memberjunction/global';
+import { Base64ToBytes, BaseSingleton, EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
   DiagnosticContext,
   IDiagnosticContextProvider,
@@ -1533,7 +1533,7 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
       return { reason: 'Invalid token claims' };
     }
 
-    if (claims.bundleId !== expectedBundleId) {
+    if (!UUIDsEqual(claims.bundleId, expectedBundleId)) {
       return { reason: 'Bundle ID mismatch' };
     }
     if (Date.now() > claims.expiresAtMs) {

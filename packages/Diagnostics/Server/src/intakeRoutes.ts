@@ -112,6 +112,7 @@ function clientIp(req: ExpressReq): string {
 }
 
 const RATE_LIMITED = { error: 'Diagnostic intake rate limit exceeded.' };
+const UNAVAILABLE = { error: 'Diagnostic intake is temporarily unavailable.' };
 
 /**
  * Sends 429 when the IP is over its failure budget, otherwise counts the failure and sends `status`.
@@ -130,8 +131,9 @@ function rejectAuthFailure(req: ExpressReq, res: ExpressRes, status: number, bod
 
 /**
  * Authenticates a signed bundle request. The header and registration are checked before any body
- * is read (generic 401). Then the body is read up to `maxBytes(resolved)` (413 beyond that) and the
- * signature over the streamed body hash is verified (generic 401). Null when a response was sent.
+ * is read (generic 401; generic 503, not counted against the IP, when the registration lookup
+ * fails). Then the body is read up to `maxBytes(resolved)` (413 beyond that) and the signature over
+ * the streamed body hash is verified (generic 401). Null when a response was sent.
  */
 async function authenticate(
   req: ExpressReq,
@@ -141,7 +143,11 @@ async function authenticate(
   const intake = DiagnosticIntakeService.Instance;
   const resolved = await intake.ResolveSender(authorizationHeader(req));
   if (resolved.Ok === false) {
-    rejectAuthFailure(req, res, 401, UNAUTHORIZED);
+    if (resolved.Reason === 'lookup-failed') {
+      res.status(503).json(UNAVAILABLE);
+    } else {
+      rejectAuthFailure(req, res, 401, UNAUTHORIZED);
+    }
     return null;
   }
   const body = await readRawBody(req, maxBytes(resolved));

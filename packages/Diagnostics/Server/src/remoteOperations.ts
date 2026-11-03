@@ -1,5 +1,6 @@
 import * as crypto from 'node:crypto';
 import {
+  AuthorizationEvaluator,
   BaseRemotableOperation,
   IMetadataProvider,
   LogError,
@@ -84,8 +85,9 @@ export async function AuthorizeDiagnosticsUser(
   }
   try {
     const md = provider ?? Metadata.Provider;
-    const authInfo = md.Authorizations?.find((a) => a.Name === authorizationName);
-    return Boolean(authInfo?.UserCanExecute(user));
+    const authorizations = md.Authorizations ?? [];
+    const authInfo = authorizations.find((a) => a.Name === authorizationName);
+    return Boolean(authInfo && new AuthorizationEvaluator().UserCanExecuteWithAncestors(authInfo, user, authorizations));
   } catch {
     // Metadata is not loaded: refuse.
     return false;
