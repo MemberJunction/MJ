@@ -175,7 +175,7 @@ Users and administrators can launch diagnostic capture or download a `.mjdiag` b
 
 The operations are metadata-registered under the `Diagnostics` category. Every operation except `Diagnostics.GetMySessionStatus` checks a `Diagnostics: *` authorization (table below). Every operation except `Diagnostics.GetMySessionStatus` and `Diagnostics.UploadClientCapture` has a `diagnostics:*` API scope (`diagnostics:manage`, `diagnostics:read` for `GetBundlePreview`, `diagnostics:send` for `SendBundle`).
 
-**Who has access.** A user passes a diagnostics check when the user is an Owner (`Type = 'Owner'`) or holds the named `Diagnostics: *` authorization. The roles Developer and Administrator do not grant access on their own. When the authorization record is missing or metadata is not loaded, the check fails. Inactive users and magic-link or scope-limited principals always fail.
+**Who has access.** A user passes a diagnostics check when the user is an Owner (`Type = 'Owner'`) or holds the named `Diagnostics: *` authorization, directly or through a parent authorization. The roles Developer and Administrator do not grant access on their own. When the authorization record is missing or metadata is not loaded, the check fails. Inactive users and magic-link or scope-limited principals always fail.
 
 | Operation | Authorization |
 | --- | --- |
@@ -319,13 +319,13 @@ Only registered installations can submit. A sender is a `MJ: Diagnostic Sender R
 - An update must not change `InstallID`, `Status`, `KeyAlgorithm`, `KeyID`, `PublicKeyBase64`, `RegistrationCodeHash`, `RegistrationCodeExpiresAt`, `EnrolledAt`, `RevokedAt` or `LastSeenAt`. Other fields, such as `Name` and `MaxBundlesPerDay`, can be edited.
 - A `ReplayOnly` save is refused.
 
-So an edit of `Status` on the Explorer form is refused. Use the operations below to change the status.
+So an edit of `Status` on the Explorer form is refused. Use the toolbar buttons or the operations below to change the status.
 
 **Enrolment.**
 1. Create a registration row with the sender's `InstallID` and a `Name` (status `Pending`).
 2. Run `Diagnostics.IssueSenderRegistrationCode` with `{ RegistrationID }` (authorization `Diagnostics: Manage Intake`). It returns `{ Code, ExpiresAt }`: 32 random bytes as base64url, valid for 24 hours. Only the SHA-256 hash is stored; give the plain code to the sender's administrator once.
 3. The sender runs `Diagnostics.EnrolSender` (§3), which posts `{ installId, registrationCode, keyId, publicKeyBase64, proof }` to `POST /diagnostics/intake/v1/enroll`. That route needs no signature. Failed enrolments count against the IP failure limit (below).
-4. The collector loads the row by `InstallID`, requires an unexpired code hash, compares the code hash in constant time, and verifies `proof` (Ed25519 over `mjdiag-enrol-v1:<installId>:<keyId>:<registrationCode>:<aud>`) with `publicKeyBase64`. It then saves `KeyID`, `PublicKeyBase64`, `Status = 'Active'`, `EnrolledAt`, and clears the code. Each code works once: the collector checks and uses the code under a lock for that registration, after it reloads the row from the database. A failed registration lookup answers 400 and is not cached. The response is `{ installId, keyId, collectorPublicKeyBase64, collectorSigningPublicKeyBase64 }`. Any failure answers 400 or 401 with a generic message; the reason is in the server log.
+4. The collector loads the row by `InstallID`, requires an unexpired code hash, compares the code hash in constant time, and verifies `proof` (Ed25519 over `mjdiag-enrol-v1:<installId>:<keyId>:<registrationCode>:<aud>`) with `publicKeyBase64`. It then saves `KeyID`, `PublicKeyBase64`, `Status = 'Active'`, `EnrolledAt`, and clears the code. Each code works once: the collector checks and uses the code under a lock for that registration, after it reloads the row from the database. When the registration lookup fails (a database fault), `POST /enroll` answers 503 with a generic body. The failure is not cached and is not counted against the IP; the sender can retry. The response is `{ installId, keyId, collectorPublicKeyBase64, collectorSigningPublicKeyBase64 }`. Any failure answers 400 or 401 with a generic message; the reason is in the server log.
 
 **Signed requests.** `POST /bundles`, `PUT /bundles/:referenceId/payload` and `POST /bundles/:referenceId/complete` require `Authorization: MJDiag-Ed25519 keyId="…",installId="…",aud="…",ts="…",nonce="…",sig="…"`. The collector:
 - finds the `Active` registration for `installId` and requires `keyId` to equal its `KeyID`;
@@ -334,7 +334,7 @@ So an edit of `Status` on the Explorer form is refused. Use the operations below
 - verifies `sig` over `mjdiag-http-v1:<METHOD>:<path>:<aud>:<installId>:<ts>:<nonce>:<bodySha256>`. The signed path is the public URL's path: the collector verifies the path of its audience URL followed by the route subpath (for example `/api/diagnostics/intake/v1/bundles` for `MJAPI_PUBLIC_URL=https://x/api`), without the query string, so a proxy that strips a path prefix does not break signatures. `bodySha256` is the hex SHA-256 of the raw body;
 - refuses a repeated `(installId, nonce)`.
 
-Any failure answers 401 with a generic message, and the reason is logged. The header and registration are checked before the body is read, and a payload body is never read past its declared `sizeBytes` (413). Rate limits:
+Any failure answers 401 with a generic message, and the reason is logged. When the registration lookup itself fails (a database fault), the request gets 503 with a generic body instead; it is not counted against the IP, and the sender can retry. The header and registration are checked before the body is read, and a payload body is never read past its declared `sizeBytes` (413). Rate limits:
 
 | Limit | Applies to | Default |
 |-------|-----------|---------|
@@ -357,6 +357,7 @@ The counters are per process, and each holds at most 10,000 keys (the oldest are
 **Revocation and rotation.**
 - To revoke a sender, run `Diagnostics.RevokeSender` with `{ RegistrationID }` (authorization `Diagnostics: Manage Intake`). It sets `Status = 'Revoked'` and `RevokedAt`, clears any outstanding registration code, and returns `{ RegistrationID, InstallID, Status, RevokedAt }`. Every request from that install then answers 401.
 - To undo a revocation with the same key, run `Diagnostics.ReactivateSender` with `{ RegistrationID }` (authorization `Diagnostics: Manage Intake`). It works only on a `Revoked` row that has an enrolled `KeyID` and `PublicKeyBase64`. It sets `Status = 'Active'` and clears `RevokedAt`.
+- In Explorer, open the record in `MJ: Diagnostic Sender Registrations`. The form toolbar shows **Revoke** on an Active or Pending registration, after a confirmation dialog, and **Reactivate** on a Revoked registration that has an enrolled key. The buttons call the operations above and need `Diagnostics: Manage Intake`. After a success the form reloads the record; a refusal shows the server's error.
 - To rotate a key, issue a new registration code; the sender enrols again with a new key, and the row's `KeyID` and `PublicKeyBase64` are replaced. Issuing a code also re-enables a revoked sender: an enrolment with that code sets the row back to `Active`.
 
 **Replay store.** The nonce cache is in memory, per process. It keeps each nonce for 602 s (the ±300 s skew window plus 2 s, because the skew check compares whole seconds), removes expired entries, and refuses new nonces when it is full. A collector that runs more than one MJAPI instance needs a shared store (for example Redis `SET NX EX`), or a nonce replayed to another instance is accepted.
@@ -413,6 +414,7 @@ npx mj diag keygen --key-id mjc-intake-2026-01 --signing
 
 - **Per-process stores.** The intake nonce replay cache and the bundle download-token nonce store are in memory, per process. With more than one MJAPI instance, a nonce or token used on one instance is not known to the others.
 - **Cross-process races.** Registration codes and the `MaxBundlesPerDay` quota are protected by locks inside one collector process only. Two collector processes can accept one registration code at the same moment; only the last key is stored, and the other sender's later requests get 401. Several collector processes can together pass `MaxBundlesPerDay`.
+- **Unknown-install cache.** The 60-second cache of install IDs with no registration is per process. On a collector with more than one instance, an install refused on one instance can stay refused there for up to 60 seconds after it enrols on another.
 - **Restart.** Server chunks that are kept in memory after a failed save are lost when the process restarts.
 - **Console tap.** When another library replaces a `console.*` method without calling the method it replaced, capture stops for that method.
 - **Duplicate chunk on retry.** When a chunk `Save()` commits and then throws, the chunk stays in memory and the next save writes it again, so the bundle can hold a duplicate chunk row. A duplicate is preferred over a lost chunk.
