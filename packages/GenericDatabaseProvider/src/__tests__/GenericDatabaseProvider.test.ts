@@ -695,6 +695,89 @@ describe('GenericDatabaseProvider', () => {
         });
     });
 
+    describe('CheckUpdateRLSPostImage — the row as it will be after the update', () => {
+        type PostImageCheck = { CheckUpdateRLSPostImage: (e: BaseEntity, u: UserInfo) => Promise<boolean> };
+        const ORG_FILTER = "OrganizationID = 'org-a'";
+
+        /** A row on an entity whose Update filter scopes the user to org-a. */
+        function scopedRow(values: Record<string, unknown>, dirty: string[], filter = ORG_FILTER): BaseEntity {
+            const fieldNames = Object.keys(values);
+            const entityInfo = {
+                Name: 'Projects',
+                GetUserRowLevelSecurityWhereClause: () => filter,
+                Fields: fieldNames.map(n => ({ Name: n, IsVirtual: false, NeedsQuotes: true })),
+            } as unknown as EntityInfo;
+            return {
+                EntityInfo: entityInfo,
+                Fields: fieldNames.map(n => ({ Name: n, Dirty: dirty.includes(n) })),
+                Get: (n: string) => values[n],
+            } as unknown as BaseEntity;
+        }
+
+        const check = (entity: BaseEntity) => (provider as unknown as PostImageCheck).CheckUpdateRLSPostImage(entity, mockUser);
+
+        it('passes without a query when no Update filter applies', async () => {
+            const entity = scopedRow({ ID: 'p1', Name: 'x' }, ['Name'], '');
+            expect(await check(entity)).toBe(true);
+            expect(provider.executeSQLCalls).toHaveLength(0);
+        });
+
+        it('passes without a query when an in-scope edit leaves the filter columns alone', async () => {
+            const entity = scopedRow({ ID: 'p1', Name: 'Renamed', OrganizationID: 'org-a' }, ['Name']);
+            expect(await check(entity)).toBe(true);
+            expect(provider.executeSQLCalls).toHaveLength(0);
+        });
+
+        it('tests the new values against the filter when a filter column changes, and refuses a move out of scope', async () => {
+            provider.executeSQLResults = [[{ pass: 0 }]];
+            const entity = scopedRow({ ID: 'p1', Name: 'x', OrganizationID: 'org-b' }, ['OrganizationID']);
+
+            expect(await check(entity)).toBe(false);
+            const sql = provider.executeSQLCalls[0].sql;
+            expect(sql).toContain(`CASE WHEN (${ORG_FILTER}) THEN 1 ELSE 0 END`);
+            expect(sql).toContain(`'org-b' AS "OrganizationID"`);
+        });
+
+        it('allows a filter column change that stays in scope', async () => {
+            provider.executeSQLResults = [[{ pass: 1 }]];
+            const entity = scopedRow({ ID: 'p1', OrganizationID: 'org-a' }, ['OrganizationID']);
+            expect(await check(entity)).toBe(true);
+        });
+
+        it('always runs the check for a filter it cannot fully decompose', async () => {
+            provider.executeSQLResults = [[{ pass: 1 }]];
+            const entity = scopedRow({ ID: 'p1', Name: 'x', OrganizationID: 'org-a' }, ['Name'], "OrganizationID = 'org-a' OR IsPublic = 1");
+            expect(await check(entity)).toBe(true);
+            expect(provider.executeSQLCalls).toHaveLength(1);
+        });
+
+        it('escapes quotes in the new values', async () => {
+            provider.executeSQLResults = [[{ pass: 0 }]];
+            const entity = scopedRow({ ID: 'p1', OrganizationID: "x' OR '1'='1" }, ['OrganizationID']);
+            await check(entity);
+            expect(provider.executeSQLCalls[0].sql).toContain(`'x'' OR ''1''=''1' AS "OrganizationID"`);
+        });
+    });
+
+    describe('TryExtractSimpleFilterColumns', () => {
+        const extract = (clause: string) =>
+            (provider as unknown as { TryExtractSimpleFilterColumns: (c: string) => string[] | null }).TryExtractSimpleFilterColumns(clause);
+
+        it('returns the columns of a conjunction of simple terms', () => {
+            expect(extract("OrganizationID = 'a' AND [Region] <> 'x' AND \"Status\" IS NOT NULL")).toEqual(['organizationid', 'region', 'status']);
+        });
+
+        it('returns null for OR, subqueries and functions', () => {
+            expect(extract("A = 1 OR B = 2")).toBeNull();
+            expect(extract("ID IN (SELECT ID FROM t)")).toBeNull();
+            expect(extract("LOWER(Name) = 'x'")).toBeNull();
+        });
+
+        it('ignores AND/OR inside string literals', () => {
+            expect(extract("Name = 'a OR b' AND Org = 'c AND d'")).toEqual(['name', 'org']);
+        });
+    });
+
     describe('AdjustDatetimeFields (default no-op)', () => {
         it('returns rows unchanged by default', async () => {
             const now = new Date();
