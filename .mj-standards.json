@@ -50,6 +50,15 @@
         "FromVersion": "202610221306",
         "AllowedValues": []
       }
+    },
+    "migration-string-collation": {
+      "Severity": "error",
+      "Roots": [
+        "migrations"
+      ],
+      "Options": {
+        "FromVersion": "202611022200"
+      }
     }
   }
 }
