@@ -36,6 +36,7 @@ import {
     AnalyzeDiagnosticBundleData,
 } from '@memberjunction/diagnostics';
 import {
+    GraphQLDataProvider,
     GraphQLResponseHeaders,
     RegisterNetworkDiagnosticObserver,
     RegisterResponseHeaderObserver,
@@ -611,8 +612,19 @@ export class MJDiagnosticsService {
         if (!res.Success || !res.Output?.DownloadUrl) {
             throw new Error(res.ErrorMessage ?? `The server gave no download link for bundle ${bundleId}`);
         }
-        this.startBrowserDownload(res.Output.DownloadUrl);
-        return res.Output.DownloadUrl;
+        const url = this.resolveOnApiServer(res.Output.DownloadUrl);
+        this.startBrowserDownload(url);
+        return url;
+    }
+
+    /**
+     * Resolves a link against the API server the provider talks to. A link without an origin
+     * would otherwise open on the app's own page instead of the API.
+     */
+    private resolveOnApiServer(url: string): string {
+        const provider = this.ProviderToUse;
+        const apiUrl = provider instanceof GraphQLDataProvider ? provider.ConfigData?.URL : undefined;
+        return apiUrl ? new URL(url, apiUrl).toString() : url;
     }
 
     /**

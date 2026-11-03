@@ -209,6 +209,33 @@ describe('MJDiagnosticsService', () => {
             expect(url).toBe('http://api.test/api/diagnostics/bundles/bundle-ux-1/download?token=fresh');
         });
 
+        it('opens a link without an origin on the API server, not on the app page', async () => {
+            vi.spyOn(DiagnosticsGetBundlePreviewOperation.prototype, 'Execute').mockResolvedValue({
+                Success: true,
+                Output: {
+                    BundleID: 'bundle-rel',
+                    Name: 'b',
+                    Direction: 'Local',
+                    Status: 'Sent',
+                    SizeBytes: 1,
+                    SHA256: null,
+                    ScrubLiterals: false,
+                    Manifest: null,
+                    ScrubReport: null,
+                    Findings: [],
+                    ReadmeText: '',
+                    DownloadUrl: '/diagnostics/bundles/bundle-rel/download?token=t',
+                },
+            });
+            const provider = fakeProvider(true);
+            Object.defineProperty(provider, 'ConfigData', { value: { URL: 'http://api.test:24000/' } });
+            service.Provider = provider;
+
+            const url = await service.DownloadServerBundle('bundle-rel');
+
+            expect(url).toBe('http://api.test:24000/diagnostics/bundles/bundle-rel/download?token=t');
+        });
+
         it('reports the server reason when the bundle cannot be served', async () => {
             vi.spyOn(DiagnosticsGetBundlePreviewOperation.prototype, 'Execute').mockResolvedValue({
                 Success: false,
