@@ -155,6 +155,21 @@ An agent can ask a fast decision model typed questions in six places on its own.
 
 Set it in an agent's `AgentTypePromptParams` (`{"decisionsEnabled": true, "finishIfMode": "shadow"}`) or for one run in `data.__agentTypePromptParams`. Uses someone placed explicitly do not read it: a Flow or task-graph Decision step, the Run Decision action, and other direct callers of `AgentDecisionService`. See the [Decision Models guide](./docs/loop-agent-decisions.md).
 
+##### Untrusted external data
+
+Some actions return content that nobody inside MJ wrote: web pages, search results, mail, feeds, arbitrary HTTP responses, MCP tool output. The loop agent wraps such a result in an `<untrusted_external_data source="…" trust="…" warning="…">` envelope (any closing tag inside the content is escaped first), drops the action's `AIDirectives`, and marks the run **tainted**. A tainted run's `memory_write` notes land with `Status = 'Pending'` and the sources named in `Comments`, so an instruction smuggled in a web page cannot become an active memory. A parent run absorbs its sub-agents' sources when the sub-agent step completes. `ExecuteAgentResult.taintedSources` carries them to the caller.
+
+How a result's trust level is decided, first match wins:
+
+| Precedence | Source |
+|---|---|
+| 1 | `actionTrustLevels: { "<action>": "Trusted" \| "SemiTrusted" \| "Untrusted" }` in the agent's `AgentTypePromptParams` or the run's `data.__agentTypePromptParams` |
+| 2 | `trustedActionNames` / `untrustedActionNames` lists in the same prompt params |
+| 3 | `Action.Config_Object?.outputTrustLevel` on the `MJ: Actions` metadata record (`IActionConfiguration` JSONType on `Action.Config`) |
+| 4 | `Trusted` |
+
+Client tools declare `TrustLevel` on their `ClientToolMetadata`; a browser DOM extractor should say `Untrusted`. In the `MJ: Actions` metadata catalog, `outputTrustLevel: "Untrusted"` is set on actions that ingest external content (web search and page content, inbox reader, HTTP request, URL metadata, RSS feeds, `Execute MCP Tool`), not on actions that send to an external system or list MJ's own MCP catalog.
+
 ##### Output Artifact Lifecycle (`artifactDirective`) & `_ARTIFACTS_ENABLED` Gating
 
 When an artifact-producing Loop agent finishes a turn (`taskComplete: true`), it controls whether its final payload creates a new artifact, versions an existing artifact in the conversation, or suppresses artifact creation via `artifactDirective: { behavior: 'create-new' | 'version-source' | 'suppress', targetArtifactId?, name?, description? }`:
