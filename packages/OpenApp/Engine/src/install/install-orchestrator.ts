@@ -22,7 +22,8 @@ import { OfferTemplateUser } from './template-user.js';
 import { ExtractApplicationIds } from './migration-application-ids.js';
 import { CreateAppTempDir } from './temp-dir.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
-import { AddAppPackages, RemoveAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, PreflightAppPackages, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
+import { AddAppPackages, RemoveAppPackages, RunPackageInstallAsync, BumpPrefixedDependencies, PreflightAppPackages, ListPackageStepFiles, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
+import { RestoreFileSnapshot, SnapshotFiles } from './file-snapshot.js';
 import { BuildHookResolutionBases, ResolveHookModule } from './hook-module-resolver.js';
 import { AddServerDynamicPackages, AddClientDynamicPackages, RemoveServerDynamicPackages, PruneDynamicPackagesNotInManifest, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, AddExcludeSchema, RemoveExcludeSchema } from './config-manager.js';
 import { AngularConfigManager } from './angular-config-manager.js';
@@ -924,11 +925,42 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     // Steps 5-6: Update packages
     let npmInstallWarning: string | undefined;
     if (!IsStepDone(UPGRADE_STEP_ORDER, resumeCheckpoint, 'PackagesInstalled')) {
+      // The previous version is still installed and runnable, so when the package install fails
+      // the true state is the one before this step: put the files it changed back (#5517).
+      const packageFiles = SnapshotFiles(
+        ListPackageStepFiles({
+          RepoRoot: context.RepoRoot,
+          ServerPackagePath: context.ServerPackagePath,
+          ClientPackagePath: context.ClientPackagePath,
+          AdditionalTargets: context.AdditionalTargets,
+          PackageManager: context.PackageManager,
+        }),
+      );
       const pkgResult = await HandlePackageInstallation(manifest, context, effectiveUpgradeVersion, effectiveUpgradeStrategy, options.Verbose);
       if (!pkgResult.Success) {
-        if (pkgResult.PackageJsonUpdated) {
+        const restore = pkgResult.PackageJsonUpdated ? RestoreFileSnapshot(packageFiles) : null;
+        if (restore !== null && restore.Failed.length === 0) {
+          const message = DescribeRestoredUpgrade({
+            AppName: options.AppName,
+            PreviousVersion: previousVersion,
+            TargetVersion: manifest.version,
+            ExplicitVersion: explicitUpgradeVersion,
+            SchemaName: manifest.migrations && manifest.schema ? manifest.schema.name : undefined,
+            Detail: pkgResult.ErrorMessage ?? 'Package install failed',
+          });
+          await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Packages', message, startTime, previousVersion);
+          // Back to the status it had before this attempt; a row that was mid-upgrade or in Error
+          // stays Error, with its checkpoint, so a re-run resumes at the package step.
+          await SetAppStatus(context.ContextUser, existingApp.ID, SETTLED_STATUSES.has(existingApp.Status) ? existingApp.Status : 'Error');
+          return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Packages', startTime, message);
+        }
+        if (restore !== null) {
+          // Some files could not be put back, so the host may point at the new version: fall back
+          // to finalizing Disabled, which keeps the app's packages out of the build until fixed.
           // Deliberately NOT checkpointed — see the matching comment in InstallApp. A resume
           // should retry npm install, not skip past it and finalize Active with unresolved deps.
+          const failed = restore.Failed.map((f) => `${f.Path} (${f.Message})`).join(', ');
+          Callbacks?.OnWarn?.('Packages', `Could not restore ${failed} after the package install failed.`);
           npmInstallWarning = pkgResult.ErrorMessage;
           Callbacks?.OnWarn?.('Packages', DescribeUnresolvedPackages(options.AppName, 'updated', pkgResult.ErrorMessage));
         } else {
@@ -985,7 +1017,8 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
 
     // Step 9: Update app record first (including final Status) so the bootstrap regen below
     // reads the final status from the DB. Mirrors the install path's Step 14: if `npm install`
-    // failed (deps unresolved), finalize 'Disabled' — not 'Active' — and flip the app's
+    // failed (deps unresolved) and the package files could not be restored (a restored upgrade
+    // returned above), finalize 'Disabled' — not 'Active' — and flip the app's
     // dynamicPackages entries off so the server loader / client bootstrap skip the app until
     // `mj app enable` after a manual `npm install`. An upgraded app whose new packages never
     // resolved must not be advertised as healthy.
@@ -2097,6 +2130,36 @@ async function PreflightManifestPackages(
     context.Callbacks?.OnWarn?.('Packages', warning);
   }
   return result.Success ? { Success: true } : { Success: false, ErrorMessage: result.ErrorMessage };
+}
+
+/** Inputs to {@link DescribeRestoredUpgrade}. */
+interface RestoredUpgradeInfo {
+  AppName: string;
+  PreviousVersion: string;
+  TargetVersion: string;
+  /** The `--version` the operator asked for, if any, so the retry command repeats it. */
+  ExplicitVersion?: string;
+  /** Set when this upgrade ran the app's migrations, which stay applied. */
+  SchemaName?: string;
+  /** Why the package install failed. */
+  Detail: string;
+}
+
+/**
+ * The failure message for an upgrade whose package install failed and whose package files were
+ * restored (#5517): what was kept, what was not rolled back, and the command to retry.
+ */
+export function DescribeRestoredUpgrade(info: RestoredUpgradeInfo): string {
+  const retry = `mj app upgrade ${info.AppName}${info.ExplicitVersion ? ` --version ${info.ExplicitVersion}` : ''}`;
+  const schema = info.SchemaName
+    ? ` Migrations already applied stay applied (they are forward-only): the ${info.SchemaName} schema is at ` +
+      `v${info.TargetVersion} while the app's packages are at v${info.PreviousVersion}.`
+    : '';
+  return (
+    `${info.Detail}\n\nThe package files this upgrade changed were restored, so ${info.AppName} stays at ` +
+    `v${info.PreviousVersion} with its previous status.${schema} If the failed install left node_modules ` +
+    `partly changed, run your package manager's install once. Fix the cause, then run '${retry}'.`
+  );
 }
 
 /**
