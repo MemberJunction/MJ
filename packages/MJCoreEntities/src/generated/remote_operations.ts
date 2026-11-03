@@ -123,6 +123,10 @@ export interface DiagnosticsGetMySessionStatusOutput {
     Level?: 'Standard' | 'Verbose' | 'Debug';
     ScrubLiterals?: boolean;
     SelfServiceRecordingAllowed: boolean;
+    /** True when Diagnostics.Capture.Enabled is on for this installation. */
+    CaptureEnabled?: boolean;
+    /** True when Diagnostics.RequireLiteralScrubbing forces literal scrubbing on every session and bundle. */
+    RequireLiteralScrubbing?: boolean;
 }
 
 export interface DiagnosticsUploadClientCaptureInput {
@@ -219,6 +223,30 @@ export interface DiagnosticsEnrolSenderOutput {
     InstallID: string;
     /** ISO 8601 time of the enrolment. */
     EnrolledAt: string;
+}
+
+export interface DiagnosticsRevokeSenderInput {
+    /** ID of the MJ: Diagnostic Sender Registrations row. */
+    RegistrationID: string;
+}
+
+export interface DiagnosticsRevokeSenderOutput {
+    RegistrationID: string;
+    InstallID: string;
+    Status: 'Revoked';
+    /** ISO 8601 time of the revocation. */
+    RevokedAt: string;
+}
+
+export interface DiagnosticsReactivateSenderInput {
+    /** ID of the MJ: Diagnostic Sender Registrations row. */
+    RegistrationID: string;
+}
+
+export interface DiagnosticsReactivateSenderOutput {
+    RegistrationID: string;
+    InstallID: string;
+    Status: 'Active';
 }
 
 /** The control action to apply to a running/paused experiment session. */
@@ -1761,7 +1789,7 @@ export class DiagnosticsBuildBundleOperation extends BaseRemotableOperation<Diag
     public readonly ExecutionMode = 'LongRunning' as const;
     public readonly RequiredScope = "diagnostics:manage";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_c636a50357add25a";
+    public readonly ContractFingerprint = "ro_fp_9b69357bc1161f12";
 }
 
 // ============================================================
@@ -1778,7 +1806,7 @@ export class DiagnosticsEnrolSenderOperation extends BaseRemotableOperation<Diag
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "diagnostics:manage";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_a27031405c5f63d5";
+    public readonly ContractFingerprint = "ro_fp_330460f047b0d391";
 }
 
 // ============================================================
@@ -1795,7 +1823,7 @@ export class DiagnosticsGetBundlePreviewOperation extends BaseRemotableOperation
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "diagnostics:read";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_32bc209707fca272";
+    public readonly ContractFingerprint = "ro_fp_1a1681bd0ef97936";
 }
 
 // ============================================================
@@ -1811,7 +1839,7 @@ export class DiagnosticsGetMySessionStatusOperation extends BaseRemotableOperati
     public readonly OperationKey = "Diagnostics.GetMySessionStatus";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_05b89d33936f58a7";
+    public readonly ContractFingerprint = "ro_fp_57e9566d7e10e763";
 }
 
 // ============================================================
@@ -1828,7 +1856,41 @@ export class DiagnosticsIssueSenderRegistrationCodeOperation extends BaseRemotab
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "diagnostics:manage";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_e118cdb9e62a66ce";
+    public readonly ContractFingerprint = "ro_fp_7fad3d11af421ef2";
+}
+
+// ============================================================
+// Diagnostics.ReactivateSender — Reactivate Diagnostic Sender
+// ============================================================
+/**
+ * Reactivate Diagnostic Sender
+ * Sets a Revoked sender registration that still has an enrolled key back to Active. A registration without a key needs a new registration code instead. Requires the Diagnostics: Manage Intake authorization. Implemented in @memberjunction/diagnostics-server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Diagnostics.ReactivateSender'. This generated base provides the typed contract only (client-safe).
+ */
+export class DiagnosticsReactivateSenderOperation extends BaseRemotableOperation<DiagnosticsReactivateSenderInput, DiagnosticsReactivateSenderOutput> {
+    public readonly OperationKey = "Diagnostics.ReactivateSender";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "diagnostics:manage";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_7801b8fcb50291f3";
+}
+
+// ============================================================
+// Diagnostics.RevokeSender — Revoke Diagnostic Sender
+// ============================================================
+/**
+ * Revoke Diagnostic Sender
+ * Revokes a sender registration on this collector: sets the MJ: Diagnostic Sender Registrations row to Revoked, sets RevokedAt, and clears any outstanding registration code. Requires the Diagnostics: Manage Intake authorization. Implemented in @memberjunction/diagnostics-server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Diagnostics.RevokeSender'. This generated base provides the typed contract only (client-safe).
+ */
+export class DiagnosticsRevokeSenderOperation extends BaseRemotableOperation<DiagnosticsRevokeSenderInput, DiagnosticsRevokeSenderOutput> {
+    public readonly OperationKey = "Diagnostics.RevokeSender";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "diagnostics:manage";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_9e97e2b618cad66d";
 }
 
 // ============================================================
@@ -1845,7 +1907,7 @@ export class DiagnosticsSendBundleOperation extends BaseRemotableOperation<Diagn
     public readonly ExecutionMode = 'LongRunning' as const;
     public readonly RequiredScope = "diagnostics:send";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_8d58e3bd1d37c7ae";
+    public readonly ContractFingerprint = "ro_fp_158f023343d3e20e";
 }
 
 // ============================================================
@@ -1862,7 +1924,7 @@ export class DiagnosticsStartSessionOperation extends BaseRemotableOperation<Dia
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "diagnostics:manage";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_74af133b37582c60";
+    public readonly ContractFingerprint = "ro_fp_8de0766dcb8c9b3c";
 }
 
 // ============================================================
@@ -1879,7 +1941,7 @@ export class DiagnosticsStopSessionOperation extends BaseRemotableOperation<Diag
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "diagnostics:manage";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_d9d6d4ff56203aa2";
+    public readonly ContractFingerprint = "ro_fp_ad5a481f7a800546";
 }
 
 // ============================================================
@@ -1895,7 +1957,7 @@ export class DiagnosticsUploadClientCaptureOperation extends BaseRemotableOperat
     public readonly OperationKey = "Diagnostics.UploadClientCapture";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_8180ee3b8c629e42";
+    public readonly ContractFingerprint = "ro_fp_97adc6e3d5d0c6a6";
 }
 
 // ============================================================

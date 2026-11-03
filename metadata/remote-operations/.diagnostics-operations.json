@@ -205,5 +205,51 @@
     "primaryKey": {
       "ID": "CFCA928A-30D0-407C-B2D9-2F7794FE0254"
     }
+  },
+  {
+    "fields": {
+      "Name": "Revoke Diagnostic Sender",
+      "OperationKey": "Diagnostics.RevokeSender",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Revokes a sender registration on this collector: sets the MJ: Diagnostic Sender Registrations row to Revoked, sets RevokedAt, and clears any outstanding registration code. Requires the Diagnostics: Manage Intake authorization. Implemented in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsRevokeSenderInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsRevokeSenderOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "diagnostics:manage",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B650BFF3-3184-4488-B30F-114DAC63F1F8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Reactivate Diagnostic Sender",
+      "OperationKey": "Diagnostics.ReactivateSender",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Diagnostics",
+      "Description": "Sets a Revoked sender registration that still has an enrolled key back to Active. A registration without a key needs a new registration code instead. Requires the Diagnostics: Manage Intake authorization. Implemented in @memberjunction/diagnostics-server.",
+      "InputTypeName": "DiagnosticsReactivateSenderInput",
+      "InputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "DiagnosticsReactivateSenderOutput",
+      "OutputTypeDefinition": "@file:types/diagnostics.types.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "diagnostics:manage",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "3FC834E5-0304-4698-9B51-C0A03AB76080"
+    }
   }
 ]

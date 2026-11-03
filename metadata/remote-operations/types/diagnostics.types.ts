@@ -47,6 +47,10 @@ export interface DiagnosticsGetMySessionStatusOutput {
     Level?: 'Standard' | 'Verbose' | 'Debug';
     ScrubLiterals?: boolean;
     SelfServiceRecordingAllowed: boolean;
+    /** True when Diagnostics.Capture.Enabled is on for this installation. */
+    CaptureEnabled?: boolean;
+    /** True when Diagnostics.RequireLiteralScrubbing forces literal scrubbing on every session and bundle. */
+    RequireLiteralScrubbing?: boolean;
 }
 
 export interface DiagnosticsUploadClientCaptureInput {
@@ -143,4 +147,28 @@ export interface DiagnosticsEnrolSenderOutput {
     InstallID: string;
     /** ISO 8601 time of the enrolment. */
     EnrolledAt: string;
+}
+
+export interface DiagnosticsRevokeSenderInput {
+    /** ID of the MJ: Diagnostic Sender Registrations row. */
+    RegistrationID: string;
+}
+
+export interface DiagnosticsRevokeSenderOutput {
+    RegistrationID: string;
+    InstallID: string;
+    Status: 'Revoked';
+    /** ISO 8601 time of the revocation. */
+    RevokedAt: string;
+}
+
+export interface DiagnosticsReactivateSenderInput {
+    /** ID of the MJ: Diagnostic Sender Registrations row. */
+    RegistrationID: string;
+}
+
+export interface DiagnosticsReactivateSenderOutput {
+    RegistrationID: string;
+    InstallID: string;
+    Status: 'Active';
 }

@@ -278,5 +278,19 @@
     "primaryKey": {
       "ID": "5377B6BF-9029-4650-8BB1-CA7A8AC1ABDC"
     }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.External.AllowUnscrubbedSend",
+      "Value": "false",
+      "ValueType": "boolean",
+      "Category": "Diagnostics",
+      "DisplayName": "Allow Unscrubbed External Send",
+      "Description": "When false, a bundle built without SQL & filter literal scrubbing cannot be sent to an external collector. When true, such a bundle can be sent to the collector at Diagnostics.External.CollectorUrl.",
+      "DefaultValue": "false"
+    },
+    "primaryKey": {
+      "ID": "2EF677D5-9C0F-466A-A101-B8BD817BF48E"
+    }
   }
 ]
