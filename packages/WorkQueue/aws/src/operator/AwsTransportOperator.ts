@@ -6,7 +6,7 @@ import { ReadAwsSubscriptionConfig } from '../config';
 import { REPLAY_ATTRIBUTE } from '../consumer/deadLetter';
 import { MessageGroupIdFor } from '../envelope';
 import type { SqsGateway } from '../gateway/SqsGateway';
-import { DeadLetterIdOf, RestoreVisibility, ScanDeadLetters, ToDeadLetterRecord, type ScannedDeadLetter } from './deadLetterScan';
+import { DeadLetterIdOf, DistinctDeadLetters, RestoreVisibility, ScanDeadLetters, ToDeadLetterRecord, type ScannedDeadLetter } from './deadLetterScan';
 
 export const REPLAY_NOTE_ATTRIBUTE = 'mj_replay_note';
 export const REPLAYED_BY_ATTRIBUTE = 'mj_replayed_by';
@@ -45,7 +45,7 @@ export class AwsTransportOperator implements ITransportOperator {
         const config = ReadAwsSubscriptionConfig(subscription.Config);
         const { Items } = await ScanDeadLetters(this.sqs, config.DeadLetterQueueUrl, Math.max(1, pageSize));
         await RestoreVisibility(this.sqs, config.DeadLetterQueueUrl, Items);
-        return { Items: Items.map(ToDeadLetterRecord), NextCursor: null };
+        return { Items: DistinctDeadLetters(Items).map(ToDeadLetterRecord), NextCursor: null };
     }
 
     public async ListPartitions(_subscription: SubscriptionBinding, _condition: PartitionCondition | null, _cursor: string | null, _pageSize: number): Promise<Page<PartitionStateRecord> | null> {
