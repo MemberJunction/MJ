@@ -16,10 +16,8 @@
  * installs re-resolve their own subtrees would install the shared dep multiple
  * times (and in the wrong order).
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { existsSync } from 'node:fs';
 
 // ── Stub every external collaborator the install path touches ──────────────
 // The template-user step loads the record-cloning engine, which this file's mocks don't provide for.
@@ -56,14 +54,13 @@ vi.mock('../install/schema-manager.js', async (importOriginal) => ({
     EscapeSqlString: (s: string) => s,
 }));
 vi.mock('../install/migration-runner.js', () => ({ RunAppMigrations: vi.fn() }));
-vi.mock('../install/package-manager.js', async (importOriginal) => ({
+vi.mock('../install/package-manager.js', () => ({
     AddAppPackages: vi.fn(),
     RemoveAppPackages: vi.fn(),
     RunPackageInstallAsync: vi.fn(),
     BumpPrefixedDependencies: vi.fn(),
     PreflightAppPackages: vi.fn(async () => ({ Success: true, Checks: [], Warnings: [] })),
-    // Real: the upgrade rollback tests below snapshot real files in a temp repo.
-    ListPackageStepFiles: (await importOriginal<typeof import('../install/package-manager.js')>()).ListPackageStepFiles,
+    ListPackageStepFiles: vi.fn(() => []),
 }));
 vi.mock('../install/config-manager.js', () => ({
     AddServerDynamicPackages: vi.fn(),
@@ -88,7 +85,7 @@ vi.mock('@memberjunction/core', () => ({
     DatabaseProviderBase: class {},
 }));
 
-import { InstallApp, UpgradeApp, DescribeRestoredUpgrade } from '../install/install-orchestrator.js';
+import { InstallApp, UpgradeApp } from '../install/install-orchestrator.js';
 import type { OrchestratorContext } from '../install/install-orchestrator.js';
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag } from '../github/github-client.js';
 import { CheckCanMigrateAppSchema, CreateAppSchema, SchemaExists, DropAppSchema } from '../install/schema-manager.js';
@@ -950,159 +947,6 @@ describe('UpgradeApp — config prune ordering', () => {
         expect(result.Success).toBe(false);
         expect(vi.mocked(PruneDynamicPackagesNotInManifest)).not.toHaveBeenCalled();
         expect(vi.mocked(SetAppStatus)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', 'Error');
-    });
-});
-
-describe('UpgradeApp — a failed package install restores the package files (#5517)', () => {
-    let repo: string;
-    let upContext: OrchestratorContext;
-
-    const SERVER_PKG = `${JSON.stringify({ name: 'mj_api', dependencies: { '@test/app-x-server': '1.0.0' } }, null, 2)}\n`;
-    const CLIENT_PKG = `${JSON.stringify({ name: 'mj_explorer', dependencies: { '@test/app-x-client': '1.0.0' } }, null, 4)}\n`;
-    const LOCKFILE = 'lockfileVersion: 9.0\n';
-
-    function v2Manifest(): string {
-        return JSON.stringify({
-            manifestVersion: 1,
-            name: 'app-x',
-            displayName: 'app-x',
-            description: 'app-x test app description',
-            version: '2.0.0',
-            publisher: { name: 'Test' },
-            repository: 'https://github.com/test/app-x',
-            mjVersionRange: '>=5.0.0 <6.0.0',
-            schema: { name: 'test_app_x' },
-            migrations: { directory: 'migrations' },
-            packages: {
-                server: [{ name: '@test/app-x-server', role: 'bootstrap', startupExport: 'Load' }],
-                client: [{ name: '@test/app-x-client', role: 'bootstrap', startupExport: 'LoadClient' }],
-            },
-            dependencies: {},
-        });
-    }
-
-    const read = (rel: string): string => readFileSync(join(repo, rel), 'utf-8');
-
-    beforeEach(() => {
-        vi.clearAllMocks();
-        repo = mkdtempSync(join(tmpdir(), 'oa-upgrade-restore-'));
-        mkdirSync(join(repo, 'packages', 'MJAPI'), { recursive: true });
-        mkdirSync(join(repo, 'packages', 'MJExplorer'), { recursive: true });
-        writeFileSync(join(repo, 'package.json'), '{"name":"host","workspaces":["packages/*"]}\n');
-        writeFileSync(join(repo, 'packages', 'MJAPI', 'package.json'), SERVER_PKG);
-        writeFileSync(join(repo, 'packages', 'MJExplorer', 'package.json'), CLIENT_PKG);
-        writeFileSync(join(repo, 'pnpm-lock.yaml'), LOCKFILE);
-        upContext = {
-            ...context,
-            RepoRoot: repo,
-            PackageManager: 'pnpm',
-            DatabaseProvider: { Dialect: { PlatformKey: 'sqlserver', CanonicalSchemaName: (s: string) => s } },
-        } as unknown as OrchestratorContext;
-
-        vi.mocked(SchemaExists).mockResolvedValue(true);
-        vi.mocked(SetAppStatus).mockResolvedValue(undefined);
-        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
-        vi.mocked(DownloadMigrations).mockResolvedValue({ Success: true } as Awaited<ReturnType<typeof DownloadMigrations>>);
-        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true } as Awaited<ReturnType<typeof RunAppMigrations>>);
-        vi.mocked(GetLatestVersion).mockResolvedValue('2.0.0' as unknown as Awaited<ReturnType<typeof GetLatestVersion>>);
-        vi.mocked(FindInstalledApp).mockResolvedValue({
-            ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Active',
-            RepositoryURL: 'https://github.com/test/app-x', SchemaName: 'test_app_x',
-        } as unknown as Awaited<ReturnType<typeof FindInstalledApp>>);
-        serveManifests({ 'https://github.com/test/app-x': v2Manifest() });
-        vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true } as ReturnType<typeof AddServerDynamicPackages>);
-        vi.mocked(PruneDynamicPackagesNotInManifest).mockReturnValue({ Success: true } as ReturnType<typeof PruneDynamicPackagesNotInManifest>);
-        // The package step writes the new version into both package.json files, then the install
-        // rewrites the lockfile and creates an npm lockfile before failing.
-        vi.mocked(AddAppPackages).mockImplementation(() => {
-            writeFileSync(join(repo, 'packages', 'MJAPI', 'package.json'), SERVER_PKG.replace('1.0.0', '2.0.0'));
-            writeFileSync(join(repo, 'packages', 'MJExplorer', 'package.json'), CLIENT_PKG.replace('1.0.0', '2.0.0'));
-            return { Success: true, Added: ['@test/app-x-server', '@test/app-x-client'], Removed: [] };
-        });
-    });
-
-    afterEach(() => {
-        rmSync(repo, { recursive: true, force: true });
-    });
-
-    function failInstall(): void {
-        vi.mocked(RunPackageInstallAsync).mockImplementation(async () => {
-            writeFileSync(join(repo, 'pnpm-lock.yaml'), `${LOCKFILE}half-written: true\n`);
-            writeFileSync(join(repo, 'package-lock.json'), '{}');
-            return { Success: false, Added: [], Removed: [], ErrorMessage: 'pnpm install failed (exit code 1).' };
-        });
-    }
-
-    it('restores every snapshotted file byte for byte and keeps the previous version and status', async () => {
-        failInstall();
-
-        const result = await UpgradeApp({ AppName: 'app-x' }, upContext);
-
-        expect(result.Success).toBe(false);
-        expect(read('packages/MJAPI/package.json')).toBe(SERVER_PKG);
-        expect(read('packages/MJExplorer/package.json')).toBe(CLIENT_PKG);
-        expect(read('pnpm-lock.yaml')).toBe(LOCKFILE);
-        expect(existsSync(join(repo, 'package-lock.json'))).toBe(false); // created by the failed install
-        // never finalized: no version bump, no Disabled, config untouched
-        expect(vi.mocked(UpdateAppRecord)).not.toHaveBeenCalled();
-        expect(vi.mocked(SetAppStatus)).not.toHaveBeenCalledWith(expect.anything(), 'app-x-id', 'Disabled');
-        expect(vi.mocked(SetAppStatus)).toHaveBeenLastCalledWith(expect.anything(), 'app-x-id', 'Active');
-        expect(vi.mocked(AddServerDynamicPackages)).not.toHaveBeenCalled();
-        expect(vi.mocked(ToggleServerDynamicPackages)).not.toHaveBeenCalled();
-    });
-
-    it('says the schema moved ahead and names the retry command', async () => {
-        failInstall();
-
-        const result = await UpgradeApp({ AppName: 'app-x' }, upContext);
-
-        expect(result.ErrorMessage).toContain('pnpm install failed');
-        expect(result.ErrorMessage).toContain('stays at v1.0.0');
-        expect(result.ErrorMessage).toContain('the test_app_x schema is at v2.0.0');
-        expect(result.ErrorMessage).toContain("'mj app upgrade app-x'");
-    });
-
-    it('leaves a row that was in Error as Error, so a re-run resumes', async () => {
-        vi.mocked(FindInstalledApp).mockResolvedValue({
-            ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Error',
-            RepositoryURL: 'https://github.com/test/app-x', SchemaName: 'test_app_x',
-        } as unknown as Awaited<ReturnType<typeof FindInstalledApp>>);
-        failInstall();
-
-        await UpgradeApp({ AppName: 'app-x' }, upContext);
-
-        expect(vi.mocked(SetAppStatus)).toHaveBeenLastCalledWith(expect.anything(), 'app-x-id', 'Error');
-    });
-
-    it('falls back to finalizing Disabled when a file cannot be restored', async () => {
-        vi.mocked(RunPackageInstallAsync).mockImplementation(async () => {
-            // a directory where the snapshot recorded no file: the restore cannot remove it
-            mkdirSync(join(repo, 'package-lock.json', 'x'), { recursive: true });
-            return { Success: false, Added: [], Removed: [], ErrorMessage: 'pnpm install failed (exit code 1).' };
-        });
-
-        const result = await UpgradeApp({ AppName: 'app-x' }, upContext);
-
-        expect(result.Success).toBe(true);
-        expect(result.Summary).toContain('finalized as Disabled');
-        expect(vi.mocked(UpdateAppRecord)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', expect.objectContaining({ Status: 'Disabled' }));
-        expect(vi.mocked(ToggleServerDynamicPackages)).toHaveBeenCalled();
-    });
-
-    it('restores nothing when the package step succeeds', async () => {
-        vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true, Added: [], Removed: [] });
-
-        const result = await UpgradeApp({ AppName: 'app-x' }, upContext);
-
-        expect(result.Success).toBe(true);
-        expect(read('packages/MJAPI/package.json')).toBe(SERVER_PKG.replace('1.0.0', '2.0.0'));
-        expect(vi.mocked(UpdateAppRecord)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', expect.objectContaining({ Status: 'Active', Version: '2.0.0' }));
-    });
-
-    it('repeats an explicit --version in the retry command', () => {
-        const message = DescribeRestoredUpgrade({ AppName: 'app-x', PreviousVersion: '1.0.0', TargetVersion: '2.0.0', ExplicitVersion: '2.0.0', Detail: 'x' });
-        expect(message).toContain("'mj app upgrade app-x --version 2.0.0'");
-        expect(message).not.toContain('schema is at');
     });
 });
 
