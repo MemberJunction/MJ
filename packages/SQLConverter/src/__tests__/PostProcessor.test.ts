@@ -662,3 +662,53 @@ describe('postProcess', () => {
     });
   });
 });
+
+// Issue #6097: the T-SQL IF EXISTS strip opened a lazy match on the converter's own PL/pgSQL
+// `IF EXISTS (…) THEN` and ran to the next T-SQL `) BEGIN … END` anywhere later in the file,
+// deleting every statement in between.
+describe('PostProcess — T-SQL IF EXISTS strip (issue #6097)', () => {
+  const plpgsql = [
+    'DO $mj$',
+    'BEGIN',
+    "  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'spCreateX') THEN",
+    "    PERFORM __mj.\"spCreateX\"(p_ID := 'a');",
+    '  END IF;',
+    'END $mj$;',
+  ].join('\n');
+
+  it('leaves PL/pgSQL IF EXISTS … THEN inside a DO block untouched', () => {
+    expect(PostProcess(plpgsql)).toContain("IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'spCreateX') THEN");
+  });
+
+  it('still strips a T-SQL IF EXISTS (…) BEGIN … END pre-flight block', () => {
+    const out = PostProcess("IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'x')\nBEGIN\n  DROP TABLE x;\nEND");
+    expect(out).toContain('-- SKIPPED: SQL Server IF EXISTS check');
+    expect(out).not.toContain('DROP TABLE');
+  });
+
+  it('does not delete the statements between a DO block and later T-SQL', () => {
+    const later = "IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'x')\nBEGIN\n  DROP TABLE x;\nEND";
+    const out = PostProcess(`${plpgsql}\n${plpgsql.replace(/spCreateX/g, 'spCreateY')}\n${later}`);
+    expect(out).toContain('spCreateX');
+    expect(out).toContain('spCreateY');
+    expect(out).toContain('-- SKIPPED: SQL Server IF EXISTS check');
+  });
+});
+
+// Issues #5838 / #5567 item 3: the type-name passes rewrote data inside string literals.
+describe('PostProcess — type names inside literals (issue #5838)', () => {
+  it("keeps 'nvarchar', 'int' and a JSON \"UUID\" inside literals", () => {
+    const out = PostProcess(`UPDATE __mj."EntityField" SET "Type" = 'nvarchar', "Note" = 'int', "Meta" = '{"type":"UUID"}';`);
+    expect(out).toContain("'nvarchar'");
+    expect(out).toContain("'int'");
+    expect(out).toContain(`'{"type":"UUID"}'`);
+  });
+
+  it('still converts type names in code', () => {
+    const out = PostProcess('CREATE FUNCTION f(p_a nvarchar(MAX), p_b int, p_c "UUID") RETURNS VOID');
+    expect(out).toContain('p_a TEXT');
+    expect(out).toContain('p_b INTEGER');
+    expect(out).toContain('p_c UUID');
+  });
+});
+

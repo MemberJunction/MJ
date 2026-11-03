@@ -21,6 +21,7 @@ import type {
 } from './types.js';
 import {
   CreateConversionContext, CreateConversionStats, CreateOutputGroups, CONVERSION_GAP_MARKERS, GAP_MARKER_BATCH_ERROR,
+  GAP_MARKER_MISSING_SAVES, GAP_MARKER_SKIPPED_EXEC_BLOCK,
 } from './types.js';
 
 /** Batch type groupings for ordered output */
@@ -214,6 +215,7 @@ export function ConvertFile(config: BatchConverterConfig): BatchConverterResult 
   // at each emission site so a gap from ANY rule — present or future — is counted: rules
   // return their marker as an ordinary string, so nothing else in this pipeline can tell
   // that the batch it just counted as `Converted` is unusable SQL (issue #3857).
+  fullOutput = appendMissingSavesMarker(rawSQL, fullOutput);
   recordOutputGaps(fullOutput, stats);
 
   // Write output
@@ -256,6 +258,58 @@ function recordOutputGaps(output: string, stats: ConversionStats): void {
 /** Replace Flyway placeholders with target schema */
 function preprocess(sql: string, schema: string): string {
   return sql.replace(/\$\{flyway:defaultSchema\}/g, schema);
+}
+
+/** An mj-sync log announces each save with a `-- Save <entity>…` line above its block. */
+const SAVE_MARKER = /^[ \t]*-- Save\b/;
+
+/**
+ * The note mj-sync writes under a save that changed no fields. Such a save has no SQL, so it
+ * is not expected in the output.
+ */
+const NO_OP_SAVE_NOTE = 'saved with no field changes; nothing to replay';
+
+/**
+ * Compare the saves an mj-sync log announces with the saves present in the output. Any
+ * shortfall means saves were lost with no marker of their own (issue #6097, where a
+ * post-processing regex deleted 278 of 279 saves and the run still passed), so a gap marker
+ * naming the counts is appended for the gap scan to count.
+ */
+function appendMissingSavesMarker(source: string, output: string): string {
+  const sourceLines = source.split('\n');
+  const announced =
+    sourceLines.filter(line => SAVE_MARKER.test(line)).length -
+    sourceLines.filter(line => line.includes(NO_OP_SAVE_NOTE)).length;
+  if (announced <= 0) return output;
+  const kept = countConvertedSaves(output) + countSkippedExecBlocks(output);
+  if (kept >= announced) return output;
+  return `${output}\n${GAP_MARKER_MISSING_SAVES}: the source announces ${announced} save(s), the output holds ${kept}\n`;
+}
+
+/**
+ * Saves the converter kept: a `-- Save` line whose following lines, past blanks and other
+ * comments, reach a `DO $mj$` block (ExecBlockRule keeps a block's leading comments above it).
+ * Another `-- Save` line first means this one has no block.
+ */
+function countConvertedSaves(output: string): number {
+  const lines = output.split('\n');
+  let kept = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (!SAVE_MARKER.test(lines[i])) continue;
+    let next = i + 1;
+    while (next < lines.length && !SAVE_MARKER.test(lines[next]) && isBlankOrComment(lines[next])) next++;
+    if (lines[next]?.trim() === 'DO $mj$') kept++;
+  }
+  return kept;
+}
+
+function isBlankOrComment(line: string): boolean {
+  const trimmed = line.trim();
+  return trimmed === '' || trimmed.startsWith('--');
+}
+
+function countSkippedExecBlocks(output: string): number {
+  return output.split('\n').filter(line => line.startsWith(GAP_MARKER_SKIPPED_EXEC_BLOCK)).length;
 }
 
 /** Split SQL on GO batch separators */

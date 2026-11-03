@@ -318,3 +318,27 @@ JOIN (SELECT ID, 1 AS rn FROM [__mj].[ConversationDetail]) x ON x.ID = cd.ID`;
     });
   });
 });
+
+// Issue #5838: the regex passes rewrote text inside string literals. A stored query or a
+// description is data and must reach PostgreSQL unchanged; the code around it still converts.
+describe('InsertRule — string literals pass through unchanged (issue #5838)', () => {
+  it('keeps ISNULL, LEN, GETDATE() and N-prefixes inside a literal byte for byte', () => {
+    const literal = "'SELECT ISNULL(a, 0), LEN(b), GETDATE(), N''x'' FROM t'";
+    const out = convert(`INSERT INTO [__mj].[Query] ([ID], [SQL]) VALUES (NEWID(), N${literal})`);
+    expect(out).toContain(literal);
+    expect(out).toContain('gen_random_uuid()');
+  });
+
+  it('keeps a schema.Name reference inside a literal unquoted', () => {
+    const out = convert("UPDATE [__mj].[Entity] SET [Description] = N'Uses __mj.User and GETDATE()' WHERE ISNULL([Name], '') = 'x'");
+    expect(out).toContain("'Uses __mj.User and GETDATE()'");
+    expect(out).toContain("COALESCE(");
+  });
+
+  it('still converts the same functions in code', () => {
+    const out = convert("UPDATE [__mj].[Entity] SET [Name] = ISNULL([Name], N'') WHERE LEN([Name]) > 0");
+    expect(out).toContain('COALESCE(');
+    expect(out).toContain('LENGTH(');
+    expect(out).not.toMatch(/\bISNULL\b|\bLEN\(/);
+  });
+});

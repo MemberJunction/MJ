@@ -21,6 +21,7 @@
  *   END $$;
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
+import { GAP_MARKER_SKIPPED_EXEC_BLOCK } from './types.js';
 import { ResolveType } from './TypeResolver.js';
 import { RemoveNPrefix } from './ExpressionHelpers.js';
 import { POSTGRESQL_PROCEDURE_PARAM_LIMIT } from './ProcedureToFunctionRule.js';
@@ -136,7 +137,20 @@ export class ExecBlockRule implements IConversionRule {
 
   /** Convert one DECLARE/SET/EXEC block to a DO $$ block */
   private convertOneBlock(block: string, context: ConversionContext): string {
-    const { comments, body } = this.extractLeadingComments(block);
+    const { comments, body: commentedBody } = this.extractLeadingComments(block);
+    // The last save of an mj-sync log carries the logger's session trailer (`-- End of SQL
+    // Logging Session …`) after its `END;`. Left on the body, the upsert parser (which needs
+    // the block to END in `END`) rejects the block and it falls to the single-EXEC path,
+    // which emits half-converted T-SQL (issue #6097). Peel it off and re-append it after
+    // the converted block instead.
+    const { body, trailing } = this.extractTrailingComments(commentedBody);
+    const source = comments ? `${comments}\n${body}` : body;
+    const converted = this.convertBlockBody(source, comments, body, context);
+    return trailing ? `${converted}${trailing}\n` : converted;
+  }
+
+  /** `block` is the source without its trailer, quoted back as comments if the block is skipped. */
+  private convertBlockBody(block: string, comments: string, body: string, context: ConversionContext): string {
     const declareVars = this.parseDeclare(body);
 
     // A create-or-update block carries TWO EXECs behind an IF NOT EXISTS guard. Detect it
@@ -185,7 +199,7 @@ export class ExecBlockRule implements IConversionRule {
         return /^p_\w+$/.test(v) && !declaredNames.has(v);
       }) ?? false);
     if (!exec || usesUndeclaredVar) {
-      return `-- SKIPPED: EXEC block (auto-conversion not supported)\n${block.split('\n').map(l => `-- ${l}`).join('\n')}\n`;
+      return `${GAP_MARKER_SKIPPED_EXEC_BLOCK} (auto-conversion not supported)\n${block.split('\n').map(l => `-- ${l}`).join('\n')}\n`;
     }
 
     return this.generateDoBlock(comments, declareVars, assignments, { kind: 'call', exec }, context);
@@ -294,6 +308,25 @@ export class ExecBlockRule implements IConversionRule {
     return {
       comments: commentLines.join('\n'),
       body: lines.slice(i).join('\n'),
+    };
+  }
+
+  /**
+   * Split trailing `--` comment and blank lines off a block body. The mirror of
+   * {@link extractLeadingComments}; a line that is code (even one ending in a comment)
+   * stops the scan, so only whole comment lines move.
+   */
+  private extractTrailingComments(sql: string): { body: string; trailing: string } {
+    const lines = sql.split('\n');
+    let end = lines.length;
+    while (end > 0) {
+      const trimmed = lines[end - 1].trim();
+      if (trimmed !== '' && !trimmed.startsWith('--')) break;
+      end--;
+    }
+    return {
+      body: lines.slice(0, end).join('\n'),
+      trailing: lines.slice(end).join('\n').trim(),
     };
   }
 

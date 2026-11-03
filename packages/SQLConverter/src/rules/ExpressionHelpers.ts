@@ -845,16 +845,27 @@ function mapInlineType(tsqlType: string): string {
  * That bug silently corrupted ISO codes in v5.25 Metadata_Sync and
  * caused spCreateStateProvince to hit UQ_StateProvince_ISO3166_2.
  *
- * Fix: only strip N' in contexts where a string literal *starts* — i.e.
- * after a non-quote boundary character (whitespace, punctuation, paren,
- * operator, comma, equals, start of line). This leaves N' inside a
- * string alone.
+ * Fix: only strip an N that sits in code directly before a string literal opens,
+ * after a boundary character (whitespace, punctuation, paren, operator, comma,
+ * equals, start of input). The scan walks code / string / comment segments, so
+ * text inside a literal is never touched — including an escaped `N''x''` inside
+ * a stored query, which a plain regex read as a prefix (issue #5838).
  */
 export function RemoveNPrefix(sql: string): string {
-  // Anchors: start of string, or after one of the "string-start" context chars.
-  // Whitespace, comma, paren, comparison operators, brackets, semicolon.
-  return sql.replace(/(^|[\s(,=<>!+\-*\/[;])N'/g, "$1'");
+  let result = '';
+  let previousType: 'code' | 'string' | 'comment' | null = null;
+  for (const seg of segmentSQL(sql)) {
+    if (seg.type === 'string' && previousType !== 'string' && N_PREFIX_BEFORE_LITERAL.test(result)) {
+      result = result.slice(0, -1);
+    }
+    result += seg.text;
+    if (seg.text) previousType = seg.type;
+  }
+  return result;
 }
+
+/** A code tail ending in the `N` of a unicode-literal prefix: boundary (or start), then `N`. */
+const N_PREFIX_BEFORE_LITERAL = /(?:^|[\s(,=<>!+\-*\/[;])N$/;
 
 /** @deprecated Use {@link RemoveNPrefix}. */
 export function removeNPrefix(sql: string): string {

@@ -54,8 +54,10 @@ export class InsertRule implements IConversionRule {
     let result = ConvertIdentifiers(sql);
     result = RemoveNPrefix(result);
     result = RemoveCollate(result);
-    // Function conversions BEFORE quoting (prevents "LEN", "SUBSTRING" etc. from being quoted)
-    result = ConvertCommonFunctions(result);
+    // Function conversions BEFORE quoting (prevents "LEN", "SUBSTRING" etc. from being quoted).
+    // Code only: a stored query or description that mentions ISNULL / LEN / GETDATE() is data
+    // and must reach PostgreSQL byte for byte (issue #5838).
+    result = TransformCodeOnly(result, ConvertCommonFunctions);
     result = ConvertStringConcat(result, context.TableColumns);
     result = ConvertCharIndex(result);
     result = ConvertStuff(result);
@@ -77,7 +79,9 @@ export class InsertRule implements IConversionRule {
       // named callback parameter instead of `$1`. The sibling ViewRule was
       // converted by the #3171 sweep; this twin was missed. See issue #3171.
       const bareSchemaRef = new RegExp(`\\b${EscapeRegExp(schema)}\\.(?!")((?:vw)?[A-Za-z]\\w+)\\b`, 'g');
-      result = result.replace(bareSchemaRef, (_match, table: string) => `${schema}."${table}"`);
+      // Code only: `__mj.User` in a description literal is text, not a reference (issue #5838).
+      result = TransformCodeOnly(result, (code) =>
+        code.replace(bareSchemaRef, (_match, table: string) => `${schema}."${table}"`));
     }
     // Quote column names in INSERT INTO table (col1, col2, ...) — these are always column
     // names even if they collide with SQL keywords (e.g. Language, Condition, Action)

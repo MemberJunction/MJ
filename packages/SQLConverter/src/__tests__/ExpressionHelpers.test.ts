@@ -734,6 +734,20 @@ describe('removeNPrefix', () => {
     // RETURN'something' should not be confused — the N is part of RETURN
     expect(RemoveNPrefix("RETURN 'val'")).toBe("RETURN 'val'");
   });
+
+  // Issue #5838: an escaped N-literal inside a stored query is data, not a prefix.
+  it("leaves N''x'' inside a literal alone while stripping the outer prefix", () => {
+    expect(RemoveNPrefix("VALUES (N'SELECT a FROM t WHERE n = N''x''')"))
+      .toBe("VALUES ('SELECT a FROM t WHERE n = N''x''')");
+  });
+
+  it("keeps a trailing N inside a literal (N'BD-3N')", () => {
+    expect(RemoveNPrefix("SET x = N'BD-3N'")).toBe("SET x = 'BD-3N'");
+  });
+
+  it("leaves N' inside a comment alone", () => {
+    expect(RemoveNPrefix("-- see N'x'\nSET y = N'z'")).toBe("-- see N'x'\nSET y = 'z'");
+  });
 });
 
 // ---------------------------------------------------------------------------

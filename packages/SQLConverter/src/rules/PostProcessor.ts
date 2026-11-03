@@ -46,30 +46,10 @@ export function PostProcess(sql: string): string {
     "RAISE EXCEPTION '$1';"
   );
 
-  // Fix remaining SQL Server type names used in procedure parameters
-  // NOTE: Type conversions must run BEFORE type unquoting so that
-  // e.g. "INT" → "INTEGER" gets cleaned up by the unquoting pass below.
-  sql = sql.replace(/\bnvarchar\s*\(\s*MAX\s*\)/gi, 'TEXT');
-  sql = sql.replace(/\bnvarchar\s*\(\s*(\d+)\s*\)/gi, 'VARCHAR($1)');
-  sql = sql.replace(/\bnvarchar\b/gi, 'TEXT');
-  sql = sql.replace(/\buniqueid(?:entifier)?\b/gi, 'UUID');
-  // int → INTEGER (standalone word only, avoid matching into "integer")
-  sql = sql.replace(/\bint\b(?!eger)/gi, 'INTEGER');
-  // varbinary → BYTEA
-  sql = sql.replace(/\bvarbinary\b/gi, 'BYTEA');
-
-  // Fix quoted type names — PG types are case-sensitive when quoted.
-  // Runs AFTER type conversions above so "INT"→"INTEGER" gets unquoted here.
-  sql = sql.replace(/"UUID"/g, 'UUID');
-  sql = sql.replace(/"BOOLEAN"/g, 'BOOLEAN');
-  sql = sql.replace(/"TIMESTAMPTZ"/g, 'TIMESTAMPTZ');
-  sql = sql.replace(/"INTEGER"/g, 'INTEGER');
-  sql = sql.replace(/"SMALLINT"/g, 'SMALLINT');
-  sql = sql.replace(/"BIGINT"/g, 'BIGINT');
-  sql = sql.replace(/"TEXT"/g, 'TEXT');
-  sql = sql.replace(/"DOUBLE PRECISION"/g, 'DOUBLE PRECISION');
-  sql = sql.replace(/"BYTEA"/g, 'BYTEA');
-  sql = sql.replace(/"REAL"/g, 'REAL');
+  // Fix remaining SQL Server type names, and unquote quoted PG type names. Code only: a
+  // literal such as an EntityField row's `Type = 'nvarchar'` or a JSON `"UUID"` is data
+  // (issues #5838, #5567 item 3).
+  sql = TransformCodeOnly(sql, convertTypeNames);
 
   // Fix boolean comparisons: =(1) → =TRUE, =(0) → =FALSE in WHERE clauses.
   // The negative lookbehind keeps this from matching the `=` inside `>=`, `<=`
@@ -313,11 +293,12 @@ export function PostProcess(sql: string): string {
     'CREATE $1 IF NOT EXISTS '
   );
 
-  // Remove SQL Server IF EXISTS(...) BEGIN ... END blocks (pre-flight checks)
-  sql = sql.replace(
-    /IF\s+EXISTS\s*\([\s\S]*?\)\s*\n\s*BEGIN[\s\S]*?\bEND\s*;?/gi,
-    '-- SKIPPED: SQL Server IF EXISTS check'
-  );
+  // Remove SQL Server IF EXISTS(...) BEGIN ... END blocks (pre-flight checks).
+  // Only outside dollar-quoted regions, and the guard may not cross a `;`: the converter's own
+  // PL/pgSQL (`IF EXISTS (SELECT 1 FROM pg_proc …) THEN` inside a `DO $mj$` block) used to open a
+  // lazy match that ran on to the next T-SQL `) BEGIN … END` anywhere later in the file, deleting
+  // every statement between the two (issue #6097).
+  sql = stripTsqlIfExistsBlocks(sql);
 
   // Fix GRANT statements missing semicolons (only at end of line, no semicolons already)
   sql = sql.replace(/^(GRANT\s+[^\n;]+[^\s;])$/gm, '$1;');
@@ -456,6 +437,38 @@ function fixBackslashLines(sql: string): string {
   }
 
   return fixedLines.join('\n');
+}
+
+/**
+ * SQL Server type names → PostgreSQL (`nvarchar(MAX)` → TEXT, `int` → INTEGER, …), then the
+ * quoted PG type names unquoted. Applied to code segments only.
+ */
+function convertTypeNames(code: string): string {
+  // Fix remaining SQL Server type names used in procedure parameters
+  // NOTE: Type conversions must run BEFORE type unquoting so that
+  // e.g. "INT" → "INTEGER" gets cleaned up by the unquoting pass below.
+  code = code.replace(/\bnvarchar\s*\(\s*MAX\s*\)/gi, 'TEXT');
+  code = code.replace(/\bnvarchar\s*\(\s*(\d+)\s*\)/gi, 'VARCHAR($1)');
+  code = code.replace(/\bnvarchar\b/gi, 'TEXT');
+  code = code.replace(/\buniqueid(?:entifier)?\b/gi, 'UUID');
+  // int → INTEGER (standalone word only, avoid matching into "integer")
+  code = code.replace(/\bint\b(?!eger)/gi, 'INTEGER');
+  // varbinary → BYTEA
+  code = code.replace(/\bvarbinary\b/gi, 'BYTEA');
+
+  // Fix quoted type names — PG types are case-sensitive when quoted.
+  // Runs AFTER type conversions above so "INT"→"INTEGER" gets unquoted here.
+  code = code.replace(/"UUID"/g, 'UUID');
+  code = code.replace(/"BOOLEAN"/g, 'BOOLEAN');
+  code = code.replace(/"TIMESTAMPTZ"/g, 'TIMESTAMPTZ');
+  code = code.replace(/"INTEGER"/g, 'INTEGER');
+  code = code.replace(/"SMALLINT"/g, 'SMALLINT');
+  code = code.replace(/"BIGINT"/g, 'BIGINT');
+  code = code.replace(/"TEXT"/g, 'TEXT');
+  code = code.replace(/"DOUBLE PRECISION"/g, 'DOUBLE PRECISION');
+  code = code.replace(/"BYTEA"/g, 'BYTEA');
+  code = code.replace(/"REAL"/g, 'REAL');
+  return code;
 }
 
 /** Count net single quotes (excluding doubled '') */
@@ -684,6 +697,23 @@ function reconnectCteDml(sql: string): string {
     sql = before + edit.replacement + after;
   }
   return sql;
+}
+
+/**
+ * Replace each T-SQL `IF EXISTS (…)\nBEGIN … END` pre-flight block with a SKIPPED comment.
+ * A match that starts inside, or reaches into, a dollar-quoted region is PostgreSQL the converter
+ * wrote and is left alone; the guard itself stops at the first `;`.
+ */
+function stripTsqlIfExistsBlocks(sql: string): string {
+  const regions = findDollarQuotedRegions(sql);
+  return sql.replace(
+    /IF\s+EXISTS\s*\([^;]*?\)\s*\n\s*BEGIN[\s\S]*?\bEND\s*;?/gi,
+    (match: string, offset: number) => {
+      const end = offset + match.length;
+      const overlapsDollarBlock = regions.some(r => offset < r.end && end > r.start);
+      return overlapsDollarBlock ? match : '-- SKIPPED: SQL Server IF EXISTS check';
+    },
+  );
 }
 
 /** Find all dollar-quoted regions ($$...$$ or $tag$...$tag$) */

@@ -142,6 +142,19 @@ export const GAP_MARKER_BATCH_ERROR = '-- ERROR converting batch';
 export const GAP_MARKER_NEEDS_HAND_AUTHORING = '-- NEEDS HAND AUTHORING';
 
 /**
+ * ExecBlockRule: a DECLARE/SET/EXEC block (an mj-sync save) the rule could not convert. The
+ * source is written below it as comments, so the save is missing from the converted file
+ * (issue #6097).
+ */
+export const GAP_MARKER_SKIPPED_EXEC_BLOCK = '-- SKIPPED: EXEC block';
+
+/**
+ * BatchConverter: the output holds fewer converted saves than the mj-sync log's `-- Save …`
+ * markers announce, so some saves vanished without a marker of their own (issue #6097).
+ */
+export const GAP_MARKER_MISSING_SAVES = '-- MISSING SAVES';
+
+/**
  * Marker comments the converter writes into its own output at the points where it
  * KNOWINGLY could not produce real SQL. Single source of truth: every emitter writes
  * one of these strings and `convertFile`'s gap scan looks for exactly these, so an
@@ -154,6 +167,8 @@ export const CONVERSION_GAP_MARKERS = [
   GAP_MARKER_UNPARSED,
   GAP_MARKER_BATCH_ERROR,
   GAP_MARKER_NEEDS_HAND_AUTHORING,
+  GAP_MARKER_SKIPPED_EXEC_BLOCK,
+  GAP_MARKER_MISSING_SAVES,
 ] as const;
 
 /** Conversion statistics tracking */
