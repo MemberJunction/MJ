@@ -1199,6 +1199,59 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     }
 
     /**
+     * The model tag embeddings use, resolved the same way the index resolves it (see
+     * {@link resolveTagEmbeddingModel}): the index's model once it is built, else the platform's
+     * default local embedding model, the "Tag Semantic Matching" prompt's model, or the smallest
+     * embedding model. Null when none exists. `MJTagEntityServer` compares a saved tag's
+     * `EmbeddingModelID` with it, so a tag is only re-embedded when its vector came from another model.
+     */
+    public async ResolveTagEmbeddingModelID(contextUser: UserInfo): Promise<string | null> {
+        return (await this.tagEmbeddingModelFor(contextUser))?.ModelID ?? null;
+    }
+
+    /**
+     * Embeds one tag's text with the model the tag index uses, under the "Tag Semantic Matching"
+     * prompt, so a tag saved through the entity lands in the same vector space as the tags TagEngine
+     * embedded (#4922). Returns null when no embedding model resolves or the call fails.
+     *
+     * @param text The text to embed, as {@link buildTagEmbeddingText} builds it (`Name: Description`)
+     * @param contextUser The user the embedding run is recorded for
+     */
+    public async EmbedTagText(text: string, contextUser: UserInfo): Promise<{ Vector: number[]; ModelID: string } | null> {
+        const modelInfo = await this.tagEmbeddingModelFor(contextUser);
+        if (!modelInfo) {
+            return null;
+        }
+        try {
+            const result = await new AIEmbeddingRunner().RunEmbedding({
+                Texts: [text],
+                PromptID: this.resolveTagSemanticPromptID(),
+                ModelID: modelInfo.ModelID,
+                ContextUser: contextUser,
+                Description: 'Tag embedding for a saved tag'
+            });
+            const vector = result.Success ? result.Vectors[0] : undefined;
+            if (!vector || vector.length === 0) {
+                LogError(`TagEngine.EmbedTagText: no vector returned: ${result.ErrorMessage ?? 'unknown error'}`);
+                return null;
+            }
+            return { Vector: vector, ModelID: modelInfo.ModelID };
+        } catch (error) {
+            LogError(`TagEngine.EmbedTagText failed: ${error instanceof Error ? error.message : String(error)}`);
+            return null;
+        }
+    }
+
+    /** The index's model when it is built, else the model it would resolve now. */
+    private async tagEmbeddingModelFor(contextUser: UserInfo): Promise<EmbeddingModelInfo | null> {
+        if (this._tagEmbeddingModel) {
+            return this._tagEmbeddingModel;
+        }
+        await AIEngine.Instance.Config(false, contextUser);
+        return this.resolveTagEmbeddingModel();
+    }
+
+    /**
      * Remove a tag's embedding from the vector service (e.g., after deletion).
      * No-op if the vector service is not initialized.
      */
@@ -1213,8 +1266,8 @@ export class TagEngine extends BaseSingleton<TagEngine> {
 
     /**
      * The one model tag embeddings use: the platform's default local embedding model
-     * (`AIEngine.DefaultLocalEmbeddingModel`), which is also what `MJTagEntityServer` embeds a saved
-     * tag with, so the persisted vector and this index always agree. When no local embedding model
+     * (`AIEngine.DefaultLocalEmbeddingModel`). `MJTagEntityServer` embeds a saved tag through
+     * {@link EmbedTagText}, so the persisted vector and this index always agree. When no local embedding model
      * exists it falls back to the "Tag Semantic Matching" prompt's model, then the smallest
      * embedding model. Tag vectors, query vectors and new-tag vectors are all pinned to it, and its
      * ID is what gets persisted as `Tag.EmbeddingModelID`.
