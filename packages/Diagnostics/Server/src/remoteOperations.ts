@@ -44,7 +44,7 @@ import {
   ActiveDiagnosticSession
 } from './sessionManager.js';
 import { DiagnosticIntakeService } from './intakeService.js';
-import { EncryptDiagnosticBundle } from '@memberjunction/diagnostics';
+import { DiagnosticBundleData, DiagnosticReproInfo, EncryptDiagnosticBundle } from '@memberjunction/diagnostics';
 import { DIAGNOSTICS_SETTING_KEYS, DiagnosticsSettings } from './settings.js';
 import { MJ_VERSION } from './version.js';
 import { EndSessionRow, FindSession, NewDiagnosticSession, SaveNewSession } from './sessionStore.js';
@@ -418,6 +418,33 @@ export class DiagnosticsUploadClientCaptureServerOperation extends DiagnosticsUp
   }
 }
 
+/** The repro text fields a client may send with a bundle build. */
+const CLIENT_REPRO_TEXT_FIELDS = ['url', 'route', 'userComment', 'userNotes'] as const;
+
+/**
+ * The repro text from a build's `ClientBundleData`, such as the Submit note. Only the text fields of
+ * `repro` are read, so a client cannot add entries or breadcrumbs to a server-built bundle.
+ */
+function clientReproSeed(clientData: DiagnosticsBuildBundleInput['ClientBundleData']): Partial<DiagnosticBundleData> | undefined {
+  const repro = clientData?.['repro'];
+  if (typeof repro !== 'object' || repro === null || Array.isArray(repro)) {
+    return undefined;
+  }
+  const fields = repro as Record<string, unknown>;
+  const seed: DiagnosticReproInfo = { breadcrumbs: [] };
+  for (const key of CLIENT_REPRO_TEXT_FIELDS) {
+    const value = fields[key];
+    if (typeof value === 'string') {
+      seed[key] = value;
+    }
+  }
+  const steps = fields['ReproductionSteps'];
+  if (Array.isArray(steps)) {
+    seed.ReproductionSteps = steps.filter((step): step is string => typeof step === 'string');
+  }
+  return { repro: seed };
+}
+
 @RegisterClass(BaseRemotableOperation, 'Diagnostics.BuildBundle')
 export class DiagnosticsBuildBundleServerOperation extends DiagnosticsBuildBundleOperation {
   /**
@@ -483,7 +510,7 @@ export class DiagnosticsBuildBundleServerOperation extends DiagnosticsBuildBundl
       const assembled = await DiagnosticSessionManager.Instance.AssembleBundleDataFromChunks(
         input.SessionID,
         scrubLiterals,
-        undefined,
+        clientReproSeed(input.ClientBundleData),
         user,
         provider
       );

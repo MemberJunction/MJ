@@ -8,6 +8,7 @@ import {
     ScrubBundleData,
     ExportToPerfettoTrace,
     ExportToOtlpJson,
+    type DiagnosticBreadcrumb,
     type DiagnosticBundleData,
     type DiagnosticBundleManifest,
     type DiagnosticScrubberProfile,
@@ -77,9 +78,22 @@ export async function RescrubDiagnosticBundle(
 
 export interface TimelineRow {
     TimestampUnixMs: number;
-    Source: 'client-span' | 'server-span' | 'sql';
+    Source: 'client-span' | 'server-span' | 'sql' | 'breadcrumb';
     DurationMs: number;
     Label: string;
+}
+
+/** Milliseconds since the epoch for an ISO timestamp, or 0 when it does not parse. */
+function isoToUnixMs(timestamp: string): number {
+    const parsedMs = Date.parse(timestamp);
+    return Number.isNaN(parsedMs) ? 0 : parsedMs;
+}
+
+/** `[type] target (detail) on route` for a breadcrumb. The route is left out when it is the target. */
+function breadcrumbLabel(crumb: DiagnosticBreadcrumb): string {
+    const detail = crumb.detail ? ` (${crumb.detail})` : '';
+    const route = crumb.route && crumb.route !== crumb.target ? ` on ${crumb.route}` : '';
+    return `[${crumb.type ?? crumb.kind ?? 'step'}] ${crumb.target}${detail}${route}`;
 }
 
 export function BuildBundleTimeline(data: DiagnosticBundleData, limit = 50): TimelineRow[] {
@@ -102,12 +116,19 @@ export function BuildBundleTimeline(data: DiagnosticBundleData, limit = 50): Tim
         });
     }
     for (const q of data.serverSql) {
-        const parsedMs = Date.parse(q.timestamp);
         rows.push({
-            TimestampUnixMs: Number.isNaN(parsedMs) ? 0 : parsedMs,
+            TimestampUnixMs: isoToUnixMs(q.timestamp),
             Source: 'sql',
             DurationMs: q.durationMs,
             Label: q.sql,
+        });
+    }
+    for (const crumb of data.repro.breadcrumbs) {
+        rows.push({
+            TimestampUnixMs: isoToUnixMs(crumb.timestamp),
+            Source: 'breadcrumb',
+            DurationMs: 0,
+            Label: breadcrumbLabel(crumb),
         });
     }
 

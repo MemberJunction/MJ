@@ -2,7 +2,7 @@ import { Args, Command, Flags } from '@oclif/core';
 import { LoadAndVerifyDiagnosticBundle, BuildBundleTimeline } from '../../utils/diag-utils.js';
 
 export default class DiagTimeline extends Command {
-    static description = 'Print a merged chronological timeline of client spans, server spans, and SQL queries';
+    static description = 'Print a merged chronological timeline of client spans, server spans, SQL queries and breadcrumbs';
 
     static args = {
         file: Args.string({

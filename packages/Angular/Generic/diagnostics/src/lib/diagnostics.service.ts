@@ -18,6 +18,7 @@ import {
     DiagnosticsSendBundleOperation,
     DiagnosticsSendBundleInput,
     DiagnosticsSendBundleOutput,
+    DiagnosticsUploadClientCaptureInput,
 } from '@memberjunction/core-entities';
 import {
     BoundedRingBuffer,
@@ -113,6 +114,26 @@ export interface SubmitBundleToSupportResult {
     errorMessage?: string;
 }
 
+/** The client entries one upload sends. */
+interface ClientCapture {
+    logs: DiagnosticLogEntry[];
+    network: DiagnosticNetworkEntry[];
+    telemetry: DiagnosticTelemetryEntry[];
+    breadcrumbs: DiagnosticBreadcrumb[];
+}
+
+/** The upload fields that carry a client capture. */
+function captureUploadFields(
+    capture: ClientCapture,
+): Pick<DiagnosticsUploadClientCaptureInput, 'Repro' | 'ClientLogs' | 'ClientWaterfall' | 'ClientTelemetry'> {
+    return {
+        Repro: { breadcrumbs: capture.breadcrumbs },
+        ClientLogs: capture.logs as unknown as Array<Record<string, unknown>>,
+        ClientWaterfall: capture.network as unknown as Array<Record<string, unknown>>,
+        ClientTelemetry: capture.telemetry as unknown as Array<Record<string, unknown>>,
+    };
+}
+
 function tryInjectNgZone(): NgZone | null {
     try {
         return inject(NgZone, { optional: true });
@@ -175,6 +196,8 @@ export class MJDiagnosticsService {
     private pendingStop: Promise<void> | null = null;
     /** True from the start of `StartLiveRecording` until it ends, so a second call is refused. */
     private isStartingRecording = false;
+    /** The client entries each server session already holds, so a later upload to it sends only new ones. */
+    private readonly uploadedToSession = new Map<string, WeakSet<object>>();
 
     /** Provider for remote operations. Defaults to the global provider when not set. */
     public Provider: IMetadataProvider | null = null;
@@ -507,6 +530,31 @@ export class MJDiagnosticsService {
         this.RecordBreadcrumb(RouteBreadcrumb(url));
     }
 
+    /** The buffered entries that `sessionId` does not hold yet; every buffered entry when no session is given. */
+    private captureToUpload(sessionId: string | undefined): ClientCapture {
+        const held = sessionId ? this.uploadedToSession.get(sessionId) : undefined;
+        const unsent = <T extends object>(buffer: BoundedRingBuffer<T>): T[] =>
+            buffer.ToArray().filter((entry) => !held?.has(entry));
+        return {
+            logs: unsent(this.logBuffer),
+            network: unsent(this.networkBuffer),
+            telemetry: unsent(this.telemetryBuffer),
+            breadcrumbs: unsent(this.breadcrumbBuffer),
+        };
+    }
+
+    /** Records that `sessionId` now holds the entries of an upload. */
+    private markUploaded(sessionId: string, capture: ClientCapture): void {
+        let held = this.uploadedToSession.get(sessionId);
+        if (!held) {
+            held = new WeakSet<object>();
+            this.uploadedToSession.set(sessionId, held);
+        }
+        for (const entry of [...capture.logs, ...capture.network, ...capture.telemetry, ...capture.breadcrumbs]) {
+            held.add(entry);
+        }
+    }
+
     /**
      * Handles the server-sent `X-MJ-Diagnostic-Trigger: <sessionId>` header when an admin/server
      * Watch Session matches the current user or GraphQL operation. Automatically flushes the
@@ -520,6 +568,7 @@ export class MJDiagnosticsService {
         this.flushedTriggerSessions.add(trimmed);
         this.StartRecording(trimmed, 'Standard');
 
+        const capture = this.captureToUpload(trimmed);
         const uploadOp = new DiagnosticsUploadClientCaptureOperation();
         const result = await uploadOp.Execute({
             SessionID: trimmed,
@@ -531,11 +580,11 @@ export class MJDiagnosticsService {
                 browserUserAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'headless',
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             },
-            Repro: { breadcrumbs: this.breadcrumbBuffer.ToArray() },
-            ClientLogs: this.logBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
-            ClientWaterfall: this.networkBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
-            ClientTelemetry: this.telemetryBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
+            ...captureUploadFields(capture),
         }, { provider: this.ProviderToUse });
+        if (result.Success) {
+            this.markUploaded(trimmed, capture);
+        }
         return result.Success;
     }
 
@@ -553,6 +602,8 @@ export class MJDiagnosticsService {
         const provider = this.ProviderToUse;
         await this.pendingStop;
         const activeSessionId = this.submitSessionId ?? undefined;
+        const capture = this.captureToUpload(activeSessionId);
+        const userComment = options.note ? ScrubString(options.note, { scrubberProfile }) : undefined;
 
         const uploadOp = new DiagnosticsUploadClientCaptureOperation();
         const uploadRes = await uploadOp.Execute({
@@ -565,13 +616,7 @@ export class MJDiagnosticsService {
                 browserUserAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'headless',
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
             },
-            Repro: {
-                userComment: options.note ? ScrubString(options.note, { scrubberProfile }) : undefined,
-                breadcrumbs: this.breadcrumbBuffer.ToArray(),
-            },
-            ClientLogs: this.logBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
-            ClientWaterfall: this.networkBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
-            ClientTelemetry: this.telemetryBuffer.ToArray() as unknown as Array<Record<string, unknown>>,
+            ...captureUploadFields(capture),
         }, { provider });
 
         if (!uploadRes.Success || !uploadRes.Output) {
@@ -579,6 +624,7 @@ export class MJDiagnosticsService {
         }
 
         const resolvedSessionId = uploadRes.Output.SessionID;
+        this.markUploaded(resolvedSessionId, capture);
         this.flushedTriggerSessions.add(resolvedSessionId);
         const buildOp = new DiagnosticsBuildBundleOperation();
         const buildRes = await buildOp.Execute({
@@ -586,6 +632,7 @@ export class MJDiagnosticsService {
             Name: options.ticketNumber ? `Support Bundle (${options.ticketNumber})` : 'Support Diagnostic Bundle',
             Description: options.note,
             ScrubLiterals: scrubLiterals,
+            ClientBundleData: userComment ? { repro: { userComment } } : undefined,
         }, { provider });
 
         if (!buildRes.Success || !buildRes.Output || buildRes.Output.Status !== 'Ready') {
@@ -766,6 +813,7 @@ export class MJDiagnosticsService {
         this.telemetryBuffer.Clear();
         this.networkBuffer.Clear();
         this.breadcrumbBuffer.Clear();
+        this.uploadedToSession.clear();
         this.flushedTriggerSessions.clear();
     }
 

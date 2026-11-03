@@ -183,6 +183,25 @@ describe('MJDiagnosticsService', () => {
         expect(result.findingsCount).toBe(3);
     });
 
+    it('sends the Submit note to the server-built bundle as its repro comment', async () => {
+        vi.spyOn(DiagnosticsUploadClientCaptureOperation.prototype, 'Execute').mockResolvedValue({
+            Success: true,
+            Output: { SessionID: 'sess-note', ChunksWritten: 1, TotalBytesWritten: 10 },
+        });
+        const buildSpy = vi.spyOn(DiagnosticsBuildBundleOperation.prototype, 'Execute').mockResolvedValue({
+            Success: true,
+            Output: { BundleID: 'bundle-note', Status: 'Ready', SizeBytes: 1, SHA256: 'x', FindingsCount: 0 },
+        });
+        vi.spyOn(DiagnosticsSendBundleOperation.prototype, 'Execute').mockResolvedValue({
+            Success: true,
+            Output: { BundleID: 'bundle-note', Status: 'Sent', Destination: 'MJC' },
+        });
+
+        await service.SubmitBundleToSupport({ note: 'Dashboard slow load' });
+
+        expect(buildSpy.mock.calls[0][0].ClientBundleData).toEqual({ repro: { userComment: 'Dashboard slow load' } });
+    });
+
     describe('server bundle download', () => {
         it('mints a fresh single-use link for the bundle and starts the download from it', async () => {
             const previewSpy = vi.spyOn(DiagnosticsGetBundlePreviewOperation.prototype, 'Execute').mockResolvedValue({
@@ -435,6 +454,60 @@ describe('MJDiagnosticsService', () => {
             await service.SubmitBundleToSupport();
 
             expect(uploadSpy.mock.calls.map((c) => c[0].SessionID)).toEqual(['srv-rec', 'srv-rec']);
+        });
+
+        describe('uploads to a session the server already holds', () => {
+            const logEntry = (message: string) => ({ timestamp: '2026-11-02T12:00:00.000Z', severity: 'info' as const, source: 'client' as const, message });
+            let uploadSpy: ReturnType<typeof vi.spyOn<DiagnosticsUploadClientCaptureOperation, 'Execute'>>;
+
+            beforeEach(() => {
+                uploadSpy = vi.spyOn(DiagnosticsUploadClientCaptureOperation.prototype, 'Execute').mockImplementation(async (input) => ({
+                    Success: true,
+                    Output: { SessionID: input.SessionID ?? 'srv-fresh', ChunksWritten: 1, TotalBytesWritten: 10 },
+                }));
+                vi.spyOn(DiagnosticsBuildBundleOperation.prototype, 'Execute').mockResolvedValue({
+                    Success: true,
+                    Output: { BundleID: 'b', Status: 'Ready', SizeBytes: 1, SHA256: 'x', FindingsCount: 0 },
+                });
+                vi.spyOn(DiagnosticsSendBundleOperation.prototype, 'Execute').mockResolvedValue({
+                    Success: true,
+                    Output: { BundleID: 'b', Status: 'Sent', Destination: 'MJC', SentAt: '' },
+                });
+            });
+
+            it('a repeat Submit sends only what was recorded since the last upload', async () => {
+                const first = logEntry('before the first Submit');
+                const second = logEntry('between the Submits');
+                service.StartRecording('srv-rec', 'FullRaw');
+                service.RecordLogEntry(first);
+                service.RecordRouteBreadcrumb('/app/one');
+                service.StopAndPackageRecording();
+
+                await service.SubmitBundleToSupport();
+                service.RecordLogEntry(second);
+                service.RecordRouteBreadcrumb('/app/two');
+                await service.SubmitBundleToSupport();
+
+                const [firstUpload, secondUpload] = uploadSpy.mock.calls.map((c) => c[0]);
+                expect(firstUpload.ClientLogs).toEqual([first]);
+                expect(secondUpload.ClientLogs).toEqual([second]);
+                expect(secondUpload.Repro?.['breadcrumbs']).toEqual([expect.objectContaining({ target: '/app/two' })]);
+            });
+
+            it('a Submit after a server trigger upload sends only what the trigger did not', async () => {
+                const early = logEntry('before the trigger');
+                const late = logEntry('after the trigger');
+                service.RecordLogEntry(early);
+                await service.HandleServerTriggerHeader('watch-1');
+                service.RecordLogEntry(late);
+
+                await service.SubmitBundleToSupport();
+
+                expect(uploadSpy.mock.calls.map((c) => [c[0].SessionID, c[0].ClientLogs])).toEqual([
+                    ['watch-1', [early]],
+                    ['watch-1', [late]],
+                ]);
+            });
         });
     });
     describe('recording scope and telemetry', () => {

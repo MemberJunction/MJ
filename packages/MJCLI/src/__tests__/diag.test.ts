@@ -123,4 +123,44 @@ describe('mj diag CLI utilities', () => {
 
         fs.rmSync(tmpDir, { recursive: true, force: true });
     });
+
+    it('puts breadcrumbs on the timeline in time order, with what happened and the page it was on', () => {
+        const data: DiagnosticBundleData = {
+            environment: { mjVersion: '6.2.0' },
+            repro: {
+                breadcrumbs: [
+                    { timestamp: '2023-11-14T22:13:20.050Z', type: 'click', target: 'button#save "Save"', route: '/app/home' },
+                    { timestamp: '2023-11-14T22:13:20.400Z', type: 'error', target: 'Save timed out', detail: 'Unhandled promise rejection' },
+                ],
+            },
+            clientLogs: [],
+            clientWaterfall: [
+                {
+                    traceId: '0123456789abcdef0123456789abcdef',
+                    spanId: '0123456789abcdef',
+                    operationName: 'RunViewUsers',
+                    operationKind: 'query',
+                    startTimeUnixMs: 1_700_000_000_100,
+                    durationMs: 150,
+                    status: 'ok',
+                    retryCount: 0,
+                    requestBytes: 128,
+                    responseBytes: 512,
+                },
+            ],
+            clientTelemetry: [],
+            serverTraces: [],
+            serverSql: [],
+            serverLogs: [],
+            findings: [],
+        };
+
+        const rows = BuildBundleTimeline(data);
+
+        expect(rows.map((r) => [r.Source, r.DurationMs, r.Label])).toEqual([
+            ['breadcrumb', 0, '[click] button#save "Save" on /app/home'],
+            ['client-span', 150, '[query] RunViewUsers'],
+            ['breadcrumb', 0, '[error] Save timed out (Unhandled promise rejection)'],
+        ]);
+    });
 });

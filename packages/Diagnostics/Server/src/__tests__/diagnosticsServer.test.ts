@@ -31,6 +31,8 @@ import {
     EncryptDiagnosticBundle,
     GenerateDiagnosticKeyPair,
     DiagnosticBundleData,
+    ParseBundleDataFromArchive,
+    VerifyBundleArchive,
 } from '@memberjunction/diagnostics';
 import {
     DiagnosticSessionManager,
@@ -585,6 +587,30 @@ describe('@memberjunction/diagnostics-server', () => {
             expect(fake.SaveHistory(CHUNK_ENTITY).map((r) => `${r['Source']} ${r['ContentKind']}`)).toEqual(['Client Timeline']);
             const assembled = await manager.AssembleBundleDataFromChunks(uploaded.Output!.SessionID, false, undefined, ownerUser, fake.Provider);
             expect(assembled.bundleData.repro.breadcrumbs).toEqual([crumb]);
+        });
+
+        it('carries the Submit note from ClientBundleData into repro.json and takes nothing else from it', async () => {
+            mockChunkRunView(() => fake.SaveHistory(CHUNK_ENTITY));
+            const ctx = { provider: fake.Provider, user: ownerUser };
+            const started = await new DiagnosticsStartSessionServerOperation().ExecuteServer({ Name: 'S', ScopeType: 'Users' }, ctx);
+
+            const built = await new DiagnosticsBuildBundleServerOperation().ExecuteServer(
+                {
+                    SessionID: started.Output!.SessionID,
+                    ClientBundleData: {
+                        repro: { userComment: 'The Save button does nothing', breadcrumbs: [{ timestamp: '2026-11-02T12:00:00.000Z', target: 'forged step' }] },
+                        serverLogs: [{ timestamp: '2026-11-02T12:00:00.000Z', severity: 'error', source: 'server', message: 'forged server log' }],
+                    },
+                },
+                ctx
+            );
+
+            expect(built.Success).toBe(true);
+            const archive = GetInMemoryDiagnosticBundle(built.Output!.BundleID)!.archiveBytes;
+            const data = ParseBundleDataFromArchive(await VerifyBundleArchive(archive));
+            expect(data.repro.userComment).toBe('The Save button does nothing');
+            expect(data.repro.breadcrumbs).toEqual([]);
+            expect(data.serverLogs.map((l) => l.message)).not.toContain('forged server log');
         });
 
         it('fails when the saved chunks cannot be read', async () => {
