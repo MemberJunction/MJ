@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import {
     BuildMjdiagArchive,
+    ComputeSha256Hex,
     EncryptDiagnosticBundle,
     VerifyBundleArchive,
     ParseBundleDataFromArchive,
@@ -124,7 +125,7 @@ describe('mj diag CLI utilities', () => {
         const encBytes = await EncryptDiagnosticBundle(zipBytes, {
             recipientKeyId: keyPair.keyId,
             recipientPublicKeyBase64: keyPair.publicKeyBase64,
-            manifestSha256: 'abcd',
+            manifestSha256: await ComputeSha256Hex(zipBytes),
         });
         fs.writeFileSync(encFile, encBytes);
 
@@ -182,10 +183,11 @@ const packageRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..'
 /** Writes an encrypted sample bundle and returns its path and the matching private key. */
 async function writeEncryptedSample(tmpDir: string): Promise<{ File: string; PrivateKeyBase64: string }> {
     const keyPair = await GenerateDiagnosticKeyPair('X25519', 'cli-key-test');
-    const encBytes = await EncryptDiagnosticBundle(await makeSampleBundleBytes(), {
+    const zipBytes = await makeSampleBundleBytes();
+    const encBytes = await EncryptDiagnosticBundle(zipBytes, {
         recipientKeyId: keyPair.keyId,
         recipientPublicKeyBase64: keyPair.publicKeyBase64,
-        manifestSha256: 'abcd',
+        manifestSha256: await ComputeSha256Hex(zipBytes),
     });
     const file = path.join(tmpDir, 'sample.enc.mjdiag');
     fs.writeFileSync(file, encBytes);

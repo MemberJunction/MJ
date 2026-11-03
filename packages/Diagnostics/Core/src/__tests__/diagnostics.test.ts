@@ -26,7 +26,8 @@ import {
   BaseDiagnosticContributor,
   DiagnosticContributorRegistry,
   DiagnosticBundleData,
-  DiagnosticContributionContext
+  DiagnosticContributionContext,
+  ComputeSha256Hex
 } from '../index.js';
 
 function createSampleBundleData(): DiagnosticBundleData {
@@ -486,7 +487,7 @@ describe('Hybrid Envelope Cryptography (X25519 + HKDF-SHA256 + AES-256-GCM + Ed2
       senderSigningPrivateKeyBase64: senderKey.privateKeyBase64,
       senderKeyId: senderKey.keyId,
       senderEnvironmentId: 'env-prod-1',
-      manifestSha256: verifiedArchive.manifest!.files['environment.json'].sha256
+      manifestSha256: await ComputeSha256Hex(archiveBytes)
     });
 
     // Fast header inspection

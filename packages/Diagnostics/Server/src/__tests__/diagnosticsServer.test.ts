@@ -461,7 +461,7 @@ describe('@memberjunction/diagnostics-server', () => {
             expect(assembled.bundleData.serverLogs.length).toBe(1);
             expect(assembled.bundleData.serverSql.length).toBe(1);
             expect(assembled.bundleData.clientLogs.length).toBe(1);
-            expect(assembled.bundleData.serverSql[0].sql).toContain('Secret = ?');
+            expect(assembled.bundleData.serverSql[0].sql).toContain('Secret = [REDACTED_SECRET]');
             expect(assembled.bundleData.findings.some((f) => f.category === 'slow_sql')).toBe(true);
         });
     });
