@@ -28,6 +28,8 @@ class ToolbarStub {
     @Input() TagCount = 0;
     @Input() LinksOpen = false;
     @Input() LinkCount = 0;
+    @Input() CommentsOpen = false;
+    @Input() CommentCount = 0;
     @Input() ConflictCount = 0;
     @Input() AttachmentCount = 0;
     @Input() AttachmentsAvailable = false;
@@ -108,6 +110,15 @@ class RecordLinksStub {
     @Input() Mode = 'drawer';
     @Input() IsOpen = false;
 }
+@Component({ standalone: true, selector: 'mj-record-comments', template: '' })
+class RecordCommentsStub {
+    @Input() Provider: unknown;
+    @Input() Record: unknown;
+    @Input() Mode = 'drawer';
+    @Input() IsOpen = false;
+    @Input() Coordinator: unknown;
+    @Input() WidthPx = 0;
+}
 @Component({ standalone: true, selector: 'mj-record-attachments', template: '' })
 class RecordAttachmentsStub {
     @Input() Record: unknown;
@@ -137,6 +148,7 @@ const CONTAINER_CHILD_STUBS = [
     RecordChangesStub,
     RecordTagsStub,
     RecordLinksStub,
+    RecordCommentsStub,
     RecordAttachmentsStub,
     ListMgmtStub,
     FormContributionsStub

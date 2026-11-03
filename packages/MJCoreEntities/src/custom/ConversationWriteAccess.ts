@@ -1,6 +1,7 @@
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJConversationEntity, MJProjectEntity, MJResourcePermissionEntity } from '../generated/entity_subclasses';
+import { IsConversationHiddenByFieldSecurity, UserCanReadLinkedRecord } from './AnchoredConversationSecurity';
 import { ResourcePermissionEngine } from './ResourcePermissions/ResourcePermissionEngine';
 
 /** Resource type ID for conversations in the resource permission system. */
@@ -41,11 +42,16 @@ export interface ConversationWriteDecision {
 }
 
 /**
- * Whether a user may write rows that belong to a conversation: the owner, a user with an
- * explicit `Edit`/`Owner` grant on the conversation, or (when {@link IsInheritingFolderAccess}
- * is true) a user with an `Edit`/`Owner` grant on the conversation's folder (`MJ: Projects`).
- * Conversations inside a Public folder (`Project.OwnerUserID IS NULL`) or a Shared folder with
- * `View` access grant View-only access unless an explicit `Edit`/`Owner` grant says otherwise.
+ * Whether a user may write rows that belong to a conversation:
+ * - For anchored record/artifact comment threads (`AnchorType != null` with `LinkedEntityID` and `LinkedRecordID`),
+ *   any user who can read the linked record (including RLS) and is not denied read access on the anchored field
+ *   or `restrictedFields` (FLS) may post and reply in the thread.
+ * - For standard chat conversations (`AnchorType == null`), the conversation owner, a user with an
+ *   explicit `Edit`/`Owner` grant on the conversation, or (when {@link IsInheritingFolderAccess}
+ *   is true) a user with an `Edit`/`Owner` grant on the conversation's folder (`MJ: Projects`).
+ *   Conversations inside a Public folder (`Project.OwnerUserID IS NULL`) or a Shared folder with
+ *   `View` access grant View-only access unless an explicit `Edit`/`Owner` grant says otherwise.
+ *
  * Server-side only; a non-database provider trusts the enforcement that already ran upstream.
  */
 export async function UserMayWriteConversation(
@@ -60,7 +66,68 @@ export async function UserMayWriteConversation(
     if (!(await conversation.Load(conversationId))) {
         return { Allowed: true, Reason: null, IsOwner: false, Loaded: false };
     }
-    if (conversation.UserID && UUIDsEqual(conversation.UserID, user.ID)) {
+    const isOwner = Boolean(conversation.UserID && UUIDsEqual(conversation.UserID, user.ID));
+
+    if (conversation.AnchorType != null && conversation.LinkedEntityID && conversation.LinkedRecordID) {
+        const entityInfo =
+            (typeof provider.EntityByID === 'function'
+                ? provider.EntityByID(conversation.LinkedEntityID)
+                : undefined) ??
+            provider.Entities?.find((e) => UUIDsEqual(e.ID, conversation.LinkedEntityID)) ??
+            null;
+        if (entityInfo) {
+            if (entityInfo.AllowRecordComments === false) {
+                return {
+                    Allowed: false,
+                    Reason: `Record commenting is disabled for ${entityInfo.DisplayNameOrName}.`,
+                    IsOwner: isOwner,
+                    Loaded: true
+                };
+            }
+            if (typeof entityInfo.CanUserComment === 'function' && !entityInfo.CanUserComment(user)) {
+                return {
+                    Allowed: false,
+                    Reason: `You do not have permission to post comments on ${entityInfo.DisplayNameOrName} records.`,
+                    IsOwner: isOwner,
+                    Loaded: true
+                };
+            }
+        }
+
+        const recordAccess = await UserCanReadLinkedRecord(
+            provider,
+            user,
+            conversation.LinkedEntityID,
+            conversation.LinkedRecordID
+        );
+        if (!recordAccess.Allowed || !recordAccess.EntityInfo) {
+            return {
+                Allowed: false,
+                Reason: recordAccess.Reason ?? 'You do not have access to the linked record.',
+                IsOwner: isOwner,
+                Loaded: true
+            };
+        }
+        if (
+            IsConversationHiddenByFieldSecurity(
+                recordAccess.EntityInfo,
+                user,
+                conversation.AnchorType,
+                conversation.AnchorKey,
+                conversation.AnchorMetadataObject ?? conversation.AnchorMetadata
+            )
+        ) {
+            return {
+                Allowed: false,
+                Reason: 'You do not have permission to access the field referenced by this comment thread.',
+                IsOwner: isOwner,
+                Loaded: true
+            };
+        }
+        return { Allowed: true, Reason: null, IsOwner: isOwner, Loaded: true };
+    }
+
+    if (isOwner) {
         return { Allowed: true, Reason: null, IsOwner: true, Loaded: true };
     }
     const engine = ResourcePermissionEngine.GetProviderInstance<ResourcePermissionEngine>(provider, ResourcePermissionEngine) as ResourcePermissionEngine;

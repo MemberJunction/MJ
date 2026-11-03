@@ -554,14 +554,14 @@ describe('ConversationEngine', () => {
             runViewHook.firstSeen = false;
         });
 
-        it('filters to owned and shared, unarchived, Global/Both conversations in the environment', async () => {
+        it('filters to owned and shared, unarchived, unanchored, unlinked, Global/Both conversations in the environment', async () => {
             shareConversations('conv-s1');
             runViewResultQueue.push({ Success: true, Results: [] });
             await engine.LoadConversations('env-1', contextUser, true);
 
             const params = runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Conversations').at(-1)!;
             expect(params['ExtraFilter']).toBe(
-                "EnvironmentID='env-1' AND (UserID='user-1' OR ID IN ('conv-s1')) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both')"
+                "EnvironmentID='env-1' AND (UserID='user-1' OR ID IN ('conv-s1')) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND LinkedEntityID IS NULL"
             );
         });
     });
@@ -576,7 +576,7 @@ describe('ConversationEngine', () => {
             const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser);
 
             expect(filter).toBe(
-                "EnvironmentID='env-1' AND (UserID='user-1' OR ID IN ('conv-s1','conv-s2')) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both')"
+                "EnvironmentID='env-1' AND (UserID='user-1' OR ID IN ('conv-s1','conv-s2')) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND LinkedEntityID IS NULL"
             );
         });
 
@@ -586,7 +586,7 @@ describe('ConversationEngine', () => {
             const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser);
 
             expect(filter).toBe(
-                "EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both')"
+                "EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND LinkedEntityID IS NULL"
             );
         });
 
@@ -595,7 +595,23 @@ describe('ConversationEngine', () => {
 
             const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser, { includeApplicationScoped: true });
 
-            expect(filter).toBe("EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0)");
+            expect(filter).toBe("EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND AnchorType IS NULL AND LinkedEntityID IS NULL");
+        });
+
+        it('includes anchored conversations only when asked to', async () => {
+            shareConversations();
+
+            const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser, { includeAnchored: true });
+
+            expect(filter).toBe("EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND LinkedEntityID IS NULL");
+        });
+
+        it('includes record-linked conversations only when asked to', async () => {
+            shareConversations();
+
+            const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser, { includeRecordLinked: true });
+
+            expect(filter).toBe("EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL");
         });
 
         it('asks the permission engine for the calling user, not a cached one', async () => {
@@ -625,6 +641,43 @@ describe('ConversationEngine', () => {
             expect(result).toBeDefined();
             expect(mockConversationEntity.Save).toHaveBeenCalled();
             expect(engine.Conversations).toHaveLength(1);
+        });
+
+        it('does not prepend record-linked conversations to the main chat list and loads them via LoadRecordConversations', async () => {
+            mockConversationEntity.Save.mockResolvedValue(true);
+
+            const result = await engine.CreateConversation(
+                'Record AI Chat',
+                'env-1',
+                contextUser,
+                undefined,
+                undefined,
+                {
+                    linkedEntityId: 'E0000001-0000-0000-0000-000000000001',
+                    linkedRecordId: 'R0000001-0000-0000-0000-000000000001'
+                }
+            );
+
+            expect(result.LinkedEntityID).toBe('E0000001-0000-0000-0000-000000000001');
+            expect(result.LinkedRecordID).toBe('R0000001-0000-0000-0000-000000000001');
+            expect(engine.Conversations).toHaveLength(0);
+            (mockConversationEntity as Record<string, unknown>).LinkedEntityID = null;
+            (mockConversationEntity as Record<string, unknown>).LinkedRecordID = null;
+
+            runViewResultQueue.push({
+                Success: true,
+                Results: [createMockConversation({ ID: 'rec-conv-1' })]
+            });
+            const recordConvos = await engine.LoadRecordConversations(
+                'E0000001-0000-0000-0000-000000000001',
+                'R0000001-0000-0000-0000-000000000001',
+                contextUser,
+                'env-1'
+            );
+            expect(recordConvos).toHaveLength(1);
+            const lastParams = runViewParamsLog.at(-1)!;
+            expect(lastParams['ExtraFilter']).toContain("LinkedEntityID='E0000001-0000-0000-0000-000000000001'");
+            expect(lastParams['ExtraFilter']).toContain("AnchorType IS NULL");
         });
 
         it('should throw when save fails', async () => {
@@ -3033,7 +3086,7 @@ describe('ConversationEngine', () => {
 
             const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser);
             expect(filter).toBe(
-                `EnvironmentID='env-1' AND (UserID='user-1' OR (ProjectID IN ('proj-shared-1') AND (AdditionalData LIKE '%"inheritFolderAccess":true%' OR AdditionalData LIKE '%"inheritFolderAccess": true%'))) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both')`
+                `EnvironmentID='env-1' AND (UserID='user-1' OR (ProjectID IN ('proj-shared-1') AND (AdditionalData LIKE '%"inheritFolderAccess":true%' OR AdditionalData LIKE '%"inheritFolderAccess": true%'))) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both') AND AnchorType IS NULL AND LinkedEntityID IS NULL`
             );
         });
 
