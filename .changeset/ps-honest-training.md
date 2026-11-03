@@ -11,6 +11,8 @@
 "@memberjunction/storage": minor
 "@memberjunction/global": minor
 "@memberjunction/ng-artifacts": minor
+"@memberjunction/ng-test-utils": minor
+"@memberjunction/ng-ui-components": minor
 "@memberjunction/ng-bootstrap": minor
 "@memberjunction/ng-bootstrap-lite": minor
 "@memberjunction/ng-core-entity-forms": minor
