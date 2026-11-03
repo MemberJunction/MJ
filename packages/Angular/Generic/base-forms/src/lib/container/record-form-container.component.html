@@ -40,6 +40,7 @@
   [ChromeLayout]="ChromeLayout"
   [Variants]="EffectiveVariants"
   [CurrentVariantID]="EffectiveCurrentVariantID"
+  [FormModeSwitch]="EffectiveFormModeSwitch"
   [RegisteredItems]="EffectiveRegisteredToolbarItems"
   [ItemOverrides]="EffectiveToolbarItemOverrides"
   [FormComponent]="fc"
@@ -229,12 +230,50 @@
          [class.mj-forms-layout--more]="IsChromeMoreActive">
       @if (ShowChromeRail) {
         <nav class="mj-forms-chrome-rail"
-             [class.is-collapsed]="ChromeRailCollapsed"
+             [class.is-collapsed]="!IsPhoneRail && ChromeRailCollapsed"
              [class.is-resizing]="RailResizing"
-             [style.width.px]="ChromeRailCollapsed ? null : ChromeRailWidthPx"
-             [attr.aria-expanded]="!ChromeRailCollapsed"
+             [style.width.px]="IsPhoneRail || ChromeRailCollapsed ? null : ChromeRailWidthPx"
+             [attr.aria-expanded]="IsPhoneRail ? null : !ChromeRailCollapsed"
              aria-label="Form sections">
-          @if (ChromeRailCollapsed) {
+          @if (IsPhoneRail) {
+            <button type="button"
+                    class="mj-forms-section-picker"
+                    aria-haspopup="dialog"
+                    [attr.aria-label]="'Change section — ' + ChromeActiveTitle"
+                    (click)="OpenSectionSheet()">
+              <i [class]="ChromeActiveIcon" aria-hidden="true"></i>
+              <span class="mj-forms-section-picker-title">{{ ChromeActiveTitle }}</span>
+              @if (ChromeActiveGroup; as activeGroup) {
+                @let activeIndicators = ChromeGroupIndicators(activeGroup);
+                @if (activeIndicators.DirtyCount > 0) {
+                  <span class="mj-forms-chrome-rail-dirty"
+                        role="img"
+                        [title]="RailDirtyTitle(activeIndicators.DirtyCount, activeGroup.Title)"
+                        [attr.aria-label]="RailDirtyTitle(activeIndicators.DirtyCount, activeGroup.Title)"></span>
+                }
+                @if (activeIndicators.ErrorCount > 0) {
+                  <span class="mj-forms-chrome-rail-error"
+                        role="img"
+                        [title]="RailErrorTitle(activeIndicators.ErrorCount, activeGroup.Title)"
+                        [attr.aria-label]="RailErrorTitle(activeIndicators.ErrorCount, activeGroup.Title)">
+                    <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>{{ activeIndicators.ErrorCount }}
+                  </span>
+                } @else if (activeIndicators.WarningCount > 0) {
+                  <span class="mj-forms-chrome-rail-warning"
+                        role="img"
+                        [title]="RailWarningTitle(activeIndicators.WarningCount, activeGroup.Title)"
+                        [attr.aria-label]="RailWarningTitle(activeIndicators.WarningCount, activeGroup.Title)">
+                    <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>{{ activeIndicators.WarningCount }}
+                  </span>
+                }
+                @let activeRowCount = ChromeGroupRowCount(activeGroup);
+                @if (activeRowCount != null && activeRowCount > 0) {
+                  <span class="mj-forms-chrome-rail-count">{{ activeRowCount }}</span>
+                }
+              }
+              <i class="fa-solid fa-chevron-down mj-forms-section-picker-chevron" aria-hidden="true"></i>
+            </button>
+          } @else if (ChromeRailCollapsed) {
             <button type="button"
                     class="mj-forms-chrome-rail-spine"
                     (click)="OnChromeRailExpand()"
@@ -478,6 +517,66 @@
           </div>
           }
         </nav>
+        @if (IsPhoneRail) {
+          <!-- Phone: all sections (first-class then More children) in one vertical, searchable sheet. -->
+          <mj-bottom-sheet [Visible]="SectionSheetOpen"
+                           (VisibleChange)="OnSectionSheetVisibleChange($event)"
+                           Title="Sections">
+            <div class="mj-forms-section-sheet">
+              <input type="text"
+                     class="mj-input mj-forms-section-sheet-search"
+                     [value]="EffectiveSearchFilter"
+                     (input)="OnSectionSheetSearch($event)"
+                     placeholder="Search sections..."
+                     aria-label="Search sections">
+              <div class="mj-forms-section-sheet-list" role="list">
+                @for (group of ChromeFirstClassGroups; track group.Key) {
+                  <ng-container *ngTemplateOutlet="sectionSheetRow; context: { $implicit: group }"></ng-container>
+                }
+                @if (ChromeMoreFolder; as more) {
+                  <div class="mj-forms-section-sheet-heading">{{ more.Title }}</div>
+                  @for (child of ChromeMoreItems; track child.Key) {
+                    <ng-container *ngTemplateOutlet="sectionSheetRow; context: { $implicit: child }"></ng-container>
+                  }
+                }
+                @if (ChromeFirstClassGroups.length === 0 && ChromeMoreItems.length === 0) {
+                  <div class="mj-forms-section-sheet-empty">No sections match.</div>
+                }
+              </div>
+            </div>
+            <ng-template #sectionSheetRow let-group>
+              @let sheetIndicators = ChromeGroupIndicators(group);
+              <button type="button"
+                      class="mj-forms-section-sheet-item"
+                      role="listitem"
+                      [class.is-active]="ChromeActiveGroupKey === group.Key"
+                      [attr.aria-current]="ChromeActiveGroupKey === group.Key ? 'page' : null"
+                      (click)="OnSectionSheetSelect(group.Key)">
+                <i [class]="group.Icon" aria-hidden="true"></i>
+                <span class="mj-forms-section-sheet-label">{{ group.Title }}</span>
+                @if (sheetIndicators.ErrorCount > 0) {
+                  <span class="mj-forms-chrome-rail-error" role="img"
+                        [attr.aria-label]="RailErrorTitle(sheetIndicators.ErrorCount, group.Title)">
+                    <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>{{ sheetIndicators.ErrorCount }}
+                  </span>
+                } @else if (sheetIndicators.WarningCount > 0) {
+                  <span class="mj-forms-chrome-rail-warning" role="img"
+                        [attr.aria-label]="RailWarningTitle(sheetIndicators.WarningCount, group.Title)">
+                    <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>{{ sheetIndicators.WarningCount }}
+                  </span>
+                }
+                @if (sheetIndicators.DirtyCount > 0) {
+                  <span class="mj-forms-chrome-rail-dirty" role="img"
+                        [attr.aria-label]="RailDirtyTitle(sheetIndicators.DirtyCount, group.Title)"></span>
+                }
+                @let sheetCount = ChromeGroupRowCount(group);
+                @if (sheetCount != null && sheetCount > 0) {
+                  <span class="mj-forms-chrome-rail-count">{{ sheetCount }}</span>
+                }
+              </button>
+            </ng-template>
+          </mj-bottom-sheet>
+        }
       }
       <!-- All panels in a single flex container — CSS order drives sequencing -->
       <div class="mj-forms-all-panels">
