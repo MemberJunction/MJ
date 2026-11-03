@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -117,6 +117,67 @@ describe('LocalFileSystemStorage', () => {
     await symlink(join(root, 'real.txt'), join(root, 'alias.txt'));
     await expect(store.GetObject({ fullPath: 'alias.txt' })).rejects.toMatchObject({ Reason: 'SymbolicLink' });
     expect((await store.ListObjects('')).objects.map((o) => o.name)).toEqual(['real.txt']);
+  });
+
+  describe('a symlink inside the root that points inside it', () => {
+    /** `alias.txt` → `real.txt` and `alias-dir/` → `real-dir/`, both inside the root. */
+    beforeEach(async () => {
+      await store.PutObject('real.txt', Buffer.from('real'));
+      await store.CreateDirectory('real-dir/');
+      await symlink(join(root, 'real.txt'), join(root, 'alias.txt'));
+      await symlink(join(root, 'real-dir'), join(root, 'alias-dir'));
+    });
+    const stillALink = async (name: string): Promise<boolean> => (await lstat(join(root, name))).isSymbolicLink();
+
+    it('is no object and no directory for ObjectExists and DirectoryExists', async () => {
+      expect(await store.ObjectExists('alias.txt')).toBe(false);
+      expect(await store.DirectoryExists('alias-dir')).toBe(false);
+      expect(await store.ObjectExists('real.txt')).toBe(true);
+      expect(await store.DirectoryExists('real-dir')).toBe(true);
+    });
+
+    it('is refused as the source of CopyObject and MoveObject', async () => {
+      await expect(store.CopyObject('alias.txt', 'copied.txt')).rejects.toMatchObject({ Reason: 'SymbolicLink' });
+      await expect(store.MoveObject('alias.txt', 'moved.txt')).rejects.toMatchObject({ Reason: 'SymbolicLink' });
+      expect(existsSync(join(root, 'copied.txt')) || existsSync(join(root, 'moved.txt'))).toBe(false);
+      expect(await stillALink('alias.txt')).toBe(true);
+    });
+
+    it('is refused as the destination of CopyObject and MoveObject, so the file it points at is untouched', async () => {
+      await store.PutObject('other.txt', Buffer.from('other'));
+      await expect(store.CopyObject('other.txt', 'alias.txt')).rejects.toMatchObject({ Reason: 'SymbolicLink' });
+      await expect(store.MoveObject('other.txt', 'alias.txt')).rejects.toMatchObject({ Reason: 'SymbolicLink' });
+      expect(await readFile(join(root, 'real.txt'), 'utf8')).toBe('real');
+      expect(await stillALink('alias.txt')).toBe(true);
+      expect(await store.ObjectExists('other.txt')).toBe(true);
+    });
+
+    it('is refused by PutObject, DeleteObject and CreatePreAuthDownloadUrl', async () => {
+      await expect(store.PutObject('alias.txt', Buffer.from('new'))).rejects.toMatchObject({ Reason: 'SymbolicLink' });
+      await expect(store.DeleteObject('alias.txt')).rejects.toMatchObject({ Reason: 'SymbolicLink' });
+      await expect(store.CreatePreAuthDownloadUrl('alias.txt')).rejects.toMatchObject({ Reason: 'SymbolicLink' });
+      expect(await stillALink('alias.txt')).toBe(true);
+      expect(await readFile(join(root, 'real.txt'), 'utf8')).toBe('real');
+    });
+
+    it('is refused by CreateDirectory and DeleteDirectory', async () => {
+      await expect(store.CreateDirectory('alias-dir/')).rejects.toMatchObject({ Reason: 'SymbolicLink' });
+      await expect(store.DeleteDirectory('alias-dir/', true)).rejects.toMatchObject({ Reason: 'SymbolicLink' });
+      expect(await stillALink('alias-dir')).toBe(true);
+      expect(await store.DirectoryExists('real-dir')).toBe(true);
+    });
+  });
+
+  it('serves a root that is itself a symlink (the operator chose that path)', async () => {
+    const linkedRoot = join(await tempDir(), 'root-link');
+    await symlink(root, linkedRoot);
+    const viaLink = new LocalFileSystemStorage();
+    await viaLink.initialize({ rootPath: linkedRoot });
+    await viaLink.PutObject('a.txt', Buffer.from('x'));
+    expect(await viaLink.DirectoryExists('/')).toBe(true);
+    expect(await viaLink.ObjectExists('a.txt')).toBe(true);
+    expect((await viaLink.ListObjects('/')).objects.map((o) => o.name)).toEqual(['a.txt']);
+    expect(await viaLink.CreateDirectory('/')).toBe(true);
   });
 
   it('removes an empty directory non-recursively and refuses a non-empty one', async () => {

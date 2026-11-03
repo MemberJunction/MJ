@@ -25,8 +25,12 @@
  * 4. Real-path containment: the real path of the deepest existing ancestor of the target (plus the not-yet-existing
  *    rest) must lie inside the real path of the root, so a symlink inside the root cannot lead reads, writes, copies,
  *    moves or listings outside it. A dangling symlink on the way is refused.
- * 5. A symbolic link is neither an object nor a directory for this driver: `GetObject`, `GetObjectMetadata` and
- *    `ListObjects` refuse one by `lstat`, and listings omit symlinked entries.
+ * 5. A symbolic link at a key is neither an object nor a directory for this driver: `ObjectExists` and
+ *    `DirectoryExists` answer `false` for one, every other operation refuses it by `lstat` (`SymbolicLink`) — so a
+ *    read, copy, move, write or delete never follows a link or replaces one — and listings omit symlinked entries.
+ *    Two paths are followed: the root itself, which may be a symlink because the operator chose that path (check 4
+ *    compares real paths), and a symlinked directory inside the root on the way to a key (check 4 keeps the key
+ *    inside the root, so it can only alias another key there).
  *
  * The checks run before each operation; a process on the host that swaps a directory for a symlink between the check
  * and the operation is outside what this driver can prevent (the host's own users are trusted with its disk).
@@ -38,7 +42,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { copyFile, lstat, mkdir, readFile, readdir, realpath, rename, rm, rmdir, stat, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, type Stats } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { OrdinalCompare, RegisterClass } from '@memberjunction/global';
@@ -201,21 +205,42 @@ export class LocalFileSystemStorage extends FileStorageBase {
 
   /** Whether `full` exists as a symbolic link itself (not followed). */
   private async isSymbolicLink(full: string): Promise<boolean> {
+    return (await LocalFileSystemStorage.lstatOrNull(full))?.isSymbolicLink() === true;
+  }
+
+  /** `lstat` of `full` (a symlink there is not followed); null when nothing exists at it. */
+  private static async lstatOrNull(full: string): Promise<Stats | null> {
     try {
-      return (await lstat(full)).isSymbolicLink();
+      return await lstat(full);
     } catch (error) {
       if (errnoCode(error) === 'ENOENT' || errnoCode(error) === 'ENOTDIR') {
-        return false;
+        return null;
       }
       throw error;
     }
   }
 
-  /** Refuses a key whose final path is a symbolic link: for this driver a symlink is neither an object nor a directory. */
+  /**
+   * What exists at a key's own path, a symlink there not followed (check 5); null when nothing does. The root is
+   * followed: it may itself be a symlink, because the operator chose that path.
+   */
+  private async entryAt(full: string): Promise<Stats | null> {
+    const entry = await LocalFileSystemStorage.lstatOrNull(full);
+    return entry !== null && entry.isSymbolicLink() && full === this.root ? stat(full) : entry;
+  }
+
+  /** Refuses a key whose final path is a symbolic link (check 5): for this driver a symlink is neither an object nor a directory. */
   private async assertNotSymbolicLink(full: string, objectName: string): Promise<void> {
-    if (await this.isSymbolicLink(full)) {
+    if ((await this.entryAt(full))?.isSymbolicLink() === true) {
       throw new StorageRootEscapeError(objectName, 'SymbolicLink');
     }
+  }
+
+  /** The path a key addresses ({@link pathOf}), refused when the key's own path is a symbolic link (check 5). */
+  private async pathOfNonLink(objectName: string, scope: KeyScope): Promise<string> {
+    const full = await this.pathOf(objectName, scope);
+    await this.assertNotSymbolicLink(full, objectName);
+    return full;
   }
 
   /** Metadata for an absolute path under the root, with `/`-separated paths relative to the root. */
@@ -241,12 +266,12 @@ export class LocalFileSystemStorage extends FileStorageBase {
 
   /** A `file://` URL to the object, readable only by processes on this host. */
   public async CreatePreAuthDownloadUrl(objectName: string): Promise<string> {
-    return pathToFileURL(await this.pathOf(objectName, 'Object')).href;
+    return pathToFileURL(await this.pathOfNonLink(objectName, 'Object')).href;
   }
 
-  /** Moves (renames) a file under the root, creating the destination's directories. */
+  /** Moves (renames) a file under the root, creating the destination's directories; a symlink at either key is refused. */
   public async MoveObject(oldObjectName: string, newObjectName: string): Promise<boolean> {
-    const [from, to] = await Promise.all([this.pathOf(oldObjectName, 'Object'), this.pathOf(newObjectName, 'Object')]);
+    const [from, to] = await Promise.all([this.pathOfNonLink(oldObjectName, 'Object'), this.pathOfNonLink(newObjectName, 'Object')]);
     await mkdir(dirname(to), { recursive: true });
     await rename(from, to);
     return true;
@@ -254,7 +279,7 @@ export class LocalFileSystemStorage extends FileStorageBase {
 
   /** Deletes a file under the root; a file that does not exist is already deleted (true). */
   public async DeleteObject(objectName: string): Promise<boolean> {
-    await rm(await this.pathOf(objectName, 'Object'), { force: true });
+    await rm(await this.pathOfNonLink(objectName, 'Object'), { force: true });
     return true;
   }
 
@@ -288,7 +313,7 @@ export class LocalFileSystemStorage extends FileStorageBase {
 
   /** Creates a directory under the root with any missing parents. */
   public async CreateDirectory(directoryPath: string): Promise<boolean> {
-    await mkdir(await this.pathOf(directoryPath, 'Location'), { recursive: true });
+    await mkdir(await this.pathOfNonLink(directoryPath, 'Location'), { recursive: true });
     return true;
   }
 
@@ -298,7 +323,7 @@ export class LocalFileSystemStorage extends FileStorageBase {
    * as deleted either way.
    */
   public async DeleteDirectory(directoryPath: string, recursive?: boolean): Promise<boolean> {
-    const full = await this.pathOf(directoryPath, 'Directory');
+    const full = await this.pathOfNonLink(directoryPath, 'Directory');
     if (recursive === true) {
       await rm(full, { recursive: true, force: true });
       return true;
@@ -319,25 +344,22 @@ export class LocalFileSystemStorage extends FileStorageBase {
    */
   public async GetObjectMetadata(params: GetObjectMetadataParams): Promise<StorageObjectMetadata> {
     const key = params.fullPath || params.objectId || '';
-    const full = await this.pathOf(key, 'Object');
-    await this.assertNotSymbolicLink(full, key);
-    return this.metadataOf(full);
+    return this.metadataOf(await this.pathOfNonLink(key, 'Object'));
   }
 
   /** Keys are paths here, so `objectId` and `fullPath` address the same thing; `fullPath` wins when both are given. */
   public async GetObject(params: GetObjectParams): Promise<Buffer> {
     const key = params.fullPath || params.objectId || '';
-    const full = await this.pathOf(key, 'Object');
-    await this.assertNotSymbolicLink(full, key);
-    return readFile(full);
+    return readFile(await this.pathOfNonLink(key, 'Object'));
   }
 
   /**
    * Writes the bytes atomically (a temporary file in the same directory, renamed over the key), creating parent
-   * directories. The content type and metadata are not stored: a plain file system has nowhere to keep them.
+   * directories; a symlink at the key is refused rather than replaced. The content type and metadata are not stored: a
+   * plain file system has nowhere to keep them.
    */
   public async PutObject(objectName: string, data: Buffer, _contentType?: string, _metadata?: Record<string, string>): Promise<boolean> {
-    const full = await this.pathOf(objectName, 'Object');
+    const full = await this.pathOfNonLink(objectName, 'Object');
     await mkdir(dirname(full), { recursive: true });
     const temp = join(dirname(full), `.${basename(full)}.${randomUUID()}.tmp`);
     try {
@@ -350,24 +372,25 @@ export class LocalFileSystemStorage extends FileStorageBase {
     return true;
   }
 
-  /** Copies a file under the root, creating the destination's directories. */
+  /**
+   * Copies a file under the root, creating the destination's directories. A symlink at either key is refused: the copy
+   * would read the file the source link points at, or write through the destination link into the file it points at.
+   */
   public async CopyObject(sourceObjectName: string, destinationObjectName: string): Promise<boolean> {
-    const [from, to] = await Promise.all([this.pathOf(sourceObjectName, 'Object'), this.pathOf(destinationObjectName, 'Object')]);
+    const [from, to] = await Promise.all([this.pathOfNonLink(sourceObjectName, 'Object'), this.pathOfNonLink(destinationObjectName, 'Object')]);
     await mkdir(dirname(to), { recursive: true });
     await copyFile(from, to);
     return true;
   }
 
-  /** Whether a file exists under the root; a directory is not an object, so its key answers `false`. */
+  /** Whether a file exists under the root; a directory or a symlink is not an object, so its key answers `false`. */
   public async ObjectExists(objectName: string): Promise<boolean> {
-    const full = await this.pathOf(objectName, 'Object');
-    return existsSync(full) && (await stat(full)).isFile();
+    return (await this.entryAt(await this.pathOf(objectName, 'Object')))?.isFile() === true;
   }
 
-  /** Whether a directory exists under the root. */
+  /** Whether a directory exists under the root (the root included); a symlink is not a directory, so its key answers `false`. */
   public async DirectoryExists(directoryPath: string): Promise<boolean> {
-    const full = await this.pathOf(directoryPath, 'Location');
-    return existsSync(full) && (await stat(full)).isDirectory();
+    return (await this.entryAt(await this.pathOf(directoryPath, 'Location')))?.isDirectory() === true;
   }
 
   /** Not supported: a local directory has no search index. */
