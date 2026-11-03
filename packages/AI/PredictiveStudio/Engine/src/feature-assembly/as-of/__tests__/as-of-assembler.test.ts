@@ -193,8 +193,8 @@ describe('AsOfFeatureAssembler', () => {
   it('reads a windowed aggregate and a series lag as of each decision date, versioned by the rows they read', async () => {
     const temporal: PredictionUnitSpec['temporal'] = { timeColumn: 'DecisionDate', horizonPeriods: 1, lags: [1], rollingWindows: [], period: 'year', seasonality: null };
     const series = SeriesFeatures.BuildSeriesHistory([
-      { EntityKey: 'P1', Period: new Date('2021-01-01T00:00:00Z'), Value: 5, RowID: 'y0' },
-      { EntityKey: 'P1', Period: new Date('2022-01-01T00:00:00Z'), Value: 7, RowID: 'y1' },
+      { EntityKey: 'P1', Period: new Date('2021-01-01T00:00:00Z'), Value: 5, RowID: 'y0', WindowEnd: new Date('2021-12-31T00:00:00Z') },
+      { EntityKey: 'P1', Period: new Date('2022-01-01T00:00:00Z'), Value: 7, RowID: 'y1', WindowEnd: new Date('2022-12-31T00:00:00Z') },
     ], temporal);
     const personRows: AssemblyRowRef[] = rows.map((r) => ({ ...r, EntityKey: 'P1' }));
     const features: FeatureColumnSpec[] = [

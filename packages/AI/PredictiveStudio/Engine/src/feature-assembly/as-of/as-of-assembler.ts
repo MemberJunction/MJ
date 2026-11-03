@@ -903,7 +903,7 @@ export class AsOfFeatureAssembler {
     const history = input.SeriesHistory;
     if (!t || !history) throw new AssemblyRefused({ kind: 'unresolved-column', entity: input.RowEntity.Name, field: `TemporalSpec.${source.feature.kind}[${source.feature.index}]` });
     return (row) => {
-      const s = SeriesFeatures.ComputeSeriesFeature(history, row.EntityKey, row.Period || row.DecisionDate, t, source.feature);
+      const s = SeriesFeatures.ComputeSeriesFeature(history, row.EntityKey, row.Period || row.DecisionDate, t, source.feature, row.DecisionDate);
       return {
         Value: s.Value,
         Provenance: { column: spec.name, source: 'series', sourceRef: `${input.RowEntity.Name}/label/${s.SourceRowIDs.join('+')}`, sourceVersion: `labelVersion:${input.Unit.label.labelVersion}`, computedAt: input.AssembledAt.toISOString() },

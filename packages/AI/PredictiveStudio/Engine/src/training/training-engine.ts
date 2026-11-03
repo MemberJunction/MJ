@@ -872,7 +872,7 @@ export class TrainingEngine {
   private static toPoint(r: UnitRow): SeriesPoint {
     if (r.Period === null) throw new Error(`TrainingEngine: unit row ${r.RowID} has no period, so it cannot be a series point`);
     if (typeof r.Label !== 'number') throw new Error(`TrainingEngine: unit row ${r.RowID} has the non-numeric label "${r.Label}", so it cannot be a series point`);
-    return { EntityKey: r.EntityKey, Period: r.Period, Value: r.Label, RowID: r.RowID };
+    return { EntityKey: r.EntityKey, Period: r.Period, Value: r.Label, RowID: r.RowID, WindowEnd: r.WindowEnd };
   }
 
   /** Read the pipeline, its unit and the unit's rows, for an assembly that is not part of a training run. */

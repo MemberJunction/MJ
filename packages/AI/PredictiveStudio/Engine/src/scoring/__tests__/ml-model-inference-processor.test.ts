@@ -9,6 +9,7 @@ import type {
   AsOfStrategy,
   FeatureStepGraph,
   PredictionUnitSpec,
+  FeatureColumnSpec,
 } from '@memberjunction/predictive-studio-core';
 import type {
   RecordProcessorContext,
@@ -39,6 +40,8 @@ import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 import type { IAssemblyMetadata } from '../../feature-assembly/assembly-metadata';
 import type { SourceRow } from '../../feature-assembly/data-access';
 import { SeriesFeatures } from '../../feature-assembly/as-of/series-features';
+import { AsOfFeatureAssembler, type AsOfAssemblyResult } from '../../feature-assembly/as-of/as-of-assembler';
+import { RunViewRecordHistoryReader } from '../../feature-assembly/as-of/record-history';
 import type { AssemblyEntityInfo } from '../../feature-assembly/assembly-metadata';
 
 /**
@@ -727,10 +730,13 @@ describe('MLModelInferenceProcessor — series history for scoring', () => {
   };
   const seams = { DataAccess: new TableDataAccess({ Series: [{ ID: 'S1' }], Months: months }), Metadata: { Entity: (n: string) => entities[n] || null } };
   const lag1 = (h: Awaited<ReturnType<typeof MLModelInferenceProcessor.SeriesHistoryForScoring>>, period: string) =>
-    (h === null ? 'no history' : SeriesFeatures.ComputeSeriesFeature(h, 'S1', new Date(period), temporal, { kind: 'lag', index: 0 }).Value);
+    (h === null ? 'no history' : SeriesFeatures.ComputeSeriesFeature(h, 'S1', new Date(period), temporal, { kind: 'lag', index: 0 }, new Date(period)).Value);
 
-  it('reads the periods whose outcome window is still open, so the lag the next period needs is the last period\'s value', async () => {
-    const h = await MLModelInferenceProcessor.SeriesHistoryForScoring(unit, seams, new Date('2026-11-10T00:00:00Z'));
+  it('reads the periods training censored at its cutoff, so a lag whose window has closed reads the last period\'s value', async () => {
+    // A fixed cutoff before the last months and a 28-day window: m22 (2026-11) is censored for training, but its window
+    // closed 2026-11-29, so the row decided 2026-12-01 reads it.
+    const fixed: PredictionUnitSpec = { ...unit, label: { ...unit.label, windowDays: 28 }, censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2026-06-01' } } };
+    const h = await MLModelInferenceProcessor.SeriesHistoryForScoring(fixed, seams, new Date('2026-12-05T00:00:00Z'));
     expect(lag1(h, '2026-12-01T00:00:00Z')).toBe(122);
     expect(lag1(h, '2026-11-01T00:00:00Z')).toBe(121);
   });
@@ -742,5 +748,38 @@ describe('MLModelInferenceProcessor — series history for scoring', () => {
     const training = TrainingEngine.SeriesHistoryFor(unit, read.Rows);
     const scoring = await MLModelInferenceProcessor.SeriesHistoryForScoring(unit, seams, now);
     for (const r of read.Rows) expect(lag1(scoring, (r.Period as Date).toISOString())).toBe(lag1(training, (r.Period as Date).toISOString()));
+  });
+
+  describe('a lag reads a period only once its outcome window had closed by the row\'s decision', () => {
+    const now = new Date('2026-11-10T00:00:00Z');
+    const lagFeature = (name: string, index: number): FeatureColumnSpec => ({ name, source: { kind: 'series', feature: { kind: 'lag', index } }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } });
+    const features = [lagFeature('Lag1', 0), lagFeature('Lag12', 1)];
+    const assemble = async (context: 'train' | 'score', history: Awaited<ReturnType<typeof MLModelInferenceProcessor.SeriesHistoryForScoring>>, rows: readonly UnitRowLike[]): Promise<AsOfAssemblyResult> =>
+      new AsOfFeatureAssembler().Assemble({
+        Context: context, Unit: unit, RowEntity: entities.Months, Features: features, SeriesHistory: history, Read: { mode: 'complete' },
+        Rows: rows.map((r) => ({ RowID: r.RowID, EntityKey: r.EntityKey, DecisionDate: r.DecisionDate, Period: r.Period })),
+        DataAccess: seams.DataAccess, History: new RunViewRecordHistoryReader(seams.DataAccess, { mode: 'complete' }), Metadata: seams.Metadata, AssembledAt: now,
+        CategoryLevels: new Map(),
+      });
+    type UnitRowLike = { readonly RowID: string; readonly EntityKey: string; readonly DecisionDate: Date; readonly Period: Date | null };
+
+    it('nulls, on a training row, a lag whose period\'s 90-day window closes after the row\'s decision, and keeps one whose window had closed', async () => {
+      const read = await new PredictionUnitRowReader().Read(unit, { ...seams, Read: { mode: 'complete' }, Now: now });
+      if (read.Status !== 'read') throw new Error('training read refused');
+      const out = await assemble('train', TrainingEngine.SeriesHistoryFor(unit, read.Rows), read.Rows);
+      if (out.Status !== 'assembled') throw new Error(JSON.stringify(out));
+      // m13 (2026-02-01): lag 1 reads m12 (2026-01-01), whose window closes 2026-04-01; lag 12 reads m01 (2025-02-01), closed 2025-05-02.
+      expect(out.Rows.find((r) => r.RowID === 'm13')?.Values).toEqual([null, 101]);
+    });
+
+    it('scores a training row at the same instant into the identical vector', async () => {
+      const read = await new PredictionUnitRowReader().Read(unit, { ...seams, Read: { mode: 'complete' }, Now: now });
+      if (read.Status !== 'read') throw new Error('training read refused');
+      const trained = await assemble('train', TrainingEngine.SeriesHistoryFor(unit, read.Rows), read.Rows);
+      const scored = await assemble('score', await MLModelInferenceProcessor.SeriesHistoryForScoring(unit, seams, now), read.Rows);
+      if (trained.Status !== 'assembled' || scored.Status !== 'assembled') throw new Error('assembly refused');
+      expect(scored.Rows.map((r) => [r.RowID, r.Values])).toEqual(trained.Rows.map((r) => [r.RowID, r.Values]));
+      expect(scored.Rows.some((r) => r.Values[0] !== null)).toBe(false);
+    });
   });
 });
