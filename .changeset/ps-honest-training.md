@@ -10,6 +10,7 @@
 "@memberjunction/core-entities-server": minor
 "@memberjunction/storage": minor
 "@memberjunction/global": minor
+"@memberjunction/graphql-dataprovider": minor
 "@memberjunction/ng-artifacts": minor
 "@memberjunction/ng-test-utils": minor
 "@memberjunction/ng-ui-components": minor
