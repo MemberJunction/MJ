@@ -2342,7 +2342,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 FieldMap: request.FieldMap?.map(fm => {
                     return {
                         FieldName: fm.FieldName,
-                        Value: fm.Value.toString() // turn the value into a string, since that is what the server expects
+                        Value: fm.Value == null ? null : fm.Value.toString() // the server expects a string; null clears the field
                     }
                 }),
                 RecordsToMerge: request.RecordsToMerge.map(r => {

@@ -27,7 +27,7 @@ export class EntityDependencyResolver {
     @PubSub() pubSub: PubSubEngine
   ) {
     try {
-      const md = GetReadOnlyProvider(providers);
+      const md = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       return md.GetEntityDependencies(entityName);
     } catch (err) {
       LogError(err);
@@ -89,7 +89,7 @@ export class RecordDependencyResolver {
     @Arg('options', () => RecordDependencyOptionsInput, { nullable: true }) options?: RecordDependencyOptionsInput
   ) {
     try {
-      const md = GetReadOnlyProvider(providers);
+      const md = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const ck = new CompositeKey(ckInput.KeyValuePairs);
       const contextUser = userPayload?.userRecord;
       const result =
@@ -119,8 +119,9 @@ class FieldMapping {
   @Field(() => String)
   FieldName: string;
 
-  @Field(() => String)
-  Value: string;
+  /** `null` sets the surviving record's field to NULL. */
+  @Field(() => String, { nullable: true })
+  Value: string | null;
 }
 
 @ObjectType()
@@ -128,8 +129,8 @@ class FieldMappingOutput {
   @Field(() => String)
   FieldName: string;
 
-  @Field(() => String)
-  Value: string;
+  @Field(() => String, { nullable: true })
+  Value: string | null;
 }
 
 @InputType()

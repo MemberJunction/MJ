@@ -504,7 +504,7 @@ export class ActionResolver extends ResolverBase {
    * @private
    */
   private async addEntityObject(providers: Array<ProviderInfo>, params: any, input: EntityActionInput, user: UserInfo): Promise<void> {
-    const md = GetReadOnlyProvider(providers);
+    const md = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
     
     // Find the entity by ID or name
     let entity;

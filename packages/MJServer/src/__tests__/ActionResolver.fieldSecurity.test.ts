@@ -118,6 +118,14 @@ describe('RunEntityAction: the record is loaded for the caller', () => {
         expect(result.Message).toContain('Record not found or access denied');
         expect(hoisted.runEntityAction).not.toHaveBeenCalled();
     });
+
+    it('runs on a host with only a read-write datasource (#3361)', async () => {
+        const ctx = context(entityInfo, getEntityObject);
+        ctx.providers = ctx.providers.map(p => ({ ...p, type: 'Read-Write' as const }));
+        const result = await new ActionResolver().RunEntityAction(input(), ctx);
+        expect(result.Success).toBe(true);
+        expect(getEntityObject).toHaveBeenCalledWith('Employees', expect.objectContaining({ ID: 'intern-1' }));
+    });
 });
 
 describe('RunEntityAction: echoed parameters are projected for the caller', () => {

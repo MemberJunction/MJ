@@ -74,7 +74,7 @@ export class DuplicateRecordResolver {
     @Ctx() { dataSource, userPayload, providers }: AppContext,
     @Arg('params') params: PotentialDuplicateRequestType
   ): Promise<PotentialDuplicateResponseType> {
-    const md = GetReadOnlyProvider(providers);
+    const md = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
 
     const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
     if (!user) {
