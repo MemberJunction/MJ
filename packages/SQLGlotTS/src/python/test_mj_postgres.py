@@ -536,6 +536,43 @@ check("TINYINT → SMALLINT in CREATE TABLE, ADD COLUMN and CAST",
       must_contain=['"Flags" SMALLINT NOT NULL', 'ADD COLUMN "Level" SMALLINT NULL', 'CAST(1 AS SMALLINT)'],
       must_not_contain=["TINYINT"])
 
+# --- DROP INDEX … ON table (issues #5955, #3166) -----------------------------------
+# PostgreSQL has no `DROP INDEX … ON <table>`; the index is dropped by schema-qualified name.
+check("DROP INDEX [ix] ON [schema].[table] → DROP INDEX IF EXISTS schema.ix",
+      "DROP INDEX [IX_Foo_Name] ON [${flyway:defaultSchema}].[Foo];",
+      must_contain=['DROP INDEX IF EXISTS ${flyway:defaultSchema}."IX_Foo_Name"'],
+      must_not_contain=[" ON "])
+check("DROP INDEX IF EXISTS ix ON schema.table → PG form",
+      "DROP INDEX IF EXISTS IX_Foo_Name ON __mj.Foo;",
+      must_contain=['DROP INDEX IF EXISTS "__mj"."IX_Foo_Name"'],
+      must_not_contain=[" ON "])
+check("guarded DROP INDEX (sys.indexes probe) → pg_indexes probe + PG drop",
+      "IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Foo_Name' "
+      "AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Foo]'))\n"
+      "BEGIN\n  DROP INDEX [IX_Foo_Name] ON [${flyway:defaultSchema}].[Foo];\nEND",
+      must_contain=["pg_indexes", 'DROP INDEX IF EXISTS ${flyway:defaultSchema}."IX_Foo_Name"'],
+      must_not_contain=[" ON ${flyway"])
+
+# --- DELETE through a CTE (issue #3166) -------------------------------------------
+# PG cannot DELETE FROM a CTE. The single-table ROW_NUMBER dedup form deletes from the base
+# table by ctid; a CTE over a join has no one-to-one row mapping and is reported.
+check("WITH c AS (… ROW_NUMBER …) DELETE FROM c → ctid delete on the base table",
+      ";WITH d AS (SELECT ID, ROW_NUMBER() OVER (PARTITION BY Name ORDER BY ID) AS rn "
+      "FROM [${flyway:defaultSchema}].[Foo]) DELETE FROM d WHERE rn > 1;",
+      must_contain=['"ctid" AS "mj_ctid"', 'DELETE FROM ${flyway:defaultSchema}."Foo"',
+                    '"ctid" IN (SELECT "mj_ctid" FROM "d" WHERE "rn" > 1)'],
+      must_not_contain=['DELETE FROM "d"'])
+check("aliased CTE source qualifies ctid with the alias",
+      "WITH d AS (SELECT f.ID, ROW_NUMBER() OVER (PARTITION BY f.Name ORDER BY f.ID) AS rn "
+      "FROM [__mj].[Foo] f) DELETE FROM d WHERE rn > 1;",
+      must_contain=['"f"."ctid" AS "mj_ctid"', 'DELETE FROM "__mj"."Foo"'])
+check("DELETE FROM a CTE over a join → DELETE-FROM-CTE gap",
+      "WITH d AS (SELECT f.ID FROM __mj.Foo f JOIN __mj.Bar b ON b.ID = f.BarID) DELETE FROM d;",
+      expect_unhandled=1)
+check("a plain DELETE that only reads a CTE is unchanged",
+      "WITH d AS (SELECT ID FROM __mj.Bar) DELETE FROM __mj.Foo WHERE ID IN (SELECT ID FROM d);",
+      must_contain=['DELETE FROM "__mj"."Foo"'], must_not_contain=["ctid"])
+
 # --- BIT registry survives a poison statement in the same batch -------------------
 check("poison statement doesn't wipe BIT registration for other tables in its batch",
       "SELECT FROM FROM;\n"

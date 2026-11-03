@@ -779,3 +779,15 @@ describe('StatementClassifier — issue #5364', () => {
     expect(ClassifyBatch('CREATE OR ALTER VIEW app.vwX AS SELECT 1 AS A')).toBe('CREATE_VIEW');
   });
 });
+
+// Issues #5955 / #3166: index drops, bare and guarded.
+describe('StatementClassifier — DROP INDEX (issues #5955, #3166)', () => {
+  it('classifies DROP INDEX name ON table as DROP_INDEX', () => {
+    expect(ClassifyBatch('DROP INDEX [IX_Foo] ON [__mj].[Foo]')).toBe('DROP_INDEX');
+  });
+
+  it('classifies a sys.indexes-guarded DROP INDEX as CONDITIONAL_DDL instead of skipping it', () => {
+    const sql = "IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Foo')\nBEGIN\n  DROP INDEX [IX_Foo] ON [__mj].[Foo];\nEND";
+    expect(ClassifyBatch(sql)).toBe('CONDITIONAL_DDL');
+  });
+});

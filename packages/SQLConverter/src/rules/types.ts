@@ -12,6 +12,7 @@ export type StatementType =
   | 'CREATE_TABLE'
   | 'CREATE_VIEW'
   | 'CREATE_INDEX'
+  | 'DROP_INDEX'
   | 'CREATE_PROCEDURE'
   | 'CREATE_FUNCTION'
   | 'CREATE_TRIGGER'

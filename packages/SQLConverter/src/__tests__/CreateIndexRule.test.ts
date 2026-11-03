@@ -14,7 +14,7 @@ describe('CreateIndexRule', () => {
     it('should have the correct name, priority, and applies-to types', () => {
       expect(rule.Name).toBe('CreateIndexRule');
       expect(rule.Priority).toBe(70);
-      expect(rule.AppliesTo).toEqual(['CREATE_INDEX']);
+      expect(rule.AppliesTo).toEqual(['CREATE_INDEX', 'DROP_INDEX']);
       expect(rule.BypassSqlglot).toBe(true);
     });
   });
@@ -165,5 +165,23 @@ ON [PRIMARY]`;
       expect(result).toContain('"ColA"');
       expect(result).toContain('"ColB"');
     });
+  });
+});
+
+// Issue #5955: T-SQL `DROP INDEX name ON table` is not PostgreSQL.
+describe('CreateIndexRule — DROP INDEX (issue #5955)', () => {
+  it('rewrites DROP INDEX name ON schema.table to a schema-qualified DROP INDEX IF EXISTS', () => {
+    expect(convert('DROP INDEX [UQ_FeatureValueCache_Key] ON [__mj].[FeatureValueCache];').trim())
+      .toBe('DROP INDEX IF EXISTS __mj."UQ_FeatureValueCache_Key";');
+  });
+
+  it('accepts DROP INDEX IF EXISTS and an unqualified table', () => {
+    expect(convert('DROP INDEX IF EXISTS IX_Foo ON Foo').trim()).toBe('DROP INDEX IF EXISTS "IX_Foo";');
+  });
+
+  it('comments out a shape it cannot convert under a counted gap marker', () => {
+    const out = convert('DROP INDEX [__mj].[Foo].[IX_Foo]');
+    expect(out).toContain('-- NEEDS HAND AUTHORING: DROP INDEX');
+    expect(out).not.toMatch(/^DROP INDEX/m);
   });
 });

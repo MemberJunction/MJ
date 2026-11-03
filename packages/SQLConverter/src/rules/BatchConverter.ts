@@ -25,7 +25,7 @@ import {
 } from './types.js';
 
 /** Batch type groupings for ordered output */
-const TABLE_TYPES = new Set<StatementType>(['CREATE_TABLE', 'ALTER_TABLE', 'PK_CONSTRAINT', 'CREATE_INDEX', 'CONDITIONAL_DDL']);
+const TABLE_TYPES = new Set<StatementType>(['CREATE_TABLE', 'ALTER_TABLE', 'PK_CONSTRAINT', 'CREATE_INDEX', 'DROP_INDEX', 'CONDITIONAL_DDL']);
 const FK_TYPES = new Set<StatementType>(['FK_CONSTRAINT', 'CHECK_CONSTRAINT', 'UNIQUE_CONSTRAINT', 'ENABLE_CONSTRAINT']);
 const VIEW_TYPES = new Set<StatementType>(['CREATE_VIEW']);
 const FUNC_TYPES = new Set<StatementType>(['CREATE_PROCEDURE', 'CREATE_FUNCTION']);

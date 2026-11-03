@@ -73,6 +73,11 @@ export function ClassifyBatch(batch: string): StatementType {
     if (/\bDROP\s+CONSTRAINT\b/i.test(upper)) {
       return 'CONDITIONAL_DDL';
     }
+    // ...and a guarded index drop (`IF EXISTS (SELECT … FROM sys.indexes …) DROP INDEX`), which
+    // becomes DROP INDEX IF EXISTS. Skipping it lost the drop without a trace (issue #3166).
+    if (/\bDROP\s+INDEX\b/i.test(upper)) {
+      return 'CONDITIONAL_DDL';
+    }
     return 'SKIP_SQLSERVER';
   }
 
@@ -172,6 +177,12 @@ export function ClassifyBatch(batch: string): StatementType {
   // CREATE INDEX
   if (/^CREATE\s+(?:UNIQUE\s+)?(?:NONCLUSTERED\s+)?INDEX\s/i.test(upper)) {
     return 'CREATE_INDEX';
+  }
+
+  // DROP INDEX — T-SQL's `DROP INDEX name ON table` is not PostgreSQL; CreateIndexRule rewrites
+  // it. Unclassified, it passed through unchanged (issue #5955).
+  if (/^DROP\s+INDEX\b/i.test(upper)) {
+    return 'DROP_INDEX';
   }
 
   // ;WITH CTE ... DML — T-SQL idiom where ;WITH is used to safely terminate the prior statement

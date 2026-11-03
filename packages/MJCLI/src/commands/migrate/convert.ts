@@ -366,14 +366,22 @@ export default class MigrateConvert extends Command {
 
     // Post-conversion: deduplicate EntityField Sequence values across files
     // to prevent UQ_EntityField_EntityID_Sequence violations on PG
+    // Only the files written by THIS run may be edited: every other .pg.sql in the folder is
+    // committed history that may already be applied, so a fix lands on the side of a collision
+    // that this run produced (issue #3166).
     this.log('\nRunning EntityField Sequence deduplication...');
-    const dedupResult = deduplicateEntityFieldSequences(outputDir);
-    if (dedupResult.totalCollisions > 0) {
-      this.log(`  Fixed ${dedupResult.totalCollisions} sequence collision(s) across ${dedupResult.fixes.length} INSERT(s):`);
+    const writtenThisRun = new Set(unconverted.map((m) => path.basename(m.OutputFile)));
+    const dedupResult = deduplicateEntityFieldSequences(outputDir, false, writtenThisRun);
+    if (dedupResult.fixes.length > 0) {
+      this.log(`  Fixed ${dedupResult.fixes.length} sequence collision(s) in files written by this run:`);
       for (const fix of dedupResult.fixes) {
         this.log(`    ${fix.file} line ${fix.line}: ${fix.originalSequence} → ${fix.newSequence}`);
       }
-    } else {
+    }
+    if (dedupResult.committedCollisions.length > 0) {
+      this.log(`  Left ${dedupResult.committedCollisions.length} collision(s) between committed files unchanged.`);
+    }
+    if (dedupResult.totalCollisions === 0) {
       this.log(`  No collisions found (${dedupResult.totalInserts} EntityField INSERTs scanned).`);
     }
 

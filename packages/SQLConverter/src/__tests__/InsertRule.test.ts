@@ -342,3 +342,52 @@ describe('InsertRule — string literals pass through unchanged (issue #5838)', 
     expect(out).not.toMatch(/\bISNULL\b|\bLEN\(/);
   });
 });
+
+// Issue #3166: PostgreSQL cannot DELETE FROM a CTE. The single-table dedup form deletes from the
+// base table by ctid; any other shape is a counted gap rather than a silent pass-through.
+describe('InsertRule — DELETE through a CTE (issue #3166)', () => {
+  it('rewrites the ROW_NUMBER dedup form to a ctid delete on the base table', () => {
+    const out = convert(';WITH d AS (SELECT ID, ROW_NUMBER() OVER (PARTITION BY Name ORDER BY ID) AS rn FROM [__mj].[Foo]) DELETE FROM d WHERE rn > 1;');
+    expect(out.trim()).toBe(
+      'WITH d AS (SELECT ctid AS mj_ctid, "ID", ROW_NUMBER() OVER (PARTITION BY "Name" ORDER BY "ID") AS rn FROM __mj."Foo") ' +
+      'DELETE FROM __mj."Foo" WHERE ctid IN (SELECT mj_ctid FROM d WHERE rn > 1);'
+    );
+  });
+
+  it('qualifies ctid with the table alias', () => {
+    const out = convert('WITH d AS (SELECT f.ID, ROW_NUMBER() OVER (PARTITION BY f.Name ORDER BY f.ID) AS rn FROM [__mj].[Foo] f) DELETE FROM d WHERE rn > 1');
+    expect(out).toContain('SELECT f.ctid AS mj_ctid,');
+    expect(out).toContain('DELETE FROM __mj."Foo" WHERE ctid IN (SELECT mj_ctid FROM d WHERE rn > 1)');
+  });
+
+  it('turns a CTE over a join into a counted gap', () => {
+    const out = convert('WITH d AS (SELECT f.ID FROM __mj.Foo f INNER JOIN __mj.Bar b ON b.ID = f.BarID) DELETE FROM d');
+    expect(out).toContain('-- NEEDS HAND AUTHORING: DELETE FROM CTE');
+    expect(out).not.toMatch(/^DELETE/m);
+  });
+
+  it('leaves a DELETE that only reads a CTE alone', () => {
+    const out = convert('WITH d AS (SELECT ID FROM __mj.Bar) DELETE FROM __mj.Foo WHERE ID IN (SELECT ID FROM d)');
+    expect(out).not.toContain('ctid');
+    expect(out).toContain('DELETE FROM __mj."Foo"');
+  });
+});
+
+describe('InsertRule — DELETE through a CTE inside a larger batch (issue #3166)', () => {
+  it('rewrites the DELETE after leading comments and keeps the statements that follow it', () => {
+    const sql = [
+      '-- 1. Remove duplicate memberships',
+      'WITH NumberedDupes AS (',
+      '    SELECT ID, ROW_NUMBER() OVER (PARTITION BY ListID, RecordID ORDER BY ID) AS RowNum',
+      '    FROM [__mj].[ListDetail]',
+      ')',
+      'DELETE FROM NumberedDupes WHERE RowNum > 1;',
+      '',
+      "UPDATE [__mj].[ListDetail] SET [Status] = 'Active' WHERE [Status] IS NULL;",
+    ].join('\n');
+    const out = convert(sql);
+    expect(out).toMatch(/^-- 1\. Remove duplicate memberships/);
+    expect(out).toContain('DELETE FROM __mj."ListDetail" WHERE ctid IN (SELECT mj_ctid FROM "NumberedDupes" WHERE "RowNum" > 1);');
+    expect(out).toContain(`UPDATE __mj."ListDetail" SET "Status" = 'Active'`);
+  });
+});

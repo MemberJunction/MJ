@@ -393,17 +393,20 @@ function removeFlywayHistoryReferences(sql: string): string {
     .join('\n');
 }
 
-/** Truncate index names longer than 63 chars with hash suffix */
+/**
+ * Truncate index names longer than 63 chars with hash suffix. A DROP INDEX gets the same name
+ * the CREATE INDEX did, or it would miss the index it drops.
+ */
 function fixLongIndexNames(sql: string): string {
-  return sql.replace(
-    /(CREATE\s+(?:UNIQUE\s+)?(?:NONCLUSTERED\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?)"([^"]+)"(\s)/gi,
-    (match, keyword: string, name: string, rest: string) => {
-      if (name.length <= 63) return match;
-      const hash = createHash('md5').update(name).digest('hex').slice(0, 8);
-      const shortName = name.slice(0, 54) + '_' + hash;
-      return `${keyword}"${shortName}"${rest}`;
-    }
-  );
+  const shorten = (match: string, keyword: string, name: string, rest: string): string => {
+    if (name.length <= 63) return match;
+    const hash = createHash('md5').update(name).digest('hex').slice(0, 8);
+    const shortName = name.slice(0, 54) + '_' + hash;
+    return `${keyword}"${shortName}"${rest}`;
+  };
+  return sql
+    .replace(/(CREATE\s+(?:UNIQUE\s+)?(?:NONCLUSTERED\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?)"([^"]+)"(\s)/gi, shorten)
+    .replace(/(DROP\s+INDEX\s+IF\s+EXISTS\s+(?:[\w$]+\.)?)"([^"]+)"(\s*;)/gi, shorten);
 }
 
 /** Fix lines starting with backslash inside INSERT string literals */

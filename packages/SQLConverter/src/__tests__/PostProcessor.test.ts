@@ -712,3 +712,15 @@ describe('PostProcess — type names inside literals (issue #5838)', () => {
   });
 });
 
+
+// Issue #5955: a converted DROP INDEX must name the index the way the converted CREATE INDEX did.
+describe('PostProcess — long index names in DROP INDEX (issue #5955)', () => {
+  it('shortens a DROP INDEX name exactly as the CREATE INDEX name', () => {
+    const name = `IX_${'A'.repeat(70)}`;
+    const out = PostProcess(`CREATE INDEX IF NOT EXISTS "${name}" ON __mj."Foo" ("Name");\nDROP INDEX IF EXISTS __mj."${name}";`);
+    const created = out.match(/CREATE INDEX IF NOT EXISTS "([^"]+)"/)![1];
+    const dropped = out.match(/DROP INDEX IF EXISTS __mj\."([^"]+)"/)![1];
+    expect(created.length).toBeLessThanOrEqual(63);
+    expect(dropped).toBe(created);
+  });
+});

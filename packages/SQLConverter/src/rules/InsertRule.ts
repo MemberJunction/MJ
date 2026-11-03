@@ -5,7 +5,7 @@ import {
   ConvertCharIndex, ConvertStuff, ConvertConvertFunction, ConvertIIF, ConvertTopToLimit,
   TransformCodeOnly, CastBooleanInsertValues, ConvertJsonFunctions,
   ConvertBooleanLiteralComparisons,
-  EscapeRegExp,
+  EscapeRegExp, NeedsHandAuthoring, StripComments,
 } from './ExpressionHelpers.js';
 
 /** Strip trailing comments (both line -- and block /* *‌/) from a SQL string.
@@ -41,6 +41,97 @@ function stripTrailingComments(input: string): { sql: string; comments: string }
   return { sql: s, comments: commentParts.join('\n') };
 }
 
+/** Words that can follow a FROM table where an alias would otherwise stand. */
+const NOT_AN_ALIAS = new Set(['WHERE', 'JOIN', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'CROSS', 'OUTER', 'ON', 'GROUP', 'ORDER', 'HAVING', 'UNION', 'WITH']);
+
+/** Offset of the `)` closing the `(` at `open`, skipping string literals; -1 when unbalanced. */
+function matchingParen(sql: string, open: number): number {
+  let depth = 0;
+  let inString = false;
+  for (let i = open; i < sql.length; i++) {
+    const ch = sql[i];
+    if (ch === "'") {
+      if (inString && sql[i + 1] === "'") { i++; continue; }
+      inString = !inString;
+    } else if (!inString) {
+      if (ch === '(') depth++;
+      else if (ch === ')' && --depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+/** `text` with every parenthesised group and string literal blanked, so a scan sees only depth 0. */
+function topLevelOnly(text: string): string {
+  let out = '';
+  let depth = 0;
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === "'") {
+      if (inString && text[i + 1] === "'") { out += '  '; i++; continue; }
+      inString = !inString;
+      out += ' ';
+    } else if (inString) {
+      out += ' ';
+    } else if (ch === '(') {
+      depth++;
+      out += ' ';
+    } else if (ch === ')') {
+      depth--;
+      out += ' ';
+    } else {
+      out += depth > 0 ? ' ' : ch;
+    }
+  }
+  return out;
+}
+
+/**
+ * T-SQL deletes base-table rows through a CTE (`WITH c AS (… ROW_NUMBER() …) DELETE FROM c WHERE
+ * rn > 1`, the dedup idiom); PostgreSQL cannot DELETE FROM a CTE (issue #3166). When the CTE reads
+ * one table, carry each row's `ctid` out of it and delete from that table by it:
+ *   WITH c AS (SELECT ctid AS mj_ctid, … FROM t …) DELETE FROM t WHERE ctid IN (SELECT mj_ctid FROM c WHERE p)
+ * A CTE whose rows do not map one-to-one onto one table (a join, several FROM tables, DISTINCT,
+ * GROUP BY, a set operation, several CTEs) becomes a counted gap. Any other statement — including
+ * a DELETE that only reads a CTE — is returned unchanged. Runs on T-SQL, before identifier
+ * conversion.
+ */
+export function RewriteDeleteFromCte(sql: string): string {
+  const head = sql.match(/^((?:[ \t]*(?:--[^\n]*)?\n)*\s*);?\s*WITH\s+(\w+)\s+AS\s*\(/i);
+  if (!head) return sql;
+  const cteName = head[2];
+  const open = head[0].length - 1;
+  const close = matchingParen(sql, open);
+  if (close < 0) return sql;
+  // The DELETE runs to the first top-level `;` (or the end of the batch); anything after it is
+  // a later statement of the same batch and is kept as is.
+  const afterCte = sql.slice(close + 1);
+  const semicolon = topLevelOnly(afterCte).indexOf(';');
+  const statementEnd = semicolon < 0 ? afterCte.length : semicolon + 1;
+  const rest = afterCte.slice(statementEnd);
+  const tail = afterCte.slice(0, statementEnd).match(/^\s*DELETE\s+(?:FROM\s+)?(\[?\w+\]?)\s*([\s\S]*?)\s*;?\s*$/i);
+  if (!tail || tail[1].replace(/^\[|\]$/g, '').toLowerCase() !== cteName.toLowerCase()) return sql;
+
+  const statement = sql.slice(0, close + 1 + statementEnd);
+  const gap = (reason: string) => NeedsHandAuthoring('DELETE FROM CTE', reason, statement).trimEnd() + rest;
+  const body = sql.slice(open + 1, close);
+  const flat = topLevelOnly(body);
+  if (/^\s*SELECT\s+(?:DISTINCT|TOP)\b/i.test(flat) || /\b(?:JOIN|GROUP\s+BY|UNION|INTERSECT|EXCEPT)\b/i.test(flat)) {
+    return gap('the CTE does not read exactly one table row for row');
+  }
+  if (!/^\s*SELECT\s/i.test(flat)) return gap('the CTE is not a single SELECT');
+  const from = flat.match(/\bFROM\s+((?:\[[^\]]+\]|"[^"]+"|[\w${}:]+)(?:\s*\.\s*(?:\[[^\]]+\]|"[^"]+"|[\w$]+))*)(?:\s+(?:AS\s+)?(\w+))?\s*(,)?/i);
+  if (!from || from[3]) return gap('the CTE does not read exactly one table');
+  const alias = from[2] && !NOT_AN_ALIAS.has(from[2].toUpperCase()) ? from[2] : null;
+
+  const selectAt = body.search(/SELECT\s/i) + 'SELECT'.length;
+  const newBody = `${body.slice(0, selectAt)} ${alias ? `${alias}.` : ''}ctid AS mj_ctid,${body.slice(selectAt)}`;
+  const where = tail[2].replace(/^WHERE\s+/i, '').trim();
+  const predicate = where ? ` WHERE ${where}` : '';
+  return `${head[1]}WITH ${cteName} AS (${newBody}) DELETE FROM ${from[1]} WHERE ctid IN (SELECT mj_ctid FROM ${cteName}${predicate});${rest}`;
+}
+
 export class InsertRule implements IConversionRule {
   Name = 'InsertRule';
   SourceDialect = 'tsql';
@@ -51,7 +142,11 @@ export class InsertRule implements IConversionRule {
   BypassJustification = 'INSERT INTO with N\'string\' literals, GETUTCDATE() defaults, IDENTITY_INSERT, [bracket] identifiers, and SQL Server BIT (0/1) for BOOLEAN columns. The rule strips N prefixes, converts date functions, and quotes identifiers — work sqlglot does partially but with quirks for MJ\'s CodeGen-emitted INSERTs.';
 
   PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
-    let result = ConvertIdentifiers(sql);
+    // A CTE-targeted DELETE that cannot be rewritten comes back commented out under a gap
+    // marker; when nothing else is left in the batch, there is no code to convert.
+    const deleteSql = RewriteDeleteFromCte(sql);
+    if (StripComments(deleteSql).trim() === '') return deleteSql + '\n';
+    let result = ConvertIdentifiers(deleteSql);
     result = RemoveNPrefix(result);
     result = RemoveCollate(result);
     // Function conversions BEFORE quoting (prevents "LEN", "SUBSTRING" etc. from being quoted).

@@ -1,17 +1,37 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { ConvertIdentifiers } from './ExpressionHelpers.js';
+import { ConvertIdentifiers, NeedsHandAuthoring } from './ExpressionHelpers.js';
+
+/** `DROP INDEX [IF EXISTS] name ON table`, after identifier conversion. One index per statement. */
+const DROP_INDEX_ON_TABLE = /^DROP\s+INDEX\s+(?:IF\s+EXISTS\s+)?("[^"]+"|\w+)\s+ON\s+([^\s;(,]+)\s*;?$/i;
+
+/**
+ * T-SQL `DROP INDEX name ON [schema].[table]` → PostgreSQL `DROP INDEX IF EXISTS schema."name";`.
+ * PostgreSQL has no `ON` clause: an index lives in its table's schema and is dropped by
+ * schema-qualified name (issue #5955). Takes SQL whose identifiers are already converted and
+ * returns null for any other shape (a comma list of indexes, the `table.index` form).
+ */
+export function ConvertDropIndex(sql: string): string | null {
+  const m = sql.trim().match(DROP_INDEX_ON_TABLE);
+  if (!m) return null;
+  const name = m[1].replace(/^"|"$/g, '');
+  const schema = m[2].match(/^(.+)\.(?:"[^"]+"|\w+)$/)?.[1];
+  return `DROP INDEX IF EXISTS ${schema ? `${schema}.` : ''}"${name}";`;
+}
 
 export class CreateIndexRule implements IConversionRule {
   Name = 'CreateIndexRule';
   SourceDialect = 'tsql';
   TargetDialect = 'postgres';
-  AppliesTo: StatementType[] = ['CREATE_INDEX'];
+  AppliesTo: StatementType[] = ['CREATE_INDEX', 'DROP_INDEX'];
   Priority = 70;
   BypassSqlglot = true;
   BypassJustification = 'Custom output adds CREATE INDEX IF NOT EXISTS for idempotency, strips T-SQL filegroup syntax (ON [PRIMARY]), removes WITH NOCHECK, truncates index names to PG\'s 63-char limit (with hash suffix), and quotes column names with PascalCase. sqlglot does not apply MJ\'s naming conventions or idempotency wrappers.';
 
   PostProcess(sql: string, _originalSQL: string, _context: ConversionContext): string {
     let result = ConvertIdentifiers(sql);
+    if (/^\s*DROP\s+INDEX\b/i.test(result)) {
+      return (ConvertDropIndex(result) ?? NeedsHandAuthoring('DROP INDEX', 'only `DROP INDEX name ON table` converts', sql).trimEnd()) + '\n';
+    }
 
     // Remove CLUSTERED/NONCLUSTERED
     result = result.replace(/\bCLUSTERED\b/gi, '');

@@ -1255,6 +1255,27 @@ _ALTER_COLUMN = _re.compile(
 )
 
 
+# T-SQL `DROP INDEX [IF EXISTS] name ON table` (issue #5955). PostgreSQL has no `ON` clause: an
+# index lives in its table's schema and is dropped by schema-qualified name. sqlglot 27.x cannot
+# parse the T-SQL form (a parse-error gap) and 30.x passes it through as invalid PG; both now get
+# the PG form. One index per statement — a comma list falls through to the existing gap.
+_DROP_INDEX = _re.compile(
+    r"^\s*DROP\s+INDEX\s+(?:IF\s+EXISTS\s+)?(?P<name>\[[^\]]+\]|\"[^\"]+\"|\w+)\s+ON\s+(?P<tbl>[^,;]+?)\s*;?\s*$",
+    _re.IGNORECASE | _re.DOTALL,
+)
+
+
+def _transpile_drop_index(txt: str) -> str | None:
+    """`DROP INDEX ix ON s.t` → `DROP INDEX IF EXISTS "s"."ix"`. Returns None for any other shape."""
+    m = _DROP_INDEX.match(_strip_leading_sql_comments(txt))
+    if not m:
+        return None
+    schema_toks = _IDENT_TOKEN.findall(m.group("tbl"))[:-1]
+    prefix = "".join(_ident_token_to_pg(t) + "." for t in schema_toks)
+    name = m.group("name").strip('[]"')
+    return f'DROP INDEX IF EXISTS {prefix}"{name}"'
+
+
 def _transpile_alter_column(txt: str) -> str | None:
     """`ALTER TABLE t ALTER COLUMN c <type> [NOT NULL|NULL]` → PG TYPE change + nullability.
     Returns None if txt isn't an ALTER COLUMN (or its type can't be parsed)."""
@@ -1445,6 +1466,45 @@ def _parse_resilient(protected: str) -> list[tuple[exp.Expression | None, str]]:
 _WITH_CHECK_ADD = _re.compile(r"\bWITH\s+(?:NOCHECK|CHECK)\s+(?=ADD\b)", _re.IGNORECASE)
 
 
+def _delete_cte_target(stmt: exp.Delete) -> exp.CTE | None:
+    """The CTE a `WITH c AS (…) DELETE FROM c …` deletes through, or None for a plain DELETE."""
+    target = stmt.this
+    with_ = stmt.args.get("with")
+    if not isinstance(target, exp.Table) or target.args.get("db") or with_ is None:
+        return None
+    for cte in with_.expressions:
+        if (cte.alias or "").lower() == (target.name or "").lower():
+            return cte
+    return None
+
+
+def _rewrite_delete_from_cte(stmt: exp.Delete, cte: exp.CTE) -> exp.Delete | None:
+    """T-SQL deletes base-table rows through a single-table CTE (the ROW_NUMBER dedup idiom);
+    PostgreSQL cannot DELETE FROM a CTE (issue #3166). Carry each row's `ctid` out of the CTE
+    and delete from the base table by it:
+        WITH c AS (SELECT ctid AS mj_ctid, … FROM t …) DELETE FROM t WHERE ctid IN (SELECT mj_ctid FROM c WHERE p)
+    Returns None for any CTE whose rows do not map one-to-one onto one table (a join, several
+    FROM tables, DISTINCT, GROUP BY, a set operation); the caller reports those as a gap."""
+    sel = cte.this
+    if not isinstance(sel, exp.Select) or sel.args.get("joins") or sel.args.get("distinct") or sel.args.get("group"):
+        return None
+    from_ = sel.args.get("from")
+    base = from_.this if from_ is not None else None
+    if not isinstance(base, exp.Table) or len(from_.expressions or []) > 0:
+        return None
+    qualifier = base.alias or None
+    sel.select(exp.alias_(exp.column("ctid", table=qualifier), "mj_ctid"), copy=False)
+    inner = exp.select("mj_ctid").from_(exp.to_table(cte.alias))
+    where = stmt.args.get("where")
+    if where is not None:
+        inner = inner.where(where.this)
+    target = base.copy()
+    target.set("alias", None)
+    stmt.set("this", target)
+    stmt.set("where", exp.Where(this=exp.In(this=exp.column("ctid"), query=exp.Subquery(this=inner))))
+    return stmt
+
+
 def _has_computed_column(stmt: exp.Expression) -> bool:
     """True if `stmt` declares a computed/generated column (T-SQL `col AS (expr) [PERSISTED]`).
     Such columns cannot be transpiled mechanically: sqlglot emits `GENERATED ALWAYS AS (...)
@@ -1493,6 +1553,10 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict], l
                 dropped.append({"kind": "ROUTINE-END", "snippet": tail[:80]})
                 continue
         if stmt is None:
+            di = _transpile_drop_index(raw)
+            if di is not None:
+                out.append(di)
+                continue
             unhandled.append({"kind": "parse-error", "snippet": raw.strip()[:80]})
             continue
         # A T-SQL `IF …` statement that the IF-EXISTS envelope did NOT capture (e.g. a
@@ -1575,6 +1639,15 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict], l
                 for t in (stmt.args.get("tables") or [])):
             unhandled.append({"kind": "DELETE-TOP", "snippet": stmt.sql(dialect="tsql")[:80]})
             continue
+        # `WITH c AS (…) DELETE FROM c` — PG cannot delete through a CTE. Rewrite the single-table
+        # form to a ctid delete on the base table; report any other shape (issue #3166).
+        if isinstance(stmt, exp.Delete):
+            cte = _delete_cte_target(stmt)
+            if cte is not None:
+                txt = stmt.sql(dialect="tsql")
+                if _rewrite_delete_from_cte(stmt, cte) is None:
+                    unhandled.append({"kind": "DELETE-FROM-CTE", "snippet": txt[:80]})
+                    continue
         # Computed/generated columns (`col AS (expr) [PERSISTED]`) can't be transpiled — report
         # (would emit a type-less `GENERATED ALWAYS AS (...) STORED`; see _has_computed_column).
         # Only CREATE/ALTER declare columns — gate on type so the subtree walk skips the huge
@@ -1596,6 +1669,10 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict], l
             ac = _transpile_alter_column(txt)
             if ac is not None:
                 out.append(ac)
+                continue
+            di = _transpile_drop_index(txt)
+            if di is not None:
+                out.append(di)
                 continue
             # SQL Server batch-control noise — not needed on PG, drop silently.
             if _re.match(r"^\s*(BEGIN\s+TRY|END\s+TRY|BEGIN\s+CATCH|END\s+CATCH|SET\s+NOEXEC|GO)\b", txt, _re.IGNORECASE):
@@ -1648,6 +1725,12 @@ def _transpile_plain(sql: str, pretty: bool = False) -> tuple[str, list[dict], l
             elif dk == "TRIGGER":
                 unhandled.append({"kind": "DROP-TRIGGER", "snippet": stmt.sql(dialect="tsql")[:80]})
                 continue
+            elif dk == "INDEX":
+                # 30.x parses the T-SQL `DROP INDEX ix ON t` and would emit it unchanged.
+                di = _transpile_drop_index(raw or stmt.sql(dialect="tsql"))
+                if di is not None:
+                    out.append(di)
+                    continue
         if isinstance(stmt, exp.Create) and (stmt.args.get("kind") or "").upper() in (
                 "NONCLUSTERED INDEX", "CLUSTERED INDEX"):
             stmt.set("kind", "INDEX")  # PG has no CLUSTERED/NONCLUSTERED qualifier
