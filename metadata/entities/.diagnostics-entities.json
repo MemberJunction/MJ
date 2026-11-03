@@ -25,6 +25,21 @@
       "TrackRecordChanges": false,
       "AllowCaching": false,
       "Icon": "fa fa-layer-group"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "_comments": [
+            "Data holds gzip-compressed bytes (varbinary), not JSON"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Diagnostic Session Chunks&Name=Data"
+          },
+          "fields": {
+            "ExtendedType": null
+          }
+        }
+      ]
     }
   },
   {

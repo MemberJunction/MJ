@@ -657,7 +657,7 @@ GO
          , [__mj_UpdatedAt]
       )
       VALUES (
-         'd83818a2-e62d-40ea-9243-c2d1175411ac',
+         '133bf1fd-e4c0-410d-b847-39b3fd6fbc11',
          'MJ: Diagnostic Sessions',
          'Diagnostic Sessions',
          'Bounded server and client diagnostic recording sessions with tenant isolation, scope targeting, and byte-budget controls.',
@@ -683,33 +683,33 @@ GO
 /* SQL generated to add entity MJ: Diagnostic Sessions to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                     ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'd83818a2-e62d-40ea-9243-c2d1175411ac', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '133bf1fd-e4c0-410d-b847-39b3fd6fbc11', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Diagnostic Sessions for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('d83818a2-e62d-40ea-9243-c2d1175411ac' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('133bf1fd-e4c0-410d-b847-39b3fd6fbc11' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('d83818a2-e62d-40ea-9243-c2d1175411ac' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('133bf1fd-e4c0-410d-b847-39b3fd6fbc11' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Diagnostic Sessions for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('d83818a2-e62d-40ea-9243-c2d1175411ac' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('133bf1fd-e4c0-410d-b847-39b3fd6fbc11' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('d83818a2-e62d-40ea-9243-c2d1175411ac' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('133bf1fd-e4c0-410d-b847-39b3fd6fbc11' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Diagnostic Sessions for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('d83818a2-e62d-40ea-9243-c2d1175411ac' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('133bf1fd-e4c0-410d-b847-39b3fd6fbc11' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('d83818a2-e62d-40ea-9243-c2d1175411ac' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('133bf1fd-e4c0-410d-b847-39b3fd6fbc11' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to create new entity MJ: Diagnostic Session Chunks */
@@ -738,7 +738,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         'a5b20694-ec9e-4beb-a402-0081504aa78b',
+         '95ae4a10-7d58-4d55-be27-5b934a958411',
          'MJ: Diagnostic Session Chunks',
          'Diagnostic Session Chunks',
          'Compressed NDJSON capture chunks flushed by server instances and client browsers during a diagnostic session.',
@@ -764,33 +764,33 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 /* SQL generated to add entity MJ: Diagnostic Session Chunks to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                     ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'a5b20694-ec9e-4beb-a402-0081504aa78b', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '95ae4a10-7d58-4d55-be27-5b934a958411', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Diagnostic Session Chunks for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('a5b20694-ec9e-4beb-a402-0081504aa78b' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('95ae4a10-7d58-4d55-be27-5b934a958411' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('a5b20694-ec9e-4beb-a402-0081504aa78b' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('95ae4a10-7d58-4d55-be27-5b934a958411' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Diagnostic Session Chunks for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('a5b20694-ec9e-4beb-a402-0081504aa78b' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('95ae4a10-7d58-4d55-be27-5b934a958411' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('a5b20694-ec9e-4beb-a402-0081504aa78b' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('95ae4a10-7d58-4d55-be27-5b934a958411' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Diagnostic Session Chunks for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('a5b20694-ec9e-4beb-a402-0081504aa78b' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('95ae4a10-7d58-4d55-be27-5b934a958411' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('a5b20694-ec9e-4beb-a402-0081504aa78b' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('95ae4a10-7d58-4d55-be27-5b934a958411' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to create new entity MJ: Diagnostic Bundles */
@@ -819,7 +819,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         'd3aad653-5b9a-4075-94c0-a2a490823d4e',
+         'a385086e-1147-4042-ae36-d808ce850ef9',
          'MJ: Diagnostic Bundles',
          'Diagnostic Bundles',
          'Assembled .mjdiag diagnostic bundles (both locally built bundles and external bundles received via MJAPI intake) with manifest, scrubbing report, automated findings, and MJStorage link.',
@@ -845,33 +845,33 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 /* SQL generated to add entity MJ: Diagnostic Bundles to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                     ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'd3aad653-5b9a-4075-94c0-a2a490823d4e', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'a385086e-1147-4042-ae36-d808ce850ef9', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Diagnostic Bundles for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('d3aad653-5b9a-4075-94c0-a2a490823d4e' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('a385086e-1147-4042-ae36-d808ce850ef9' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('d3aad653-5b9a-4075-94c0-a2a490823d4e' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('a385086e-1147-4042-ae36-d808ce850ef9' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Diagnostic Bundles for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('d3aad653-5b9a-4075-94c0-a2a490823d4e' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('a385086e-1147-4042-ae36-d808ce850ef9' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('d3aad653-5b9a-4075-94c0-a2a490823d4e' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('a385086e-1147-4042-ae36-d808ce850ef9' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Diagnostic Bundles for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('d3aad653-5b9a-4075-94c0-a2a490823d4e' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('a385086e-1147-4042-ae36-d808ce850ef9' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('d3aad653-5b9a-4075-94c0-a2a490823d4e' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('a385086e-1147-4042-ae36-d808ce850ef9' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to create new entity MJ: Diagnostic Sender Registrations */
@@ -900,7 +900,7 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '7680f8bd-1da5-4664-81cc-2225eb4299a7',
+         '0a75d64d-9396-4b77-871a-d88577f2ac4f',
          'MJ: Diagnostic Sender Registrations',
          'Diagnostic Sender Registrations',
          'An installation that is allowed to send diagnostic bundles to this collector. Holds its enrollment state, the public key that verifies its signed requests, the hash of its one-time registration code, and its daily bundle quota.',
@@ -926,34 +926,66 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
 /* SQL generated to add entity MJ: Diagnostic Sender Registrations to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                     ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '7680f8bd-1da5-4664-81cc-2225eb4299a7', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '0a75d64d-9396-4b77-871a-d88577f2ac4f', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Diagnostic Sender Registrations for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('7680f8bd-1da5-4664-81cc-2225eb4299a7' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('0a75d64d-9396-4b77-871a-d88577f2ac4f' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('7680f8bd-1da5-4664-81cc-2225eb4299a7' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('0a75d64d-9396-4b77-871a-d88577f2ac4f' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Diagnostic Sender Registrations for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('7680f8bd-1da5-4664-81cc-2225eb4299a7' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('0a75d64d-9396-4b77-871a-d88577f2ac4f' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('7680f8bd-1da5-4664-81cc-2225eb4299a7' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('0a75d64d-9396-4b77-871a-d88577f2ac4f' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Diagnostic Sender Registrations for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('7680f8bd-1da5-4664-81cc-2225eb4299a7' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('0a75d64d-9396-4b77-871a-d88577f2ac4f' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('7680f8bd-1da5-4664-81cc-2225eb4299a7' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('0a75d64d-9396-4b77-871a-d88577f2ac4f' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.DiagnosticSession */
+ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSession] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.DiagnosticSession */
+UPDATE [${flyway:defaultSchema}].[DiagnosticSession] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.DiagnosticSession */
+ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSession] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.DiagnosticSession */
+ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSession] ADD CONSTRAINT [DF___mj_DiagnosticSession___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.DiagnosticSession */
+ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSession] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.DiagnosticSession */
+UPDATE [${flyway:defaultSchema}].[DiagnosticSession] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.DiagnosticSession */
+ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSession] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.DiagnosticSession */
+ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSession] ADD CONSTRAINT [DF___mj_DiagnosticSession___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
+GO
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.DiagnosticSessionChunk */
 ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSessionChunk] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
@@ -985,38 +1017,6 @@ GO
 
 /* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.DiagnosticSessionChunk */
 ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSessionChunk] ADD CONSTRAINT [DF___mj_DiagnosticSessionChunk___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.DiagnosticSenderRegistration */
-ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSenderRegistration] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.DiagnosticSenderRegistration */
-UPDATE [${flyway:defaultSchema}].[DiagnosticSenderRegistration] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.DiagnosticSenderRegistration */
-ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSenderRegistration] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
-GO
-
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.DiagnosticSenderRegistration */
-ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSenderRegistration] ADD CONSTRAINT [DF___mj_DiagnosticSenderRegistration___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.DiagnosticSenderRegistration */
-ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSenderRegistration] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.DiagnosticSenderRegistration */
-UPDATE [${flyway:defaultSchema}].[DiagnosticSenderRegistration] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.DiagnosticSenderRegistration */
-ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSenderRegistration] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
-GO
-
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.DiagnosticSenderRegistration */
-ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSenderRegistration] ADD CONSTRAINT [DF___mj_DiagnosticSenderRegistration___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
 GO
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.DiagnosticBundle */
@@ -1051,41 +1051,41 @@ GO
 ALTER TABLE [${flyway:defaultSchema}].[DiagnosticBundle] ADD CONSTRAINT [DF___mj_DiagnosticBundle___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
 GO
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.DiagnosticSession */
-ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSession] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.DiagnosticSenderRegistration */
+ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSenderRegistration] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
 GO
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.DiagnosticSession */
-UPDATE [${flyway:defaultSchema}].[DiagnosticSession] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.DiagnosticSenderRegistration */
+UPDATE [${flyway:defaultSchema}].[DiagnosticSenderRegistration] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
 GO
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.DiagnosticSession */
-ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSession] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.DiagnosticSenderRegistration */
+ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSenderRegistration] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
 GO
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.DiagnosticSession */
-ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSession] ADD CONSTRAINT [DF___mj_DiagnosticSession___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.DiagnosticSenderRegistration */
+ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSenderRegistration] ADD CONSTRAINT [DF___mj_DiagnosticSenderRegistration___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
 GO
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.DiagnosticSession */
-ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSession] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.DiagnosticSenderRegistration */
+ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSenderRegistration] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
 GO
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.DiagnosticSession */
-UPDATE [${flyway:defaultSchema}].[DiagnosticSession] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.DiagnosticSenderRegistration */
+UPDATE [${flyway:defaultSchema}].[DiagnosticSenderRegistration] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
 GO
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.DiagnosticSession */
-ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSession] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.DiagnosticSenderRegistration */
+ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSenderRegistration] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
 GO
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.DiagnosticSession */
-ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSession] ADD CONSTRAINT [DF___mj_DiagnosticSession___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.DiagnosticSenderRegistration */
+ALTER TABLE [${flyway:defaultSchema}].[DiagnosticSenderRegistration] ADD CONSTRAINT [DF___mj_DiagnosticSenderRegistration___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
 GO
 
 /* SQL text to insert 75 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '92210665-7cbe-464d-a0f3-321349bb576b' OR (EntityID = 'A5B20694-EC9E-4BEB-A402-0081504AA78B' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6d73cd9a-ebd5-4c84-ad04-730de04bcee4' OR (EntityID = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1118,9 +1118,9 @@ GO
          )
          VALUES
          (
-            '92210665-7cbe-464d-a0f3-321349bb576b',
-            'A5B20694-EC9E-4BEB-A402-0081504AA78B', -- Entity: MJ: Diagnostic Session Chunks
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A5B20694-EC9E-4BEB-A402-0081504AA78B'),
+            '6d73cd9a-ebd5-4c84-ad04-730de04bcee4',
+            '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', -- Entity: MJ: Diagnostic Sessions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11'),
             'ID',
             'ID',
             NULL,
@@ -1148,7 +1148,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '72168bca-4b51-457b-afc9-167326fbe1a4' OR (EntityID = 'A5B20694-EC9E-4BEB-A402-0081504AA78B' AND Name = 'DiagnosticSessionID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '10bacf04-9a95-4b35-8f0b-34d70fb2fc19' OR (EntityID = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND Name = 'Name')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1181,3663 +1181,9 @@ GO
          )
          VALUES
          (
-            '72168bca-4b51-457b-afc9-167326fbe1a4',
-            'A5B20694-EC9E-4BEB-A402-0081504AA78B', -- Entity: MJ: Diagnostic Session Chunks
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A5B20694-EC9E-4BEB-A402-0081504AA78B'),
-            'DiagnosticSessionID',
-            'Diagnostic Session ID',
-            'Owning diagnostic session for this chunk.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            'D83818A2-E62D-40EA-9243-C2D1175411AC',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bc039dc4-e227-4836-b237-cb312edb05e0' OR (EntityID = 'A5B20694-EC9E-4BEB-A402-0081504AA78B' AND Name = 'Source')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'bc039dc4-e227-4836-b237-cb312edb05e0',
-            'A5B20694-EC9E-4BEB-A402-0081504AA78B', -- Entity: MJ: Diagnostic Session Chunks
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A5B20694-EC9E-4BEB-A402-0081504AA78B'),
-            'Source',
-            'Source',
-            'Origin tier that produced the chunk (Server or Client).',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            1,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '42d629e0-cef2-447e-84d2-124bfcc82a47' OR (EntityID = 'A5B20694-EC9E-4BEB-A402-0081504AA78B' AND Name = 'HostInstanceLabel')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '42d629e0-cef2-447e-84d2-124bfcc82a47',
-            'A5B20694-EC9E-4BEB-A402-0081504AA78B', -- Entity: MJ: Diagnostic Session Chunks
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A5B20694-EC9E-4BEB-A402-0081504AA78B'),
-            'HostInstanceLabel',
-            'Host Instance Label',
-            'Process UUID, hostname, or browser tab identifier that flushed this chunk.',
-            'nvarchar',
-            510,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            1,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '61c5f07f-89f7-48c3-beb4-8354a88c0423' OR (EntityID = 'A5B20694-EC9E-4BEB-A402-0081504AA78B' AND Name = 'Sequence')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '61c5f07f-89f7-48c3-beb4-8354a88c0423',
-            'A5B20694-EC9E-4BEB-A402-0081504AA78B', -- Entity: MJ: Diagnostic Session Chunks
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A5B20694-EC9E-4BEB-A402-0081504AA78B'),
-            'Sequence',
-            'Sequence',
-            'Monotonically increasing sequence number per (DiagnosticSessionID, Source, HostInstanceLabel, ContentKind).',
-            'int',
-            4,
-            10,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            1,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e91151ea-695e-40f1-ac51-f918454da4d0' OR (EntityID = 'A5B20694-EC9E-4BEB-A402-0081504AA78B' AND Name = 'ContentKind')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'e91151ea-695e-40f1-ac51-f918454da4d0',
-            'A5B20694-EC9E-4BEB-A402-0081504AA78B', -- Entity: MJ: Diagnostic Session Chunks
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A5B20694-EC9E-4BEB-A402-0081504AA78B'),
-            'ContentKind',
-            'Content Kind',
-            'Type of diagnostic data stored in this chunk.',
-            'nvarchar',
-            60,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '78db8811-5731-4f94-b5e3-9f44ccdfa766' OR (EntityID = 'A5B20694-EC9E-4BEB-A402-0081504AA78B' AND Name = 'Data')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '78db8811-5731-4f94-b5e3-9f44ccdfa766',
-            'A5B20694-EC9E-4BEB-A402-0081504AA78B', -- Entity: MJ: Diagnostic Session Chunks
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A5B20694-EC9E-4BEB-A402-0081504AA78B'),
-            'Data',
-            'Data',
-            'DEFLATE/gzip compressed NDJSON or JSON payload (~256 KB max per chunk).',
-            'varbinary',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'deb5678d-ec9b-4db8-b1cd-ec3ef7cda71a' OR (EntityID = 'A5B20694-EC9E-4BEB-A402-0081504AA78B' AND Name = 'EntryCount')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'deb5678d-ec9b-4db8-b1cd-ec3ef7cda71a',
-            'A5B20694-EC9E-4BEB-A402-0081504AA78B', -- Entity: MJ: Diagnostic Session Chunks
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A5B20694-EC9E-4BEB-A402-0081504AA78B'),
-            'EntryCount',
-            'Entry Count',
-            'Number of records or events contained in this chunk.',
-            'int',
-            4,
-            10,
-            0,
-            0,
-            '(0)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '01f2994d-8667-4834-b9f5-b05b23303c24' OR (EntityID = 'A5B20694-EC9E-4BEB-A402-0081504AA78B' AND Name = 'FirstEntryAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '01f2994d-8667-4834-b9f5-b05b23303c24',
-            'A5B20694-EC9E-4BEB-A402-0081504AA78B', -- Entity: MJ: Diagnostic Session Chunks
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A5B20694-EC9E-4BEB-A402-0081504AA78B'),
-            'FirstEntryAt',
-            'First Entry At',
-            'Timestamp of the earliest event in this chunk.',
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '94a9fc0e-6770-4394-ab47-ce152192cc10' OR (EntityID = 'A5B20694-EC9E-4BEB-A402-0081504AA78B' AND Name = 'LastEntryAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '94a9fc0e-6770-4394-ab47-ce152192cc10',
-            'A5B20694-EC9E-4BEB-A402-0081504AA78B', -- Entity: MJ: Diagnostic Session Chunks
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A5B20694-EC9E-4BEB-A402-0081504AA78B'),
-            'LastEntryAt',
-            'Last Entry At',
-            'Timestamp of the latest event in this chunk.',
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '18d6e6b6-4d05-4865-91bf-d0650e25e12e' OR (EntityID = 'A5B20694-EC9E-4BEB-A402-0081504AA78B' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '18d6e6b6-4d05-4865-91bf-d0650e25e12e',
-            'A5B20694-EC9E-4BEB-A402-0081504AA78B', -- Entity: MJ: Diagnostic Session Chunks
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A5B20694-EC9E-4BEB-A402-0081504AA78B'),
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '52934c2d-ffb4-4ef9-9416-73ec4ed4c1a9' OR (EntityID = 'A5B20694-EC9E-4BEB-A402-0081504AA78B' AND Name = '__mj_UpdatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '52934c2d-ffb4-4ef9-9416-73ec4ed4c1a9',
-            'A5B20694-EC9E-4BEB-A402-0081504AA78B', -- Entity: MJ: Diagnostic Session Chunks
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A5B20694-EC9E-4BEB-A402-0081504AA78B'),
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'feaa52e1-360e-4774-81fb-7b3dec9a1738' OR (EntityID = '7680F8BD-1DA5-4664-81CC-2225EB4299A7' AND Name = 'ID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'feaa52e1-360e-4774-81fb-7b3dec9a1738',
-            '7680F8BD-1DA5-4664-81CC-2225EB4299A7', -- Entity: MJ: Diagnostic Sender Registrations
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7680F8BD-1DA5-4664-81CC-2225EB4299A7'),
-            'ID',
-            'ID',
-            'Unique identifier of the sender registration.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            1,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '23c5308d-2c15-46a6-bc53-16adacc8fb74' OR (EntityID = '7680F8BD-1DA5-4664-81CC-2225EB4299A7' AND Name = 'InstallID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '23c5308d-2c15-46a6-bc53-16adacc8fb74',
-            '7680F8BD-1DA5-4664-81CC-2225EB4299A7', -- Entity: MJ: Diagnostic Sender Registrations
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7680F8BD-1DA5-4664-81CC-2225EB4299A7'),
-            'InstallID',
-            'Install ID',
-            'Installation ID of the sending MemberJunction instance. Unique per registration.',
-            'nvarchar',
-            200,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            1,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c63dbeb8-cb74-415c-a8b2-ac20fc66bfa6' OR (EntityID = '7680F8BD-1DA5-4664-81CC-2225EB4299A7' AND Name = 'Name')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'c63dbeb8-cb74-415c-a8b2-ac20fc66bfa6',
-            '7680F8BD-1DA5-4664-81CC-2225EB4299A7', -- Entity: MJ: Diagnostic Sender Registrations
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7680F8BD-1DA5-4664-81CC-2225EB4299A7'),
-            'Name',
-            'Name',
-            'Display name of the customer or installation that sends the bundles.',
-            'nvarchar',
-            510,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            1,
-            1,
-            0,
-            1,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '620f41d8-532d-420d-bfd0-549e404dfc34' OR (EntityID = '7680F8BD-1DA5-4664-81CC-2225EB4299A7' AND Name = 'Status')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '620f41d8-532d-420d-bfd0-549e404dfc34',
-            '7680F8BD-1DA5-4664-81CC-2225EB4299A7', -- Entity: MJ: Diagnostic Sender Registrations
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7680F8BD-1DA5-4664-81CC-2225EB4299A7'),
-            'Status',
-            'Status',
-            'Lifecycle status of the registration. Pending: created, waiting for the sender to enroll with its registration code. Active: enrolled, bundles are accepted. Revoked: bundles are refused.',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            'Pending',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            1,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd33265b5-34fe-4765-a09c-c3dd5212ba6b' OR (EntityID = '7680F8BD-1DA5-4664-81CC-2225EB4299A7' AND Name = 'KeyAlgorithm')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'd33265b5-34fe-4765-a09c-c3dd5212ba6b',
-            '7680F8BD-1DA5-4664-81CC-2225EB4299A7', -- Entity: MJ: Diagnostic Sender Registrations
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7680F8BD-1DA5-4664-81CC-2225EB4299A7'),
-            'KeyAlgorithm',
-            'Key Algorithm',
-            'Signature algorithm of the sender public key.',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            'Ed25519',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            1,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b3b4f241-0a0a-464a-8f91-c49532f502cc' OR (EntityID = '7680F8BD-1DA5-4664-81CC-2225EB4299A7' AND Name = 'KeyID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'b3b4f241-0a0a-464a-8f91-c49532f502cc',
-            '7680F8BD-1DA5-4664-81CC-2225EB4299A7', -- Entity: MJ: Diagnostic Sender Registrations
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7680F8BD-1DA5-4664-81CC-2225EB4299A7'),
-            'KeyID',
-            'Key ID',
-            'Identifier of the sender signing key. Set at enrollment; a key rotation replaces it.',
-            'nvarchar',
-            200,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd39fffe7-bb97-4a50-b028-93d17d4c4fe3' OR (EntityID = '7680F8BD-1DA5-4664-81CC-2225EB4299A7' AND Name = 'PublicKeyBase64')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'd39fffe7-bb97-4a50-b028-93d17d4c4fe3',
-            '7680F8BD-1DA5-4664-81CC-2225EB4299A7', -- Entity: MJ: Diagnostic Sender Registrations
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7680F8BD-1DA5-4664-81CC-2225EB4299A7'),
-            'PublicKeyBase64',
-            'Public Key Base 64',
-            'Base64-encoded public key that verifies the sender signed requests. Set at enrollment.',
-            'nvarchar',
-            510,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2be187da-8771-4521-9067-ed5058e5ab97' OR (EntityID = '7680F8BD-1DA5-4664-81CC-2225EB4299A7' AND Name = 'RegistrationCodeHash')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '2be187da-8771-4521-9067-ed5058e5ab97',
-            '7680F8BD-1DA5-4664-81CC-2225EB4299A7', -- Entity: MJ: Diagnostic Sender Registrations
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7680F8BD-1DA5-4664-81CC-2225EB4299A7'),
-            'RegistrationCodeHash',
-            'Registration Code Hash',
-            'SHA-256 hex digest of the one-time registration code. The plain code is never stored.',
-            'nvarchar',
-            256,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '87738366-263a-4480-8874-ceb178445606' OR (EntityID = '7680F8BD-1DA5-4664-81CC-2225EB4299A7' AND Name = 'RegistrationCodeExpiresAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '87738366-263a-4480-8874-ceb178445606',
-            '7680F8BD-1DA5-4664-81CC-2225EB4299A7', -- Entity: MJ: Diagnostic Sender Registrations
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7680F8BD-1DA5-4664-81CC-2225EB4299A7'),
-            'RegistrationCodeExpiresAt',
-            'Registration Code Expires At',
-            'Time after which the one-time registration code can no longer be used to enroll.',
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e06922fb-e7c9-4b1c-8f55-ada49775fb75' OR (EntityID = '7680F8BD-1DA5-4664-81CC-2225EB4299A7' AND Name = 'EnrolledAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'e06922fb-e7c9-4b1c-8f55-ada49775fb75',
-            '7680F8BD-1DA5-4664-81CC-2225EB4299A7', -- Entity: MJ: Diagnostic Sender Registrations
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7680F8BD-1DA5-4664-81CC-2225EB4299A7'),
-            'EnrolledAt',
-            'Enrolled At',
-            'Time the sender enrolled its public key.',
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '654fa598-6390-40c3-89b1-16f94fc336af' OR (EntityID = '7680F8BD-1DA5-4664-81CC-2225EB4299A7' AND Name = 'RevokedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '654fa598-6390-40c3-89b1-16f94fc336af',
-            '7680F8BD-1DA5-4664-81CC-2225EB4299A7', -- Entity: MJ: Diagnostic Sender Registrations
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7680F8BD-1DA5-4664-81CC-2225EB4299A7'),
-            'RevokedAt',
-            'Revoked At',
-            'Time the registration was revoked.',
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '229552f8-6c5f-4cb2-b279-e4655732c2a5' OR (EntityID = '7680F8BD-1DA5-4664-81CC-2225EB4299A7' AND Name = 'LastSeenAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '229552f8-6c5f-4cb2-b279-e4655732c2a5',
-            '7680F8BD-1DA5-4664-81CC-2225EB4299A7', -- Entity: MJ: Diagnostic Sender Registrations
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7680F8BD-1DA5-4664-81CC-2225EB4299A7'),
-            'LastSeenAt',
-            'Last Seen At',
-            'Time of the last authenticated request from the sender.',
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '92469c19-5ea5-42df-b466-cc3db5b7740b' OR (EntityID = '7680F8BD-1DA5-4664-81CC-2225EB4299A7' AND Name = 'MaxBundlesPerDay')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '92469c19-5ea5-42df-b466-cc3db5b7740b',
-            '7680F8BD-1DA5-4664-81CC-2225EB4299A7', -- Entity: MJ: Diagnostic Sender Registrations
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7680F8BD-1DA5-4664-81CC-2225EB4299A7'),
-            'MaxBundlesPerDay',
-            'Max Bundles Per Day',
-            'Maximum number of bundles the collector accepts from this sender per day.',
-            'int',
-            4,
-            10,
-            0,
-            0,
-            '(20)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '90c0f86a-b035-4889-9545-d22558399ea2' OR (EntityID = '7680F8BD-1DA5-4664-81CC-2225EB4299A7' AND Name = 'Comments')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '90c0f86a-b035-4889-9545-d22558399ea2',
-            '7680F8BD-1DA5-4664-81CC-2225EB4299A7', -- Entity: MJ: Diagnostic Sender Registrations
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7680F8BD-1DA5-4664-81CC-2225EB4299A7'),
-            'Comments',
-            'Comments',
-            'Free-form administrator notes about the registration.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ef629ac8-f225-42ce-acae-ff29d213f9c2' OR (EntityID = '7680F8BD-1DA5-4664-81CC-2225EB4299A7' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'ef629ac8-f225-42ce-acae-ff29d213f9c2',
-            '7680F8BD-1DA5-4664-81CC-2225EB4299A7', -- Entity: MJ: Diagnostic Sender Registrations
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7680F8BD-1DA5-4664-81CC-2225EB4299A7'),
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd88aa667-8f2f-4b3e-b38d-87faa310d266' OR (EntityID = '7680F8BD-1DA5-4664-81CC-2225EB4299A7' AND Name = '__mj_UpdatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'd88aa667-8f2f-4b3e-b38d-87faa310d266',
-            '7680F8BD-1DA5-4664-81CC-2225EB4299A7', -- Entity: MJ: Diagnostic Sender Registrations
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7680F8BD-1DA5-4664-81CC-2225EB4299A7'),
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '71992e90-7c1e-460d-bd31-791d2d0eddde' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'ID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '71992e90-7c1e-460d-bd31-791d2d0eddde',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'ID',
-            'ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            1,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '21106266-910e-43ab-abe3-aa5ed911314d' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'Name')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '21106266-910e-43ab-abe3-aa5ed911314d',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'Name',
-            'Name',
-            'Display name of the diagnostic bundle.',
-            'nvarchar',
-            510,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            1,
-            1,
-            0,
-            1,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c5e68c2e-41aa-4e67-97d8-3bc62174d59d' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'Description')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'c5e68c2e-41aa-4e67-97d8-3bc62174d59d',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'Description',
-            'Description',
-            'Optional description or summary notes attached to the bundle.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            1,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '226b9ca7-5fdb-444d-99ac-618b573dc703' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'Direction')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '226b9ca7-5fdb-444d-99ac-618b573dc703',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'Direction',
-            'Direction',
-            'Indicates whether this bundle was built locally on this instance (Local) or ingested via the MJAPI intake endpoint (Received).',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            'Local',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            1,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cdec5719-7946-4367-884f-ffb3bc620cbc' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'DiagnosticSessionID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'cdec5719-7946-4367-884f-ffb3bc620cbc',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'DiagnosticSessionID',
-            'Diagnostic Session ID',
-            'Source diagnostic session when built from a server session; NULL for client-only or received bundles.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            'D83818A2-E62D-40EA-9243-C2D1175411AC',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '469602a1-9d6f-48aa-ad64-b70a48fef38e' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'Status')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '469602a1-9d6f-48aa-ad64-b70a48fef38e',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'Status',
-            'Status',
-            'Current lifecycle status of the diagnostic bundle.',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            'Building',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ca2539bd-bc9c-4b7b-8385-7b3d9b76ae9e' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'ScrubLiterals')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'ca2539bd-bc9c-4b7b-8385-7b3d9b76ae9e',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'ScrubLiterals',
-            'Scrub Literals',
-            'True when inline SQL and filter literals were normalized to ? placeholders in this bundle.',
-            'bit',
-            1,
-            1,
-            0,
-            0,
-            '(0)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '71280090-eb5f-490a-9108-d8fa1da9f264' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'WindowStart')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '71280090-eb5f-490a-9108-d8fa1da9f264',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'WindowStart',
-            'Window Start',
-            'Start of the time window covered by this bundle.',
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '67683c2a-0a1c-4e6e-8f43-e6f89b6586c7' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'WindowEnd')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '67683c2a-0a1c-4e6e-8f43-e6f89b6586c7',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'WindowEnd',
-            'Window End',
-            'End of the time window covered by this bundle.',
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd3335a61-8bd1-4416-90ea-ac65269d7b80' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'FileID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'd3335a61-8bd1-4416-90ea-ac65269d7b80',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'FileID',
-            'File ID',
-            'Reference to MJ: Files when the bundle archive is persisted in MJStorage.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            '29248F34-2837-EF11-86D4-6045BDEE16E6',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '61e09b1a-6e15-46ef-b0f5-1c304507beac' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'Data')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '61e09b1a-6e15-46ef-b0f5-1c304507beac',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'Data',
-            'Data',
-            'Fallback binary storage for the .mjdiag archive when no MJStorage account is configured.',
-            'varbinary',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ce1b783e-7afb-4c66-a0c8-359c24dcbd11' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'SizeBytes')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'ce1b783e-7afb-4c66-a0c8-359c24dcbd11',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'SizeBytes',
-            'Size Bytes',
-            'Total size of the .mjdiag archive in bytes.',
-            'bigint',
-            8,
-            19,
-            0,
-            0,
-            '(0)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c1561d65-10fe-4b6b-ba80-30be25d926e4' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'SHA256')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'c1561d65-10fe-4b6b-ba80-30be25d926e4',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'SHA256',
-            'Sha 256',
-            'Hex-encoded SHA-256 digest of the unencrypted .mjdiag archive.',
-            'nchar',
-            128,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4e898d0d-39c4-4aee-b38b-f138ce3fcde2' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'ManifestJSON')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '4e898d0d-39c4-4aee-b38b-f138ce3fcde2',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'ManifestJSON',
-            'Manifest JSON',
-            'Parsed manifest.json contents including file inventory and SHA-256 digests.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '635e72ad-5692-408e-a98e-8088b0c6fc09' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'ScrubReportJSON')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '635e72ad-5692-408e-a98e-8088b0c6fc09',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'ScrubReportJSON',
-            'Scrub Report JSON',
-            'Summary counts of credential tokens scrubbed and literals normalized across all bundle entries.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5ba8e940-33d4-4dc0-86d5-76340ae53921' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'FindingsJSON')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '5ba8e940-33d4-4dc0-86d5-76340ae53921',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'FindingsJSON',
-            'Findings JSON',
-            'Automated rules-engine diagnostic findings extracted from this bundle.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '883e6ce7-cf5a-4276-937d-ec70480fc823' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'FailureReason')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '883e6ce7-cf5a-4276-937d-ec70480fc823',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'FailureReason',
-            'Failure Reason',
-            'Error details when Status is Failed (e.g., build error, send failure, or malware/structural verification rejection).',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '666a271a-40fe-4adc-9fe0-d52e64f82d3e' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'CreatedByUserID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '666a271a-40fe-4adc-9fe0-d52e64f82d3e',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'CreatedByUserID',
-            'Created By User ID',
-            'User who built or uploaded this bundle; NULL for remotely ingested bundles.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            'E1238F34-2837-EF11-86D4-6045BDEE16E6',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b0e50d95-6be4-4f3b-a71a-ebbb2db48101' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'ApprovedByUserID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'b0e50d95-6be4-4f3b-a71a-ebbb2db48101',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'ApprovedByUserID',
-            'Approved By User ID',
-            'Administrator who approved sending this bundle externally.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            'E1238F34-2837-EF11-86D4-6045BDEE16E6',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '65540dba-e972-458c-b523-c57eafd24a42' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'ApprovedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '65540dba-e972-458c-b523-c57eafd24a42',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'ApprovedAt',
-            'Approved At',
-            'UTC timestamp when external transmission was approved.',
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '64e2435a-02c6-4688-aba3-b05612e69ead' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'Destination')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '64e2435a-02c6-4688-aba3-b05612e69ead',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'Destination',
-            'Destination',
-            'Target external destination when sending a bundle (MJC, CustomerCollector, or StorageAccount).',
-            'nvarchar',
-            60,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1aea44ea-8908-4556-91ae-b10728daff77' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'SentAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '1aea44ea-8908-4556-91ae-b10728daff77',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'SentAt',
-            'Sent At',
-            'UTC timestamp when the bundle was transmitted to Destination.',
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b85a691e-5146-4263-82a5-7d5d7338d0ff' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'ExternalReferenceID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'b85a691e-5146-4263-82a5-7d5d7338d0ff',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'ExternalReferenceID',
-            'External Reference ID',
-            'Reference ID returned by the receiving collector intake endpoint.',
-            'nvarchar',
-            510,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8d2a4187-10f8-416d-8c65-aee61c27d653' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'SenderInstallID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '8d2a4187-10f8-416d-8c65-aee61c27d653',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'SenderInstallID',
-            'Sender Install ID',
-            'InstallID of the sender instance when Direction = Received.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6f79b945-203b-498c-8871-7d6126f1ef46' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'SenderMJVersion')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '6f79b945-203b-498c-8871-7d6126f1ef46',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'SenderMJVersion',
-            'Sender MJ Version',
-            'MemberJunction version reported by the sender instance when Direction = Received.',
-            'nvarchar',
-            100,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8200ea9c-b129-442b-b221-db9a93aa7780' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'ContactInfo')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '8200ea9c-b129-442b-b221-db9a93aa7780',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'ContactInfo',
-            'Contact Info',
-            'Optional reporter or administrator contact information on received bundles.',
-            'nvarchar',
-            1000,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e649ab90-e9e5-4b6b-bd3d-e6dac9a3d35e' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'ExpiresAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'e649ab90-e9e5-4b6b-bd3d-e6dac9a3d35e',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'ExpiresAt',
-            'Expires At',
-            'UTC timestamp when this bundle becomes eligible for automatic retention purge.',
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '10f82559-ae1f-451f-ad0a-00d509d58c8a' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'CompanyID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '10f82559-ae1f-451f-ad0a-00d509d58c8a',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'CompanyID',
-            'Company ID',
-            'Optional tenant CompanyID scoping this diagnostic bundle.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            'D4238F34-2837-EF11-86D4-6045BDEE16E6',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd464283c-4ac5-4365-b614-d61ffc045e3e' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'd464283c-4ac5-4365-b614-d61ffc045e3e',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9d3f49ae-5959-41e4-bf59-40e737499880' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = '__mj_UpdatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '9d3f49ae-5959-41e4-bf59-40e737499880',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0d57649f-3694-4399-95f9-fb6aa970691f' OR (EntityID = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND Name = 'ID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '0d57649f-3694-4399-95f9-fb6aa970691f',
-            'D83818A2-E62D-40EA-9243-C2D1175411AC', -- Entity: MJ: Diagnostic Sessions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC'),
-            'ID',
-            'ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            1,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '754ff87b-8341-453a-975d-ab9caae553e2' OR (EntityID = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND Name = 'Name')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '754ff87b-8341-453a-975d-ab9caae553e2',
-            'D83818A2-E62D-40EA-9243-C2D1175411AC', -- Entity: MJ: Diagnostic Sessions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC'),
+            '10bacf04-9a95-4b35-8f0b-34d70fb2fc19',
+            '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', -- Entity: MJ: Diagnostic Sessions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11'),
             'Name',
             'Name',
             'Human-readable label for the diagnostic session.',
@@ -4865,7 +1211,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'de4c9a0a-fab6-470c-9c1d-37980a8c2792' OR (EntityID = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND Name = 'Reason')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ed4bec44-fd27-4123-9596-febd77edae75' OR (EntityID = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND Name = 'Reason')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4898,9 +1244,9 @@ GO
          )
          VALUES
          (
-            'de4c9a0a-fab6-470c-9c1d-37980a8c2792',
-            'D83818A2-E62D-40EA-9243-C2D1175411AC', -- Entity: MJ: Diagnostic Sessions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC'),
+            'ed4bec44-fd27-4123-9596-febd77edae75',
+            '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', -- Entity: MJ: Diagnostic Sessions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11'),
             'Reason',
             'Reason',
             'Optional explanation of why this diagnostic session was started (such as a ticket number or reproduction notes).',
@@ -4928,7 +1274,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '94dd344e-f20c-489f-8fd7-f5fa6e7ba19a' OR (EntityID = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND Name = 'Status')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '14b54bf3-b16f-477e-aa04-f88e58a6b6f3' OR (EntityID = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND Name = 'Status')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4961,9 +1307,9 @@ GO
          )
          VALUES
          (
-            '94dd344e-f20c-489f-8fd7-f5fa6e7ba19a',
-            'D83818A2-E62D-40EA-9243-C2D1175411AC', -- Entity: MJ: Diagnostic Sessions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC'),
+            '14b54bf3-b16f-477e-aa04-f88e58a6b6f3',
+            '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', -- Entity: MJ: Diagnostic Sessions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11'),
             'Status',
             'Status',
             'Current lifecycle status of the diagnostic session.',
@@ -4991,7 +1337,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '57d1c951-dfcf-4754-a3d1-3f13b6ecdbc1' OR (EntityID = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND Name = 'ScopeType')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a0906db6-1d69-4c67-b552-812e12345344' OR (EntityID = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND Name = 'ScopeType')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5024,9 +1370,9 @@ GO
          )
          VALUES
          (
-            '57d1c951-dfcf-4754-a3d1-3f13b6ecdbc1',
-            'D83818A2-E62D-40EA-9243-C2D1175411AC', -- Entity: MJ: Diagnostic Sessions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC'),
+            'a0906db6-1d69-4c67-b552-812e12345344',
+            '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', -- Entity: MJ: Diagnostic Sessions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11'),
             'ScopeType',
             'Scope Type',
             'Determines which incoming requests are matched and captured by this session.',
@@ -5054,7 +1400,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '104f5ada-3d67-49d1-9486-7dc41c475183' OR (EntityID = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND Name = 'ScopeJSON')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '35265cae-ec4b-4a65-974b-a55af93e3a9f' OR (EntityID = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND Name = 'ScopeJSON')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5087,9 +1433,9 @@ GO
          )
          VALUES
          (
-            '104f5ada-3d67-49d1-9486-7dc41c475183',
-            'D83818A2-E62D-40EA-9243-C2D1175411AC', -- Entity: MJ: Diagnostic Sessions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC'),
+            '35265cae-ec4b-4a65-974b-a55af93e3a9f',
+            '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', -- Entity: MJ: Diagnostic Sessions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11'),
             'ScopeJSON',
             'Scope JSON',
             'JSON specification of targeted UserIDs, APIKeyIDs, GraphQL/RemoteOperation names, or BrowserSessionID.',
@@ -5117,7 +1463,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3bf08c60-a005-4cc3-a730-6aa48bf64d86' OR (EntityID = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND Name = 'Level')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '83f35dfd-93ed-412a-83c1-66ce415c1e50' OR (EntityID = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND Name = 'Level')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5150,9 +1496,9 @@ GO
          )
          VALUES
          (
-            '3bf08c60-a005-4cc3-a730-6aa48bf64d86',
-            'D83818A2-E62D-40EA-9243-C2D1175411AC', -- Entity: MJ: Diagnostic Sessions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC'),
+            '83f35dfd-93ed-412a-83c1-66ce415c1e50',
+            '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', -- Entity: MJ: Diagnostic Sessions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11'),
             'Level',
             'Level',
             'Capture verbosity level applied to requests matched by this session.',
@@ -5180,7 +1526,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '65051c13-cba4-4879-b0e6-e004ff972553' OR (EntityID = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND Name = 'CategoriesJSON')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cfecff5d-2dc3-4155-8033-4b8da1292598' OR (EntityID = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND Name = 'CategoriesJSON')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5213,9 +1559,9 @@ GO
          )
          VALUES
          (
-            '65051c13-cba4-4879-b0e6-e004ff972553',
-            'D83818A2-E62D-40EA-9243-C2D1175411AC', -- Entity: MJ: Diagnostic Sessions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC'),
+            'cfecff5d-2dc3-4155-8033-4b8da1292598',
+            '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', -- Entity: MJ: Diagnostic Sessions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11'),
             'CategoriesJSON',
             'Categories JSON',
             'JSON array of diagnostic categories enabled for this session (e.g., Logs, SQL, Spans, Network, Telemetry).',
@@ -5243,7 +1589,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f3fe8ee6-f207-4242-b4d0-bfcd27a88ab6' OR (EntityID = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND Name = 'ScrubLiterals')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9dd51870-8edf-441d-91a4-fcedd9d0612b' OR (EntityID = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND Name = 'ScrubLiterals')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5276,9 +1622,9 @@ GO
          )
          VALUES
          (
-            'f3fe8ee6-f207-4242-b4d0-bfcd27a88ab6',
-            'D83818A2-E62D-40EA-9243-C2D1175411AC', -- Entity: MJ: Diagnostic Sessions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC'),
+            '9dd51870-8edf-441d-91a4-fcedd9d0612b',
+            '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', -- Entity: MJ: Diagnostic Sessions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11'),
             'ScrubLiterals',
             'Scrub Literals',
             'When true, replaces inline SQL and filter string/number/UUID literals with ? placeholders in addition to mandatory credential scrubbing.',
@@ -5306,7 +1652,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1564eaa6-84f0-4fa7-bf4d-3394d442a8b1' OR (EntityID = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND Name = 'StartedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1811ddd3-1e6c-4338-8148-21ac96f09bc3' OR (EntityID = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND Name = 'StartedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5339,9 +1685,9 @@ GO
          )
          VALUES
          (
-            '1564eaa6-84f0-4fa7-bf4d-3394d442a8b1',
-            'D83818A2-E62D-40EA-9243-C2D1175411AC', -- Entity: MJ: Diagnostic Sessions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC'),
+            '1811ddd3-1e6c-4338-8148-21ac96f09bc3',
+            '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', -- Entity: MJ: Diagnostic Sessions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11'),
             'StartedAt',
             'Started At',
             'UTC timestamp when the diagnostic session became active.',
@@ -5369,7 +1715,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '61f4070e-b90d-4f76-896e-c95ba652aaba' OR (EntityID = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND Name = 'EndsAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f377b211-e2e0-4ce7-9069-9620f2d48e05' OR (EntityID = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND Name = 'EndsAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5402,9 +1748,9 @@ GO
          )
          VALUES
          (
-            '61f4070e-b90d-4f76-896e-c95ba652aaba',
-            'D83818A2-E62D-40EA-9243-C2D1175411AC', -- Entity: MJ: Diagnostic Sessions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC'),
+            'f377b211-e2e0-4ce7-9069-9620f2d48e05',
+            '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', -- Entity: MJ: Diagnostic Sessions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11'),
             'EndsAt',
             'Ends At',
             'UTC timestamp when the diagnostic session automatically expires.',
@@ -5432,7 +1778,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a9b850ee-cfde-428c-8aed-5f3ffecbd40d' OR (EntityID = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND Name = 'StoppedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '433ad27e-71a6-4f6b-854d-55a8789599c1' OR (EntityID = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND Name = 'StoppedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5465,9 +1811,9 @@ GO
          )
          VALUES
          (
-            'a9b850ee-cfde-428c-8aed-5f3ffecbd40d',
-            'D83818A2-E62D-40EA-9243-C2D1175411AC', -- Entity: MJ: Diagnostic Sessions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC'),
+            '433ad27e-71a6-4f6b-854d-55a8789599c1',
+            '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', -- Entity: MJ: Diagnostic Sessions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11'),
             'StoppedAt',
             'Stopped At',
             'UTC timestamp when the diagnostic session was manually stopped.',
@@ -5495,7 +1841,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd8f29b3e-bc24-4bd6-b799-ea932025869b' OR (EntityID = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND Name = 'MaxBytes')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a13aeb63-1d12-4275-8140-e9d31a13b882' OR (EntityID = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND Name = 'MaxBytes')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5528,9 +1874,9 @@ GO
          )
          VALUES
          (
-            'd8f29b3e-bc24-4bd6-b799-ea932025869b',
-            'D83818A2-E62D-40EA-9243-C2D1175411AC', -- Entity: MJ: Diagnostic Sessions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC'),
+            'a13aeb63-1d12-4275-8140-e9d31a13b882',
+            '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', -- Entity: MJ: Diagnostic Sessions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11'),
             'MaxBytes',
             'Max Bytes',
             'Maximum total compressed chunk bytes allowed for this session before capture stops (defaults to 50 MB).',
@@ -5558,7 +1904,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e52bcee5-cc97-4d8b-94bc-2c95e5368f48' OR (EntityID = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND Name = 'CreatedByUserID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8cf0e0d5-f3d2-4f64-b7a4-01f66e1333f7' OR (EntityID = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND Name = 'CreatedByUserID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5591,9 +1937,9 @@ GO
          )
          VALUES
          (
-            'e52bcee5-cc97-4d8b-94bc-2c95e5368f48',
-            'D83818A2-E62D-40EA-9243-C2D1175411AC', -- Entity: MJ: Diagnostic Sessions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC'),
+            '8cf0e0d5-f3d2-4f64-b7a4-01f66e1333f7',
+            '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', -- Entity: MJ: Diagnostic Sessions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11'),
             'CreatedByUserID',
             'Created By User ID',
             'User who initiated the diagnostic session.',
@@ -5621,7 +1967,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5048c5fb-8b97-4270-9b9d-115dc22ac99f' OR (EntityID = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND Name = 'CompanyID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4edf3600-acea-410d-8014-294ced366562' OR (EntityID = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND Name = 'CompanyID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5654,9 +2000,9 @@ GO
          )
          VALUES
          (
-            '5048c5fb-8b97-4270-9b9d-115dc22ac99f',
-            'D83818A2-E62D-40EA-9243-C2D1175411AC', -- Entity: MJ: Diagnostic Sessions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC'),
+            '4edf3600-acea-410d-8014-294ced366562',
+            '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', -- Entity: MJ: Diagnostic Sessions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11'),
             'CompanyID',
             'Company ID',
             'Optional tenant CompanyID isolating session capture in multi-tenant deployments.',
@@ -5684,7 +2030,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1446c757-b326-47a9-8823-1bce91c9938b' OR (EntityID = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0720a793-474d-463f-ab4d-7e9a6a2ff9f9' OR (EntityID = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5717,9 +2063,9 @@ GO
          )
          VALUES
          (
-            '1446c757-b326-47a9-8823-1bce91c9938b',
-            'D83818A2-E62D-40EA-9243-C2D1175411AC', -- Entity: MJ: Diagnostic Sessions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC'),
+            '0720a793-474d-463f-ab4d-7e9a6a2ff9f9',
+            '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', -- Entity: MJ: Diagnostic Sessions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11'),
             '__mj_CreatedAt',
             'Created At',
             NULL,
@@ -5747,7 +2093,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7b9a235d-6609-4cbe-a6b0-c495ae9f368a' OR (EntityID = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '720a573e-634c-4a6e-8915-3d41716cffd9' OR (EntityID = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5780,9 +2126,9 @@ GO
          )
          VALUES
          (
-            '7b9a235d-6609-4cbe-a6b0-c495ae9f368a',
-            'D83818A2-E62D-40EA-9243-C2D1175411AC', -- Entity: MJ: Diagnostic Sessions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC'),
+            '720a573e-634c-4a6e-8915-3d41716cffd9',
+            '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', -- Entity: MJ: Diagnostic Sessions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11'),
             '__mj_UpdatedAt',
             'Updated At',
             NULL,
@@ -5810,263 +2156,3917 @@ GO
          )
       END;
 
-/* SQL text to insert entity field value with ID 9bcafe08-38be-4ed4-876e-46b1c3680beb */
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f3e60710-4797-459e-8f8e-7ac8b18e1e3d' OR (EntityID = '95AE4A10-7D58-4D55-BE27-5B934A958411' AND Name = 'ID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'f3e60710-4797-459e-8f8e-7ac8b18e1e3d',
+            '95AE4A10-7D58-4D55-BE27-5B934A958411', -- Entity: MJ: Diagnostic Session Chunks
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '95AE4A10-7D58-4D55-BE27-5B934A958411'),
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3c9534e2-bf0c-4062-a9c5-462a98d688a5' OR (EntityID = '95AE4A10-7D58-4D55-BE27-5B934A958411' AND Name = 'DiagnosticSessionID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '3c9534e2-bf0c-4062-a9c5-462a98d688a5',
+            '95AE4A10-7D58-4D55-BE27-5B934A958411', -- Entity: MJ: Diagnostic Session Chunks
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '95AE4A10-7D58-4D55-BE27-5B934A958411'),
+            'DiagnosticSessionID',
+            'Diagnostic Session ID',
+            'Owning diagnostic session for this chunk.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            '133BF1FD-E4C0-410D-B847-39B3FD6FBC11',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '65f25294-38fe-4962-ae82-e79654deb7ab' OR (EntityID = '95AE4A10-7D58-4D55-BE27-5B934A958411' AND Name = 'Source')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '65f25294-38fe-4962-ae82-e79654deb7ab',
+            '95AE4A10-7D58-4D55-BE27-5B934A958411', -- Entity: MJ: Diagnostic Session Chunks
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '95AE4A10-7D58-4D55-BE27-5B934A958411'),
+            'Source',
+            'Source',
+            'Origin tier that produced the chunk (Server or Client).',
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1829e0ec-705c-4b0a-aeaa-6229a57d18a9' OR (EntityID = '95AE4A10-7D58-4D55-BE27-5B934A958411' AND Name = 'HostInstanceLabel')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '1829e0ec-705c-4b0a-aeaa-6229a57d18a9',
+            '95AE4A10-7D58-4D55-BE27-5B934A958411', -- Entity: MJ: Diagnostic Session Chunks
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '95AE4A10-7D58-4D55-BE27-5B934A958411'),
+            'HostInstanceLabel',
+            'Host Instance Label',
+            'Process UUID, hostname, or browser tab identifier that flushed this chunk.',
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1ff87845-c451-4511-837b-3a4571fd4889' OR (EntityID = '95AE4A10-7D58-4D55-BE27-5B934A958411' AND Name = 'Sequence')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '1ff87845-c451-4511-837b-3a4571fd4889',
+            '95AE4A10-7D58-4D55-BE27-5B934A958411', -- Entity: MJ: Diagnostic Session Chunks
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '95AE4A10-7D58-4D55-BE27-5B934A958411'),
+            'Sequence',
+            'Sequence',
+            'Monotonically increasing sequence number per (DiagnosticSessionID, Source, HostInstanceLabel, ContentKind).',
+            'int',
+            4,
+            10,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd78c8c45-20c6-461a-a5f9-89f1538caa0f' OR (EntityID = '95AE4A10-7D58-4D55-BE27-5B934A958411' AND Name = 'ContentKind')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'd78c8c45-20c6-461a-a5f9-89f1538caa0f',
+            '95AE4A10-7D58-4D55-BE27-5B934A958411', -- Entity: MJ: Diagnostic Session Chunks
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '95AE4A10-7D58-4D55-BE27-5B934A958411'),
+            'ContentKind',
+            'Content Kind',
+            'Type of diagnostic data stored in this chunk.',
+            'nvarchar',
+            60,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '583d39d5-8db1-4367-a310-9ad3efa46332' OR (EntityID = '95AE4A10-7D58-4D55-BE27-5B934A958411' AND Name = 'Data')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '583d39d5-8db1-4367-a310-9ad3efa46332',
+            '95AE4A10-7D58-4D55-BE27-5B934A958411', -- Entity: MJ: Diagnostic Session Chunks
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '95AE4A10-7D58-4D55-BE27-5B934A958411'),
+            'Data',
+            'Data',
+            'DEFLATE/gzip compressed NDJSON or JSON payload (~256 KB max per chunk).',
+            'varbinary',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '79ad6a5b-7fd9-44cd-adf9-619c0d5c8c7d' OR (EntityID = '95AE4A10-7D58-4D55-BE27-5B934A958411' AND Name = 'EntryCount')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '79ad6a5b-7fd9-44cd-adf9-619c0d5c8c7d',
+            '95AE4A10-7D58-4D55-BE27-5B934A958411', -- Entity: MJ: Diagnostic Session Chunks
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '95AE4A10-7D58-4D55-BE27-5B934A958411'),
+            'EntryCount',
+            'Entry Count',
+            'Number of records or events contained in this chunk.',
+            'int',
+            4,
+            10,
+            0,
+            0,
+            '(0)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '66aee3db-eb2f-48d1-b3e9-22a23ac77fcb' OR (EntityID = '95AE4A10-7D58-4D55-BE27-5B934A958411' AND Name = 'FirstEntryAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '66aee3db-eb2f-48d1-b3e9-22a23ac77fcb',
+            '95AE4A10-7D58-4D55-BE27-5B934A958411', -- Entity: MJ: Diagnostic Session Chunks
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '95AE4A10-7D58-4D55-BE27-5B934A958411'),
+            'FirstEntryAt',
+            'First Entry At',
+            'Timestamp of the earliest event in this chunk.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9d54251c-1f94-492b-9d41-165ec8fa607c' OR (EntityID = '95AE4A10-7D58-4D55-BE27-5B934A958411' AND Name = 'LastEntryAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '9d54251c-1f94-492b-9d41-165ec8fa607c',
+            '95AE4A10-7D58-4D55-BE27-5B934A958411', -- Entity: MJ: Diagnostic Session Chunks
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '95AE4A10-7D58-4D55-BE27-5B934A958411'),
+            'LastEntryAt',
+            'Last Entry At',
+            'Timestamp of the latest event in this chunk.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b8051f5e-d175-4a1b-b838-902bca34700d' OR (EntityID = '95AE4A10-7D58-4D55-BE27-5B934A958411' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'b8051f5e-d175-4a1b-b838-902bca34700d',
+            '95AE4A10-7D58-4D55-BE27-5B934A958411', -- Entity: MJ: Diagnostic Session Chunks
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '95AE4A10-7D58-4D55-BE27-5B934A958411'),
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '84d272e8-9cee-4bc2-91d0-e07959e3b5ba' OR (EntityID = '95AE4A10-7D58-4D55-BE27-5B934A958411' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '84d272e8-9cee-4bc2-91d0-e07959e3b5ba',
+            '95AE4A10-7D58-4D55-BE27-5B934A958411', -- Entity: MJ: Diagnostic Session Chunks
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '95AE4A10-7D58-4D55-BE27-5B934A958411'),
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'edd96485-ab7f-4b90-b8b0-0ff89f5ce083' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'ID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'edd96485-ab7f-4b90-b8b0-0ff89f5ce083',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0b1302d6-9ec4-44d1-a37a-990917da383d' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'Name')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '0b1302d6-9ec4-44d1-a37a-990917da383d',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'Name',
+            'Name',
+            'Display name of the diagnostic bundle.',
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            1,
+            1,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8bb008bf-de67-444d-9c70-f6ca72ce1e5f' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'Description')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '8bb008bf-de67-444d-9c70-f6ca72ce1e5f',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'Description',
+            'Description',
+            'Optional description or summary notes attached to the bundle.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '329f06fc-164a-44ca-9a37-6db686e80dc9' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'Direction')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '329f06fc-164a-44ca-9a37-6db686e80dc9',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'Direction',
+            'Direction',
+            'Indicates whether this bundle was built locally on this instance (Local) or ingested via the MJAPI intake endpoint (Received).',
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'Local',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1b866d87-8bd5-4797-8bd6-a7b82208960e' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'DiagnosticSessionID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '1b866d87-8bd5-4797-8bd6-a7b82208960e',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'DiagnosticSessionID',
+            'Diagnostic Session ID',
+            'Source diagnostic session when built from a server session; NULL for client-only or received bundles.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            '133BF1FD-E4C0-410D-B847-39B3FD6FBC11',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b3e39419-3f28-487f-8e96-b787a316ae23' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'Status')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'b3e39419-3f28-487f-8e96-b787a316ae23',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'Status',
+            'Status',
+            'Current lifecycle status of the diagnostic bundle.',
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'Building',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '03f204c7-74b8-4567-b4e7-8daad2ae52f6' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'ScrubLiterals')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '03f204c7-74b8-4567-b4e7-8daad2ae52f6',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'ScrubLiterals',
+            'Scrub Literals',
+            'True when inline SQL and filter literals were normalized to ? placeholders in this bundle.',
+            'bit',
+            1,
+            1,
+            0,
+            0,
+            '(0)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5e30689f-da96-490f-8d50-19e9ce98ea06' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'WindowStart')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '5e30689f-da96-490f-8d50-19e9ce98ea06',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'WindowStart',
+            'Window Start',
+            'Start of the time window covered by this bundle.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9b0845fb-9964-49e8-b814-134de5842026' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'WindowEnd')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '9b0845fb-9964-49e8-b814-134de5842026',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'WindowEnd',
+            'Window End',
+            'End of the time window covered by this bundle.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9aa2c46a-16e0-4233-871e-9ffcce400acb' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'FileID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '9aa2c46a-16e0-4233-871e-9ffcce400acb',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'FileID',
+            'File ID',
+            'Reference to MJ: Files when the bundle archive is persisted in MJStorage.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            '29248F34-2837-EF11-86D4-6045BDEE16E6',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c66bbb4a-991e-448a-83b0-c977d59ddced' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'Data')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c66bbb4a-991e-448a-83b0-c977d59ddced',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'Data',
+            'Data',
+            'Fallback binary storage for the .mjdiag archive when no MJStorage account is configured.',
+            'varbinary',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '008be4d2-d5da-4d58-9c59-c2d0ea75c1a2' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'SizeBytes')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '008be4d2-d5da-4d58-9c59-c2d0ea75c1a2',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'SizeBytes',
+            'Size Bytes',
+            'Total size of the .mjdiag archive in bytes.',
+            'bigint',
+            8,
+            19,
+            0,
+            0,
+            '(0)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1103f8ce-c48c-4fe3-ae05-ead4e4516347' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'SHA256')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '1103f8ce-c48c-4fe3-ae05-ead4e4516347',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'SHA256',
+            'Sha 256',
+            'Hex-encoded SHA-256 digest of the unencrypted .mjdiag archive.',
+            'nchar',
+            128,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '12ddb9b2-bb41-4a3b-8bb8-cea9fc7d6e68' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'ManifestJSON')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '12ddb9b2-bb41-4a3b-8bb8-cea9fc7d6e68',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'ManifestJSON',
+            'Manifest JSON',
+            'Parsed manifest.json contents including file inventory and SHA-256 digests.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'be34ef65-dd3f-4631-944f-18126e0dec06' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'ScrubReportJSON')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'be34ef65-dd3f-4631-944f-18126e0dec06',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'ScrubReportJSON',
+            'Scrub Report JSON',
+            'Summary counts of credential tokens scrubbed and literals normalized across all bundle entries.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ad7dd548-3a48-40b8-843e-16dafe4af6c4' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'FindingsJSON')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'ad7dd548-3a48-40b8-843e-16dafe4af6c4',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'FindingsJSON',
+            'Findings JSON',
+            'Automated rules-engine diagnostic findings extracted from this bundle.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '058765e6-dd09-484f-822e-b466d681e801' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'FailureReason')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '058765e6-dd09-484f-822e-b466d681e801',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'FailureReason',
+            'Failure Reason',
+            'Error details when Status is Failed (e.g., build error, send failure, or malware/structural verification rejection).',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '601f1c45-a56c-4ccd-9a29-efc6a7fee5c4' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'CreatedByUserID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '601f1c45-a56c-4ccd-9a29-efc6a7fee5c4',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'CreatedByUserID',
+            'Created By User ID',
+            'User who built or uploaded this bundle; NULL for remotely ingested bundles.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            'E1238F34-2837-EF11-86D4-6045BDEE16E6',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '999005e6-4821-443f-bb77-e06fe89d87d6' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'ApprovedByUserID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '999005e6-4821-443f-bb77-e06fe89d87d6',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'ApprovedByUserID',
+            'Approved By User ID',
+            'Administrator who approved sending this bundle externally.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            'E1238F34-2837-EF11-86D4-6045BDEE16E6',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '374efb56-ca0c-464c-b67f-f63bf4fc71b8' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'ApprovedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '374efb56-ca0c-464c-b67f-f63bf4fc71b8',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'ApprovedAt',
+            'Approved At',
+            'UTC timestamp when external transmission was approved.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5486f090-0c0f-4312-ab17-2109820f6866' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'Destination')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '5486f090-0c0f-4312-ab17-2109820f6866',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'Destination',
+            'Destination',
+            'Target external destination when sending a bundle (MJC, CustomerCollector, or StorageAccount).',
+            'nvarchar',
+            60,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c6a6729a-6922-4977-97f5-2eb4b9471308' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'SentAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c6a6729a-6922-4977-97f5-2eb4b9471308',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'SentAt',
+            'Sent At',
+            'UTC timestamp when the bundle was transmitted to Destination.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6c7bdfed-2462-45fd-9022-6ffe9b9369ba' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'ExternalReferenceID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '6c7bdfed-2462-45fd-9022-6ffe9b9369ba',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'ExternalReferenceID',
+            'External Reference ID',
+            'Reference ID returned by the receiving collector intake endpoint.',
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e864c1fe-6e5b-4fd7-982a-6d0ec2083c49' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'SenderInstallID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'e864c1fe-6e5b-4fd7-982a-6d0ec2083c49',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'SenderInstallID',
+            'Sender Install ID',
+            'InstallID of the sender instance when Direction = Received.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c10c0183-8895-4cea-aff0-c2b993772bd0' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'SenderMJVersion')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c10c0183-8895-4cea-aff0-c2b993772bd0',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'SenderMJVersion',
+            'Sender MJ Version',
+            'MemberJunction version reported by the sender instance when Direction = Received.',
+            'nvarchar',
+            100,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0d61de7d-c46e-45fc-bf04-29d295d55aec' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'ContactInfo')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '0d61de7d-c46e-45fc-bf04-29d295d55aec',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'ContactInfo',
+            'Contact Info',
+            'Optional reporter or administrator contact information on received bundles.',
+            'nvarchar',
+            1000,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bc31da3a-499b-4c7c-b0c9-bf8cf37c25de' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'ExpiresAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'bc31da3a-499b-4c7c-b0c9-bf8cf37c25de',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'ExpiresAt',
+            'Expires At',
+            'UTC timestamp when this bundle becomes eligible for automatic retention purge.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '928b0221-2753-412e-97c8-58998662fb3b' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'CompanyID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '928b0221-2753-412e-97c8-58998662fb3b',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            'CompanyID',
+            'Company ID',
+            'Optional tenant CompanyID scoping this diagnostic bundle.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            'D4238F34-2837-EF11-86D4-6045BDEE16E6',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c987f153-54f3-492f-bd74-8b1851199237' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c987f153-54f3-492f-bd74-8b1851199237',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '23d783e5-25d1-48f6-9960-2802038ae3fb' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '23d783e5-25d1-48f6-9960-2802038ae3fb',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9ba99562-5bcc-4f2a-a4c5-29f35efbd7fc' OR (EntityID = '0A75D64D-9396-4B77-871A-D88577F2AC4F' AND Name = 'ID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '9ba99562-5bcc-4f2a-a4c5-29f35efbd7fc',
+            '0A75D64D-9396-4B77-871A-D88577F2AC4F', -- Entity: MJ: Diagnostic Sender Registrations
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0A75D64D-9396-4B77-871A-D88577F2AC4F'),
+            'ID',
+            'ID',
+            'Unique identifier of the sender registration.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f6e61a2e-1d12-4f53-bf96-f610f619baf4' OR (EntityID = '0A75D64D-9396-4B77-871A-D88577F2AC4F' AND Name = 'InstallID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'f6e61a2e-1d12-4f53-bf96-f610f619baf4',
+            '0A75D64D-9396-4B77-871A-D88577F2AC4F', -- Entity: MJ: Diagnostic Sender Registrations
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0A75D64D-9396-4B77-871A-D88577F2AC4F'),
+            'InstallID',
+            'Install ID',
+            'Installation ID of the sending MemberJunction instance. Unique per registration.',
+            'nvarchar',
+            200,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3ac7ba3c-7bba-4fd2-8ae0-a60b8d1eb1c6' OR (EntityID = '0A75D64D-9396-4B77-871A-D88577F2AC4F' AND Name = 'Name')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '3ac7ba3c-7bba-4fd2-8ae0-a60b8d1eb1c6',
+            '0A75D64D-9396-4B77-871A-D88577F2AC4F', -- Entity: MJ: Diagnostic Sender Registrations
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0A75D64D-9396-4B77-871A-D88577F2AC4F'),
+            'Name',
+            'Name',
+            'Display name of the customer or installation that sends the bundles.',
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            1,
+            1,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7d1b5770-11ed-494b-8014-9940ccb6930f' OR (EntityID = '0A75D64D-9396-4B77-871A-D88577F2AC4F' AND Name = 'Status')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '7d1b5770-11ed-494b-8014-9940ccb6930f',
+            '0A75D64D-9396-4B77-871A-D88577F2AC4F', -- Entity: MJ: Diagnostic Sender Registrations
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0A75D64D-9396-4B77-871A-D88577F2AC4F'),
+            'Status',
+            'Status',
+            'Lifecycle status of the registration. Pending: created, waiting for the sender to enroll with its registration code. Active: enrolled, bundles are accepted. Revoked: bundles are refused.',
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'Pending',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ca639f48-0665-4b2d-ab83-6709ff9057a3' OR (EntityID = '0A75D64D-9396-4B77-871A-D88577F2AC4F' AND Name = 'KeyAlgorithm')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'ca639f48-0665-4b2d-ab83-6709ff9057a3',
+            '0A75D64D-9396-4B77-871A-D88577F2AC4F', -- Entity: MJ: Diagnostic Sender Registrations
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0A75D64D-9396-4B77-871A-D88577F2AC4F'),
+            'KeyAlgorithm',
+            'Key Algorithm',
+            'Signature algorithm of the sender public key.',
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'Ed25519',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c25ba215-389e-46e8-9050-a44bfc676de5' OR (EntityID = '0A75D64D-9396-4B77-871A-D88577F2AC4F' AND Name = 'KeyID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c25ba215-389e-46e8-9050-a44bfc676de5',
+            '0A75D64D-9396-4B77-871A-D88577F2AC4F', -- Entity: MJ: Diagnostic Sender Registrations
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0A75D64D-9396-4B77-871A-D88577F2AC4F'),
+            'KeyID',
+            'Key ID',
+            'Identifier of the sender signing key. Set at enrollment; a key rotation replaces it.',
+            'nvarchar',
+            200,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b796135f-273b-45bf-8329-65fc9de0ff2e' OR (EntityID = '0A75D64D-9396-4B77-871A-D88577F2AC4F' AND Name = 'PublicKeyBase64')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'b796135f-273b-45bf-8329-65fc9de0ff2e',
+            '0A75D64D-9396-4B77-871A-D88577F2AC4F', -- Entity: MJ: Diagnostic Sender Registrations
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0A75D64D-9396-4B77-871A-D88577F2AC4F'),
+            'PublicKeyBase64',
+            'Public Key Base 64',
+            'Base64-encoded public key that verifies the sender signed requests. Set at enrollment.',
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e9c4c14e-11ca-494e-a2b4-6513b2b3881c' OR (EntityID = '0A75D64D-9396-4B77-871A-D88577F2AC4F' AND Name = 'RegistrationCodeHash')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'e9c4c14e-11ca-494e-a2b4-6513b2b3881c',
+            '0A75D64D-9396-4B77-871A-D88577F2AC4F', -- Entity: MJ: Diagnostic Sender Registrations
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0A75D64D-9396-4B77-871A-D88577F2AC4F'),
+            'RegistrationCodeHash',
+            'Registration Code Hash',
+            'SHA-256 hex digest of the one-time registration code. The plain code is never stored.',
+            'nvarchar',
+            256,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3fc72eb4-086c-4219-a913-6dfe9f8cf7ec' OR (EntityID = '0A75D64D-9396-4B77-871A-D88577F2AC4F' AND Name = 'RegistrationCodeExpiresAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '3fc72eb4-086c-4219-a913-6dfe9f8cf7ec',
+            '0A75D64D-9396-4B77-871A-D88577F2AC4F', -- Entity: MJ: Diagnostic Sender Registrations
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0A75D64D-9396-4B77-871A-D88577F2AC4F'),
+            'RegistrationCodeExpiresAt',
+            'Registration Code Expires At',
+            'Time after which the one-time registration code can no longer be used to enroll.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7263a223-577a-4f6e-a3a4-36ba4770152a' OR (EntityID = '0A75D64D-9396-4B77-871A-D88577F2AC4F' AND Name = 'EnrolledAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '7263a223-577a-4f6e-a3a4-36ba4770152a',
+            '0A75D64D-9396-4B77-871A-D88577F2AC4F', -- Entity: MJ: Diagnostic Sender Registrations
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0A75D64D-9396-4B77-871A-D88577F2AC4F'),
+            'EnrolledAt',
+            'Enrolled At',
+            'Time the sender enrolled its public key.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ad087aed-aebf-48bc-9182-fac5db00b418' OR (EntityID = '0A75D64D-9396-4B77-871A-D88577F2AC4F' AND Name = 'RevokedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'ad087aed-aebf-48bc-9182-fac5db00b418',
+            '0A75D64D-9396-4B77-871A-D88577F2AC4F', -- Entity: MJ: Diagnostic Sender Registrations
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0A75D64D-9396-4B77-871A-D88577F2AC4F'),
+            'RevokedAt',
+            'Revoked At',
+            'Time the registration was revoked.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b2d6fa3e-a824-4b66-b34c-fbdd2d9e60ae' OR (EntityID = '0A75D64D-9396-4B77-871A-D88577F2AC4F' AND Name = 'LastSeenAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'b2d6fa3e-a824-4b66-b34c-fbdd2d9e60ae',
+            '0A75D64D-9396-4B77-871A-D88577F2AC4F', -- Entity: MJ: Diagnostic Sender Registrations
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0A75D64D-9396-4B77-871A-D88577F2AC4F'),
+            'LastSeenAt',
+            'Last Seen At',
+            'Time of the last authenticated request from the sender.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3b129ac5-3331-4388-8d98-ae433a401f7a' OR (EntityID = '0A75D64D-9396-4B77-871A-D88577F2AC4F' AND Name = 'MaxBundlesPerDay')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '3b129ac5-3331-4388-8d98-ae433a401f7a',
+            '0A75D64D-9396-4B77-871A-D88577F2AC4F', -- Entity: MJ: Diagnostic Sender Registrations
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0A75D64D-9396-4B77-871A-D88577F2AC4F'),
+            'MaxBundlesPerDay',
+            'Max Bundles Per Day',
+            'Maximum number of bundles the collector accepts from this sender per day.',
+            'int',
+            4,
+            10,
+            0,
+            0,
+            '(20)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '58b59bb2-ba98-44da-a5ad-fea5aa67a9f2' OR (EntityID = '0A75D64D-9396-4B77-871A-D88577F2AC4F' AND Name = 'Comments')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '58b59bb2-ba98-44da-a5ad-fea5aa67a9f2',
+            '0A75D64D-9396-4B77-871A-D88577F2AC4F', -- Entity: MJ: Diagnostic Sender Registrations
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0A75D64D-9396-4B77-871A-D88577F2AC4F'),
+            'Comments',
+            'Comments',
+            'Free-form administrator notes about the registration.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8616eaba-06ea-4daa-a3f8-4e4b053bc0e9' OR (EntityID = '0A75D64D-9396-4B77-871A-D88577F2AC4F' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '8616eaba-06ea-4daa-a3f8-4e4b053bc0e9',
+            '0A75D64D-9396-4B77-871A-D88577F2AC4F', -- Entity: MJ: Diagnostic Sender Registrations
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0A75D64D-9396-4B77-871A-D88577F2AC4F'),
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '95972272-7d48-47b5-9c16-0b37d36c85aa' OR (EntityID = '0A75D64D-9396-4B77-871A-D88577F2AC4F' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '95972272-7d48-47b5-9c16-0b37d36c85aa',
+            '0A75D64D-9396-4B77-871A-D88577F2AC4F', -- Entity: MJ: Diagnostic Sender Registrations
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0A75D64D-9396-4B77-871A-D88577F2AC4F'),
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert entity field value with ID fa9b4f3d-3b7f-4d42-9c9c-b2cc4fa8206a */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('9bcafe08-38be-4ed4-876e-46b1c3680beb', '94DD344E-F20C-489F-8FD7-F5FA6E7BA19A', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
+                                       ('fa9b4f3d-3b7f-4d42-9c9c-b2cc4fa8206a', '14B54BF3-B16F-477E-AA04-F88E58A6B6F3', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 7842f677-05c6-422e-922b-304a8c4108d0 */
+/* SQL text to insert entity field value with ID c334c9c8-a008-4303-884a-91c949ad51de */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('7842f677-05c6-422e-922b-304a8c4108d0', '94DD344E-F20C-489F-8FD7-F5FA6E7BA19A', 2, 'Expired', 'Expired', GETUTCDATE(), GETUTCDATE());
+                                       ('c334c9c8-a008-4303-884a-91c949ad51de', '14B54BF3-B16F-477E-AA04-F88E58A6B6F3', 2, 'Expired', 'Expired', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 97f59e2c-f90a-4d12-a558-0103d6960322 */
+/* SQL text to insert entity field value with ID b8bd7d4b-a79a-4ae1-b670-4696c51facd7 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('97f59e2c-f90a-4d12-a558-0103d6960322', '94DD344E-F20C-489F-8FD7-F5FA6E7BA19A', 3, 'Stopped', 'Stopped', GETUTCDATE(), GETUTCDATE());
+                                       ('b8bd7d4b-a79a-4ae1-b670-4696c51facd7', '14B54BF3-B16F-477E-AA04-F88E58A6B6F3', 3, 'Stopped', 'Stopped', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 94DD344E-F20C-489F-8FD7-F5FA6E7BA19A */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='94DD344E-F20C-489F-8FD7-F5FA6E7BA19A';
+/* SQL text to update ValueListType for entity field ID 14B54BF3-B16F-477E-AA04-F88E58A6B6F3 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='14B54BF3-B16F-477E-AA04-F88E58A6B6F3';
 
-/* SQL text to insert entity field value with ID 9852436d-3991-4b17-a7e8-bd20210a4043 */
+/* SQL text to insert entity field value with ID 08196d40-2772-417a-a3e2-50eae4be3ab8 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('9852436d-3991-4b17-a7e8-bd20210a4043', '57D1C951-DFCF-4754-A3D1-3F13B6ECDBC1', 1, 'APIKeys', 'APIKeys', GETUTCDATE(), GETUTCDATE());
+                                       ('08196d40-2772-417a-a3e2-50eae4be3ab8', 'A0906DB6-1D69-4C67-B552-812E12345344', 1, 'APIKeys', 'APIKeys', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 9f0cc14a-98bf-4fba-b312-9ba0ac101b9d */
+/* SQL text to insert entity field value with ID 866bf4b6-e741-44f9-a478-63d62cda05e2 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('9f0cc14a-98bf-4fba-b312-9ba0ac101b9d', '57D1C951-DFCF-4754-A3D1-3F13B6ECDBC1', 2, 'BrowserSession', 'BrowserSession', GETUTCDATE(), GETUTCDATE());
+                                       ('866bf4b6-e741-44f9-a478-63d62cda05e2', 'A0906DB6-1D69-4C67-B552-812E12345344', 2, 'BrowserSession', 'BrowserSession', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID ffc0cf82-096a-4caa-a147-3bba74fcbda1 */
+/* SQL text to insert entity field value with ID f382726b-e420-47b7-9eae-36f11df6ba3d */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('ffc0cf82-096a-4caa-a147-3bba74fcbda1', '57D1C951-DFCF-4754-A3D1-3F13B6ECDBC1', 3, 'Instance', 'Instance', GETUTCDATE(), GETUTCDATE());
+                                       ('f382726b-e420-47b7-9eae-36f11df6ba3d', 'A0906DB6-1D69-4C67-B552-812E12345344', 3, 'Instance', 'Instance', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID f6d9325a-2911-40fb-8514-d6c7cc8d14f9 */
+/* SQL text to insert entity field value with ID d11d88e3-1685-42ad-915b-fe86d9f2c3ce */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('f6d9325a-2911-40fb-8514-d6c7cc8d14f9', '57D1C951-DFCF-4754-A3D1-3F13B6ECDBC1', 4, 'Operations', 'Operations', GETUTCDATE(), GETUTCDATE());
+                                       ('d11d88e3-1685-42ad-915b-fe86d9f2c3ce', 'A0906DB6-1D69-4C67-B552-812E12345344', 4, 'Operations', 'Operations', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 92308446-2d55-466e-86dc-1ac90de392ca */
+/* SQL text to insert entity field value with ID 43e07a67-40ee-45df-9f4b-0bdb7c9220c1 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('92308446-2d55-466e-86dc-1ac90de392ca', '57D1C951-DFCF-4754-A3D1-3F13B6ECDBC1', 5, 'Users', 'Users', GETUTCDATE(), GETUTCDATE());
+                                       ('43e07a67-40ee-45df-9f4b-0bdb7c9220c1', 'A0906DB6-1D69-4C67-B552-812E12345344', 5, 'Users', 'Users', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 57D1C951-DFCF-4754-A3D1-3F13B6ECDBC1 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='57D1C951-DFCF-4754-A3D1-3F13B6ECDBC1';
+/* SQL text to update ValueListType for entity field ID A0906DB6-1D69-4C67-B552-812E12345344 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='A0906DB6-1D69-4C67-B552-812E12345344';
 
-/* SQL text to insert entity field value with ID d007f459-2a8f-422e-af26-0ddc650b2c3c */
+/* SQL text to insert entity field value with ID 36356b74-9150-4629-bb58-b707ba60e0b9 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('d007f459-2a8f-422e-af26-0ddc650b2c3c', '3BF08C60-A005-4CC3-A730-6AA48BF64D86', 1, 'Debug', 'Debug', GETUTCDATE(), GETUTCDATE());
+                                       ('36356b74-9150-4629-bb58-b707ba60e0b9', '83F35DFD-93ED-412A-83C1-66CE415C1E50', 1, 'Debug', 'Debug', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 83a65d7b-b4bd-4c92-82f5-09c8439f747e */
+/* SQL text to insert entity field value with ID a2a90b3c-cd9c-4a9a-9b6c-0dfd28286775 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('83a65d7b-b4bd-4c92-82f5-09c8439f747e', '3BF08C60-A005-4CC3-A730-6AA48BF64D86', 2, 'Standard', 'Standard', GETUTCDATE(), GETUTCDATE());
+                                       ('a2a90b3c-cd9c-4a9a-9b6c-0dfd28286775', '83F35DFD-93ED-412A-83C1-66CE415C1E50', 2, 'Standard', 'Standard', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 5230d3a1-e5f9-4524-81f6-3d191a5fa000 */
+/* SQL text to insert entity field value with ID 57f808ed-4e86-4ac4-a647-98c2f931c1a8 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('5230d3a1-e5f9-4524-81f6-3d191a5fa000', '3BF08C60-A005-4CC3-A730-6AA48BF64D86', 3, 'Verbose', 'Verbose', GETUTCDATE(), GETUTCDATE());
+                                       ('57f808ed-4e86-4ac4-a647-98c2f931c1a8', '83F35DFD-93ED-412A-83C1-66CE415C1E50', 3, 'Verbose', 'Verbose', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 3BF08C60-A005-4CC3-A730-6AA48BF64D86 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='3BF08C60-A005-4CC3-A730-6AA48BF64D86';
+/* SQL text to update ValueListType for entity field ID 83F35DFD-93ED-412A-83C1-66CE415C1E50 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='83F35DFD-93ED-412A-83C1-66CE415C1E50';
 
-/* SQL text to insert entity field value with ID 0b678409-3010-425d-8a51-0367dea5b578 */
+/* SQL text to insert entity field value with ID 2a008b14-d412-431f-8837-1aac64c67814 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('0b678409-3010-425d-8a51-0367dea5b578', 'BC039DC4-E227-4836-B237-CB312EDB05E0', 1, 'Client', 'Client', GETUTCDATE(), GETUTCDATE());
+                                       ('2a008b14-d412-431f-8837-1aac64c67814', '65F25294-38FE-4962-AE82-E79654DEB7AB', 1, 'Client', 'Client', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 0515170f-1cc2-43d5-9600-6f876cc61c9f */
+/* SQL text to insert entity field value with ID b6b86892-e802-460c-98bf-389ccee20140 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('0515170f-1cc2-43d5-9600-6f876cc61c9f', 'BC039DC4-E227-4836-B237-CB312EDB05E0', 2, 'Server', 'Server', GETUTCDATE(), GETUTCDATE());
+                                       ('b6b86892-e802-460c-98bf-389ccee20140', '65F25294-38FE-4962-AE82-E79654DEB7AB', 2, 'Server', 'Server', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID BC039DC4-E227-4836-B237-CB312EDB05E0 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='BC039DC4-E227-4836-B237-CB312EDB05E0';
+/* SQL text to update ValueListType for entity field ID 65F25294-38FE-4962-AE82-E79654DEB7AB */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='65F25294-38FE-4962-AE82-E79654DEB7AB';
 
-/* SQL text to insert entity field value with ID 40c92434-53ed-4a3d-a3b3-9d4718c8954e */
+/* SQL text to insert entity field value with ID 928f9c34-eef0-4e50-86b8-4d200fa9fb52 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('40c92434-53ed-4a3d-a3b3-9d4718c8954e', 'E91151EA-695E-40F1-AC51-F918454DA4D0', 1, 'App', 'App', GETUTCDATE(), GETUTCDATE());
+                                       ('928f9c34-eef0-4e50-86b8-4d200fa9fb52', 'D78C8C45-20C6-461A-A5F9-89F1538CAA0F', 1, 'App', 'App', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID ac91d9eb-06e9-4a2e-870a-2ea1c108aebc */
+/* SQL text to insert entity field value with ID 865b8c18-4038-47d5-bb7b-effcda6646c7 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('ac91d9eb-06e9-4a2e-870a-2ea1c108aebc', 'E91151EA-695E-40F1-AC51-F918454DA4D0', 2, 'Errors', 'Errors', GETUTCDATE(), GETUTCDATE());
+                                       ('865b8c18-4038-47d5-bb7b-effcda6646c7', 'D78C8C45-20C6-461A-A5F9-89F1538CAA0F', 2, 'Errors', 'Errors', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 4ab9aacd-b200-4e95-8af2-858229bed0fc */
+/* SQL text to insert entity field value with ID bdec08a6-9e7e-4fec-a322-751b4472a990 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('4ab9aacd-b200-4e95-8af2-858229bed0fc', 'E91151EA-695E-40F1-AC51-F918454DA4D0', 3, 'Health', 'Health', GETUTCDATE(), GETUTCDATE());
+                                       ('bdec08a6-9e7e-4fec-a322-751b4472a990', 'D78C8C45-20C6-461A-A5F9-89F1538CAA0F', 3, 'Health', 'Health', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 7bdfae4c-37e6-470d-bb19-93808b73822b */
+/* SQL text to insert entity field value with ID 5b53e7e2-70a4-4917-8daf-de5c83f5a2c2 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('7bdfae4c-37e6-470d-bb19-93808b73822b', 'E91151EA-695E-40F1-AC51-F918454DA4D0', 4, 'Logs', 'Logs', GETUTCDATE(), GETUTCDATE());
+                                       ('5b53e7e2-70a4-4917-8daf-de5c83f5a2c2', 'D78C8C45-20C6-461A-A5F9-89F1538CAA0F', 4, 'Logs', 'Logs', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 51979d71-1eed-473f-88ea-97af05b0fed0 */
+/* SQL text to insert entity field value with ID 496d2fee-cf2f-493b-8e51-cc46a4902ec1 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('51979d71-1eed-473f-88ea-97af05b0fed0', 'E91151EA-695E-40F1-AC51-F918454DA4D0', 5, 'Network', 'Network', GETUTCDATE(), GETUTCDATE());
+                                       ('496d2fee-cf2f-493b-8e51-cc46a4902ec1', 'D78C8C45-20C6-461A-A5F9-89F1538CAA0F', 5, 'Network', 'Network', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID acb1ffc0-060e-41bd-bf85-80e0dba86fcb */
+/* SQL text to insert entity field value with ID 929eff0d-fba9-45ff-b7df-35f618845df6 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('acb1ffc0-060e-41bd-bf85-80e0dba86fcb', 'E91151EA-695E-40F1-AC51-F918454DA4D0', 6, 'SQL', 'SQL', GETUTCDATE(), GETUTCDATE());
+                                       ('929eff0d-fba9-45ff-b7df-35f618845df6', 'D78C8C45-20C6-461A-A5F9-89F1538CAA0F', 6, 'SQL', 'SQL', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 82f9ba29-83ec-40f2-9244-1d004c34e42e */
+/* SQL text to insert entity field value with ID 37244f1d-91d9-4be1-8685-07fcc4fd6123 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('82f9ba29-83ec-40f2-9244-1d004c34e42e', 'E91151EA-695E-40F1-AC51-F918454DA4D0', 7, 'Spans', 'Spans', GETUTCDATE(), GETUTCDATE());
+                                       ('37244f1d-91d9-4be1-8685-07fcc4fd6123', 'D78C8C45-20C6-461A-A5F9-89F1538CAA0F', 7, 'Spans', 'Spans', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID b5830951-0d4f-4290-9de4-fd5deb3d56b7 */
+/* SQL text to insert entity field value with ID 911be4fb-2614-42fd-b61b-799bb16d22a9 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('b5830951-0d4f-4290-9de4-fd5deb3d56b7', 'E91151EA-695E-40F1-AC51-F918454DA4D0', 8, 'Telemetry', 'Telemetry', GETUTCDATE(), GETUTCDATE());
+                                       ('911be4fb-2614-42fd-b61b-799bb16d22a9', 'D78C8C45-20C6-461A-A5F9-89F1538CAA0F', 8, 'Telemetry', 'Telemetry', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID e94abecb-670f-4e09-a56a-c7ef6d466c70 */
+/* SQL text to insert entity field value with ID 43d71475-ee3e-405e-8718-09f9b60b7416 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('e94abecb-670f-4e09-a56a-c7ef6d466c70', 'E91151EA-695E-40F1-AC51-F918454DA4D0', 9, 'Timeline', 'Timeline', GETUTCDATE(), GETUTCDATE());
+                                       ('43d71475-ee3e-405e-8718-09f9b60b7416', 'D78C8C45-20C6-461A-A5F9-89F1538CAA0F', 9, 'Timeline', 'Timeline', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID E91151EA-695E-40F1-AC51-F918454DA4D0 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='E91151EA-695E-40F1-AC51-F918454DA4D0';
+/* SQL text to update ValueListType for entity field ID D78C8C45-20C6-461A-A5F9-89F1538CAA0F */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='D78C8C45-20C6-461A-A5F9-89F1538CAA0F';
 
-/* SQL text to insert entity field value with ID a932ef12-6f31-4fb5-8ae4-5c093eb2f519 */
+/* SQL text to insert entity field value with ID 65edb92c-4f63-40d2-919d-22b6beaabb48 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('a932ef12-6f31-4fb5-8ae4-5c093eb2f519', '226B9CA7-5FDB-444D-99AC-618B573DC703', 1, 'Local', 'Local', GETUTCDATE(), GETUTCDATE());
+                                       ('65edb92c-4f63-40d2-919d-22b6beaabb48', '329F06FC-164A-44CA-9A37-6DB686E80DC9', 1, 'Local', 'Local', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID c542ba27-8292-4e5a-92b2-4b849de5d295 */
+/* SQL text to insert entity field value with ID 5077c25c-5f66-44f2-9e72-1d212801605f */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('c542ba27-8292-4e5a-92b2-4b849de5d295', '226B9CA7-5FDB-444D-99AC-618B573DC703', 2, 'Received', 'Received', GETUTCDATE(), GETUTCDATE());
+                                       ('5077c25c-5f66-44f2-9e72-1d212801605f', '329F06FC-164A-44CA-9A37-6DB686E80DC9', 2, 'Received', 'Received', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 226B9CA7-5FDB-444D-99AC-618B573DC703 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='226B9CA7-5FDB-444D-99AC-618B573DC703';
+/* SQL text to update ValueListType for entity field ID 329F06FC-164A-44CA-9A37-6DB686E80DC9 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='329F06FC-164A-44CA-9A37-6DB686E80DC9';
 
-/* SQL text to insert entity field value with ID 9bc5a0d7-287e-4843-9145-494df039b593 */
+/* SQL text to insert entity field value with ID 1e025bc8-7a89-4de1-b607-5df2b2c69416 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('9bc5a0d7-287e-4843-9145-494df039b593', '469602A1-9D6F-48AA-AD64-B70A48FEF38E', 1, 'Building', 'Building', GETUTCDATE(), GETUTCDATE());
+                                       ('1e025bc8-7a89-4de1-b607-5df2b2c69416', 'B3E39419-3F28-487F-8E96-B787A316AE23', 1, 'Building', 'Building', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 39b5ac14-f0b6-4747-8340-f09bebd7fc94 */
+/* SQL text to insert entity field value with ID 038f8158-6566-4a22-a7f0-cfc46757474b */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('39b5ac14-f0b6-4747-8340-f09bebd7fc94', '469602A1-9D6F-48AA-AD64-B70A48FEF38E', 2, 'Expired', 'Expired', GETUTCDATE(), GETUTCDATE());
+                                       ('038f8158-6566-4a22-a7f0-cfc46757474b', 'B3E39419-3F28-487F-8E96-B787A316AE23', 2, 'Expired', 'Expired', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 0a84b59c-8372-4447-933a-b74a7d94a63f */
+/* SQL text to insert entity field value with ID 8d1a72ee-f84a-4819-8b34-c4ec156725e0 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('0a84b59c-8372-4447-933a-b74a7d94a63f', '469602A1-9D6F-48AA-AD64-B70A48FEF38E', 3, 'Failed', 'Failed', GETUTCDATE(), GETUTCDATE());
+                                       ('8d1a72ee-f84a-4819-8b34-c4ec156725e0', 'B3E39419-3F28-487F-8E96-B787A316AE23', 3, 'Failed', 'Failed', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 7f4ed990-fdeb-45af-b515-efd620784524 */
+/* SQL text to insert entity field value with ID 299b18f0-4208-4662-999a-6583e84a19ed */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('7f4ed990-fdeb-45af-b515-efd620784524', '469602A1-9D6F-48AA-AD64-B70A48FEF38E', 4, 'Ready', 'Ready', GETUTCDATE(), GETUTCDATE());
+                                       ('299b18f0-4208-4662-999a-6583e84a19ed', 'B3E39419-3F28-487F-8E96-B787A316AE23', 4, 'Ready', 'Ready', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID a5e7d5ce-b521-4e6b-b733-5515654d6cbf */
+/* SQL text to insert entity field value with ID 77aca5e3-79f1-4ede-81a4-7b5c9a3145cb */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('a5e7d5ce-b521-4e6b-b733-5515654d6cbf', '469602A1-9D6F-48AA-AD64-B70A48FEF38E', 5, 'Receiving', 'Receiving', GETUTCDATE(), GETUTCDATE());
+                                       ('77aca5e3-79f1-4ede-81a4-7b5c9a3145cb', 'B3E39419-3F28-487F-8E96-B787A316AE23', 5, 'Receiving', 'Receiving', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 86f64637-95f5-4988-a09e-07c60407c445 */
+/* SQL text to insert entity field value with ID 58a49e58-7b31-4256-bfc7-f49770f5dbf6 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('86f64637-95f5-4988-a09e-07c60407c445', '469602A1-9D6F-48AA-AD64-B70A48FEF38E', 6, 'Sending', 'Sending', GETUTCDATE(), GETUTCDATE());
+                                       ('58a49e58-7b31-4256-bfc7-f49770f5dbf6', 'B3E39419-3F28-487F-8E96-B787A316AE23', 6, 'Sending', 'Sending', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 67677e54-ecef-4f88-ba85-ff2dc7d365e2 */
+/* SQL text to insert entity field value with ID a95cd2f7-cc5d-44ce-8ded-e1ebb0a7dda1 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('67677e54-ecef-4f88-ba85-ff2dc7d365e2', '469602A1-9D6F-48AA-AD64-B70A48FEF38E', 7, 'Sent', 'Sent', GETUTCDATE(), GETUTCDATE());
+                                       ('a95cd2f7-cc5d-44ce-8ded-e1ebb0a7dda1', 'B3E39419-3F28-487F-8E96-B787A316AE23', 7, 'Sent', 'Sent', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 469602A1-9D6F-48AA-AD64-B70A48FEF38E */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='469602A1-9D6F-48AA-AD64-B70A48FEF38E';
+/* SQL text to update ValueListType for entity field ID B3E39419-3F28-487F-8E96-B787A316AE23 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='B3E39419-3F28-487F-8E96-B787A316AE23';
 
-/* SQL text to insert entity field value with ID 80ba450f-2083-4500-8d5f-f5cf4cec3db4 */
+/* SQL text to insert entity field value with ID 26554521-cdb8-4096-af82-3b6ab8fc8dd1 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('80ba450f-2083-4500-8d5f-f5cf4cec3db4', '64E2435A-02C6-4688-ABA3-B05612E69EAD', 1, 'CustomerCollector', 'CustomerCollector', GETUTCDATE(), GETUTCDATE());
+                                       ('26554521-cdb8-4096-af82-3b6ab8fc8dd1', '5486F090-0C0F-4312-AB17-2109820F6866', 1, 'CustomerCollector', 'CustomerCollector', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 44d29376-3883-4635-9ae1-f3c181f1391f */
+/* SQL text to insert entity field value with ID e419aa4e-e490-4523-a298-04a4b3ef90f7 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('44d29376-3883-4635-9ae1-f3c181f1391f', '64E2435A-02C6-4688-ABA3-B05612E69EAD', 2, 'MJC', 'MJC', GETUTCDATE(), GETUTCDATE());
+                                       ('e419aa4e-e490-4523-a298-04a4b3ef90f7', '5486F090-0C0F-4312-AB17-2109820F6866', 2, 'MJC', 'MJC', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID ea3c42cd-3acc-49dd-b4e9-2fcd6dcfa512 */
+/* SQL text to insert entity field value with ID 34e4da0d-e1b4-4567-9197-94e42ea407ac */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('ea3c42cd-3acc-49dd-b4e9-2fcd6dcfa512', '64E2435A-02C6-4688-ABA3-B05612E69EAD', 3, 'StorageAccount', 'StorageAccount', GETUTCDATE(), GETUTCDATE());
+                                       ('34e4da0d-e1b4-4567-9197-94e42ea407ac', '5486F090-0C0F-4312-AB17-2109820F6866', 3, 'StorageAccount', 'StorageAccount', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 64E2435A-02C6-4688-ABA3-B05612E69EAD */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='64E2435A-02C6-4688-ABA3-B05612E69EAD';
+/* SQL text to update ValueListType for entity field ID 5486F090-0C0F-4312-AB17-2109820F6866 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='5486F090-0C0F-4312-AB17-2109820F6866';
 
-/* SQL text to insert entity field value with ID 5ce85ecd-5f18-41e7-8ed8-6c600e22d740 */
+/* SQL text to insert entity field value with ID b7d78e1c-bb00-4dbd-80f6-dde17c5d7263 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('5ce85ecd-5f18-41e7-8ed8-6c600e22d740', '620F41D8-532D-420D-BFD0-549E404DFC34', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
+                                       ('b7d78e1c-bb00-4dbd-80f6-dde17c5d7263', '7D1B5770-11ED-494B-8014-9940CCB6930F', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID ef4c0f19-6a76-4cac-b8c7-b4ec8d539539 */
+/* SQL text to insert entity field value with ID a9d2768c-e40a-4c2d-8219-89e6ed4cc138 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('ef4c0f19-6a76-4cac-b8c7-b4ec8d539539', '620F41D8-532D-420D-BFD0-549E404DFC34', 2, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
+                                       ('a9d2768c-e40a-4c2d-8219-89e6ed4cc138', '7D1B5770-11ED-494B-8014-9940CCB6930F', 2, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID c05e59b5-af9f-405f-a647-045e4a0599b4 */
+/* SQL text to insert entity field value with ID 6c179a01-3c58-4e96-97c7-23c64b6154ae */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('c05e59b5-af9f-405f-a647-045e4a0599b4', '620F41D8-532D-420D-BFD0-549E404DFC34', 3, 'Revoked', 'Revoked', GETUTCDATE(), GETUTCDATE());
+                                       ('6c179a01-3c58-4e96-97c7-23c64b6154ae', '7D1B5770-11ED-494B-8014-9940CCB6930F', 3, 'Revoked', 'Revoked', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 620F41D8-532D-420D-BFD0-549E404DFC34 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='620F41D8-532D-420D-BFD0-549E404DFC34';
+/* SQL text to update ValueListType for entity field ID 7D1B5770-11ED-494B-8014-9940CCB6930F */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='7D1B5770-11ED-494B-8014-9940CCB6930F';
 
-/* SQL text to insert entity field value with ID e7d49c87-d867-4dba-b9e5-33e9b5c6bacf */
+/* SQL text to insert entity field value with ID c1bc046b-87a6-446b-a1b9-8a516bfab54f */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('e7d49c87-d867-4dba-b9e5-33e9b5c6bacf', 'D33265B5-34FE-4765-A09C-C3DD5212BA6B', 1, 'Ed25519', 'Ed25519', GETUTCDATE(), GETUTCDATE());
+                                       ('c1bc046b-87a6-446b-a1b9-8a516bfab54f', 'CA639F48-0665-4B2D-AB83-6709FF9057A3', 1, 'Ed25519', 'Ed25519', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID D33265B5-34FE-4765-A09C-C3DD5212BA6B */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='D33265B5-34FE-4765-A09C-C3DD5212BA6B';
+/* SQL text to update ValueListType for entity field ID CA639F48-0665-4B2D-AB83-6709FF9057A3 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='CA639F48-0665-4B2D-AB83-6709FF9057A3';
 
 /* Deterministic search-flag hygiene — clear AllowUserSearchAPI */
 
@@ -6088,80 +6088,81 @@ UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID
          );
 
 
-/* Create Entity Relationship: MJ: Companies -> MJ: Diagnostic Bundles (One To Many via CompanyID) */
+/* Create Entity Relationship: MJ: Diagnostic Sessions -> MJ: Diagnostic Session Chunks (One To Many via DiagnosticSessionID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'ba68e05b-5254-44a1-be20-2d8a2c848959' OR ([EntityID] = 'D4238F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND [RelatedEntityJoinField] = 'CompanyID')
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '1f166381-8193-47c0-9d78-0dcfcfa489f9' OR ([EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND [RelatedEntityID] = '95AE4A10-7D58-4D55-BE27-5B934A958411' AND [RelatedEntityJoinField] = 'DiagnosticSessionID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('ba68e05b-5254-44a1-be20-2d8a2c848959', 'D4238F34-2837-EF11-86D4-6045BDEE16E6', 'D3AAD653-5B9A-4075-94C0-A2A490823D4E', 'CompanyID', 'One To Many', 1, 1, 9, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('1f166381-8193-47c0-9d78-0dcfcfa489f9', '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', '95AE4A10-7D58-4D55-BE27-5B934A958411', 'DiagnosticSessionID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
    END;
                     
+/* Create Entity Relationship: MJ: Diagnostic Sessions -> MJ: Diagnostic Bundles (One To Many via DiagnosticSessionID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'a273816d-ed8f-4b7a-b226-5a3e0469443b' OR ([EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND [RelatedEntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9' AND [RelatedEntityJoinField] = 'DiagnosticSessionID')
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('a273816d-ed8f-4b7a-b226-5a3e0469443b', '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', 'A385086E-1147-4042-AE36-D808CE850EF9', 'DiagnosticSessionID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
+   END;
+
+
 /* Create Entity Relationship: MJ: Companies -> MJ: Diagnostic Sessions (One To Many via CompanyID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '9051985e-2f7e-4de5-ab38-ddd3c8542598' OR ([EntityID] = 'D4238F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND [RelatedEntityJoinField] = 'CompanyID')
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '02efd5f2-2a23-44d5-97df-74c2d552a2ea' OR ([EntityID] = 'D4238F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND [RelatedEntityJoinField] = 'CompanyID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('9051985e-2f7e-4de5-ab38-ddd3c8542598', 'D4238F34-2837-EF11-86D4-6045BDEE16E6', 'D83818A2-E62D-40EA-9243-C2D1175411AC', 'CompanyID', 'One To Many', 1, 1, 10, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('02efd5f2-2a23-44d5-97df-74c2d552a2ea', 'D4238F34-2837-EF11-86D4-6045BDEE16E6', '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', 'CompanyID', 'One To Many', 1, 1, 9, GETUTCDATE(), GETUTCDATE())
    END;
 
 
-/* Create Entity Relationship: MJ: Users -> MJ: Diagnostic Bundles (One To Many via CreatedByUserID) */
+/* Create Entity Relationship: MJ: Companies -> MJ: Diagnostic Bundles (One To Many via CompanyID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '5fd21170-5e0d-4f8f-ac3c-ccaa233fcb5a' OR ([EntityID] = 'E1238F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND [RelatedEntityJoinField] = 'CreatedByUserID')
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '4f5b987e-18cd-426e-be73-a53fb987042f' OR ([EntityID] = 'D4238F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9' AND [RelatedEntityJoinField] = 'CompanyID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('5fd21170-5e0d-4f8f-ac3c-ccaa233fcb5a', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', 'D3AAD653-5B9A-4075-94C0-A2A490823D4E', 'CreatedByUserID', 'One To Many', 1, 1, 126, GETUTCDATE(), GETUTCDATE())
-   END;
-                    
-/* Create Entity Relationship: MJ: Users -> MJ: Diagnostic Bundles (One To Many via ApprovedByUserID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'adda12fb-cee2-477d-82ba-eff2c32c677e' OR ([EntityID] = 'E1238F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND [RelatedEntityJoinField] = 'ApprovedByUserID')
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('adda12fb-cee2-477d-82ba-eff2c32c677e', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', 'D3AAD653-5B9A-4075-94C0-A2A490823D4E', 'ApprovedByUserID', 'One To Many', 1, 1, 127, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('4f5b987e-18cd-426e-be73-a53fb987042f', 'D4238F34-2837-EF11-86D4-6045BDEE16E6', 'A385086E-1147-4042-AE36-D808CE850EF9', 'CompanyID', 'One To Many', 1, 1, 10, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: Users -> MJ: Diagnostic Sessions (One To Many via CreatedByUserID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '17e0d1e6-2b06-4020-a43b-f36d2986dae3' OR ([EntityID] = 'E1238F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND [RelatedEntityJoinField] = 'CreatedByUserID')
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '32f1656d-e417-45f5-a62e-6079ea182784' OR ([EntityID] = 'E1238F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND [RelatedEntityJoinField] = 'CreatedByUserID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('17e0d1e6-2b06-4020-a43b-f36d2986dae3', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', 'D83818A2-E62D-40EA-9243-C2D1175411AC', 'CreatedByUserID', 'One To Many', 1, 1, 128, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('32f1656d-e417-45f5-a62e-6079ea182784', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', 'CreatedByUserID', 'One To Many', 1, 1, 127, GETUTCDATE(), GETUTCDATE())
+   END;
+
+
+/* Create Entity Relationship: MJ: Users -> MJ: Diagnostic Bundles (One To Many via CreatedByUserID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'ec738767-0c8d-4a00-8e43-1cc558c355e0' OR ([EntityID] = 'E1238F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9' AND [RelatedEntityJoinField] = 'CreatedByUserID')
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('ec738767-0c8d-4a00-8e43-1cc558c355e0', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', 'A385086E-1147-4042-AE36-D808CE850EF9', 'CreatedByUserID', 'One To Many', 1, 1, 128, GETUTCDATE(), GETUTCDATE())
+   END;
+                    
+/* Create Entity Relationship: MJ: Users -> MJ: Diagnostic Bundles (One To Many via ApprovedByUserID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '6d0f56a8-6eda-4400-93e2-116a89930fa1' OR ([EntityID] = 'E1238F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9' AND [RelatedEntityJoinField] = 'ApprovedByUserID')
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('6d0f56a8-6eda-4400-93e2-116a89930fa1', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', 'A385086E-1147-4042-AE36-D808CE850EF9', 'ApprovedByUserID', 'One To Many', 1, 1, 129, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: Files -> MJ: Diagnostic Bundles (One To Many via FileID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '4eb34d16-9cf0-4409-94af-9d80ed739b2f' OR ([EntityID] = '29248F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND [RelatedEntityJoinField] = 'FileID')
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '860d2b1e-efce-4e19-a6a1-0bf3a8888426' OR ([EntityID] = '29248F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9' AND [RelatedEntityJoinField] = 'FileID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('4eb34d16-9cf0-4409-94af-9d80ed739b2f', '29248F34-2837-EF11-86D4-6045BDEE16E6', 'D3AAD653-5B9A-4075-94C0-A2A490823D4E', 'FileID', 'One To Many', 1, 1, 11, GETUTCDATE(), GETUTCDATE())
-   END;
-
-
-/* Create Entity Relationship: MJ: Diagnostic Sessions -> MJ: Diagnostic Session Chunks (One To Many via DiagnosticSessionID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '564f7cd9-c80c-43a3-b464-48c84f506ca8' OR ([EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND [RelatedEntityID] = 'A5B20694-EC9E-4BEB-A402-0081504AA78B' AND [RelatedEntityJoinField] = 'DiagnosticSessionID')
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('564f7cd9-c80c-43a3-b464-48c84f506ca8', 'D83818A2-E62D-40EA-9243-C2D1175411AC', 'A5B20694-EC9E-4BEB-A402-0081504AA78B', 'DiagnosticSessionID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
-   END;
-                    
-/* Create Entity Relationship: MJ: Diagnostic Sessions -> MJ: Diagnostic Bundles (One To Many via DiagnosticSessionID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'e02d963d-097d-49b5-8670-ef611ce7fc77' OR ([EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND [RelatedEntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND [RelatedEntityJoinField] = 'DiagnosticSessionID')
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('e02d963d-097d-49b5-8670-ef611ce7fc77', 'D83818A2-E62D-40EA-9243-C2D1175411AC', 'D3AAD653-5B9A-4075-94C0-A2A490823D4E', 'DiagnosticSessionID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('860d2b1e-efce-4e19-a6a1-0bf3a8888426', '29248F34-2837-EF11-86D4-6045BDEE16E6', 'A385086E-1147-4042-AE36-D808CE850EF9', 'FileID', 'One To Many', 1, 1, 11, GETUTCDATE(), GETUTCDATE())
    END;
 
 /* Index for Foreign Keys for DiagnosticBundle */
@@ -6218,8 +6219,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_DiagnosticBundle_CompanyID ON [${flyway:defaultSchema}].[DiagnosticBundle] ([CompanyID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID CDEC5719-7946-4367-884F-FFB3BC620CBC */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='CDEC5719-7946-4367-884F-FFB3BC620CBC', @RelatedEntityNameFieldMap='DiagnosticSession';
+/* SQL text to update entity field related entity name field map for entity field ID 1B866D87-8BD5-4797-8BD6-A7B82208960E */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='1B866D87-8BD5-4797-8BD6-A7B82208960E', @RelatedEntityNameFieldMap='DiagnosticSession';
 
 /* Index for Foreign Keys for DiagnosticSenderRegistration */
 -----------------------------------------------------------------
@@ -6249,8 +6250,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_DiagnosticSessionChunk_DiagnosticSessionID ON [${flyway:defaultSchema}].[DiagnosticSessionChunk] ([DiagnosticSessionID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 72168BCA-4B51-457B-AFC9-167326FBE1A4 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='72168BCA-4B51-457B-AFC9-167326FBE1A4', @RelatedEntityNameFieldMap='DiagnosticSession';
+/* SQL text to update entity field related entity name field map for entity field ID 3C9534E2-BF0C-4062-A9C5-462A98D688A5 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='3C9534E2-BF0C-4062-A9C5-462A98D688A5', @RelatedEntityNameFieldMap='DiagnosticSession';
 
 /* Index for Foreign Keys for DiagnosticSession */
 -----------------------------------------------------------------
@@ -6279,8 +6280,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_DiagnosticSession_CompanyID ON [${flyway:defaultSchema}].[DiagnosticSession] ([CompanyID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID E52BCEE5-CC97-4D8B-94BC-2C95E5368F48 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='E52BCEE5-CC97-4D8B-94BC-2C95E5368F48', @RelatedEntityNameFieldMap='CreatedByUser';
+/* SQL text to update entity field related entity name field map for entity field ID 8CF0E0D5-F3D2-4F64-B7A4-01F66E1333F7 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='8CF0E0D5-F3D2-4F64-B7A4-01F66E1333F7', @RelatedEntityNameFieldMap='CreatedByUser';
 
 /* Base View SQL for MJ: Diagnostic Sender Registrations */
 -----------------------------------------------------------------
@@ -6605,11 +6606,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDiagnosticSenderRegistration
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDiagnosticSenderRegistration] TO [cdp_Developer], [cdp_Integration];
 
-/* SQL text to update entity field related entity name field map for entity field ID D3335A61-8BD1-4416-90EA-AC65269D7B80 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='D3335A61-8BD1-4416-90EA-AC65269D7B80', @RelatedEntityNameFieldMap='File';
-
-/* SQL text to update entity field related entity name field map for entity field ID 5048C5FB-8B97-4270-9B9D-115DC22AC99F */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='5048C5FB-8B97-4270-9B9D-115DC22AC99F', @RelatedEntityNameFieldMap='Company';
+/* SQL text to update entity field related entity name field map for entity field ID 9AA2C46A-16E0-4233-871E-9FFCCE400ACB */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='9AA2C46A-16E0-4233-871E-9FFCCE400ACB', @RelatedEntityNameFieldMap='File';
 
 /* Base View SQL for MJ: Diagnostic Session Chunks */
 -----------------------------------------------------------------
@@ -6899,8 +6897,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDiagnosticSessionChunk] TO [
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDiagnosticSessionChunk] TO [cdp_Developer], [cdp_Integration];
 
-/* SQL text to update entity field related entity name field map for entity field ID 666A271A-40FE-4ADC-9FE0-D52E64F82D3E */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='666A271A-40FE-4ADC-9FE0-D52E64F82D3E', @RelatedEntityNameFieldMap='CreatedByUser';
+/* SQL text to update entity field related entity name field map for entity field ID 4EDF3600-ACEA-410D-8014-294CED366562 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='4EDF3600-ACEA-410D-8014-294CED366562', @RelatedEntityNameFieldMap='Company';
 
 /* Base View SQL for MJ: Diagnostic Sessions */
 -----------------------------------------------------------------
@@ -7236,11 +7234,14 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDiagnosticSession] TO [cdp_D
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDiagnosticSession] TO [cdp_Developer], [cdp_Integration];
 
-/* SQL text to update entity field related entity name field map for entity field ID B0E50D95-6BE4-4F3B-A71A-EBBB2DB48101 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='B0E50D95-6BE4-4F3B-A71A-EBBB2DB48101', @RelatedEntityNameFieldMap='ApprovedByUser';
+/* SQL text to update entity field related entity name field map for entity field ID 601F1C45-A56C-4CCD-9A29-EFC6A7FEE5C4 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='601F1C45-A56C-4CCD-9A29-EFC6A7FEE5C4', @RelatedEntityNameFieldMap='CreatedByUser';
 
-/* SQL text to update entity field related entity name field map for entity field ID 10F82559-AE1F-451F-AD0A-00D509D58C8A */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='10F82559-AE1F-451F-AD0A-00D509D58C8A', @RelatedEntityNameFieldMap='Company';
+/* SQL text to update entity field related entity name field map for entity field ID 999005E6-4821-443F-BB77-E06FE89D87D6 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='999005E6-4821-443F-BB77-E06FE89D87D6', @RelatedEntityNameFieldMap='ApprovedByUser';
+
+/* SQL text to update entity field related entity name field map for entity field ID 928B0221-2753-412E-97C8-58998662FB3B */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='928B0221-2753-412E-97C8-58998662FB3B', @RelatedEntityNameFieldMap='Company';
 
 /* Base View SQL for MJ: Diagnostic Bundles */
 -----------------------------------------------------------------
@@ -7718,7 +7719,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDiagnosticBundle] TO [cdp_De
 
 /* SQL text to insert 8 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6fd02426-cdd3-4c0b-9851-5e40ef242ff5' OR (EntityID = 'A5B20694-EC9E-4BEB-A402-0081504AA78B' AND Name = 'DiagnosticSession')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c08293ba-fada-4548-8130-bdbaadb414d8' OR (EntityID = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND Name = 'CreatedByUser')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -7751,9 +7752,135 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDiagnosticBundle] TO [cdp_De
          )
          VALUES
          (
-            '6fd02426-cdd3-4c0b-9851-5e40ef242ff5',
-            'A5B20694-EC9E-4BEB-A402-0081504AA78B', -- Entity: MJ: Diagnostic Session Chunks
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A5B20694-EC9E-4BEB-A402-0081504AA78B'),
+            'c08293ba-fada-4548-8130-bdbaadb414d8',
+            '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', -- Entity: MJ: Diagnostic Sessions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11'),
+            'CreatedByUser',
+            'Created By User',
+            NULL,
+            'nvarchar',
+            200,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '18e874fa-5763-445c-add1-340b1d943e8f' OR (EntityID = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND Name = 'Company')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '18e874fa-5763-445c-add1-340b1d943e8f',
+            '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', -- Entity: MJ: Diagnostic Sessions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11'),
+            'Company',
+            'Company',
+            NULL,
+            'nvarchar',
+            100,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8ffa316b-8d2e-4b06-8302-ecf87de6bf38' OR (EntityID = '95AE4A10-7D58-4D55-BE27-5B934A958411' AND Name = 'DiagnosticSession')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '8ffa316b-8d2e-4b06-8302-ecf87de6bf38',
+            '95AE4A10-7D58-4D55-BE27-5B934A958411', -- Entity: MJ: Diagnostic Session Chunks
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '95AE4A10-7D58-4D55-BE27-5B934A958411'),
             'DiagnosticSession',
             'Diagnostic Session',
             NULL,
@@ -7781,7 +7908,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDiagnosticBundle] TO [cdp_De
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '11ebfa09-30d0-4569-aca7-a732a3390506' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'DiagnosticSession')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'eedc374e-540d-4bfe-8df1-6298fc76eb30' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'DiagnosticSession')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -7814,9 +7941,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDiagnosticBundle] TO [cdp_De
          )
          VALUES
          (
-            '11ebfa09-30d0-4569-aca7-a732a3390506',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
+            'eedc374e-540d-4bfe-8df1-6298fc76eb30',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
             'DiagnosticSession',
             'Diagnostic Session',
             NULL,
@@ -7844,7 +7971,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDiagnosticBundle] TO [cdp_De
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0e6c5053-4336-479f-9557-fd78e1ff0251' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'File')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd922872f-06a0-43dd-8054-c7eb3a26e69f' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'File')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -7877,9 +8004,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDiagnosticBundle] TO [cdp_De
          )
          VALUES
          (
-            '0e6c5053-4336-479f-9557-fd78e1ff0251',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
+            'd922872f-06a0-43dd-8054-c7eb3a26e69f',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
             'File',
             'File',
             NULL,
@@ -7907,7 +8034,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDiagnosticBundle] TO [cdp_De
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9c24d38a-02c8-458a-b585-c7cea8317929' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'CreatedByUser')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '225f88a3-f9a2-4b13-a5a1-93c058f7fcd2' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'CreatedByUser')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -7940,9 +8067,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDiagnosticBundle] TO [cdp_De
          )
          VALUES
          (
-            '9c24d38a-02c8-458a-b585-c7cea8317929',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
+            '225f88a3-f9a2-4b13-a5a1-93c058f7fcd2',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
             'CreatedByUser',
             'Created By User',
             NULL,
@@ -7970,7 +8097,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDiagnosticBundle] TO [cdp_De
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd2efd21a-7610-47ad-906f-6783e59768ed' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'ApprovedByUser')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c60f4895-1b9f-4d4f-9028-402f46622b3d' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'ApprovedByUser')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -8003,9 +8130,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDiagnosticBundle] TO [cdp_De
          )
          VALUES
          (
-            'd2efd21a-7610-47ad-906f-6783e59768ed',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
+            'c60f4895-1b9f-4d4f-9028-402f46622b3d',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
             'ApprovedByUser',
             'Approved By User',
             NULL,
@@ -8033,7 +8160,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDiagnosticBundle] TO [cdp_De
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '903a950a-55cc-4286-99ba-5bcda1b7bda8' OR (EntityID = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND Name = 'Company')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '90d490a2-af3b-4909-b17e-b55c3f013f09' OR (EntityID = 'A385086E-1147-4042-AE36-D808CE850EF9' AND Name = 'Company')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -8066,135 +8193,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDiagnosticBundle] TO [cdp_De
          )
          VALUES
          (
-            '903a950a-55cc-4286-99ba-5bcda1b7bda8',
-            'D3AAD653-5B9A-4075-94C0-A2A490823D4E', -- Entity: MJ: Diagnostic Bundles
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E'),
-            'Company',
-            'Company',
-            NULL,
-            'nvarchar',
-            100,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '39da2564-48cf-4dd4-a133-d424397ef39c' OR (EntityID = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND Name = 'CreatedByUser')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '39da2564-48cf-4dd4-a133-d424397ef39c',
-            'D83818A2-E62D-40EA-9243-C2D1175411AC', -- Entity: MJ: Diagnostic Sessions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC'),
-            'CreatedByUser',
-            'Created By User',
-            NULL,
-            'nvarchar',
-            200,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f9c29344-20a5-44f2-9a44-eed9a294c58c' OR (EntityID = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND Name = 'Company')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'f9c29344-20a5-44f2-9a44-eed9a294c58c',
-            'D83818A2-E62D-40EA-9243-C2D1175411AC', -- Entity: MJ: Diagnostic Sessions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC'),
+            '90d490a2-af3b-4909-b17e-b55c3f013f09',
+            'A385086E-1147-4042-AE36-D808CE850EF9', -- Entity: MJ: Diagnostic Bundles
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9'),
             'Company',
             'Company',
             NULL,
@@ -8226,99 +8227,494 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDiagnosticBundle] TO [cdp_De
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '469602A1-9D6F-48AA-AD64-B70A48FEF38E'
+               WHERE ID = '83F35DFD-93ED-412A-83C1-66CE415C1E50'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'CE1B783E-7AFB-4C66-A0C8-359C24DCBD11'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '64E2435A-02C6-4688-ABA3-B05612E69EAD'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = 'D464283C-4AC5-4365-B614-D61FFC045E3E'
+               WHERE ID = '1811DDD3-1E6C-4338-8148-21AC96F09BC3'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '21106266-910E-43AB-ABE3-AA5ED911314D'
+               WHERE ID = '10BACF04-9A95-4B35-8F0B-34D70FB2FC19'
                AND AutoUpdateUserSearchPredicate = 1;
 
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '229552F8-6C5F-4CB2-B279-E4655732C2A5'
+               WHERE ID = 'B2D6FA3E-A824-4B66-B34C-FBDD2D9E60AE'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '92469C19-5EA5-42DF-B466-CC3DB5B7740B'
+               WHERE ID = '3B129AC5-3331-4388-8D98-AE433A401F7A'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET IncludeInUserSearchAPI = 1
-               WHERE ID = '23C5308D-2C15-46A6-BC53-16ADACC8FB74'
+               WHERE ID = 'F6E61A2E-1D12-4F53-BF96-F610F619BAF4'
                AND AutoUpdateIncludeInUserSearchAPI = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = 'C63DBEB8-CB74-415C-A8B2-AC20FC66BFA6'
+               WHERE ID = '3AC7BA3C-7BBA-4FD2-8AE0-A60B8D1EB1C6'
                AND AutoUpdateUserSearchPredicate = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'Exact'
-               WHERE ID = '23C5308D-2C15-46A6-BC53-16ADACC8FB74'
+               WHERE ID = 'F6E61A2E-1D12-4F53-BF96-F610F619BAF4'
                AND AutoUpdateUserSearchPredicate = 1;
 
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IsNameField = 1
-               WHERE ID = 'E91151EA-695E-40F1-AC51-F918454DA4D0'
-               AND AutoUpdateIsNameField = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'E91151EA-695E-40F1-AC51-F918454DA4D0'
+               WHERE ID = 'D78C8C45-20C6-461A-A5F9-89F1538CAA0F'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'DEB5678D-EC9B-4DB8-B1CD-EC3EF7CDA71A'
+               WHERE ID = '79AD6A5B-7FD9-44CD-ADF9-619C0D5C8C7D'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '01F2994D-8667-4834-B9F5-B05B23303C24'
+               WHERE ID = '66AEE3DB-EB2F-48D1-B3E9-22A23AC77FCB'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '6FD02426-CDD3-4C0B-9851-5E40EF242FF5'
+               WHERE ID = '8FFA316B-8D2E-4B06-8302-ECF87DE6BF38'
                AND AutoUpdateDefaultInView = 1;
+
+/* Set categories for 16 fields */
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '9BA99562-5BCC-4F2A-A4C5-29F35EFBD7FC';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.InstallID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Registration Details',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'F6E61A2E-1D12-4F53-BF96-F610F619BAF4';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.Name 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Registration Details',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '3AC7BA3C-7BBA-4FD2-8AE0-A60B8D1EB1C6';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.Status 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Registration Details',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '7D1B5770-11ED-494B-8014-9940CCB6930F';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.MaxBundlesPerDay 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Registration Details',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '3B129AC5-3331-4388-8D98-AE433A401F7A';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.Comments 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Registration Details',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '58B59BB2-BA98-44DA-A5AD-FEA5AA67A9F2';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.KeyAlgorithm 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Security and Keys',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'CA639F48-0665-4B2D-AB83-6709FF9057A3';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.KeyID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Security and Keys',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'C25BA215-389E-46E8-9050-A44BFC676DE5';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.PublicKeyBase64 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Security and Keys',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Public Key (Base64)'
+WHERE 
+   ID = 'B796135F-273B-45BF-8329-65FC9DE0FF2E';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.RegistrationCodeHash 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Security and Keys',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'E9C4C14E-11CA-494E-A2B4-6513B2B3881C';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.RegistrationCodeExpiresAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Timeline and Activity',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '3FC72EB4-086C-4219-A913-6DFE9F8CF7EC';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.EnrolledAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Timeline and Activity',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '7263A223-577A-4F6E-A3A4-36BA4770152A';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.RevokedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Timeline and Activity',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'AD087AED-AEBF-48BC-9182-FAC5DB00B418';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.LastSeenAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Timeline and Activity',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'B2D6FA3E-A824-4B66-B34C-FBDD2D9E60AE';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '8616EABA-06EA-4DAA-A3F8-4E4B053BC0E9';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '95972272-7D48-47B5-9C16-0B37D36C85AA';
+
+/* Set entity icon to fa fa-server */
+
+               UPDATE [${flyway:defaultSchema}].[Entity]
+               SET [Icon] = 'fa fa-server', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = '0A75D64D-9396-4B77-871A-D88577F2AC4F';
+
+/* Insert FieldCategoryInfo setting for entity */
+IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '0A75D64D-9396-4B77-871A-D88577F2AC4F' AND [Name] = 'FieldCategoryInfo'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('1e98990f-0ffd-5dbb-90f0-7a8cb4335d24', '0A75D64D-9396-4B77-871A-D88577F2AC4F', 'FieldCategoryInfo', '{
+  "Registration Details": {
+    "description": "Core installation identity, status, quotas, and administrator notes",
+    "icon": "fa fa-info-circle"
+  },
+  "Security and Keys": {
+    "description": "Cryptographic keys, algorithms, and enrollment authentication codes",
+    "icon": "fa fa-shield-alt"
+  },
+  "System Metadata": {
+    "description": "System-managed audit and tracking fields",
+    "icon": "fa fa-cog"
+  },
+  "Timeline and Activity": {
+    "description": "Enrollment, expiration, revocation, and last activity timestamps",
+    "icon": "fa fa-clock"
+  }
+}', GETUTCDATE(), GETUTCDATE())
+   END;
 
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '3BF08C60-A005-4CC3-A730-6AA48BF64D86'
+               WHERE ID = 'B3E39419-3F28-487F-8E96-B787A316AE23'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '1564EAA6-84F0-4FA7-BF4D-3394D442A8B1'
+               WHERE ID = '008BE4D2-D5DA-4D58-9C59-C2D0EA75C1A2'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'C987F153-54F3-492F-BD74-8B1851199237'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '754FF87B-8341-453A-975D-AB9CAAE553E2'
+               WHERE ID = '0B1302D6-9EC4-44D1-A37A-990917DA383D'
                AND AutoUpdateUserSearchPredicate = 1;
+
+/* Insert FieldCategoryIcons setting (legacy) */
+IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '0A75D64D-9396-4B77-871A-D88577F2AC4F' AND [Name] = 'FieldCategoryIcons'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('33cec053-9d46-500b-a35c-03a4208d6ddc', '0A75D64D-9396-4B77-871A-D88577F2AC4F', 'FieldCategoryIcons', '{
+  "Registration Details": "fa fa-info-circle",
+  "Security and Keys": "fa fa-shield-alt",
+  "System Metadata": "fa fa-cog",
+  "Timeline and Activity": "fa fa-clock"
+}', GETUTCDATE(), GETUTCDATE())
+   END;
+
+/* Set DefaultForNewUser=true for NEW entity (category: supporting, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
+         SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
+         WHERE [EntityID] = '0A75D64D-9396-4B77-871A-D88577F2AC4F';
+
+/* Set categories for 19 fields */
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '6D73CD9A-EBD5-4C84-AD04-730DE04BCEE4';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.Name 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Session Details',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '10BACF04-9A95-4B35-8F0B-34D70FB2FC19';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.Reason 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Session Details',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'ED4BEC44-FD27-4123-9596-FEBD77EDAE75';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.Status 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Session Details',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '14B54BF3-B16F-477E-AA04-F88E58A6B6F3';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.ScopeType 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Scope and Targeting',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'A0906DB6-1D69-4C67-B552-812E12345344';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.ScopeJSON 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Scope and Targeting',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '35265CAE-EC4B-4A65-974B-A55AF93E3A9F';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.Level 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Capture Configuration',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '83F35DFD-93ED-412A-83C1-66CE415C1E50';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.CategoriesJSON 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Capture Configuration',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = 'CFECFF5D-2DC3-4155-8033-4B8DA1292598';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.ScrubLiterals 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Capture Configuration',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '9DD51870-8EDF-441D-91A4-FCEDD9D0612B';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.MaxBytes 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Capture Configuration',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'A13AEB63-1D12-4275-8140-E9D31A13B882';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.StartedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Timeline and Lifespan',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '1811DDD3-1E6C-4338-8148-21AC96F09BC3';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.EndsAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Timeline and Lifespan',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'F377B211-E2E0-4CE7-9069-9620F2D48E05';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.StoppedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Timeline and Lifespan',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '433AD27E-71A6-4F6B-854D-55A8789599C1';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.CreatedByUserID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Ownership and Tenant',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Created By User'
+WHERE 
+   ID = '8CF0E0D5-F3D2-4F64-B7A4-01F66E1333F7';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.CompanyID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Ownership and Tenant',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Company'
+WHERE 
+   ID = '4EDF3600-ACEA-410D-8014-294CED366562';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.CreatedByUser 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Ownership and Tenant',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Created By User Name'
+WHERE 
+   ID = 'C08293BA-FADA-4548-8130-BDBAADB414D8';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.Company 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Ownership and Tenant',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Company Name'
+WHERE 
+   ID = '18E874FA-5763-445C-ADD1-340B1D943E8F';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '0720A793-474D-463F-AB4D-7E9A6A2FF9F9';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '720A573E-634C-4A6E-8915-3D41716CFFD9';
+
+/* Set entity icon to fa fa-stethoscope */
+
+               UPDATE [${flyway:defaultSchema}].[Entity]
+               SET [Icon] = 'fa fa-stethoscope', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11';
+
+/* Insert FieldCategoryInfo setting for entity */
+IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND [Name] = 'FieldCategoryInfo'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('8d81dac6-3d8b-530e-b8ca-90e28a4cea1f', '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', 'FieldCategoryInfo', '{
+  "Capture Configuration": {
+    "description": "Verbosity levels, categories, scrubbing, and budget limits",
+    "icon": "fa fa-sliders-h"
+  },
+  "Ownership and Tenant": {
+    "description": "User and tenant isolation details",
+    "icon": "fa fa-building"
+  },
+  "Scope and Targeting": {
+    "description": "Targeting rules and scope configuration for request capture",
+    "icon": "fa fa-bullseye"
+  },
+  "Session Details": {
+    "description": "Core identifying details and status of the diagnostic session",
+    "icon": "fa fa-info-circle"
+  },
+  "System Metadata": {
+    "description": "System-managed audit and tracking fields",
+    "icon": "fa fa-cog"
+  },
+  "Timeline and Lifespan": {
+    "description": "Start, expiration, and stop timestamps for the session",
+    "icon": "fa fa-clock"
+  }
+}', GETUTCDATE(), GETUTCDATE())
+   END;
+
+/* Insert FieldCategoryIcons setting (legacy) */
+IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11' AND [Name] = 'FieldCategoryIcons'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('f324aeda-7e14-58a7-850b-6b1f7f375dbf', '133BF1FD-E4C0-410D-B847-39B3FD6FBC11', 'FieldCategoryIcons', '{
+  "Capture Configuration": "fa fa-sliders-h",
+  "Ownership and Tenant": "fa fa-building",
+  "Scope and Targeting": "fa fa-bullseye",
+  "Session Details": "fa fa-info-circle",
+  "System Metadata": "fa fa-cog",
+  "Timeline and Lifespan": "fa fa-clock"
+}', GETUTCDATE(), GETUTCDATE())
+   END;
+
+/* Set DefaultForNewUser=true for NEW entity (category: primary, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
+         SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
+         WHERE [EntityID] = '133BF1FD-E4C0-410D-B847-39B3FD6FBC11';
 
 /* Set categories for 13 fields */
 
@@ -8328,7 +8724,7 @@ SET
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '92210665-7CBE-464D-A0F3-321349BB576B';
+   ID = 'F3E60710-4797-459E-8F8E-7AC8B18E1E3D';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Session Chunks.DiagnosticSessionID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8337,15 +8733,7 @@ SET
    GeneratedFormSection = 'Category',
    DisplayName = 'Diagnostic Session'
 WHERE 
-   ID = '72168BCA-4B51-457B-AFC9-167326FBE1A4';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Session Chunks.DiagnosticSession 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Session Information',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '6FD02426-CDD3-4C0B-9851-5E40EF242FF5';
+   ID = '3C9534E2-BF0C-4062-A9C5-462A98D688A5';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Session Chunks.Source 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8353,7 +8741,7 @@ SET
    Category = 'Session Information',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'BC039DC4-E227-4836-B237-CB312EDB05E0';
+   ID = '65F25294-38FE-4962-AE82-E79654DEB7AB';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Session Chunks.HostInstanceLabel 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8361,39 +8749,40 @@ SET
    Category = 'Session Information',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '42D629E0-CEF2-447E-84D2-124BFCC82A47';
+   ID = '1829E0EC-705C-4B0A-AEAA-6229A57D18A9';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Session Chunks.Sequence 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Chunk Details',
+   Category = 'Session Information',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '61C5F07F-89F7-48C3-BEB4-8354A88C0423';
+   ID = '1FF87845-C451-4511-837B-3A4571FD4889';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Session Chunks.ContentKind 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Chunk Details',
+   Category = 'Chunk Payload',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'E91151EA-695E-40F1-AC51-F918454DA4D0';
+   ID = 'D78C8C45-20C6-461A-A5F9-89F1538CAA0F';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Session Chunks.Data 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Chunk Details',
-   GeneratedFormSection = 'Category'
+   Category = 'Chunk Payload',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
 WHERE 
-   ID = '78DB8811-5731-4F94-B5E3-9F44CCDFA766';
+   ID = '583D39D5-8DB1-4367-A310-9AD3EFA46332';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Session Chunks.EntryCount 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Chunk Details',
+   Category = 'Chunk Payload',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'DEB5678D-EC9B-4DB8-B1CD-EC3EF7CDA71A';
+   ID = '79AD6A5B-7FD9-44CD-ADF9-619C0D5C8C7D';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Session Chunks.FirstEntryAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8401,7 +8790,7 @@ SET
    Category = 'Timeline',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '01F2994D-8667-4834-B9F5-B05B23303C24';
+   ID = '66AEE3DB-EB2F-48D1-B3E9-22A23AC77FCB';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Session Chunks.LastEntryAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8409,7 +8798,15 @@ SET
    Category = 'Timeline',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '94A9FC0E-6770-4394-AB47-CE152192CC10';
+   ID = '9D54251C-1F94-492B-9D41-165EC8FA607C';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Session Chunks.DiagnosticSession 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Session Information',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '8FFA316B-8D2E-4B06-8302-ECF87DE6BF38';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Session Chunks.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8417,7 +8814,7 @@ SET
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '18D6E6B6-4D05-4865-91BF-D0650E25E12E';
+   ID = 'B8051F5E-D175-4A1B-B838-902BCA34700D';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Session Chunks.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8425,27 +8822,27 @@ SET
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '52934C2D-FFB4-4EF9-9416-73EC4ED4C1A9';
+   ID = '84D272E8-9CEE-4BC2-91D0-E07959E3B5BA';
 
 /* Set entity icon to fa fa-database */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
                SET [Icon] = 'fa fa-database', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = 'A5B20694-EC9E-4BEB-A402-0081504AA78B';
+               WHERE [ID] = '95AE4A10-7D58-4D55-BE27-5B934A958411';
 
 /* Insert FieldCategoryInfo setting for entity */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'A5B20694-EC9E-4BEB-A402-0081504AA78B' AND [Name] = 'FieldCategoryInfo'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '95AE4A10-7D58-4D55-BE27-5B934A958411' AND [Name] = 'FieldCategoryInfo'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('72570627-cd80-5774-888d-d919c0840554', 'A5B20694-EC9E-4BEB-A402-0081504AA78B', 'FieldCategoryInfo', '{
-  "Chunk Details": {
-    "description": "Payload contents, sequence, and record counts for the capture chunk",
+               VALUES ('8a15bc51-369d-5b46-a254-d5b6be9e4ebe', '95AE4A10-7D58-4D55-BE27-5B934A958411', 'FieldCategoryInfo', '{
+  "Chunk Payload": {
+    "description": "Diagnostic payload content, entry counts, and data format details",
     "icon": "fa fa-file-code"
   },
   "Session Information": {
-    "description": "Session context and origin details for the diagnostic chunk",
+    "description": "Session context, origin tier, and instance identifiers",
     "icon": "fa fa-info-circle"
   },
   "System Metadata": {
@@ -8453,7 +8850,7 @@ IF NOT EXISTS (
     "icon": "fa fa-cog"
   },
   "Timeline": {
-    "description": "Timestamps covering the range of events within the chunk",
+    "description": "Timestamps for the earliest and latest events in the chunk",
     "icon": "fa fa-clock"
   }
 }', GETUTCDATE(), GETUTCDATE())
@@ -8461,12 +8858,12 @@ IF NOT EXISTS (
 
 /* Insert FieldCategoryIcons setting (legacy) */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'A5B20694-EC9E-4BEB-A402-0081504AA78B' AND [Name] = 'FieldCategoryIcons'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '95AE4A10-7D58-4D55-BE27-5B934A958411' AND [Name] = 'FieldCategoryIcons'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('cebf2974-f34e-5571-84f5-5d1d2806581a', 'A5B20694-EC9E-4BEB-A402-0081504AA78B', 'FieldCategoryIcons', '{
-  "Chunk Details": "fa fa-file-code",
+               VALUES ('a0a0b277-b222-5ec4-a6b5-4b3b8d204f08', '95AE4A10-7D58-4D55-BE27-5B934A958411', 'FieldCategoryIcons', '{
+  "Chunk Payload": "fa fa-file-code",
   "Session Information": "fa fa-info-circle",
   "System Metadata": "fa fa-cog",
   "Timeline": "fa fa-clock"
@@ -8477,346 +8874,7 @@ IF NOT EXISTS (
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = 'A5B20694-EC9E-4BEB-A402-0081504AA78B';
-
-/* Set categories for 16 fields */
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.ID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'FEAA52E1-360E-4774-81FB-7B3DEC9A1738';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.InstallID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Registration Details',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '23C5308D-2C15-46A6-BC53-16ADACC8FB74';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.Name 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Registration Details',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'C63DBEB8-CB74-415C-A8B2-AC20FC66BFA6';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.Status 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Registration Details',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '620F41D8-532D-420D-BFD0-549E404DFC34';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.MaxBundlesPerDay 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Registration Details',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '92469C19-5EA5-42DF-B466-CC3DB5B7740B';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.KeyAlgorithm 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Security and Keys',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'D33265B5-34FE-4765-A09C-C3DD5212BA6B';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.KeyID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Security and Keys',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'B3B4F241-0A0A-464A-8F91-C49532F502CC';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.PublicKeyBase64 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Security and Keys',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Public Key (Base64)'
-WHERE 
-   ID = 'D39FFFE7-BB97-4A50-B028-93D17D4C4FE3';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.RegistrationCodeHash 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Security and Keys',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '2BE187DA-8771-4521-9067-ED5058E5AB97';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.RegistrationCodeExpiresAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Timeline and Activity',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '87738366-263A-4480-8874-CEB178445606';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.EnrolledAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Timeline and Activity',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'E06922FB-E7C9-4B1C-8F55-ADA49775FB75';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.RevokedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Timeline and Activity',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '654FA598-6390-40C3-89B1-16F94FC336AF';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.LastSeenAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Timeline and Activity',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '229552F8-6C5F-4CB2-B279-E4655732C2A5';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.Comments 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Registration Details',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '90C0F86A-B035-4889-9545-D22558399EA2';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.__mj_CreatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'EF629AC8-F225-42CE-ACAE-FF29D213F9C2';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sender Registrations.__mj_UpdatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'D88AA667-8F2F-4B3E-B38D-87FAA310D266';
-
-/* Set entity icon to fa fa-shield-alt */
-
-               UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-shield-alt', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '7680F8BD-1DA5-4664-81CC-2225EB4299A7';
-
-/* Insert FieldCategoryInfo setting for entity */
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '7680F8BD-1DA5-4664-81CC-2225EB4299A7' AND [Name] = 'FieldCategoryInfo'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('2d2fa526-e263-58f6-8981-7a612d6ab2d4', '7680F8BD-1DA5-4664-81CC-2225EB4299A7', 'FieldCategoryInfo', '{
-  "Registration Details": {
-    "description": "Core information, names, statuses, and operational limits of the registration",
-    "icon": "fa fa-id-card"
-  },
-  "Security and Keys": {
-    "description": "Cryptographic keys, algorithms, and registration code verification data",
-    "icon": "fa fa-lock"
-  },
-  "System Metadata": {
-    "description": "System-managed audit and tracking fields",
-    "icon": "fa fa-cog"
-  },
-  "Timeline and Activity": {
-    "description": "Timestamps tracking enrollment, expiration, revocation, and activity",
-    "icon": "fa fa-clock"
-  }
-}', GETUTCDATE(), GETUTCDATE())
-   END;
-
-/* Insert FieldCategoryIcons setting (legacy) */
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '7680F8BD-1DA5-4664-81CC-2225EB4299A7' AND [Name] = 'FieldCategoryIcons'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('3ae4dafe-0aa0-5d37-b431-b628e668f9de', '7680F8BD-1DA5-4664-81CC-2225EB4299A7', 'FieldCategoryIcons', '{
-  "Registration Details": "fa fa-id-card",
-  "Security and Keys": "fa fa-lock",
-  "System Metadata": "fa fa-cog",
-  "Timeline and Activity": "fa fa-clock"
-}', GETUTCDATE(), GETUTCDATE())
-   END;
-
-/* Set DefaultForNewUser=false for NEW entity (category: supporting, confidence: high) */
-
-         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
-         SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '7680F8BD-1DA5-4664-81CC-2225EB4299A7';
-
-/* Set categories for 19 fields */
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.ID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '0D57649F-3694-4399-95F9-FB6AA970691F';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.Name 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Session Details',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '754FF87B-8341-453A-975D-AB9CAAE553E2';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.Reason 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Session Details',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'DE4C9A0A-FAB6-470C-9C1D-37980A8C2792';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.Status 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Session Details',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '94DD344E-F20C-489F-8FD7-F5FA6E7BA19A';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.ScopeType 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Targeting and Scope',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '57D1C951-DFCF-4754-A3D1-3F13B6ECDBC1';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.ScopeJSON 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Targeting and Scope',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '104F5ADA-3D67-49D1-9486-7DC41C475183';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.Level 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Capture Configuration',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '3BF08C60-A005-4CC3-A730-6AA48BF64D86';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.CategoriesJSON 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Capture Configuration',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '65051C13-CBA4-4879-B0E6-E004FF972553';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.ScrubLiterals 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Capture Configuration',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'F3FE8EE6-F207-4242-B4D0-BFCD27A88AB6';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.MaxBytes 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Capture Configuration',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'D8F29B3E-BC24-4BD6-B799-EA932025869B';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.StartedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Timeline',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '1564EAA6-84F0-4FA7-BF4D-3394D442A8B1';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.EndsAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Timeline',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '61F4070E-B90D-4F76-896E-C95BA652AABA';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.StoppedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Timeline',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'A9B850EE-CFDE-428C-8AED-5F3FFECBD40D';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.CreatedByUserID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Ownership and Tenant',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'E52BCEE5-CC97-4D8B-94BC-2C95E5368F48';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.CompanyID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Ownership and Tenant',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '5048C5FB-8B97-4270-9B9D-115DC22AC99F';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.CreatedByUser 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Ownership and Tenant',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '39DA2564-48CF-4DD4-A133-D424397EF39C';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.Company 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Ownership and Tenant',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'F9C29344-20A5-44F2-9A44-EED9A294C58C';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.__mj_CreatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '1446C757-B326-47A9-8823-1BCE91C9938B';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Sessions.__mj_UpdatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '7B9A235D-6609-4CBE-A6B0-C495AE9F368A';
+         WHERE [EntityID] = '95AE4A10-7D58-4D55-BE27-5B934A958411';
 
 /* Set categories for 35 fields */
 
@@ -8826,159 +8884,160 @@ SET
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '71992E90-7C1E-460D-BD31-791D2D0EDDDE';
+   ID = 'EDD96485-AB7F-4B90-B8B0-0FF89F5CE083';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.Name 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Bundle Details',
+   Category = 'Bundle Information',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '21106266-910E-43AB-ABE3-AA5ED911314D';
+   ID = '0B1302D6-9EC4-44D1-A37A-990917DA383D';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.Description 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Bundle Details',
+   Category = 'Bundle Information',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'C5E68C2E-41AA-4E67-97D8-3BC62174D59D';
+   ID = '8BB008BF-DE67-444D-9C70-F6CA72CE1E5F';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.Direction 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Bundle Details',
+   Category = 'Bundle Information',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '226B9CA7-5FDB-444D-99AC-618B573DC703';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.Status 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Bundle Details',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '469602A1-9D6F-48AA-AD64-B70A48FEF38E';
+   ID = '329F06FC-164A-44CA-9A37-6DB686E80DC9';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.DiagnosticSessionID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Bundle Details',
-   GeneratedFormSection = 'Category'
+   Category = 'Source and References',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Diagnostic Session'
 WHERE 
-   ID = 'CDEC5719-7946-4367-884F-FFB3BC620CBC';
+   ID = '1B866D87-8BD5-4797-8BD6-A7B82208960E';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.DiagnosticSession 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Bundle Details',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '11EBFA09-30D0-4569-ACA7-A732A3390506';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.WindowStart 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Timeline and Scope',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '71280090-EB5F-490A-9108-D8FA1DA9F264';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.WindowEnd 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Timeline and Scope',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '67683C2A-0A1C-4E6E-8F43-E6F89B6586C7';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.ScrubLiterals 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Security and Scrubbing',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'CA2539BD-BC9C-4B7B-8385-7B3D9B76AE9E';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.ScrubReportJSON 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Security and Scrubbing',
+   Category = 'Source and References',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Scrub Report',
-   ExtendedType = 'JSON'
+   DisplayName = 'Diagnostic Session Name'
 WHERE 
-   ID = '635E72AD-5692-408E-A98E-8088B0C6FC09';
+   ID = 'EEDC374E-540D-4BFE-8DF1-6298FC76EB30';
 
--- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.FindingsJSON 
+-- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.Status 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Analysis and Findings',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Findings',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '5BA8E940-33D4-4DC0-86D5-76340AE53921';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.FileID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Storage and Archive',
+   Category = 'Lifecycle and Status',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'D3335A61-8BD1-4416-90EA-AC65269D7B80';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.File 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Storage and Archive',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '0E6C5053-4336-479F-9557-FD78E1FF0251';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.Data 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Storage and Archive',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '61E09B1A-6E15-46EF-B0F5-1C304507BEAC';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.SizeBytes 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Storage and Archive',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Size (Bytes)'
-WHERE 
-   ID = 'CE1B783E-7AFB-4C66-A0C8-359C24DCBD11';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.SHA256 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Storage and Archive',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'SHA256'
-WHERE 
-   ID = 'C1561D65-10FE-4B6B-BA80-30BE25D926E4';
-
--- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.ManifestJSON 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Storage and Archive',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Manifest',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '4E898D0D-39C4-4AEE-B38B-F138CE3FCDE2';
+   ID = 'B3E39419-3F28-487F-8E96-B787A316AE23';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.FailureReason 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Status and Error Tracking',
+   Category = 'Lifecycle and Status',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '883E6CE7-CF5A-4276-937D-EC70480FC823';
+   ID = '058765E6-DD09-484F-822E-B466D681E801';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.ScrubLiterals 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Content and Findings',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '03F204C7-74B8-4567-B4E7-8DAAD2AE52F6';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.WindowStart 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Content and Findings',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '5E30689F-DA96-490F-8D50-19E9CE98EA06';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.WindowEnd 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Content and Findings',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '9B0845FB-9964-49E8-B814-134DE5842026';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.ManifestJSON 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Content and Findings',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '12DDB9B2-BB41-4A3B-8BB8-CEA9FC7D6E68';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.ScrubReportJSON 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Content and Findings',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = 'BE34EF65-DD3F-4631-944F-18126E0DEC06';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.FindingsJSON 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Content and Findings',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = 'AD7DD548-3A48-40B8-843E-16DAFE4AF6C4';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.FileID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Storage and File Details',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'File'
+WHERE 
+   ID = '9AA2C46A-16E0-4233-871E-9FFCCE400ACB';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.File 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Storage and File Details',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'File Name'
+WHERE 
+   ID = 'D922872F-06A0-43DD-8054-C7EB3A26E69F';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.Data 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Storage and File Details',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'C66BBB4A-991E-448A-83B0-C977D59DDCED';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.SizeBytes 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Storage and File Details',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Size (Bytes)'
+WHERE 
+   ID = '008BE4D2-D5DA-4D58-9C59-C2D0EA75C1A2';
+
+-- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.SHA256 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Storage and File Details',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'SHA256'
+WHERE 
+   ID = '1103F8CE-C48C-4FE3-AE05-EAD4E4516347';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.CreatedByUserID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8986,7 +9045,7 @@ SET
    Category = 'Ownership and Approval',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '666A271A-40FE-4ADC-9FE0-D52E64F82D3E';
+   ID = '601F1C45-A56C-4CCD-9A29-EFC6A7FEE5C4';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.CreatedByUser 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -8994,7 +9053,7 @@ SET
    Category = 'Ownership and Approval',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '9C24D38A-02C8-458A-B585-C7CEA8317929';
+   ID = '225F88A3-F9A2-4B13-A5A1-93C058F7FCD2';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.ApprovedByUserID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9002,7 +9061,7 @@ SET
    Category = 'Ownership and Approval',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'B0E50D95-6BE4-4F3B-A71A-EBBB2DB48101';
+   ID = '999005E6-4821-443F-BB77-E06FE89D87D6';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.ApprovedByUser 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9010,7 +9069,7 @@ SET
    Category = 'Ownership and Approval',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'D2EFD21A-7610-47AD-906F-6783E59768ED';
+   ID = 'C60F4895-1B9F-4D4F-9028-402F46622B3D';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.ApprovedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9018,7 +9077,7 @@ SET
    Category = 'Ownership and Approval',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '65540DBA-E972-458C-B523-C57EAFD24A42';
+   ID = '374EFB56-CA0C-464C-B67F-F63BF4FC71B8';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.Destination 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9026,7 +9085,7 @@ SET
    Category = 'Transmission Details',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '64E2435A-02C6-4688-ABA3-B05612E69EAD';
+   ID = '5486F090-0C0F-4312-AB17-2109820F6866';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.SentAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9034,7 +9093,7 @@ SET
    Category = 'Transmission Details',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '1AEA44EA-8908-4556-91AE-B10728DAFF77';
+   ID = 'C6A6729A-6922-4977-97F5-2EB4B9471308';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.ExternalReferenceID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9042,55 +9101,55 @@ SET
    Category = 'Transmission Details',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'B85A691E-5146-4263-82A5-7D5D7338D0FF';
+   ID = '6C7BDFED-2462-45FD-9022-6FFE9B9369BA';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.SenderInstallID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Sender Information',
+   Category = 'Intake and Source Context',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '8D2A4187-10F8-416D-8C65-AEE61C27D653';
+   ID = 'E864C1FE-6E5B-4FD7-982A-6D0EC2083C49';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.SenderMJVersion 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Sender Information',
+   Category = 'Intake and Source Context',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '6F79B945-203B-498C-8871-7D6126F1EF46';
+   ID = 'C10C0183-8895-4CEA-AFF0-C2B993772BD0';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.ContactInfo 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Sender Information',
+   Category = 'Intake and Source Context',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '8200EA9C-B129-442B-B221-DB9A93AA7780';
+   ID = '0D61DE7D-C46E-45FC-BF04-29D295D55AEC';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.ExpiresAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Timeline and Scope',
+   Category = 'Lifecycle and Status',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'E649AB90-E9E5-4B6B-BD3D-E6DAC9A3D35E';
+   ID = 'BC31DA3A-499B-4C7C-B0C9-BF8CF37C25DE';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.CompanyID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Bundle Details',
+   Category = 'Source and References',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '10F82559-AE1F-451F-AD0A-00D509D58C8A';
+   ID = '928B0221-2753-412E-97C8-58998662FB3B';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.Company 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Bundle Details',
+   Category = 'Source and References',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '903A950A-55CC-4286-99BA-5BCDA1B7BDA8';
+   ID = '90D490A2-AF3B-4909-B17E-B55C3F013F09';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9098,7 +9157,7 @@ SET
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'D464283C-4AC5-4365-B614-D61FFC045E3E';
+   ID = 'C987F153-54F3-492F-BD74-8B1851199237';
 
 -- UPDATE Entity Field Category Info MJ: Diagnostic Bundles.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -9106,117 +9165,55 @@ SET
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '9D3F49AE-5959-41E4-BF59-40E737499880';
+   ID = '23D783E5-25D1-48F6-9960-2802038AE3FB';
 
 /* Set entity icon to fa fa-stethoscope */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
                SET [Icon] = 'fa fa-stethoscope', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC';
+               WHERE [ID] = 'A385086E-1147-4042-AE36-D808CE850EF9';
 
 /* Insert FieldCategoryInfo setting for entity */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND [Name] = 'FieldCategoryInfo'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9' AND [Name] = 'FieldCategoryInfo'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('e6804625-99ef-5ba6-8f79-19658fe07205', 'D83818A2-E62D-40EA-9243-C2D1175411AC', 'FieldCategoryInfo', '{
-  "Capture Configuration": {
-    "description": "Verbosity levels, budget controls, and capture settings",
-    "icon": "fa fa-sliders-h"
-  },
-  "Ownership and Tenant": {
-    "description": "Creator user and tenant isolation details",
-    "icon": "fa fa-building"
-  },
-  "Session Details": {
-    "description": "General identification and status details for the diagnostic session",
+               VALUES ('ea0c70cd-20f1-5e92-b7a5-bc679fa64d2b', 'A385086E-1147-4042-AE36-D808CE850EF9', 'FieldCategoryInfo', '{
+  "Bundle Information": {
+    "description": "General identification and descriptive details of the diagnostic bundle",
     "icon": "fa fa-info-circle"
+  },
+  "Content and Findings": {
+    "description": "Manifests, scrubbing reports, automated findings, and time windows",
+    "icon": "fa fa-file-alt"
+  },
+  "Intake and Source Context": {
+    "description": "Remote sender metadata and contact information for ingested bundles",
+    "icon": "fa fa-network-wired"
+  },
+  "Lifecycle and Status": {
+    "description": "Current status, failure reasons, and retention expiration",
+    "icon": "fa fa-tasks"
+  },
+  "Ownership and Approval": {
+    "description": "Creators, approvers, and approval timestamps",
+    "icon": "fa fa-user-shield"
+  },
+  "Source and References": {
+    "description": "Originating diagnostic session, company scoping, and relationships",
+    "icon": "fa fa-link"
+  },
+  "Storage and File Details": {
+    "description": "File storage references, binary data, size, and checksums",
+    "icon": "fa fa-database"
   },
   "System Metadata": {
     "description": "System-managed audit and tracking fields",
     "icon": "fa fa-cog"
   },
-  "Targeting and Scope": {
-    "description": "Targeting rules and specifications for matching incoming requests",
-    "icon": "fa fa-crosshairs"
-  },
-  "Timeline": {
-    "description": "Start, expiration, and stop timestamps for session execution",
-    "icon": "fa fa-clock"
-  }
-}', GETUTCDATE(), GETUTCDATE())
-   END;
-
-/* Insert FieldCategoryIcons setting (legacy) */
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC' AND [Name] = 'FieldCategoryIcons'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('c5044c5b-3b6e-5624-8d0d-f70783f7ad3d', 'D83818A2-E62D-40EA-9243-C2D1175411AC', 'FieldCategoryIcons', '{
-  "Capture Configuration": "fa fa-sliders-h",
-  "Ownership and Tenant": "fa fa-building",
-  "Session Details": "fa fa-info-circle",
-  "System Metadata": "fa fa-cog",
-  "Targeting and Scope": "fa fa-crosshairs",
-  "Timeline": "fa fa-clock"
-}', GETUTCDATE(), GETUTCDATE())
-   END;
-
-/* Set DefaultForNewUser=true for NEW entity (category: supporting, confidence: high) */
-
-         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
-         SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = 'D83818A2-E62D-40EA-9243-C2D1175411AC';
-
-/* Set entity icon to fa fa-stethoscope */
-
-               UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-stethoscope', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E';
-
-/* Insert FieldCategoryInfo setting for entity */
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND [Name] = 'FieldCategoryInfo'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('a2868638-4d23-5df8-b9de-ce522ceaa8ed', 'D3AAD653-5B9A-4075-94C0-A2A490823D4E', 'FieldCategoryInfo', '{
-  "Analysis and Findings": {
-    "description": "Automated rules-engine diagnostic findings and results",
-    "icon": "fa fa-chart-line"
-  },
-  "Bundle Details": {
-    "description": "Core descriptive and relational metadata for the diagnostic bundle",
-    "icon": "fa fa-box"
-  },
-  "Ownership and Approval": {
-    "description": "Creators, approvers, and administrative sign-offs",
-    "icon": "fa fa-user-check"
-  },
-  "Security and Scrubbing": {
-    "description": "Configuration and reports regarding literal scrubbing and data protection",
-    "icon": "fa fa-shield-alt"
-  },
-  "Sender Information": {
-    "description": "Origin instance details for ingested external bundles",
-    "icon": "fa fa-network-wired"
-  },
-  "Status and Error Tracking": {
-    "description": "Failure details and execution status messages",
-    "icon": "fa fa-exclamation-triangle"
-  },
-  "Storage and Archive": {
-    "description": "File manifests, binary archives, storage links, and checksums",
-    "icon": "fa fa-database"
-  },
-  "Timeline and Scope": {
-    "description": "Time windows, coverage, and expiration retention dates",
-    "icon": "fa fa-clock"
-  },
   "Transmission Details": {
-    "description": "External destination, delivery timestamps, and reference IDs",
+    "description": "External destination, transmission timestamps, and reference IDs",
     "icon": "fa fa-paper-plane"
   }
 }', GETUTCDATE(), GETUTCDATE())
@@ -9224,19 +9221,19 @@ IF NOT EXISTS (
 
 /* Insert FieldCategoryIcons setting (legacy) */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E' AND [Name] = 'FieldCategoryIcons'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9' AND [Name] = 'FieldCategoryIcons'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('0ea1fe4d-b972-52ee-98b9-d2ac05202dcf', 'D3AAD653-5B9A-4075-94C0-A2A490823D4E', 'FieldCategoryIcons', '{
-  "Analysis and Findings": "fa fa-chart-line",
-  "Bundle Details": "fa fa-box",
-  "Ownership and Approval": "fa fa-user-check",
-  "Security and Scrubbing": "fa fa-shield-alt",
-  "Sender Information": "fa fa-network-wired",
-  "Status and Error Tracking": "fa fa-exclamation-triangle",
-  "Storage and Archive": "fa fa-database",
-  "Timeline and Scope": "fa fa-clock",
+               VALUES ('29625ba2-5469-58a3-82bf-a07404eba192', 'A385086E-1147-4042-AE36-D808CE850EF9', 'FieldCategoryIcons', '{
+  "Bundle Information": "fa fa-info-circle",
+  "Content and Findings": "fa fa-file-alt",
+  "Intake and Source Context": "fa fa-network-wired",
+  "Lifecycle and Status": "fa fa-tasks",
+  "Ownership and Approval": "fa fa-user-shield",
+  "Source and References": "fa fa-link",
+  "Storage and File Details": "fa fa-database",
+  "System Metadata": "fa fa-cog",
   "Transmission Details": "fa fa-paper-plane"
 }', GETUTCDATE(), GETUTCDATE())
    END;
@@ -9245,5 +9242,5 @@ IF NOT EXISTS (
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = 'D3AAD653-5B9A-4075-94C0-A2A490823D4E';
+         WHERE [EntityID] = 'A385086E-1147-4042-AE36-D808CE850EF9';
 

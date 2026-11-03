@@ -18300,7 +18300,7 @@ export const MJDiagnosticBundleSchema = z.object({
         * * Description: Indicates whether this bundle was built locally on this instance (Local) or ingested via the MJAPI intake endpoint (Received).`),
     DiagnosticSessionID: z.string().nullable().describe(`
         * * Field Name: DiagnosticSessionID
-        * * Display Name: Diagnostic Session ID
+        * * Display Name: Diagnostic Session
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Diagnostic Sessions (vwDiagnosticSessions.ID)
         * * Description: Source diagnostic session when built from a server session; NULL for client-only or received bundles.`),
@@ -18337,7 +18337,7 @@ export const MJDiagnosticBundleSchema = z.object({
         * * Description: End of the time window covered by this bundle.`),
     FileID: z.string().nullable().describe(`
         * * Field Name: FileID
-        * * Display Name: File ID
+        * * Display Name: File
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
         * * Description: Reference to MJ: Files when the bundle archive is persisted in MJStorage.`),
@@ -18359,19 +18359,19 @@ export const MJDiagnosticBundleSchema = z.object({
         * * Description: Hex-encoded SHA-256 digest of the unencrypted .mjdiag archive.`),
     ManifestJSON: z.any().nullable().describe(`
         * * Field Name: ManifestJSON
-        * * Display Name: Manifest
+        * * Display Name: Manifest JSON
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJDiagnosticBundleEntity_IDiagnosticBundleManifest
         * * Description: Parsed manifest.json contents including file inventory and SHA-256 digests.`),
     ScrubReportJSON: z.any().nullable().describe(`
         * * Field Name: ScrubReportJSON
-        * * Display Name: Scrub Report
+        * * Display Name: Scrub Report JSON
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJDiagnosticBundleEntity_IDiagnosticScrubReport
         * * Description: Summary counts of credential tokens scrubbed and literals normalized across all bundle entries.`),
     FindingsJSON: z.any().nullable().describe(`
         * * Field Name: FindingsJSON
-        * * Display Name: Findings
+        * * Display Name: Findings JSON
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: Array<MJDiagnosticBundleEntity_IDiagnosticFinding>
         * * Description: Automated rules-engine diagnostic findings extracted from this bundle.`),
@@ -18455,11 +18455,11 @@ export const MJDiagnosticBundleSchema = z.object({
         * * Default Value: getutcdate()`),
     DiagnosticSession: z.string().nullable().describe(`
         * * Field Name: DiagnosticSession
-        * * Display Name: Diagnostic Session
+        * * Display Name: Diagnostic Session Name
         * * SQL Data Type: nvarchar(255)`),
     File: z.string().nullable().describe(`
         * * Field Name: File
-        * * Display Name: File
+        * * Display Name: File Name
         * * SQL Data Type: nvarchar(500)`),
     CreatedByUser: z.string().nullable().describe(`
         * * Field Name: CreatedByUser
@@ -18761,13 +18761,13 @@ export const MJDiagnosticSessionSchema = z.object({
         * * Description: Maximum total compressed chunk bytes allowed for this session before capture stops (defaults to 50 MB).`),
     CreatedByUserID: z.string().describe(`
         * * Field Name: CreatedByUserID
-        * * Display Name: Created By User ID
+        * * Display Name: Created By User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: User who initiated the diagnostic session.`),
     CompanyID: z.string().nullable().describe(`
         * * Field Name: CompanyID
-        * * Display Name: Company ID
+        * * Display Name: Company
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Companies (vwCompanies.ID)
         * * Description: Optional tenant CompanyID isolating session capture in multi-tenant deployments.`),
@@ -18783,11 +18783,11 @@ export const MJDiagnosticSessionSchema = z.object({
         * * Default Value: getutcdate()`),
     CreatedByUser: z.string().describe(`
         * * Field Name: CreatedByUser
-        * * Display Name: Created By User
+        * * Display Name: Created By User Name
         * * SQL Data Type: nvarchar(100)`),
     Company: z.string().nullable().describe(`
         * * Field Name: Company
-        * * Display Name: Company
+        * * Display Name: Company Name
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -94098,7 +94098,7 @@ export class MJDiagnosticBundleEntity extends BaseEntity<MJDiagnosticBundleEntit
 
     /**
     * * Field Name: DiagnosticSessionID
-    * * Display Name: Diagnostic Session ID
+    * * Display Name: Diagnostic Session
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Diagnostic Sessions (vwDiagnosticSessions.ID)
     * * Description: Source diagnostic session when built from a server session; NULL for client-only or received bundles.
@@ -94175,7 +94175,7 @@ export class MJDiagnosticBundleEntity extends BaseEntity<MJDiagnosticBundleEntit
 
     /**
     * * Field Name: FileID
-    * * Display Name: File ID
+    * * Display Name: File
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
     * * Description: Reference to MJ: Files when the bundle archive is persisted in MJStorage.
@@ -94230,7 +94230,7 @@ export class MJDiagnosticBundleEntity extends BaseEntity<MJDiagnosticBundleEntit
 
     /**
     * * Field Name: ManifestJSON
-    * * Display Name: Manifest
+    * * Display Name: Manifest JSON
     * * SQL Data Type: nvarchar(MAX)
     * * JSON Type: MJDiagnosticBundleEntity_IDiagnosticBundleManifest
     * * Description: Parsed manifest.json contents including file inventory and SHA-256 digests.
@@ -94259,7 +94259,7 @@ export class MJDiagnosticBundleEntity extends BaseEntity<MJDiagnosticBundleEntit
 
     /**
     * * Field Name: ScrubReportJSON
-    * * Display Name: Scrub Report
+    * * Display Name: Scrub Report JSON
     * * SQL Data Type: nvarchar(MAX)
     * * JSON Type: MJDiagnosticBundleEntity_IDiagnosticScrubReport
     * * Description: Summary counts of credential tokens scrubbed and literals normalized across all bundle entries.
@@ -94288,7 +94288,7 @@ export class MJDiagnosticBundleEntity extends BaseEntity<MJDiagnosticBundleEntit
 
     /**
     * * Field Name: FindingsJSON
-    * * Display Name: Findings
+    * * Display Name: Findings JSON
     * * SQL Data Type: nvarchar(MAX)
     * * JSON Type: Array<MJDiagnosticBundleEntity_IDiagnosticFinding>
     * * Description: Automated rules-engine diagnostic findings extracted from this bundle.
@@ -94501,7 +94501,7 @@ export class MJDiagnosticBundleEntity extends BaseEntity<MJDiagnosticBundleEntit
 
     /**
     * * Field Name: DiagnosticSession
-    * * Display Name: Diagnostic Session
+    * * Display Name: Diagnostic Session Name
     * * SQL Data Type: nvarchar(255)
     */
     get DiagnosticSession(): string | null {
@@ -94510,7 +94510,7 @@ export class MJDiagnosticBundleEntity extends BaseEntity<MJDiagnosticBundleEntit
 
     /**
     * * Field Name: File
-    * * Display Name: File
+    * * Display Name: File Name
     * * SQL Data Type: nvarchar(500)
     */
     get File(): string | null {
@@ -95282,7 +95282,7 @@ export class MJDiagnosticSessionEntity extends BaseEntity<MJDiagnosticSessionEnt
 
     /**
     * * Field Name: CreatedByUserID
-    * * Display Name: Created By User ID
+    * * Display Name: Created By User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: User who initiated the diagnostic session.
@@ -95296,7 +95296,7 @@ export class MJDiagnosticSessionEntity extends BaseEntity<MJDiagnosticSessionEnt
 
     /**
     * * Field Name: CompanyID
-    * * Display Name: Company ID
+    * * Display Name: Company
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Companies (vwCompanies.ID)
     * * Description: Optional tenant CompanyID isolating session capture in multi-tenant deployments.
@@ -95330,7 +95330,7 @@ export class MJDiagnosticSessionEntity extends BaseEntity<MJDiagnosticSessionEnt
 
     /**
     * * Field Name: CreatedByUser
-    * * Display Name: Created By User
+    * * Display Name: Created By User Name
     * * SQL Data Type: nvarchar(100)
     */
     get CreatedByUser(): string {
@@ -95339,7 +95339,7 @@ export class MJDiagnosticSessionEntity extends BaseEntity<MJDiagnosticSessionEnt
 
     /**
     * * Field Name: Company
-    * * Display Name: Company
+    * * Display Name: Company Name
     * * SQL Data Type: nvarchar(50)
     */
     get Company(): string | null {

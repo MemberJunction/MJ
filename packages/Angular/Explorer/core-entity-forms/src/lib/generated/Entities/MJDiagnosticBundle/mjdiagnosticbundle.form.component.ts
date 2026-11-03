@@ -15,15 +15,14 @@ export class MJDiagnosticBundleFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'bundleDetails', sectionName: 'Bundle Details', isExpanded: true },
-            { sectionKey: 'securityAndScrubbing', sectionName: 'Security and Scrubbing', isExpanded: true },
-            { sectionKey: 'timelineAndScope', sectionName: 'Timeline and Scope', isExpanded: true },
-            { sectionKey: 'storageAndArchive', sectionName: 'Storage and Archive', isExpanded: true },
-            { sectionKey: 'analysisAndFindings', sectionName: 'Analysis and Findings', isExpanded: true },
-            { sectionKey: 'statusAndErrorTracking', sectionName: 'Status and Error Tracking', isExpanded: true },
+            { sectionKey: 'bundleInformation', sectionName: 'Bundle Information', isExpanded: true },
+            { sectionKey: 'sourceAndReferences', sectionName: 'Source and References', isExpanded: true },
+            { sectionKey: 'lifecycleAndStatus', sectionName: 'Lifecycle and Status', isExpanded: true },
+            { sectionKey: 'contentAndFindings', sectionName: 'Content and Findings', isExpanded: true },
+            { sectionKey: 'storageAndFileDetails', sectionName: 'Storage and File Details', isExpanded: true },
             { sectionKey: 'ownershipAndApproval', sectionName: 'Ownership and Approval', isExpanded: true },
             { sectionKey: 'transmissionDetails', sectionName: 'Transmission Details', isExpanded: true },
-            { sectionKey: 'senderInformation', sectionName: 'Sender Information', isExpanded: true },
+            { sectionKey: 'intakeAndSourceContext', sectionName: 'Intake and Source Context', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

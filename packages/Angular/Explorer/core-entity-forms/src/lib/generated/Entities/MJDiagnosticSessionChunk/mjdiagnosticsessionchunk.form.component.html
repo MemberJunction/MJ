@@ -42,16 +42,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Chunk Details Section -->
-    <mj-collapsible-panel
-        SectionKey="chunkDetails"
-        SectionName="Chunk Details"
-        Icon="fa fa-file-code"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -60,6 +50,16 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Chunk Payload Section -->
+    <mj-collapsible-panel
+        SectionKey="chunkPayload"
+        SectionName="Chunk Payload"
+        Icon="fa fa-file-code"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"

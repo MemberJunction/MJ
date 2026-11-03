@@ -17,9 +17,9 @@ export class MJDiagnosticSessionFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'sessionDetails', sectionName: 'Session Details', isExpanded: true },
-            { sectionKey: 'targetingAndScope', sectionName: 'Targeting and Scope', isExpanded: true },
+            { sectionKey: 'scopeAndTargeting', sectionName: 'Scope and Targeting', isExpanded: true },
             { sectionKey: 'captureConfiguration', sectionName: 'Capture Configuration', isExpanded: true },
-            { sectionKey: 'timeline', sectionName: 'Timeline', isExpanded: true },
+            { sectionKey: 'timelineAndLifespan', sectionName: 'Timeline and Lifespan', isExpanded: true },
             { sectionKey: 'ownershipAndTenant', sectionName: 'Ownership and Tenant', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJDiagnosticSessionChunks', sectionName: 'Diagnostic Session Chunks', isExpanded: false },

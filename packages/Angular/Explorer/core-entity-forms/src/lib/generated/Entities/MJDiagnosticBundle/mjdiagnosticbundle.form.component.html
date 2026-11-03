@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Bundle Details Section -->
+    <!-- Bundle Information Section -->
     <mj-collapsible-panel
-        SectionKey="bundleDetails"
-        SectionName="Bundle Details"
-        Icon="fa fa-box"
+        SectionKey="bundleInformation"
+        SectionName="Bundle Information"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -41,6 +41,16 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Source and References Section -->
+    <mj-collapsible-panel
+        SectionKey="sourceAndReferences"
+        SectionName="Source and References"
+        Icon="fa fa-link"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -49,14 +59,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Status"
-            Type="select"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
@@ -70,11 +72,45 @@
 
     </mj-collapsible-panel>
 
-    <!-- Security and Scrubbing Section -->
+    <!-- Lifecycle and Status Section -->
     <mj-collapsible-panel
-        SectionKey="securityAndScrubbing"
-        SectionName="Security and Scrubbing"
-        Icon="fa fa-shield-alt"
+        SectionKey="lifecycleAndStatus"
+        SectionName="Lifecycle and Status"
+        Icon="fa fa-tasks"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="FailureReason"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ExpiresAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Content and Findings Section -->
+    <mj-collapsible-panel
+        SectionKey="contentAndFindings"
+        SectionName="Content and Findings"
+        Icon="fa fa-file-alt"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -85,24 +121,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ScrubReportJSON"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Timeline and Scope Section -->
-    <mj-collapsible-panel
-        SectionKey="timelineAndScope"
-        SectionName="Timeline and Scope"
-        Icon="fa fa-clock"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -122,18 +140,34 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ExpiresAt"
-            Type="datepicker"
+            FieldName="ManifestJSON"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ScrubReportJSON"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="FindingsJSON"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Storage and Archive Section -->
+    <!-- Storage and File Details Section -->
     <mj-collapsible-panel
-        SectionKey="storageAndArchive"
-        SectionName="Storage and Archive"
+        SectionKey="storageAndFileDetails"
+        SectionName="Storage and File Details"
         Icon="fa fa-database"
         [Form]="this"
         [FormContext]="formContext">
@@ -162,50 +196,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ManifestJSON"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Analysis and Findings Section -->
-    <mj-collapsible-panel
-        SectionKey="analysisAndFindings"
-        SectionName="Analysis and Findings"
-        Icon="fa fa-chart-line"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="false"
-            FieldName="FindingsJSON"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Status and Error Tracking Section -->
-    <mj-collapsible-panel
-        SectionKey="statusAndErrorTracking"
-        SectionName="Status and Error Tracking"
-        Icon="fa fa-exclamation-triangle"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="false"
-            FieldName="FailureReason"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -213,7 +203,7 @@
     <mj-collapsible-panel
         SectionKey="ownershipAndApproval"
         SectionName="Ownership and Approval"
-        Icon="fa fa-user-check"
+        Icon="fa fa-user-shield"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -279,10 +269,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Sender Information Section -->
+    <!-- Intake and Source Context Section -->
     <mj-collapsible-panel
-        SectionKey="senderInformation"
-        SectionName="Sender Information"
+        SectionKey="intakeAndSourceContext"
+        SectionName="Intake and Source Context"
         Icon="fa fa-network-wired"
         [Form]="this"
         [FormContext]="formContext">
