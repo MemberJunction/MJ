@@ -106,6 +106,13 @@ interface ChunkToUnpack {
   compressedData: Uint8Array | null;
 }
 
+/** What one save of a session's buffered chunks wrote to the database. */
+export interface SavedSessionChunks {
+  ChunksWritten: number;
+  /** Compressed bytes of the saved chunks. */
+  BytesWritten: number;
+}
+
 /** The session entries a bundle holds, by file. */
 interface AssembledEntries {
   serverLogs: DiagnosticLogEntry[];
@@ -664,31 +671,45 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     return drained;
   }
 
+  /** Saves a session's buffered chunks to the database and returns how many were saved. */
   public async FlushSessionChunksToDatabase(
     sessionId: string,
     contextUser?: UserInfo,
     provider?: IMetadataProvider
   ): Promise<number> {
+    return (await this.SaveSessionChunks(sessionId, contextUser, provider)).ChunksWritten;
+  }
+
+  /**
+   * Saves every buffered chunk of a session, from any source, to the database. Returns the chunks
+   * and compressed bytes saved. A failed save is logged and its chunk is not counted.
+   */
+  public async SaveSessionChunks(
+    sessionId: string,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider
+  ): Promise<SavedSessionChunks> {
     return WithoutDiagnosticCapture(async () => {
+      const saved: SavedSessionChunks = { ChunksWritten: 0, BytesWritten: 0 };
       const drained = this.DrainPendingBuffersForSession(sessionId);
       if (drained.length === 0) {
-        return 0;
+        return saved;
       }
       let md: IMetadataProvider;
       try {
         md = provider ?? Metadata.Provider;
         if (!md.EntityByName('MJ: Diagnostic Session Chunks')) {
-          return 0;
+          return saved;
         }
       } catch {
-        return 0;
+        return saved;
       }
-      let written = 0;
       const failures: string[] = [];
       for (const item of drained) {
         const failure = await this.saveChunk(md, sessionId, item, contextUser);
         if (failure === null) {
-          written++;
+          saved.ChunksWritten++;
+          saved.BytesWritten += item.compressedData.byteLength;
         } else {
           failures.push(failure);
         }
@@ -698,7 +719,7 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
           `Diagnostic session '${sessionId}': ${failures.length} of ${drained.length} chunk saves failed. First error: ${failures[0]}`
         );
       }
-      return written;
+      return saved;
     });
   }
 

@@ -589,6 +589,42 @@ describe('@memberjunction/diagnostics-server', () => {
             expect(assembled.bundleData.repro.breadcrumbs).toEqual([crumb]);
         });
 
+        it('an upload into a live session keeps the server entries still buffered for it', async () => {
+            mockChunkRunView(() => fake.SaveHistory(CHUNK_ENTITY));
+            const ctx = { provider: fake.Provider, user: ownerUser };
+            const started = await new DiagnosticsStartSessionServerOperation().ExecuteServer({ Name: 'S', ScopeType: 'Users' }, ctx);
+            const sessionId = started.Output!.SessionID;
+            manager.AppendToChunkBuffer(sessionId, 'Server', 'SQL', sqlEntry);
+
+            const uploaded = await new DiagnosticsUploadClientCaptureServerOperation().ExecuteServer(
+                { SessionID: sessionId, ClientLogs: [{ ...logEntry, source: 'client' }] },
+                ctx
+            );
+
+            expect(uploaded.Success).toBe(true);
+            const assembled = await manager.AssembleBundleDataFromChunks(sessionId, false, undefined, ownerUser, fake.Provider);
+            expect(assembled.bundleData.serverSql).toHaveLength(1);
+            expect(assembled.bundleData.clientLogs).toHaveLength(1);
+        });
+
+        it('an upload reports, numbers and counts each chunk it saves once', async () => {
+            mockChunkRunView(() => fake.SaveHistory(CHUNK_ENTITY));
+            const ctx = { provider: fake.Provider, user: ownerUser };
+            const started = await new DiagnosticsStartSessionServerOperation().ExecuteServer({ Name: 'S', ScopeType: 'Users' }, ctx);
+            const sessionId = started.Output!.SessionID;
+
+            const uploaded = await new DiagnosticsUploadClientCaptureServerOperation().ExecuteServer(
+                { SessionID: sessionId, ClientLogs: [{ ...logEntry, source: 'client' }] },
+                ctx
+            );
+
+            const rows = fake.SaveHistory(CHUNK_ENTITY);
+            const savedBytes = rows.reduce((n, r) => n + Buffer.from(String(r['Data']), 'base64').byteLength, 0);
+            expect(rows.map((r) => r['Sequence'])).toEqual([1]);
+            expect(uploaded.Output).toMatchObject({ ChunksWritten: 1, TotalBytesWritten: savedBytes });
+            expect(manager.GetActiveSession(sessionId)?.bytesWritten).toBe(savedBytes);
+        });
+
         it('carries the Submit note from ClientBundleData into repro.json and takes nothing else from it', async () => {
             mockChunkRunView(() => fake.SaveHistory(CHUNK_ENTITY));
             const ctx = { provider: fake.Provider, user: ownerUser };

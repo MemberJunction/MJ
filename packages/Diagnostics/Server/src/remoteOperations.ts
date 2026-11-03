@@ -398,22 +398,15 @@ export class DiagnosticsUploadClientCaptureServerOperation extends DiagnosticsUp
     const mgr = DiagnosticSessionManager.Instance;
 
     stageClientCapture(mgr, sessionId, input);
-
-    const drained = mgr.DrainPendingBuffersForSession(sessionId);
-    const totalBytes = drained.reduce((acc, d) => acc + d.compressedData.byteLength, 0);
-
-    // Re-stage drained entries in memory so AssembleBundleDataFromChunks can consume them even without DB
-    stageClientCapture(mgr, sessionId, input);
-
-    await mgr.FlushSessionChunksToDatabase(sessionId, user, provider);
+    const saved = await mgr.SaveSessionChunks(sessionId, user, provider);
     if (!input.SessionID) {
       await this.endCallerSession(sessionId, user, provider);
     }
 
     return {
       SessionID: sessionId,
-      ChunksWritten: drained.length,
-      TotalBytesWritten: totalBytes
+      ChunksWritten: saved.ChunksWritten,
+      TotalBytesWritten: saved.BytesWritten
     };
   }
 }
