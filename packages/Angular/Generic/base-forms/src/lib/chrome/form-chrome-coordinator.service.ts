@@ -70,8 +70,13 @@ export class FormChromeCoordinator {
         this.suppressedSectionKeys = new Set<string>();
     }
 
-    public Apply(spec: FormChromeSpec): void {
-        this.Spec = StabilizeFirstClassGroupOrder(this.Spec, spec);
+    /**
+     * Apply a resolved spec. The first-class order is kept from the previous spec so the rail
+     * does not reshuffle on every re-resolve; pass `Reordered: true` for the one deliberate
+     * reorder (populated-first related sections), which must not be undone that way.
+     */
+    public Apply(spec: FormChromeSpec, options?: { Reordered?: boolean }): void {
+        this.Spec = options?.Reordered ? spec : StabilizeFirstClassGroupOrder(this.Spec, spec);
         if (spec.Layout === 'left-nav') {
             // A More child is a valid active key too: it is never a group of its own.
             const active = this.ActiveGroupKey;

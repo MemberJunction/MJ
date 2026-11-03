@@ -120,3 +120,39 @@ describe('MjRecordFormContainerComponent rail refresh on field-visibility change
     expect(h.ResolveCount()).toBe(1);
   });
 });
+
+/**
+ * A contribution can apply to saved records only (`visibleWhen`, #4618), so the first save changes
+ * what the rail lists and the slots mount: the container re-resolves the rail and remounts the
+ * slots when the record's saved state flips.
+ */
+describe('MjRecordFormContainerComponent re-resolves on first save', () => {
+  it('re-resolves the rail and remounts the slots once, when IsSaved flips', () => {
+    const record = { IsSaved: false };
+    const form = { EditMode: false, showEmptyFields: false, searchFilter: '', record };
+    let resolveCount = 0;
+    let remountCount = 0;
+    const container = Object.create(MjRecordFormContainerComponent.prototype) as MjRecordFormContainerComponent;
+    Object.assign(container, {
+      chrome: new FormChromeCoordinator(),
+      slots: { NotifyPanelsChanged: () => { remountCount++; } },
+    });
+    container.FormComponent = form as unknown as BaseFormComponent;
+    Object.assign(container, {
+      lastRailEditMode: false,
+      lastRailShowEmptyFields: false,
+      lastRailSearchFilter: '',
+      scheduleChromeResolve: () => { resolveCount++; },
+    });
+
+    container.ngDoCheck();
+    container.ngDoCheck();
+    expect(resolveCount).toBe(0);
+
+    record.IsSaved = true;
+    container.ngDoCheck();
+    container.ngDoCheck();
+    expect(resolveCount).toBe(1);
+    expect(remountCount).toBe(1);
+  });
+});

@@ -6,6 +6,7 @@ import { BaseFormComponent } from '../base-form-component';
 import { FormContext } from '../types/form-types';
 import { CollectFormContributionRegistrations } from './collect-form-contribution-registrations';
 import {
+    RegistrationsForRecordState,
     ResolveFormContributions,
     type FormContributionWinner,
 } from './form-contribution';
@@ -99,6 +100,7 @@ export class FormContributionsComponent implements OnChanges, OnInit, OnDestroy 
                 : CollectFormContributionRegistrations(entity, this.FormComponent.ProviderToUse, { Preview: this.preview }),
             BakedSectionKeys: this.BakedSectionKeys,
             ShowRelatedEntities: this.ShowRelatedEntities,
+            RecordIsSaved: this.Record.IsSaved,
         });
         this.StockGrids = resolved.StockGrids;
     }

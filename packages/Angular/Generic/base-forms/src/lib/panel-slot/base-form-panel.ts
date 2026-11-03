@@ -115,6 +115,14 @@ export interface FormPanelRegistrationMetadata extends Record<string, unknown> {
      * L3 `MJ: Form Chrome Rules` still wins. `chromeGroup` still merges.
      */
     inclusion?: FormInclusion;
+    /**
+     * Which record state this contribution applies to. `'saved'` — only once the record exists
+     * (a panel keyed by the parent's ID has nothing to show on a new record). `'new'` — only
+     * while the record is unsaved. `'always'` (or absent) — both. A contribution that does not
+     * apply is dropped before the rail is worked out and is not mounted, so a new record shows
+     * no rail item for it. The form re-resolves when the record is first saved.
+     */
+    visibleWhen?: FormVisibleWhen;
 
     /**
      * `'bare'` = a hero strip that draws no collapsible chrome and is never a rail item.
@@ -167,6 +175,9 @@ export interface FormPanelRegistrationMetadata extends Record<string, unknown> {
      */
     count?: FormContributionCountSpec | false;
 }
+
+/** Record state a contribution applies to. See {@link FormPanelRegistrationMetadata.visibleWhen}. */
+export type FormVisibleWhen = 'always' | 'saved' | 'new';
 
 /** The related rows a contribution's badge / empty check counts. */
 export interface FormContributionCountSpec {

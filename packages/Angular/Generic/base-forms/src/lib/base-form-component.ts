@@ -43,7 +43,7 @@ import { CollectFormContributionRegistrations } from './panel-slot/collect-form-
 import type { FormContributionRegistration } from './panel-slot/form-contribution';
 import { FORM_PLACEMENT_PREVIEW } from './panel-slot/placement-preview';
 import { FormContextsEqual } from './base-form-component-internals';
-import { ContributionClaimedFieldNames, ContributionHiddenSectionKeys } from './panel-slot/form-contribution';
+import { ContributionClaimedFieldNames, ContributionHiddenSectionKeys, RegistrationsForRecordState } from './panel-slot/form-contribution';
 import { DuplicateEntryCheckController, type DuplicateEntryCheckValue } from './duplicate-entry-check/duplicate-entry-check';
 
 /** Options for {@link BaseFormComponent.RefreshRecord}. */
@@ -312,6 +312,17 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    * never asked for.
    */
   public get OwnsEntireFormBody(): boolean { return false; }
+
+  /**
+   * Opt in to populated-first related sections on a left-nav form. Once every related
+   * section's row count is known, related sections with no rows leave their places on the
+   * rail and are gathered into one "No records" item at the end of the first-class items, so
+   * the sections with data come first. Each gathered section still shows its grid, so a first
+   * record can be added. The rail is reordered once per record and does not move again as
+   * counts change. Off by default: some forms rely on a deliberate section order. Override in
+   * a form subclass to turn it on.
+   */
+  public get PopulatedRelatedSectionsFirst(): boolean { return false; }
 
   /**
    * Last composition snapshot the container published — what is actually on this form:
@@ -1217,8 +1228,9 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public get formContext(): FormContext {
     // One collector read per access; both contribution-derived values come from it.
     const entity = this.record?.EntityInfo;
+    // Only the contributions that apply to the record's state (`visibleWhen`) claim fields or hide sections.
     const regs = entity
-      ? CollectFormContributionRegistrations(entity, this.ProviderToUse, { Preview: this.placementPreview })
+      ? RegistrationsForRecordState(CollectFormContributionRegistrations(entity, this.ProviderToUse, { Preview: this.placementPreview }), this.record?.IsSaved)
       : null;
     const next: FormContext = {
       sectionFilter: this.searchFilter,

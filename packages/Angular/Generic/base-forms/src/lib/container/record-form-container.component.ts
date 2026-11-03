@@ -58,7 +58,7 @@ void _BUILTIN_TOOLBAR_ACTIONS;
 import type { FormChromeSpec } from '../chrome/form-chrome';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
 import { IsPhoneViewport, WatchPhoneViewport } from '../chrome/phone-viewport';
-import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder, OverlayChromeSectionOrder } from '../chrome/resolve-form-chrome';
+import { ResolveFormChrome, EmptyRelatedGroupKeys, GatherEmptyRelatedGroups, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder, OverlayChromeSectionOrder } from '../chrome/resolve-form-chrome';
 import { LoadFormChromeRules } from '../chrome/load-form-chrome-rules';
 import { MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection, IsDetailsSectionKey, DetailsCardEdges, ReplacedSectionChromeGroup, RailGroupSectionKeys, DefaultContributionChromeGroup, SectionDrawingAnyField } from '../chrome/form-chrome';
 import type { FormChromeGroup, FormChromePanelSnapshot } from '../chrome/form-chrome';
@@ -82,6 +82,7 @@ import { HiddenPanelKeys, PanelHideKey } from '../panel-slot/panel-hides';
 import { FORM_PLACEMENT_PREVIEW } from '../panel-slot/placement-preview';
 import type { FormPanelRegistrationMetadata } from '../panel-slot/base-form-panel';
 import {
+    RegistrationsForRecordState,
   ContributionDrawsInSection,
   ContributionHiddenSectionKeys,
   IsWildcardPlaceClaim,
@@ -935,6 +936,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * the form component directly, bypassing that handler entirely.
    */
   ngDoCheck(): void {
+    this.watchRecordSavedState();
     const editMode = this.EffectiveEditMode;
     const showEmptyFields = this.EffectiveShowEmptyFields;
     // The section filter hides panels through their own host class, which is
@@ -951,6 +953,26 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.lastRailShowEmptyFields = showEmptyFields;
     this.lastRailSearchFilter = searchFilter;
     this.scheduleChromeResolve();
+  }
+
+  /** Last seen `IsSaved` of the record, or null before the first check. */
+  private lastRecordIsSaved: boolean | null = null;
+
+  /**
+   * Contributions can apply to one record state only (`visibleWhen`), so the first save changes
+   * which ones the rail lists and the slots mount. Re-resolve the rail and remount the slots when
+   * the record's saved state flips (or a different record arrives in another state).
+   */
+  private watchRecordSavedState(): void {
+    const isSaved = !!this.EffectiveRecord?.IsSaved;
+    if (this.lastRecordIsSaved == null) {
+      this.lastRecordIsSaved = isSaved;
+      return;
+    }
+    if (isSaved === this.lastRecordIsSaved) return;
+    this.lastRecordIsSaved = isSaved;
+    this.scheduleChromeResolve();
+    this.slots.NotifyPanelsChanged();
   }
 
   ngOnDestroy(): void {
@@ -1402,11 +1424,13 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       this.pushChromeSuppression();
     }
 
+    const reordered = this.applyPopulatedFirst(result.Spec);
+
     const before = new BeforeLayoutResolveEventArgs(result.Spec.Layout);
     this.BeforeLayoutResolve.emit(before);
     if (before.Cancel) return;
 
-    this.chrome.Apply(result.Spec);
+    this.chrome.Apply(result.Spec, { Reordered: reordered });
     this.ensureActiveGroupVisible();
     if (this.chrome.ActiveGroupKey) {
       this.expandActiveGroupSections(this.chrome.ActiveGroupKey);
@@ -1419,6 +1443,42 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.publishCompositionSnapshot(result.Spec, panels);
   }
 
+  /**
+   * The populated-first decision for the record on the form: which related groups were empty
+   * when every count first became known. Kept per record so the rail is reordered once and does
+   * not move again as counts change (a row added, a refresh).
+   */
+  private relatedOrderLatch: { RecordKey: string; EmptyGroupKeys: ReadonlySet<string> } | null = null;
+
+  /**
+   * Populated-first related sections, for a form that opts in
+   * ({@link BaseFormComponent.PopulatedRelatedSectionsFirst}) on a left-nav layout. Waits until
+   * the counts have loaded, then gathers the empty related groups into one "No records" group
+   * after the populated ones. The group the user is on stays where it is.
+   *
+   * @returns true only on the resolve that first applies the reorder, so the coordinator does
+   * not restore the previous order over it.
+   */
+  private applyPopulatedFirst(spec: FormChromeSpec): boolean {
+    const record = this.EffectiveRecord;
+    if (!this.Fc?.PopulatedRelatedSectionsFirst || spec.Layout !== 'left-nav' || !record?.IsSaved) {
+      this.relatedOrderLatch = null;
+      return false;
+    }
+    const recordKey = `${record.EntityInfo?.Name ?? ''}|${record.PrimaryKey.ToURLSegment()}`;
+    const latch = this.relatedOrderLatch;
+    if (latch && latch.RecordKey === recordKey) {
+      GatherEmptyRelatedGroups(spec, latch.EmptyGroupKeys);
+      return false;
+    }
+    if (this.countPhase !== 'loaded') return false;
+    const keep = new Set(this.chrome.ActiveGroupKey ? [this.chrome.ActiveGroupKey] : []);
+    const empty = new Set(EmptyRelatedGroupKeys(spec, (key) => this.Fc?.PeekSectionRowCount(key), keep));
+    this.relatedOrderLatch = { RecordKey: recordKey, EmptyGroupKeys: empty };
+    GatherEmptyRelatedGroups(spec, empty);
+    return empty.size > 0;
+  }
+
   private warnedReplaceKeys = new Set<string>();
   private warnedFieldClaims = new Set<string>();
 
@@ -1429,7 +1489,11 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    */
   private formContributionRegistrations(): FormContributionRegistration[] {
     if (this.Fc?.OwnsEntireFormBody) return [];
-    return CollectFormContributionRegistrations(this.EffectiveEntityInfo, this.ProviderToUse, { Preview: this.placementPreview });
+    // A contribution whose `visibleWhen` does not match the record's state gets no rail item.
+    return RegistrationsForRecordState(
+      CollectFormContributionRegistrations(this.EffectiveEntityInfo, this.ProviderToUse, { Preview: this.placementPreview }),
+      this.EffectiveRecord?.IsSaved,
+    );
   }
 
   /**
