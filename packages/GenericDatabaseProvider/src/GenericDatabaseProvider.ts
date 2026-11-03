@@ -22,6 +22,7 @@ import {
     DatabaseProviderBase,
     EntityInfo,
     EntityFieldInfo,
+    EntityRelationshipInfo,
     EntityFieldTSType,
     ProjectRowsToFields,
     ProjectEntityValueRowsForUser,
@@ -3508,7 +3509,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
     /**
      * Returns the SELECT list for a single-record load: `*` normally, or an explicit list of
-     * the columns this user is allowed to read when field security denies them any.
+     * the columns this user is allowed to read when field security denies them any. With
+     * `tableAlias`, every column (or the `*`) is qualified with it.
      *
      * Deliberately NOT routed through RunView, which is the other way to get this behavior.
      * That reroute is the tidier long-term shape and is planned separately (it must pass
@@ -3516,19 +3518,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * — and it changes relationship loading, which stays on its current path). Filtering the
      * column list here buys the same protection without touching either.
      */
-    protected buildFieldSecuritySelectList(entityInfo: EntityInfo, user: UserInfo | undefined): string {
+    protected buildFieldSecuritySelectList(entityInfo: EntityInfo, user: UserInfo | undefined, tableAlias?: string): string {
+        const prefix = tableAlias ? `${tableAlias}.` : '';
         if (!user || !entityInfo.FieldLevelSecurityApplies) {
-            return '*'; // the overwhelmingly common case — one boolean, unchanged SQL
+            return `${prefix}*`; // the overwhelmingly common case — one boolean, unchanged SQL
         }
         const denied = entityInfo.GetDeniedReadFields(user);
         if (denied.size === 0) {
-            return '*';
+            return `${prefix}*`;
         }
         const allowed = entityInfo.Fields.filter(f => !denied.has(f.Name.trim().toLowerCase()));
         if (allowed.length === 0) {
-            return '*'; // degenerate; PKs are unrestrictable so this should be unreachable
+            return `${prefix}*`; // degenerate; PKs are unrestrictable so this should be unreachable
         }
-        return allowed.map(f => this.QuoteIdentifier(f.Name)).join(', ');
+        return allowed.map(f => `${prefix}${this.QuoteIdentifier(f.Name)}`).join(', ');
     }
 
     /**
@@ -7376,15 +7379,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
                     // An EntityRelationship joins on ONE column (RelatedEntityJoinField / JoinEntityJoinField)
                     // that references this entity's key — a single-column foreign-key target by metadata design.
-                    const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: relationship join field is a single-column FK target
-                    const pkValue = ret[entity.FirstPrimaryKey.Name]; // first-pk-ok: relationship join field is a single-column FK target
-                    let relSql: string;
-
-                    if (relInfo.Type.trim().toLowerCase() === 'one to many') {
-                        relSql = `SELECT * FROM ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.RelatedEntityBaseView)} WHERE ${this.QuoteIdentifier(relInfo.RelatedEntityJoinField)} = ${quotes}${pkValue}${quotes}`;
-                    } else {
-                        // many to many — use join view
-                        relSql = `SELECT _theview.* FROM ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.RelatedEntityBaseView)} _theview INNER JOIN ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.JoinView)} _jv ON _theview.${this.QuoteIdentifier(relInfo.RelatedEntityJoinField)} = _jv.${this.QuoteIdentifier(relInfo.JoinEntityInverseJoinField)} WHERE _jv.${this.QuoteIdentifier(relInfo.JoinEntityJoinField)} = ${quotes}${pkValue}${quotes}`;
+                    const relSql = this.BuildRelatedRowsLoadSQL(
+                        relInfo,
+                        relEntityInfo,
+                        ret[entity.FirstPrimaryKey.Name], // first-pk-ok: relationship join field is a single-column FK target
+                        entity.FirstPrimaryKey.NeedsQuotes, // first-pk-ok: relationship join field is a single-column FK target
+                        user,
+                    );
+                    if (relSql === null) {
+                        LogStatus(`[GenericDatabaseProvider] Skipping relationship '${rel}' on '${entityInfo.Name}': the user cannot read '${relEntityInfo.Name}'.`);
+                        continue;
                     }
 
                     const rawRelData = await this.ExecuteSQL<Record<string, unknown>>(relSql, undefined, undefined, user);
@@ -7396,6 +7400,45 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             return ret;
         }
         return null;
+    }
+
+    /**
+     * Builds the SELECT for one relationship of a single-record load, or returns null when the
+     * user may not read the related entity at all (the caller skips the relationship).
+     *
+     * The related rows get the same protection the parent row gets: the column list leaves out
+     * fields the user may not read, and the user's Read row filter narrows the rows. A user with
+     * no field denials and no row filter gets the same SQL as before. With no user (server-side
+     * system work) nothing is narrowed, which matches the parent load.
+     *
+     * For a many-to-many relationship the row filter is applied inside a derived table over the
+     * related view, so its column names cannot clash with the join view's.
+     */
+    protected BuildRelatedRowsLoadSQL(
+        relInfo: EntityRelationshipInfo,
+        relEntityInfo: EntityInfo,
+        pkValue: unknown,
+        pkNeedsQuotes: boolean,
+        user: UserInfo | undefined,
+    ): string | null {
+        if (user && !relEntityInfo.GetUserPermisions(user)?.CanRead) {
+            return null;
+        }
+        const quotes = pkNeedsQuotes ? "'" : '';
+        const safeValue = pkNeedsQuotes ? String(pkValue).replace(/'/g, "''") : String(pkValue);
+        const keyLiteral = `${quotes}${safeValue}${quotes}`;
+        const rowFilter = user ? relEntityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '') : '';
+        const relatedView = this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.RelatedEntityBaseView);
+
+        if (relInfo.Type.trim().toLowerCase() === 'one to many') {
+            const filterClause = rowFilter ? ` AND (${rowFilter})` : '';
+            return `SELECT ${this.buildFieldSecuritySelectList(relEntityInfo, user)} FROM ${relatedView} WHERE ${this.QuoteIdentifier(relInfo.RelatedEntityJoinField)} = ${keyLiteral}${filterClause}`;
+        }
+
+        // many to many — through the join view
+        const columns = this.buildFieldSecuritySelectList(relEntityInfo, user, '_theview');
+        const source = rowFilter ? `(SELECT * FROM ${relatedView} WHERE (${rowFilter}))` : relatedView;
+        return `SELECT ${columns} FROM ${source} _theview INNER JOIN ${this.QuoteSchemaAndView(relEntityInfo.SchemaName, relInfo.JoinView)} _jv ON _theview.${this.QuoteIdentifier(relInfo.RelatedEntityJoinField)} = _jv.${this.QuoteIdentifier(relInfo.JoinEntityInverseJoinField)} WHERE _jv.${this.QuoteIdentifier(relInfo.JoinEntityJoinField)} = ${keyLiteral}`;
     }
 
     /**************************************************************************/

@@ -233,7 +233,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         // move of this count has been deliberate, which is what the guard is for.
         ['task-graph-execution', TaskGraphExecutionChecks, 27],
         ['entity-actions', EntityActionChecks, 8], // EA1-EA8 the entity-action substrate end to end (IT75)
-        ['fls-enforcement', FlsEnforcementChecks, 24], // FLS1-FLS24 field-level security against a live DB (IT90); FLS22/FLS23 cover the Record Changes payload projection, FLS24 record names, FLS21 measures metadata-refresh cost
+        ['fls-enforcement', FlsEnforcementChecks, 27], // FLS1-FLS27 field-level security against a live DB (IT90); FLS22/FLS23 cover the Record Changes payload projection, FLS24 record names, FLS25-FLS27 related rows, constraint errors and re-enable, FLS21 measures metadata-refresh cost
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
         ['fls-closeout', FlsCloseoutChecks, 20], // CO1-CO20 FLS close-out, server tier: object width, the clause gate, datasets, Record Changes by ViewID and full-width snapshots of restricted saves, config guards (CO14-CO16 mutation-gated), agent data sources, search projection, anchored record comments (IT133)
@@ -387,7 +387,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'fls-closeout-client': 9,
         'fls-closeout-pending': 7,
         'fls-closeout': 20,
-        'fls-enforcement': 24,
+        'fls-enforcement': 27,
         'fls-enforcement-client': 6,
         'fls-lifecycle': 9,
         'form-contributions': 17,

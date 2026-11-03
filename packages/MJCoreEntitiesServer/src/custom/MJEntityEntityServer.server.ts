@@ -1,7 +1,8 @@
-import { BaseEntity, EntitySaveOptions, IMetadataProvider, LogDebug, RunInEntityTransaction } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, EntitySaveOptions, IMetadataProvider, LogDebug, RunInEntityTransaction, RunView } from '@memberjunction/core';
 import { MJEntityEntityExtended } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { ReconcileFieldPermissions } from './fieldPermissionReconciler';
+import { ExistingFieldPermissionRow } from './fieldPermissionDelta';
 
 /**
  * Server-side `MJ: Entities` entity — the runtime half of field-security lifecycle management.
@@ -56,6 +57,10 @@ export class MJEntityEntityServer extends MJEntityEntityExtended {
      * Resolves the `EntityInfo` from the provider rather than trusting a captured reference:
      * the delta is computed from the entity's fields and entity-level permissions, and those
      * live on metadata rather than on this record.
+     *
+     * The existing field-permission rows, though, are read from the database. Metadata can still
+     * list rows that were deleted outside this process; trusting it would skip inserting them and
+     * leave every field denied to everyone.
      */
     private async snapshotFieldPermissions(provider: IMetadataProvider): Promise<void> {
         const entityInfo = provider.Entities?.find(e => UUIDsEqual(e.ID, this.ID));
@@ -65,7 +70,33 @@ export class MJEntityEntityServer extends MJEntityEntityExtended {
             LogDebug(`[FieldSecurity] '${this.Name}' enabled before its metadata was available; deferring snapshot`);
             return;
         }
-        const result = await ReconcileFieldPermissions(entityInfo, provider, this.ContextCurrentUser);
+        const existingRows = await this.loadExistingFieldPermissionRows(entityInfo);
+        const result = await ReconcileFieldPermissions(entityInfo, provider, this.ContextCurrentUser, existingRows);
         LogDebug(`[FieldSecurity] '${this.Name}' enabled; snapshot wrote ${result.Inserted} row(s)`);
+    }
+
+    /**
+     * The entity's field-permission rows as stored now, bypassing every cache. A failed read
+     * throws, which rolls back the flag with it: enabling on a guess could deny every field.
+     */
+    private async loadExistingFieldPermissionRows(entityInfo: EntityInfo): Promise<ExistingFieldPermissionRow[]> {
+        if (entityInfo.Fields.length === 0) {
+            return [];
+        }
+        const fieldIDs = entityInfo.Fields.map(f => `'${f.ID.replace(/'/g, "''")}'`).join(', ');
+        const result = await new RunView(this.RunViewProviderToUse).RunView<ExistingFieldPermissionRow>(
+            {
+                EntityName: 'MJ: Entity Field Permissions',
+                ExtraFilter: `EntityFieldID IN (${fieldIDs})`,
+                Fields: ['ID', 'EntityFieldID', 'RoleID'],
+                ResultType: 'simple',
+                BypassCache: true,
+            },
+            this.ContextCurrentUser
+        );
+        if (!result.Success) {
+            throw new Error(`Could not read the field permissions of '${entityInfo.Name}' before enabling field-level security: ${result.ErrorMessage}`);
+        }
+        return result.Results;
     }
 }

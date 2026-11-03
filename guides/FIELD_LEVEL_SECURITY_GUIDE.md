@@ -756,6 +756,13 @@ What holds full-width data, and why that is safe:
   for each reader (§3.2). That includes a restricted user's own saves: the provider reads the
   stored row to complete the snapshot, so the payload never narrows to what the saver could see.
 
+- **Related rows loaded with an entity** (`Load` with `EntityRelationshipsToLoad`) are read with
+  the same column list and Read row filter as the parent row, and a relationship to an entity the
+  user cannot read is skipped.
+- **A save that fails on a database constraint** returns the database's message without the
+  column values it quotes (a unique-index violation lists the key, which can include a denied
+  column) to a caller who is denied any field of the entity. The server log keeps the full message.
+
 For server code acting for a user, the rule is simple: create entity objects and run views with
 that user as `contextUser`, and they will never hold a value the user is denied.
 
@@ -948,6 +955,9 @@ Until it runs, only the API tier reflects the change.
   access, so nothing changes until you tighten a field; switching it off keeps your rules for
   later. You do not maintain the rows by hand — MJ reconciles them as the schema and
   entity-level permissions change, and never overwrites a rule you wrote.
+- **Enabling reads the existing rules from the database, not from cached metadata.** Rules
+  deleted with direct SQL, or by another server this one has not heard from, are recreated at
+  snapshot defaults when you turn the flag on. If that read fails, the flag is not saved.
 - **Run CodeGen after a schema change on an enabled entity.** That is the pass which creates
   rows for new columns. Until it runs, a new column is denied to everyone (§1.5).
 - **Restricted users still need their baseline roles.** A user holding *only* a custom
@@ -1029,24 +1039,11 @@ restriction should know them before relying on it.
   This is tracked as a security advisory. Until it is fixed, **pin only agents whose data sources
   and tools read public data** to a widget or anonymous session.
 
-- **Database constraint errors may echo denied values.** A unique-index violation reports the
-  duplicate key, and the provider returns the database's message to the caller. With a unique index
-  over `(Email, SSN)` and `SSN` denied, a collision on `Email` can show the SSN
-  ([#5981](https://github.com/MemberJunction/MJ/issues/5981)). Avoid unique indexes and constraints
-  that include a restricted column, or keep their messages away from restricted users.
-
 - **A read-only cache collection's children keep the engine's width.** A related-record
   collection filled from an engine cache (`Source: 'cache'`, read-only) holds the engine's own
   shared objects, so setting `ContextCurrentUser` on its owner does not narrow them (§2.3): doing so
   would narrow them for every reader. Like any engine-cached object they hold every column, and no
   transport serializes them to a client. Do not hand them to a restricted user without projecting.
-
-- **Related rows loaded with an entity are not narrowed.** `InnerLoad` with
-  `EntityRelationshipsToLoad` reads related records without the user's field, row-level or entity
-  checks and attaches them to the object unprojected
-  ([#5982](https://github.com/MemberJunction/MJ/issues/5982)). No transport returns them today
-  (REST `?include=` leaves related data out of its response), but do not serialize such an object
-  to a restricted user.
 
 - **Shared conversations and artifacts can hold rows loaded for another user.** An agent's answer,
   and any artifact it produced, holds what its user could read. Sharing that conversation or

@@ -31,6 +31,7 @@ export * from "./generic/entityRecordNameCache";
 export * from "./generic/recordChangeFieldSecurity";
 export * from "./generic/entityValueFieldSecurity";
 export * from "./generic/indexRestrictedFields";
+export * from "./generic/constraintErrorRedaction";
 export * from "./generic/fieldSecuritySQLGate";
 export * from "./generic/baseRemotableOperation";
 export * from "./generic/remoteOperationDispatch";
