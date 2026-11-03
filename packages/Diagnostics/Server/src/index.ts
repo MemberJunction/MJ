@@ -12,5 +12,5 @@ export * from './collectorClient.js';
 export * from './senderEnrolment.js';
 export * from './version.js';
 export { MJStorageIntakeBridge } from './intakeStorageBridge.js';
-export * from './senderRegistrationEntityServer.js';
+export { MJDiagnosticSenderRegistrationEntityServer } from './senderRegistrationEntityServer.js';
 export * from './senderRegistrationOperations.js';

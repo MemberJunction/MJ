@@ -88,6 +88,7 @@ export class MJDiagnosticSenderRegistrationEntityServer extends MJDiagnosticSend
 
   private async callerManagesIntake(): Promise<boolean> {
     const caller: UserInfo | undefined = this.ActiveUser ?? undefined;
+    // BaseEntity types its provider as IEntityDataProvider; the server providers also implement IMetadataProvider.
     return AuthorizeDiagnosticsUser(caller, 'Diagnostics: Manage Intake', this.ProviderToUse as unknown as IMetadataProvider);
   }
 
