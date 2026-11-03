@@ -12,7 +12,13 @@ import { MLExperimentResultsViewerComponent } from './ml-experiment-results-view
 
 /** Test double at the entity boundary: the viewer reads only the version's Content and Name. */
 const version = (content: object): MJArtifactVersionEntity =>
-  ({ Content: JSON.stringify(content), Name: 'Results' }) as unknown as MJArtifactVersionEntity;
+  Object.assign(Object.create(null), { Content: JSON.stringify(content), Name: 'Results' });
+
+/** True only when A and B are the same type: a check `tsc -p tsconfig.spec.json` enforces. */
+type IsExactly<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+
+/** The side card's titles: OutcomeCardTitle keeps this literal union, so a widened `string` return fails to compile. */
+const outcomeCardTitleIsLiteral: IsExactly<MLExperimentResultsViewerComponent['OutcomeCardTitle'], 'Winning Model' | 'Kept a simple baseline' | 'No model shipped' | 'Not evaluated'> = true;
 
 const searchRow = (rank: number, algorithm: string, score: number, isWinner: boolean, metricName = 'log-loss') => ({
   rank, algorithm, score, metricName, innerLower: score - 0.03, innerUpper: score + 0.03, optimistic: true, isWinner,
@@ -86,6 +92,12 @@ describe('MLExperimentResultsViewerComponent (DOM) — the stored gate outcome',
     expect(queryAll(f, '.lb-table tbody tr.is-winner')).toHaveLength(1);
     expect(text(f, '.col-side .section-title')).toBe('Winning Model');
     expect(text(f, '.hero-metric-label')).toBe('log-loss · winner');
+  });
+});
+
+describe('MLExperimentResultsViewerComponent — the outcome card title type', () => {
+  it('is the literal union of the four titles (checked at compile time by tsconfig.spec.json)', () => {
+    expect(outcomeCardTitleIsLiteral).toBe(true);
   });
 });
 
