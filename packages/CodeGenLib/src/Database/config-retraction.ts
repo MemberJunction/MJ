@@ -13,11 +13,10 @@
  *   their `Source` column (`Config`); soft foreign keys carry it in `IsSoftForeignKey`.
  */
 
-/** Where an EntityFieldValue row came from. Mirrors the CHECK constraint on `EntityFieldValue.Source`. */
-export type EntityFieldValueSource = 'Check' | 'Config' | 'Manual';
+import type { MJEntityFieldValueEntity } from '@memberjunction/core-entities';
 
-/** Where an EntityOrganicKey row came from. Mirrors the CHECK constraint on `EntityOrganicKey.Source`. */
-export type EntityOrganicKeySource = 'Config' | 'Manual';
+/** Where an EntityFieldValue row came from, as the generated entity types the column's CHECK constraint. */
+export type EntityFieldValueSource = MJEntityFieldValueEntity['Source'];
 
 /** An entity, as far as matching a config entry to it needs. */
 export interface ConfigEntityRef {
