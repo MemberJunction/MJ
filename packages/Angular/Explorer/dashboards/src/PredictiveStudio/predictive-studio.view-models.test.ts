@@ -184,6 +184,10 @@ describe('SessionSuccessMetric', () => {
     expect(SessionSuccessMetric(JSON.stringify({ TargetDefinition: { SuccessMetric: 'RMSE' } }))).toBe('RMSE');
     expect([SessionSuccessMetric(null), SessionSuccessMetric('not json'), SessionSuccessMetric('{}')]).toEqual(['', '', '']);
   });
+  it('reads a non-string SuccessMetric, or a non-object TargetDefinition or plan, as no metric', () => {
+    const plans = [{ TargetDefinition: { SuccessMetric: 7 } }, { TargetDefinition: { SuccessMetric: ['rmse'] } }, { TargetDefinition: 'rmse' }, ['rmse'], 'rmse'];
+    expect(plans.map((p) => SessionSuccessMetric(JSON.stringify(p)))).toEqual(['', '', '', '', '']);
+  });
 });
 
 /**

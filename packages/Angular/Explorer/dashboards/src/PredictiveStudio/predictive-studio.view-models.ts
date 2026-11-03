@@ -18,7 +18,7 @@
  */
 
 import { IndexByUUID, UUIDsEqual } from '@memberjunction/global';
-import { JsonParse, MetricDirections, TrainingRunResultsParser, type GateOutcome, type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
+import { JsonParse, MetricDirections, TrainingRunResultsParser, type GateOutcome } from '@memberjunction/predictive-studio-core';
 import { PSFeatureBar, PSIterationCard, PSLeaderboardEntry } from './predictive-studio.types';
 
 // ---------------------------------------------------------------------------
@@ -806,15 +806,15 @@ export interface PSCompareColumn {
   OnSuccessMetric: boolean;
 }
 
-/** The plan's success metric from a session's `PlanSpec` JSON, or an empty string when the plan is absent or unreadable. */
+/**
+ * The plan's success metric from a session's `PlanSpec` JSON (`TargetDefinition.SuccessMetric`), or an empty string
+ * when the plan is absent or unreadable or the metric is not a string.
+ */
 export function SessionSuccessMetric(planSpecJson: string | null): string {
-  if (!planSpecJson) return '';
-  try {
-    const plan = JSON.parse(planSpecJson) as ModelingPlanSpec | null;
-    return plan?.TargetDefinition?.SuccessMetric || '';
-  } catch {
-    return '';
-  }
+  const parsed = JsonParse.ParseJsonText(planSpecJson, 'PlanSpec');
+  if (!parsed.Ok || !JsonParse.IsJsonObject(parsed.Value)) return '';
+  const target = JsonParse.JsonObjectField(parsed.Value, 'TargetDefinition');
+  return (target === null ? null : JsonParse.JsonString(target, 'SuccessMetric')) || '';
 }
 
 /**
