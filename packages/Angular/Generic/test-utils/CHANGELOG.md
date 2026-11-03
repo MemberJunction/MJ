@@ -1,5 +1,25 @@
 # @memberjunction/ng-test-utils
 
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [397ae9a]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+  - @memberjunction/core@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes

@@ -321,7 +321,9 @@ jobs:
             echo "  ${TREE} = ${HASH}"
             TREES="${TREES}${HASH}"
           done
-          KEY="mj-ci-db-v1-$(printf '%s' "$TREES" | sha256sum | cut -c1-32)"
+          # v2: every v1 entry saved after a restore holds the OLDER snapshot it restored (see
+          # "Save the snapshot" below), so none of them may be read again.
+          KEY="mj-ci-db-v2-$(printf '%s' "$TREES" | sha256sum | cut -c1-32)"
           echo "key=${KEY}" >> "$GITHUB_OUTPUT"
           echo "Snapshot key: ${KEY}"
 
@@ -336,7 +338,7 @@ jobs:
           # Prefix fallback to the newest `next` snapshot. `cache-hit` is 'true' ONLY on an
           # exact key match, which is what gates the sync-push skip below; a prefix match
           # leaves it 'false', so the full metadata reconcile still runs.
-          restore-keys: mj-ci-db-v1-
+          restore-keys: mj-ci-db-v2-
 
       - name: Load the snapshot into SQL Server
         id: dbload
@@ -478,26 +480,65 @@ jobs:
       #
       # Both steps are best-effort throughout: a merge that provisioned and tested cleanly must
       # not go red because a cache upload failed.
+      #
+      # A failed backup must never be saved. After a prefix restore, /tmp/mjdb still holds the
+      # OLDER snapshot that was just loaded, so a save after a failed backup uploads that older
+      # database under this run's exact key. The next run with the same trees then exact-hits it,
+      # skips both sync pushes, and tests against metadata that predates its own commit (the
+      # IT: Permission Grant Fixture agent went missing this way and APM6 skipped). Hence: clear
+      # /tmp/mjdb first, back up to a file nothing else writes, and save only on the backup
+      # step's real `outcome` (continue-on-error makes its `conclusion` success either way).
+      #
+      # The backup file is NOT /var/opt/mssql/test.bak: the restore above `docker cp`s the
+      # snapshot there as the host uid with mode 0644, which SQL Server (uid 10001) can read but
+      # not overwrite, so BACKUP to that path failed with "Operating system error 5(Access is
+      # denied.)" on every run that had restored first.
       - name: Snapshot the provisioned DB
+        id: dbsnapshot
         if: (github.event_name == 'push' || github.event_name == 'schedule') && steps.dbcache.outputs.cache-hit != 'true'
         continue-on-error: true
         run: |
+          rm -rf /tmp/mjdb
           mkdir -p /tmp/mjdb
           docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
             /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -b \
-            -Q "BACKUP DATABASE [test] TO DISK='/var/opt/mssql/test.bak' WITH COMPRESSION, INIT, FORMAT;"
-          docker cp sql:/var/opt/mssql/test.bak /tmp/mjdb/test.bak
+            -Q "BACKUP DATABASE [test] TO DISK='/var/opt/mssql/snapshot.bak' WITH COMPRESSION, INIT, FORMAT;"
+          docker cp sql:/var/opt/mssql/snapshot.bak /tmp/mjdb/test.bak
           # Printed so the size trend is visible in the log; it is the one figure the cache
           # budget depends on.
           ls -lh /tmp/mjdb/test.bak
 
       - name: Save the provisioned-DB snapshot
-        if: (github.event_name == 'push' || github.event_name == 'schedule') && steps.dbcache.outputs.cache-hit != 'true'
+        if: (github.event_name == 'push' || github.event_name == 'schedule') && steps.dbcache.outputs.cache-hit != 'true' && steps.dbsnapshot.outcome == 'success'
         continue-on-error: true
         uses: actions/cache/save@v4
         with:
           path: /tmp/mjdb
           key: ${{ steps.dbkey.outputs.key }}
+
+      # Encrypted entity fields (MJ: Credentials.Values and the like) need a base key in BOTH
+      # processes that write them: MJAPI (IT160 over the wire) and the mj test process (IT161
+      # in-process). Without one the save is refused and those bundles can only skip. A per-run
+      # throwaway is enough — the database was provisioned for this run, so there is no earlier
+      # ciphertext to stay compatible with. GITHUB_ENV carries it to every later step.
+      - name: Generate a throwaway encryption key for this run
+        run: echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+
+      # Clone the provisioned [test] database into 3 isolated worker databases ([test_s1],
+      # [test_s2], [test_s3]) so the 101 pure-server deterministic bundles can execute across
+      # 3 LPT-balanced shards concurrently without cross-bundle mutation or entity-cache collisions,
+      # while [test] remains dedicated to MJAPI and the client-transport (+ wire-companion) worker.
+      - name: Clone isolated worker databases for parallel server shards
+        run: |
+          docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -b \
+            -Q "
+              BACKUP DATABASE [test] TO DISK='/var/opt/mssql/worker_seed.bak' WITH COMPRESSION, INIT, FORMAT;
+              RESTORE DATABASE [test_s1] FROM DISK='/var/opt/mssql/worker_seed.bak' WITH REPLACE, MOVE 'test' TO '/var/opt/mssql/data/test_s1.mdf', MOVE 'test_log' TO '/var/opt/mssql/data/test_s1_log.ldf';
+              RESTORE DATABASE [test_s2] FROM DISK='/var/opt/mssql/worker_seed.bak' WITH REPLACE, MOVE 'test' TO '/var/opt/mssql/data/test_s2.mdf', MOVE 'test_log' TO '/var/opt/mssql/data/test_s2_log.ldf';
+              RESTORE DATABASE [test_s3] FROM DISK='/var/opt/mssql/worker_seed.bak' WITH REPLACE, MOVE 'test' TO '/var/opt/mssql/data/test_s3.mdf', MOVE 'test_log' TO '/var/opt/mssql/data/test_s3_log.ldf';
+            "
+          docker exec -u 0 sql rm -f /var/opt/mssql/worker_seed.bak
 
       # Boot MJAPI against the provisioned DB so the client-transport members execute
       # instead of skipping. MJ_API_KEY is a throwaway per-run system key: MJServer
@@ -540,6 +581,10 @@ jobs:
       # MJ_API_KEY (same value MJAPI booted with) arms the client-transport members.
       # RUN_MUTATION_TESTS=1 on the nightly cron arms the save/delete cache-invalidation
       # checks — PR/push runs keep them Skipped (visible in the summary, never false-green).
+      #
+      # Parallel sharding across 4 isolated databases (1 per vCPU on standard 4-core runners):
+      #   - server-1..3 run `--transport=server --shard=k/3` against `test_s1..3`
+      #   - client runs `--transport=client` against `test` (the DB served by MJAPI on :4000)
       - name: Run integration tier (mj test)
         env:
           MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
@@ -553,14 +598,79 @@ jobs:
           # shape/templating/composition variant on every client run path, ~22% of the points.
           # The content-only pairs it drops run in full on every PR in the server bundles
           # IT143/IT146. The nightly cron, merges to next/lts and manual dispatch run 'full'.
+          # At full scope 900 s was too tight to be a hang guard: 7 of the 10 merges to next
+          # measured on 2026-10-30 ran into it, with SPC1 passing and SPC2 either still running at the limit
+          # or passing with no time left for teardown. IT145's MaxExecutionTimeMS is therefore
+          # 1,500 s (the worst full run above plus ~35%).
           SQLPIPE_MATRIX_SCOPE: ${{ github.event_name == 'pull_request' && 'pr' || 'full' }}
           # live-model is DEFAULT-ON since 2026-07-20 (tiers.ts: only an explicit '0'
           # disables). This lane has no LLM credentials, so pin it off explicitly —
           # tiers.ts's own doc comment assumes CI does this, and nothing did.
           RUN_AGENT_TESTS: '0'
         run: |
-          set -o pipefail
-          pnpm run test:integration 2>&1 | tee /tmp/integration.log
+          set -uo pipefail
+          SUITE_NAME="Integration Tests — Deterministic"
+          rm -f /tmp/integration-shard-*.log /tmp/integration-shard-*.status /tmp/integration-shard-*.json /tmp/integration.log
+
+          run_shard() {
+            local name="$1"
+            local db="$2"
+            shift 2
+            local log="/tmp/integration-shard-${name}.log"
+            local status_file="/tmp/integration-shard-${name}.status"
+            local json_file="/tmp/integration-shard-${name}.json"
+            local start_ts
+            start_ts=$(date +%s)
+            echo "[shard:${name}] Starting on DB=${db} args=($*)..."
+            local rc=0
+            DB_DATABASE="${db}" MJ_INTEGRATION_TEST=1 \
+              node packages/MJCLI/bin/run.js test suite "${SUITE_NAME}" --output "${json_file}" "$@" > "${log}" 2>&1 || rc=$?
+            local end_ts
+            end_ts=$(date +%s)
+            local elapsed=$((end_ts - start_ts))
+            printf '%s\t%s\t%s\t%s\t%s\n' "${name}" "${db}" "$*" "${rc}" "${elapsed}s" > "${status_file}"
+            echo "[shard:${name}] Finished with exit=${rc} in ${elapsed}s"
+            return 0
+          }
+
+          run_shard "server-1" "test_s1" --transport=server --shard=1/3 &
+          PID_S1=$!
+          run_shard "server-2" "test_s2" --transport=server --shard=2/3 &
+          PID_S2=$!
+          run_shard "server-3" "test_s3" --transport=server --shard=3/3 &
+          PID_S3=$!
+          run_shard "client"   "test"    --transport=client &
+          PID_CLIENT=$!
+
+          wait "${PID_S1}" "${PID_S2}" "${PID_S3}" "${PID_CLIENT}"
+
+          OVERALL_EXIT=0
+          for SHARD in server-1 server-2 server-3 client; do
+            LOG="/tmp/integration-shard-${SHARD}.log"
+            STATUS_FILE="/tmp/integration-shard-${SHARD}.status"
+            RC=$(cut -f4 "${STATUS_FILE}")
+            ELAPSED=$(cut -f5 "${STATUS_FILE}")
+            echo "::group::Shard ${SHARD} (exit=${RC}, duration=${ELAPSED})"
+            cat "${LOG}"
+            echo "::endgroup::"
+            cat "${LOG}" >> /tmp/integration.log
+            if [ "${RC}" -ne 0 ]; then
+              OVERALL_EXIT=1
+            fi
+          done
+
+          if [ "${OVERALL_EXIT}" -ne 0 ]; then
+            echo "::error::One or more integration shards failed — summary of failing shards:"
+            for SHARD in server-1 server-2 server-3 client; do
+              STATUS_FILE="/tmp/integration-shard-${SHARD}.status"
+              RC=$(cut -f4 "${STATUS_FILE}")
+              if [ "${RC}" -ne 0 ]; then
+                echo "=== Failing shard: ${SHARD} (exit=${RC}) ==="
+                grep -E '(\[(SUITE_COMPLETE|SUMMARY|DURATION|FAILURES|SKIPPED)\]|✗|Error:)' "/tmp/integration-shard-${SHARD}.log" | tail -80 || true
+              fi
+            done
+            exit 1
+          fi
 
       # IT92 and IT134 are the only checks that prove field-level security through MJAPI's
       # GraphQL and REST endpoints. The suite counts a skipped check as a skip, not a failure, so a
@@ -575,12 +685,86 @@ jobs:
       - name: Publish suite summary
         if: always()
         run: |
-          {
-            echo '## Integration tier result'
-            echo '```'
-            grep -E '\[(SUITE_COMPLETE|SUMMARY|DURATION|FAILURES|SKIPPED)\]' /tmp/integration.log || echo 'No suite summary found in the log.'
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          node -e '
+            const fs = require("node:fs");
+            const shards = ["server-1", "server-2", "server-3", "client"];
+            const lines = [
+              "## Integration tier result (4 parallel shards)",
+              "",
+              "| Shard | Database | Flags | Exit | Wall Time | Suite Summary |",
+              "| --- | --- | --- | --- | --- | --- |",
+            ];
+            let totalPassed = 0, totalFailed = 0, totalSkipped = 0, totalTests = 0, haveTotals = false;
+            const detailBlocks = [];
+
+            for (const shard of shards) {
+              const statusPath = `/tmp/integration-shard-${shard}.status`;
+              const jsonPath = `/tmp/integration-shard-${shard}.json`;
+              const logPath = `/tmp/integration-shard-${shard}.log`;
+              if (!fs.existsSync(statusPath)) continue;
+
+              const [, db = "", flags = "", rc = "", elapsed = ""] =
+                fs.readFileSync(statusPath, "utf8").trim().split("\t");
+              const logText = fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf8") : "";
+
+              let parsed = null;
+              if (fs.existsSync(jsonPath)) {
+                try { parsed = JSON.parse(fs.readFileSync(jsonPath, "utf8")); } catch {}
+              }
+              if (!parsed && logText) {
+                const p = /"passedTests":\s*(\d+)/.exec(logText);
+                const f = /"failedTests":\s*(\d+)/.exec(logText);
+                const s = /"skippedTests":\s*(\d+)/.exec(logText);
+                const t = /"totalTests":\s*(\d+)/.exec(logText);
+                if (p && f && t) {
+                  parsed = {
+                    passedTests: Number(p[1]),
+                    failedTests: Number(f[1]),
+                    skippedTests: s ? Number(s[1]) : 0,
+                    totalTests: Number(t[1]),
+                  };
+                }
+              }
+
+              let summaryCell = "(no summary line)";
+              if (parsed && typeof parsed.totalTests === "number") {
+                const p = parsed.passedTests ?? 0;
+                const f = parsed.failedTests ?? 0;
+                const s = parsed.skippedTests ?? 0;
+                const t = parsed.totalTests ?? 0;
+                summaryCell = `${p} passed / ${f} failed / ${s} skipped of ${t}`;
+                totalPassed += p;
+                totalFailed += f;
+                totalSkipped += s;
+                totalTests += t;
+                haveTotals = true;
+              } else if (logText) {
+                const m = /\[SUMMARY\]\s*(.+)/.exec(logText);
+                if (m) summaryCell = m[1].trim();
+              }
+
+              lines.push(`| \`${shard}\` | \`${db}\` | \`${flags}\` | \`${rc}\` | ${elapsed} | ${summaryCell} |`);
+
+              const skipGateMatch = /Skip gate:\s*(.+)/.exec(logText);
+              const detailLines = [`=== ${shard} (${summaryCell}) ===`];
+              if (skipGateMatch) detailLines.push(`Skip gate: ${skipGateMatch[1].trim()}`);
+              if (parsed && Array.isArray(parsed.testResults)) {
+                const failed = parsed.testResults.filter(tr => tr.status !== "Passed" && tr.status !== "Skipped");
+                for (const tr of failed) {
+                  detailLines.push(`  ✗ ${tr.testName} (${tr.status})`);
+                }
+              }
+              detailBlocks.push(detailLines.join("\n"));
+            }
+
+            if (haveTotals) {
+              lines.push(
+                `| **Total** | | | | | **${totalPassed} passed / ${totalFailed} failed / ${totalSkipped} skipped of ${totalTests}** |`
+              );
+            }
+            lines.push("", "### Per-shard details", "```", ...detailBlocks, "```");
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
+          '
 
       - name: Dump MJAPI log on failure
         if: failure()
@@ -787,6 +971,11 @@ jobs:
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
       DB_TRUST_SERVER_CERTIFICATE: 'true'
+      # One definition for both MJAPI processes AND the rig: the servers swap to
+      # RedisLocalStorageProvider from REDIS_URL, and the rig's XS10/XS11 subscribe to the same
+      # Redis + key prefix to assert what the servers broadcast. Defined here so the two cannot drift.
+      REDIS_URL: redis://localhost:6379
+      REDIS_KEY_PREFIX: mj
       # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
       # receive it, so they degrade to a cold local cache rather than failing. Rationale and
       # setup instructions live once, on the build job in test.yml.
@@ -879,7 +1068,6 @@ jobs:
       - name: Boot two MJAPI processes on shared Redis
         env:
           MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
-          REDIS_URL: redis://localhost:6379
         run: |
           (cd packages/MJAPI && GRAPHQL_PORT=4000 node dist/index.js > /tmp/mjapi-a.log 2>&1 &)
           (cd packages/MJAPI && GRAPHQL_PORT=4001 node dist/index.js > /tmp/mjapi-b.log 2>&1 &)

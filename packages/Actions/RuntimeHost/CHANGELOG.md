@@ -1,5 +1,62 @@
 # @memberjunction/action-runtime-host
 
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- 1419ba7: Host-assigned search scopes for agent runs, and `actionChanges` that remove every action are now honored.
+  - **`ExecuteAgentParams.SearchScopeIDs`:** the search scopes a host (for example a collaboration space) assigns to a run. They are stamped on every action dispatch as `RunActionParams.RunScope.SearchScopeIDs` and passed to every agent the run starts: sub-agents, `Execute Agent`, realtime delegation and runtime actions. Scoped Search then searches only those scopes (the first when the model names none). The host's assignment stands in for the calling agent's own `SearchScopeAccess` and assigned-scope list, so any agent a host runs can search what the host allows. It never grants: the user's own permission on the scope (`SearchScopePermissionResolver`, new `HostAssigned` input), skill rules, the scope's dimension rules and row-level security still apply. It is read only from the parameter, never from `data`. In such a run the plain Search action refuses (it would search past the host's scopes) and task graphs are withheld (their nodes run without the scopes).
+  - **Remove-all `actionChanges`:** `BaseAgent` treated an empty effective action (or sub-agent) list as "not computed" and fell back to the agent's configured set, so a host that limited an agent to zero actions gave all of them back. A computed empty list is now authoritative; a non-empty or uncomputed one behaves as before.
+
+- Updated dependencies [54f6563]
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [91cba84]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [8f370b3]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [b1a656b]
+- Updated dependencies [953086f]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [896334a]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [bbca6b6]
+- Updated dependencies [6779eed]
+- Updated dependencies [0b406e8]
+- Updated dependencies [c018cb9]
+- Updated dependencies [397ae9a]
+- Updated dependencies [89a5b59]
+- Updated dependencies [d7e95b9]
+- Updated dependencies [6b0de38]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/ai-agents@6.2.0-edge.7
+  - @memberjunction/actions@6.2.0-edge.7
+  - @memberjunction/actions-base@6.2.0-edge.7
+  - @memberjunction/ai-core-plus@6.2.0-edge.7
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/ai@6.2.0-edge.7
+  - @memberjunction/aiengine@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/ai-prompts@6.2.0-edge.7
+  - @memberjunction/code-execution@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes

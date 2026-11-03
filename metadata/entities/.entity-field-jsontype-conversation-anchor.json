@@ -1,0 +1,31 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on AnchorMetadata (MJ: Conversations entity)",
+      "so CodeGen emits a typed AnchorMetadataObject accessor using IConversationAnchorMetadata."
+    ],
+    "fields": {
+      "Name": "MJ: Conversations"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IConversationAnchorMetadata",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IConversationAnchorMetadata.ts"
+          },
+          "_comments": [
+            "AnchorMetadata field — structured anchor context, value snapshot, and FLS restrictedFields for anchored conversation threads"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Conversations&Name=AnchorMetadata"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Conversations"
+    }
+  }
+]

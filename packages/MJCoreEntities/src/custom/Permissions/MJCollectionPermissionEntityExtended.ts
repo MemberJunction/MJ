@@ -82,6 +82,7 @@ export class MJCollectionPermissionEntityExtended extends MJCollectionPermission
                 ExtraFilter: `ID='${this.CollectionID}'`,
                 Fields: ['ID', 'OwnerID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
             },
             {
@@ -89,6 +90,7 @@ export class MJCollectionPermissionEntityExtended extends MJCollectionPermission
                 ExtraFilter: `CollectionID='${this.CollectionID}' AND UserID='${user.ID}' AND CanShare=1`,
                 Fields: ['ID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple',
             },
         ], user);

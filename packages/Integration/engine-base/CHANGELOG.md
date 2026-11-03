@@ -1,5 +1,48 @@
 # @memberjunction/integration-engine-base
 
+## 6.2.0-edge.7
+
+### Patch Changes
+
+- 2c38278: `IntegrationEngineBase` no longer loads `MJ: Company Integration Field Maps` at startup. A consumer reads the field maps of one entity map on demand with `LoadFieldMapsForEntityMap(entityMapID, contextUser?, provider?)`.
+
+  The engine is `@RegisterForStartup`, so every server process and every browser tab loaded the whole field-map table. A deployment with about 86,000 field maps read about 88 MB per load. That result is larger than the per-entry cache limit, so it was never cached and every load went back to the database. On a production API each load blocked the event loop for 9 to 13 seconds. The only reader, the integration mapping workspace, reads one entity map at a time.
+  - Removed from `IntegrationEngineBase`: the `FieldMaps` getter, `GetFieldMapsForEntityMap`, and the `FieldMaps` option of `SeedForTesting`.
+  - Removed from `IntegrationEngine`: the `FieldMaps` pass-through. `GetFieldMapsForEntityMap` is replaced by `LoadFieldMapsForEntityMap(entityMapID, contextUser?)`.
+  - `IntegrationDataService.LoadFieldMaps` reads through `LoadFieldMapsForEntityMap` and now uses the provider it is given.
+  - `LoadFieldMapsForEntityMap` throws when the read fails, so a failed read is not taken for an entity map with no field maps.
+
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [91cba84]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [6779eed]
+- Updated dependencies [397ae9a]
+- Updated dependencies [89a5b59]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes

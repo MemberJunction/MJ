@@ -55,6 +55,7 @@ function createHarness(forkId: string | null): Harness {
   open['conversationLoadToken'] = 1;
   open['scopeFallbackLogged'] = null;
   open['cdr'] = { detectChanges: vi.fn(), markForCheck: vi.fn() };
+  open['handoffStepsByRunId'] = new Map();
   open['loadForkSummaries'] = vi.fn(async () => undefined);
 
   return { component, open, runView, windowStore, agentState };
