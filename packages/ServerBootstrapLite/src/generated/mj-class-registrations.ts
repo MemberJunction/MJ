@@ -1161,7 +1161,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (70 classes)
+// @memberjunction/core-entities-server (71 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1222,6 +1222,7 @@ import {
     MJRubricScaleEntityServer,
     MJRubricScaleLevelEntityServer,
     MJRubricVersionEntityServer,
+    MJScopedNotificationConfigEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
@@ -2401,6 +2402,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJRubricScaleEntityServer,
     MJRubricScaleLevelEntityServer,
     MJRubricVersionEntityServer,
+    MJScopedNotificationConfigEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
@@ -2495,11 +2497,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GetRecordListMembershipAction,
     GetRecordsAction,
     GetSignatureStatusAction,
-    GetStockPriceAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    GetStockPriceAction,
     GetUploadUrlAction,
     GetWeatherAction,
     Get_AI_Model_Cost_Action,
@@ -2640,7 +2642,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1124;
+export const CLASS_REGISTRATIONS_COUNT = 1125;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
