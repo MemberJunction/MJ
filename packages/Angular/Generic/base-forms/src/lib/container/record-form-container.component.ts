@@ -14,7 +14,7 @@ import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-conf
 import { FormToolbarItemConfig, FormToolbarItemClickEventArgs } from '../types/form-toolbar-item';
 import { ResolveFormShowToolbar, ResolveFormToolbarConfig } from '../types/entity-form-config';
 import { FormNavigationEvent } from '../types/navigation-events';
-import { FormWidthMode } from '../types/form-types';
+import { FormWidthMode, FormModeSwitch } from '../types/form-types';
 import { MjCollapsiblePanelComponent } from '../panel/collapsible-panel.component';
 import { SectionManagerItem, ChromeMembershipChange } from '../section-manager/section-manager.component';
 import {
@@ -52,6 +52,7 @@ const _BUILTIN_TOOLBAR_ACTIONS = [RecordLinksToolbarAction];
 void _BUILTIN_TOOLBAR_ACTIONS;
 import type { FormChromeSpec } from '../chrome/form-chrome';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
+import { IsPhoneViewport, WatchPhoneViewport } from '../chrome/phone-viewport';
 import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder, OverlayChromeSectionOrder } from '../chrome/resolve-form-chrome';
 import { LoadFormChromeRules } from '../chrome/load-form-chrome-rules';
 import { MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection, IsDetailsSectionKey, DetailsCardEdges, ReplacedSectionChromeGroup, RailGroupSectionKeys, DefaultContributionChromeGroup, SectionDrawingAnyField } from '../chrome/form-chrome';
@@ -617,6 +618,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   /** Left-nav rail stays up while searching even if only one group matches. */
   get ShowChromeRail(): boolean {
     if (this.ChromeLayout !== 'left-nav') return false;
+    if (this.IsPhoneRail) {
+      return this.chrome.Spec.Groups.length > 1;
+    }
     if (this.EffectiveSearchFilter.trim()) {
       return this.ChromeFirstClassGroups.length > 0 || this.ChromeMoreItems.length > 0;
     }
@@ -682,7 +686,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     }
     return this.ChromeFirstClassGroups.find((group) => group.Key === key)
       ?? this.ChromeMoreItems.find((item) => item.Key === key)
-      ?? null;
+      ?? this.chrome.Spec.Groups.find((group) => !group.IsMore && group.Key === key)
+      ?? (this.chrome.Spec.MoreSectionKeys.includes(key) ? this.moreItemFromKey(key) : null);
   }
 
   get ChromeActiveTitle(): string {
@@ -845,6 +850,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
     this.restoreChromePrefs();
     this.scheduleChromeResolve();
+    this.stopWatchingPhoneViewport = WatchPhoneViewport(() => {
+      this.SectionSheetOpen = false;
+      this.cdr.markForCheck();
+    });
 
     // Watch for changes to record dirty state
     this.watchRecordChanges();
@@ -896,6 +905,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   ngOnDestroy(): void {
     this.destroyed = true;
+    this.stopWatchingPhoneViewport?.();
+    this.stopWatchingPhoneViewport = null;
     this.destroyToolbarActions();
     // A count or chrome-rule result still in flight then matches nothing and is dropped.
     this.countRequestToken++;
@@ -1029,12 +1040,58 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.chrome.SetActiveGroup(groupKey);
     this.expandActiveGroupSections(groupKey);
     this.applyChromeVisibility();
-    if (!this.ChromeRailPinned && previous !== groupKey) {
+    if (!this.ChromeRailPinned && previous !== groupKey && !this.isMobileRailViewport()) {
       this.chromeRailExpanded = false;
     }
     this.persistChromePrefs();
     this.AfterSectionActivated.emit(new AfterSectionActivatedEventArgs(groupKey));
     this.cdr.detectChanges();
+  }
+
+  private isMobileRailViewport(): boolean {
+    return IsPhoneViewport();
+  }
+
+  /** Template-facing: on a phone, the rail renders the single section picker and bottom sheet. */
+  public get IsPhoneRail(): boolean {
+    return this.isMobileRailViewport();
+  }
+
+  // ---- Phone Section sheet ----
+
+  /** Whether the phone's Sections bottom sheet (first-class + More sections) is open. */
+  public SectionSheetOpen = false;
+
+  private stopWatchingPhoneViewport: (() => void) | null = null;
+
+  public OpenSectionSheet(): void {
+    this.SectionSheetOpen = true;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * The sheet opened or closed from its own controls (scrim, Escape). Closing clears the sheet's
+   * search the same way picking a row does: it was a way to find a row, not a standing filter.
+   */
+  public OnSectionSheetVisibleChange(visible: boolean): void {
+    this.SectionSheetOpen = visible;
+    if (!visible && this.EffectiveSearchFilter.trim()) this.OnFilterChange('');
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * A row in the phone's Sections sheet was tapped: go there and put the sheet away. The sheet's
+   * search was a way to find the row, not a standing filter, so it is cleared too.
+   */
+  public OnSectionSheetSelect(groupKey: string): void {
+    this.SectionSheetOpen = false;
+    if (this.EffectiveSearchFilter.trim()) this.OnFilterChange('');
+    this.OnChromeGroupActivate(groupKey);
+  }
+
+  public OnSectionSheetSearch(event: Event): void {
+    const input = event.target as HTMLInputElement | null;
+    this.OnFilterChange(input?.value ?? '');
   }
 
   public OnChromeRailExpand(): void {
@@ -3667,6 +3724,15 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   get EffectiveCurrentVariantID(): string | null {
     return this.Fc?.CurrentVariantID ?? this.CurrentVariantID;
+  }
+
+  /**
+   * Mode switch callback supplied by the form host when a standard form
+   * alternative exists. Forwarded to the toolbar so the phone View bottom sheet
+   * can switch between the custom and standard views.
+   */
+  public get EffectiveFormModeSwitch(): FormModeSwitch | null {
+    return this.Fc?.FormModeSwitch ?? null;
   }
 
   /** Whether to show the variant picker at all. Hidden when the entity has
