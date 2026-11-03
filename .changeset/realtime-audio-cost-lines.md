@@ -4,6 +4,7 @@
 "@memberjunction/ai-engine-base": minor
 "@memberjunction/ai-realtime-client": minor
 "@memberjunction/ai-openai": minor
+"@memberjunction/ai-xai": minor
 "@memberjunction/core-entities": minor
 "@memberjunction/core-entities-server": minor
 ---
