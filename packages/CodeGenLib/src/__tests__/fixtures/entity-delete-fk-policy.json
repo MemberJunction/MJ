@@ -1122,6 +1122,14 @@
       "reason": "Nullable reference to a UserView row this proc deletes; cleared."
     },
     {
+      "table": "DuplicateRun",
+      "column": "SourceViewID",
+      "references": "UserView",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a UserView row this proc deletes; cleared."
+    },
+    {
       "table": "List",
       "column": "SourceViewID",
       "references": "UserView",
