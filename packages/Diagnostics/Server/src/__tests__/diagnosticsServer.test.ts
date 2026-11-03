@@ -1307,6 +1307,17 @@ describe('@memberjunction/diagnostics-server', () => {
             expect(preview.Output?.DownloadUrl).toMatch(/^\/api\/diagnostics\/bundles\//);
         });
 
+        it('builds the download URL as the public absolute URL so a browser on another origin can fetch it', async () => {
+            await new DiagnosticsServerMiddleware().Initialize({
+                ApiRoute: (subpath: string, options?: { absolute?: boolean }) =>
+                    options?.absolute ? `https://api.example.test/api${subpath}` : `/api${subpath}`,
+            });
+            const ctx = { provider: fake.Provider, user: ownerUser };
+            const started = await new DiagnosticsStartSessionServerOperation().ExecuteServer({ Name: 'U', ScopeType: 'Users' }, ctx);
+            const built = await new DiagnosticsBuildBundleServerOperation().ExecuteServer({ SessionID: started.Output!.SessionID }, ctx);
+            expect(built.Output?.DownloadUrl).toMatch(/^https:\/\/api\.example\.test\/api\/diagnostics\/bundles\/.+\/download\?token=/);
+        });
+
         it('fails BuildBundle loudly when the server gave no route builder', async () => {
             await new DiagnosticsServerMiddleware().Initialize();
             const ctx = { provider: fake.Provider, user: ownerUser };

@@ -6,6 +6,7 @@ import {
     DiagnosticsStartSessionOperation,
     DiagnosticsStopSessionOperation,
     DiagnosticsGetMySessionStatusOperation,
+    DiagnosticsGetBundlePreviewOperation,
 } from '@memberjunction/core-entities';
 import { VerifyBundleArchive, ParseBundleDataFromArchive } from '@memberjunction/diagnostics';
 import { TelemetryManager } from '@memberjunction/core';
@@ -182,6 +183,42 @@ describe('MJDiagnosticsService', () => {
         expect(result.findingsCount).toBe(3);
     });
 
+    describe('server bundle download', () => {
+        it('mints a fresh single-use link for the bundle and starts the download from it', async () => {
+            const previewSpy = vi.spyOn(DiagnosticsGetBundlePreviewOperation.prototype, 'Execute').mockResolvedValue({
+                Success: true,
+                Output: {
+                    BundleID: 'bundle-ux-1',
+                    Name: 'Support Diagnostic Bundle',
+                    Direction: 'Local',
+                    Status: 'Sent',
+                    SizeBytes: 3,
+                    SHA256: 'abc',
+                    ScrubLiterals: false,
+                    Manifest: null,
+                    ScrubReport: null,
+                    Findings: [],
+                    ReadmeText: '',
+                    DownloadUrl: 'http://api.test/api/diagnostics/bundles/bundle-ux-1/download?token=fresh',
+                },
+            });
+
+            const url = await service.DownloadServerBundle('bundle-ux-1');
+
+            expect(previewSpy).toHaveBeenCalledWith({ BundleID: 'bundle-ux-1', MintDownloadToken: true }, expect.anything());
+            expect(url).toBe('http://api.test/api/diagnostics/bundles/bundle-ux-1/download?token=fresh');
+        });
+
+        it('reports the server reason when the bundle cannot be served', async () => {
+            vi.spyOn(DiagnosticsGetBundlePreviewOperation.prototype, 'Execute').mockResolvedValue({
+                Success: false,
+                ErrorMessage: 'Diagnostic bundle bundle-gone was not found on this instance',
+            });
+
+            await expect(service.DownloadServerBundle('bundle-gone')).rejects.toThrow(/not found on this instance/);
+        });
+    });
+
     it('automatically flushes client flight-recorder buffers once per server X-MJ-Diagnostic-Trigger header', async () => {
         const uploadSpy = vi
             .spyOn(DiagnosticsUploadClientCaptureOperation.prototype, 'Execute')
@@ -349,6 +386,28 @@ describe('MJDiagnosticsService', () => {
 
             await expect(service.SubmitBundleToSupport()).rejects.toThrow('stop here');
             expect(uploadSpy.mock.calls[0][0].SessionID).toBeUndefined();
+        });
+
+        it('a repeat Submit from the packaging dialog builds from the same recorded session', async () => {
+            const uploadSpy = vi.spyOn(DiagnosticsUploadClientCaptureOperation.prototype, 'Execute').mockImplementation(async (input) => ({
+                Success: true,
+                Output: { SessionID: input.SessionID ?? 'srv-fresh', ChunksWritten: 1, TotalBytesWritten: 10 },
+            }));
+            vi.spyOn(DiagnosticsBuildBundleOperation.prototype, 'Execute').mockResolvedValue({
+                Success: true,
+                Output: { BundleID: 'b', Status: 'Ready', SizeBytes: 1, SHA256: 'x', FindingsCount: 0 },
+            });
+            vi.spyOn(DiagnosticsSendBundleOperation.prototype, 'Execute').mockResolvedValue({
+                Success: true,
+                Output: { BundleID: 'b', Status: 'Sent', Destination: 'MJC', SentAt: '' },
+            });
+            service.StartRecording('srv-rec', 'FullRaw');
+            service.StopAndPackageRecording();
+
+            await service.SubmitBundleToSupport();
+            await service.SubmitBundleToSupport();
+
+            expect(uploadSpy.mock.calls.map((c) => c[0].SessionID)).toEqual(['srv-rec', 'srv-rec']);
         });
     });
     describe('recording scope and telemetry', () => {

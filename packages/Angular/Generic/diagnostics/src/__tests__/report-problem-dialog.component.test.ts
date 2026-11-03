@@ -117,4 +117,30 @@ describe('MJDiagnosticReportProblemDialogComponent', () => {
         expect(source).toContain('OnStartRecording()');
         expect(source).toContain('OnStopRecording()');
     });
+    it('offers a download of the submitted server bundle and shows its findings count', () => {
+        const source = readFileSync(fileURLToPath(new URL('../lib/report-problem-dialog.component.ts', import.meta.url)), 'utf8');
+        const start = source.indexOf('@if (LastSubmission)');
+        const submission = source.slice(start, source.indexOf('<mj-dialog-actions>', start));
+
+        expect(submission).toContain('OnDownloadServerBundle()');
+        expect(submission).toContain('LastSubmission.findingsCount');
+    });
+    it('downloads the submitted bundle through the service and shows a failure in the error area', async () => {
+        const dialog = runInInjectionContext(injector, () => new MJDiagnosticReportProblemDialogComponent());
+        dialog.LastSubmission = {
+            sessionId: 's1',
+            bundleId: 'bundle-1',
+            status: 'Sent',
+            destination: 'MJC',
+            externalReferenceId: 'diagref_1',
+            findingsCount: 2,
+        };
+        const downloadSpy = vi.spyOn(service, 'DownloadServerBundle').mockRejectedValue(new Error('bytes are gone'));
+
+        await dialog.OnDownloadServerBundle();
+
+        expect(downloadSpy).toHaveBeenCalledWith('bundle-1');
+        expect(dialog.ErrorMessage).toContain('bytes are gone');
+        expect(dialog.IsDownloading).toBe(false);
+    });
 });

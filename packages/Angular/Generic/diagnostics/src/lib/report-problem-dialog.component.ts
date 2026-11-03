@@ -115,6 +115,10 @@ function errorText(err: unknown): string {
                         } @else if (LastSubmission.errorMessage) {
                             <span>{{ LastSubmission.errorMessage }}</span>
                         }
+                        <span>{{ LastSubmission.findingsCount }} findings.</span>
+                        <button type="button" mjButton Variant="flat" Size="sm" [disabled]="IsDownloading" (click)="OnDownloadServerBundle()">
+                            {{ IsDownloading ? 'Preparing...' : 'Download Bundle (.mjdiag)' }}
+                        </button>
                     </div>
                 }
             </div>
@@ -200,6 +204,8 @@ export class MJDiagnosticReportProblemDialogComponent implements OnInit, OnDestr
     public ErrorMessage: string | null = null;
     public IsBuilding = false;
     public IsSubmitting = false;
+    /** True while a fresh download link for the submitted server bundle is being minted. */
+    public IsDownloading = false;
     /** True while a live recording runs; the dialog then offers Stop & Package instead of Start. */
     public IsRecording = false;
     /** True while the running recording has no server session, so the bundle holds browser data only. */
@@ -269,6 +275,25 @@ export class MJDiagnosticReportProblemDialogComponent implements OnInit, OnDestr
             this.ErrorMessage = `Submit failed: ${errorText(err)}`;
         } finally {
             this.IsSubmitting = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    /** Downloads the submitted server bundle through a fresh single-use link. */
+    public async OnDownloadServerBundle(): Promise<void> {
+        const bundleId = this.LastSubmission?.bundleId;
+        if (!bundleId) {
+            return;
+        }
+        this.IsDownloading = true;
+        this.ErrorMessage = null;
+        this.cdr.markForCheck();
+        try {
+            await this.diagnosticsService.DownloadServerBundle(bundleId);
+        } catch (err) {
+            this.ErrorMessage = `Download failed: ${errorText(err)}`;
+        } finally {
+            this.IsDownloading = false;
             this.cdr.markForCheck();
         }
     }

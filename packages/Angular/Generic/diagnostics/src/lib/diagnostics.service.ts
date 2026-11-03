@@ -14,6 +14,7 @@ import {
     DiagnosticsGetMySessionStatusOperation,
     DiagnosticsUploadClientCaptureOperation,
     DiagnosticsBuildBundleOperation,
+    DiagnosticsGetBundlePreviewOperation,
     DiagnosticsSendBundleOperation,
     DiagnosticsSendBundleInput,
     DiagnosticsSendBundleOutput,
@@ -553,9 +554,6 @@ export class MJDiagnosticsService {
 
         const resolvedSessionId = uploadRes.Output.SessionID;
         this.flushedTriggerSessions.add(resolvedSessionId);
-        if (!this.recordingStateSubject.value.isRecording) {
-            this.submitSessionId = null;
-        }
         const buildOp = new DiagnosticsBuildBundleOperation();
         const buildRes = await buildOp.Execute({
             SessionID: resolvedSessionId,
@@ -600,6 +598,42 @@ export class MJDiagnosticsService {
             downloadUrl: buildRes.Output.DownloadUrl,
             errorMessage: sendRes.Output.ErrorMessage,
         };
+    }
+
+    /**
+     * Downloads a server-built bundle. The link minted at build time is single-use and expires after a
+     * minute, so this mints a fresh one through `DiagnosticsGetBundlePreviewOperation` and starts the
+     * browser download from it. Returns the link it used.
+     */
+    public async DownloadServerBundle(bundleId: string): Promise<string> {
+        const previewOp = new DiagnosticsGetBundlePreviewOperation();
+        const res = await previewOp.Execute({ BundleID: bundleId, MintDownloadToken: true }, { provider: this.ProviderToUse });
+        if (!res.Success || !res.Output?.DownloadUrl) {
+            throw new Error(res.ErrorMessage ?? `The server gave no download link for bundle ${bundleId}`);
+        }
+        this.startBrowserDownload(res.Output.DownloadUrl);
+        return res.Output.DownloadUrl;
+    }
+
+    /**
+     * Points a hidden frame at a cross-origin download URL. The attachment response downloads
+     * without leaving the page; the frame is removed once the single-use link has expired.
+     */
+    private startBrowserDownload(url: string): void {
+        if (typeof document === 'undefined') {
+            return;
+        }
+        const frame = document.createElement('iframe');
+        frame.style.display = 'none';
+        frame.setAttribute('aria-hidden', 'true');
+        frame.src = url;
+        (document.body ?? document.documentElement).appendChild(frame);
+        const timer = setTimeout(() => {
+            frame.parentNode?.removeChild(frame);
+        }, 60_000);
+        if (typeof (timer as unknown as { unref?: () => void }).unref === 'function') {
+            (timer as unknown as { unref: () => void }).unref();
+        }
     }
 
     /**

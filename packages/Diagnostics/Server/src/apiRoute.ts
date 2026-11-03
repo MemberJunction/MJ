@@ -20,7 +20,7 @@ export function GetDiagnosticsApiRoute(): DiagnosticsApiRouteBuilder {
   return routeBuilder;
 }
 
-/** The download path of a bundle, under MJAPI's base path. */
+/** The public absolute download URL of a bundle, so a browser on another origin can open it. */
 export function BundleDownloadUrl(route: DiagnosticsApiRouteBuilder, bundleId: string, token: string): string {
-  return `${route(`/diagnostics/bundles/${bundleId}/download`)}?token=${encodeURIComponent(token)}`;
+  return `${route(`/diagnostics/bundles/${bundleId}/download`, { absolute: true })}?token=${encodeURIComponent(token)}`;
 }
