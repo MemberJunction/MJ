@@ -193,6 +193,13 @@ const ROW_NUMBER_FIELD = '__rowNumber';
  */
 const AUTO_WIDTH_FLEX_WEIGHT = 1000;
 
+/**
+ * `SortChangedEvent.source` values that mean the user sorted: a header click (AG Grid's
+ * `progressSort`) or a column/context menu. Every other source is the grid reacting to data or
+ * state it was given.
+ */
+const USER_SORT_SOURCES: ReadonlySet<string> = new Set(['uiColumnSorted', 'columnMenu', 'contextMenu']);
+
 @Component({
   standalone: false,
   selector: 'mj-entity-data-grid',
@@ -4868,7 +4875,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   }
 
   OnAgSortChanged(event: AgSortChangedEvent): void {
-    if (this.suppressSortEvents) {
+    // Only a sort the user made counts. AG Grid also emits `sortChanged` for its own reasons —
+    // after a data reload, a column-state restore or a grid-option change — and some of those
+    // arrive after `suppressSortEvents` was already cleared (the `Data` setter clears it
+    // synchronously, AG Grid emits later). Treating them as user sorts re-sorted the grid and
+    // saved the raw entity layout as the user's default.
+    if (this.suppressSortEvents || !USER_SORT_SOURCES.has(event.source)) {
       return;
     }
 
@@ -5153,11 +5165,17 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     // so we need to carry them over from the current gridState
     const existingFormatsByName = new Map<string, ColumnFormat | undefined>();
     const existingUserDisplayNames = new Map<string, string | undefined>();
+    // A view's own header text (DisplayName). Rebuilding it from the entity field on every resize
+    // or sort replaced the view's custom headers with the raw field names.
+    const existingDisplayNames = new Map<string, string>();
     if (this._gridState?.columnSettings) {
       for (const col of this._gridState.columnSettings) {
         const keyLower = col.Name.toLowerCase();
         if (col.format) {
           existingFormatsByName.set(keyLower, col.format);
+        }
+        if (col.DisplayName) {
+          existingDisplayNames.set(keyLower, col.DisplayName);
         }
         if (col.userDisplayName) {
           existingUserDisplayNames.set(keyLower, col.userDisplayName);
@@ -5185,7 +5203,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         const colConfig: ViewGridColumnSetting = {
           ID: field.ID,
           Name: field.Name,
-          DisplayName: field.DisplayNameOrName,
+          DisplayName: existingDisplayNames.get(keyLower) ?? field.DisplayNameOrName,
           hidden: col.hide ?? false,
           width: col.width ?? undefined,
           orderIndex: i
@@ -5271,7 +5289,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
           columnSettings.push({
             ID: field.ID,
             Name: field.Name,
-            DisplayName: field.DisplayNameOrName,
+            DisplayName: existingDisplayNames.get(denied) ?? (modelled.title || field.DisplayNameOrName),
             hidden: false,
             orderIndex: columnSettings.length
           });
@@ -5283,10 +5301,9 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
 
     // Sort by sortIndex to maintain correct multi-sort priority order
     sortedColumns.sort((a, b) => a.sortIndex - b.sortIndex);
-    const sortSettings: ViewGridSortSetting[] = sortedColumns.map(s => ({
-      field: s.field,
-      dir: s.dir
-    }));
+    const sortSettings: ViewGridSortSetting[] = sortedColumns.length > 0
+      ? sortedColumns.map(s => ({ field: s.field, dir: s.dir }))
+      : this.unrenderedSortSettings(columnState.map(c => c.colId));
 
     // Include current aggregates config in the state
     return {
@@ -5296,6 +5313,19 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       // view. Without it one column resize makes the wrong numbers durable.
       aggregates: this.capturableAggregatesConfig
     };
+  }
+
+  /**
+   * The current sort keys that have no rendered column — a view sorting by a field the grid does
+   * not show, or by an expression. AG Grid's sort model cannot hold them, so a state captured from
+   * the grid alone would drop the view's sort on the first resize.
+   */
+  private unrenderedSortSettings(renderedColIds: string[]): ViewGridSortSetting[] {
+    const rendered = new Set(renderedColIds.map(id => id.toLowerCase()));
+    return [...this._sortState]
+      .filter(s => !rendered.has(s.field.toLowerCase()))
+      .sort((a, b) => a.index - b.index)
+      .map(s => ({ field: s.field, dir: s.direction }));
   }
 
   private applySortStateToGrid(): void {
