@@ -1784,7 +1784,7 @@ import {
     SequencedRoleBucketBroadcastProvider,
 } from '@memberjunction/server';
 
-// @memberjunction/diagnostics-server (11 classes)
+// @memberjunction/diagnostics-server (14 classes)
 import {
     DiagnosticRetentionScheduledJobDriver,
     DiagnosticsBuildBundleServerOperation,
@@ -1792,11 +1792,14 @@ import {
     DiagnosticsGetBundlePreviewServerOperation,
     DiagnosticsGetMySessionStatusServerOperation,
     DiagnosticsIssueSenderRegistrationCodeServerOperation,
+    DiagnosticsReactivateSenderServerOperation,
+    DiagnosticsRevokeSenderServerOperation,
     DiagnosticsSendBundleServerOperation,
     DiagnosticsServerMiddleware,
     DiagnosticsStartSessionServerOperation,
     DiagnosticsStopSessionServerOperation,
     DiagnosticsUploadClientCaptureServerOperation,
+    MJDiagnosticSenderRegistrationEntityServer,
 } from '@memberjunction/diagnostics-server';
 
 // @memberjunction/work-queue-samples (1 classes)
@@ -3109,11 +3112,14 @@ const CLASS_REGISTRATIONS_6: any[] = [
     DiagnosticsGetBundlePreviewServerOperation,
     DiagnosticsGetMySessionStatusServerOperation,
     DiagnosticsIssueSenderRegistrationCodeServerOperation,
+    DiagnosticsReactivateSenderServerOperation,
+    DiagnosticsRevokeSenderServerOperation,
     DiagnosticsSendBundleServerOperation,
     DiagnosticsServerMiddleware,
     DiagnosticsStartSessionServerOperation,
     DiagnosticsStopSessionServerOperation,
     DiagnosticsUploadClientCaptureServerOperation,
+    MJDiagnosticSenderRegistrationEntityServer,
     HelloWorldHandler,
     WorkQueueServerExtension,
 ];
@@ -3133,7 +3139,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1274;
+export const CLASS_REGISTRATIONS_COUNT = 1277;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
