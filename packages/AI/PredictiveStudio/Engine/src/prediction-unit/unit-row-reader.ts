@@ -37,6 +37,12 @@ export interface UnitReadDeps {
   readonly Read: ReadPolicy;
   /** The clock for `cutoff.kind = 'now'` (injected so tests are deterministic). */
   readonly Now: Date;
+  /**
+   * True only for a read whose rows become a series history at scoring: rows whose outcome window has not closed by the
+   * cutoff are kept instead of censored, because a lag reads the period's recorded value, not a resolved label, and
+   * training read every earlier period's value. A read that trains or labels never sets it.
+   */
+  readonly KeepOpenWindows?: boolean;
 }
 
 export type UnitRowReadResult =
@@ -150,7 +156,7 @@ export class PredictionUnitRowReader {
     const unperiodic = timeColumn === null ? 0 : candidates.filter((r) => UtcDay.ToUtcDay(r[timeColumn]) === null).length;
     if (timeColumn !== null && unperiodic > 0) return PredictionUnitRowReader.unitRefusal({ kind: 'missing-period', entity: rowEntity.Name, field: timeColumn, rows: unperiodic });
 
-    const resolved = this.resolveRows(unit, rowEntity, candidates, cutoff, labeler);
+    const resolved = this.resolveRows(unit, rowEntity, candidates, deps.KeepOpenWindows === true ? null : cutoff, labeler);
     const rows = this.removeDuplicates(resolved.Rows);
     return {
       Status: 'read',
@@ -173,9 +179,9 @@ export class PredictionUnitRowReader {
   /**
    * Applies the exclusions in their documented order — censored, label known at the decision, outcome inside the gap,
    * empty label — and
-   * builds the unit rows, sorted by decision date then row id (ordinal).
+   * builds the unit rows, sorted by decision date then row id (ordinal). A null `cutoff` censors nothing.
    */
-  private resolveRows(unit: PredictionUnitSpec, rowEntity: AssemblyEntityInfo, candidates: readonly SourceRow[], cutoff: Date, labeler: Labeler): ResolvedRows {
+  private resolveRows(unit: PredictionUnitSpec, rowEntity: AssemblyEntityInfo, candidates: readonly SourceRow[], cutoff: Date | null, labeler: Labeler): ResolvedRows {
     let censored = 0;
     let labelKnown = 0;
     let gapOutcome = 0;
@@ -186,7 +192,7 @@ export class PredictionUnitRowReader {
       const decision = PredictionUnitRowReader.requireDay(this.decisionDate(unit, row), `decision date of ${rowEntity.Name} ${rowId}`);
       const windowStart = UtcDay.AddUtcDays(decision, unit.label.gapDays);
       const windowEnd = UtcDay.AddUtcDays(windowStart, unit.label.windowDays);
-      if (windowEnd.getTime() > cutoff.getTime()) { censored++; continue; }
+      if (cutoff !== null && windowEnd.getTime() > cutoff.getTime()) { censored++; continue; }
       const ref = PredictionUnitRowReader.UnitRowRef(unit, rowEntity, row, decision);
       const label = labeler(row, ref.EntityKey, decision, windowStart, windowEnd);
       if (label.Kind === 'known-at-decision') { labelKnown++; continue; }

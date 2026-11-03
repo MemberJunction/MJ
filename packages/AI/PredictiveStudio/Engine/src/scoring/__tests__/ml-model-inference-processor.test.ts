@@ -8,6 +8,7 @@ import type {
   SourceBinding,
   AsOfStrategy,
   FeatureStepGraph,
+  PredictionUnitSpec,
 } from '@memberjunction/predictive-studio-core';
 import type {
   RecordProcessorContext,
@@ -37,6 +38,8 @@ import type {
 import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 import type { IAssemblyMetadata } from '../../feature-assembly/assembly-metadata';
 import type { SourceRow } from '../../feature-assembly/data-access';
+import { SeriesFeatures } from '../../feature-assembly/as-of/series-features';
+import type { AssemblyEntityInfo } from '../../feature-assembly/assembly-metadata';
 
 /**
  * Unit tests for the MLModelInferenceProcessor (scoring). NO live DB, NO live
@@ -696,5 +699,48 @@ describe('MLModelInferenceProcessor — a fixed decision date that advances each
     expect(scored.Status).toBe('assembled');
     if (scored.Status !== 'assembled') return;
     expect(scored.Rows.map((r) => r.Values)).toEqual([['Active'], ['Lapsed']]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A unit with a Temporal Spec: the lags scoring reads come from the same periods training reads them from.
+// ---------------------------------------------------------------------------
+
+describe('MLModelInferenceProcessor — series history for scoring', () => {
+  const months: SourceRow[] = [];
+  for (let i = 0; i < 23; i++) months.push({ ID: `m${String(i).padStart(2, '0')}`, SeriesID: 'S1', PeriodDate: new Date(Date.UTC(2025, i, 1)).toISOString().slice(0, 10), Y: 100 + i });
+  const f = (Name: string, TSType: 'string' | 'number' | 'Date') => ({ Name, SqlType: 'nvarchar', TSType, AllowUpdateAPI: false, IsPrimaryKey: Name === 'ID', RelatedEntity: null, IsVirtual: false });
+  const entities: Record<string, AssemblyEntityInfo> = {
+    Series: { ID: 'E-S', Name: 'Series', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [f('ID', 'string')] },
+    Months: { ID: 'E-M', Name: 'Months', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [f('ID', 'string'), f('SeriesID', 'string'), f('PeriodDate', 'Date'), f('Y', 'number')] },
+  };
+  const temporal = { timeColumn: 'PeriodDate', horizonPeriods: 1, lags: [1, 12], rollingWindows: [], period: 'month' as const, seasonality: 12 };
+  const unit: PredictionUnitSpec = {
+    id: 'U', lineageRootId: 'U', version: 1, name: 'monthly forecast',
+    rows: { kind: 'grain-x-periods', grainEntity: 'Series', childEntity: 'Months', foreignKey: 'SeriesID', periodDate: 'PeriodDate', filter: [] },
+    label: { rule: { kind: 'column', column: 'Y' }, windowDays: 90, gapDays: 0, outcome: { kind: 'forecast', valueKind: 'continuous' }, labelVersion: 1 },
+    censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'now' } },
+    history: { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' },
+    groupKey: null, temporal,
+    decision: { action: 'forecast', actorRole: 't', capacityPerPeriod: null, period: 'month' },
+    incumbent: { kind: 'none' }, authoredBy: { kind: 'human', userId: 'U' },
+  };
+  const seams = { DataAccess: new TableDataAccess({ Series: [{ ID: 'S1' }], Months: months }), Metadata: { Entity: (n: string) => entities[n] || null } };
+  const lag1 = (h: Awaited<ReturnType<typeof MLModelInferenceProcessor.SeriesHistoryForScoring>>, period: string) =>
+    (h === null ? 'no history' : SeriesFeatures.ComputeSeriesFeature(h, 'S1', new Date(period), temporal, { kind: 'lag', index: 0 }).Value);
+
+  it('reads the periods whose outcome window is still open, so the lag the next period needs is the last period\'s value', async () => {
+    const h = await MLModelInferenceProcessor.SeriesHistoryForScoring(unit, seams, new Date('2026-11-10T00:00:00Z'));
+    expect(lag1(h, '2026-12-01T00:00:00Z')).toBe(122);
+    expect(lag1(h, '2026-11-01T00:00:00Z')).toBe(121);
+  });
+
+  it('gives every row training read the same lag training gave it', async () => {
+    const now = new Date('2026-11-10T00:00:00Z');
+    const read = await new PredictionUnitRowReader().Read(unit, { ...seams, Read: { mode: 'complete' }, Now: now });
+    if (read.Status !== 'read') throw new Error('training read refused');
+    const training = TrainingEngine.SeriesHistoryFor(unit, read.Rows);
+    const scoring = await MLModelInferenceProcessor.SeriesHistoryForScoring(unit, seams, now);
+    for (const r of read.Rows) expect(lag1(scoring, (r.Period as Date).toISOString())).toBe(lag1(training, (r.Period as Date).toISOString()));
   });
 });

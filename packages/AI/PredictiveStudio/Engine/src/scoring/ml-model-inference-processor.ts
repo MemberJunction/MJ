@@ -109,7 +109,7 @@ import type {
 } from './types';
 
 /** The read seams a unit model's scoring assembly uses: the run's metadata and counting data access. */
-interface ScoringSeams { readonly Metadata: IAssemblyMetadata; readonly DataAccess: ICountingDataAccess }
+export interface ScoringSeams { readonly Metadata: IAssemblyMetadata; readonly DataAccess: ICountingDataAccess }
 
 /** Stable work-type keys this processor is registered under on the ClassFactory. */
 export const ML_INFERENCE_WORK_TYPE = 'ML Model';
@@ -568,7 +568,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       RowEntity: rowEntity,
       Rows: refs,
       Features: unit.Features,
-      SeriesHistory: await MLModelInferenceProcessor.seriesHistory(unit.Spec, seams),
+      SeriesHistory: await MLModelInferenceProcessor.SeriesHistoryForScoring(unit.Spec, seams, now),
       Read: { mode: 'complete' },
       DataAccess: seams.DataAccess,
       History: this.deps.history || new RunViewRecordHistoryReader(seams.DataAccess, { mode: 'complete' }),
@@ -625,10 +625,15 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     return PredictionUnitRowReader.UnitRowRef(spec, rowEntity, row, decision);
   }
 
-  /** A unit with a Temporal Spec reads its lags from the unit's resolved rows, built the way training builds them. */
-  private static async seriesHistory(spec: PredictionUnitSpec, seams: ScoringSeams): Promise<SeriesHistory | null> {
+  /**
+   * The series history a unit with a Temporal Spec reads its lags from at scoring, built from the unit's rows the way
+   * training builds it. Rows whose outcome window is still open at `now` are kept: the lag a row being scored reads is a
+   * recent period's recorded value, and every period a training row's lag read was already in training's own read, so
+   * censoring them here would leave the recent lags empty that training always had.
+   */
+  public static async SeriesHistoryForScoring(spec: PredictionUnitSpec, seams: ScoringSeams, now: Date): Promise<SeriesHistory | null> {
     if (!spec.temporal) return null;
-    const read = await new PredictionUnitRowReader().Read(spec, { DataAccess: seams.DataAccess, Metadata: seams.Metadata, Read: { mode: 'complete' }, Now: new Date() });
+    const read = await new PredictionUnitRowReader().Read(spec, { DataAccess: seams.DataAccess, Metadata: seams.Metadata, Read: { mode: 'complete' }, Now: now, KeepOpenWindows: true });
     if (read.Status === 'refused') throw new TrainingRefusedError(read.Refusal);
     return TrainingEngine.SeriesHistoryFor(spec, read.Rows);
   }
