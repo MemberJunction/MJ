@@ -397,3 +397,30 @@ describe('PSPipelinesComponent (DOM) — step kinds the trainer honours', () => 
     expect(fixture.componentInstance.EditSteps[0]).toEqual({ Id: 'step_1', Kind: 'impute', Column: 'Tenure', Strategy: 'constant', FillValue: 7 });
   });
 });
+
+describe('PSPipelinesComponent (DOM) — saving FeatureSteps', () => {
+  const OUTCOME_CONFIG = '{"OutcomeStyles":{"Renewed":{"BadgeColor":"green"},"Lapsed":{"BadgeColor":"red"}}}';
+  const STORED = `{"Steps":[{"Id":"step_1","Kind":"select","Columns":["Tenure"]}],"OutcomeConfig":${OUTCOME_CONFIG},"Note":"kept"}`;
+
+  it('replaces only Steps: OutcomeConfig and every other key survive an edited step, byte for byte', async () => {
+    const stored = makePipeline({ FeatureSteps: STORED, Save: vi.fn().mockResolvedValue(true) });
+    const fixture = render([stored], 'dag');
+    const node = query(fixture, '[data-node-id="step_1"]');
+    if (!(node instanceof HTMLElement)) throw new Error('no step node');
+    node.click();
+    fixture.detectChanges();
+    fixture.componentInstance.SetColumns('Tenure, City');
+    await fixture.componentInstance.save();
+    const saved = stored.FeatureSteps ?? '';
+    expect([saved.includes(`"OutcomeConfig":${OUTCOME_CONFIG}`), saved.includes('"Note":"kept"'), saved.includes('"Columns":["Tenure","City"]')]).toEqual([true, true, true]);
+  });
+
+  it('still saves a stored bare array of steps as a graph', async () => {
+    const stored = makePipeline({ FeatureSteps: '[{"Id":"step_1","Kind":"select","Columns":["Tenure"]}]', Save: vi.fn().mockResolvedValue(true) });
+    const fixture = render([stored]);
+    (query(fixture, '[data-testid="ps-pipelines-add-source"]') as HTMLElement).click();
+    fixture.detectChanges();
+    await fixture.componentInstance.save();
+    expect(stored.FeatureSteps).toBe('{"Steps":[{"Id":"step_1","Kind":"select","Columns":["Tenure"]}]}');
+  });
+});

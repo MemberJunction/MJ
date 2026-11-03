@@ -19,6 +19,8 @@ import {
   type LeakageGuard,
   type ProblemType,
   type GateOutcome,
+  JsonParse,
+  type JsonObject,
 } from '@memberjunction/predictive-studio-core';
 import { PSPanelKey } from '../predictive-studio.types';
 import { PublishedModelTag, ReadStoredGate, type PSPublishedModelTag, type PSStoredGate } from '../predictive-studio.view-models';
@@ -940,6 +942,9 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
 
   public EditSteps: FeatureStep[] = [];
 
+  /** The selected pipeline's stored FeatureSteps object, so a save replaces only its `Steps` (OutcomeConfig and every other key stay). */
+  private storedFeatureSteps: JsonObject = {};
+
   public EditTargetVariable = '';
 
   public EditProblemType: ProblemType = 'classification';
@@ -1310,6 +1315,8 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
       ? [{ Kind: 'Entity', Ref: (rawSources as { EntityID?: string }).EntityID || '' }]
       : [];
 
+    const storedSteps = JsonParse.ParseJsonText(p.FeatureSteps, 'FeatureSteps');
+    this.storedFeatureSteps = storedSteps.Ok && JsonParse.IsJsonObject(storedSteps.Value) ? storedSteps.Value : {};
     const rawSteps = this.parse<unknown>(p.FeatureSteps, { Steps: [] });
     if (Array.isArray(rawSteps)) {
       this.EditSteps = rawSteps as FeatureStep[];
@@ -1784,7 +1791,7 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     this.Busy = true;
     try {
       p.SourceBindings = JSON.stringify(this.EditSources);
-      p.FeatureSteps = JSON.stringify({ Steps: this.EditSteps });
+      p.FeatureSteps = JSON.stringify({ ...this.storedFeatureSteps, Steps: this.EditSteps });
       p.TargetVariable = this.EditTargetVariable;
       p.ProblemType = this.EditProblemType;
       p.AlgorithmID = this.EditAlgorithmId;
