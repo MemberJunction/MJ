@@ -51,6 +51,8 @@
     "@memberjunction/core": "6.2.0-edge.7",
     "@memberjunction/core-entities-server": "6.2.0-edge.7",
     "@memberjunction/credentials": "6.2.0-edge.7",
+    "@memberjunction/diagnostics": "6.2.0-edge.7",
+    "@memberjunction/diagnostics-server": "6.2.0-edge.7",
     "@memberjunction/encryption": "6.2.0-edge.7",
     "@memberjunction/external-data-sources": "6.2.0-edge.7",
     "@memberjunction/feature-pipelines": "6.2.0-edge.7",

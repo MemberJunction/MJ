@@ -2,7 +2,7 @@ import {
   Component, Input, Output, EventEmitter,
   ChangeDetectionStrategy, ChangeDetectorRef, inject, NgZone,
   ContentChildren, QueryList, AfterContentInit, DoCheck, OnDestroy,
-  ViewChild, ViewEncapsulation, ElementRef
+  ViewChild, ViewEncapsulation, ElementRef, Injector
 } from '@angular/core';
 import { BaseEntity, BaseEntityEvent, CompositeKey, EntityField, EntityInfo, KeyValuePair, LogError, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
 import { EscapeSQLString, MJGlobal, UUIDsEqual, type ValidationErrorInfo } from '@memberjunction/global';
@@ -193,6 +193,7 @@ export interface VariantPickerItem {
 export class MjRecordFormContainerComponent extends BaseAngularComponent implements AfterContentInit, DoCheck, OnDestroy  {
   private cdr = inject(ChangeDetectorRef);
   private ngZone = inject(NgZone);
+  private injector = inject(Injector);
   private notificationService = inject(MJNotificationService);
   private chrome = inject(FormChromeCoordinator);
   private sectionIndicators = inject(FormSectionIndicatorCoordinator);
@@ -2252,6 +2253,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       IsPinned: isPinned,
       IsVisibleOnBar: isVisibleOnBar,
       FormComponent: this.Fc,
+      Injector: this.injector,
       SetBadge: (badge: string | number | null | undefined) => {
         action.Badge = badge ?? undefined;
         if (action.Metadata.Key === 'links') {
