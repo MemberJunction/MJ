@@ -25,8 +25,8 @@ import {
   FALLBACK_PNPM_PIN,
   NPMRC_BASE_LINES,
   ONLY_BUILT_DEPENDENCIES,
+  PARENT_BUILD_SCRIPT,
   PEER_INSTALL_SETTINGS,
-  PickTurboJson,
   ResolveDevDependencyUnion,
   ResolveDuplicateProviderLinks,
   ResolveMemberPnpmBlocks,
@@ -48,7 +48,6 @@ function repo(name: string, overrides?: Partial<CandidateRepo>): CandidateRepo {
     Packages: [],
     UnsupportedGlobs: [],
     Lockfile: null,
-    TurboJson: null,
     MjAppJson: null,
     MjAppJsonError: null,
     WorkspaceGlobs: ['packages/*'],
@@ -914,6 +913,39 @@ describe('BuildRootPackageJson', () => {
     expect(result.Content.endsWith('\n')).toBe(true);
   });
 
+  // #4913: the quickstart's `pnpm run build` at the parent needs a script there.
+  it('writes a parent build script that recurses with pnpm, one package at a time', () => {
+    const manifest = JSON.parse(BuildRootPackageJson('ws', [repo('a')]).Content) as { scripts: Record<string, string> };
+    expect(manifest.scripts).toEqual({ build: 'pnpm -r --workspace-concurrency=1 run build' });
+    expect(PARENT_BUILD_SCRIPT).toBe(manifest.scripts.build);
+  });
+
+  // #4129: an importer the generated workspace drops (an app shell outside packages/) must not vote.
+  it('derives lockfile pins only from the root and the importers the member contributes to the workspace', () => {
+    const member = repo('bizapps-x', {
+      Packages: [pkg('packages/core', '@mj-biz-apps/x-core')],
+      Lockfile: {
+        Kind: 'npm',
+        Direct: [
+          { Name: 'chalk', Version: '5.6.2', Importer: '.' },
+          { Name: 'zod', Version: '3.24.1', Importer: 'packages/core' },
+          { Name: '@azure/msal-browser', Version: '5.20.0', Importer: 'apps/MJExplorer' },
+        ],
+        Types: [],
+        Resolutions: [],
+        Skipped: [],
+      },
+    });
+    const overrides = (BuildRootPackageJson('ws', [member]).PnpmSettings as { overrides: Record<string, string> }).overrides;
+    expect(overrides.chalk).toBe('5.6.2');
+    expect(overrides.zod).toBe('3.24.1');
+    expect(overrides['@azure/msal-browser']).toBeUndefined();
+    // admitting the shell with --apps puts it in Packages, and then it votes
+    const admitted = { ...member, AppGlobs: ['apps/*'], Packages: [...member.Packages, pkg('apps/MJExplorer', 'x-explorer')] };
+    const admittedOverrides = (BuildRootPackageJson('ws', [admitted]).PnpmSettings as { overrides: Record<string, string> }).overrides;
+    expect(admittedOverrides['@azure/msal-browser']).toBe('5.20.0');
+  });
+
   it('sanitizes the parent directory name into a valid npm name', () => {
     const result = BuildRootPackageJson('Blue Cypress Code!', [repo('a')]);
     const manifest = JSON.parse(result.Content) as { name: string };
@@ -946,8 +978,8 @@ describe('BuildRootPackageJson', () => {
       Lockfile: {
         Kind: 'pnpm',
         Direct: [
-          { Name: 'axios', Version: '1.13.6' },
-          { Name: '@memberjunction/core', Version: '6.1.0' }, // family — excluded from pins
+          { Name: 'axios', Version: '1.13.6', Importer: '.' },
+          { Name: '@memberjunction/core', Version: '6.1.0', Importer: 'packages/MJCore' }, // family — excluded from pins
         ],
         Types: [{ Name: '@types/express', Version: '5.1.1' }],
         Resolutions: [{ Name: 'axios', Version: '1.13.6' }, { Name: '@types/express', Version: '5.1.1' }],
@@ -1212,25 +1244,5 @@ describe('BuildSentinel', () => {
   it('throws on an empty file list or an empty member list', () => {
     expect(() => BuildSentinel([], ['repo-1'])).toThrow(/at least one generated file/);
     expect(() => BuildSentinel(['a.json'], [])).toThrow(/at least one member/);
-  });
-});
-
-describe('PickTurboJson', () => {
-  it('copies the first member turbo.json (sorted by repo name) verbatim', () => {
-    const content = '{\n  "tasks": { "build": {} }\n}\n';
-    const result = PickTurboJson([
-      repo('z-repo', { TurboJson: '{"other": true}' }),
-      repo('a-repo', { TurboJson: content }),
-    ]);
-    expect(result.Content).toBe(content);
-    expect(result.Source).toBe('a-repo');
-  });
-
-  it('falls back to a minimal dependency-ordered build config when no member carries one', () => {
-    const result = PickTurboJson([repo('a'), repo('b')]);
-    expect(result.Source).toBe('generator fallback');
-    const parsed = JSON.parse(result.Content) as { tasks: { build: { dependsOn: string[]; outputs: string[] } } };
-    expect(parsed.tasks.build.dependsOn).toEqual(['^build']);
-    expect(parsed.tasks.build.outputs).toContain('dist/**');
   });
 });

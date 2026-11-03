@@ -45,6 +45,9 @@ export interface FormToolbarConfig {
   /** Show the Links button for viewing linked records across the workspace. Default: true */
   ShowLinksButton: boolean;
 
+  /** Show the Comments button for viewing/managing anchored record conversations. Default: true */
+  ShowCommentsButton?: boolean;
+
   /** Show the Ask AI button for opening the AI assistant with active record context. Default: true */
   ShowAskAIButton?: boolean;
 

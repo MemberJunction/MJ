@@ -3,7 +3,7 @@
  * @module @memberjunction/testing-cli
  */
 
-import { TestEngine } from '@memberjunction/testing-engine';
+import { TestEngine, ParseShardSpec } from '@memberjunction/testing-engine';
 import { UserInfo } from '@memberjunction/core';
 import { SuiteFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
@@ -15,7 +15,9 @@ import { InitializeMJProvider, CloseMJProvider, GetContextUser } from '../lib/mj
 import { ParseVariableFlags } from '../utils/variable-parser';
 import { LoadOraclesModule } from '../utils/oracle-module-loader';
 import { LoadCheckModules } from '../utils/check-module-loader';
-import { installInstrumentedCacheFirst } from '@memberjunction/testing-integration';
+import { installInstrumentedCacheFirst, FormatSkipGateReport } from '@memberjunction/testing-integration';
+import { EvaluateSuiteSkipGate } from './suite-skip-gate';
+import { FlushAndExit } from '../utils/flush-and-exit';
 
 /**
  * Suite command - Execute a test suite
@@ -32,6 +34,11 @@ export class SuiteCommand {
      */
     async Execute(suiteId: string | undefined, flags: SuiteFlags, contextUser?: UserInfo): Promise<void> {
         try {
+            const parsedShard = flags.shard ? ParseShardSpec(flags.shard) : undefined;
+            if (flags.transport && flags.transport !== 'server' && flags.transport !== 'client' && flags.transport !== 'all') {
+                throw new Error(`Invalid --transport value '${String(flags.transport)}': expected 'server', 'client', or 'all'.`);
+            }
+
             // Integration tests must install the instrumented cache as the FIRST caller
             // (before any provider setup) or its counters are a silent no-op. Opt-in via
             // MJ_INTEGRATION_TEST=1 so every other suite run is byte-for-byte unchanged.
@@ -164,6 +171,8 @@ export class SuiteCommand {
                 repeatCountOverride: flags.flakyCheck && flags.flakyCheck > 1 ? flags.flakyCheck : undefined,
                 rubricId: rubric?.rubricId,
                 rubricVersionId: rubric?.versionId,
+                transport: flags.transport,
+                shard: parsedShard,
             }, contextUser);
 
             this.spinner.stop();
@@ -185,11 +194,21 @@ export class SuiteCommand {
             const fileOutput = flakyReport && format !== 'json' ? output + '\n' + flakyReport : output;
             OutputFormatter.writeToFile(fileOutput, flags.output);
 
+            // Skip gate: a skipped integration check verified nothing, so a skip that is not on the
+            // allowlist fails the run, as does a bundle that skipped every check and a registered
+            // check that produced no result. Allowed skips are listed so they stay visible.
+            const skipGate = EvaluateSuiteSkipGate(result, engine.Tests ?? []);
+            const skipGateOutput = FormatSkipGateReport(skipGate);
+            if (skipGateOutput) {
+                console.log(skipGateOutput);
+            }
+
             // Clean up resources
             await CloseMJProvider();
 
-            // Exit with appropriate code (non-zero if any test failed)
-            process.exit(result.failedTests === 0 ? 0 : 1);
+            // Exit with appropriate code (non-zero if any test failed or the skip gate failed),
+            // after the result above has reached a piped stdout in full
+            await FlushAndExit(result.failedTests === 0 && skipGate.Passed ? 0 : 1);
 
         } catch (error) {
             this.spinner.fail();

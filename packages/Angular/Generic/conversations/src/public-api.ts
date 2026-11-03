@@ -13,6 +13,7 @@ export * from './lib/models/navigation-request.model';
 // Host rules for an agent turn: reply mode, routes, and the host turn handler contract
 export * from './lib/models/agent-turn.model';
 export * from './lib/utils/agent-turn-routing';
+export * from './lib/utils/agent-handoff-map';
 // Opt-in decision routing for an unmentioned message (EnableDecisionRouting)
 // NOTE: the routing decision's builders and types, and IsAgentAllowed, live in
 // @memberjunction/ai-core-plus — import them from there directly.
@@ -20,6 +21,7 @@ export * from './lib/utils/decision-routing';
 // Fork rules: the delete guard and the open view (Main or one fork)
 export * from './lib/utils/conversation-branching';
 export * from './lib/utils/conversation-forks';
+export * from './lib/utils/thread-replies';
 export * from './lib/utils/agent-failure-display';
 
 // Services - State
@@ -65,8 +67,10 @@ export * from './lib/components/sidebar/conversation-sidebar.component';
 export * from './lib/components/sidebar/routines-section.component';
 export * from './lib/components/conversation/conversation-list.component';
 export * from './lib/components/conversation/conversation-chat-area.component';
+export * from './lib/components/conversation/conversation-remote-browser-controller';
 export * from './lib/components/conversation/conversation-empty-state.component';
 export * from './lib/components/message/message-item.component';
+export * from './lib/components/message/agent-handoff-card.component';
 export * from './lib/components/message/message-list.component';
 export * from './lib/components/message/message-input.component';
 // AI-aware composer wrapper (mj-ai-composer): mj-message-input-box + the three AI trigger
@@ -173,6 +177,7 @@ export * from './lib/components/realtime/channels/channel-onboarding-panel.compo
 // NOTE: the whiteboard itself (engine, tools, components, export builders) lives in
 // @memberjunction/ng-whiteboard — import board types/components from there directly.
 export * from './lib/components/realtime/whiteboard/whiteboard-channel';
+export * from './lib/components/realtime/whiteboard/whiteboard-channel-config';
 export * from './lib/components/realtime/whiteboard/whiteboard-artifact-viewer.component';
 // Remote Browser channel plugin (client-direct, server-hosted browser) + its live surface + tools.
 export * from './lib/components/realtime/remote-browser/remote-browser-channel';

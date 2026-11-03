@@ -66,6 +66,8 @@ const engineStub = (overrides: Record<string, unknown> = {}) => ({
   CanShareConversation: ConversationEngine.prototype.CanShareConversation,
   CanEditConversation: ConversationEngine.prototype.CanEditConversation,
   CanDeleteConversation: ConversationEngine.prototype.CanDeleteConversation,
+  CanMoveConversation: ConversationEngine.prototype.CanMoveConversation,
+  GetProjectVisibilityTier: (): 'Private' | 'Shared' | 'Public' => 'Private',
   GetConversation(id: string) {
     return (this as unknown as { Conversations: MJConversationEntity[] }).Conversations.find(c => c.ID === id);
   },

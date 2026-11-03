@@ -161,7 +161,7 @@ async function resolveUserId(ctx: IntegrationCheckContext, email: string): Promi
 }
 
 async function provisionLeg(ctx: IntegrationCheckContext, fx: ConversationDeleteFixture, email: string, userId: string): Promise<DeleteLeg> {
-    const rawKey = await MintFullAccessUserKey(ctx, fx, userId, `IT138 conversation delete ${email} (mj-integration-test)`);
+    const rawKey = await MintFullAccessUserKey(ctx, fx, userId, `IT164 conversation delete ${email} (mj-integration-test)`);
     const provider = (await BuildUserKeyProviderWithRetry(rawKey)) as GraphQLDataProvider;
     return { Email: email, UserID: userId, Provider: provider };
 }
@@ -271,7 +271,7 @@ async function provision(ctx: IntegrationCheckContext, fx: ConversationDeleteFix
     const conversation = await owner.Provider.GetEntityObject<MJConversationEntity>(CONVERSATIONS_ENTITY, owner.Provider.CurrentUser);
     conversation.NewRecord();
     conversation.UserID = owner.UserID;
-    conversation.Name = `IT138 shared conversation ${fx.RunTag} ${MARKER}`;
+    conversation.Name = `IT164 shared conversation ${fx.RunTag} ${MARKER}`;
     await saveFirstWrite(conversation, `${owner.Email} creating the conversation`);
     fx.ConversationID = conversation.ID;
 
@@ -341,7 +341,7 @@ async function idsWhere(ctx: IntegrationCheckContext, entityName: string, filter
 
 IntegrationCheckRegistry.Instance.RegisterLifecycle(BUNDLE, {
     Setup: async (ctx: IntegrationCheckContext): Promise<void> => {
-        const fx: ConversationDeleteFixture = { RunTag: `IT138-${Date.now()}`, CreatedKeyIds: [], CreatedScopeRuleIds: [] };
+        const fx: ConversationDeleteFixture = { RunTag: `IT164-${Date.now()}`, CreatedKeyIds: [], CreatedScopeRuleIds: [] };
         fixture.Current = fx;
         if (!IsTierEnabled('mutation') && ctx.Config?.runMutationTests !== true) {
             fx.SkipReason = 'the mutation tier is off (RUN_MUTATION_TESTS)';

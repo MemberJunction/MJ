@@ -42,6 +42,14 @@ export interface FieldSecuritySQLContext {
      * database), and `EXEC`/`CALL`. What such a relation reads cannot be checked.
      */
     RefuseUnknownRelations?: boolean;
+    /**
+     * For a saved query's rendered SQL: the character offsets of `*` tokens that a structural
+     * reading of the whole statement has shown reach the caller only as output columns (a plain
+     * `*` or `alias.*` select item of a block whose rows become the result unchanged in shape).
+     * Such a star is not refused as a whole-row read; the caller must instead drop the denied
+     * columns it brings from the result. Every other star is judged as usual.
+     */
+    ProjectionStarOffsets?: ReadonlySet<number>;
 }
 
 /** A catalog name, folded, mapped to the entities whose base view or base table carries it. */
@@ -869,11 +877,15 @@ export class FieldSecuritySQLGate {
 
     /**
      * What a `*` at `i` reads: null for a multiplication, `COUNT(*)`, `EXISTS (SELECT *` whose body
-     * has no set operation or row-picking ORDER BY at its own depth, or `alias.*` whose alias binds
-     * only to entities the user is denied nothing on.
+     * has no set operation or row-picking ORDER BY at its own depth, `alias.*` whose alias binds
+     * only to entities the user is denied nothing on, or a projection star
+     * ({@link FieldSecuritySQLContext.ProjectionStarOffsets}).
      */
     private static starConstruct(analysis: SQLReadAnalysis, i: number): string | null {
         const tokens = analysis.Tokens;
+        if (analysis.Context.ProjectionStarOffsets?.has(tokens[i].Start)) {
+            return null; // a projection star: its denied columns are dropped from the result instead
+        }
         const prev = tokens[i - 1];
         if (FieldSecuritySQLGate.isSymbol(prev, '.')) {
             const qualifier = tokens[i - 2];

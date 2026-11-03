@@ -98,6 +98,7 @@ export class RecordProcessExecutor {
                     ExtraFilter: `RecordProcessID = '${EscapeSQLString(rp.ID)}' AND Status = 'Completed'`,
                     OrderBy: 'StartedAt DESC',
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                 }, options.ContextUser);
                 if (lastRunRes.Success && lastRunRes.Results && lastRunRes.Results.length > 0) {
                     lastRunAt = lastRunRes.Results[0].StartedAt ?? null;

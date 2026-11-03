@@ -32,6 +32,8 @@ import { languages } from '@codemirror/language-data';
 import { ToolbarConfig, ToolbarButton, ToolbarButtonGroup, ToolbarActionEvent } from './toolbar-config';
 
 // Import composition token extension for SQL highlighting
+import { DiagnosticMarkerExtension, SetDiagnosticMarkersEffect } from './diagnostic-marker-extension';
+import type { DiagnosticMarker } from './diagnostic-marker-extension';
 import { CompositionTokenExtension, CompositionTokenClickEvent, CompositionTokenResolver, CompositionTokenInfo } from './composition-token-extension';
 
 // Import QueryEngine for default hover resolution
@@ -131,10 +133,8 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
     this._readonly = val;
     if (this.view) {
       this.SetReadonly(val);
-      // When readonly, also make it non-editable
-      if (val) {
-        this.SetEditable(false);
-      }
+      // Readonly also makes it non-editable; clearing readonly makes it editable again unless disabled.
+      this.SetEditable(!val && !this._disabled);
     }
   }
 
@@ -560,6 +560,9 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
           })
         : []),
 
+      // Markers for findings the host reports (see SetDiagnosticMarkers)
+      DiagnosticMarkerExtension(),
+
       ...this._extensions,
     ];
 
@@ -795,6 +798,25 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
 
   private _dispatchEffects(effects: StateEffect<any> | readonly StateEffect<any>[]) {
     return this.view?.dispatch({ effects });
+  }
+
+  /**
+   * Marks findings in the document (line background plus a wavy underline from the column to the
+   * end of the word, with the message on hover). An empty list clears them. Markers move with
+   * later edits.
+   */
+  SetDiagnosticMarkers(markers: readonly DiagnosticMarker[]) {
+    this.view?.dispatch({ effects: SetDiagnosticMarkersEffect.of(markers) });
+  }
+
+  /** Moves the cursor to a 1-based line and column, scrolls it into view and focuses the editor. */
+  RevealPosition(line: number, column: number) {
+    if (!this.view) return;
+    const doc = this.view.state.doc;
+    const target = doc.line(Math.max(1, Math.min(line, doc.lines)));
+    const pos = Math.min(target.from + Math.max(0, column - 1), target.to);
+    this.view.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: 'center' }) });
+    this.view.focus();
   }
 
   /** Sets the root extensions of the editor. */

@@ -86,9 +86,9 @@ export class LiveKitWebhookParser {
       RoomName: roomName,
       ParticipantIdentity: participant?.identity ?? '',
       IsSipParticipant: isSip,
-      CallerNumber: isSip ? attributes[LIVEKIT_SIP_ATTRIBUTES.CallerNumber] : undefined,
-      DialedNumber: isSip ? attributes[LIVEKIT_SIP_ATTRIBUTES.DialedNumber] : undefined,
-      SipCallID: isSip ? attributes[LIVEKIT_SIP_ATTRIBUTES.CallID] : undefined,
+      CallerNumber: isSip ? (attributes[LIVEKIT_SIP_ATTRIBUTES.CallerNumber] ?? attributes['sipPhoneNumber']) : undefined,
+      DialedNumber: isSip ? (attributes[LIVEKIT_SIP_ATTRIBUTES.DialedNumber] ?? attributes['sipTrunkPhoneNumber']) : undefined,
+      SipCallID: isSip ? (attributes[LIVEKIT_SIP_ATTRIBUTES.CallID] ?? attributes['sipCallId']) : undefined,
     };
   }
 }

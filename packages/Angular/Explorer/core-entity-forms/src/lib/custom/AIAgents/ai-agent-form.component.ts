@@ -1375,7 +1375,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 this.AgentNotes = results[1].Results as MJAIAgentNoteEntity[] || [];
 
                 this.RecentExecutions = results[2].Results as MJAIAgentRunEntityExtended[] || [];
-                this.TotalExecutionHistoryCount = results[2].TotalRowCount;
+                this.TotalExecutionHistoryCount = results[2].TotalRowCount ?? 0;
 
                 // Initialize cache with first page of results
                 this.allLoadedExecutions = [...this.RecentExecutions];

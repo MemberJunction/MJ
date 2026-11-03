@@ -600,10 +600,19 @@ describe('extractSelectColumns', () => {
         expect(changeCount.TableQualifier).toBe('changes');
     });
 
-    it('should return empty array for empty/invalid SQL', () => {
+    it('should return empty array for empty SQL', () => {
         expect(extractSelectColumns('')).toHaveLength(0);
         expect(extractSelectColumns('   ')).toHaveLength(0);
-        expect(extractSelectColumns('NOT VALID SQL AT ALL %%%')).toHaveLength(0);
+    });
+
+    // Decided: a parse failure is distinguishable from an empty result, through an additive checked sibling;
+    // the deprecated ExtractSelectColumns keeps returning [] (COMPAT-MAP §1.2 ExtractSelectColumns; DISCUSSION §6,
+    // 2026-10-27, O2). P7, #5683. Inverted from "should return empty array for empty/invalid SQL", which asserted
+    // the [] as correct. Before the redesign: [] for the invalid SQL, the same as for a valid statement with no select list.
+    it('should tell invalid SQL apart from a valid statement with no select list', () => {
+        expect(extractSelectColumns('NOT VALID SQL AT ALL %%%')).toEqual([]);
+        expect(SQLParser.ExtractSelectColumnsChecked('NOT VALID SQL AT ALL %%%', tsqlDialect).Complete).toBe(false);
+        expect(SQLParser.ExtractSelectColumnsChecked('SELECT ID FROM Users', tsqlDialect).Complete).toBe(true);
     });
 });
 

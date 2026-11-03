@@ -10,10 +10,12 @@
  */
 import { BaseSingleton } from '@memberjunction/global';
 import { NamedCheck, BundleLifecycle } from './check';
+import type { AllowedSkip } from './skip-gate';
 
 export class IntegrationCheckRegistry extends BaseSingleton<IntegrationCheckRegistry> {
     private checks = new Map<string, NamedCheck>();
     private lifecycles = new Map<string, BundleLifecycle>();
+    private allowedSkips = new Map<string, AllowedSkip>();
 
     protected constructor() {
         super();
@@ -94,6 +96,29 @@ export class IntegrationCheckRegistry extends BaseSingleton<IntegrationCheckRegi
     /** The lifecycle for a bundle, or undefined when the bundle needs no shared fixture. */
     public GetLifecycle(bundle: string): BundleLifecycle | undefined {
         return this.lifecycles.get(bundle);
+    }
+
+    /**
+     * Put a check on the skip allowlist: when it skips, the run records the skip but does not fail
+     * for it. Reserved for checks that wait on the mutation tier or on credentials the runner does
+     * not have; every other skip fails the run. Throws when the check already has a different entry.
+     */
+    public AllowSkip(entry: AllowedSkip): void {
+        const existing = this.allowedSkips.get(entry.CheckId);
+        if (existing && (existing.Gate !== entry.Gate || existing.Reason !== entry.Reason)) {
+            throw new Error(`IntegrationCheckRegistry: check '${entry.CheckId}' is already on the skip allowlist with a different entry.`);
+        }
+        this.allowedSkips.set(entry.CheckId, entry);
+    }
+
+    /** The allowlist entry for a check, or undefined when a skip of it is unexpected. */
+    public GetAllowedSkip(checkId: string): AllowedSkip | undefined {
+        return this.allowedSkips.get(checkId);
+    }
+
+    /** Every allowlist entry, sorted by check Id. */
+    public GetAllowedSkips(): AllowedSkip[] {
+        return [...this.allowedSkips.values()].sort((a, b) => a.CheckId.localeCompare(b.CheckId));
     }
 
     /** True when two check objects define the same check (a re-evaluated module's copy). */
