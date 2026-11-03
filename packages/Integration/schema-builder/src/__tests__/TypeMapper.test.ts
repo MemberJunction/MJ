@@ -185,10 +185,17 @@ describe('TypeMapper', () => {
             expect(mapper.MapSourceType('uuid', 'postgresql', field)).toBe('UUID');
         });
 
-        it('should map json to NVARCHAR(MAX) / JSONB', () => {
+        it('should map json to NVARCHAR(MAX) / TEXT, the nvarchar its MJ field type declares', () => {
+            // MJ metadata reads the column as nvarchar, so CodeGen's CRUD functions take and write TEXT, and
+            // PostgreSQL rejects TEXT into a JSONB column. The column has to be the type the metadata says.
             const field = MakeField();
             expect(mapper.MapSourceType('json', 'sqlserver', field)).toBe('NVARCHAR(MAX)');
-            expect(mapper.MapSourceType('json', 'postgresql', field)).toBe('JSONB');
+            expect(mapper.MapSourceType('json', 'postgresql', field)).toBe('TEXT');
+            expect(mapper.GetMJFieldType('json')).toBe('nvarchar');
+            expect(mapper.GetAllMappings().find(m => m.SourceType === 'json')).toMatchObject({
+                SqlServerType: 'NVARCHAR(MAX)',
+                PostgresType: 'TEXT',
+            });
         });
 
         it('should floor low declared precision to 28 (defensive against narrow describe output)', () => {

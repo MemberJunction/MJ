@@ -20,7 +20,7 @@ const TYPE_MAP: TypeMappingEntry[] = [
   { SourceType: 'datetime', SqlServerType: 'DATETIMEOFFSET', PostgresType: 'TIMESTAMPTZ', MJFieldType: 'datetimeoffset' },
   { SourceType: 'date', SqlServerType: 'DATE', PostgresType: 'DATE', MJFieldType: 'date' },
   { SourceType: 'uuid', SqlServerType: 'UNIQUEIDENTIFIER', PostgresType: 'UUID', MJFieldType: 'uniqueidentifier' },
-  { SourceType: 'json', SqlServerType: 'NVARCHAR(MAX)', PostgresType: 'JSONB', MJFieldType: 'nvarchar' },
+  { SourceType: 'json', SqlServerType: 'NVARCHAR(MAX)', PostgresType: 'TEXT', MJFieldType: 'nvarchar' },
   { SourceType: 'float', SqlServerType: 'FLOAT', PostgresType: 'DOUBLE PRECISION', MJFieldType: 'float' },
   { SourceType: 'time', SqlServerType: 'TIME', PostgresType: 'TIME', MJFieldType: 'time' },
 ];
@@ -90,6 +90,10 @@ export class TypeMapper {
       const { precision, scale } = this.boundedDecimalPrecision(field);
       return dialect.ResolveAbstractType({ type: 'decimal', precision, scale });
     }
+    // A json source column is the dialect's unbounded text type, never its native JSON type. Its MJ field
+    // type is nvarchar (TYPE_MAP), so CodeGen's CRUD functions take and write text, and PostgreSQL rejects
+    // text into a JSONB column: the column has to be the type the metadata reads it as.
+    if (abstractType === 'json') return dialect.ResolveAbstractType({ type: 'text' });
     return dialect.ResolveAbstractType({ type: abstractType });
   }
 
