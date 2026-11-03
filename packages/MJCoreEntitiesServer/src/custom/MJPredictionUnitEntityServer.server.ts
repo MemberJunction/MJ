@@ -1,4 +1,4 @@
-import { BaseEntity, LogStatus, RunView, ValidationErrorInfo, ValidationErrorType, type EntitySaveOptions, type IEntityDataProvider, type IMetadataProvider, type UserInfo, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, BaseEntityResult, LogStatus, RunView, ValidationErrorInfo, ValidationErrorType, type EntitySaveOptions, type IEntityDataProvider, type IMetadataProvider, type UserInfo, type ValidationResult } from '@memberjunction/core';
 import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
 import { MJPredictionUnitEntity } from '@memberjunction/core-entities';
 import { PredictionUnit, type ParseResult, type PredictionUnitColumns, type PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
@@ -27,13 +27,53 @@ export interface PreviousVersionArgs<TRow extends { readonly ID: string }, TSpec
 
 /**
  * The immutable-version guard shared by the unit, protocol and snapshot subclasses: one implementation of
- * "a saved version is never updated", so the three entities cannot drift apart.
+ * "a saved version is never updated", so the three entities cannot drift apart. It holds on both write paths: an
+ * ordinary save is refused in `Validate()` ({@link AddProblems}), and a `ReplayOnly` save, which skips `Validate()`,
+ * in `Save()` ({@link SaveRefusingSavedRowReplay}). A delete is not refused: the integration rigs and the plan's probes
+ * delete the rows they create, and the foreign keys keep a version that anything references.
+ *
+ * **Which user.** The unit, protocol and pipeline subclasses judge authorship and read other rows as `ActiveUser`: the
+ * user the save is attributed to (`ContextCurrentUser`, else the provider's `CurrentUser`), which `BaseEntity.Save()`
+ * checks permissions for and hands the provider's write. The coding standard's "use `BaseEntity.ContextCurrentUser`
+ * rather than tracking the current user" is about not keeping a user of one's own; `ActiveUser` is that same
+ * BaseEntity resolution, finished. `ContextCurrentUser` alone is only an explicitly set user: an entity created without
+ * one is written as the provider's user, and reading `ContextCurrentUser` would judge, and read as, no user instead.
  */
 export class VersionedRowGuard {
-  /** The refusal for a write to a saved version row; null for a new row or a saved row with no change. Pure. */
-  public static GetVersionedRowUpdateProblem(entityName: string, isSaved: boolean, dirtyFields: readonly string[]): string | null {
+  /**
+   * The refusal for a write to a saved row; null for a new row or a saved row with no change. A row of a versioned
+   * lineage (it has a `LineageRootID`) is told to save the next version; a row with no lineage (a Training Snapshot) to
+   * write a new row. Pure.
+   */
+  public static GetVersionedRowUpdateProblem(entityName: string, isSaved: boolean, dirtyFields: readonly string[], hasLineage: boolean): string | null {
     if (!isSaved || dirtyFields.length === 0) return null;
-    return `${entityName} rows are immutable versions; ${dirtyFields.join(', ')} cannot be changed on a saved version. Save a new version instead (Version + 1, same LineageRootID).`;
+    return hasLineage
+      ? `${entityName} rows are immutable versions; ${dirtyFields.join(', ')} cannot be changed on a saved version. Save a new version instead (Version + 1, same LineageRootID).`
+      : `${entityName} rows are immutable once saved; ${dirtyFields.join(', ')} cannot be changed on a saved row. Write a new row instead.`;
+  }
+
+  /** The refusal for a `ReplayOnly` save of a saved row of `entityName`. Pure. */
+  public static GetReplayOnlyUpdateProblem(entityName: string): string {
+    return `${entityName} rows are immutable once saved; a ReplayOnly save of a saved row is refused, because ReplayOnly skips the validation that refuses the update but still writes.`;
+  }
+
+  /**
+   * Runs `save` (the subclass's base save) unless this is a `ReplayOnly` save of a saved row, which is refused with
+   * {@link GetReplayOnlyUpdateProblem} recorded on the result history (so `LatestResult.CompleteMessage` carries it).
+   * `ReplayOnly` skips `Validate()` but still writes, and it writes even when no field is dirty (values loaded with
+   * `LoadFromData` are not dirty), so the option itself is refused on a saved row rather than its dirty fields judged.
+   * A `ReplayOnly` insert goes through, as it does for every entity.
+   */
+  public static async SaveRefusingSavedRowReplay(entity: BaseEntity, options: EntitySaveOptions | undefined, save: () => Promise<boolean>): Promise<boolean> {
+    if (!entity.IsSaved || options?.ReplayOnly !== true) return save();
+    const refused = new BaseEntityResult();
+    refused.Success = false;
+    refused.Type = 'update';
+    refused.Message = VersionedRowGuard.GetReplayOnlyUpdateProblem(entity.EntityInfo.Name);
+    refused.StartedAt = new Date();
+    refused.EndedAt = refused.StartedAt;
+    entity.RegisterResultHistoryEntry(refused);
+    return false;
   }
 
   /**
@@ -104,7 +144,8 @@ export class VersionedRowGuard {
    */
   public static AddProblems(entity: BaseEntity, result: ValidationResult, updateField: string, rowField: string, rowProblems: () => readonly string[]): ValidationResult {
     const dirty = entity.Fields.filter((f) => f.Dirty).map((f) => f.Name);
-    const update = VersionedRowGuard.GetVersionedRowUpdateProblem(entity.EntityInfo.Name, entity.IsSaved, dirty);
+    const hasLineage = entity.Fields.some((f) => f.Name === 'LineageRootID');
+    const update = VersionedRowGuard.GetVersionedRowUpdateProblem(entity.EntityInfo.Name, entity.IsSaved, dirty, hasLineage);
     const problems: readonly { field: string; message: string }[] = update
       ? [{ field: updateField, message: update }]
       : rowProblems().map((message) => ({ field: rowField, message }));
@@ -131,10 +172,10 @@ export class MJPredictionUnitEntityServer extends MJPredictionUnitEntity {
     return changed ? previous + 1 : previous;
   }
 
-  /** A version-1 row is its own lineage root; the server assigns it on create. */
+  /** A version-1 row is its own lineage root; the server assigns it on create. A `ReplayOnly` save of a saved row is refused. */
   public override async Save(options?: EntitySaveOptions): Promise<boolean> {
     VersionedRowGuard.AdoptOwnLineageRoot(this);
-    return super.Save(options);
+    return VersionedRowGuard.SaveRefusingSavedRowReplay(this, options, () => super.Save(options));
   }
 
   public override Validate(): ValidationResult {
@@ -183,7 +224,7 @@ export class MJPredictionUnitEntityServer extends MJPredictionUnitEntity {
   private async checkLabelVersion(result: ValidationResult, provider: IMetadataProvider, spec: PredictionUnitSpec): Promise<void> {
     const previous = await VersionedRowGuard.PreviousVersion<PredictionUnitColumns, PredictionUnitSpec>(result, {
       Label: 'Prediction Unit', LineageRootID: this.LineageRootID, Version: this.Version,
-      Load: (version) => VersionedRowGuard.LoadVersion<PredictionUnitColumns>(provider, 'MJ: Prediction Units', this.LineageRootID, version, this.ContextCurrentUser),
+      Load: (version) => VersionedRowGuard.LoadVersion<PredictionUnitColumns>(provider, 'MJ: Prediction Units', this.LineageRootID, version, this.ActiveUser),
       Parse: (row) => PredictionUnit.ParsePredictionUnitRow(row),
     });
     if (!previous) return;

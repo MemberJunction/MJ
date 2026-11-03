@@ -10,14 +10,16 @@ import { VersionedRowGuard, type RowRead } from './MJPredictionUnitEntityServer.
  * declared, and the guard fields change only when the author may change them under the previous version's
  * `GuardFieldsEditableBy` (never an agent tool call; under `human-only`, only a user). A version authored by a user
  * names the user who saves it: the guard-field rule trusts `AuthoredBy`, so a version may not claim another user (or
- * a user when no user saves it). The rules that need a unit run where a pipeline binds a unit and a protocol.
+ * a user when no user saves it). "The user who saves it" is the user the save is attributed to, `ActiveUser` (see
+ * {@link VersionedRowGuard}), which also reads the previous version. The rules that need a unit run where a pipeline
+ * binds a unit and a protocol.
  */
 @RegisterClass(BaseEntity, 'MJ: Evaluation Protocols')
 export class MJEvaluationProtocolEntityServer extends MJEvaluationProtocolEntity {
-  /** A version-1 row is its own lineage root; the server assigns it on create. */
+  /** A version-1 row is its own lineage root; the server assigns it on create. A `ReplayOnly` save of a saved row is refused. */
   public override async Save(options?: EntitySaveOptions): Promise<boolean> {
     VersionedRowGuard.AdoptOwnLineageRoot(this);
-    return super.Save(options);
+    return VersionedRowGuard.SaveRefusingSavedRowReplay(this, options, () => super.Save(options));
   }
 
   public override Validate(): ValidationResult {
@@ -46,7 +48,7 @@ export class MJEvaluationProtocolEntityServer extends MJEvaluationProtocolEntity
       VersionedRowGuard.Fail(result, 'Version', `Evaluation Protocol does not parse: ${parsed.Errors.join('; ')}`);
       return result;
     }
-    const impersonation = MJEvaluationProtocolEntityServer.GetHumanAuthorProblem(parsed.Value.authoredBy, this.ContextCurrentUser?.ID || null);
+    const impersonation = MJEvaluationProtocolEntityServer.GetHumanAuthorProblem(parsed.Value.authoredBy, this.ActiveUser?.ID || null);
     if (impersonation !== null) {
       VersionedRowGuard.Fail(result, 'AuthoredBy', impersonation);
       return result;
@@ -90,6 +92,8 @@ export class MJEvaluationProtocolEntityServer extends MJEvaluationProtocolEntity
         return 'InnerValidation';
       case 'primary-score-family-mismatch':
         return 'PrimaryScore';
+      case 'calibration-not-applicable-for-probability-task':
+        return 'Calibration';
       case 'no-dummy-baseline':
       case 'forecast-no-seasonal-naive':
         return 'Baselines';
@@ -104,8 +108,8 @@ export class MJEvaluationProtocolEntityServer extends MJEvaluationProtocolEntity
     }
   }
 
-  /** One version of this row's lineage as a plain row (nothing is mutated), or the read error. */
+  /** One version of this row's lineage as a plain row (nothing is mutated), read as the saving user, or the read error. */
   protected async LoadVersion(provider: IMetadataProvider, version: number): Promise<RowRead<EvaluationProtocolColumns>> {
-    return VersionedRowGuard.LoadVersion<EvaluationProtocolColumns>(provider, 'MJ: Evaluation Protocols', this.LineageRootID, version, this.ContextCurrentUser);
+    return VersionedRowGuard.LoadVersion<EvaluationProtocolColumns>(provider, 'MJ: Evaluation Protocols', this.LineageRootID, version, this.ActiveUser);
   }
 }

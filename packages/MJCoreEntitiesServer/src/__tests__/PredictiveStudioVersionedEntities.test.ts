@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { BaseEntity, RunView, ValidationResult, type RunViewParams } from '@memberjunction/core';
+import { BaseEntity, BaseEntityResult, EntitySaveOptions, RunView, ValidationResult, type RunViewParams, type UserInfo } from '@memberjunction/core';
 
 // Neutralize class-factory registration, as the package's other entity tests do.
 vi.mock('@memberjunction/global', async (importOriginal) => {
@@ -9,7 +9,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
 
 import { MJPredictionUnitEntityServer, VersionedRowGuard, type RowRead } from '../custom/MJPredictionUnitEntityServer.server';
 import { MJEvaluationProtocolEntityServer } from '../custom/MJEvaluationProtocolEntityServer.server';
-import { EvaluationProtocol, EvaluationProtocolRules, type Actor, type EvaluationProtocolColumns, type HoldoutSplit, type PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
+import { EvaluationProtocol, EvaluationProtocolRules, ProtocolRows, type Actor, type EvaluationProtocolColumns, type HoldoutSplit, type PredictionUnitColumns, type PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
 import { MJTrainingSnapshotEntityServer } from '../custom/MJTrainingSnapshotEntityServer.server';
 import { MJMLTrainingPipelineEntityServer } from '../custom/MJMLTrainingPipelineEntityServer.server';
 
@@ -28,12 +28,17 @@ const countUnit: PredictionUnitSpec = {
 
 describe('GetVersionedRowUpdateProblem', () => {
   it('allows a new row and a saved row with no change', () => {
-    expect(VersionedRowGuard.GetVersionedRowUpdateProblem('MJ: Prediction Units', false, ['Name'])).toBeNull();
-    expect(VersionedRowGuard.GetVersionedRowUpdateProblem('MJ: Prediction Units', true, [])).toBeNull();
+    expect(VersionedRowGuard.GetVersionedRowUpdateProblem('MJ: Prediction Units', false, ['Name'], true)).toBeNull();
+    expect(VersionedRowGuard.GetVersionedRowUpdateProblem('MJ: Prediction Units', true, [], true)).toBeNull();
   });
   it('refuses any change to a saved version, naming the fields', () => {
-    expect(VersionedRowGuard.GetVersionedRowUpdateProblem('MJ: Prediction Units', true, ['LabelRule', 'LabelWindowDays'])).toBe(
+    expect(VersionedRowGuard.GetVersionedRowUpdateProblem('MJ: Prediction Units', true, ['LabelRule', 'LabelWindowDays'], true)).toBe(
       'MJ: Prediction Units rows are immutable versions; LabelRule, LabelWindowDays cannot be changed on a saved version. Save a new version instead (Version + 1, same LineageRootID).',
+    );
+  });
+  it('tells a row with no lineage (a Training Snapshot) to write a new row, not a new version', () => {
+    expect(VersionedRowGuard.GetVersionedRowUpdateProblem('MJ: Training Snapshots', true, ['ContentHash'], false)).toBe(
+      'MJ: Training Snapshots rows are immutable once saved; ContentHash cannot be changed on a saved row. Write a new row instead.',
     );
   });
 });
@@ -114,20 +119,45 @@ class InMemoryLineageProtocol extends MJEvaluationProtocolEntityServer {
 }
 
 /**
- * A new protocol row with the given columns over a metadata provider double, its previous version in memory, saved by
- * `savingUserId` (default the fixtures' human author, U-1).
+ * Where a double's saving user comes from: the entity's context user, the provider's current user (no context user
+ * set), or nowhere (`BaseEntity.ActiveUser` resolves no user).
  */
-function newProtocolRow(columns: EvaluationProtocolColumns, previous: EvaluationProtocolColumns | null, savingUserId: string | null = 'U-1'): InMemoryLineageProtocol {
-  const row = Object.create(InMemoryLineageProtocol.prototype) as InMemoryLineageProtocol;
-  const provider = { EntityByName: () => undefined, Entities: [] };
-  const savingUser = savingUserId === null ? undefined : { ID: savingUserId };
-  for (const [name, value] of Object.entries({ ...columns, IsSaved: false, ProviderToUse: provider, ContextCurrentUser: savingUser, Previous: previous })) {
+type SavingUserSource = 'context' | 'provider' | 'none';
+
+/**
+ * Defines `members` on `row`, plus the saving user `savingUserId` from `source`. With no user, `ActiveUser` itself is
+ * stubbed: its last fallback is the global `Metadata.Provider`, which these tests never configure.
+ */
+function defineMembers(row: object, members: Record<string, object | string | number | boolean | null | undefined>, savingUserId: string | null, source: SavingUserSource = 'context'): void {
+  const user = savingUserId === null || source === 'none' ? undefined : { ID: savingUserId };
+  const provider = { EntityByName: () => undefined, EntityByID: () => undefined, Entities: [], CurrentUser: source === 'provider' ? user : undefined };
+  const all = { ProviderToUse: provider, ...members, ContextCurrentUser: source === 'context' ? user : undefined, ...(user === undefined ? { ActiveUser: undefined } : {}) };
+  for (const [name, value] of Object.entries(all)) {
     Object.defineProperty(row, name, { value, writable: true, configurable: true });
   }
+}
+
+/**
+ * A new protocol row with the given columns over a metadata provider double, its previous version in memory, saved by
+ * `savingUserId` (default the fixtures' human author, U-1) set as the context user, or as the provider's user.
+ */
+function newProtocolRow(columns: EvaluationProtocolColumns, previous: EvaluationProtocolColumns | null, savingUserId: string | null = 'U-1', source: SavingUserSource = 'context'): InMemoryLineageProtocol {
+  const row = Object.create(InMemoryLineageProtocol.prototype) as InMemoryLineageProtocol;
+  defineMembers(row, { ...columns, IsSaved: false, Previous: previous }, savingUserId, source);
   return row;
 }
 
+/** Serves every RunView from `answer` (by entity name and the ID of the user it runs as), so a read can fail without a database. */
+function serveRunViews(answer: (entityName: string, userID: string | undefined) => { Success: boolean; Results: object[]; ErrorMessage?: string }): void {
+  const runView = async (p: RunViewParams, user?: UserInfo) => answer(p.EntityName || '', user?.ID);
+  // Test-double cast at the seam: the double implements only the RunView member the server entities call.
+  vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunView: runView } as unknown as RunView);
+}
+
 describe('MJEvaluationProtocolEntityServer.ValidateAsync (who may change the guard fields of a protocol lineage)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
   const draft = EvaluationProtocolRules.DefaultEvaluationProtocolDraft({ Unit: countUnit, Holdout: seeded, Candidates: 1, Seed: 0, Name: 'p' });
   const v1 = EvaluationProtocolRules.EvaluationProtocolColumnsFromDraft(draft, { ID: 'P-1', LineageRootID: 'P-1', Version: 1, AuthoredBy: human });
   const v2Of = (previous: EvaluationProtocolColumns, changes: Partial<typeof draft>, author: Actor): EvaluationProtocolColumns =>
@@ -167,6 +197,21 @@ describe('MJEvaluationProtocolEntityServer.ValidateAsync (who may change the gua
     const result = await newProtocolRow(v2Of(v1, margin, { kind: 'human', userId: 'u-1' }), v1, 'U-1').ValidateAsync();
     expect([result.Success, result.Errors]).toEqual([true, []]);
   });
+  it('judges the human author against the user the save is attributed to: the provider\'s user when no context user is set', async () => {
+    const result = await newProtocolRow(v2Of(v1, margin, human), v1, 'U-1', 'provider').ValidateAsync();
+    expect([result.Success, result.Errors]).toEqual([true, []]);
+  });
+  it('reads the previous version as the user the save is attributed to', async () => {
+    const readAs: (string | undefined)[] = [];
+    serveRunViews((_entity, userID) => {
+      readAs.push(userID);
+      return { Success: true, Results: [v1] };
+    });
+    const row = Object.create(MJEvaluationProtocolEntityServer.prototype) as MJEvaluationProtocolEntityServer;
+    defineMembers(row, { ...v2Of(v1, margin, human), IsSaved: false }, 'U-1', 'provider');
+    const result = await row.ValidateAsync();
+    expect([result.Success, result.Errors, readAs]).toEqual([true, [], ['U-1']]);
+  });
   it('refuses a version without a dummy baseline, and a version whose previous version is missing', async () => {
     const noDummy = EvaluationProtocolRules.EvaluationProtocolColumnsFromDraft({ ...draft, baselines: [] , promotion: { ...draft.promotion, comparators: [] } }, { ID: 'P-9', LineageRootID: 'P-9', Version: 1, AuthoredBy: human });
     expect((await newProtocolRow(noDummy, null).ValidateAsync()).Errors.map((e) => [e.Source, e.Message])).toEqual([
@@ -177,25 +222,49 @@ describe('MJEvaluationProtocolEntityServer.ValidateAsync (who may change the gua
   });
 });
 
-/** A new pipeline row bound to a unit (and optionally a protocol) over a metadata provider double; no leakage guard. */
-function newPipelineRow(unitID: string, protocolID: string | null): MJMLTrainingPipelineEntityServer {
-  const row = Object.create(MJMLTrainingPipelineEntityServer.prototype) as MJMLTrainingPipelineEntityServer;
-  const provider = { EntityByName: () => undefined, EntityByID: () => undefined, Entities: [] };
-  const members = {
-    IsSaved: false, Name: 'p', PredictionUnitID: unitID, EvaluationProtocolID: protocolID, LeakageGuard: null, SourceBindings: null,
-    TargetEntityID: null, ProviderToUse: provider, ContextCurrentUser: undefined,
-  };
-  for (const [name, value] of Object.entries(members)) {
-    Object.defineProperty(row, name, { value, writable: true, configurable: true });
-  }
-  return row;
+/** The `MJ: Prediction Units` columns of `spec` as version `version` of lineage `lineageRootID` (label version 1). */
+function unitColumnsOf(spec: PredictionUnitSpec, id: string, lineageRootID: string, version: number): PredictionUnitColumns {
+  const columns = ProtocolRows.UnitDraftColumns({
+    Name: spec.name, Description: null, UnitRows: spec.rows, LabelRule: spec.label.rule, LabelWindowDays: spec.label.windowDays,
+    LabelGapDays: spec.label.gapDays, TaskType: spec.label.outcome, Censoring: spec.censoring, ChangeHistoryPolicy: spec.history,
+    GroupKey: spec.groupKey, TemporalSpec: spec.temporal, DecisionSpec: spec.decision, IncumbentHeuristic: spec.incumbent,
+  });
+  return { ...columns, ID: id, LineageRootID: lineageRootID, Version: version, LabelVersion: 1, AuthoredBy: JSON.stringify(spec.authoredBy) };
 }
 
-/** Serves every RunView from `answer` (by entity name), so a read can fail without a database. */
-function serveRunViews(answer: (entityName: string) => { Success: boolean; Results: unknown[]; ErrorMessage?: string }): void {
-  const runView = async (p: RunViewParams) => answer(p.EntityName || '');
-  // Test-double cast at the seam: the double implements only the RunView member the pipeline server calls.
-  vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunView: runView } as unknown as RunView);
+describe('MJPredictionUnitEntityServer.ValidateAsync (which user reads the previous version)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+  it('reads the previous version as the user the save is attributed to: the provider\'s user when no context user is set', async () => {
+    const readAs: (string | undefined)[] = [];
+    serveRunViews((_entity, userID) => {
+      readAs.push(userID);
+      return { Success: true, Results: [unitColumnsOf(countUnit, 'U-1', 'U-1', 1)] };
+    });
+    const row = Object.create(MJPredictionUnitEntityServer.prototype) as MJPredictionUnitEntityServer;
+    defineMembers(row, { ...unitColumnsOf(countUnit, 'U-2', 'U-1', 2), IsSaved: false }, 'U-1', 'provider');
+    // Every entity and field the unit names resolves, so the only read is the previous version.
+    Object.defineProperty(row.ProviderToUse, 'EntityByName', { value: () => ({ FieldByName: () => ({}) }) });
+    const result = await row.ValidateAsync();
+    expect([result.Success, result.Errors, readAs]).toEqual([true, [], ['U-1']]);
+  });
+});
+
+/** Well-formed row IDs for the pipeline tests: a pipeline refuses a malformed bound ID before reading anything. */
+const UNIT_ID = '0A000000-0000-4000-8000-000000000001';
+const PROTOCOL_ID = '0B000000-0000-4000-8000-000000000001';
+
+/**
+ * A new pipeline row bound to a unit and a protocol (either may be null) over a metadata provider double, saved by the
+ * provider's user U-1 (no context user set); no leakage guard.
+ */
+function newPipelineRow(unitID: string | null, protocolID: string | null): MJMLTrainingPipelineEntityServer {
+  const row = Object.create(MJMLTrainingPipelineEntityServer.prototype) as MJMLTrainingPipelineEntityServer;
+  defineMembers(row, {
+    IsSaved: false, Name: 'p', PredictionUnitID: unitID, EvaluationProtocolID: protocolID, LeakageGuard: null, SourceBindings: null, TargetEntityID: null,
+  }, 'U-1', 'provider');
+  return row;
 }
 
 describe('MJMLTrainingPipelineEntityServer.ValidateAsync (a failed read of the bound unit or protocol)', () => {
@@ -204,77 +273,167 @@ describe('MJMLTrainingPipelineEntityServer.ValidateAsync (a failed read of the b
   });
   it('reports a failed Prediction Unit read as a failed read, never as "not found"', async () => {
     serveRunViews(() => ({ Success: false, Results: [], ErrorMessage: 'timeout' }));
-    const result = await newPipelineRow('U-9', null).ValidateAsync();
+    const result = await newPipelineRow(UNIT_ID, null).ValidateAsync();
     expect(result.Success).toBe(false);
-    expect(result.Errors.map((e) => [e.Source, e.Message])).toEqual([['PredictionUnitID', 'Reading Prediction Unit U-9 failed: timeout']]);
+    expect(result.Errors.map((e) => [e.Source, e.Message])).toEqual([['PredictionUnitID', `Reading Prediction Unit ${UNIT_ID} failed: timeout`]]);
   });
   it('reports a failed Evaluation Protocol read as a failed read, never as "not found"', async () => {
     const unit = unitRowFixture();
     serveRunViews((entity) => (entity === 'MJ: Prediction Units' ? { Success: true, Results: [unit] } : { Success: false, Results: [], ErrorMessage: 'timeout' }));
-    const result = await newPipelineRow('U-9', 'P-9').ValidateAsync();
+    const result = await newPipelineRow(UNIT_ID, PROTOCOL_ID).ValidateAsync();
     expect(result.Success).toBe(false);
-    expect(result.Errors.map((e) => [e.Source, e.Message])).toEqual([['EvaluationProtocolID', 'Reading Evaluation Protocol P-9 failed: timeout']]);
+    expect(result.Errors.map((e) => [e.Source, e.Message])).toEqual([['EvaluationProtocolID', `Reading Evaluation Protocol ${PROTOCOL_ID} failed: timeout`]]);
   });
   it('still reports an absent unit as not found', async () => {
     serveRunViews(() => ({ Success: true, Results: [] }));
-    const result = await newPipelineRow('U-9', null).ValidateAsync();
-    expect(result.Errors.map((e) => [e.Source, e.Message])).toEqual([['PredictionUnitID', 'Prediction Unit U-9 was not found']]);
+    const result = await newPipelineRow(UNIT_ID, null).ValidateAsync();
+    expect(result.Errors.map((e) => [e.Source, e.Message])).toEqual([['PredictionUnitID', `Prediction Unit ${UNIT_ID} was not found`]]);
+  });
+  it('reads the bound rows as the user the save is attributed to: the provider\'s user when no context user is set', async () => {
+    const readAs: (string | undefined)[] = [];
+    serveRunViews((_entity, userID) => {
+      readAs.push(userID);
+      return { Success: true, Results: [] };
+    });
+    await newPipelineRow(UNIT_ID, PROTOCOL_ID).ValidateAsync();
+    expect(readAs).toEqual(['U-1', 'U-1']);
   });
 });
 
-describe('MJMLTrainingPipelineEntityServer.ValidateAsync (rebinding a pipeline to another protocol lineage)', () => {
+describe('MJMLTrainingPipelineEntityServer.ValidateAsync (a bound protocol with no unit)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
   const draft = EvaluationProtocolRules.DefaultEvaluationProtocolDraft({ Unit: countUnit, Holdout: seeded, Candidates: 1, Seed: 0, Name: 'p' });
-  const bound = EvaluationProtocolRules.EvaluationProtocolColumnsFromDraft(draft, { ID: 'P-1', LineageRootID: 'P-1', Version: 1, AuthoredBy: human });
-  const relaxedBy = (author: Actor, id = 'Q-1', lineageRootId = id): EvaluationProtocolColumns => EvaluationProtocolRules.EvaluationProtocolColumnsFromDraft(
+  const protocol = EvaluationProtocolRules.EvaluationProtocolColumnsFromDraft(draft, { ID: PROTOCOL_ID, LineageRootID: PROTOCOL_ID, Version: 1, AuthoredBy: human });
+  const errorsOf = (result: ValidationResult): string[][] => result.Errors.map((e) => [e.Source, e.Message]);
+
+  it('refuses a malformed protocol ID (and a malformed unit ID) without reading anything', async () => {
+    const reads: string[] = [];
+    serveRunViews((entity) => {
+      reads.push(entity);
+      return { Success: true, Results: [] };
+    });
+    expect(errorsOf(await newPipelineRow(null, 'not-a-uuid').ValidateAsync())).toEqual([['EvaluationProtocolID', 'EvaluationProtocolID "not-a-uuid" is not a valid ID']]);
+    expect(errorsOf(await newPipelineRow('U-9', PROTOCOL_ID).ValidateAsync())).toEqual([['PredictionUnitID', 'PredictionUnitID "U-9" is not a valid ID']]);
+    expect(reads).toEqual([]);
+  });
+  it('reports an absent protocol as not found, and a failed read as a failed read', async () => {
+    serveRunViews(() => ({ Success: true, Results: [] }));
+    expect(errorsOf(await newPipelineRow(null, PROTOCOL_ID).ValidateAsync())).toEqual([['EvaluationProtocolID', `Evaluation Protocol ${PROTOCOL_ID} was not found`]]);
+    vi.restoreAllMocks();
+    serveRunViews(() => ({ Success: false, Results: [], ErrorMessage: 'timeout' }));
+    expect(errorsOf(await newPipelineRow(null, PROTOCOL_ID).ValidateAsync())).toEqual([['EvaluationProtocolID', `Reading Evaluation Protocol ${PROTOCOL_ID} failed: timeout`]]);
+  });
+  it('refuses a protocol that does not parse, and saves one that does', async () => {
+    serveRunViews(() => ({ Success: true, Results: [{ ...protocol, Holdout: '{"kind":"sideways"}' }] }));
+    const unparseable = errorsOf(await newPipelineRow(null, PROTOCOL_ID).ValidateAsync());
+    expect(unparseable.map(([source]) => source)).toEqual(['EvaluationProtocolID']);
+    expect(unparseable[0][1]).toMatch(new RegExp(`^Evaluation Protocol ${PROTOCOL_ID} does not parse: `));
+    vi.restoreAllMocks();
+    serveRunViews(() => ({ Success: true, Results: [protocol] }));
+    const result = await newPipelineRow(null, PROTOCOL_ID).ValidateAsync();
+    expect([result.Success, result.Errors]).toEqual([true, []]);
+  });
+});
+
+describe('MJMLTrainingPipelineEntityServer.ValidateAsync (rebinding a pipeline to another protocol)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+  const P1 = '0C000000-0000-4000-8000-000000000001';
+  const P2 = '0C000000-0000-4000-8000-000000000002';
+  const Q1 = '0D000000-0000-4000-8000-000000000001';
+  const draft = EvaluationProtocolRules.DefaultEvaluationProtocolDraft({ Unit: countUnit, Holdout: seeded, Candidates: 1, Seed: 0, Name: 'p' });
+  const bound = EvaluationProtocolRules.EvaluationProtocolColumnsFromDraft(draft, { ID: P1, LineageRootID: P1, Version: 1, AuthoredBy: human });
+  const humanOnly = { ...bound, GuardFieldsEditableBy: 'human-only' as const };
+  const relaxedBy = (author: Actor, id = Q1, lineageRootId = id): EvaluationProtocolColumns => EvaluationProtocolRules.EvaluationProtocolColumnsFromDraft(
     { ...draft, promotion: { ...draft.promotion, margin: EvaluationProtocol.ToNonNegative(0.5) } }, { ID: id, LineageRootID: lineageRootId, Version: lineageRootId === id ? 1 : 2, AuthoredBy: author },
   );
+  const agent: Actor = { kind: 'agent', agentRunId: 'AR-1' };
+  const errorsOf = (result: ValidationResult): string[][] => result.Errors.map((e) => [e.Source, e.Message]);
 
-  /** A saved pipeline (no unit) whose EvaluationProtocolID changes from `fromId` to `toId`; protocol rows are served by ID. */
-  function rebound(fromId: string, toId: string, rows: readonly EvaluationProtocolColumns[]): MJMLTrainingPipelineEntityServer {
+  /**
+   * A saved pipeline (no unit) whose EvaluationProtocolID changes from `fromId` to `toId`, saved by `savingUserId`
+   * (null: no user) from `source`; protocol rows are served by ID.
+   */
+  function rebound(fromId: string, toId: string, rows: readonly EvaluationProtocolColumns[], savingUserId: string | null = 'U-1', source: SavingUserSource = 'context'): MJMLTrainingPipelineEntityServer {
     const runView = async (p: RunViewParams) => ({ Success: true, Results: rows.filter((r) => String(p.ExtraFilter || '').includes(`'${r.ID}'`)) });
     // Test-double cast at the seam: the double implements only the RunView member the pipeline server calls.
     vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunView: runView } as unknown as RunView);
     const row = Object.create(MJMLTrainingPipelineEntityServer.prototype) as MJMLTrainingPipelineEntityServer;
-    const provider = { EntityByName: () => undefined, EntityByID: () => undefined, Entities: [] };
     const fields: Record<string, { Dirty: boolean; OldValue: string | null }> = { EvaluationProtocolID: { Dirty: true, OldValue: fromId } };
-    const members = {
+    defineMembers(row, {
       IsSaved: true, Name: 'p', PredictionUnitID: null, EvaluationProtocolID: toId, LeakageGuard: null, SourceBindings: null, TargetEntityID: null,
-      ProviderToUse: provider, ContextCurrentUser: { ID: 'U-1' }, GetFieldByName: (name: string) => fields[name] || { Dirty: false, OldValue: null },
-    };
-    for (const [name, value] of Object.entries(members)) {
-      Object.defineProperty(row, name, { value, writable: true, configurable: true });
-    }
+      GetFieldByName: (name: string) => fields[name] || { Dirty: false, OldValue: null },
+    }, savingUserId, source);
     return row;
   }
 
-  it('refuses a rebind to another lineage whose guard fields an agent tool call relaxed', async () => {
-    const result = await rebound('P-1', 'Q-1', [bound, relaxedBy({ kind: 'agent', agentRunId: 'AR-1' })]).ValidateAsync();
-    expect(result.Success).toBe(false);
-    expect(result.Errors.map((e) => [e.Source, e.Message])).toEqual([[
+  it('refuses a rebind to another lineage whose guard fields an agent tool call relaxed, naming the refused author', async () => {
+    expect(errorsOf(await rebound(P1, Q1, [bound, relaxedBy(agent)]).ValidateAsync())).toEqual([[
       'EvaluationProtocolID',
-      'Binding Evaluation Protocol Q-1 in place of P-1 (another lineage) changes the guard fields: An agent tool call cannot change the guard fields promotion; they are set in protocol configuration (UI, a non-agent API caller, a scheduled job or shipped metadata).',
+      `Binding Evaluation Protocol ${Q1} in place of ${P1} (another lineage) changes the guard fields promotion, which ${P1}'s GuardFieldsEditableBy "non-agent" lets any author but an agent tool call change; refused for the target protocol's author (agent).`,
     ]]);
   });
   it('allows a rebind to another lineage whose guard fields a scheduled job set, under non-agent', async () => {
-    const result = await rebound('P-1', 'Q-1', [bound, relaxedBy({ kind: 'scheduled-job', scheduledJobRunId: 'SJ-1' })]).ValidateAsync();
+    const result = await rebound(P1, Q1, [bound, relaxedBy({ kind: 'scheduled-job', scheduledJobRunId: 'SJ-1' })]).ValidateAsync();
     expect([result.Success, result.Errors]).toEqual([true, []]);
   });
-  it('leaves a rebind within the lineage to the version\'s own save-time rule', async () => {
-    const result = await rebound('P-1', 'P-2', [bound, relaxedBy({ kind: 'agent', agentRunId: 'AR-1' }, 'P-2', 'P-1')]).ValidateAsync();
+  it('refuses a rebind with no saving user under human-only, naming the rebinding actor', async () => {
+    expect(errorsOf(await rebound(P1, Q1, [humanOnly, relaxedBy(human)], null).ValidateAsync())).toEqual([[
+      'EvaluationProtocolID',
+      `Binding Evaluation Protocol ${Q1} in place of ${P1} (another lineage) changes the guard fields promotion, guardFieldsEditableBy, which ${P1}'s GuardFieldsEditableBy "human-only" lets only a user change; refused for the rebinding actor (system: ML Training Pipeline save with no user).`,
+    ]]);
+  });
+  it('allows a user to rebind under human-only to a protocol a user authored', async () => {
+    const result = await rebound(P1, Q1, [humanOnly, relaxedBy(human)]).ValidateAsync();
+    expect([result.Success, result.Errors]).toEqual([true, []]);
+  });
+  it('judges the rebind as the user the save is attributed to: the provider\'s user when no context user is set', async () => {
+    const result = await rebound(P1, Q1, [humanOnly, relaxedBy(human)], 'U-1', 'provider').ValidateAsync();
+    expect([result.Success, result.Errors]).toEqual([true, []]);
+  });
+  it('allows a forward move within the lineage (each version\'s own save checked its guard change)', async () => {
+    const result = await rebound(P1, P2, [bound, relaxedBy(agent, P2, P1)]).ValidateAsync();
+    expect([result.Success, result.Errors]).toEqual([true, []]);
+  });
+  it('refuses a downgrade to an earlier version of the lineage whose guard fields its author may not set under the later version', async () => {
+    const v1 = EvaluationProtocolRules.EvaluationProtocolColumnsFromDraft(draft, { ID: P1, LineageRootID: P1, Version: 1, AuthoredBy: { kind: 'scheduled-job', scheduledJobRunId: 'SJ-1' } });
+    const v2 = EvaluationProtocolRules.EvaluationProtocolColumnsFromDraft(
+      { ...draft, guardFieldsEditableBy: 'human-only', promotion: { ...draft.promotion, margin: EvaluationProtocol.ToNonNegative(0.05) } },
+      { ID: P2, LineageRootID: P1, Version: 2, AuthoredBy: human },
+    );
+    expect(errorsOf(await rebound(P2, P1, [v1, v2]).ValidateAsync())).toEqual([[
+      'EvaluationProtocolID',
+      `Binding Evaluation Protocol ${P1} in place of ${P2} (a downgrade from version 2 to version 1 of the same lineage) changes the guard fields promotion, guardFieldsEditableBy, which ${P2}'s GuardFieldsEditableBy "human-only" lets only a user change; refused for the target protocol's author (scheduled-job).`,
+    ]]);
+  });
+  it('allows a downgrade whose guard fields are unchanged, even to a version an agent tool call authored', async () => {
+    const v1 = { ...bound, AuthoredBy: JSON.stringify(agent) };
+    const v2 = { ...bound, ID: P2, Version: 2, Name: 'renamed' };
+    const result = await rebound(P2, P1, [v1, v2]).ValidateAsync();
     expect([result.Success, result.Errors]).toEqual([true, []]);
   });
 });
 
 /** A unit row (any parseable shape): the protocol read fails before the unit is parsed. */
 function unitRowFixture(): { ID: string } {
-  return { ID: 'U-9' };
+  return { ID: UNIT_ID };
+}
+
+/** The members a Save override reads: the row identity, plus what a refusal records (entity name, result history). */
+interface SaveDoubleMembers {
+  IsSaved: boolean;
+  Version: number;
+  ID: string;
+  LineageRootID: string;
+  EntityInfo?: { Name: string };
+  _resultHistory?: BaseEntityResult[];
 }
 
 /** A server entity object with only the members the Save override reads, so no database or metadata is needed. */
-function newRowOf<T extends object>(ctor: { prototype: T }, members: { IsSaved: boolean; Version: number; ID: string; LineageRootID: string }): T {
+function newRowOf<T extends object>(ctor: { prototype: T }, members: SaveDoubleMembers): T {
   const row = Object.create(ctor.prototype) as T;
   for (const [name, value] of Object.entries(members)) {
     Object.defineProperty(row, name, { value, writable: true, configurable: true });
@@ -314,6 +473,39 @@ describe.each(versionedRowClasses)('%s Save adopts the lineage root', (_name, ct
     const saved = newRowOf(ctor, { IsSaved: true, Version: 1, ID: 'ID-4', LineageRootID: 'ROOT' });
     expect(await saved.Save()).toBe(true);
     expect(saved.LineageRootID).toBe('ROOT');
+  });
+});
+
+/** An immutable-version server row class: the members its Save override reads and records. */
+type ImmutableRowClass = { prototype: { IsSaved: boolean; Save(options?: EntitySaveOptions): Promise<boolean>; readonly LatestResult: BaseEntityResult | null } };
+const immutableRowClasses: readonly (readonly [string, ImmutableRowClass])[] = [
+  ['MJ: Prediction Units', MJPredictionUnitEntityServer],
+  ['MJ: Evaluation Protocols', MJEvaluationProtocolEntityServer],
+  ['MJ: Training Snapshots', MJTrainingSnapshotEntityServer],
+];
+
+describe.each(immutableRowClasses)('%s Save with ReplayOnly (which skips Validate but still writes)', (entityName, ctor) => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+  const replayOnly = Object.assign(new EntitySaveOptions(), { ReplayOnly: true });
+  const rowOf = (isSaved: boolean) => newRowOf(ctor, { IsSaved: isSaved, Version: 2, ID: 'ID-1', LineageRootID: 'ROOT', EntityInfo: { Name: entityName }, _resultHistory: [] });
+
+  it('refuses a ReplayOnly save of a saved row without writing, and says why', async () => {
+    const baseSave = vi.spyOn(BaseEntity.prototype, 'Save').mockResolvedValue(true);
+    const saved = rowOf(true);
+    expect(await saved.Save(replayOnly)).toBe(false);
+    expect(baseSave).not.toHaveBeenCalled();
+    expect([saved.LatestResult?.Success, saved.LatestResult?.Type, saved.LatestResult?.CompleteMessage]).toEqual([
+      false, 'update',
+      `${entityName} rows are immutable once saved; a ReplayOnly save of a saved row is refused, because ReplayOnly skips the validation that refuses the update but still writes.`,
+    ]);
+  });
+  it('passes a ReplayOnly insert, and an ordinary save of a saved row, to the base save', async () => {
+    const baseSave = vi.spyOn(BaseEntity.prototype, 'Save').mockResolvedValue(true);
+    expect(await rowOf(false).Save(replayOnly)).toBe(true);
+    expect(await rowOf(true).Save()).toBe(true);
+    expect(baseSave).toHaveBeenCalledTimes(2);
   });
 });
 

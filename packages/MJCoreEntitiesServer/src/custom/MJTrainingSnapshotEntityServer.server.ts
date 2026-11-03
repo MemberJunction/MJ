@@ -1,4 +1,4 @@
-import { BaseEntity, type ValidationResult } from '@memberjunction/core';
+import { BaseEntity, type EntitySaveOptions, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import { VersionedRowGuard } from './MJPredictionUnitEntityServer.server';
@@ -6,7 +6,7 @@ import { VersionedRowGuard } from './MJPredictionUnitEntityServer.server';
 /** The snapshot columns the row check reads: the read-complete flag and the five content hashes. */
 export type SnapshotHashFields = Pick<MJTrainingSnapshotEntity, 'ReadComplete' | 'ContentHash' | 'MatrixSha256' | 'RowManifestSha256' | 'ProvenanceSha256' | 'FeatureSchemaHash'>;
 
-/** `MJ: Training Snapshots`: written once by the snapshot builder, never updated. */
+/** `MJ: Training Snapshots`: written once by the snapshot builder, never updated, by an ordinary save or by a `ReplayOnly` one. */
 @RegisterClass(BaseEntity, 'MJ: Training Snapshots')
 export class MJTrainingSnapshotEntityServer extends MJTrainingSnapshotEntity {
   private static readonly SHA256_HEX = /^[0-9a-f]{64}$/;
@@ -26,5 +26,10 @@ export class MJTrainingSnapshotEntityServer extends MJTrainingSnapshotEntity {
 
   public override Validate(): ValidationResult {
     return VersionedRowGuard.AddProblems(this, super.Validate(), 'ContentHash', 'ContentHash', () => MJTrainingSnapshotEntityServer.GetTrainingSnapshotRowProblems(this));
+  }
+
+  /** A `ReplayOnly` save of a saved snapshot is refused: it skips {@link Validate}, which refuses the update, but still writes. */
+  public override async Save(options?: EntitySaveOptions): Promise<boolean> {
+    return VersionedRowGuard.SaveRefusingSavedRowReplay(this, options, () => super.Save(options));
   }
 }

@@ -1,5 +1,5 @@
-import { BaseEntity, EntityInfo, IEntityDataProvider, IMetadataProvider, LogStatus, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
-import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { BaseEntity, EntityInfo, IEntityDataProvider, IMetadataProvider, LogStatus, UserInfo, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
+import { EscapeSQLString, IsValidUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import { VersionedRowGuard, type RowRead } from './MJPredictionUnitEntityServer.server';
 import {
@@ -10,6 +10,8 @@ import {
     TaskTypeRules,
     validateLeakageGuard,
     DOMINANCE_THRESHOLD_DEFAULT,
+    type Actor,
+    type GuardFieldsEditableBy,
     type LeakageGuard,
     type LeakageGuardIssue,
     type LeakageGuardValidationContext,
@@ -38,6 +40,11 @@ export interface PipelineUnitFacts { readonly TaskType: string; readonly RowEnti
  * no real column, reaches the database. The rules themselves live in
  * `@memberjunction/predictive-studio-core` so the editor can apply the identical
  * checks at input time without the two ever drifting apart.
+ *
+ * It also checks the bound Prediction Unit and Evaluation Protocol (each bound ID is a well-formed ID of a row that
+ * exists and parses; the unit's rules apply only when a unit is bound) and holds a protocol rebind to the guard-field
+ * rule ({@link GetProtocolRebindProblem}). The reads run as the user the save is attributed to; see
+ * {@link VersionedRowGuard} for why that is `ActiveUser`.
  */
 @RegisterClass(BaseEntity, 'MJ: ML Training Pipelines')
 export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity {
@@ -51,9 +58,23 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
         if (!result.Success) return result;
 
         await this.runLeakageGuardCheck(result);
-        if (this.needsUnitProtocolCheck()) await this.checkUnitAndProtocol(result);
-        await this.checkProtocolRebind(result);
+        if (this.needsUnitProtocolCheck()) await this.checkBindings(result);
         return result;
+    }
+
+    /**
+     * The bound unit and protocol checks, then the rebind check against the protocol they read (a rebind changes
+     * `EvaluationProtocolID`, so it always comes with these checks, and the new protocol is read once).
+     */
+    private async checkBindings(result: ValidationResult): Promise<void> {
+        if (!this.PredictionUnitID && !this.EvaluationProtocolID) return;
+        const provider = this.ProviderToUse;
+        if (!VersionedRowGuard.IsMetadataProvider(provider)) {
+            LogStatus(`MJMLTrainingPipelineEntityServer: the provider is not a metadata provider, so the Prediction Unit, Evaluation Protocol and protocol rebind checks were skipped for pipeline "${this.Name}"`);
+            return;
+        }
+        const boundProtocol = await this.checkUnitAndProtocol(result, provider);
+        if (boundProtocol !== null) await this.checkProtocolRebind(result, provider, boundProtocol);
     }
 
     /**
@@ -71,7 +92,7 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
         this.applyIssues(result, issues);
     }
 
-    /** Whether the unit and protocol agreement needs re-checking: on insert, or when any column it reads changes. */
+    /** Whether the unit and protocol (and a protocol rebind) need re-checking: on insert, or when any column they read changes. */
     private needsUnitProtocolCheck(): boolean {
         if (!this.IsSaved) return true;
         return ['PredictionUnitID', 'EvaluationProtocolID', 'TargetEntityID', 'ProblemType', 'TargetVariable']
@@ -224,27 +245,57 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
      */
     public static GetProtocolUnitProblems(protocol: EvaluationProtocolColumns, unit: PredictionUnitSpec): string[] {
         const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(protocol);
-        if (parsed.Ok === false) return [`Evaluation Protocol ${protocol.ID} does not parse: ${parsed.Errors.join('; ')}`];
+        if (parsed.Ok === false) return [MJMLTrainingPipelineEntityServer.unparseableProtocol(protocol, parsed.Errors)];
         return EvaluationProtocolRules.ValidateProtocolForUnit(parsed.Value, unit).map((r) => EvaluationProtocolRules.DescribeProtocolRefusal(r));
     }
 
-    private async checkUnitAndProtocol(result: ValidationResult): Promise<void> {
+    /** The refusal for a protocol row that does not parse. */
+    private static unparseableProtocol(protocol: EvaluationProtocolColumns, errors: readonly string[]): string {
+        return `Evaluation Protocol ${protocol.ID} does not parse: ${errors.join('; ')}`;
+    }
+
+    /**
+     * The bound unit and protocol: each bound ID must be a well-formed ID of a row that is read and exists, and a bound
+     * protocol must parse, with or without a unit. With a unit, the unit must parse, the legacy columns must agree with
+     * it and the protocol must fit it. Returns the bound protocol row when it was read and parses (the rebind check
+     * compares it), else null; every refusal is recorded on `result`.
+     */
+    private async checkUnitAndProtocol(result: ValidationResult, provider: IEntityDataProvider & IMetadataProvider): Promise<EvaluationProtocolColumns | null> {
         const unitID = this.PredictionUnitID;
-        if (!unitID) return;
-        const provider = this.ProviderToUse;
-        if (!VersionedRowGuard.IsMetadataProvider(provider)) {
-            LogStatus(`MJMLTrainingPipelineEntityServer: the provider is not a metadata provider, so the Prediction Unit and Evaluation Protocol checks were skipped for pipeline "${this.Name}"`);
-            return;
+        const protocolID = this.EvaluationProtocolID;
+        if (!this.boundIDsWellFormed(result, unitID, protocolID)) return null;
+        const { Unit: unitRead, Protocol: protocolRead } = await this.loadUnitAndProtocol(provider, unitID, protocolID);
+        const unitRow = unitRead === null ? null : this.readRowOrFail(result, 'PredictionUnitID', `Prediction Unit ${unitID}`, unitRead);
+        if (unitRead !== null && !unitRow) return null;
+        const protocol = protocolRead === null ? null : this.readRowOrFail(result, 'EvaluationProtocolID', `Evaluation Protocol ${protocolID}`, protocolRead);
+        if (protocolRead !== null && !protocol) return null;
+        const unit = unitRow === null ? null : this.checkUnitRow(result, provider, unitRow);
+        if (protocol === null || !this.protocolParses(result, protocol)) return null;
+        if (unit !== null) {
+            for (const problem of MJMLTrainingPipelineEntityServer.GetProtocolUnitProblems(protocol, unit)) {
+                VersionedRowGuard.Fail(result, 'EvaluationProtocolID', problem);
+            }
         }
-        const { Unit: unitRead, Protocol: protocolRead } = await this.loadUnitAndProtocol(provider, unitID, this.EvaluationProtocolID);
-        const unitRow = this.readRowOrFail(result, 'PredictionUnitID', `Prediction Unit ${unitID}`, unitRead);
-        if (!unitRow) return;
-        const protocol = protocolRead === null ? null : this.readRowOrFail(result, 'EvaluationProtocolID', `Evaluation Protocol ${this.EvaluationProtocolID}`, protocolRead);
-        if (protocolRead !== null && !protocol) return;
+        return protocol;
+    }
+
+    /**
+     * Whether every bound ID is a well-formed ID; each malformed one is recorded. Checked before reading, so a malformed
+     * ID is refused in words rather than surfacing as the database's conversion error.
+     */
+    private boundIDsWellFormed(result: ValidationResult, unitID: string | null, protocolID: string | null): boolean {
+        const bound: readonly (readonly [string, string | null])[] = [['PredictionUnitID', unitID], ['EvaluationProtocolID', protocolID]];
+        const malformed = bound.filter(([, id]) => !!id && !IsValidUUID(id));
+        for (const [field, id] of malformed) VersionedRowGuard.Fail(result, field, `${field} "${id}" is not a valid ID`);
+        return malformed.length === 0;
+    }
+
+    /** The bound unit's parsed form, with the legacy columns' disagreements recorded; null (recorded) when it does not parse. */
+    private checkUnitRow(result: ValidationResult, provider: IMetadataProvider, unitRow: PredictionUnitColumns): PredictionUnitSpec | null {
         const spec = PredictionUnit.ParsePredictionUnitRow(unitRow);
         if (spec.Ok === false) {
-            VersionedRowGuard.Fail(result, 'PredictionUnitID', `Prediction Unit ${unitID} does not parse: ${spec.Errors.join('; ')}`);
-            return;
+            VersionedRowGuard.Fail(result, 'PredictionUnitID', `Prediction Unit ${this.PredictionUnitID} does not parse: ${spec.Errors.join('; ')}`);
+            return null;
         }
         const rowEntityName = PredictionUnit.UnitRowEntityName(spec.Value.rows);
         const facts: PipelineUnitFacts = {
@@ -255,24 +306,31 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
         for (const problem of MJMLTrainingPipelineEntityServer.GetPipelineUnitProblems(this, facts)) {
             VersionedRowGuard.Fail(result, 'PredictionUnitID', problem);
         }
-        if (!protocol) return;
-        for (const problem of MJMLTrainingPipelineEntityServer.GetProtocolUnitProblems(protocol, spec.Value)) {
-            VersionedRowGuard.Fail(result, 'EvaluationProtocolID', problem);
-        }
+        return spec.Value;
+    }
+
+    /** Whether the bound protocol row parses; the refusal is recorded when it does not. */
+    private protocolParses(result: ValidationResult, protocol: EvaluationProtocolColumns): boolean {
+        const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(protocol);
+        if (parsed.Ok === false) VersionedRowGuard.Fail(result, 'EvaluationProtocolID', MJMLTrainingPipelineEntityServer.unparseableProtocol(protocol, parsed.Errors));
+        return parsed.Ok === true;
     }
 
     /**
      * Reads the bound unit row and the bound protocol row (every column of each, for the parsers), in parallel, as
-     * plain rows (nothing is mutated). A failed read carries its error, so it is never reported as "not found".
+     * plain rows (nothing is mutated), each only when bound. A failed read carries its error, so it is never reported as
+     * "not found".
      */
     private async loadUnitAndProtocol(
         provider: IEntityDataProvider & IMetadataProvider,
-        unitID: string,
+        unitID: string | null,
         protocolID: string | null,
-    ): Promise<{ Unit: RowRead<PredictionUnitColumns>; Protocol: RowRead<EvaluationProtocolColumns> | null }> {
-        const user = this.ContextCurrentUser;
+    ): Promise<{ Unit: RowRead<PredictionUnitColumns> | null; Protocol: RowRead<EvaluationProtocolColumns> | null }> {
+        const user = this.ActiveUser;
         const [unit, protocol] = await Promise.all([
-            VersionedRowGuard.ReadOneRow<PredictionUnitColumns>(provider, 'MJ: Prediction Units', `ID='${EscapeSQLString(unitID)}'`, user),
+            unitID
+                ? VersionedRowGuard.ReadOneRow<PredictionUnitColumns>(provider, 'MJ: Prediction Units', `ID='${EscapeSQLString(unitID)}'`, user)
+                : null,
             protocolID
                 ? VersionedRowGuard.ReadOneRow<EvaluationProtocolColumns>(provider, 'MJ: Evaluation Protocols', `ID='${EscapeSQLString(protocolID)}'`, user)
                 : null,
@@ -281,49 +339,86 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
     }
 
     /**
-     * Rebinding a saved pipeline from one protocol to a protocol of another lineage changes the guard fields the
-     * pipeline trains under without saving a version of the bound lineage, so it is held to the same rule: when the
-     * guard fields differ, the new protocol's author must be one the previous protocol's `GuardFieldsEditableBy`
-     * allows (never an agent tool call; under `human-only`, only a user). A rebind within the lineage needs no check:
-     * the version's own save applied the rule.
+     * Moving a saved pipeline from one protocol to another changes the guard fields it trains under without saving a
+     * version of the bound lineage, so the move is held to the guard-field rule ({@link GetProtocolRebindProblem}).
+     * `to` is the new protocol as {@link checkUnitAndProtocol} read and parsed it; the previous one is read here.
+     *
+     * Two moves pass this check by construction (owner flag vvv): an agent acting through its human user's session
+     * saves as that user, so it is indistinguishable from the user here; and an unbind to no protocol followed by a
+     * bind is two saves, neither of which moves from one protocol to another.
      */
-    private async checkProtocolRebind(result: ValidationResult): Promise<void> {
+    private async checkProtocolRebind(result: ValidationResult, provider: IMetadataProvider, to: EvaluationProtocolColumns): Promise<void> {
         if (!this.IsSaved) return;
         const field = this.GetFieldByName('EvaluationProtocolID');
         const fromID: string | null = field?.Dirty === true ? field.OldValue : null;
-        const toID = this.EvaluationProtocolID;
-        if (!fromID || !toID || UUIDsEqual(fromID, toID)) return;
-        const provider = this.ProviderToUse;
-        if (!VersionedRowGuard.IsMetadataProvider(provider)) {
-            LogStatus(`MJMLTrainingPipelineEntityServer: the provider is not a metadata provider, so the protocol rebind check was skipped for pipeline "${this.Name}"`);
-            return;
-        }
-        const user = this.ContextCurrentUser;
-        const [fromRead, toRead] = await Promise.all([
-            VersionedRowGuard.ReadOneRow<EvaluationProtocolColumns>(provider, 'MJ: Evaluation Protocols', `ID='${EscapeSQLString(fromID)}'`, user),
-            VersionedRowGuard.ReadOneRow<EvaluationProtocolColumns>(provider, 'MJ: Evaluation Protocols', `ID='${EscapeSQLString(toID)}'`, user),
-        ]);
+        if (!fromID || UUIDsEqual(fromID, this.EvaluationProtocolID)) return;
+        const user = this.ActiveUser;
+        const fromRead = await VersionedRowGuard.ReadOneRow<EvaluationProtocolColumns>(provider, 'MJ: Evaluation Protocols', `ID='${EscapeSQLString(fromID)}'`, user);
         const from = this.readRowOrFail(result, 'EvaluationProtocolID', `Evaluation Protocol ${fromID}`, fromRead);
-        const to = this.readRowOrFail(result, 'EvaluationProtocolID', `Evaluation Protocol ${toID}`, toRead);
-        if (!from || !to || UUIDsEqual(from.LineageRootID, to.LineageRootID)) return;
-        const problem = MJMLTrainingPipelineEntityServer.GetProtocolRebindProblem(from, to);
+        if (!from) return;
+        const problem = MJMLTrainingPipelineEntityServer.GetProtocolRebindProblem(from, to, MJMLTrainingPipelineEntityServer.RebindingActor(user));
         if (problem !== null) VersionedRowGuard.Fail(result, 'EvaluationProtocolID', problem);
     }
 
+    /** The `system` component named for a rebind saved with no user. */
+    private static readonly NO_USER_COMPONENT = 'ML Training Pipeline save with no user';
+
     /**
-     * Why a pipeline may not move from protocol `from` to protocol `to` of another lineage: the guard fields differ and
-     * `to`'s author may not change them under `from`'s `GuardFieldsEditableBy`; or why either row does not parse.
-     * Null when the move is allowed. Pure.
+     * Who performs a rebind: the user the save is attributed to, as a `human` actor; with no user, a `system` actor. An
+     * agent acting through its human user's session is that user here (owner flag vvv). Pure.
      */
-    public static GetProtocolRebindProblem(from: EvaluationProtocolColumns, to: EvaluationProtocolColumns): string | null {
+    public static RebindingActor(user: Pick<UserInfo, 'ID'> | null | undefined): Actor {
+        return user ? { kind: 'human', userId: user.ID } : { kind: 'system', component: MJMLTrainingPipelineEntityServer.NO_USER_COMPONENT };
+    }
+
+    /**
+     * Why a pipeline may not move from protocol `from` to protocol `to`; null when it may. Pure.
+     *
+     * - A forward move within one lineage (`to.Version > from.Version`) is allowed: each later version's own save
+     *   checked its guard-field change against the version before it.
+     * - A backward move within one lineage (a downgrade) and any move to another lineage, when the guard fields differ
+     *   ({@link EvaluationProtocolRules.ChangedGuardFields}), is allowed only when both `to`'s author and the rebinding
+     *   actor may change guard fields under `from`'s `GuardFieldsEditableBy`
+     *   ({@link EvaluationProtocolRules.MayEditGuardFields}). The author alone is not enough: it is who wrote `to`, not
+     *   who is moving the pipeline onto it.
+     * - Either row not parsing is a refusal.
+     *
+     * @param rebinder who performs the move ({@link RebindingActor})
+     */
+    public static GetProtocolRebindProblem(from: EvaluationProtocolColumns, to: EvaluationProtocolColumns, rebinder: Actor): string | null {
         const previous = EvaluationProtocol.ParseEvaluationProtocolRow(from);
-        if (previous.Ok === false) return `Evaluation Protocol ${from.ID} does not parse: ${previous.Errors.join('; ')}`;
+        if (previous.Ok === false) return MJMLTrainingPipelineEntityServer.unparseableProtocol(from, previous.Errors);
         const next = EvaluationProtocol.ParseEvaluationProtocolRow(to);
-        if (next.Ok === false) return `Evaluation Protocol ${to.ID} does not parse: ${next.Errors.join('; ')}`;
-        const refusals = EvaluationProtocolRules.ValidateEvaluationProtocol({ Protocol: next.Value, Previous: previous.Value, AuthoredBy: next.Value.authoredBy })
-            .filter((r) => r.Kind === 'guard-field-edited-by-disallowed-author');
-        if (refusals.length === 0) return null;
-        return `Binding Evaluation Protocol ${to.ID} in place of ${from.ID} (another lineage) changes the guard fields: ${EvaluationProtocolRules.DescribeProtocolRefusal(refusals[0])}`;
+        if (next.Ok === false) return MJMLTrainingPipelineEntityServer.unparseableProtocol(to, next.Errors);
+        const sameLineage = UUIDsEqual(from.LineageRootID, to.LineageRootID);
+        if (sameLineage && to.Version > from.Version) return null;
+        const changed = EvaluationProtocolRules.ChangedGuardFields(previous.Value, next.Value);
+        if (changed.length === 0) return null;
+        const setting = previous.Value.guardFieldsEditableBy;
+        const refused = [
+            ...(EvaluationProtocolRules.MayEditGuardFields(next.Value.authoredBy, setting) ? [] : [`the target protocol's author (${next.Value.authoredBy.kind})`]),
+            ...(EvaluationProtocolRules.MayEditGuardFields(rebinder, setting) ? [] : [`the rebinding actor (${MJMLTrainingPipelineEntityServer.describeActor(rebinder)})`]),
+        ];
+        if (refused.length === 0) return null;
+        const move = sameLineage ? `a downgrade from version ${from.Version} to version ${to.Version} of the same lineage` : 'another lineage';
+        return `Binding Evaluation Protocol ${to.ID} in place of ${from.ID} (${move}) changes the guard fields ${changed.join(', ')}, ` +
+            `which ${from.ID}'s GuardFieldsEditableBy "${setting}" lets ${MJMLTrainingPipelineEntityServer.describeEditors(setting)} change; ` +
+            `refused for ${refused.join(' and ')}.`;
+    }
+
+    /** Who may change guard fields under a setting, in words (the rule is {@link EvaluationProtocolRules.MayEditGuardFields}). */
+    private static describeEditors(setting: GuardFieldsEditableBy): string {
+        return setting === 'non-agent' ? 'any author but an agent tool call' : 'only a user';
+    }
+
+    /** An actor in a refusal: its kind, and the user or component it names. */
+    private static describeActor(actor: Actor): string {
+        switch (actor.kind) {
+            case 'human': return `user ${actor.userId}`;
+            case 'system': return `system: ${actor.component}`;
+            case 'agent': return `agent run ${actor.agentRunId}`;
+            case 'scheduled-job': return `scheduled job run ${actor.scheduledJobRunId}`;
+        }
     }
 
     /** The row a read returned; null with "Reading … failed" or "… was not found" recorded on `field`. */
