@@ -164,7 +164,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
     const bundles: Array<[string, NamedCheck[], number]> = [
         ['server-cache', ServerCacheChecks, 35],
         ['cache-immutability', CacheImmutabilityChecks, 15], // F1-F15 freeze-on-write runtime contract (IT81); F13/F14 cover review findings C1/C2, F15 covers M3 (dataset key collision)
-        ['client-cache', ClientCacheChecks, 14],
+        ['client-cache', ClientCacheChecks, 26],
         ['runquery-cache', RunQueryCacheChecks, 21], // Q11 (B46 category collision) + Q12 (B45 hit-vs-miss permission parity) added 2026-07-20; Q13–Q21 (query definition changes) added 2026-10-14
         // RLS1–RLS12 (rls-isolation.checks.ts) + KF1–KF6 (keyrowfilter.checks.ts, API-key row filters)
         // + RF1–RF3 (rolerowfilter.checks.ts, role filter edits) share one bundle
@@ -368,7 +368,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'chief-of-staff': 8,
         'ciphertext-cache': 5,
         'class-resolution': 5,
-        'client-cache': 14,
+        'client-cache': 26,
         'cloudflare-clef': 6,
         'codegen-determinism': 6,
         'communication': 5,
