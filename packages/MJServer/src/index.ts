@@ -10,10 +10,10 @@ import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunc
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { registerIntegrationCustomColumnPromoter, IntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
-import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, selectFieldsToMap } from './integration/EntityMapLifecycle.js';
+import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, SelectFieldsToMap } from './integration/EntityMapLifecycle.js';
 import { RSUPostRestartProgressSession } from './integration/RSUPostRestartProgress.js';
 import type { RSUPostRestartProgress } from './integration/RSUPostRestartProgress.js';
-import { IntrospectInCatalogScope } from './integration/PostRestartIntrospect.js';
+import { ResolvePostRestartFields, type IntrospectedSchema } from './integration/PostRestartIntrospect.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
 import cors from 'cors';
@@ -2059,28 +2059,33 @@ async function processRSUPendingWork(): Promise<void> {
       const rvPending = new RunView();
       const sourceObjectFields: Record<string, string[] | null> = item.SourceObjectFields ?? {};
 
-      // Introspect schema ONCE for the entire connector, then reuse per object.
+      // Resolve every object's fields ONCE, then reuse per object.
       //
-      // IN THE CONNECTION'S CATALOG SCOPE. This runs at process start, outside any request, so
-      // nothing upstream has entered a scope for it — and an unscoped catalog read falls back to
-      // the SHARED catalog by design. That would build these field maps from the connector's
-      // declared fields alone: every column this connection's own discovery sampled would get a
-      // table column from the RSU (built in scope, from the per-connection rows) but no field map,
-      // and its values would land in the overflow JSON instead of the column. Observed on the
-      // sandbox 2026-09-11: 487 declared fields, 556 per-connection — 69 columns that this read
-      // would have silently left unmapped. Entering the scope is not enough on a fresh process:
-      // IntrospectInCatalogScope loads the catalog and warms each object's fields first.
+      // From the connection's PERSISTED catalog first: its active field rows are what the RSU built
+      // the tables from, so the field maps match the columns that exist. The connector is
+      // introspected only for objects with no persisted fields, in the connection's catalog scope
+      // with those objects warm. Introspecting every object instead is a live re-discovery on a
+      // connector whose IntrospectSchema calls the vendor (NetForum: every object, at every restart).
+      // This runs at process start, outside any request, so the resolver enters the scope itself.
       const introspect = connector.IntrospectSchema.bind(connector) as
-        (ci: unknown, u: unknown) => Promise<{ Objects: Array<{ ExternalName: string; Fields: Array<{ Name: string; IsPrimaryKey?: boolean; IsRequired?: boolean }> }> }>;
-      const schema = await IntrospectInCatalogScope(
+        (ci: unknown, u: unknown) => Promise<IntrospectedSchema>;
+      const postRestartFields = await ResolvePostRestartFields(
         item.CompanyIntegrationID,
+        companyIntegration.IntegrationID,
         item.SourceObjectNames,
         () => introspect(companyIntegration, systemUser),
         systemUser,
       );
+      console.log(
+        `[RSU] Field maps for ${item.CompanyIntegrationID}: ${postRestartFields.PersistedCount} object(s) from the ` +
+        `persisted catalog, ${postRestartFields.Introspected.length} by introspection`
+      );
 
       const objectsToMap = item.SourceObjectNames.length;
       progress?.BeginEntityMaps(objectsToMap);
+      // Objects whose map ended with no field maps at all. A sync skips such a map (it cannot write
+      // a single column), so they are reported as failed here rather than as created.
+      const withoutFieldMaps: string[] = [];
 
       for (const objName of item.SourceObjectNames) {
         const tableName = objName.replace(/[^A-Za-z0-9_]/g, '_').toLowerCase();
@@ -2144,16 +2149,14 @@ async function processRSUPendingWork(): Promise<void> {
         }
 
         if (isNewMap) createdEntityMapIDs.push(entityMapID);
-        mappedObjectNames.add(objName);
 
         // Create field maps — filter by SourceObjectFields (null = all)
+        let noFieldMaps = false;
         try {
-          const sourceObj = schema.Objects.find(o => o.ExternalName.toLowerCase() === objName.toLowerCase());
-
           const selectedFields = sourceObjectFields[objName]; // null = all, string[] = specific
-          // Always maps the PRIMARY KEY, selected or not — see selectFieldsToMap for why identity
+          // Always maps the PRIMARY KEY, selected or not — see SelectFieldsToMap for why identity
           // cannot be left to the selection.
-          const fieldsToMap = selectFieldsToMap(sourceObj?.Fields ?? [], selectedFields);
+          const fieldsToMap = SelectFieldsToMap(postRestartFields.FieldsByObject.get(objName.toLowerCase()) ?? [], selectedFields);
 
           // Load existing field maps to avoid duplicates
           const existingFieldMaps = await rvPending.RunView<MJCompanyIntegrationFieldMapEntity>({
@@ -2181,19 +2184,47 @@ async function processRSUPendingWork(): Promise<void> {
             fieldMap.Direction = 'SourceToDest';
             fieldMap.Status = item.CreateDisabled ? 'Inactive' : 'Active';
             if (await fieldMap.Save()) fieldCount++;
+            else console.warn(`[RSU] Failed to save field map ${field.Name} for ${objName}: ${fieldMap.LatestResult?.CompleteMessage ?? 'unknown error'}`);
           }
           console.log(`[RSU] Created entity map for ${objName} → ${entity.Name} with ${fieldCount} field maps${isNewMap ? '' : ' (existing map, new fields only)'}`);
+          // A map with no field maps cannot write a single column: the sync skips it. Say so by
+          // name, instead of reporting it as a created map.
+          if (fieldCount === 0 && existingFieldNames.size === 0) {
+            noFieldMaps = true;
+            const why = fieldsToMap.length === 0
+              ? 'neither the persisted catalog nor introspection returned a field for it'
+              : `all ${fieldsToMap.length} of its field map save(s) failed`;
+            console.error(`[RSU] NO FIELD MAPS for ${objName} → ${entity.Name}: ${why}, so a sync cannot write this table.`);
+          }
         } catch (fieldErr) {
           console.warn(`[RSU] Field map creation failed for ${objName}: ${fieldErr}`);
         }
 
+        // Not counted as mapped: the stage reports it as failed, and a retry of this item retries it.
+        if (noFieldMaps) {
+          withoutFieldMaps.push(objName);
+          continue;
+        }
+        mappedObjectNames.add(objName);
         progress?.ObjectMapped(objName, mappedObjectNames.size, objectsToMap);
       }
 
       // The applied rollup for this half of the run, in OBJECTS. `mappedObjectNames` is the same set
       // the retry path narrows against, so what is reported succeeded here is exactly what a retry
       // would NOT redo.
-      progress?.CompleteEntityMaps(objectsToMap, mappedObjectNames.size, objectsToMap - mappedObjectNames.size);
+      //
+      // A map left with no field maps fails the stage, naming the objects: those tables exist and
+      // nothing can sync into them, and this stream is what the client is watching. The healthy
+      // maps still sync below.
+      if (withoutFieldMaps.length > 0) {
+        progress?.FailEntityMaps(
+          `${withoutFieldMaps.length} of ${objectsToMap} object(s) ended with no field maps, so a sync cannot ` +
+          `write their tables. Re-run discovery for this connection, then apply these objects again.`,
+          withoutFieldMaps
+        );
+      } else {
+        progress?.CompleteEntityMaps(objectsToMap, mappedObjectNames.size, objectsToMap - mappedObjectNames.size);
+      }
 
       // Remove-as-disable: entity maps whose object is NOT in this apply's selection
       // are disabled (data kept; re-selection re-enables). 'ignore' opts out for subset applies.
