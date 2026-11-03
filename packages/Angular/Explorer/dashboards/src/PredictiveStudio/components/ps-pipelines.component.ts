@@ -305,7 +305,9 @@ const PS_PIPELINES_STARTER_PROMPT =
                       </div>
                     </div>
                     <div style="display:flex; gap:6px;">
-                      <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-add-source" (click)="AddSource()"><i class="fa-solid fa-plus"></i> Add Source</button>
+                      @if (!IsUnitBound) {
+                        <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-add-source" (click)="AddSource()"><i class="fa-solid fa-plus"></i> Add Source</button>
+                      }
                       <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-add-step" (click)="AddStep()"><i class="fa-solid fa-sliders"></i> Add Step</button>
                     </div>
                   </div>
@@ -552,7 +554,9 @@ const PS_PIPELINES_STARTER_PROMPT =
                       <div class="canvas-bar">
                         <div class="canvas-bar-left">
                           <span class="ps-small ps-muted" style="font-weight:600">Add to Graph:</span>
-                          <button class="ps-pchip s" data-testid="ps-pipelines-add-source" (click)="AddSource()"><i class="fa-solid fa-database"></i> Source</button>
+                          @if (!IsUnitBound) {
+                            <button class="ps-pchip s" data-testid="ps-pipelines-add-source" (click)="AddSource()"><i class="fa-solid fa-database"></i> Source</button>
+                          }
                           <button class="ps-pchip f" data-testid="ps-pipelines-add-step" (click)="AddStep()"><i class="fa-solid fa-sliders"></i> Feature step</button>
                         </div>
                         <div class="canvas-bar-right">
@@ -645,12 +649,17 @@ const PS_PIPELINES_STARTER_PROMPT =
                       <button class="insp-collapse-btn" type="button" (click)="ToggleInspector()" title="Collapse inspector" aria-label="Collapse inspector">
                         <i class="fa-solid fa-chevron-right"></i>
                       </button>
-                      @if (SelectedNode.type === 'src' || SelectedNode.type === 'feat' || SelectedNode.type === 'emb') {
+                      @if ((SelectedNode.type === 'src' && !IsUnitBound) || SelectedNode.type === 'feat' || SelectedNode.type === 'emb') {
                         <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-delete" (click)="DeleteSelected()"><i class="fa-solid fa-trash"></i></button>
                       }
                     </div>
                     <div class="ps-card-body">
-                      @if (SelectedSource) {
+                      @if (SelectedSource && IsUnitBound) {
+                        <div class="ps-field"><label>Kind</label><span>{{ SelectedSource.Kind }}</span></div>
+                        <div class="ps-field"><label>Reference (entity / query / id)</label><span>{{ SelectedSource.Ref }}</span></div>
+                        <div class="ps-field"><label>Alias (optional)</label><span>{{ SelectedSource.Alias || '—' }}</span></div>
+                        <p class="ps-muted ps-small" data-testid="ps-pipelines-unit-source-note">{{ UnitSourceNote }}</p>
+                      } @else if (SelectedSource) {
                         <div class="ps-field"><label>Kind</label>
                           <select class="mj-input" [value]="SelectedSource.Kind" (change)="SetSourceKind(InputVal($event))">
                             @for (k of SourceKinds; track k) { <option [value]="k">{{ k }}</option> }
@@ -700,7 +709,11 @@ const PS_PIPELINES_STARTER_PROMPT =
                           @case ('vision-llm') { <div class="ps-field"><label>Image column</label><input class="mj-input" type="text" [value]="StepField('ImageColumn')" (input)="SetStepStr('ImageColumn', InputVal($event))" /></div> }
                         }
                       }
-                      @if (SelectedNode.type === 'target') {
+                      @if (SelectedNode.type === 'target' && IsUnitBound) {
+                        <div class="ps-field"><label>Target variable</label><span data-testid="ps-pipelines-target-variable">{{ EditTargetVariable }}</span></div>
+                        <div class="ps-field"><label>Problem type</label><span data-testid="ps-pipelines-problem-type">{{ EditProblemType }}</span></div>
+                        <p class="ps-muted ps-small" data-testid="ps-pipelines-unit-source-note">{{ UnitSourceNote }}</p>
+                      } @else if (SelectedNode.type === 'target') {
                         <div class="ps-field"><label>Target variable</label><input class="mj-input" type="text" [value]="EditTargetVariable" (input)="SetTargetVariable(InputVal($event))" /></div>
                         <div class="ps-field"><label>Problem type</label><select class="mj-input" [value]="EditProblemType" (change)="SetProblemType(InputVal($event))">@for (pt of ProblemTypes; track pt) { <option [value]="pt">{{ pt }}</option> }</select></div>
                       }
@@ -1690,6 +1703,22 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
 
   // ---- target / algorithm editing ----
 
+  /**
+   * Whether the selected pipeline is bound to a Prediction Unit. The unit then decides the target, the problem type and
+   * the rows: training replaces both target values with the unit's (training-engine.ts trainUnitPipeline), the server
+   * entity refuses a save whose values differ from it, and neither unit assembly nor unit scoring reads SourceBindings.
+   * So the editor shows those fields read-only and does not write them.
+   */
+  public get IsUnitBound(): boolean {
+    return !!this.SelectedPipeline?.PredictionUnitID;
+  }
+
+  /** The copy beside a unit-decided field, naming the unit. */
+  public get UnitSourceNote(): string {
+    const p = this.SelectedPipeline;
+    return `Set by the Prediction Unit "${p?.PredictionUnit || p?.PredictionUnitID || ''}": edit the unit to change it.`;
+  }
+
   public SetTargetVariable(v: string): void { this.EditTargetVariable = v; this.markDirty(); }
 
   public SetProblemType(v: string): void { this.EditProblemType = v as ProblemType; this.markDirty(); }
@@ -1790,10 +1819,12 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     }
     this.Busy = true;
     try {
-      p.SourceBindings = JSON.stringify(this.EditSources);
       p.FeatureSteps = JSON.stringify({ ...this.storedFeatureSteps, Steps: this.EditSteps });
-      p.TargetVariable = this.EditTargetVariable;
-      p.ProblemType = this.EditProblemType;
+      if (!this.IsUnitBound) {
+        p.SourceBindings = JSON.stringify(this.EditSources);
+        p.TargetVariable = this.EditTargetVariable;
+        p.ProblemType = this.EditProblemType;
+      }
       p.AlgorithmID = this.EditAlgorithmId;
       p.Hyperparameters = this.EditHyperparams || null;
       p.LeakageGuard = JSON.stringify(this.EditLeakage);

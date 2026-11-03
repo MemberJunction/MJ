@@ -424,3 +424,53 @@ describe('PSPipelinesComponent (DOM) — saving FeatureSteps', () => {
     expect(stored.FeatureSteps).toBe('{"Steps":[{"Id":"step_1","Kind":"select","Columns":["Tenure"]}]}');
   });
 });
+
+describe('PSPipelinesComponent (DOM) — what a Prediction Unit decides', () => {
+  const RULE = 'Renewed within 30 days of the decision';
+  const unitPipeline = () => makePipeline({ PredictionUnitID: 'u1', PredictionUnit: 'Renewal unit', TargetVariable: RULE, Save: vi.fn().mockResolvedValue(true) });
+  const freePipeline = () => makePipeline({ PredictionUnitID: null, PredictionUnit: null, Save: vi.fn().mockResolvedValue(true) });
+  const inspect = (fixture: ReturnType<typeof render>, id: string): HTMLElement | null => {
+    const node = query(fixture, `[data-node-id="${id}"]`);
+    if (!(node instanceof HTMLElement)) throw new Error(`no node ${id}`);
+    node.click();
+    fixture.detectChanges();
+    return query(fixture, '[data-testid="ps-pipelines-inspector"] .ps-card-body');
+  };
+  const NOTE = 'Set by the Prediction Unit "Renewal unit": edit the unit to change it.';
+
+  it('shows target variable, problem type and the source fields of a unit pipeline read-only, naming the unit as their source', () => {
+    const fixture = render([unitPipeline()], 'dag');
+    const target = inspect(fixture, '__target');
+    const targetView = [target?.querySelectorAll('input, select').length, query(fixture, '[data-testid="ps-pipelines-target-variable"]')?.textContent?.trim(),
+      query(fixture, '[data-testid="ps-pipelines-problem-type"]')?.textContent?.trim(), query(fixture, '[data-testid="ps-pipelines-unit-source-note"]')?.textContent?.trim()];
+    const source = inspect(fixture, 'src:0');
+    const sourceView = [source?.querySelectorAll('input, select').length, source?.textContent?.includes('Members'), query(fixture, '[data-testid="ps-pipelines-unit-source-note"]')?.textContent?.trim()];
+    expect([targetView, sourceView, queryAll(fixture, '[data-testid="ps-pipelines-add-source"]').length, query(fixture, '[data-testid="ps-pipelines-delete"]')])
+      .toEqual([[0, RULE, 'classification', NOTE], [0, true, NOTE], 0, null]);
+  });
+
+  it('does not write target variable, problem type or sources of a unit pipeline on save', async () => {
+    const stored = unitPipeline();
+    const sources = stored.SourceBindings;
+    const fixture = render([stored]);
+    const c = fixture.componentInstance;
+    c.SetTargetVariable('Lapsed');
+    c.SetProblemType('regression');
+    c.EditSources = [...c.EditSources, { Kind: 'Entity', Ref: 'Orders' }];
+    await c.save();
+    expect([stored.TargetVariable, stored.ProblemType, stored.SourceBindings]).toEqual([RULE, 'classification', sources]);
+  });
+
+  it('keeps target variable, problem type and sources editable and saved for a pipeline without a unit', async () => {
+    const stored = freePipeline();
+    const fixture = render([stored], 'dag');
+    const target = inspect(fixture, '__target');
+    const editable = [target?.querySelectorAll('input, select').length, query(fixture, '[data-testid="ps-pipelines-unit-source-note"]')];
+    const c = fixture.componentInstance;
+    c.SetTargetVariable('Lapsed');
+    c.SetProblemType('regression');
+    c.AddSource();
+    await c.save();
+    expect([editable, stored.TargetVariable, stored.ProblemType, JSON.parse(stored.SourceBindings ?? '[]').length]).toEqual([[2, null], 'Lapsed', 'regression', 2]);
+  });
+});
