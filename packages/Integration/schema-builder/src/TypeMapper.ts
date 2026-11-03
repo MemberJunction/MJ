@@ -77,7 +77,8 @@ export class TypeMapper {
       // resolveStringType's `> 0` test and silently yield NVARCHAR(255) — the NARROWEST column for a
       // field explicitly asked to be the widest. A primary key can never be unbounded (MAX is not
       // indexable), so it is clamped to the key ceiling instead; note Math.min would return -1 here,
-      // which is why this is a special case rather than a comparison.
+      // which is why this is a special case rather than a comparison. Where the key ceiling is
+      // effectively none (PostgreSQL), the dialect renders that width as its own unbounded type.
       if (maxLength === -1) {
         if (!field.IsPrimaryKey) return dialect.ResolveAbstractType({ type: 'text' });
         maxLength = dialect.MaxKeyStringLength;
@@ -119,10 +120,17 @@ export class TypeMapper {
   private boundedStringLength(field: SourceFieldInfo): number {
     const MIN_LENGTH = 255; // floor — a tiny field still gets a sane column
     const HEADROOM = 300; // generous additive buffer for values longer than the sample happened to see
+    // SQL Server's nvarchar(max) character count (2^30 - 1). A source that declares this width or more is
+    // describing an unbounded column in numbers (netFORUM reports nvarchar(max) as 2147483646), not a width.
+    const UNBOUNDED_DECLARED_LENGTH = 1073741823;
     // -1 is MAX/unbounded (the convention both dialects render as `(MAX)`), passed straight through
     // so the dialect resolves its own unbounded type. Without this it failed the `> 0` test and fell
     // to the 255 floor — i.e. asking for MAX produced the NARROWEST possible column.
     if (field.MaxLength === -1) return -1;
+    // A declared unbounded width is handed on as -1 too, unpadded. Adding HEADROOM to 2147483646 produced
+    // VARCHAR(2147483946), which no dialect can create (PostgreSQL caps VARCHAR(n) at 10485760), so the
+    // CREATE TABLE failed outright. As -1 each dialect picks its own unbounded type: TEXT / NVARCHAR(MAX).
+    if (field.MaxLength != null && field.MaxLength >= UNBOUNDED_DECLARED_LENGTH) return -1;
     const declared = field.MaxLength != null && field.MaxLength > 0 ? field.MaxLength : null;
     return declared == null ? MIN_LENGTH : Math.max(MIN_LENGTH, declared + HEADROOM);
   }

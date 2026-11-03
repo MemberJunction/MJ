@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { SQLDialect, type ResolveTypeOptions } from '@memberjunction/sql-dialect';
 import { TypeMapper } from '../TypeMapper.js';
 import type { SourceFieldInfo } from '../interfaces.js';
 
@@ -85,6 +86,53 @@ describe('TypeMapper', () => {
             // Math.min(-1, 450) is -1, so the cap had to special-case MAX rather than compare.
             const unboundedPk = MakeField({ MaxLength: -1, IsPrimaryKey: true });
             expect(mapper.MapSourceType('string', 'sqlserver', unboundedPk)).toBe('NVARCHAR(450)');
+        });
+
+        it('gives an unbounded PRIMARY-KEY column a type PostgreSQL can create', () => {
+            // PostgreSQL has no index-key string cap, so the clamp above lands on Number.MAX_SAFE_INTEGER;
+            // VARCHAR(9007199254740991) is not a type PostgreSQL accepts. TEXT is, and it is indexable there.
+            const unboundedPk = MakeField({ MaxLength: -1, IsPrimaryKey: true });
+            expect(mapper.MapSourceType('string', 'postgresql', unboundedPk)).toBe('TEXT');
+        });
+
+        it('renders a source width at or past nvarchar(max) as each dialect\'s unbounded type', () => {
+            // netFORUM reports nvarchar(max) as MaxLength 2147483646; SQL Server's own count is 1073741823.
+            // Padding that by the 300 headroom gave VARCHAR(2147483946) on PostgreSQL, which caps VARCHAR(n)
+            // at 10485760, so the CREATE TABLE failed ("syntax error at or near 2147483946").
+            for (const MaxLength of [2147483646, 1073741823]) {
+                const field = MakeField({ MaxLength });
+                expect(mapper.MapSourceType('string', 'sqlserver', field)).toBe('NVARCHAR(MAX)');
+                expect(mapper.MapSourceType('string', 'postgresql', field)).toBe('TEXT');
+                const pk = MakeField({ MaxLength, IsPrimaryKey: true });
+                expect(mapper.MapSourceType('string', 'sqlserver', pk)).toBe('NVARCHAR(450)');
+                expect(mapper.MapSourceType('string', 'postgresql', pk)).toBe('TEXT');
+            }
+        });
+
+        describe('what the sizing policy asks the dialect for', () => {
+            /** The ResolveAbstractType options a non-key `string` column of this declared width produces. */
+            function RequestedType(maxLength: number | null): ResolveTypeOptions[] {
+                const spy = vi.spyOn(SQLDialect.prototype, 'ResolveAbstractType');
+                try {
+                    mapper.MapSourceType('string', 'postgresql', MakeField({ MaxLength: maxLength }));
+                    return spy.mock.calls.map(([options]) => options);
+                } finally {
+                    spy.mockRestore();
+                }
+            }
+
+            it('hands a declared width at or past nvarchar(max) on as unbounded, never padded', () => {
+                // The dialect then picks its own unbounded type, rather than being handed a width no dialect renders.
+                expect(RequestedType(2147483646)).toEqual([{ type: 'text' }]);
+                expect(RequestedType(1073741823)).toEqual([{ type: 'text' }]);
+            });
+
+            it('keeps the headroom and floor for every narrower width', () => {
+                expect(RequestedType(100)).toEqual([{ type: 'string', maxLength: 400 }]);
+                expect(RequestedType(null)).toEqual([{ type: 'string', maxLength: 255 }]);
+                expect(RequestedType(-1)).toEqual([{ type: 'text' }]);
+                expect(RequestedType(1073741822)).toEqual([{ type: 'string', maxLength: 1073742122 }]);
+            });
         });
 
         it('should stay BOUNDED for a declared length comfortably under the ceiling (SQL Server)', () => {
