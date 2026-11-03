@@ -223,7 +223,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (465 classes)
+// @memberjunction/core-entities (466 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -552,6 +552,7 @@ import {
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
+    MJProjectEntityExtended,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
     MJQueryDependencyEntity,
@@ -1164,7 +1165,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (72 classes)
+// @memberjunction/core-entities-server (73 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1211,6 +1212,7 @@ import {
     MJMLTrainingPipelineEntityServer,
     MJMaterializedResultEntityServer,
     MJPredictionUnitEntityServer,
+    MJProjectEntityServer,
     MJQueryEntityServer,
     MJQuerySQLEntityServer,
     MJRecordChangeEntityServer,
@@ -1240,7 +1242,7 @@ import {
     QueryRefreshExtractionServerOperation,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (166 classes)
+// @memberjunction/core-actions (168 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1308,6 +1310,7 @@ import {
     GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
+    GetArchitectureDiagramReferenceAction,
     GetDefaultFormScaffoldForEntityAction,
     GetDownloadUrlAction,
     GetEntityDetailsAction,
@@ -1363,6 +1366,7 @@ import {
     ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
+    RenderArchitectureDiagramAction,
     ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
@@ -1878,6 +1882,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
+    MJProjectEntityExtended,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
     MJQueryDependencyEntity,
@@ -1886,11 +1891,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueryEntityExtended,
     MJQueryFieldEntity,
     MJQueryParameterEntity,
-    MJQueryPermissionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJQueryPermissionEntity,
     MJQuerySQLEntity,
     MJQueueEntity,
     MJQueueTaskEntity,
@@ -2090,11 +2095,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetJotFormStatisticsAction,
     GetJotFormSubmissionsAction,
     GetSingleGoogleFormsResponseAction,
-    GetSingleJotFormSubmissionAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetSingleJotFormSubmissionAction,
     GetSingleSurveyMonkeyResponseAction,
     GetSingleTypeformResponseAction,
     GetSurveyMonkeyDetailsAction,
@@ -2294,11 +2299,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     WorkflowAgentWriter,
     FormBuilderAgent,
     FormBuilderBuilderAgent,
-    FormBuilderDesignerAgent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    FormBuilderDesignerAgent,
     RecordProcessCancelRunServerOperation,
     RecordProcessGetRunStatusServerOperation,
     RecordProcessPauseRunServerOperation,
@@ -2393,6 +2398,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJMLTrainingPipelineEntityServer,
     MJMaterializedResultEntityServer,
     MJPredictionUnitEntityServer,
+    MJProjectEntityServer,
     MJQueryEntityServer,
     MJQuerySQLEntityServer,
     MJRecordChangeEntityServer,
@@ -2486,6 +2492,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
+    GetArchitectureDiagramReferenceAction,
     GetDefaultFormScaffoldForEntityAction,
     GetDownloadUrlAction,
     GetEntityDetailsAction,
@@ -2496,13 +2503,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GetFormContributionsForEntityAction,
     GetListRecordsAction,
     GetMetadataAction,
-    GetMyCalendarAndAvailabilityAction,
-    GetObjectAction,
-    GetRecordAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    GetMyCalendarAndAvailabilityAction,
+    GetObjectAction,
+    GetRecordAction,
     GetRecordListMembershipAction,
     GetRecordsAction,
     GetSignatureStatusAction,
@@ -2545,6 +2552,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
+    RenderArchitectureDiagramAction,
     ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
@@ -2646,7 +2654,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1127;
+export const CLASS_REGISTRATIONS_COUNT = 1131;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -197,6 +197,18 @@
   overflow: hidden;
 }
 
+.mj-grid-content:has(> mj-empty-state) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 76px;
+  overflow: visible;
+}
+
+.mj-grid-container:has(> .mj-grid-content > mj-empty-state) {
+  min-height: 126px;
+}
+
 .mj-grid-scroll-container {
   height: 100%;
   overflow: auto;
@@ -431,22 +443,41 @@
 
 @media (max-width: 768px) {
   .mj-grid-toolbar {
-    flex-wrap: wrap;
-    padding: 8px;
+    flex-wrap: nowrap;
+    padding: 0 8px;
+    gap: 8px;
+  }
+
+  .toolbar-left {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .toolbar-search {
-    order: 3;
+    flex: 1 1 auto;
+    min-width: 0;
     width: 100%;
-    margin-top: 8px;
+    margin-top: 0;
   }
 
   .search-input {
     width: 100%;
+    min-width: 0;
   }
 
   .toolbar-center {
-    order: 2;
+    flex: 0 0 auto;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+
+  .toolbar-right {
+    flex: 0 0 auto;
+    gap: 4px;
+  }
+
+  .toolbar-button {
+    padding: 6px 8px;
   }
 
   /* Hide button text on mobile */

@@ -488,6 +488,9 @@
   {
     "fields": {
       "Name": "Execute MCP Tool",
+      "Config": {
+        "outputTrustLevel": "Untrusted"
+      },
       "Description": "Executes a tool on an MCP server. Connects to the server if not already connected, calls the specified tool with provided arguments, and returns the result. This is the primary action for invoking external tool capabilities through MCP.",
       "DriverClass": "Execute MCP Tool",
       "Type": "Custom",

@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (465 classes)
+// @memberjunction/core-entities (466 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -365,6 +365,7 @@ import {
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
+    MJProjectEntityExtended,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
     MJQueryDependencyEntity,
@@ -1229,6 +1230,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
+    MJProjectEntityExtended,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
     MJQueryDependencyEntity,
@@ -1288,11 +1290,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchProviderEntity,
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
-    MJSearchScopeExternalIndexEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSearchScopeExternalIndexEntity,
     MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
@@ -1492,11 +1494,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJRubricEvaluationScoreFormComponentExtended,
     MJRubricFormComponentExtended,
     MJRubricScaleFormComponentExtended,
-    MJRubricScaleLevelFormComponentExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MJRubricScaleLevelFormComponentExtended,
     MJRubricVersionFormComponentExtended,
     MJTemplateFormComponentExtended,
     MJTestFormComponentExtended,
@@ -1680,7 +1682,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 769;
+export const CLASS_REGISTRATIONS_COUNT = 770;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

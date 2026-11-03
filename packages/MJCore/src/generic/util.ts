@@ -521,7 +521,13 @@ export function StripContainingParens(value: string): string {
  * // entities is MyEntity[] — fully usable with .Save(), .Load(), etc.
  * ```
  */
-export async function TransformSimpleObjectToEntityObject<T extends BaseEntity>(md: IMetadataProvider, entityName: string, items: Array<Record<string, unknown>>, contextUser?: UserInfo): Promise<Array<T>> {
+export async function TransformSimpleObjectToEntityObject<T extends BaseEntity>(
+    md: IMetadataProvider,
+    entityName: string,
+    items: Array<Record<string, unknown>>,
+    contextUser?: UserInfo,
+    batchUnfilteredCache?: ReadonlyMap<string, ReadonlyArray<BaseEntity | Record<string, unknown>>>
+): Promise<Array<T>> {
     if (items.length === 0) return [];
 
     // Look up EntityInfo once via the O(1) name map. Inside GetEntityObject this
@@ -621,7 +627,7 @@ export async function TransformSimpleObjectToEntityObject<T extends BaseEntity>(
         if (pendingPeers.length > 0) {
             const coordinator = pendingPeers[0].entity;
             if (typeof coordinator.LoadFromDataBatchAsISAParent === 'function') {
-                await coordinator.LoadFromDataBatchAsISAParent(pendingPeers, md, contextUser);
+                await coordinator.LoadFromDataBatchAsISAParent(pendingPeers, md, contextUser, batchUnfilteredCache);
             } else {
                 await Promise.all(pendingPeers.map(p => p.entity.LoadFromData(p.data)));
             }

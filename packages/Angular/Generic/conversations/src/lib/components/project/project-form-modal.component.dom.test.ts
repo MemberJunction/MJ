@@ -107,6 +107,49 @@ describe('ProjectFormModalComponent (DOM) — save failure reporting', () => {
   });
 });
 
+describe('ProjectFormModalComponent (DOM) — folder sharing failure reporting', () => {
+  let alertSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    alertSpy.mockRestore();
+  });
+
+  it('keeps the dialog open and shows the reason when a folder grant is refused', async () => {
+    const project = { ...failingProject(''), ID: 'p1', Save: vi.fn().mockResolvedValue(true) } as unknown as MJProjectEntity;
+    const refusedGrant = {
+      ID: '',
+      Save: vi.fn().mockResolvedValue(false),
+      LatestResult: { Success: false, CompleteMessage: 'RoleID or UserID is required', Errors: [] }
+    };
+    const close = vi.fn();
+    const provider = {
+      GetEntityObject: vi.fn((name: string) => Promise.resolve(name === 'MJ: Projects' ? project : refusedGrant))
+    } as unknown as IMetadataProvider;
+    const f = renderComponentFixture(ProjectFormModalComponent, {
+      imports: [CommonModule, FormsModule],
+      declarations: [ProjectFormModalComponent, StubDialogComponent, StubDialogActionsComponent],
+      inputs: { environmentId: 'env1', currentUser, dialogRef: { Close: close } as unknown as MJDialogRef, Provider: provider },
+    });
+    f.componentInstance.formData.name = 'Budget';
+    f.componentInstance.VisibilityTier = 'Shared';
+    f.componentInstance.FolderPermissions = [{ permissionId: null, type: 'User', userId: 'u2', permissionLevel: 'View' }];
+    const saved = vi.fn();
+    f.componentInstance.projectSaved.subscribe(saved);
+
+    await f.componentInstance.onSave();
+
+    expect(refusedGrant.Save).toHaveBeenCalledTimes(1);
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    expect(String(alertSpy.mock.calls[0][0])).toContain('RoleID or UserID is required');
+    expect(saved).not.toHaveBeenCalled();
+    expect(close).not.toHaveBeenCalled();
+  });
+});
+
 describe('ProjectFormModalComponent (DOM) — visibility hint on a new folder', () => {
   const SHARING_IS_ONE_WAY = "Once shared, a folder can't be made private again.";
 
@@ -129,7 +172,87 @@ describe('ProjectFormModalComponent (DOM) — visibility hint on a new folder', 
 
   it('does not show the warning when Only me is selected', () => {
     const hint = renderWithVisibility(true);
-    expect(hint).toContain('Only you can see this folder.');
+    expect(hint).toContain('This folder appears only in your list.');
     expect(hint).not.toContain(SHARING_IS_ONE_WAY);
   });
+
+  it('shows the ACL panel and saves ResourcePermission records when Shared tier is selected', async () => {
+    const createdPermissions: Array<Record<string, unknown>> = [];
+    const savedProject = {
+      ID: 'proj-new-shared',
+      Name: '',
+      Description: null,
+      Color: null,
+      Icon: null,
+      OwnerUserID: null as string | null,
+      EnvironmentID: '',
+      ParentID: null,
+      IsArchived: false,
+      Save: vi.fn().mockResolvedValue(true),
+      LatestResult: { Success: true, Message: '', CompleteMessage: '', Errors: [] }
+    } as unknown as MJProjectEntity;
+
+    const provider = {
+      GetEntityObject: vi.fn().mockImplementation(async (entityName: string) => {
+        if (entityName === 'MJ: Projects') {
+          return savedProject;
+        }
+        const perm: Record<string, unknown> = {
+          ID: 'perm-1',
+          Save: vi.fn().mockImplementation(async () => {
+            createdPermissions.push(perm);
+            return true;
+          }),
+          Load: vi.fn().mockResolvedValue(true),
+          Delete: vi.fn().mockResolvedValue(true)
+        };
+        return perm;
+      })
+    } as unknown as IMetadataProvider;
+
+    const close = vi.fn();
+    const saved = vi.fn();
+    const f = renderComponentFixture(ProjectFormModalComponent, {
+      imports: [CommonModule, FormsModule],
+      declarations: [ProjectFormModalComponent, StubDialogComponent, StubDialogActionsComponent],
+      inputs: {
+        environmentId: 'env1',
+        currentUser,
+        dialogRef: { Close: close } as unknown as MJDialogRef,
+        Provider: provider
+      },
+      setup: (instance) => {
+        instance.formData.name = 'Team Roadmap';
+        instance.SelectVisibility('Shared');
+        instance.FolderPermissions = [
+          {
+            permissionId: null,
+            type: 'User',
+            userId: 'u2',
+            userEmail: 'colleague@example.com',
+            userName: 'Colleague',
+            permissionLevel: 'Edit'
+          }
+        ];
+      }
+    });
+    f.componentInstance.projectSaved.subscribe(saved);
+
+    const el = f.nativeElement as HTMLElement;
+    expect(el.querySelector('#projectVisibilityHint')?.textContent).toContain(
+      'People and roles you add below see this folder'
+    );
+    expect(el.querySelector('.folder-acl-panel')).not.toBeNull();
+
+    await f.componentInstance.onSave();
+
+    expect(savedProject.OwnerUserID).toBe('u1');
+    expect(createdPermissions).toHaveLength(1);
+    expect(createdPermissions[0]['ResourceRecordID']).toBe('proj-new-shared');
+    expect(createdPermissions[0]['UserID']).toBe('u2');
+    expect(createdPermissions[0]['PermissionLevel']).toBe('Edit');
+    expect(saved).toHaveBeenCalledWith(savedProject);
+    expect(close).toHaveBeenCalledTimes(1);
+  });
 });
+

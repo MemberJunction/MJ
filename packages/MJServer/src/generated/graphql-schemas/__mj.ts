@@ -42262,6 +42262,27 @@ export class MJConversation_ {
     @MaxLength(36)
     LastConversationID?: string;
         
+    @Field({nullable: true, description: "Fine-grained anchor discriminator when this conversation acts as an inline comment thread on a linked record or artifact. NULL for standard chat conversations. Allowed values: Record (whole-record comment), Field (anchored to an EntityField), Section (anchored to a CollapsiblePanel section), Group (anchored to a left-nav rail group/tab), Contribution (anchored to a related-entity grid or form contribution), DocBlock (anchored to a document block in MJ Docs), SlideRegion (anchored to a slide or element in MJ Slides), SheetRange (anchored to a cell range in MJ Sheets). Requires LinkedEntityID and LinkedRecordID when non-null."}) 
+    @MaxLength(30)
+    AnchorType?: string;
+        
+    @Field({nullable: true, description: "Identifier of the specific element within the linked record to which this conversation is anchored. For AnchorType = 'Field', stores EntityField.Name (for example 'AnnualRevenue'). For 'Section', stores the CollapsiblePanel SectionKey. For 'Group', stores the form nav GroupKey. For 'Contribution', stores the contribution or related-grid key. For 'DocBlock', 'SlideRegion', or 'SheetRange', stores the block ID, slide/region key, or A1 cell range. NULL when AnchorType is NULL or 'Record'."}) 
+    @MaxLength(255)
+    AnchorKey?: string;
+        
+    @Field({nullable: true, description: "JSON payload (IConversationAnchorMetadata) capturing display labels, parent section/group keys for badge rollup, quoted field value snapshot at comment creation time, FLS restrictedFields referenced by the thread, or document/slide/sheet selection coordinates."}) 
+    AnchorMetadata?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: "Whether this anchored comment thread has been marked resolved. Defaults to 0 (open). Resolved threads remain queryable for audit and history but are hidden from open-comment count badges on form fields, sections, and navigation rails."}) 
+    IsResolved?: boolean;
+        
+    @Field({nullable: true, description: "User who most recently marked this anchored conversation thread as resolved. NULL when IsResolved = 0."}) 
+    @MaxLength(36)
+    ResolvedByUserID?: string;
+        
+    @Field({nullable: true, description: "UTC timestamp when this anchored conversation thread was most recently marked resolved. NULL when IsResolved = 0."}) 
+    ResolvedAt?: Date;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     User?: string;
@@ -42301,6 +42322,10 @@ export class MJConversation_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     LastConversation?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ResolvedByUser?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -42381,6 +42406,24 @@ export class CreateMJConversationInput {
     @Field({ nullable: true })
     LastConversationID: string | null;
 
+    @Field({ nullable: true })
+    AnchorType: string | null;
+
+    @Field({ nullable: true })
+    AnchorKey: string | null;
+
+    @Field({ nullable: true })
+    AnchorMetadata: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsResolved?: boolean;
+
+    @Field({ nullable: true })
+    ResolvedByUserID: string | null;
+
+    @Field({ nullable: true })
+    ResolvedAt: Date | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -42459,6 +42502,24 @@ export class UpdateMJConversationInput {
 
     @Field({ nullable: true })
     LastConversationID?: string | null;
+
+    @Field({ nullable: true })
+    AnchorType?: string | null;
+
+    @Field({ nullable: true })
+    AnchorKey?: string | null;
+
+    @Field({ nullable: true })
+    AnchorMetadata?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsResolved?: boolean;
+
+    @Field({ nullable: true })
+    ResolvedByUserID?: string | null;
+
+    @Field({ nullable: true })
+    ResolvedAt?: Date | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
