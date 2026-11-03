@@ -512,6 +512,24 @@ describe('MaintenanceEngine.TriggerRetrainIfStale + CompareChallenger', () => {
     expect(promote.detail).toContain('closer to 1 is better');
   });
 
+  it('holds, naming the metric and saying its direction is unknown, for a pinned metric Predictive Studio has no direction for', () => {
+    // rmsle is a loss, but neither METRIC_DIRECTION nor the legacy lower-is-better spellings name it: read as
+    // higher-is-better, the worse challenger (0.35 against 0.20) would clear the 0.01 margin and be promoted.
+    const policy: RetrainingPolicy = { ...DEFAULT_RETRAINING_POLICY, comparisonMetric: 'rmsle', promotionMargin: 0.01 };
+    const model = (id: string, value: number) => {
+      const m = new FakeModel(id);
+      m.ProblemType = 'regression';
+      m.HoldoutMetrics = JSON.stringify({ rmsle: value });
+      return asModel(m);
+    };
+    const cmp = engine.CompareChallenger(model('m1', 0.2), model('m2', 0.35), policy);
+    expect([cmp.metric, cmp.incumbentValue, cmp.challengerValue, cmp.recommendation, cmp.detail]).toEqual([
+      'rmsle', 0.2, 0.35, 'hold',
+      'The policy compares on "rmsle", a metric whose direction is unknown: Predictive Studio cannot tell whether higher or lower is better, '
+        + 'so it cannot rank the new model (0.3500) against the current model (0.2000). Recommending HOLD until a human reviews. No promotion was performed.',
+    ]);
+  });
+
   it('compareChallenger never mutates the models / performs no promotion (pure recommendation)', () => {
     const incumbent = new FakeModel('m1');
     incumbent.HoldoutMetrics = JSON.stringify({ roc_auc: 0.7 });

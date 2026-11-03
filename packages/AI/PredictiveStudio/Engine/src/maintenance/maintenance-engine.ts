@@ -331,18 +331,30 @@ export class MaintenanceEngine {
     // direction: for error metrics (RMSE/MAE/logloss) lower is better, so an
     // improvement means the incumbent's value minus the challenger's.
     const delta = (incumbentValue !== null && incumbentValue !== undefined) && (challengerValue !== null && challengerValue !== undefined) ? challengerValue - incumbentValue : null;
-    const improvement = this.metricImprovement(metric, incumbentValue, challengerValue);
+    // A pinned name wins over 'auto' unvetted (ResolveComparisonMetric), so its direction may be unknown; such a metric
+    // cannot be ranked (MetricDirections.MetricDirectionOf), and the comparison holds instead of guessing a direction.
+    const unranked = this.isPinned(policy) && MetricDirections.MetricDirectionOf(metric) === null && incumbentValue !== null && challengerValue !== null;
+    const improvement = unranked ? null : this.metricImprovement(metric, incumbentValue, challengerValue);
     const recommendation = this.recommendPromotion(improvement, policy.promotionMargin);
+    const detail = unranked && incumbentValue !== null && challengerValue !== null
+      ? this.unknownDirectionDetail(metric, incumbentValue, challengerValue)
+      : this.buildComparisonDetail(metric, incumbentValue, challengerValue, delta, policy.promotionMargin, recommendation);
 
-    return {
-      metric,
-      incumbentValue,
-      challengerValue,
-      delta,
-      margin: policy.promotionMargin,
-      recommendation,
-      detail: this.buildComparisonDetail(metric, incumbentValue, challengerValue, delta, policy.promotionMargin, recommendation),
-    };
+    return { metric, incumbentValue, challengerValue, delta, margin: policy.promotionMargin, recommendation, detail };
+  }
+
+  /** Whether the policy pins a concrete comparison metric rather than letting 'auto' pick one of known direction. */
+  private isPinned(policy: RetrainingPolicy): boolean {
+    return !!policy.comparisonMetric && policy.comparisonMetric !== 'auto';
+  }
+
+  /** The HOLD explanation for a pinned metric whose direction Predictive Studio does not know. */
+  private unknownDirectionDetail(metric: string, incumbentValue: number, challengerValue: number): string {
+    return (
+      `The policy compares on "${metric}", a metric whose direction is unknown: Predictive Studio cannot tell whether higher ` +
+      `or lower is better, so it cannot rank the new model (${challengerValue.toFixed(4)}) against the current model ` +
+      `(${incumbentValue.toFixed(4)}). Recommending HOLD until a human reviews. No promotion was performed.`
+    );
   }
 
   /**
@@ -352,8 +364,10 @@ export class MaintenanceEngine {
    * the leaderboard's orientation): for error metrics incumbent − challenger, for
    * higher-is-better metrics challenger − incumbent, for a closer-to-one metric
    * (calibration slope) |1 − incumbent| − |1 − challenger|. A metric whose direction
-   * is not declared (the earlier sidecar's names, e.g. `roc_auc`) reads as
-   * higher-is-better, as it always has.
+   * is not declared reads as higher-is-better here; only 'auto' reaches this with one,
+   * and only for its declared higher-is-better defaults (the earlier sidecar's
+   * `roc_auc`, `explained_variance`). A pinned metric of unknown direction never
+   * gets here: CompareChallenger holds on it.
    */
   private metricImprovement(metric: string, incumbentValue: number | null, challengerValue: number | null): number | null {
     if ((incumbentValue === null || incumbentValue === undefined) || (challengerValue === null || challengerValue === undefined)) {
