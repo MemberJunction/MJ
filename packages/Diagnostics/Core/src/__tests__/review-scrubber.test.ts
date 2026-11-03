@@ -112,6 +112,19 @@ describe('Stage 1 secret shapes in strings', () => {
         expect(out).toContain('client_id=app');
     });
 
+    it("redacts SQL Server N'…' literals in parameter assignments under every profile", () => {
+        const sql = "exec spUpdate @Name=N'Bob', @AccessToken=N'ya29.tok', @Password = N'it''s pw', @RefreshToken=n'1//rt'";
+        for (const profile of ['FullRaw', 'Standard'] as const) {
+            const out = ScrubString(sql, profile);
+            expect(out).not.toContain('ya29.tok');
+            expect(out).not.toContain('pw');
+            expect(out).not.toContain('1//rt');
+        }
+        expect(ScrubString(sql, 'FullRaw')).toContain("@Name=N'Bob'");
+        expect(ScrubString("Password=N'x'", 'FullRaw')).toBe('Password=[REDACTED_SECRET]');
+        expect(ScrubString("@ClientSecret=N'cs-abc'", 'FullRaw')).toBe('@ClientSecret=[REDACTED_SECRET]');
+    });
+
     it('redacts an x-api-key header line', () => {
         const out = ScrubString('request headers:\nx-api-key: abcdef123456\naccept: */*', 'FullRaw');
         expect(out).not.toContain('abcdef123456');

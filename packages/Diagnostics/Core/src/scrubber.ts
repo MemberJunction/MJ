@@ -140,8 +140,9 @@ const KNOWN_API_KEY_REGEX =
 /** `scheme://userinfo@` where the user info may hold a password. */
 const URI_CREDENTIALS_REGEX = /\b([A-Za-z][A-Za-z0-9+.-]{1,31}:\/\/)([^\s/?#@'"<>]+)@/g;
 
+/** A bare connection-string secret. A SQL `N'…'` value is left to the `name=` reader, which reads the whole literal. */
 const CONN_STRING_SECRET_REGEX =
-    /\b(Password|Pwd|AccountKey|SharedAccessKey|SharedAccessSignature|SecretAccessKey|ClientSecret)\s*=\s*([^;\s"']+)/gi;
+    /\b(Password|Pwd|AccountKey|SharedAccessKey|SharedAccessSignature|SecretAccessKey|ClientSecret)\s*=\s*(?![Nn]')([^;\s"']+)/gi;
 
 const URL_QUERY_SECRET_REGEX =
     /([?&](?:access_token|refresh_token|id_token|token|api_key|apikey|key|secret|password|sig|signature|code)=)([^&#\s"']+)/gi;
@@ -149,8 +150,8 @@ const URL_QUERY_SECRET_REGEX =
 /** `name=` at the start of a pair (query strings, form bodies, env lines, connection strings). */
 const KEY_ASSIGNMENT_REGEX = /(^|[^A-Za-z0-9_.-])([A-Za-z][A-Za-z0-9_.-]{0,63})(\s*=\s*)/g;
 
-/** The value after `name=`: quoted (ends at the closing quote or the line end) or a bare token. */
-const ASSIGNMENT_VALUE_REGEX = /'(?:''|[^'\r\n])*(?:'|(?=[\r\n])|$)|"(?:""|[^"\r\n])*(?:"|(?=[\r\n])|$)|[^&\s"';,)=]+/y;
+/** The value after `name=`: quoted (ends at the closing quote or the line end; SQL `N'…'` included) or a bare token. */
+const ASSIGNMENT_VALUE_REGEX = /[Nn]?'(?:''|[^'\r\n])*(?:'|(?=[\r\n])|$)|"(?:""|[^"\r\n])*(?:"|(?=[\r\n])|$)|[^&\s"';,)=]+/y;
 
 /** A quoted value after `name: `; it ends at the closing quote or the line end. */
 const LINE_QUOTED_VALUE_REGEX = /"[^"\r\n]*(?:"|(?=[\r\n])|$)|'[^'\r\n]*(?:'|(?=[\r\n])|$)/y;
