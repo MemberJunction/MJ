@@ -2,9 +2,9 @@
  * ps-inproc-agent-builder.ts — IN-PROCESS proof of the **Predictive Studio Agent's deterministic
  * builder**: `PredictiveStudioPipelineBuilder.build(ModelingPlanSpec)` — the code (no-LLM) step that
  * turns the agent's approved, strongly-typed modeling plan into real metadata: it creates the
- * `MJ: ML Training Pipelines` row, trains a model via the engine, and **publishes the model only if
- * the trust verdict clears the bar** (the same `TrustVerdicts.DeriveTrustVerdict` rendering of the training run's stored
- * gate decision the business UI uses; a pipeline trained without a Prediction Unit stores none, so it is not evaluated).
+ * `MJ: ML Training Pipelines` row, binds its Prediction Unit and default Evaluation Protocol, trains one search over
+ * the plan's experiments via the engine, and **publishes the model only if the trust verdict clears the bar** (the same
+ * `TrustVerdicts.DeriveTrustVerdict` rendering of the training run's stored gate decision the business UI uses).
  *
  * This is what proves "the agent can BUILD NEW THINGS" without needing the full LLM loop — we feed the
  * builder a hand-authored plan (what the Goal Analyst / Data Scout / Experiment Designer sub-agents
@@ -18,20 +18,22 @@
  * Needs the real server-side training engine + the Python sidecar, so it uses `bootstrapAI()` (the real
  * SQLServerDataProvider in-process, no MJAPI) and gates the train leg behind `PS_INTEGRATION=1`.
  *
- * THROWAWAY: creates a driver-named ML Algorithm (if missing) + a pipeline + a trained model + run, then
- * deletes every row it created (child→parent) in `finally`.
+ * THROWAWAY: creates the driver's ML Algorithm (if missing) + a pipeline with its Prediction Unit and Evaluation
+ * Protocol + a training run with its Training Snapshot + the shipped model, then deletes every row it created in
+ * `finally`, children first, through `lib/ps-rig-lifecycle.ts` (a row it cannot delete fails the rig).
  *
- * USAGE (from the repo root):
- *   PS_INTEGRATION=1 npx tsx packages/MJServer/integration-test-scripts/ps-inproc-agent-builder.ts
- *   npx tsx packages/MJServer/integration-test-scripts/ps-inproc-agent-builder.ts   # deterministic SKIP (no sidecar)
+ * USAGE (from the repo root; needs AssociationDemo's Memberships):
+ *   PS_INTEGRATION=1 npx tsx packages/TestingFramework/integration-test-suite/rigs/ps-inproc-agent-builder.ts
+ *   npx tsx packages/TestingFramework/integration-test-suite/rigs/ps-inproc-agent-builder.ts   # deterministic SKIP (no sidecar)
  *
  * Exit code: 0 = passed (or cleanly skipped), 1 = failures, 2 = bootstrap error.
  */
 import { BootstrapAI } from './lib/ai-bootstrap';
-import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { DeleteRecordedRows, EnsureDriverAlgorithm, RecordPipelineBindings, ReportCleanup, type RigAlgorithm } from './lib/ps-rig-lifecycle';
+import { RunView } from '@memberjunction/core';
 import '@memberjunction/core-entities';
-import { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 import { TrustVerdicts, type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
+import { RunRecords } from '@memberjunction/predictive-studio-truth-suite';
 import { PredictiveStudioPipelineBuilder, LoadMLModelInferenceProcessor } from '@memberjunction/predictive-studio';
 
 // Anchor the side-effect registration so the transpiler/bundler can't drop the 'ML Model' work type.
@@ -48,28 +50,6 @@ let failures = 0;
 function check(condition: boolean, label: string): void {
   console.log(`  ${condition ? 'PASS' : 'FAIL'}  ${label}`);
   if (!condition) failures++;
-}
-
-/**
- * Resolve (or create) the ML Algorithm the sidecar driver names, matched on Name OR DriverClass: a second row with the
- * same driver would make the builder's algorithm name ambiguous, which it refuses.
- */
-async function ensureAlgorithm(md: IMetadataProvider, user: UserInfo): Promise<{ id: string; created: boolean }> {
-  const existing = await new RunView().RunView<{ ID: string }>(
-    { EntityName: 'MJ: ML Algorithms', ExtraFilter: `Name='${DRIVER_KEY}' OR DriverClass='${DRIVER_KEY}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 },
-    user,
-  );
-  if (existing.Success && existing.Results.length > 0) return { id: existing.Results[0].ID, created: false };
-  const algo = await md.GetEntityObject<MJMLAlgorithmEntity>('MJ: ML Algorithms', user);
-  algo.NewRecord();
-  algo.Name = DRIVER_KEY;
-  algo.Description = TAG;
-  algo.ProblemTypes = 'classification';
-  algo.DriverClass = DRIVER_KEY;
-  algo.SupportsFeatureImportance = true;
-  algo.Status = 'Active';
-  if (!(await algo.Save())) throw new Error(`Failed to create ML Algorithm: ${algo.LatestResult?.CompleteMessage}`);
-  return { id: algo.ID, created: true };
 }
 
 /** The plan the Goal Analyst / Data Scout / Experiment Designer sub-agents would have accumulated. */
@@ -93,32 +73,6 @@ function buildPlan(): ModelingPlanSpec {
   };
 }
 
-/** Delete every row the run created (child → parent). Best-effort; logs but never throws out. */
-async function cleanup(md: IMetadataProvider, user: UserInfo, ids: { modelId?: string; pipelineId?: string; algorithmId?: string; algorithmCreated: boolean }): Promise<void> {
-  banner('CLEANUP');
-  try {
-    if (ids.modelId) {
-      const runs = await new RunView().RunView<MJMLTrainingRunEntity>(
-        { EntityName: 'MJ: ML Training Runs', ExtraFilter: `ResultingModelID='${ids.modelId}'`, ResultType: 'entity_object' }, user,
-      );
-      for (const r of runs.Results ?? []) await r.Delete();
-      const model = await md.GetEntityObject<MJMLModelEntity>('MJ: ML Models', user);
-      if (await model.Load(ids.modelId)) await model.Delete();
-    }
-    if (ids.pipelineId) {
-      const p = await md.GetEntityObject<MJMLTrainingPipelineEntity>('MJ: ML Training Pipelines', user);
-      if (await p.Load(ids.pipelineId)) await p.Delete();
-    }
-    if (ids.algorithmCreated && ids.algorithmId) {
-      const a = await md.GetEntityObject<MJMLAlgorithmEntity>('MJ: ML Algorithms', user);
-      if (await a.Load(ids.algorithmId)) await a.Delete();
-    }
-    console.log('  cleanup done.');
-  } catch (e) {
-    console.log(`  cleanup warning: ${e instanceof Error ? e.message : String(e)}`);
-  }
-}
-
 async function main(): Promise<void> {
   const { provider, user } = await BootstrapAI();
   banner('PREDICTIVE STUDIO AGENT — DETERMINISTIC BUILDER (in-process)');
@@ -133,27 +87,34 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  const created = { algorithmCreated: false } as { modelId?: string; pipelineId?: string; algorithmId?: string; algorithmCreated: boolean };
+  const records = new RunRecords();
+  let algorithm: RigAlgorithm | undefined;
   try {
-    const algo = await ensureAlgorithm(provider, user);
-    created.algorithmId = algo.id;
-    created.algorithmCreated = algo.created;
+    algorithm = await EnsureDriverAlgorithm(provider, user, DRIVER_KEY, TAG);
 
     banner('BUILD: PredictiveStudioPipelineBuilder.build(plan) — create pipeline → train → publish-gated-on-trust');
     const t0 = Date.now();
     const result = await new PredictiveStudioPipelineBuilder().Build({ spec: buildPlan(), provider, user, autoPublish: true, sidecarVersion: TAG });
     console.log(`  Built in ${Date.now() - t0}ms — success=${result.success} pipelineId=${result.pipelineId} modelId=${result.modelId}`);
     console.log(`  Trust: outcome=${result.trust ? TrustVerdicts.OutcomeTitle(result.trust) : '(none)'} canAct=${result.trust?.CanAct} | published=${result.published} | leakageFlagged=${result.leakageFlagged} | held=${result.heldReason || '(n/a)'}`);
-    created.pipelineId = result.pipelineId;
-    created.modelId = result.modelId;
+    console.log(`  Stored gate decision: ${result.Gate ? `${result.Gate.Outcome} — ${result.Gate.Reason}` : '(none)'}`);
+    if (result.pipelineId) await RecordPipelineBindings(provider, user, records, [result.pipelineId]);
+    if (result.modelId) records.RecordModel(result.modelId);
 
-    check(result.success, 'builder reported success');
+    check(result.success, `builder reported success${result.errorMessage ? ` — ${result.errorMessage}` : ''}`);
     check(!!result.pipelineId, 'a training pipeline was created');
-    check(!!result.modelId, 'a model was trained');
-    check(!!result.trust && (result.trust.Kind === 'evaluated' || result.trust.Kind === 'not-evaluated'), 'a stored-gate trust verdict was produced');
-    console.log(`  Leaderboard: ${JSON.stringify(result.leaderboard)}`);
-    check((result.leaderboard || []).length === 1, 'one training run gives one leaderboard row (no search without a Prediction Unit)');
-    check(!JSON.stringify(result.leaderboard || []).includes('cvScore'), 'no leaderboard row carries a cvScore');
+    check(records.PredictionUnitIDs.Size === 1 && records.EvaluationProtocolIDs.Size === 1, 'the pipeline is bound to a Prediction Unit and an Evaluation Protocol');
+    check(!!result.Gate, 'the training run stored a gate decision');
+    // A model ships (with its verdict) unless the stored decision is no-signal.
+    const shipsModel = !!result.Gate && result.Gate.Outcome !== 'no-signal';
+    check(!!result.modelId === shipsModel, `a model ships exactly when the stored decision ships one (modelId=${result.modelId ?? 'none'}, outcome=${result.Gate?.Outcome ?? 'none'})`);
+    check(!!result.trust === shipsModel, 'a shipped model carries the stored-gate trust verdict; no model, no verdict');
+    const leaderboard = result.leaderboard || [];
+    console.log(`  Leaderboard: ${JSON.stringify(leaderboard)}`);
+    // One search over the plan's experiments: a row per scored candidate, each an optimistic inner-fold score, one finalist.
+    check(leaderboard.length >= 1 && leaderboard.every((r) => r.optimistic === true), 'the search leaderboard has inner-fold rows, each marked optimistic');
+    check(leaderboard.filter((r) => r.isWinner === true).length === 1, 'exactly one leaderboard row is the finalist');
+    check(!JSON.stringify(leaderboard).includes('cvScore'), 'no leaderboard row carries a cvScore');
 
     // The core invariant: a model is published IFF the trust verdict clears the bar AND no leakage flag.
     const shouldPublish = !!result.trust?.CanAct && !result.leakageFlagged;
@@ -177,7 +138,8 @@ async function main(): Promise<void> {
 
     banner(failures === 0 ? 'AGENT-BUILDER PROOF COMPLETE — ALL CHECKS PASSED' : `AGENT-BUILDER PROOF — ${failures} CHECK(S) FAILED`);
   } finally {
-    await cleanup(provider, user, created);
+    banner('CLEANUP');
+    failures += ReportCleanup(await DeleteRecordedRows(provider, user, records, algorithm));
   }
   process.exit(failures === 0 ? 0 : 1);
 }
