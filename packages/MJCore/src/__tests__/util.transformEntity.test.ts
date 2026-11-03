@@ -1531,6 +1531,48 @@ describe('TransformSimpleObjectToEntityObject batched IS-A hydration & 1-query C
         expect(messages.filter(m => m.includes('Error in BaseEntity.Load(Meetings') && m.includes(hiddenRow))).toHaveLength(1);
     });
 
+    it('calls a child subclass\'s LoadFromData override when it links the child from a batch row', async () => {
+        /** A child subclass that customises LoadFromData, as the parent check in LoadFromDataBatchAsISAParent allows for. */
+        class CustomLoadMeeting extends LoadHintTestEntity {
+            public LoadFromDataCalls = 0;
+            public override async LoadFromData(data: Record<string, unknown>, replaceOldValues: boolean = false): Promise<boolean> {
+                this.LoadFromDataCalls++;
+                return super.LoadFromData(data, replaceOldValues);
+            }
+        }
+        batchedProvider.GetEntityObject = async <T extends BaseEntity>(entityName: string, contextUser?: UserInfo): Promise<T> => {
+            if (entityName !== 'Meetings') {
+                return (await LoadHintTestProvider.prototype.GetEntityObject.call(batchedProvider, entityName, contextUser)) as T;
+            }
+            const meeting = new CustomLoadMeeting(batchedProvider.EntityByName('Meetings')!, batchedProvider.AsEntityDataProvider);
+            meeting.ContextCurrentUser = contextUser ?? user;
+            await meeting.InitializeParentEntity();
+            meeting.NewRecord();
+            return meeting as unknown as T;
+        };
+        const productsInfo = batchedProvider.EntityByName('Products')!;
+        const rows = Array.from({ length: BATCH_ROWS }, (_, i) =>
+            store.ViewRow(productsInfo, `c2000000-0000-0000-0000-${String(i).padStart(12, '0')}`)!
+        );
+
+        const results = await TransformSimpleObjectToEntityObject<BaseEntity>(
+            batchedProvider as object as IMetadataProvider, 'Products', rows, user
+        );
+
+        results.forEach((p, idx) => {
+            if (idx % 2 !== 0) {
+                expect(p.ISAChild?.EntityInfo.Name).toBe('Publications');
+                return;
+            }
+            const meeting = p.ISAChild as CustomLoadMeeting;
+            expect(meeting).toBeInstanceOf(CustomLoadMeeting);
+            expect(meeting.LoadFromDataCalls, `product ${idx}`).toBe(1);
+            expect(meeting.Get('Venue')).toBe(`Hall ${idx}`);
+            expect(meeting.ISAParent).toBe(p);
+            expect(p.Get('Name')).toBe(`Prod ${idx}`);
+        });
+    });
+
     it('narrows field-level security denied columns when linking an IS-A child from a system-user engine cache', async () => {
         const productsInfo = batchedProvider.EntityByName('Products')!;
         const meetingsInfo = batchedProvider.EntityByName('Meetings')!;
