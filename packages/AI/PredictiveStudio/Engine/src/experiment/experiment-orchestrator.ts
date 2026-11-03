@@ -39,7 +39,7 @@
  */
 
 import { LogError } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { IndexByUUID } from '@memberjunction/global';
 import { MetricDirections } from '@memberjunction/predictive-studio-core';
 import type {
   ModelingPlanSpec,
@@ -517,10 +517,12 @@ export class ExperimentOrchestrator {
     // leaderboard. If a save fails, the entry stays so the iteration isn't silently
     // lost (it remains a candidate winner with its DB Status still `Completed`).
     const persisted = new Set<string>();
+    const iterationsById = IndexByUUID(iterations);
+    const entriesByIteration = IndexByUUID(leaderboard, (e) => e.IterationID);
     for (const id of prunedIds) {
-      const iteration = iterations.find((it) => UUIDsEqual(it.ID, id));
+      const iteration = iterationsById.Get(id);
       if (iteration && iteration.Status === 'Completed') {
-        const entry = leaderboard.find((e) => UUIDsEqual(e.IterationID, id)) ?? null;
+        const entry = entriesByIteration.Get(id) ?? null;
         const saved = await this.markPruned(iteration, entry, best, deps);
         if (saved) {
           persisted.add(id);

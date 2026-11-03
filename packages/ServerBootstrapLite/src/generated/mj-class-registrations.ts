@@ -223,7 +223,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (475 classes)
+// @memberjunction/core-entities (479 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -429,6 +429,10 @@ import {
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
+    MJDiagnosticBundleEntity,
+    MJDiagnosticSenderRegistrationEntity,
+    MJDiagnosticSessionChunkEntity,
+    MJDiagnosticSessionEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -1768,6 +1772,10 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
+    MJDiagnosticBundleEntity,
+    MJDiagnosticSenderRegistrationEntity,
+    MJDiagnosticSessionChunkEntity,
+    MJDiagnosticSessionEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -1896,14 +1904,14 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
     MJPhoneNumberEntity,
-    MJPredictionUnitEntity,
-    MJProcessRunDetailEntity,
-    MJProcessRunEntity,
-    MJProjectEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJPredictionUnitEntity,
+    MJProcessRunDetailEntity,
+    MJProcessRunEntity,
+    MJProjectEntity,
     MJProjectEntityExtended,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
@@ -2100,14 +2108,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetActivitiesByContactAction,
     LogActivityAction,
     MergeContactsAction,
-    CreateJotFormAction,
-    CreateSurveyMonkeyAction,
-    CreateTypeformAction,
-    ExportGoogleFormsCSVAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    CreateJotFormAction,
+    CreateSurveyMonkeyAction,
+    CreateTypeformAction,
+    ExportGoogleFormsCSVAction,
     ExportJotFormCSVAction,
     ExportSurveyMonkeyCSVAction,
     ExportTypeformCSVAction,
@@ -2304,14 +2312,14 @@ const CLASS_REGISTRATIONS_3: any[] = [
     TextToolLibrary,
     WhiteboardChannelServer,
     ClaudeCodeCliAdapter,
-    CodexAdapter,
-    GeminiCliAdapter,
-    HarnessAgentBase,
-    HarnessAgentType,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    CodexAdapter,
+    GeminiCliAdapter,
+    HarnessAgentBase,
+    HarnessAgentType,
     OpenCodeAdapter,
     PiAdapter,
     StdioJsonAdapter,
@@ -2508,14 +2516,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GenerateImageAction,
     GenerateIntegrationActionAction,
     GenerateVideoAction,
-    GeocodeAddressAction,
-    GetActiveFormForEntityAction,
-    GetArchitectureDiagramReferenceAction,
-    GetDefaultFormScaffoldForEntityAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    GeocodeAddressAction,
+    GetActiveFormForEntityAction,
+    GetArchitectureDiagramReferenceAction,
+    GetDefaultFormScaffoldForEntityAction,
     GetDownloadUrlAction,
     GetEntityDetailsAction,
     GetEntityListAction,
@@ -2672,7 +2680,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1140;
+export const CLASS_REGISTRATIONS_COUNT = 1144;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

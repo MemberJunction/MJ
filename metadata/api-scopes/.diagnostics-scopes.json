@@ -1,0 +1,62 @@
+[
+  {
+    "fields": {
+      "Name": "diagnostics",
+      "FullPath": "diagnostics",
+      "ParentID": null,
+      "Category": "Diagnostics",
+      "Description": "Parent scope for diagnostic sessions, bundle assembly, external transmission, and collector intake.",
+      "ResourceType": null,
+      "IsActive": true,
+      "UIConfig": {
+        "icon": "fa-solid fa-stethoscope",
+        "color": "#0284c7"
+      }
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-204000000001"
+    }
+  },
+  {
+    "fields": {
+      "Name": "read",
+      "FullPath": "diagnostics:read",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=diagnostics",
+      "Category": "Diagnostics",
+      "Description": "Preview diagnostic bundles, inspect scrubbing summaries and automated findings.",
+      "ResourceType": "DiagnosticBundle",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-204000000002"
+    }
+  },
+  {
+    "fields": {
+      "Name": "manage",
+      "FullPath": "diagnostics:manage",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=diagnostics",
+      "Category": "Diagnostics",
+      "Description": "Start and stop diagnostic sessions, upload client captures, and assemble diagnostic bundles.",
+      "ResourceType": "DiagnosticSession",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-204000000003"
+    }
+  },
+  {
+    "fields": {
+      "Name": "send",
+      "FullPath": "diagnostics:send",
+      "ParentID": "@lookup:MJ: API Scopes.FullPath=diagnostics",
+      "Category": "Diagnostics",
+      "Description": "Encrypt and transmit diagnostic bundles to an external collector or storage destination.",
+      "ResourceType": "DiagnosticBundle",
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-204000000004"
+    }
+  }
+]

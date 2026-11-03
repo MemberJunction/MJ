@@ -31,6 +31,7 @@ export class MJFileFormComponent extends BaseFormComponent {
             { sectionKey: 'mJBrandKitAssets', sectionName: 'Brand Kit Assets', isExpanded: false },
             { sectionKey: 'mJContentItems', sectionName: 'Content Items', isExpanded: false },
             { sectionKey: 'mJTrainingSnapshotsMatrixFileID', sectionName: 'Training Snapshots (Matrix File)', isExpanded: false },
+            { sectionKey: 'mJDiagnosticBundles', sectionName: 'Diagnostic Bundles', isExpanded: false },
             { sectionKey: 'mJTrainingSnapshotsRowManifestFileID', sectionName: 'Training Snapshots (Row Manifest File)', isExpanded: false },
             { sectionKey: 'mJTrainingSnapshotsProvenanceFileID', sectionName: 'Training Snapshots (Provenance File)', isExpanded: false }
         ]);

@@ -238,6 +238,7 @@ export * from './checks/ciphertext-cache.checks';
 export * from './checks/concurrency-conflict-client.checks';
 export * from './checks/entity-status-fanout-client.checks';
 export * from './checks/encrypted-read-client.checks';
+export * from './checks/diagnostics.checks';
 export * from './checks/semantic-graph.checks';
 // The skip allowlist registers on the same registry; a skip of any check not listed fails the run.
 export * from './skip-allowlist';

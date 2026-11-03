@@ -1906,6 +1906,17 @@
           "primaryKey": {
             "ID": "71C5AB97-996D-4FCD-B277-8D86171CC3C2"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT163 - Diagnostic Bundles Capture, Assembly and Intake",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B3E731A9-F19F-4DF1-AAA9-A20B77C19FA5"
+          }
         }
       ]
     },

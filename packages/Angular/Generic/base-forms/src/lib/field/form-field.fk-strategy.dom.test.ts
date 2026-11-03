@@ -342,6 +342,25 @@ describe('mj-form-field FK lookup strategy', () => {
     }
   });
 
+  it('shows the error row when a strategy throws and MJ\'s own lookup fails too', async () => {
+    const boom = vi
+      .spyOn(GroupedTestStrategy.prototype, 'Lookup')
+      .mockRejectedValue(new Error('strategy exploded'));
+    const provider = fkProvider();
+    (provider as unknown as { RunView: () => Promise<{ Success: boolean; ErrorMessage: string; Results: [] }> }).RunView =
+      async () => ({ Success: false, ErrorMessage: 'Gateway Timeout', Results: [] });
+    try {
+      const f = renderFK({ Provider: provider });
+      await openDropdown(f);
+
+      expect(f.componentInstance.FKLoading).toBe(false);
+      expect(f.componentInstance.FKNoMatches).toBe(false);
+      expect(text(f, '.mj-fk-status--error')).toContain('The search failed.');
+    } finally {
+      boom.mockRestore();
+    }
+  });
+
   it('lets the pick through when BeforeSelect throws, rather than swallowing the click', async () => {
     const boom = vi
       .spyOn(GroupedTestStrategy.prototype, 'BeforeSelect')
