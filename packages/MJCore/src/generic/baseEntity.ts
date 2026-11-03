@@ -7508,7 +7508,12 @@ export abstract class BaseEntity<T = unknown> {
     ): Promise<BaseEntity[]> {
         const unlinkedParents: BaseEntity[] = [];
 
-        // First resolve any child entities whose complete unfiltered table is already in memory
+        // Every parent here already has a known subtype (a load hint, or discovery against the
+        // DB), so a miss in a child's in-memory cache means the cache is behind the DB (the
+        // engine's event debounce window, another server node, an out-of-band write), not that
+        // the row is absent. Those parents are read from the DB with the uncached children below.
+        // Unhinted discovery is different: there a complete cache does prove absence, and
+        // discoverAndHydrateDisjointChildren never sends such parents here.
         const remainingByChildName = new Map<string, BaseEntity[]>();
         for (const [childName, parents] of parentsByChildName) {
             const childInfo =
@@ -7522,11 +7527,12 @@ export abstract class BaseEntity<T = unknown> {
             if (childInfo && pkField && cachedRecords) {
                 const pkIsUuid = Boolean(pkField.IsUniqueIdentifier);
                 const byPk = BaseEntity.buildInMemoryChildLookupMap(cachedRecords, pkField.Name, pkIsUuid);
+                const cacheMisses: BaseEntity[] = [];
                 for (const p of parents) {
                     const pkKey = CanonicalPrimaryKeyValue(String(p.PrimaryKey.Values()), pkIsUuid);
                     const matched = byPk.get(pkKey);
                     if (!matched) {
-                        unlinkedParents.push(p);
+                        cacheMisses.push(p);
                         continue;
                     }
                     const linked = await BaseEntity.linkSingleParentFromRawOrEntityRecord(
@@ -7539,6 +7545,9 @@ export abstract class BaseEntity<T = unknown> {
                     if (!linked) {
                         unlinkedParents.push(p);
                     }
+                }
+                if (cacheMisses.length > 0) {
+                    remainingByChildName.set(childName, cacheMisses);
                 }
             } else {
                 remainingByChildName.set(childName, parents);
