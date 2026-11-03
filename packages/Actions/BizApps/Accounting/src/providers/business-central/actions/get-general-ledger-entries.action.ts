@@ -82,19 +82,19 @@ export class GetBusinessCentralGeneralLedgerEntriesAction extends BusinessCentra
             // Account filter
             const accountNumber = this.getParamValue(params.Params, 'AccountNumber');
             if (accountNumber) {
-                filters.push(`accountNumber eq '${accountNumber}'`);
+                filters.push(`accountNumber eq '${EscapeODataString(String(accountNumber))}'`);
             }
 
             // Document number filter
             const documentNumber = this.getParamValue(params.Params, 'DocumentNumber');
             if (documentNumber) {
-                filters.push(`documentNumber eq '${documentNumber}'`);
+                filters.push(`documentNumber eq '${EscapeODataString(String(documentNumber))}'`);
             }
 
             // Document type filter
             const documentType = this.getParamValue(params.Params, 'DocumentType');
             if (documentType) {
-                filters.push(`documentType eq '${documentType}'`);
+                filters.push(`documentType eq '${EscapeODataString(String(documentType))}'`);
             }
 
             // Business Central's generalLedgerEntry has no `amount` property, so MinAmount / MaxAmount
@@ -393,4 +393,9 @@ export class GetBusinessCentralGeneralLedgerEntriesAction extends BusinessCentra
 
         return [...baseParams, ...specificParams];
     }
+}
+
+/** Escapes a value for a single-quoted OData string literal (a quote is doubled). */
+export function EscapeODataString(value: string): string {
+    return value.replace(/'/g, "''");
 }
