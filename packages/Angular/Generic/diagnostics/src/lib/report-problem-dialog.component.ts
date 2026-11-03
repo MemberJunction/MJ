@@ -61,11 +61,14 @@ function errorText(err: unknown): string {
                     <select
                         id="mj-diag-scrub-tier"
                         class="mj-input"
-                        [value]="ScrubberProfile"
+                        [value]="LiteralScrubbingRequired ? 'Standard' : ScrubberProfile"
                         (change)="OnScrubberProfileChange($event)">
                         <option value="Standard">Standard (default): credentials removed, SQL and filter literals replaced with ?</option>
-                        <option value="FullRaw">FullRaw: credentials removed, SQL and filter literals kept</option>
+                        <option value="FullRaw" [disabled]="LiteralScrubbingRequired">FullRaw: credentials removed, SQL and filter literals kept</option>
                     </select>
+                    @if (LiteralScrubbingRequired) {
+                        <span class="mj-diag-hint">This server requires literal scrubbing, so bundles use Standard.</span>
+                    }
                 </div>
 
                 <div class="mj-diag-field">
@@ -240,10 +243,15 @@ export class MJDiagnosticReportProblemDialogComponent implements OnInit, OnDestr
         this.Note = target?.value ?? '';
     }
 
+    /** True when the server requires literal scrubbing, so only the Standard profile is offered. */
+    public get LiteralScrubbingRequired(): boolean {
+        return this.diagnosticsService.LiteralScrubbingRequired;
+    }
+
     public OnScrubberProfileChange(event: Event): void {
         const target = event.target as HTMLSelectElement | null;
         const val = target?.value;
-        if (val === 'Standard' || val === 'FullRaw') {
+        if (val === 'Standard' || (val === 'FullRaw' && !this.LiteralScrubbingRequired)) {
             this.ScrubberProfile = val;
         }
     }

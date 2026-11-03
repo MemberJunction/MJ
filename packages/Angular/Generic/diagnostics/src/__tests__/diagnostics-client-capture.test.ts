@@ -163,6 +163,46 @@ describe('MJDiagnosticsService client capture', () => {
             expect(ParseBundleDataFromArchive(await VerifyBundleArchive(built.zipBytes)).repro.breadcrumbs).toEqual([]);
         });
 
+        it('captures into memory before the server status is known', async () => {
+            service.Provider = null;
+            vi.stubGlobal('document', doc);
+            service.Initialize();
+            service.RecordRouteBreadcrumb('/app/login');
+
+            expect(doc.listenerCount).toBeGreaterThan(0);
+            const built = await service.BuildClientBundle();
+            expect(ParseBundleDataFromArchive(await VerifyBundleArchive(built.zipBytes)).repro.breadcrumbs).toEqual([
+                expect.objectContaining({ type: 'route', target: '/app/login' }),
+            ]);
+        });
+
+        it('clears what it captured before the status when the server reports capture as off', async () => {
+            let answer: (value: Awaited<ReturnType<DiagnosticsGetMySessionStatusOperation['Execute']>>) => void = () => undefined;
+            vi.spyOn(DiagnosticsGetMySessionStatusOperation.prototype, 'Execute').mockReturnValue(new Promise((resolve) => (answer = resolve)));
+            service.Initialize();
+            service.RecordRouteBreadcrumb('/app/login');
+            service.RecordLogEntry(logEntry('before the status'));
+
+            answer({ Success: true, Output: { Active: false, SelfServiceRecordingAllowed: false, CaptureEnabled: false } });
+            await service.LoadServerStatus();
+
+            expect(doc.listenerCount).toBe(0);
+            const data = ParseBundleDataFromArchive(await VerifyBundleArchive((await service.BuildClientBundle()).zipBytes));
+            expect(data.repro.breadcrumbs).toEqual([]);
+            expect(data.clientLogs).toEqual([]);
+        });
+
+        it('keeps capturing into memory when the server status cannot be read', async () => {
+            vi.spyOn(DiagnosticsGetMySessionStatusOperation.prototype, 'Execute').mockRejectedValue(new Error('no server'));
+            service.Initialize();
+            await service.LoadServerStatus();
+            service.RecordRouteBreadcrumb('/app/login');
+
+            expect(doc.listenerCount).toBeGreaterThan(0);
+            const built = await service.BuildClientBundle();
+            expect(ParseBundleDataFromArchive(await VerifyBundleArchive(built.zipBytes)).repro.breadcrumbs).toHaveLength(1);
+        });
+
         it('listens for clicks once the server reports capture as enabled', async () => {
             mockStatus({ CaptureEnabled: true });
             service.Initialize();

@@ -254,9 +254,9 @@ export class MJDiagnosticsService {
     }
 
     /**
-     * Starts listening for the server's `X-MJ-Diagnostic-Trigger` header and, when a user is signed
-     * in, reads the server status (see {@link LoadServerStatus}). Background capture starts only when
-     * the server reports `Diagnostics.Capture.Enabled`.
+     * Starts listening for the server's `X-MJ-Diagnostic-Trigger` header, starts background capture
+     * into memory and, when a user is signed in, reads the server status (see {@link LoadServerStatus}).
+     * Entries captured before the status is known stay in memory; only the user's own download or Submit sends them.
      */
     public Initialize(): void {
         if (this.initialized) {
@@ -268,6 +268,7 @@ export class MJDiagnosticsService {
                 this.onResponseHeaders(headers);
             });
         });
+        this.startBackgroundCapture();
         if (this.signedInProvider()) {
             void this.LoadServerStatus();
         }
@@ -275,13 +276,17 @@ export class MJDiagnosticsService {
 
     /**
      * Reads the server's diagnostics status for the signed-in user. Call it after sign-in.
-     * Background capture runs only while the status reports `CaptureEnabled === true`; a missing
-     * or failed status means off. `RequireLiteralScrubbing` forces the `Standard` profile.
+     * When the status reports `CaptureEnabled === true`, background capture continues. When it
+     * reports capture off (or leaves it out), capture stops and every buffered entry is cleared.
+     * When the status cannot be read, capture continues into memory only.
+     * `RequireLiteralScrubbing` forces the `Standard` profile.
      */
     public async LoadServerStatus(): Promise<void> {
         const load = this.readServerStatus().then((status) => {
-            this.serverStatus = status;
-            this.applyCaptureSwitch(status?.CaptureEnabled === true);
+            if (status) {
+                this.serverStatus = status;
+                this.applyCaptureSwitch(status.CaptureEnabled === true);
+            }
         });
         this.serverStatusLoad = load;
         await load;
@@ -321,7 +326,15 @@ export class MJDiagnosticsService {
             this.startBackgroundCapture();
         } else if (!enabled) {
             this.stopBackgroundCapture();
+            this.clearCapturedEntries();
         }
+    }
+
+    private clearCapturedEntries(): void {
+        this.logBuffer.Clear();
+        this.telemetryBuffer.Clear();
+        this.networkBuffer.Clear();
+        this.breadcrumbBuffer.Clear();
     }
 
     /**
@@ -893,10 +906,7 @@ export class MJDiagnosticsService {
      * Clears in-memory buffers (used in tests or when resetting session state).
      */
     public ClearBuffers(): void {
-        this.logBuffer.Clear();
-        this.telemetryBuffer.Clear();
-        this.networkBuffer.Clear();
-        this.breadcrumbBuffer.Clear();
+        this.clearCapturedEntries();
         this.uploadedToSession.clear();
         this.ownSessions.clear();
         this.triggerUploadTimes.clear();

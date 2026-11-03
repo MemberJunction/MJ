@@ -107,6 +107,19 @@ describe('MJDiagnosticReportProblemDialogComponent', () => {
         service.StopRecording();
         dialog.ngOnDestroy();
     });
+    it('keeps the Standard profile and disables FullRaw when the server requires literal scrubbing', () => {
+        vi.spyOn(service, 'LiteralScrubbingRequired', 'get').mockReturnValue(true);
+        const dialog = runInInjectionContext(injector, () => new MJDiagnosticReportProblemDialogComponent());
+
+        dialog.OnScrubberProfileChange({ target: { value: 'FullRaw' } } as unknown as Event);
+
+        expect(dialog.LiteralScrubbingRequired).toBe(true);
+        expect(dialog.ScrubberProfile).toBe('Standard');
+        const source = readFileSync(fileURLToPath(new URL('../lib/report-problem-dialog.component.ts', import.meta.url)), 'utf8');
+        expect(source).toMatch(/<option value="FullRaw" \[disabled\]="LiteralScrubbingRequired">/);
+        expect(source).toContain('@if (LiteralScrubbingRequired)');
+    });
+
     it('keeps the action row to Submit, Download and Cancel so it fits a medium dialog', () => {
         const source = readFileSync(fileURLToPath(new URL('../lib/report-problem-dialog.component.ts', import.meta.url)), 'utf8');
         const actions = source.slice(source.indexOf('<mj-dialog-actions>'), source.indexOf('</mj-dialog-actions>'));
