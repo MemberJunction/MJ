@@ -49,9 +49,12 @@ class TestEngine extends BaseEngine<TestEngine> {
 
     /** Kicks off a real full refresh (the LoadSingleConfig → LoadSingleEntityConfig path). */
     public RefreshForTest(config: BaseEnginePropertyConfig): Promise<void> {
-        return (this as unknown as {
-            LoadSingleConfig: (c: BaseEnginePropertyConfig, u?: UserInfo) => Promise<void>;
-        }).LoadSingleConfig(config, undefined);
+        return this.LoadSingleConfig(config, undefined as unknown as UserInfo);
+    }
+
+    /** Kicks off a batched refresh (the Config(true) → LoadMultipleEntityConfigs path). */
+    public RefreshBatchForTest(configs: BaseEnginePropertyConfig[]): Promise<void> {
+        return this.LoadMultipleEntityConfigs(configs, undefined as unknown as UserInfo, true);
     }
 }
 
@@ -72,8 +75,15 @@ class DelayedRunViewProvider {
         });
     }
 
-    public RunViews(): Promise<RunViewResult[]> {
-        return Promise.resolve([]);
+    public RunViews(params: RunViewParams[]): Promise<RunViewResult[]> {
+        const response = this.responses[this.callCount] ?? { items: [], delayMs: 0 };
+        this.callCount++;
+        return new Promise<RunViewResult[]>((resolve) => {
+            setTimeout(
+                () => resolve(params.map(() => makeResult(response.items))),
+                response.delayMs
+            );
+        });
     }
 }
 
@@ -175,5 +185,34 @@ describe('BaseEngine concurrent full-refresh ordering guard', () => {
         await only;
 
         expect(ids(engine._items)).toEqual(['only']);
+    });
+
+    it('immediately commits an explicit batch refresh (LoadMultipleEntityConfigs) even when a later debounced single-config refresh is still in flight', async () => {
+        vi.useFakeTimers();
+        const { engine, provider, config } = setup();
+
+        // Batch refresh (generation 1, e.g. Config(true) after Save()) resolves at t=50ms.
+        // Single-config refresh (generation 2, e.g. the 1.5s debounce timer for that same Save()
+        // firing while RunViews is still in flight) starts at t=20ms and resolves at t=100ms.
+        provider.responses = [
+            { items: [makeItem('saved-prompt')], delayMs: 50 },
+            { items: [makeItem('saved-prompt')], delayMs: 80 },
+        ];
+
+        const batchRefresh = engine.RefreshBatchForTest([config]); // generation 1 at t=0ms
+        await vi.advanceTimersByTimeAsync(20);
+        const debouncedRefresh = engine.RefreshForTest(config); // generation 2 at t=20ms
+
+        // Advance to t=50ms so the batch refresh finishes while debouncedRefresh is still in flight.
+        await vi.advanceTimersByTimeAsync(30);
+        await batchRefresh;
+
+        // Immediately upon `await batchRefresh` resolving, callers MUST see 'saved-prompt'
+        // rather than an empty/stale pre-save array.
+        expect(ids(engine._items)).toEqual(['saved-prompt']);
+
+        await vi.advanceTimersByTimeAsync(60);
+        await debouncedRefresh;
+        expect(ids(engine._items)).toEqual(['saved-prompt']);
     });
 });

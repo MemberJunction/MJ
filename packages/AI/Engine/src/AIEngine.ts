@@ -573,9 +573,14 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
             return;
         }
 
-        // If currently loading, return the existing promise so all callers wait together
-        if (this._loading && this._loadingPromise) {
-            return this._loadingPromise;
+        // If currently loading, wait for the in-flight load to settle; non-forced callers
+        // can then return immediately, whereas forceRefresh callers must still run a fresh
+        // load that captures writes committed after the earlier load began.
+        while (this._loading && this._loadingPromise) {
+            await this._loadingPromise;
+            if (this._loaded && !forceRefresh) {
+                return;
+            }
         }
 
         // Start loading
