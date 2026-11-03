@@ -52,14 +52,14 @@ import { MJGlobal } from '@memberjunction/global';
 export interface RedisProviderConfig {
     /**
      * Redis connection URL (e.g., `redis://localhost:6379`, `rediss://user:pass@host:6380`).
-     * Mutually exclusive with `options`.
+     * When `options` is also given, its values are applied on top of what the URL sets.
      * The `rediss://` scheme enables TLS, which is required for most cloud-hosted Redis services.
      */
     url?: string;
 
     /**
-     * Full `ioredis` options object for fine-grained connection control.
-     * Mutually exclusive with `url`.
+     * Full `ioredis` options object for fine-grained connection control. Applied after the
+     * provider's defaults, with or without a `url`, so any ioredis option can be set.
      *
      * @see https://github.com/redis/ioredis?tab=readme-ov-file#connect-to-redis
      */
@@ -121,6 +121,21 @@ export interface RedisProviderConfig {
      * @default 30000
      */
     maxRetryDelayMs?: number;
+
+    /**
+     * Longest a cache read waits for Redis, in milliseconds. A read that takes longer is answered
+     * as a cache miss, so the caller reads the database instead of waiting.
+     *
+     * Applies to `GetItem`, `GetItems`, `GetIndexGroupKeys` and `GetCategoryKeys`. Writes,
+     * removals and invalidations have no timeout, so an invalidation is never dropped. A Redis
+     * that is connected but saturated otherwise leaves every cached read waiting with no bound;
+     * a lost connection is already answered as a miss without this setting.
+     *
+     * Set to `0` to wait without a limit.
+     *
+     * @default 2000
+     */
+    readTimeoutMs?: number;
 
     /**
      * Whether to log connection events (connect, disconnect, error) via
@@ -201,6 +216,24 @@ const DEFAULT_CATEGORY_TTL_SECONDS: Readonly<Record<string, number>> = { default
 
 /** Expiry applied when the configuration does not set `defaultTTLSeconds`. @internal */
 const DEFAULT_TTL_SECONDS = 3600;
+
+/** Read timeout applied when the configuration does not set `readTimeoutMs`. @internal */
+const DEFAULT_READ_TIMEOUT_MS = 2000;
+
+/** At most one read-timeout log line per this window; the rest are counted into the next line. @internal */
+const READ_TIMEOUT_LOG_WINDOW_MS = 10000;
+
+/**
+ * A cache read that did not finish within {@link RedisProviderConfig.readTimeoutMs}.
+ * Caught inside the provider and answered as a miss; never thrown to callers.
+ * @internal
+ */
+class RedisReadTimeoutError extends Error {
+    constructor(operation: string, timeoutMs: number) {
+        super(`Redis ${operation} did not finish within ${timeoutMs} ms`);
+        this.name = 'RedisReadTimeoutError';
+    }
+}
 
 /** Keys requested per `SCAN` step. @internal */
 const SCAN_BATCH = 500;
@@ -475,6 +508,10 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     /** The subscriber start-up in flight or completed, shared by every caller of {@link StartListening}. */
     private _listening: Promise<void> | null = null;
     private _config: RedisProviderConfig;
+    private _readTimeoutMs: number;
+    /** When the last read-timeout line was logged, and how many timeouts since then went unlogged. */
+    private _readTimeoutLoggedAt: number = 0;
+    private _readTimeoutsSuppressed: number = 0;
 
     /**
      * Creates a new Redis local storage provider and establishes a connection.
@@ -519,6 +556,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         this._categoryTTLSeconds = { ...DEFAULT_CATEGORY_TTL_SECONDS, ...(config.categoryTTLSeconds ?? {}) };
         this._enableLogging = config.enableLogging ?? true;
         this._maxRetryDelayMs = config.maxRetryDelayMs ?? 30000;
+        this._readTimeoutMs = config.readTimeoutMs ?? DEFAULT_READ_TIMEOUT_MS;
         this._enablePubSub = config.enablePubSub ?? false;
         this._pubSubChannel = `${this._keyPrefix}:__pubsub__`;
 
@@ -529,6 +567,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
                 maxRetriesPerRequest: null,
                 retryStrategy: (times: number) => this.retryStrategy(times, maxRetries),
                 lazyConnect: false,
+                ...config.options,
             });
         } else {
             this._client = new Redis({
@@ -664,6 +703,49 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      */
     private get shouldFailFast(): boolean {
         return this._hasEverConnected && !this._connected;
+    }
+
+    /**
+     * Races a read command against {@link RedisProviderConfig.readTimeoutMs}. On timeout it rejects
+     * with {@link RedisReadTimeoutError}; the command itself is left to finish or fail on its own.
+     * @internal
+     */
+    private async withReadTimeout<T>(operation: string, command: Promise<T>): Promise<T> {
+        const timeoutMs = this._readTimeoutMs;
+        if (!(timeoutMs > 0)) {
+            return command;
+        }
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timeout = new Promise<never>((_resolve, reject) => {
+            timer = setTimeout(() => reject(new RedisReadTimeoutError(operation, timeoutMs)), timeoutMs);
+        });
+        // A command that fails after losing the race has nobody awaiting it.
+        command.catch(() => undefined);
+        try {
+            return await Promise.race([command, timeout]);
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    /**
+     * Logs a read timeout at most once per {@link READ_TIMEOUT_LOG_WINDOW_MS}, counting the ones in
+     * between, so a saturated Redis does not also flood the log.
+     * @internal
+     */
+    private noteReadTimeout(err: RedisReadTimeoutError): void {
+        const now = Date.now();
+        if (now - this._readTimeoutLoggedAt < READ_TIMEOUT_LOG_WINDOW_MS) {
+            this._readTimeoutsSuppressed++;
+            return;
+        }
+        const suppressed = this._readTimeoutsSuppressed;
+        this._readTimeoutLoggedAt = now;
+        this._readTimeoutsSuppressed = 0;
+        if (this._enableLogging) {
+            const more = suppressed > 0 ? ` (${suppressed} more since the last report)` : '';
+            LogError(`${err.message}; answered as a cache miss${more}. Redis is connected but slow to answer.`);
+        }
     }
 
     /**
@@ -896,7 +978,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         }
         try {
             const redisKey = this.buildKey(key, category ?? DEFAULT_CATEGORY);
-            const raw = await this._client.get(redisKey);
+            const raw = await this.withReadTimeout('GET', this._client.get(redisKey));
             if (raw === null) return null;
             try {
                 return JSON.parse(raw) as T;
@@ -908,6 +990,10 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
                 return null;
             }
         } catch (err) {
+            if (err instanceof RedisReadTimeoutError) {
+                this.noteReadTimeout(err);
+                return null;
+            }
             if (this._enableLogging) {
                 LogError(`Redis GetItem failed for key "${key}": ${(err as Error).message}`);
             }
@@ -945,7 +1031,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
 
             // MGET returns an array of strings/nulls in the same order as the inputs.
             // ioredis variadic call: pass keys as separate args.
-            const raws = await this._client.mget(...redisKeys);
+            const raws = await this.withReadTimeout('MGET', this._client.mget(...redisKeys));
 
             for (let i = 0; i < uniqueKeys.length; i++) {
                 const raw = raws[i];
@@ -964,7 +1050,9 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
             }
             return out;
         } catch (err) {
-            if (this._enableLogging) {
+            if (err instanceof RedisReadTimeoutError) {
+                this.noteReadTimeout(err);
+            } else if (this._enableLogging) {
                 LogError(`Redis GetItems failed for ${keys.length} keys: ${(err as Error).message}`);
             }
             // On error, return null entries for every requested key — callers see them as cache misses.
@@ -1174,9 +1262,13 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         try {
             const cat = category || DEFAULT_CATEGORY;
             const redisPrefix = this.buildKey('', cat);
-            const redisKeys = await this.scanKeys(`${escapeGlob(redisPrefix)}*`);
+            const redisKeys = await this.withReadTimeout('SCAN', this.scanKeys(`${escapeGlob(redisPrefix)}*`));
             return redisKeys.map(k => k.substring(redisPrefix.length));
         } catch (err) {
+            if (err instanceof RedisReadTimeoutError) {
+                this.noteReadTimeout(err);
+                return [];
+            }
             if (this._enableLogging) {
                 LogError(`Redis GetCategoryKeys failed for "${category}": ${(err as Error).message}`);
             }
@@ -1208,9 +1300,15 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         try {
             const cat = category || DEFAULT_CATEGORY;
             const groupSetKey = this.buildGroupSetKey(cat, group);
-            const alive = await this._client.eval(PRUNE_GROUP_SCRIPT, 1, groupSetKey, this.buildKey('', cat));
+            const alive = await this.withReadTimeout('index group read', this._client.eval(PRUNE_GROUP_SCRIPT, 1, groupSetKey, this.buildKey('', cat)));
             return Array.isArray(alive) ? alive.map(m => String(m)) : [];
         } catch (err) {
+            if (err instanceof RedisReadTimeoutError) {
+                // The caller still has this process's own index; only slots peers wrote that this
+                // process has not seen are missed, and they expire under the TTL.
+                this.noteReadTimeout(err);
+                return [];
+            }
             if (this._enableLogging) {
                 LogError(`Redis GetIndexGroupKeys failed for "${category}"/"${group}": ${(err as Error).message}`);
             }
@@ -1657,6 +1755,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
                 maxRetriesPerRequest: null,
                 retryStrategy: (times: number) => this.retryStrategy(times, maxRetries),
                 lazyConnect: false,
+                ...this._config.options,
             });
         }
 

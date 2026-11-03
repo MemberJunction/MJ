@@ -2049,6 +2049,7 @@ REDIS_URL=redis://user:password@redis-host:6379
 |---------|---------|-------------|
 | `REDIS_KEY_PREFIX` (env) | `mj` | Prefix for every key. Processes that must share a cache use the same prefix. |
 | `REDIS_TTL_SECONDS` (env) / `cacheSettings.sharedCacheTTLSeconds` | 3600 | Expiry of shared cache entries. The environment variable wins. `0` stores entries without expiry. |
+| `REDIS_READ_TIMEOUT_MS` (env) / `cacheSettings.redisReadTimeoutMs` | 2000 | Longest a shared-cache read waits before it is answered as a miss and the server reads the database. Writes and invalidations have no limit. The environment variable wins. `0` waits without a limit. |
 
 Event-driven invalidation is still what keeps shared entries fresh; the expiry bounds how long an entry
 written by something that never publishes (direct SQL, another application) can be served, and lets a
@@ -2256,6 +2257,13 @@ outage. A cache outage should cost latency, not liveness.
 **The exception is startup.** Before the first successful connection, commands *are* allowed to
 queue — at that point a brief wait is the difference between a warm cache and a cold one, and nothing
 can be stale because nothing is cached yet.
+
+**A connected but saturated Redis does not hang reads.** A lost connection is caught by the rule
+above, but a Redis that stays connected and answers slowly is not. Reads (`GetItem`, `GetItems`,
+`GetIndexGroupKeys`, `GetCategoryKeys`) are raced against `readTimeoutMs` (default 2000 ms) and
+answered as a cache miss when they lose, logged at most once per ten seconds. Writes, removals and
+invalidations are not timed out, so an invalidation is never dropped; that is also why this is not
+ioredis's client-wide `commandTimeout`.
 
 **Reconnection never gives up.** The ceiling is on the delay between attempts
 (`maxRetryDelayMs`, default 30s), not on the number of attempts. Setting `maxRetries` reinstates a

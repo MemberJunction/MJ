@@ -726,3 +726,109 @@ describe('RedisLocalStorageProvider — surviving an outage', () => {
         });
     });
 });
+
+describe('RedisLocalStorageProvider — a connected but saturated Redis', () => {
+    let RedisLocalStorageProvider: typeof import('../RedisLocalStorageProvider.js').RedisLocalStorageProvider;
+    let RedisCtor: ReturnType<typeof vi.fn>;
+
+    beforeEach(async () => {
+        constructed = [];
+        vi.clearAllMocks();
+        RedisLocalStorageProvider = (await import('../RedisLocalStorageProvider.js')).RedisLocalStorageProvider;
+        RedisCtor = (await import('ioredis')).default as unknown as ReturnType<typeof vi.fn>;
+    });
+
+    function connected(config: Record<string, unknown> = {}) {
+        const provider = new RedisLocalStorageProvider({
+            url: 'redis://localhost:6379',
+            keyPrefix: 'mj',
+            enableLogging: false,
+            ...config,
+        });
+        const client = constructed[0];
+        client._fire('connect');
+        client._fire('ready');
+        return { provider, client };
+    }
+
+    const never = <T>(): Promise<T> => new Promise<T>(() => undefined);
+
+    it('answers a GET that never settles as a miss after the default 2000 ms', async () => {
+        vi.useFakeTimers();
+        try {
+            const { provider, client } = connected();
+            client.get.mockImplementation(() => never<string | null>());
+
+            let settled = false;
+            const read = provider.GetItem('k', 'RunViewCache').then(v => { settled = true; return v; });
+            await vi.advanceTimersByTimeAsync(1999);
+            expect(settled).toBe(false);
+            await vi.advanceTimersByTimeAsync(1);
+            await expect(read).resolves.toBeNull();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('applies a configured timeout to MGET, the index-group read and the category scan', async () => {
+        vi.useFakeTimers();
+        try {
+            const { provider, client } = connected({ readTimeoutMs: 50 });
+            client.mget.mockImplementation(() => never<(string | null)[]>());
+            client.eval.mockImplementation(() => never<unknown>());
+
+            const many = provider.GetItems(['a', 'b'], 'RunViewCache');
+            const group = provider.GetIndexGroupKeys('RunViewCache', 'Users');
+            await vi.advanceTimersByTimeAsync(50);
+
+            const result = await many;
+            expect(result.get('a')).toBeNull();
+            expect(result.get('b')).toBeNull();
+            await expect(group).resolves.toEqual([]);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('waits without a limit when readTimeoutMs is 0', async () => {
+        vi.useFakeTimers();
+        try {
+            const { provider, client } = connected({ readTimeoutMs: 0 });
+            let release: (v: string | null) => void = () => undefined;
+            client.get.mockImplementation(() => new Promise<string | null>(r => { release = r; }));
+
+            let settled = false;
+            const read = provider.GetItem('k').then(v => { settled = true; return v; });
+            await vi.advanceTimersByTimeAsync(60000);
+            expect(settled).toBe(false);
+            release(JSON.stringify({ x: 1 }));
+            await expect(read).resolves.toEqual({ x: 1 });
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('a read that answers in time is unaffected', async () => {
+        const { provider, client } = connected();
+        client._store.set('mj:RunViewCache:k', JSON.stringify({ rows: 3 }));
+        await expect(provider.GetItem('k', 'RunViewCache')).resolves.toEqual({ rows: 3 });
+    });
+
+    it('passes options to the client and the subscriber on the URL path too', async () => {
+        const provider = new RedisLocalStorageProvider({
+            url: 'redis://localhost:6379',
+            options: { connectTimeout: 1234, enableOfflineQueue: true },
+            enablePubSub: true,
+            enableLogging: false,
+        });
+        await provider.StartListening().catch(() => undefined);
+
+        const urlCalls = RedisCtor.mock.calls.filter(c => c[0] === 'redis://localhost:6379');
+        expect(urlCalls.length).toBeGreaterThanOrEqual(2); // command client + subscriber
+        for (const call of urlCalls) {
+            const opts = call[1] as Record<string, unknown>;
+            expect(opts.connectTimeout).toBe(1234);
+            expect(opts.maxRetriesPerRequest).toBeNull(); // the MJ defaults stay underneath
+        }
+    });
+});

@@ -40,7 +40,28 @@ export interface SharedCacheProviderOptions {
     Url: string;
     KeyPrefix: string;
     DefaultTTLSeconds?: number;
+    /** Longest a cache read waits before it is answered as a miss; 0 = no limit. */
+    ReadTimeoutMs?: number;
     EnableLogging: boolean;
+}
+
+/** Read timeout for the shared cache when neither config nor environment sets one. */
+export const DEFAULT_REDIS_READ_TIMEOUT_MS = 2000;
+
+/**
+ * Read timeout for the shared Redis cache: `REDIS_READ_TIMEOUT_MS` when it holds a non-negative
+ * integer, otherwise `cacheSettings.redisReadTimeoutMs`, otherwise {@link DEFAULT_REDIS_READ_TIMEOUT_MS}.
+ */
+export function ResolveRedisReadTimeoutMs(configured: number | undefined, env: NodeJS.ProcessEnv = process.env): number {
+  const fromEnv = env.REDIS_READ_TIMEOUT_MS;
+  if (fromEnv !== undefined && fromEnv.trim() !== '') {
+    const parsed = Number(fromEnv);
+    if (Number.isInteger(parsed) && parsed >= 0) {
+      return parsed;
+    }
+    console.warn(`REDIS_READ_TIMEOUT_MS="${fromEnv}" is not a non-negative integer; ignoring it`);
+  }
+  return configured ?? DEFAULT_REDIS_READ_TIMEOUT_MS;
 }
 
 /**
@@ -60,7 +81,8 @@ export function ResolveSharedCacheTTLSeconds(configured: number | undefined, env
 }
 
 /**
- * The shared cache the environment asks for (`REDIS_URL`, `REDIS_KEY_PREFIX`, `REDIS_TTL_SECONDS`),
+ * The shared cache the environment asks for (`REDIS_URL`, `REDIS_KEY_PREFIX`, `REDIS_TTL_SECONDS`,
+ * `REDIS_READ_TIMEOUT_MS`),
  * or null. Built before the database provider so metadata and startup engines use it from the
  * first read.
  */
@@ -72,6 +94,7 @@ export function CreateSharedCacheFromEnvironment(settings: CacheSettingsConfig |
         Url: env.REDIS_URL,
         KeyPrefix: env.REDIS_KEY_PREFIX || 'mj',
         DefaultTTLSeconds: ResolveSharedCacheTTLSeconds(settings?.sharedCacheTTLSeconds, env),
+        ReadTimeoutMs: ResolveRedisReadTimeoutMs(settings?.redisReadTimeoutMs, env),
         EnableLogging: settings?.verboseLogging ?? false,
     });
 }
@@ -189,6 +212,7 @@ export function CreateSharedCacheProvider(options: SharedCacheProviderOptions): 
         url: options.Url,
         keyPrefix: options.KeyPrefix,
         defaultTTLSeconds: options.DefaultTTLSeconds,
+        readTimeoutMs: options.ReadTimeoutMs,
         enablePubSub: true,
         enableLogging: options.EnableLogging,
         publishModes: MJAPI_PUBLISH_MODES,
