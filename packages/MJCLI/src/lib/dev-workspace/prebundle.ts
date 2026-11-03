@@ -241,6 +241,19 @@ function resolveRecordPath(parentDir: string, recordPath: string): string | null
   return IsInsideDirectory(parentDir, absolute) ? absolute : null;
 }
 
+/**
+ * Reads a file, or returns null when it does not exist. Reading directly instead of checking
+ * `existsSync` first leaves no window between the check and the use.
+ */
+function readFileIfPresent(absolute: string): string | null {
+  try {
+    return readFileSync(absolute, 'utf8');
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
 /** Recorded entries for one file + project. */
 function recordedEntries(records: readonly PrebundleExcludeRecord[], file: string, project: string): string[] {
   return records.filter((r) => r.file === file && r.project === project).flatMap((r) => r.entries);
@@ -294,11 +307,11 @@ function planFile(
     plan.Skipped.push({ File: file, Reason: `not an ${ANGULAR_JSON_FILE_NAME} inside the workspace parent` });
     return;
   }
-  if (!existsSync(absolute)) {
+  const original = readFileIfPresent(absolute);
+  if (original === null) {
     plan.Skipped.push({ File: file, Reason: 'file no longer exists' });
     return;
   }
-  const original = readFileSync(absolute, 'utf8');
   const parsed = parseAngularJson(original);
   if ('Error' in parsed) {
     plan.Skipped.push({ File: file, Reason: `not plain JSON (${parsed.Error}) — edit its prebundle exclude by hand` });
@@ -350,11 +363,11 @@ export function RevertPrebundleExcludes(
       result.Skipped.push({ File: file, Reason: `not an ${ANGULAR_JSON_FILE_NAME} inside the workspace parent` });
       continue;
     }
-    if (!existsSync(absolute)) {
+    const original = readFileIfPresent(absolute);
+    if (original === null) {
       result.Skipped.push({ File: file, Reason: 'file no longer exists' });
       continue;
     }
-    const original = readFileSync(absolute, 'utf8');
     const parsed = parseAngularJson(original);
     if ('Error' in parsed) {
       result.Skipped.push({ File: file, Reason: `not plain JSON (${parsed.Error})` });
@@ -380,7 +393,8 @@ export function FindPrebundleDrift(parentDir: string, records: readonly Prebundl
   const drift: PrebundleDrift[] = [];
   for (const record of records) {
     const absolute = resolveRecordPath(parentDir, record.file);
-    const parsed = absolute !== null && existsSync(absolute) ? parseAngularJson(readFileSync(absolute, 'utf8')) : null;
+    const text = absolute !== null ? readFileIfPresent(absolute) : null;
+    const parsed = text !== null ? parseAngularJson(text) : null;
     const project = parsed !== null && 'Json' in parsed ? parsed.Json.projects?.[record.project] : undefined;
     const current = project === undefined ? [] : readExclude(project) ?? [];
     const missing = record.entries.filter((entry) => !current.includes(entry));
