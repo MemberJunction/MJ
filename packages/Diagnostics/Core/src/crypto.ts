@@ -13,7 +13,7 @@
  *   - Bytes (9 + L)..end: `AES-256-GCM` ciphertext + 128-bit authentication tag
  */
 
-import { VerifyBundleArchive, type BundleArchiveVerificationResult } from './archive.js';
+import { ComputeSha256Hex, VerifyBundleArchive, type BundleArchiveVerificationResult } from './archive.js';
 
 const ENVELOPE_MAGIC = new Uint8Array([0x4d, 0x4a, 0x44, 0x42]); // "MJDB"
 const ENVELOPE_VERSION = 0x01;
@@ -37,6 +37,7 @@ export interface EncryptedEnvelopeHeader {
     senderEnvironmentId?: string;
     senderKeyId?: string;
     senderSignatureBase64?: string;
+    /** SHA-256 hex of the plaintext `.mjdiag` archive; covered by the sender signature. */
     manifestSha256?: string;
     createdAt: string;
 }
@@ -300,6 +301,24 @@ export interface EnvelopeHeaderInspectionResult {
     ciphertextOffset?: number;
 }
 
+const OPTIONAL_STRING_HEADER_FIELDS = ['senderEnvironmentId', 'senderKeyId', 'senderSignatureBase64', 'manifestSha256'] as const;
+
+/** True when `header` is an object with the required envelope fields, and each optional field present is a string. */
+function isValidEnvelopeHeader(header: EncryptedEnvelopeHeader | null): header is EncryptedEnvelopeHeader {
+    if (typeof header !== 'object' || header === null || Array.isArray(header)) {
+        return false;
+    }
+    const requiredOk =
+        header.version === 1 &&
+        header.algorithm === 'X25519-HKDF-SHA256-AES256GCM' &&
+        typeof header.recipientKeyId === 'string' &&
+        header.recipientKeyId.length > 0 &&
+        typeof header.ephemeralPublicKeyBase64 === 'string' &&
+        typeof header.hkdfSaltBase64 === 'string' &&
+        typeof header.ivBase64 === 'string';
+    return requiredOk && OPTIONAL_STRING_HEADER_FIELDS.every((field) => header[field] === undefined || typeof header[field] === 'string');
+}
+
 /**
  * Fast `<1ms` pre-check on an uploaded `.mjdiag.enc` buffer before streaming or decrypting.
  * Verifies the `MJDB` magic bytes, version `0x01`, header length bounds, and JSON schema.
@@ -329,25 +348,18 @@ export function InspectEncryptedEnvelopeHeader(
         return { valid: false, reasonCode: 'TRUNCATED_CIPHERTEXT', reason: 'Envelope truncated before GCM authentication tag' };
     }
 
-    let header: EncryptedEnvelopeHeader;
+    let parsed: EncryptedEnvelopeHeader | null;
     try {
         const headerSlice = envelopeBytes.subarray(9, ciphertextOffset);
-        header = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(headerSlice)) as EncryptedEnvelopeHeader;
+        parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(headerSlice)) as EncryptedEnvelopeHeader | null;
     } catch {
         return { valid: false, reasonCode: 'MALFORMED_HEADER_JSON', reason: 'Envelope header is not valid UTF-8 JSON' };
     }
 
-    if (
-        header.version !== 1 ||
-        header.algorithm !== 'X25519-HKDF-SHA256-AES256GCM' ||
-        typeof header.recipientKeyId !== 'string' ||
-        !header.recipientKeyId ||
-        typeof header.ephemeralPublicKeyBase64 !== 'string' ||
-        typeof header.hkdfSaltBase64 !== 'string' ||
-        typeof header.ivBase64 !== 'string'
-    ) {
+    if (!isValidEnvelopeHeader(parsed)) {
         return { valid: false, reasonCode: 'INVALID_HEADER_FIELDS', reason: 'Envelope header failed schema check' };
     }
+    const header = parsed;
 
     if (allowedRecipientKeyIds && allowedRecipientKeyIds.length > 0) {
         if (!allowedRecipientKeyIds.includes(header.recipientKeyId)) {
@@ -397,7 +409,8 @@ export interface DecryptDiagnosticBundleResult {
  * 1. Inspects header and resolves recipient private key by `recipientKeyId`
  * 2. Optionally verifies customer `Ed25519` sender signature
  * 3. Performs `X25519` + `HKDF-SHA256` key derivation and `AES-256-GCM` decryption with header AAD
- * 4. Runs `VerifyBundleArchive()` on the decrypted `.mjdiag` ZIP bytes
+ * 4. When the header carries `manifestSha256`, requires it to equal the SHA-256 of the decrypted bytes -> `MANIFEST_SHA256_MISMATCH`
+ * 5. Runs `VerifyBundleArchive()` on the decrypted `.mjdiag` ZIP bytes
  */
 export async function DecryptDiagnosticBundle(
     envelopeBytes: Uint8Array,
@@ -506,6 +519,19 @@ export async function DecryptDiagnosticBundle(
             header,
             senderVerified,
         };
+    }
+
+    if (header.manifestSha256) {
+        const actualSha256 = await ComputeSha256Hex(decryptedZipBytes);
+        if (actualSha256 !== header.manifestSha256.toLowerCase()) {
+            return {
+                valid: false,
+                reasonCode: 'MANIFEST_SHA256_MISMATCH',
+                reason: 'Envelope manifestSha256 does not match the SHA-256 of the decrypted archive',
+                header,
+                senderVerified,
+            };
+        }
     }
 
     const archiveVerification = await VerifyBundleArchive(decryptedZipBytes);
