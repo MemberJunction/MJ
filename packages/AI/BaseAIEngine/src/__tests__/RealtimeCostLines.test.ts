@@ -1,5 +1,5 @@
 /**
- * Unit tests for the avatar video line of a realtime run's cost: when the configured price prices the run's stored
+ * Unit tests for the avatar video and audio lines of a realtime run's cost (audio at the end of the file): when the configured price prices the run's stored
  * video seconds (per minute) or its video tokens (per 1M tokens), when the video stays priced as before (and why), how
  * the video tokens leave the default line's output bucket, and how the cost lines are written into and read from
  * `ModelSpecificResponseDetails`.
@@ -11,11 +11,14 @@ import { describe, it, expect } from 'vitest';
 import type { AIModelConfiguration } from '@memberjunction/ai';
 import {
     BuildCostLines,
+    ExcludeAudioTokens,
     ExcludeAvatarVideoTokens,
+    PriceAudioTokens,
     PriceAvatarVideoOutput,
     ReadCostLines,
     RoundCost,
     WriteCostLines,
+    type PricedAudioTokens,
     type PricedAvatarVideo,
 } from '../RealtimeCostLines';
 import type { RealtimeUsageRecord } from '../RealtimeUsageRecord';
@@ -164,5 +167,102 @@ describe('RoundCost', () => {
     it('rounds to 8 decimals, the precision of AIPromptRun.Cost', () => {
         expect(RoundCost(0.123456789)).toBe(0.12345679);
         expect(RoundCost(0.0165 + 0.37152)).toBe(0.38802);
+    });
+});
+
+describe('PriceAudioTokens', () => {
+    const AUDIO_PRICES: AIModelConfiguration = {
+        Realtime: { Pricing: { AudioInput: { Price: 32, Unit: 'Per 1M Tokens', Currency: 'USD' }, AudioOutput: { Price: 64, Unit: 'Per 1M Tokens', Currency: 'USD' } } },
+    };
+    const CALL: RealtimeUsageRecord = { Input: { TextTokens: 2000, AudioTokens: 8000 }, Output: { TextTokens: 500, AudioTokens: 1500 } };
+
+    function audioConfiguration(input: object | null, output: object | null): AIModelConfiguration {
+        return JSON.parse(JSON.stringify({ Realtime: { Pricing: { AudioInput: input, AudioOutput: output } } })) as AIModelConfiguration;
+    }
+
+    it('prices each direction at its own per-1M-token price', () => {
+        expect(PriceAudioTokens(CALL, AUDIO_PRICES, 'USD')).toEqual({
+            Input: { Priced: true, Direction: 'Input', Tokens: 8000, Cost: 0.256 },
+            Output: { Priced: true, Direction: 'Output', Tokens: 1500, Cost: 0.096 },
+        });
+    });
+
+    it('is null for a direction without audio tokens, and for no record', () => {
+        expect(PriceAudioTokens({ Input: { AudioTokens: 10 }, Output: { TextTokens: 5 } }, AUDIO_PRICES, 'USD').Output).toBeNull();
+        expect(PriceAudioTokens(null, AUDIO_PRICES, 'USD')).toEqual({ Input: null, Output: null });
+    });
+
+    it('says no-price without a usable price: none, a partial one, or a negative amount', () => {
+        for (const configuration of [null, {}, audioConfiguration({ Price: 32, Unit: 'Per 1M Tokens' }, { Price: -1, Unit: 'Per 1M Tokens', Currency: 'USD' })]) {
+            const pricing = PriceAudioTokens(CALL, configuration, 'USD');
+            expect(pricing.Input).toEqual({ Priced: false, Direction: 'Input', Tokens: 8000, Reason: 'no-price' });
+            expect(pricing.Output).toEqual({ Priced: false, Direction: 'Output', Tokens: 1500, Reason: 'no-price' });
+        }
+    });
+
+    it("refuses any unit but 'Per 1M Tokens', a per-minute price included", () => {
+        const pricing = PriceAudioTokens(CALL, audioConfiguration({ Price: 0.06, Unit: 'Per Minute', Currency: 'USD' }, { Price: 64, Unit: 'Per 1K Tokens', Currency: 'USD' }), 'USD');
+        expect(pricing.Input).toMatchObject({ Priced: false, Reason: 'unit' });
+        expect(pricing.Output).toMatchObject({ Priced: false, Reason: 'unit' });
+    });
+
+    it("refuses a currency other than the cost row's, but matches its case loosely", () => {
+        expect(PriceAudioTokens(CALL, audioConfiguration({ Price: 32, Unit: 'Per 1M Tokens', Currency: 'EUR' }, null), 'USD').Input).toMatchObject({ Priced: false, Reason: 'currency' });
+        expect(PriceAudioTokens(CALL, AUDIO_PRICES, ' usd ').Input).toMatchObject({ Priced: true });
+    });
+
+    it('prices a free audio line at a price of 0', () => {
+        expect(PriceAudioTokens(CALL, audioConfiguration({ Price: 0, Unit: 'Per 1M Tokens', Currency: 'USD' }, null), 'USD').Input).toMatchObject({ Priced: true, Cost: 0 });
+    });
+});
+
+describe('ExcludeAudioTokens', () => {
+    it('takes the audio tokens out of the input and output buckets and leaves the cache buckets', () => {
+        expect(ExcludeAudioTokens({ input: 10000, output: 2000, cacheRead: 300, cacheWrite: 4 }, 8000, 1500)).toEqual({
+            Usage: { input: 2000, output: 500, cacheRead: 300, cacheWrite: 4 },
+            ClampedInput: false,
+            ClampedOutput: false,
+        });
+    });
+
+    it('stops each bucket at 0 and says which ran out', () => {
+        expect(ExcludeAudioTokens({ input: 100, output: 50 }, 120, 10)).toEqual({ Usage: { input: 0, output: 40 }, ClampedInput: true, ClampedOutput: false });
+        expect(ExcludeAudioTokens({ input: 100, output: 50 }, 0, 60)).toEqual({ Usage: { input: 100, output: 0 }, ClampedInput: false, ClampedOutput: true });
+    });
+
+    it('takes nothing for no audio tokens, or a negative count', () => {
+        expect(ExcludeAudioTokens({ input: 100, output: 50 }, 0, -5)).toEqual({ Usage: { input: 100, output: 50 }, ClampedInput: false, ClampedOutput: false });
+    });
+});
+
+describe('BuildCostLines with audio', () => {
+    const audio: PricedAudioTokens[] = [
+        { Priced: true, Direction: 'Input', Tokens: 8000, Cost: 0.256 },
+        { Priced: true, Direction: 'Output', Tokens: 1500, Cost: 0.096 },
+    ];
+
+    it('writes an Audio line per priced direction after the default line, and the video line last', () => {
+        const video: PricedAvatarVideo = { Priced: true, Measure: 'Tokens', Seconds: 60, Cost: 0.37152, VideoTokens: 371520 };
+        const lines = BuildCostLines({ CostRowID: 'row-1', Measure: 'Tokens', Usage: { input: 2000, output: 500 }, Cost: 0.016 }, video, audio);
+        expect(lines).toEqual([
+            { Modality: null, CostRowID: 'row-1', Measure: 'Tokens', Input: 2000, Output: 500, Cost: 0.016 },
+            { Modality: 'Audio', CostRowID: null, Measure: 'Tokens', Input: 8000, Output: 0, Cost: 0.256 },
+            { Modality: 'Audio', CostRowID: null, Measure: 'Tokens', Input: 0, Output: 1500, Cost: 0.096 },
+            { Modality: 'Video', CostRowID: null, Measure: 'Tokens', Input: 0, Output: 371520, Cost: 0.37152 },
+        ]);
+    });
+
+    it('marks a blended default line, and writes and reads the mark back', () => {
+        const lines = BuildCostLines({ CostRowID: 'row-1', Measure: 'Tokens', Usage: { input: 10000, output: 2000 }, Cost: 0.072, Blended: true }, null);
+        expect(lines).toEqual([{ Modality: null, CostRowID: 'row-1', Measure: 'Tokens', Input: 10000, Output: 2000, Cost: 0.072, Blended: true }]);
+        const written = WriteCostLines(null, lines);
+        expect(JSON.parse(written ?? '{}').CostLines[0].Blended).toBe(true);
+        expect(ReadCostLines(written)).toEqual(lines);
+    });
+
+    it('writes no mark on a line that is not blended, and reads only a true mark', () => {
+        const written = WriteCostLines(null, BuildCostLines({ CostRowID: 'row-1', Measure: 'Tokens', Usage: { input: 1, output: 1 }, Cost: 1, Blended: false }, null));
+        expect(JSON.parse(written ?? '{}').CostLines[0]).not.toHaveProperty('Blended');
+        expect(ReadCostLines(JSON.stringify({ CostLines: [{ Cost: 1, Blended: 'yes' }] }))[0]).not.toHaveProperty('Blended');
     });
 });

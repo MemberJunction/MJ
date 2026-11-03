@@ -1,13 +1,18 @@
 /**
- * @fileoverview REALTIME COST LINES: the pure math that prices a realtime run's generated avatar video on a line of its
- * own, and the record of how the run's cost splits, written into `ModelSpecificResponseDetails` under `CostLines` when
- * the run is priced.
+ * @fileoverview REALTIME COST LINES: the pure math that prices a realtime run's generated avatar video and its audio
+ * tokens on lines of their own, and the record of how the run's cost splits, written into `ModelSpecificResponseDetails`
+ * under `CostLines` when the run is priced.
  *
  * A realtime call is one prompt run priced by one cost row. Avatar video has its own price, in the model vendor's
  * resolved configuration (`Realtime.Pricing.AvatarVideoOutput`), per minute or per 1M tokens. The run's cost is then
  * its default line (the cost row, over the run's token columns less the output tokens the provider counted as video)
  * plus the video line: the stored output video seconds at a per-minute price, or the stored output video tokens at a
  * per-token price.
+ *
+ * Audio tokens work the same way: providers bill them at a different rate from text tokens, and a cost row holds one
+ * input and one output rate. With an audio price in the configuration (`Realtime.Pricing.AudioInput` / `AudioOutput`,
+ * per 1M tokens), each direction's audio tokens leave the default line's bucket and are priced on an `'Audio'` line.
+ * Without one, they stay on the default line at the row's rate, and that line is marked `Blended`.
  *
  * Pure: no entity or engine access; `MJAIPromptRunEntityServer` resolves the cost row and the configuration.
  */
@@ -23,9 +28,16 @@ export const COST_LINES_DETAILS_KEY = 'CostLines';
 /** The {@link PromptRunCostLine.Modality} of the line that prices a generated avatar's video. */
 export const AVATAR_VIDEO_COST_LINE_MODALITY = 'Video';
 
+/** The {@link PromptRunCostLine.Modality} of a line that prices audio tokens, one line per direction. */
+export const AUDIO_COST_LINE_MODALITY = 'Audio';
+
 /** One line of a prompt run's cost. The lines add up to the run's `Cost`, in its `CostCurrency`. */
 export interface PromptRunCostLine {
-    /** `null` for the default line (the run's cost row); `'Video'` for the avatar video line. */
+    /**
+     * `null` for the default line (the run's cost row); `'Video'` for the avatar video line; `'Audio'` for an audio
+     * line, whose {@link PromptRunCostLine.Input} or {@link PromptRunCostLine.Output} holds the audio tokens of its
+     * direction (the other is 0).
+     */
     Modality: string | null;
     /** The `MJ: AI Model Costs` row that priced the line; `null` for a line priced from the model configuration. */
     CostRowID: string | null;
@@ -41,6 +53,12 @@ export interface PromptRunCostLine {
     Output: number;
     /** The line's cost, to 8 decimals. */
     Cost: number;
+    /**
+     * Set to `true` on the default line when it priced audio tokens at the cost row's text rates because the
+     * configuration has no usable audio price for their direction, so a report can tell such runs apart. Absent
+     * otherwise.
+     */
+    Blended?: boolean;
 }
 
 /** Why a run's avatar video was not priced on its own line. */
@@ -150,27 +168,128 @@ export function ExcludeAvatarVideoTokens(usage: NormalizedUsage, videoTokens: nu
     return { Usage: { ...usage, output: usage.output - removed }, Clamped: removed < wanted };
 }
 
+/** The direction of a run's audio tokens. */
+export type RealtimeAudioDirection = 'Input' | 'Output';
+
+/** Why a direction's audio tokens were not priced on a line of their own. */
+export type AudioTokensUnpricedReason = 'no-price' | 'unit' | 'currency';
+
+/** One direction's audio tokens, priced on an `'Audio'` line from the configuration. */
+export interface PricedAudioTokens {
+    Priced: true;
+    Direction: RealtimeAudioDirection;
+    /** The audio tokens the run stored for the direction, which leave the default line's bucket. */
+    Tokens: number;
+    /** The line's cost, to 8 decimals. */
+    Cost: number;
+}
+
+/** One direction's audio tokens that stay on the default line at the cost row's rate, and why. */
+export interface UnpricedAudioTokens {
+    Priced: false;
+    Direction: RealtimeAudioDirection;
+    Tokens: number;
+    Reason: AudioTokensUnpricedReason;
+}
+
+/** How each direction's audio tokens are priced; `null` for a direction with no audio tokens stored. */
+export interface AudioTokensPricing {
+    Input: PricedAudioTokens | UnpricedAudioTokens | null;
+    Output: PricedAudioTokens | UnpricedAudioTokens | null;
+}
+
+/** The default line's quantities after priced audio lines took their tokens. */
+export interface AudioTokenExclusion {
+    Usage: NormalizedUsage;
+    /** The audio input tokens were more than the input bucket held, so the bucket stopped at 0. */
+    ClampedInput: boolean;
+    /** The audio output tokens were more than the output bucket held, so the bucket stopped at 0. */
+    ClampedOutput: boolean;
+}
+
 /**
- * The lines of a run's cost: the default line, and the avatar video line when one was priced.
+ * The audio price units this prices: per 1M tokens only. The token counts are what the providers report per modality;
+ * nothing records audio seconds per direction to price a per-minute rate against.
+ */
+const AUDIO_PRICE_UNITS: ReadonlyMap<string, number> = new Map([['Per 1M Tokens', 1_000_000]]);
+
+/**
+ * Prices the audio tokens a realtime run stored, per direction, at the prices in the model vendor's resolved
+ * configuration (`Realtime.Pricing.AudioInput` / `AudioOutput`, per 1M tokens). For each direction: `null` when the
+ * run stored no audio tokens for it; otherwise the priced line, or why the tokens stay on the default line at the cost
+ * row's rate: no usable price (a partial price counts as none), a unit other than `'Per 1M Tokens'`, or a currency
+ * other than the cost row's.
  *
- * @param defaultLine The cost row's id, its measure, the quantities it priced and their cost.
+ * @param record The run's stored usage record.
+ * @param configuration The model vendor's resolved model configuration.
+ * @param rowCurrency The currency of the run's cost row, which the run's cost is in.
+ */
+export function PriceAudioTokens(record: RealtimeUsageRecord | null, configuration: AIModelConfiguration | null, rowCurrency: string): AudioTokensPricing {
+    const pricing = configuration?.Realtime?.Pricing;
+    return {
+        Input: priceAudioDirection('Input', record?.Input?.AudioTokens ?? 0, pricing?.AudioInput ?? null, rowCurrency),
+        Output: priceAudioDirection('Output', record?.Output?.AudioTokens ?? 0, pricing?.AudioOutput ?? null, rowCurrency),
+    };
+}
+
+/**
+ * Takes the audio tokens that priced audio lines cover out of the default line: input audio tokens from the uncached
+ * input bucket, output audio tokens from the output bucket. The cache buckets stay on the default line. A bucket never
+ * goes below 0.
+ *
+ * @param usage The default line's quantities.
+ * @param inputAudioTokens The input audio tokens a priced line covers (0 when the input direction is not priced).
+ * @param outputAudioTokens The output audio tokens a priced line covers (0 when the output direction is not priced).
+ */
+export function ExcludeAudioTokens(usage: NormalizedUsage, inputAudioTokens: number, outputAudioTokens: number): AudioTokenExclusion {
+    const wantedInput = Math.max(0, inputAudioTokens);
+    const wantedOutput = Math.max(0, outputAudioTokens);
+    const removedInput = Math.min(usage.input, wantedInput);
+    const removedOutput = Math.min(usage.output, wantedOutput);
+    return {
+        Usage: { ...usage, input: usage.input - removedInput, output: usage.output - removedOutput },
+        ClampedInput: removedInput < wantedInput,
+        ClampedOutput: removedOutput < wantedOutput,
+    };
+}
+
+/**
+ * The lines of a run's cost: the default line, the audio lines that were priced, and the avatar video line when one
+ * was priced.
+ *
+ * @param defaultLine The cost row's id, its measure, the quantities it priced, their cost, and whether it priced audio
+ * tokens at the row's text rates.
  * @param video The priced avatar video line, if any.
+ * @param audio The priced audio lines, if any.
  */
 export function BuildCostLines(
-    defaultLine: { CostRowID: string; Measure: string; Usage: NormalizedUsage; Cost: number },
-    video: PricedAvatarVideo | null
+    defaultLine: { CostRowID: string; Measure: string; Usage: NormalizedUsage; Cost: number; Blended?: boolean },
+    video: PricedAvatarVideo | null,
+    audio: readonly PricedAudioTokens[] = []
 ): PromptRunCostLine[] {
     const usage = defaultLine.Usage;
-    const lines: PromptRunCostLine[] = [
-        {
-            Modality: null,
-            CostRowID: defaultLine.CostRowID,
-            Measure: defaultLine.Measure,
-            Input: usage.input + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0),
-            Output: usage.output,
-            Cost: RoundCost(defaultLine.Cost),
-        },
-    ];
+    const first: PromptRunCostLine = {
+        Modality: null,
+        CostRowID: defaultLine.CostRowID,
+        Measure: defaultLine.Measure,
+        Input: usage.input + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0),
+        Output: usage.output,
+        Cost: RoundCost(defaultLine.Cost),
+    };
+    if (defaultLine.Blended) {
+        first.Blended = true;
+    }
+    const lines: PromptRunCostLine[] = [first];
+    for (const line of audio) {
+        lines.push({
+            Modality: AUDIO_COST_LINE_MODALITY,
+            CostRowID: null,
+            Measure: 'Tokens',
+            Input: line.Direction === 'Input' ? line.Tokens : 0,
+            Output: line.Direction === 'Output' ? line.Tokens : 0,
+            Cost: line.Cost,
+        });
+    }
     if (video) {
         const output = video.Measure === 'Tokens' ? video.VideoTokens : video.Seconds;
         lines.push({ Modality: AVATAR_VIDEO_COST_LINE_MODALITY, CostRowID: null, Measure: video.Measure, Input: 0, Output: output, Cost: video.Cost });
@@ -214,32 +333,66 @@ export function RoundCost(cost: number): number {
 }
 
 /**
- * The configured price and its unit when it can price the run, or why it can't. A price applies only when all three of
- * its fields are set, so a partial price counts as none.
+ * The configured avatar video price and its unit when it can price the run, or why it can't.
  */
 function readAvatarPrice(price: RealtimeUnitPrice | null, rowCurrency: string): UsableAvatarVideoPrice | AvatarVideoUnpricedReason {
+    const usable = readConfiguredPrice(price, rowCurrency, AVATAR_VIDEO_PRICE_UNITS);
+    return typeof usable === 'string' ? usable : { ...usable.Unit, Price: usable.Price };
+}
+
+/** One direction's audio tokens priced at its configured price, or why they stay on the default line. */
+function priceAudioDirection(
+    direction: RealtimeAudioDirection,
+    tokens: number,
+    price: RealtimeUnitPrice | null,
+    rowCurrency: string
+): PricedAudioTokens | UnpricedAudioTokens | null {
+    if (!Number.isFinite(tokens) || tokens <= 0) {
+        return null;
+    }
+    const usable = readConfiguredPrice(price, rowCurrency, AUDIO_PRICE_UNITS);
+    if (typeof usable === 'string') {
+        return { Priced: false, Direction: direction, Tokens: tokens, Reason: usable };
+    }
+    return { Priced: true, Direction: direction, Tokens: tokens, Cost: RoundCost((tokens / usable.Unit) * usable.Price) };
+}
+
+/**
+ * A configured price and what its unit maps to in `units` when it can price the run, or why it can't. A price applies
+ * only when all three of its fields are set and the amount is a finite number of at least 0, so a partial price counts
+ * as none; its currency must be the cost row's, compared without case or surrounding space.
+ */
+function readConfiguredPrice<TUnit>(
+    price: RealtimeUnitPrice | null,
+    rowCurrency: string,
+    units: ReadonlyMap<string, TUnit>
+): { Price: number; Unit: TUnit } | 'no-price' | 'unit' | 'currency' {
     if (!price || price.Price == null || price.Unit == null || price.Currency == null) {
         return 'no-price';
     }
     if (!Number.isFinite(price.Price) || price.Price < 0) {
         return 'no-price';
     }
-    const unit = AVATAR_VIDEO_PRICE_UNITS.get(price.Unit);
-    if (!unit) {
+    const unit = units.get(price.Unit);
+    if (unit === undefined) {
         return 'unit';
     }
-    return price.Currency.trim().toUpperCase() === rowCurrency.trim().toUpperCase() ? { ...unit, Price: price.Price } : 'currency';
+    return price.Currency.trim().toUpperCase() === rowCurrency.trim().toUpperCase() ? { Price: price.Price, Unit: unit } : 'currency';
 }
 
 function costLineAsJson(line: PromptRunCostLine): JSONObject {
-    return { Modality: line.Modality, CostRowID: line.CostRowID, Measure: line.Measure, Input: line.Input, Output: line.Output, Cost: line.Cost };
+    const json: JSONObject = { Modality: line.Modality, CostRowID: line.CostRowID, Measure: line.Measure, Input: line.Input, Output: line.Output, Cost: line.Cost };
+    if (line.Blended) {
+        json['Blended'] = true;
+    }
+    return json;
 }
 
 function readCostLine(value: JSONValue): PromptRunCostLine | null {
     if (!IsPlainObject(value) || typeof value['Cost'] !== 'number' || !Number.isFinite(value['Cost'])) {
         return null;
     }
-    return {
+    const line: PromptRunCostLine = {
         Modality: typeof value['Modality'] === 'string' ? value['Modality'] : null,
         CostRowID: typeof value['CostRowID'] === 'string' ? value['CostRowID'] : null,
         Measure: typeof value['Measure'] === 'string' ? value['Measure'] : 'Tokens',
@@ -247,4 +400,8 @@ function readCostLine(value: JSONValue): PromptRunCostLine | null {
         Output: typeof value['Output'] === 'number' ? value['Output'] : 0,
         Cost: value['Cost'],
     };
+    if (value['Blended'] === true) {
+        line.Blended = true;
+    }
+    return line;
 }

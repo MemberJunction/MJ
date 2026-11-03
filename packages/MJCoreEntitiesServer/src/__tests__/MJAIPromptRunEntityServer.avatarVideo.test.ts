@@ -9,6 +9,8 @@
  *
  * The generated base (`MJAIPromptRunEntityExtended`) is replaced by a plain stub, as the package's other entity
  * tests do, and the engine's catalog lookups are stubbed on the real singleton; the pricing math is the real code.
+ * The records carry audio tokens and the configurations here hold no audio price, so the default line is marked
+ * `Blended` (audio pricing has its own suite, `MJAIPromptRunEntityServer.audio.test.ts`).
  * Numbers: one speaking minute of Gemini 3.8 Live on Vertex AI at $0.75 / $4.50 per 1M tokens, with Google counting
  * 371,520 avatar video tokens in the response total, and the avatar's video at $0.37152 per minute or $1.00 per 1M
  * video tokens.
@@ -163,7 +165,7 @@ describe('MJAIPromptRunEntityServer pricing: the avatar video line', () => {
             expect(details['RealtimeUsage']).toEqual(ONE_MINUTE_RECORD.RealtimeUsage);
             expect(details['Provider']).toBe('kept');
             expect(ReadCostLines(run.ModelSpecificResponseDetails)).toEqual([
-                { Modality: null, CostRowID: 'cost-row-vertex', Measure: 'Tokens', Input: 10000, Output: 2000, Cost: 0.0165 },
+                { Modality: null, CostRowID: 'cost-row-vertex', Measure: 'Tokens', Input: 10000, Output: 2000, Cost: 0.0165, Blended: true },
                 { Modality: 'Video', CostRowID: null, Measure: 'Seconds', Input: 0, Output: 60, Cost: 0.37152 },
             ]);
         });
@@ -222,7 +224,7 @@ describe('MJAIPromptRunEntityServer pricing: the avatar video line', () => {
 
             expect(run.Cost).toBeCloseTo(DEFAULT_LINE_COST + 0.37152, 10);
             expect(ReadCostLines(run.ModelSpecificResponseDetails)).toEqual([
-                { Modality: null, CostRowID: 'cost-row-vertex', Measure: 'Tokens', Input: 10000, Output: 2000, Cost: 0.0165 },
+                { Modality: null, CostRowID: 'cost-row-vertex', Measure: 'Tokens', Input: 10000, Output: 2000, Cost: 0.0165, Blended: true },
                 { Modality: 'Video', CostRowID: null, Measure: 'Tokens', Input: 0, Output: 371520, Cost: 0.37152 },
             ]);
         });
@@ -241,7 +243,7 @@ describe('MJAIPromptRunEntityServer pricing: the avatar video line', () => {
 
             expect(run.Cost).toBeCloseTo(DEFAULT_LINE_COST, 10);
             expect(ReadCostLines(run.ModelSpecificResponseDetails)).toEqual([
-                { Modality: null, CostRowID: 'cost-row-vertex', Measure: 'Tokens', Input: 10000, Output: 2000, Cost: 0.0165 },
+                { Modality: null, CostRowID: 'cost-row-vertex', Measure: 'Tokens', Input: 10000, Output: 2000, Cost: 0.0165, Blended: true },
             ]);
             expect(loggedStatus('no video tokens to price')).toBe(1);
         });
@@ -256,7 +258,7 @@ describe('MJAIPromptRunEntityServer pricing: the avatar video line', () => {
             expect(run.Cost).toBeCloseTo(TODAY_COST, 10);
             expect(run.TotalCost).toBe(run.Cost);
             expect(ReadCostLines(run.ModelSpecificResponseDetails)).toEqual([
-                { Modality: null, CostRowID: 'cost-row-vertex', Measure: 'Tokens', Input: 10000, Output: 373520, Cost: 1.68834 },
+                { Modality: null, CostRowID: 'cost-row-vertex', Measure: 'Tokens', Input: 10000, Output: 373520, Cost: 1.68834, Blended: true },
             ]);
             expect(loggedStatus('no usable Realtime.Pricing.AvatarVideoOutput price')).toBe(1);
         });
@@ -279,8 +281,8 @@ describe('MJAIPromptRunEntityServer pricing: the avatar video line', () => {
             expect(loggedStatus("not in the cost row's currency")).toBe(1);
         });
 
-        it('logs nothing for a realtime run without avatar video', async () => {
-            const run = makeRun({ RealtimeUsage: { Output: { AudioTokens: 2000 } } }, { Completion: 2000 });
+        it('logs nothing about video for a realtime run without avatar video', async () => {
+            const run = makeRun({ RealtimeUsage: { Output: { TextTokens: 2000 } } }, { Completion: 2000 });
             await run.Price();
 
             expect(run.Cost).toBeCloseTo(DEFAULT_LINE_COST, 10);

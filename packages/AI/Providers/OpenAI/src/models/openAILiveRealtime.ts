@@ -23,9 +23,9 @@ import {
     REALTIME_SDP_EXCHANGE_PATH,
     ResolveRealtimeProxyBaseHttpUrl,
     RealtimeToolBatchBarrier,
+    MapRealtimeUsageModalityDetail,
     type RealtimeInputFrame,
 } from '@memberjunction/ai';
-import { MapUsageModalityDetail } from './openAIRealtime.js';
 
 /**
  * Default backend reasoning/planning model used by OpenAI Live when in `responses` delegation mode
@@ -635,8 +635,8 @@ export class OpenAILiveSession implements IRealtimeSession {
                             InputTokens: resp.usage.input_tokens ?? 0,
                             OutputTokens: resp.usage.output_tokens ?? 0,
                             DurationSeconds: this._lastReportedSeconds,
-                            InputTokenDetails: MapUsageModalityDetail(resp.usage.input_token_details),
-                            OutputTokenDetails: MapUsageModalityDetail(resp.usage.output_token_details),
+                            InputTokenDetails: MapRealtimeUsageModalityDetail(resp.usage.input_token_details),
+                            OutputTokenDetails: MapRealtimeUsageModalityDetail(resp.usage.output_token_details),
                         };
                         for (const handler of this._usageHandlers) {
                             handler(u);
