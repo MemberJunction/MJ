@@ -3,6 +3,7 @@ import { AggregateResult, DatasetItemFilterType, DatasetResultType, IMetadataPro
 import { AggregateExpression, RunViewParams, IsMaterializedDataSource } from "../views/runView";
 import { LogError, LogStatusEx } from "./logging";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
+import { EntityInfo } from "./entityInfo";
 import { Metadata } from "./metadata";
 import { CompositeKey, KeyValuePair } from "./compositeKey";
 
@@ -1191,6 +1192,19 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const baseEntity = entityEvent.baseEntity;
         if (!baseEntity?.EntityInfo?.Name) return;
 
+        if ((entityEvent.type === 'save' || entityEvent.type === 'delete') && baseEntity.EntityInfo.IsParentType) {
+            const activeChainLower = new Set<string>();
+            let currChild: BaseEntity | null = baseEntity.ISAChild;
+            while (currChild) {
+                const cName = currChild.EntityInfo?.Name?.trim().toLowerCase();
+                if (cName) {
+                    activeChainLower.add(cName);
+                }
+                currChild = currChild.ISAChild;
+            }
+            await this.invalidateISADescendantEntities(baseEntity.EntityInfo, activeChainLower);
+        }
+
         const entityName = baseEntity.EntityInfo.Name;
 
         // Short-circuit: if caching is disabled for this entity, skip the fingerprint scan
@@ -1265,6 +1279,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // the Metadata helper itself proxies to the global provider with sensible fallbacks.
         const md = entityEvent.provider ?? new Metadata();
         const entityInfo = md.EntityByName(entityName);
+        if (entityInfo?.IsParentType) {
+            await this.invalidateISADescendantEntities(entityInfo);
+        }
         if (entityInfo && !this.IsCachingEnabledForEntity(entityInfo)) return;
 
         const fingerprints = await this.resolveFingerprintsForEntity(entityName);
@@ -1382,6 +1399,55 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             return CompositeKey.FromKeyValuePairs(pairs.map(p => new KeyValuePair(p.FieldName, p.Value)));
         } catch {
             return null;
+        }
+    }
+
+    /**
+     * When an IS-A parent entity is saved or deleted, child entities' SQL views (`vwMembers`,
+     * `vwSpeakers`, `vwMeetings`, etc.) join the parent table for inherited columns.
+     * - For overlapping subtype parents (`AllowMultipleSubtypes === true`, e.g., `Persons` ->
+     *   `Members`, `Speakers`), saving `Members` also updates `Persons`, so sibling subtypes
+     *   (`Speakers`) not in the active save chain may now hold stale inherited parent fields.
+     * - For disjoint subtype parents (`AllowMultipleSubtypes === false`, e.g., `Products` ->
+     *   `Meetings`, `Publications`), each record belongs to at most one child subtype, so when
+     *   a known child is in the active chain, sibling subtypes cannot hold that record; only a
+     *   bare parent save/delete (no active child in `alreadyHandledLower`) requires invalidating
+     *   child subtype caches.
+     */
+    private async invalidateISADescendantEntities(
+        parentInfo: EntityInfo,
+        alreadyHandledLower?: ReadonlySet<string>
+    ): Promise<void> {
+        const children = parentInfo.ChildEntities;
+        if (!Array.isArray(children) || children.length === 0) {
+            return;
+        }
+        if (!parentInfo.AllowMultipleSubtypes && alreadyHandledLower && alreadyHandledLower.size > 0) {
+            const hasHandledChild = children.some(c => {
+                const cLower = c?.Name?.trim().toLowerCase();
+                return !!cLower && alreadyHandledLower.has(cLower);
+            });
+            if (hasHandledChild) {
+                return;
+            }
+        }
+        for (const child of children) {
+            const childName = child?.Name?.trim();
+            if (!childName) {
+                continue;
+            }
+            const childLower = childName.toLowerCase();
+            if (!alreadyHandledLower?.has(childLower)) {
+                const childFingerprints = await this.resolveFingerprintsForEntity(childName);
+                if (childFingerprints && childFingerprints.size > 0) {
+                    for (const fp of [...childFingerprints]) {
+                        await this.InvalidateRunViewResult(fp);
+                    }
+                }
+            }
+            if (child.IsParentType) {
+                await this.invalidateISADescendantEntities(child, alreadyHandledLower);
+            }
         }
     }
 

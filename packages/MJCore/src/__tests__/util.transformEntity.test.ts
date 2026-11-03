@@ -1359,4 +1359,94 @@ describe('TransformSimpleObjectToEntityObject batched IS-A hydration & 1-query C
             'IS-A'
         );
     });
+
+    it('CloneEntityWithISAChain clones an IS-A parent and its attached 3-level ISAChild chain in 0 provider queries', async () => {
+        const productsInfo = batchedProvider.EntityByName('Products')!;
+        const coursesInfo = batchedProvider.EntityByName('Courses')!;
+        const webinarsInfo = batchedProvider.EntityByName('Webinars')!;
+        const webinarId = 'e2000000-0000-0000-0000-000000000001';
+
+        store.Insert('Products', {
+            ID: webinarId,
+            Name: 'Deep Clone Webinar',
+            ProductTypeID: null,
+        });
+        store.Insert('Courses', { ID: webinarId, CreditHours: 6 });
+        store.Insert('Webinars', { ID: webinarId, PlatformURL: 'https://stream.example.com/clone' });
+
+        const batchParams = [
+            { EntityName: 'Products', ResultType: 'entity_object' as const },
+            { EntityName: 'Courses', ResultType: 'simple' as const },
+            { EntityName: 'Webinars', ResultType: 'simple' as const },
+        ];
+        const batchResults = [
+            {
+                Success: true,
+                Results: [store.ViewRow(productsInfo, webinarId)!] as unknown[],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 0,
+                ErrorMessage: '',
+                UserViewRunID: '',
+            },
+            {
+                Success: true,
+                Results: [store.ViewRow(coursesInfo, webinarId)!] as unknown[],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 0,
+                ErrorMessage: '',
+                UserViewRunID: '',
+            },
+            {
+                Success: true,
+                Results: [store.ViewRow(webinarsInfo, webinarId)!] as unknown[],
+                RowCount: 1,
+                TotalRowCount: 1,
+                ExecutionTime: 0,
+                ErrorMessage: '',
+                UserViewRunID: '',
+            },
+        ];
+
+        const providerWithTransform = Object.assign(batchedProvider, {
+            TransformSimpleObjectToEntityObject: ProviderBase.prototype['TransformSimpleObjectToEntityObject'],
+            NormalizeSimpleRowTypes: () => {},
+            isUnfilteredFullEntityBatchView: ProviderBase.prototype['isUnfilteredFullEntityBatchView'],
+            isFullCoverageFieldList: ProviderBase.prototype['isFullCoverageFieldList'],
+        });
+
+        await ProviderBase.prototype['TransformBatchRunViewResults'].call(
+            providerWithTransform,
+            batchParams,
+            batchResults,
+            undefined,
+            undefined,
+            user
+        );
+
+        const [sourceProduct] = batchResults[0].Results as BaseEntity[];
+        expect(sourceProduct.ISAChild?.ISAChild?.EntityInfo.Name).toBe('Webinars');
+
+        batchedProvider.ResetRoundTrips();
+        const clonedProduct = await batchedProvider.GetEntityObject<BaseEntity>('Products', user);
+        await BaseEntity.CloneEntityWithISAChain(
+            sourceProduct,
+            clonedProduct,
+            batchedProvider as object as IMetadataProvider,
+            user
+        );
+
+        expect(clonedProduct).not.toBe(sourceProduct);
+        expect(clonedProduct.Get('Name')).toBe('Deep Clone Webinar');
+        expect(clonedProduct.ISAChild?.EntityInfo.Name).toBe('Courses');
+        expect(clonedProduct.ISAChild).not.toBe(sourceProduct.ISAChild);
+        expect(clonedProduct.ISAChild?.Get('CreditHours')).toBe(6);
+        expect(clonedProduct.ISAChild?.ISAChild?.EntityInfo.Name).toBe('Webinars');
+        expect(clonedProduct.ISAChild?.ISAChild?.Get('PlatformURL')).toBe('https://stream.example.com/clone');
+        expect(batchedProvider.BatchDiscoveryCalls).toBe(0);
+        expect(batchedProvider.RunViewsBatchCalls).toBe(0);
+        expect(batchedProvider.Count('FindISAChildEntity')).toBe(0);
+        expect(batchedProvider.Count('Load')).toBe(0);
+    });
 });
