@@ -6,6 +6,7 @@ import type { EntityInfo } from '@memberjunction/core';
 import type { BaseEntity } from '@memberjunction/core';
 import type { AfterRowClickEventArgs, AfterRowDoubleClickEventArgs, AfterDataLoadEventArgs, GridColumnConfig } from '@memberjunction/ng-entity-viewer';
 import type { ViewGridState } from '@memberjunction/core-entities';
+import type { CompositeFilterDescriptor } from '@memberjunction/ng-filter-builder';
 import { renderComponentFixture, capture } from '@memberjunction/ng-test-utils';
 import { ExplorerEntityDataGridComponent } from './explorer-entity-data-grid.component';
 import { RELATED_GRID_HSCROLLBAR_PX, RelatedGridHeightPx } from './related-grid-height';
@@ -28,6 +29,9 @@ class StubInnerGrid {
   @Input() AllowLoad = false;
   @Input() ShowToolbar = false;
   @Input() ShowSearch = true;
+  @Input() ShowFilterButton = false;
+  @Input() UserFilter: CompositeFilterDescriptor | null = null;
+  @Output() UserFilterChange = new EventEmitter<CompositeFilterDescriptor | null>();
   @Input() ShowNewButton = true;
   @Input() ShowRefreshButton = true;
   @Input() ShowExportButton = true;
@@ -108,6 +112,27 @@ describe('ExplorerEntityDataGridComponent (DOM)', () => {
     const g = inner(render({ Columns: columns, GridState: state }));
     expect(g.Columns).toEqual(columns);
     expect(g.GridState).toBe(state);
+  });
+
+  it('keeps the Filter button off by default', () => {
+    expect(inner(render()).ShowFilterButton).toBe(false);
+  });
+
+  it('forwards ShowFilterButton and UserFilter', () => {
+    const filter: CompositeFilterDescriptor = { logic: 'and', filters: [{ field: 'Status', operator: 'eq', value: 'Open' }] };
+    const g = inner(render({ ShowFilterButton: true, UserFilter: filter }));
+    expect(g.ShowFilterButton).toBe(true);
+    expect(g.UserFilter).toBe(filter);
+  });
+
+  it('re-emits the inner grid UserFilterChange', () => {
+    const f = render({ ShowFilterButton: true });
+    const out = capture(f.componentInstance.UserFilterChange);
+    const filter: CompositeFilterDescriptor = { logic: 'and', filters: [{ field: 'Status', operator: 'eq', value: 'Open' }] };
+    inner(f).UserFilterChange.emit(filter);
+    inner(f).UserFilterChange.emit(null);
+    expect(out).toEqual([filter, null]);
+    expect(f.componentInstance.UserFilter).toBeNull();
   });
 
   it('passes an empty column list and no state by default', () => {

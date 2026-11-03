@@ -1534,3 +1534,18 @@
   object-position: center;
   display: block;
 }
+
+/* ========================================
+   User filter (opt-in Filter button)
+   ======================================== */
+
+.toolbar-user-filter {
+  flex-shrink: 0;
+}
+
+/* Projected into mj-filter-popover's overlay, so it is styled from here without ::ng-deep */
+.mj-grid-user-filter-builder {
+  width: min(640px, 90vw);
+  max-height: 60vh;
+  overflow: auto;
+}

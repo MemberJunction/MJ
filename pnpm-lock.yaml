@@ -6794,6 +6794,9 @@ importers:
       '@memberjunction/ng-file-storage':
         specifier: 6.2.0-edge.7
         version: link:../file-storage
+      '@memberjunction/ng-filter-builder':
+        specifier: 6.2.0-edge.7
+        version: link:../filter-builder
       '@memberjunction/ng-list-management':
         specifier: 6.2.0-edge.7
         version: link:../list-management

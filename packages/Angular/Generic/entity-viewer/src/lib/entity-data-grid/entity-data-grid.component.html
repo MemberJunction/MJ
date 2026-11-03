@@ -28,6 +28,24 @@
             }
           </div>
         }
+        <!-- User filter (opt-in): narrows the rows within the host's scope -->
+        @if (CanShowFilterButton) {
+          <mj-filter-popover
+            #userFilterPopover
+            class="toolbar-user-filter"
+            Label="Filter"
+            [ActiveCount]="UserFilterCount">
+            <div class="mj-grid-user-filter-builder">
+              <mj-filter-builder
+                [fields]="UserFilterFields"
+                [filter]="UserFilter"
+                [config]="UserFilterBuilderConfig"
+                (apply)="OnUserFilterApply($event)"
+                (clear)="OnUserFilterClear()">
+              </mj-filter-builder>
+            </div>
+          </mj-filter-popover>
+        }
         <!-- Custom Left Buttons -->
         @for (button of ToolbarConfig.customButtons; track button) {
           @if (button.position !== 'right' && isButtonVisible(button)) {
@@ -368,6 +386,16 @@
         }
       </div>
     </div>
+  }
+
+  <!-- Active user filter: one removable chip per top-level condition -->
+  @if (CanShowFilterButton && UserFilterChips.length > 0) {
+    <mj-applied-filters
+      class="mj-grid-user-filter-chips"
+      [Filters]="UserFilterChips"
+      (Remove)="OnUserFilterChipRemove($event)"
+      (ClearAll)="OnUserFilterClear()">
+    </mj-applied-filters>
   }
 
   <!-- Aggregate Cards (displayed as summary cards above the grid) -->
