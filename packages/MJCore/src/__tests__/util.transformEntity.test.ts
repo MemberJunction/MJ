@@ -1489,6 +1489,48 @@ describe('TransformSimpleObjectToEntityObject batched IS-A hydration & 1-query C
         });
     });
 
+    it('reports subtype-hint misses after discovery, the way the per-row path does', async () => {
+        const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const productsInfo = batchedProvider.EntityByName('Products')!;
+        productsInfo.SubtypeSelector = JSON.stringify({ Path: 'ProductTypeID.ProductExtensionEntity', UseForLoadedRecords: true });
+        const ptInfo = batchedProvider.EntityByName('Product Types')!;
+        const typeEntities = await TransformSimpleObjectToEntityObject<LoadHintTestEntity>(
+            batchedProvider as object as IMetadataProvider,
+            'Product Types',
+            [MEETING_TYPE_ID, PUB_TYPE_ID].map(id => store.ViewRow(ptInfo, id)!),
+            user
+        );
+        registeredEngine = new FakeProductTypeEngine(typeEntities);
+        BaseEngineRegistry.Instance.RegisterEngine(registeredEngine);
+
+        // All three are typed as Meetings.
+        const noSubtypeRow = 'c3000000-0000-0000-0000-000000000001'; // no subtype row anywhere: a normal state
+        const rowElsewhere = 'c3000000-0000-0000-0000-000000000002'; // the row is a Publication: rule and data disagree
+        const hiddenRow = 'c3000000-0000-0000-0000-000000000003';    // the Meetings row exists, but its load comes back empty
+        for (const id of [noSubtypeRow, rowElsewhere, hiddenRow]) {
+            store.Insert('Products', { ID: id, Name: `Typed ${id}`, ProductTypeID: MEETING_TYPE_ID });
+        }
+        store.Insert('Publications', { ID: rowElsewhere, ISBN: '978-x' });
+        store.Insert('Meetings', { ID: hiddenRow, Venue: 'Hidden Hall' });
+        store.HideFromLoads('Meetings', hiddenRow);
+
+        const results = await TransformSimpleObjectToEntityObject<BaseEntity>(
+            batchedProvider as object as IMetadataProvider,
+            'Products',
+            [noSubtypeRow, rowElsewhere, hiddenRow].map(id => store.ViewRow(productsInfo, id)!),
+            user
+        );
+
+        expect(results[0].ISAChild).toBeNull();
+        expect(results[1].ISAChild?.EntityInfo.Name).toBe('Publications');
+        expect(results[2].ISAChild).toBeNull();
+        const messages = errors.mock.calls.map(c => c.map(String).join(' '));
+        expect(messages.filter(m => m.includes(noSubtypeRow))).toEqual([]);
+        expect(messages.filter(m => m.includes("names 'Meetings', but its subtype row is in 'Publications'"))).toHaveLength(1);
+        expect(messages.filter(m => m.includes('Error in BaseEntity.Load(') && m.includes(rowElsewhere))).toEqual([]);
+        expect(messages.filter(m => m.includes('Error in BaseEntity.Load(Meetings') && m.includes(hiddenRow))).toHaveLength(1);
+    });
+
     it('narrows field-level security denied columns when linking an IS-A child from a system-user engine cache', async () => {
         const productsInfo = batchedProvider.EntityByName('Products')!;
         const meetingsInfo = batchedProvider.EntityByName('Meetings')!;
