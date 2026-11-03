@@ -494,6 +494,44 @@ describe('FeatureValueCacheService', () => {
             const provider = stubProvider(vi.fn().mockResolvedValue(row));
             await expect(FeatureValueCacheService.Instance.Store({ ...base, provider })).rejects.toThrow(/UQ violation/);
         });
+
+        describe('KeyDisplay longer than its column (#4917)', () => {
+            /** A new row whose metadata gives KeyDisplay the nvarchar(500) limit. */
+            const rowWithLimit = (): Record<string, unknown> => ({
+                NewRecord: vi.fn(), Save: vi.fn().mockResolvedValue(true),
+                EntityInfo: { Fields: [{ Name: 'KeyDisplay', MaxLength: 500 }, { Name: 'KeyJSON', MaxLength: 0 }] },
+            });
+
+            it('clamps an over-long display to MaxLength, ending with an ellipsis, and still saves', async () => {
+                MockRunView.mockResults = [];
+                const row = rowWithLimit();
+                const provider = stubProvider(vi.fn().mockResolvedValue(row));
+                const longDisplay = 'x'.repeat(1200);
+                await FeatureValueCacheService.Instance.Store({ ...base, keyDisplay: longDisplay, provider });
+                const display = row.KeyDisplay as string;
+                expect(display.length).toBe(500);
+                expect(display.endsWith('…')).toBe(true);
+                expect(display.startsWith('x'.repeat(499))).toBe(true);
+                expect(row.KeyHash).toBe('k-owner');
+                expect(row.Save).toHaveBeenCalledTimes(1);
+            });
+
+            it('leaves a display within the limit unchanged', async () => {
+                MockRunView.mockResults = [];
+                const row = rowWithLimit();
+                const provider = stubProvider(vi.fn().mockResolvedValue(row));
+                const exact = 'y'.repeat(500);
+                await FeatureValueCacheService.Instance.Store({ ...base, keyDisplay: exact, provider });
+                expect(row.KeyDisplay).toBe(exact);
+                await FeatureValueCacheService.Instance.Store({ ...base, provider });
+                expect(row.KeyDisplay).toBe('Owner');
+            });
+
+            it('ClampToLength treats 0 as unlimited', () => {
+                expect(FeatureValueCacheService.ClampToLength('abcdef', 0)).toBe('abcdef');
+                expect(FeatureValueCacheService.ClampToLength('abcdef', 4)).toBe('abc…');
+            });
+        });
     });
 
     describe('Human values', () => {

@@ -1853,6 +1853,8 @@ export class AgentRunner {
             let artifactId: string;
             let newVersionNumber: number;
             let isNewArtifact = false;
+            // Known for a new header; looked up for an existing artifact when the version is built.
+            let artifactTypeId: string | null = null;
 
             if (plan.kind === 'version') {
                 const maxVersion = await this.GetMaxVersionForArtifact(plan.artifactId, contextUser, provider);
@@ -1872,6 +1874,7 @@ export class AgentRunner {
                 } else {
                     const artifact = await this.createArtifactHeader(md, contextUser, agent, creationMode, directive, payload);
                     artifactId = artifact.ID;
+                    artifactTypeId = artifact.TypeID;
                     newVersionNumber = 1;
                     isNewArtifact = true;
                     LogStatus(`Created new artifact: ${artifact.Name} (${artifactId})${plan.kind === 'create-new' ? ' per agent directive' : ''}`);
@@ -1908,6 +1911,12 @@ export class AgentRunner {
             version.VersionNumber = newVersionNumber;
             version.Content = serializedContent;
             version.UserID = contextUser.ID;
+            // Preview plugins match on the version's MIME type; without it their contentType arm never
+            // fires for payload artifacts (#4597).
+            version.MimeType = await this.ResolvePayloadVersionMimeType(
+                artifactTypeId ?? await this.GetArtifactTypeIDForArtifact(artifactId, contextUser, provider),
+                contextUser
+            );
 
             const directiveName = AgentRunner.safeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH);
             const directiveDescription = AgentRunner.safeDirectiveText(directive?.description);
@@ -2201,6 +2210,71 @@ export class AgentRunner {
         } catch (error) {
             // Fail closed: an unavailable lookup must not become an unchecked write.
             return reject(`could not be verified (${(error as Error)?.message ?? 'unknown error'})`);
+        }
+    }
+
+    /**
+     * MIME type stamped on an agent payload version: its artifact type's `ContentType` when that is
+     * concrete, `null` when it is empty or a wildcard (`image/*`, `text/*`), since a wildcard is not
+     * a real MIME type.
+     *
+     * @param contentType - The artifact type's `ContentType`.
+     * @returns The MIME type to store, or `null`.
+     */
+    public static PayloadVersionMimeType(contentType: string | null | undefined): string | null {
+        const trimmed = contentType?.trim();
+        if (!trimmed || trimmed.includes('*')) {
+            return null;
+        }
+        return trimmed;
+    }
+
+    /**
+     * Resolves the MIME type for a payload version from its artifact type (see
+     * {@link PayloadVersionMimeType}). Never throws: a lookup failure leaves the MIME type empty
+     * rather than failing the artifact.
+     *
+     * @param artifactTypeId - The artifact's `TypeID`, or `null` when unknown.
+     * @param contextUser - User the run executes as.
+     * @returns The MIME type to store, or `null`.
+     */
+    protected async ResolvePayloadVersionMimeType(artifactTypeId: string | null, contextUser: UserInfo): Promise<string | null> {
+        if (!artifactTypeId) {
+            return null;
+        }
+        try {
+            await ArtifactMetadataEngine.Instance.Config(false, contextUser);
+            const artifactType = ArtifactMetadataEngine.Instance.ArtifactTypes.find(t => UUIDsEqual(t.ID, artifactTypeId));
+            return AgentRunner.PayloadVersionMimeType(artifactType?.ContentType);
+        } catch (error) {
+            LogError(`Could not resolve artifact type ${artifactTypeId} for payload version MIME type: ${(error as Error)?.message ?? 'unknown error'}`);
+            return null;
+        }
+    }
+
+    /**
+     * Reads an existing artifact's `TypeID`. Never throws.
+     *
+     * @param artifactId - The artifact being versioned.
+     * @param contextUser - User the run executes as.
+     * @param provider - Optional provider for the lookup.
+     * @returns The type id, or `null` when the artifact cannot be read.
+     */
+    protected async GetArtifactTypeIDForArtifact(artifactId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<string | null> {
+        try {
+            const rv = RunView.FromMetadataProvider(provider || this._provider);
+            const result = await rv.RunView<{ TypeID: string }>({
+                EntityName: 'MJ: Artifacts',
+                ExtraFilter: `ID='${AgentRunner.filterId(artifactId, 'GetArtifactTypeIDForArtifact artifactId')}'`,
+                Fields: ['TypeID'],
+                MaxRows: 1,
+                SkipTotalRowCount: true,
+                ResultType: 'simple'
+            }, contextUser);
+            return result.Success ? (result.Results?.[0]?.TypeID ?? null) : null;
+        } catch (error) {
+            LogError(`Error reading artifact type for ${artifactId}: ${(error as Error)?.message ?? 'unknown error'}`);
+            return null;
         }
     }
 
