@@ -19,6 +19,8 @@
   [DirtyFieldNames]="EffectiveDirtyFieldNames"
   [ListCount]="ListCount"
   [TagCount]="TagCount"
+  [CommentsOpen]="ShowRecordComments"
+  [CommentCount]="CommentCount"
   [LinksOpen]="ShowRecordLinks"
   [LinkCount]="LinkCount"
   [ConflictCount]="ConflictCount"
@@ -70,6 +72,7 @@
   (ResetSectionOrderRequested)="OnResetSectionOrder()"
   (ManageSectionsRequested)="OnManageSections()"
   (TagsPanelToggled)="OnTagsPanelToggled()"
+  (CommentsRequest)="OnToggleRecordComments()"
   (LinksRequest)="OnToggleRecordLinks()"
   (AttachmentsPanelToggled)="OnAttachmentsPanelToggled()"
   (AskAIRequested)="OnAskAIRequested()"
@@ -301,6 +304,14 @@
                       [title]="RailDirtyTitle(formIndicators.DirtyCount, 'this record')"
                       [attr.aria-label]="RailDirtyTitle(formIndicators.DirtyCount, 'this record')"></span>
               }
+              @if ((formIndicators.CommentCount ?? 0) > 0) {
+                <span class="mj-forms-chrome-rail-comments is-spine"
+                      role="img"
+                      [title]="RailCommentTitle(formIndicators.CommentCount!, 'this record')"
+                      [attr.aria-label]="RailCommentTitle(formIndicators.CommentCount!, 'this record')">
+                  <i class="fa-regular fa-comment-dots" aria-hidden="true"></i>{{ formIndicators.CommentCount }}
+                </span>
+              }
             </button>
           } @else {
             <div class="mj-forms-chrome-rail-resizer"
@@ -389,6 +400,14 @@
               @if (rowCount != null && rowCount > 0) {
                 <span class="mj-forms-chrome-rail-count">{{ rowCount }}</span>
               }
+              @if ((groupIndicators.CommentCount ?? 0) > 0) {
+                <span class="mj-forms-chrome-rail-comments"
+                      role="img"
+                      [title]="RailCommentTitle(groupIndicators.CommentCount!, group.Title)"
+                      [attr.aria-label]="RailCommentTitle(groupIndicators.CommentCount!, group.Title)">
+                  <i class="fa-regular fa-comment-dots" aria-hidden="true"></i>{{ groupIndicators.CommentCount }}
+                </span>
+              }
             </div>
           }
           @if (ChromeMoreFolder; as more) {
@@ -430,6 +449,14 @@
                 @let moreRowCount = ChromeMoreRowCount;
                 @if (moreRowCount != null && moreRowCount > 0) {
                   <span class="mj-forms-chrome-rail-count" title="Rows across the sections in More">{{ moreRowCount }}</span>
+                }
+                @if ((moreIndicators.CommentCount ?? 0) > 0) {
+                  <span class="mj-forms-chrome-rail-comments"
+                        role="img"
+                        [title]="RailCommentTitle(moreIndicators.CommentCount!, more.Title)"
+                        [attr.aria-label]="RailCommentTitle(moreIndicators.CommentCount!, more.Title)">
+                    <i class="fa-regular fa-comment-dots" aria-hidden="true"></i>{{ moreIndicators.CommentCount }}
+                  </span>
                 }
               }
               <i class="fa-solid mj-forms-chrome-rail-more-toggle"
@@ -492,6 +519,14 @@
                   @let childCount = ChromeGroupRowCount(child);
                   @if (childCount != null && childCount > 0) {
                     <span class="mj-forms-chrome-rail-count">{{ childCount }}</span>
+                  }
+                  @if ((childIndicators.CommentCount ?? 0) > 0) {
+                    <span class="mj-forms-chrome-rail-comments"
+                          role="img"
+                          [title]="RailCommentTitle(childIndicators.CommentCount!, child.Title)"
+                          [attr.aria-label]="RailCommentTitle(childIndicators.CommentCount!, child.Title)">
+                      <i class="fa-regular fa-comment-dots" aria-hidden="true"></i>{{ childIndicators.CommentCount }}
+                    </span>
                   }
                 </div>
               }
@@ -769,3 +804,29 @@
   (FormChosen)="OnPanelManagerFormChosen($event)"
   (Closed)="OnPanelManagerClosed()">
 </mj-panel-manager>
+
+<!-- ============================================
+     ANCHORED RECORD COMMENTS (drawer + inline field/section popover)
+     ============================================ -->
+@if (ShowRecordComments && EffectiveRecord && EffectiveRecord.IsSaved) {
+  <mj-record-comments
+    [Provider]="Provider"
+    [Record]="EffectiveRecord"
+    [Mode]="'drawer'"
+    [IsOpen]="ShowRecordComments"
+    [WidthPx]="CommentsPanelWidth"
+    (Close)="OnRecordCommentsClosed()"
+    (CommentCountChange)="OnCommentCountChanged($event)"
+    (WidthChanged)="OnCommentsPanelWidthChanged($event)"
+    (Navigate)="OnNavigate($event)">
+  </mj-record-comments>
+}
+
+@if (CommentsCoordinator.ActivePopoverTarget && EffectiveRecord && EffectiveRecord.IsSaved) {
+  <mj-record-comments
+    [Provider]="Provider"
+    [Record]="EffectiveRecord"
+    [Mode]="'popover'"
+    (Navigate)="OnNavigate($event)">
+  </mj-record-comments>
+}

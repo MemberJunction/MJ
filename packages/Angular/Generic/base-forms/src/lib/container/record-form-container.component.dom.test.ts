@@ -61,7 +61,7 @@ vi.mock('../panel-slot/collect-form-contribution-registrations', async (importOr
 class ToolbarStub {
   @Input() Record: unknown; @Input() EditMode = false; @Input() UserCanEdit = false; @Input() UserCanDelete = false;
   @Input() IsFavorite = false; @Input() FavoriteInitDone = false; @Input() IsDirty = false; @Input() DirtyFieldNames: unknown;
-  @Input() ListCount = 0; @Input() TagCount = 0; @Input() LinksOpen = false; @Input() LinkCount = 0; @Input() ConflictCount = 0; @Input() AttachmentCount = 0; @Input() AttachmentsAvailable = false; @Input() IsAttachmentsPanelOpen = false; @Input() VersionCount = 0; @Input() EntityInfo: unknown; @Input() Config: unknown;
+  @Input() ListCount = 0; @Input() TagCount = 0; @Input() LinksOpen = false; @Input() LinkCount = 0; @Input() CommentsOpen = false; @Input() CommentCount = 0; @Input() ConflictCount = 0; @Input() AttachmentCount = 0; @Input() AttachmentsAvailable = false; @Input() IsAttachmentsPanelOpen = false; @Input() VersionCount = 0; @Input() EntityInfo: unknown; @Input() Config: unknown;
   @Input() IsSaving = false; @Input() IsRefreshing = false; @Input() VisibleSectionCount = 0; @Input() TotalSectionCount = 0; @Input() ExpandedSectionCount = 0;
   @Input() SearchFilter = ''; @Input() ShowEmptyFields = false; @Input() WidthMode = ''; @Input() HasCustomSectionOrder = false;
   @Input() Variants: unknown; @Input() CurrentVariantID: unknown; @Input() FormModeSwitch: unknown;
@@ -112,6 +112,8 @@ class RecordChangesStub { @Input() record: unknown; @Input() AllowRestore = fals
 class RecordTagsStub { @Input() Record: unknown; @Input() WidthPx = 0; }
 @Component({ standalone: true, selector: 'mj-record-links', template: '' })
 class RecordLinksStub { @Input() Provider: unknown; @Input() Record: unknown; @Input() Mode = 'drawer'; @Input() IsOpen = false; }
+@Component({ standalone: true, selector: 'mj-record-comments', template: '' })
+class RecordCommentsStub { @Input() Provider: unknown; @Input() Record: unknown; @Input() Mode = 'drawer'; @Input() IsOpen = false; @Input() Coordinator: unknown; @Input() WidthPx = 0; }
 @Component({ standalone: true, selector: 'mj-record-attachments', template: '' })
 class RecordAttachmentsStub { @Input() Record: unknown; @Input() Visible = false; }
 @Component({ standalone: true, selector: 'mj-list-management-dialog', template: '' })
@@ -122,7 +124,7 @@ class FormContributionsStub { @Input() Record: unknown; @Input() FormComponent: 
 @Component({ standalone: true, selector: 'mj-bottom-sheet', template: '@if (Visible) { <ng-content></ng-content> }' })
 class BottomSheetStub { @Input() Visible = false; @Input() Title = ''; @Output() VisibleChange = new EventEmitter<boolean>(); @Output() Closed = new EventEmitter<void>(); }
 
-const CHILD_STUBS = [BottomSheetStub, ToolbarStub, SectionManagerStub, PanelManagerStub, PanelSlotStub, EmptyStateStub, IsaPanelStub, RecordChangesStub, RecordTagsStub, RecordLinksStub, RecordAttachmentsStub, ListMgmtStub, FormContributionsStub];
+const CHILD_STUBS = [BottomSheetStub, ToolbarStub, SectionManagerStub, PanelManagerStub, PanelSlotStub, EmptyStateStub, IsaPanelStub, RecordChangesStub, RecordTagsStub, RecordLinksStub, RecordCommentsStub, RecordAttachmentsStub, ListMgmtStub, FormContributionsStub];
 
 const RECORD = { EntityInfo: { Name: 'Accounts' } } as unknown as BaseEntity;
 
