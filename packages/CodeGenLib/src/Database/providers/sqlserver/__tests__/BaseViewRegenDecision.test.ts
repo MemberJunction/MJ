@@ -339,7 +339,7 @@ FROM
             entity: makeEntity(),
             relatedFieldsSelect: '\n    Customer_CustomerID.[Name] AS [Customer]',
             relatedFieldsJoins:
-                'INNER JOIN\n    [__mj].[Customer] AS Customer_CustomerID\n  ON\n    [r].[CustomerID] = Customer_CustomerID.[ID]',
+                'LEFT OUTER JOIN\n    [__mj].[Customer] AS Customer_CustomerID\n  ON\n    [r].[CustomerID] = Customer_CustomerID.[ID]',
             parentFieldsSelect: '',
             parentJoins: '',
             rootFieldsSelect: '',
@@ -402,7 +402,7 @@ INNER JOIN
             entity: makeEntity(),
             relatedFieldsSelect: '\n    Customer_CustomerID.[Name] AS [Customer]',
             relatedFieldsJoins:
-                'INNER JOIN\n    [__mj].[Customer] AS Customer_CustomerID\n  ON\n    [r].[CustomerID] = Customer_CustomerID.[ID]',
+                'LEFT OUTER JOIN\n    [__mj].[Customer] AS Customer_CustomerID\n  ON\n    [r].[CustomerID] = Customer_CustomerID.[ID]',
             parentFieldsSelect: '',
             parentJoins: '',
             rootFieldsSelect: '',
@@ -416,7 +416,7 @@ SELECT
     Customer_CustomerID.[Name] AS [CustomerName]
 FROM
     [__mj].[RegenTarget] AS r
-INNER JOIN
+LEFT OUTER JOIN
     [__mj].[Customer] AS Customer_CustomerID
   ON
     [r].[CustomerID] = Customer_CustomerID.[ID]
