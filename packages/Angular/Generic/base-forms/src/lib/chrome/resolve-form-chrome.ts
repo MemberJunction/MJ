@@ -91,6 +91,12 @@ export interface ResolveFormChromeResult {
     Spec: FormChromeSpec;
     RelatedRoles: RelatedFormRoleResolution;
     PolicyUsed: boolean;
+    /**
+     * Section keys an inclusion of `None` removed from the form: a relationship ruled `None`
+     * (L1 config or an L3 `MJ: Form Chrome Rules` row) and a contribution ruled `None`. These
+     * sections are not shown anywhere, so their content must not mount or load data.
+     */
+    SuppressedSectionKeys: string[];
 }
 
 /**
@@ -150,8 +156,8 @@ export function ResolveFormChrome(input: ResolveFormChromeInput): ResolveFormChr
     );
     const hidden = new Set(input.HiddenSectionKeys ?? []);
     for (const key of displayInFormFalseSectionKeys(input.Entity)) hidden.add(key);
-    for (const key of noneInclusionSectionKeys(input.Entity, assignments)) hidden.add(key);
-    for (const key of contributionGroups.hiddenKeys) hidden.add(key);
+    const suppressed = [...new Set([...noneInclusionSectionKeys(input.Entity, assignments), ...contributionGroups.hiddenKeys])];
+    for (const key of suppressed) hidden.add(key);
     const visiblePanels = input.Panels.filter((p) => !hidden.has(p.SectionKey));
     const defaultSpec = BuildDefaultChromeSpec(
         visiblePanels,
@@ -188,12 +194,12 @@ export function ResolveFormChrome(input: ResolveFormChromeInput): ResolveFormChr
         ApplyUserChromeMembership(spec, input.Membership, visiblePanels);
         ApplyEmptySectionBehavior(spec, input.EmptySectionBehavior, visiblePanels);
         ApplyFormChromeRuleTitles(spec, input.Entity, input.ChromeRules ?? []);
-        return { Spec: spec, RelatedRoles: resolution, PolicyUsed: true };
+        return { Spec: spec, RelatedRoles: resolution, PolicyUsed: true, SuppressedSectionKeys: suppressed };
     }
 
     ApplyEmptySectionBehavior(defaultSpec, input.EmptySectionBehavior, visiblePanels);
     ApplyFormChromeRuleTitles(defaultSpec, input.Entity, input.ChromeRules ?? []);
-    return { Spec: defaultSpec, RelatedRoles: resolution, PolicyUsed: false };
+    return { Spec: defaultSpec, RelatedRoles: resolution, PolicyUsed: false, SuppressedSectionKeys: suppressed };
 }
 
 /**

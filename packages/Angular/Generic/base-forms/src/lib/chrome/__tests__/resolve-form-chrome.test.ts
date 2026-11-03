@@ -1514,3 +1514,49 @@ describe('ApplyEmptySectionBehavior', () => {
         expect(after.Spec.Layout).toBe(before.Spec.Layout);
     });
 });
+
+describe('ResolveFormChrome SuppressedSectionKeys', () => {
+    const parentId = '12121212-1212-1212-1212-121212121212';
+    const relatedId = '34343434-3434-3434-3434-343434343434';
+    const entity = () => new EntityInfo({
+        ID: parentId,
+        Name: 'Sample_Common: People',
+        SchemaName: 'Sample_Common',
+        RelatedEntities: [{
+            ID: '56565656-5656-5656-5656-565656565656',
+            RelatedEntity: 'Sample_Orders: Order Headers',
+            RelatedEntityID: relatedId,
+            RelatedEntityJoinField: 'PersonID',
+            DisplayInForm: true,
+            DisplayName: 'Orders',
+        }],
+    });
+    const panels = [
+        { SectionKey: 'identity', SectionName: 'Identity', Variant: 'default' as const },
+        { SectionKey: 'sampleOrdersOrderHeaders', SectionName: 'Orders', Variant: 'related-entity' as const },
+        { SectionKey: 'forms', SectionName: 'Forms', Variant: 'default' as const },
+    ];
+    const resolve = (rules: Parameters<typeof ResolveFormChrome>[0]['ChromeRules']) => ResolveFormChrome({
+        Entity: entity(),
+        Panels: panels,
+        RelatedSchemaByEntityId: new Map([[relatedId, 'Sample_Orders']]),
+        ContributionSectionKeys: ['forms'],
+        ChromeRules: rules,
+    });
+
+    it('lists a relationship and a contribution ruled None', () => {
+        const result = resolve([
+            { EntityID: parentId, TargetKind: 'Relationship', RelatedEntityID: relatedId, Inclusion: 'None' },
+            { EntityID: parentId, TargetKind: 'Contribution', ContributionKey: 'forms', Inclusion: 'None' },
+        ]);
+        expect([...result.SuppressedSectionKeys].sort()).toEqual(['forms', 'sampleOrdersOrderHeaders']);
+    });
+
+    it('lists nothing for More, Primary or no rule', () => {
+        expect(resolve([]).SuppressedSectionKeys).toEqual([]);
+        expect(resolve([
+            { EntityID: parentId, TargetKind: 'Relationship', RelatedEntityID: relatedId, Inclusion: 'More' },
+            { EntityID: parentId, TargetKind: 'Contribution', ContributionKey: 'forms', Inclusion: 'Primary' },
+        ]).SuppressedSectionKeys).toEqual([]);
+    });
+});

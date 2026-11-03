@@ -18,6 +18,7 @@ import '@angular/compiler';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { MjRecordFormContainerComponent } from '../record-form-container.component';
 import type { BaseFormComponent } from '../../base-form-component';
+import { FormChromeCoordinator } from '../../chrome/form-chrome-coordinator.service';
 
 type FormStub = { EditMode: boolean; showEmptyFields: boolean; searchFilter: string };
 
@@ -31,6 +32,8 @@ function makeHarness(): Harness {
   const form: FormStub = { EditMode: false, showEmptyFields: false, searchFilter: '' };
   let resolveCount = 0;
   const container = Object.create(MjRecordFormContainerComponent.prototype) as MjRecordFormContainerComponent;
+  // Setting FormComponent pushes the chrome-rule suppression state, read off the coordinator.
+  Object.assign(container, { chrome: new FormChromeCoordinator() });
   container.FormComponent = form as unknown as BaseFormComponent;
   container.EditMode = false;
   Object.assign(container, {

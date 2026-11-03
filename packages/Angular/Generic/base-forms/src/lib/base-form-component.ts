@@ -21,6 +21,7 @@ import { BaseRecordComponent } from './base-record-component';
 import type { BaseFormPanel } from './panel-slot/base-form-panel';
 import { MergePanelValidation } from './panel-slot/merge-panel-validation';
 import type { FormCompositionSnapshot } from './chrome/form-composition-snapshot';
+import type { FormChromeSuppression } from './chrome/form-chrome-coordinator.service';
 import { BaseFormSectionInfo } from './base-form-section-info';
 import { MjCollapsiblePanelComponent } from './panel/collapsible-panel.component';
 import { FormNavigationEvent } from './types/navigation-events';
@@ -1394,10 +1395,19 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         : new BaseFormSectionInfo(s.sectionKey, s.sectionName, s.isExpanded, s.rowCount, s.metadata)
     );
     this.sectionMap.clear();
+    this.seededExpandedSectionKeys.clear();
     this.sections.forEach(section => {
       this.sectionMap.set(section.sectionKey, section);
+      if (section.isExpanded) this.seededExpandedSectionKeys.add(section.sectionKey);
     });
   }
+
+  /**
+   * Sections `initSections()` seeded expanded (field sections). Kept apart from
+   * `BaseFormSectionInfo.isExpanded`, which follows the user's toggles, because chrome-rule
+   * gating needs the form's own default: a section seeded collapsed loads lazily.
+   */
+  private seededExpandedSectionKeys = new Set<string>();
 
   protected getSection(sectionKey: string): BaseFormSectionInfo | undefined {
     return this.sectionMap.get(sectionKey);
@@ -1405,6 +1415,12 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public IsSectionExpanded(sectionKey: string, defaultExpanded?: boolean): boolean {
     const section = this.sectionMap.get(sectionKey);
+    // A section an admin ruled `None` (Form Chrome Rules) is shown nowhere, so it reports
+    // collapsed whatever the user's saved state says: every lazy loader (a related grid's
+    // [AllowLoad], a contribution panel) asks here, and none of them should load its data.
+    if (this.isSuppressedOrPending(sectionKey, defaultExpanded ?? this.seededExpandedSectionKeys.has(sectionKey))) {
+      return false;
+    }
     // When the caller doesn't pass an explicit default, fall back to the value seeded by
     // initSections() — related-entity and System Metadata panels are seeded collapsed there.
     // Without this, FormStateService falls back to its global DEFAULT_SECTION_STATE (isExpanded=true),
@@ -1423,6 +1439,36 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       return this.formStateService.isSectionExpanded(entityName, sectionKey, resolvedDefault);
     }
     return section ? section.isExpanded : (defaultExpanded !== undefined ? defaultExpanded : true);
+  }
+
+  /**
+   * Chrome-rule suppression pushed by `<mj-record-form-container>`, which owns the chrome
+   * coordinator. `null` for a form outside a container: nothing is gated.
+   */
+  private chromeSuppression: FormChromeSuppression | null = null;
+
+  /**
+   * Called by the form container as the entity's chrome rules load. Until `RulesResolved`,
+   * sections that start collapsed (related grids, contribution panels — the ones that load
+   * lazily) report collapsed, so nothing loads for a section a rule may be about to hide.
+   * After it, a section in `SuppressedSectionKeys` always reports collapsed.
+   */
+  public SetChromeSuppression(state: FormChromeSuppression | null): void {
+    this.chromeSuppression = state;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * True when {@link IsSectionExpanded} must answer false because of chrome rules: the section
+   * is suppressed, or the rules are still loading and the section starts collapsed. Field
+   * sections start expanded and are not rule targets, so they are not held back; related grids
+   * and contribution panels start collapsed and are.
+   */
+  private isSuppressedOrPending(sectionKey: string, seededExpanded: boolean): boolean {
+    const state = this.chromeSuppression;
+    if (!state) return false;
+    if (!state.RulesResolved) return !seededExpanded;
+    return state.SuppressedSectionKeys.has(sectionKey);
   }
 
   public SetSectionExpanded(sectionKey: string, isExpanded: boolean): void {

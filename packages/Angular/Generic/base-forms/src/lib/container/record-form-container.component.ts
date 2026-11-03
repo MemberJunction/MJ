@@ -219,6 +219,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   private lastRailSearchFilter = '';
   private chromeRules: FormChromeRule[] = [];
   private chromeRulesForEntityId: string | null = null;
+  /** True once the chrome rules for the current entity have loaded (or there are none to load). */
+  private chromeRulesLoaded = false;
+  /** Fingerprint of the suppression state last pushed to the form, so it is pushed on change only. */
+  private lastPushedSuppression: string | null = null;
   /** The form whose duplicate-check answers this container already re-renders on. */
   private duplicateNoticeWiredFor: BaseFormComponent | null = null;
 
@@ -334,7 +338,18 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * When provided, the container derives toolbar state from this reference and
    * handles Save/Cancel/Edit internally by calling its methods.
    */
-  @Input() FormComponent: BaseFormComponent | null = null;
+  @Input()
+  set FormComponent(value: BaseFormComponent | null) {
+    this._formComponent = value;
+    // Before the form's grids and panels bind: they are later in its template than this
+    // container, so the pending state reaches IsSectionExpanded before any of them asks.
+    this.lastPushedSuppression = null;
+    this.pushChromeSuppression();
+  }
+  get FormComponent(): BaseFormComponent | null {
+    return this._formComponent;
+  }
+  private _formComponent: BaseFormComponent | null = null;
 
   // ---- Fallback Inputs (used when FormComponent is NOT provided) ----
 
@@ -1309,17 +1324,48 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   private loadChromeRulesIfNeeded(): void {
     const entityId = this.EffectiveEntityInfo?.ID ?? null;
-    if (!entityId || this.chromeRulesForEntityId === entityId) return;
+    if (!entityId) {
+      // No entity ID, no rules to load: nothing is suppressed, and nothing waits on rules.
+      this.chromeRulesLoaded = true;
+      return;
+    }
+    if (this.chromeRulesForEntityId === entityId) return;
     this.chromeRulesForEntityId = entityId;
+    // A different entity: its rules are unknown until they load, so lazy sections wait again.
+    this.chromeRulesLoaded = false;
+    this.chrome.ResetSuppression();
+    this.pushChromeSuppression();
     void this.loadChromeRules(entityId);
   }
 
   private async loadChromeRules(entityId: string): Promise<void> {
-    const rules = await LoadFormChromeRules(entityId, this.ProviderToUse);
+    let rules: FormChromeRule[] = [];
+    try {
+      rules = await LoadFormChromeRules(entityId, this.ProviderToUse);
+    } catch (e) {
+      // A failed read must not hold lazily loaded sections closed for the life of the form.
+      LogError(`Form chrome rules failed to load for entity ${entityId}: ${e instanceof Error ? e.message : String(e)}`);
+    }
     // Also false once the container is destroyed (ngOnDestroy clears the id).
     if (this.chromeRulesForEntityId !== entityId) return;
     this.chromeRules = rules;
+    this.chromeRulesLoaded = true;
     this.scheduleChromeResolve();
+  }
+
+  /**
+   * Hands the chrome suppression state to the form, whose `IsSectionExpanded` is what every lazy
+   * loader asks. The coordinator is provided by this container, so the form (its parent) cannot
+   * inject it and is told instead. Pushed only when the state changes.
+   */
+  private pushChromeSuppression(): void {
+    const form = this._formComponent;
+    if (!form) return;
+    const state = this.chrome.Suppression;
+    const fingerprint = `${state.RulesResolved ? 1 : 0}|${[...state.SuppressedSectionKeys].sort().join('\0')}`;
+    if (fingerprint === this.lastPushedSuppression) return;
+    this.lastPushedSuppression = fingerprint;
+    form.SetChromeSuppression?.(state);
   }
 
   private resolveChrome(): void {
@@ -1348,6 +1394,13 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
         firstClassSectionKeys: this.Fc?.getFirstClassSectionKeys?.() ?? [],
       },
     });
+
+    // Suppression is about data, not layout, so it is applied even when a handler cancels the
+    // layout below. Set before Apply so panels re-reading on Changes see it.
+    if (this.chromeRulesLoaded) {
+      this.chrome.SetSuppressed(result.SuppressedSectionKeys);
+      this.pushChromeSuppression();
+    }
 
     const before = new BeforeLayoutResolveEventArgs(result.Spec.Layout);
     this.BeforeLayoutResolve.emit(before);
