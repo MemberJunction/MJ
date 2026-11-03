@@ -911,7 +911,7 @@ describe('EntitySearchProvider', () => {
     });
 
     describe('multi-word token matching in convertResults', () => {
-        it('retains and scores records when multi-word query tokens match across separate fields (token match weighted equally with full match)', async () => {
+        it('retains and scores records when multi-word query tokens match across separate fields (a token-only match ranks in the contains tier)', async () => {
             mockEntities.push({
                 Name: 'Contacts',
                 AllowUserSearchAPI: true,
@@ -927,7 +927,8 @@ describe('EntitySearchProvider', () => {
                 Success: true,
                 Results: [
                     // Neither field contains the full string "alice smith", but each field matches a token.
-                    // By design, a token match counts the same as a full match toward matchedFields (2/2 fields + nameBoost = 0.95).
+                    // A token match counts toward matchedFields and ranks as 'contains':
+                    // min(0.15 + 2/2 × 0.30 + 0.20 name boost, 0.65) = 0.65.
                     { ID: 'c-1', FirstName: 'Alice', LastName: 'Smith' },
                     // Zero tokens match -> must still be dropped by `if (matchedFields === 0) return null`.
                     { ID: 'c-2', FirstName: 'Bob', LastName: 'Jones' },
@@ -938,7 +939,8 @@ describe('EntitySearchProvider', () => {
 
             expect(results).toHaveLength(1);
             expect(results[0].RecordID).toBe('c-1');
-            expect(results[0].Score).toBe(0.95);
+            expect(results[0].Score).toBe(0.65);
+            expect(results[0].MatchedFields).toEqual(['FirstName', 'LastName']);
         });
     });
 });
