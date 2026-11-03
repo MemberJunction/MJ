@@ -57,26 +57,25 @@ export async function ComputeSha256Hex(bytes: Uint8Array): Promise<string> {
     return hex;
 }
 
-async function deflateRaw(input: Uint8Array): Promise<Uint8Array> {
-    if (typeof CompressionStream === 'undefined' || input.byteLength === 0) {
-        return input;
-    }
-    const cs = new CompressionStream('deflate-raw');
-    const writer = cs.writable.getWriter();
+/**
+ * Writes `input` to a transform stream and closes it. The returned promise never rejects:
+ * it resolves to the write error, or null when the write and close succeed.
+ */
+function writeAndClose(writable: WritableStream<BufferSource>, input: Uint8Array): Promise<Error | null> {
+    const writer = writable.getWriter();
     const copy = new Uint8Array(input.byteLength);
     copy.set(input);
-    const writePromise = writer.write(copy).then(() => writer.close());
+    return writer
+        .write(copy)
+        .then(() => writer.close())
+        .then(
+            () => null,
+            (err: Error | string) => (err instanceof Error ? err : new Error(String(err)))
+        );
+}
 
-    const chunks: Uint8Array[] = [];
-    const reader = cs.readable.getReader();
-    let total = 0;
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        total += value.byteLength;
-    }
-    await writePromise;
+/** Joins chunks into one buffer of `total` bytes. */
+function concatChunks(chunks: Uint8Array[], total: number): Uint8Array {
     const out = new Uint8Array(total);
     let offset = 0;
     for (const chunk of chunks) {
@@ -86,34 +85,60 @@ async function deflateRaw(input: Uint8Array): Promise<Uint8Array> {
     return out;
 }
 
+async function deflateRaw(input: Uint8Array): Promise<Uint8Array> {
+    if (typeof CompressionStream === 'undefined' || input.byteLength === 0) {
+        return input;
+    }
+    const cs = new CompressionStream('deflate-raw');
+    const writeDone = writeAndClose(cs.writable, input);
+    const chunks: Uint8Array[] = [];
+    const reader = cs.readable.getReader();
+    let total = 0;
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            total += value.byteLength;
+        }
+    } finally {
+        const writeError = await writeDone;
+        if (writeError) {
+            throw writeError;
+        }
+    }
+    return concatChunks(chunks, total);
+}
+
+/**
+ * Inflates `compressed` and throws once the output passes `maxUncompressedBytes`.
+ * Every stream promise is awaited, so a bad or oversized entry never leaves an unhandled rejection.
+ */
 async function inflateRaw(compressed: Uint8Array, maxUncompressedBytes: number): Promise<Uint8Array> {
     const ds = new DecompressionStream('deflate-raw');
-    const writer = ds.writable.getWriter();
-    const copy = new Uint8Array(compressed.byteLength);
-    copy.set(compressed);
-    const writePromise = writer.write(copy).then(() => writer.close());
-
+    const writeDone = writeAndClose(ds.writable, compressed);
     const reader = ds.readable.getReader();
     const chunks: Uint8Array[] = [];
     let total = 0;
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        total += value.byteLength;
-        if (total > maxUncompressedBytes) {
-            await reader.cancel('Exceeded maxUncompressedBytes');
-            throw new Error(`ZIP entry decompression exceeded limit of ${maxUncompressedBytes} bytes`);
+    try {
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            total += value.byteLength;
+            if (total > maxUncompressedBytes) {
+                await reader.cancel('Exceeded maxUncompressedBytes').catch(() => undefined);
+                throw new Error(`ZIP entry decompression exceeded limit of ${maxUncompressedBytes} bytes`);
+            }
+            chunks.push(value);
         }
-        chunks.push(value);
+    } finally {
+        await writeDone;
     }
-    await writePromise;
-    const out = new Uint8Array(total);
-    let offset = 0;
-    for (const chunk of chunks) {
-        out.set(chunk, offset);
-        offset += chunk.byteLength;
+    const writeError = await writeDone;
+    if (writeError) {
+        throw writeError;
     }
-    return out;
+    return concatChunks(chunks, total);
 }
 
 export interface CustomZipEntryInput {

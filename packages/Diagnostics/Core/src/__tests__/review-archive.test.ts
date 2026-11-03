@@ -91,6 +91,48 @@ describe('VerifyBundleArchive local header and central directory agreement', () 
 });
 
 describe('VerifyBundleArchive inflate limit', () => {
+    it('handles every decompression stream promise when the limit stops an entry', async () => {
+        const unhandled: Array<string> = [];
+        const listener = (reason: Error | string): void => {
+            unhandled.push(String(reason));
+        };
+        process.on('unhandledRejection', listener);
+        try {
+            const archive = await BuildCustomZipArchive([{ name: 'environment.json', data: new Uint8Array(1_000_000) }]);
+            const entry = FindZipEntry(archive, 'environment.json');
+            const zip = MutableZip(archive);
+            zip.View.setUint32(entry.CentralOffset + 24, 10, true);
+            zip.View.setUint32(entry.LocalOffset + 22, 10, true);
+            const result = await VerifyBundleArchive(zip.Bytes, { maxCompressionRatio: 1e9 });
+            expect(result.reasonCode).toBe('CORRUPT_ZIP_STRUCTURE');
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            expect(unhandled).toEqual([]);
+        } finally {
+            process.off('unhandledRejection', listener);
+        }
+    });
+
+    it('handles every decompression stream promise when the entry data is not valid deflate', async () => {
+        const unhandled: Array<string> = [];
+        const listener = (reason: Error | string): void => {
+            unhandled.push(String(reason));
+        };
+        process.on('unhandledRejection', listener);
+        try {
+            const archive = await BuildCustomZipArchive([{ name: 'environment.json', data: new Uint8Array(100_000).fill(65) }]);
+            const entry = FindZipEntry(archive, 'environment.json');
+            const zip = MutableZip(archive);
+            const dataStart = entry.LocalOffset + 30 + 'environment.json'.length;
+            zip.Bytes.fill(0xff, dataStart, dataStart + 20);
+            const result = await VerifyBundleArchive(zip.Bytes, { maxCompressionRatio: 1e9 });
+            expect(result.reasonCode).toBe('CORRUPT_ZIP_STRUCTURE');
+            await new Promise((resolve) => setTimeout(resolve, 50));
+            expect(unhandled).toEqual([]);
+        } finally {
+            process.off('unhandledRejection', listener);
+        }
+    });
+
     it('stops inflating an entry once it passes the declared uncompressed size', async () => {
         const archive = await BuildCustomZipArchive([{ name: 'environment.json', data: new Uint8Array(1_000_000) }]);
         const entry = FindZipEntry(archive, 'environment.json');

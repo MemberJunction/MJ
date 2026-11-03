@@ -98,7 +98,16 @@ const SENSITIVE_EXACT_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 /** Normalized key names that contain a sensitive fragment but hold counts or settings, not secrets. */
-const SAFE_KEY_NAMES: ReadonlySet<string> = new Set(['credentialsscrubbedcount', 'tokentype']);
+const SAFE_KEY_NAMES: ReadonlySet<string> = new Set(['credentialsscrubbedcount', 'tokentype', 'tokens']);
+
+/** Normalized name endings that mark a descriptor of a secret (its kind, size or rules), not the secret itself. */
+const SAFE_KEY_SUFFIXES: readonly string[] = ['type', 'version', 'policy', 'count', 'length'];
+
+/** Names that end in an `Id` / `ID` word, such as `apiKeyId` or `API_KEY_ID`. */
+const SAFE_ID_SUFFIX_REGEX = /(?:Id|ID|[-_.\s][iI][dD])$/;
+
+/** Normalized header names whose value runs to the end of the line (scheme plus credentials, or many cookies). */
+const MULTI_VALUE_HEADER_NAMES: ReadonlySet<string> = new Set(['authorization', 'proxyauthorization', 'cookie', 'setcookie']);
 
 /** Token-count style names (`maxTokens`, `promptTokens`, `tokenCount`, `tokenizer`, `TokensUsed`). */
 const SAFE_TOKEN_KEY_REGEX =
@@ -130,9 +139,17 @@ const CONN_STRING_SECRET_REGEX =
 const URL_QUERY_SECRET_REGEX =
     /([?&](?:access_token|refresh_token|id_token|token|api_key|apikey|key|secret|password|sig|signature|code)=)([^&#\s"']+)/gi;
 
-/** `name=value` pairs (query strings, form bodies, env lines, connection strings); the value may be quoted. */
-const KEY_ASSIGNMENT_REGEX =
-    /(^|[^A-Za-z0-9_.-])([A-Za-z][A-Za-z0-9_.-]{0,63})(\s*=\s*)('(?:''|[^'])*(?:'|$)|"(?:""|[^"])*(?:"|$)|[^&\s"';,)=]+)/g;
+/** `name=` at the start of a pair (query strings, form bodies, env lines, connection strings). */
+const KEY_ASSIGNMENT_REGEX = /(^|[^A-Za-z0-9_.-])([A-Za-z][A-Za-z0-9_.-]{0,63})(\s*=\s*)/g;
+
+/** The value after `name=`: quoted (ends at the closing quote or the line end) or a bare token. */
+const ASSIGNMENT_VALUE_REGEX = /'(?:''|[^'\r\n])*(?:'|(?=[\r\n])|$)|"(?:""|[^"\r\n])*(?:"|(?=[\r\n])|$)|[^&\s"';,)=]+/y;
+
+/** The value token after `name: `: quoted (ends at the closing quote or the line end) or up to the next whitespace. */
+const LINE_VALUE_TOKEN_REGEX = /"[^"\r\n]*(?:"|(?=[\r\n])|$)|'[^'\r\n]*(?:'|(?=[\r\n])|$)|\S+/y;
+
+/** The next line break. */
+const LINE_BREAK_REGEX = /[\r\n]/g;
 
 /** `"name": "value"` pairs inside a string. */
 const JSON_STRING_PAIR_REGEX = /("([A-Za-z0-9_.-]{1,64})"\s*:\s*)"((?:\\.|[^"\\])*)"/g;
@@ -144,7 +161,7 @@ const ESCAPED_JSON_STRING_PAIR_REGEX = /(\\"([A-Za-z0-9_.-]{1,64})\\"\s*:\s*)\\"
 const LINE_KEY_REGEX = /(^|[^A-Za-z0-9_-])([A-Za-z][A-Za-z0-9_-]{0,63})([ \t]*:[ \t]*)/g;
 
 /** HTTP auth schemes kept in front of a redacted header value. */
-const AUTH_SCHEME_PREFIX_REGEX = /^(?:Basic|Bearer|Digest|Negotiate|NTLM|Token|ApiKey|AWS4-HMAC-SHA256)[ \t]+/i;
+const AUTH_SCHEME_PREFIX_REGEX = /(?:Basic|Bearer|Digest|Negotiate|NTLM|Token|ApiKey|AWS4-HMAC-SHA256)[ \t]+/iy;
 
 /** A value that is exactly one redaction marker. */
 const PURE_MARKER_REGEX = /^\[REDACTED_[A-Z_]+\]$/;
@@ -229,12 +246,6 @@ const CREDENTIAL_RULES: readonly CredentialRule[] = [
     },
     { regex: CONN_STRING_SECRET_REGEX, secretGroup: 2, replace: (groups) => `${groups[0]}=[REDACTED_SECRET]` },
     { regex: URL_QUERY_SECRET_REGEX, secretGroup: 2, replace: (groups) => `${groups[0]}[REDACTED_QUERY_PARAM]` },
-    {
-        regex: KEY_ASSIGNMENT_REGEX,
-        secretGroup: 4,
-        replace: (groups) => `${groups[0]}${groups[1]}${groups[2]}[REDACTED_SECRET]`,
-        applies: (groups) => sensitivePair(groups[1], groups[3]),
-    },
     {
         regex: JSON_STRING_PAIR_REGEX,
         secretGroup: 3,
@@ -360,44 +371,77 @@ function redactJwts(input: string, tally: RedactionTally): string {
     );
 }
 
+/** Where a redactable value starts and ends, and the text kept in front of it. */
+interface KeyedValue {
+    end: number;
+    keptPrefix: string;
+    secret: string;
+}
+
 /**
- * Replaces the value of each `name: value` header line or YAML pair whose name is a credential.
- * The value runs to the end of the line; a leading HTTP auth scheme is kept.
+ * Finds each `name<separator>` match of `keyRegex` (group 2 is the name) and, when `isSensitive(name)`,
+ * replaces the value that `readValue` finds after it with `[REDACTED_SECRET]`.
+ * The scan never re-reads a redacted value and skips only the name when the name is not sensitive,
+ * so it runs in linear time and still checks pairs that follow.
  */
-function redactSensitiveLineValues(input: string, tally: RedactionTally): string {
+function redactKeyedValues(
+    input: string,
+    keyRegex: RegExp,
+    isSensitive: (name: string) => boolean,
+    readValue: (input: string, start: number, name: string) => KeyedValue | null,
+    tally: RedactionTally
+): string {
     let out = '';
     let cursor = 0;
-    LINE_KEY_REGEX.lastIndex = 0;
-    let match = LINE_KEY_REGEX.exec(input);
+    keyRegex.lastIndex = 0;
+    let match = keyRegex.exec(input);
     while (match) {
         const valueStart = match.index + match[0].length;
-        if (!IsSensitiveHeaderName(match[2])) {
-            LINE_KEY_REGEX.lastIndex = valueStart;
-        } else {
-            const valueEnd = lineEnd(input, valueStart);
-            const value = input.slice(valueStart, valueEnd);
-            const scheme = AUTH_SCHEME_PREFIX_REGEX.exec(value)?.[0] ?? '';
-            const secret = value.slice(scheme.length).trimEnd();
-            if (secret.length > 0 && !PURE_MARKER_REGEX.test(secret)) {
-                if (!secret.startsWith(REDACTION_MARKER_PREFIX)) {
-                    tally.count++;
-                }
-                out += input.slice(cursor, valueStart) + scheme + '[REDACTED_SECRET]';
-                cursor = valueEnd;
+        keyRegex.lastIndex = valueStart;
+        const value = isSensitive(match[2]) ? readValue(input, valueStart, match[2]) : null;
+        if (value && value.secret.length > 0 && !PURE_MARKER_REGEX.test(value.secret)) {
+            if (!value.secret.startsWith(REDACTION_MARKER_PREFIX)) {
+                tally.count++;
             }
-            LINE_KEY_REGEX.lastIndex = valueEnd;
+            out += input.slice(cursor, valueStart) + value.keptPrefix + '[REDACTED_SECRET]';
+            cursor = value.end;
+            keyRegex.lastIndex = value.end;
         }
-        match = LINE_KEY_REGEX.exec(input);
+        match = keyRegex.exec(input);
     }
     return cursor === 0 ? input : out + input.slice(cursor);
 }
 
+/** Reads the value of a `name=value` pair. */
+function readAssignmentValue(input: string, start: number): KeyedValue | null {
+    ASSIGNMENT_VALUE_REGEX.lastIndex = start;
+    const value = ASSIGNMENT_VALUE_REGEX.exec(input);
+    return value ? { end: start + value[0].length, keptPrefix: '', secret: value[0] } : null;
+}
+
+/**
+ * Reads the value of a `name: value` header line or YAML pair. For multi-value headers
+ * (`Authorization`, `Cookie`, ...) the value runs to the end of the line; for other names it is the
+ * next value token. A leading HTTP auth scheme is kept.
+ */
+function readLineValue(input: string, start: number, name: string): KeyedValue | null {
+    AUTH_SCHEME_PREFIX_REGEX.lastIndex = start;
+    const scheme = AUTH_SCHEME_PREFIX_REGEX.exec(input)?.[0] ?? '';
+    const valueStart = start + scheme.length;
+    if (MULTI_VALUE_HEADER_NAMES.has(name.toLowerCase().replace(/[-_]/g, ''))) {
+        const secret = input.slice(valueStart, lineEnd(input, valueStart)).trimEnd();
+        return { end: valueStart + secret.length, keptPrefix: scheme, secret };
+    }
+    LINE_VALUE_TOKEN_REGEX.lastIndex = valueStart;
+    const token = LINE_VALUE_TOKEN_REGEX.exec(input);
+    return token ? { end: valueStart + token[0].length, keptPrefix: scheme, secret: token[0] } : null;
+}
+
 /** Returns the index of the first line break at or after `from`, or the input length. */
 function lineEnd(input: string, from: number): number {
-    const lf = input.indexOf('\n', from);
-    const cr = input.indexOf('\r', from);
-    const ends = [lf, cr].filter((i) => i >= 0);
-    return ends.length > 0 ? Math.min(...ends) : input.length;
+    LINE_BREAK_REGEX.lastIndex = from;
+    const lineBreak = LINE_BREAK_REGEX.exec(input);
+    return lineBreak ? lineBreak.index : input.length;
 }
 
 /**
@@ -409,7 +453,8 @@ function redactCredentials(input: string, tally: RedactionTally): string {
     for (const rule of CREDENTIAL_RULES) {
         result = applyCredentialRule(result, rule, tally);
     }
-    return redactSensitiveLineValues(result, tally);
+    result = redactKeyedValues(result, KEY_ASSIGNMENT_REGEX, IsSensitiveKeyName, readAssignmentValue, tally);
+    return redactKeyedValues(result, LINE_KEY_REGEX, IsSensitiveHeaderName, readLineValue, tally);
 }
 
 /**
@@ -420,6 +465,9 @@ function redactCredentials(input: string, tally: RedactionTally): string {
 export function IsSensitiveKeyName(key: string): boolean {
     const normalized = key.trim().toLowerCase().replace(/[-_.\s]/g, '');
     if (!normalized || SAFE_KEY_NAMES.has(normalized) || SAFE_TOKEN_KEY_REGEX.test(normalized)) {
+        return false;
+    }
+    if (SAFE_ID_SUFFIX_REGEX.test(key.trim()) || SAFE_KEY_SUFFIXES.some((suffix) => normalized.endsWith(suffix))) {
         return false;
     }
     if (SENSITIVE_EXACT_KEYS.has(normalized)) {
@@ -647,7 +695,7 @@ function scrubValueInternal(
     const record = value as Record<string, unknown>;
     const scrubbedRecord: Record<string, unknown> = {};
     for (const [key, propVal] of Object.entries(record)) {
-        if (IsSensitiveKeyName(key)) {
+        if (IsSensitiveKeyName(key) && typeof propVal !== 'boolean') {
             scrubbedRecord[key] = '[REDACTED_KEY]';
             tally.count++;
         } else {

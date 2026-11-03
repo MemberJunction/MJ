@@ -41,6 +41,11 @@ describe('Stage 1 running time', () => {
         const hostile = 'eyJ-'.repeat(100_000);
         expect(elapsedMs(() => ScrubString(hostile, 'FullRaw'))).toBeLessThan(500);
     }, 60_000);
+
+    it('scrubs 1.6 MB of sensitive name: value lines with no carriage return in well under a second', () => {
+        const hostile = 'pwd:x\n'.repeat(280_000);
+        expect(elapsedMs(() => ScrubString(hostile, 'FullRaw'))).toBeLessThan(500);
+    }, 60_000);
 });
 
 describe('Stage 1 secret shapes in strings', () => {
@@ -114,7 +119,55 @@ describe('Stage 1 secret shapes in strings', () => {
     });
 });
 
+describe('Stage 1 unterminated quoted values', () => {
+    it('still checks pairs after an unterminated quoted value of a non-sensitive key', () => {
+        const out = ScrubString("msg='it client_secret=SUPERSECRET; api_key=KKKK1234", 'FullRaw');
+        expect(out).not.toContain('SUPERSECRET');
+        expect(out).not.toContain('KKKK1234');
+    });
+});
+
+describe('Stage 1 line rule keeps diagnostic text', () => {
+    it('redacts only the next value token after a sensitive name that is not a multi-value header', () => {
+        const token = ScrubString('Failed to validate token: signature mismatch', 'FullRaw');
+        expect(token).toContain('mismatch');
+        const pk = ScrubString('primary-key: ID, Name, Email', 'FullRaw');
+        expect(pk).toContain('Name, Email');
+        expect(pk).not.toContain('ID,');
+    });
+});
+
 describe('Stage 1 sensitive object keys', () => {
+    it('keeps boolean values and id, type, version, policy, count, length and token-usage names', () => {
+        const out = ScrubValue(
+            {
+                hasPassword: true,
+                apiKeyId: 'k-1',
+                API_KEY_ID: 'k-2',
+                credentialType: 'oauth',
+                signatureVersion: 'v4',
+                passwordPolicy: 'strict',
+                passwordLength: 12,
+                secretCount: 3,
+                tokens: 120,
+                tokenUsage: 30,
+                password: 1234,
+            },
+            'FullRaw'
+        );
+        expect(out.hasPassword).toBe(true);
+        expect(out.apiKeyId).toBe('k-1');
+        expect(out.API_KEY_ID).toBe('k-2');
+        expect(out.credentialType).toBe('oauth');
+        expect(out.signatureVersion).toBe('v4');
+        expect(out.passwordPolicy).toBe('strict');
+        expect(out.passwordLength).toBe(12);
+        expect(out.secretCount).toBe(3);
+        expect(out.tokens).toBe(120);
+        expect(out.tokenUsage).toBe(30);
+        expect(out.password).toBe('[REDACTED_KEY]');
+    });
+
     it('redacts keys that contain a secret word and keeps token-count keys', () => {
         const out = ScrubValue(
             {
