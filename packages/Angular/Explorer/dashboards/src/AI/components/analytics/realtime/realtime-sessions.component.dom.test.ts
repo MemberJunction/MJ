@@ -6,6 +6,13 @@ import { createFakeProvider, useFakeGlobalProvider, query, queryAll, StubDropdow
 import { MJPageSearchComponent, MJRefreshButtonComponent } from '@memberjunction/ng-ui-components';
 import { KPICardComponent } from '../../widgets/kpi-card.component';
 import { AnalyticsRealtimeSessionsComponent } from './realtime-sessions.component';
+import { ExpectConsoleLines } from '../../../../__tests__/support/expected-console';
+
+/** The lines these tests log on purpose: the AI engine's load against a provider double that has no datasets. Any other line fails its test. */
+ExpectConsoleLines({
+  log: [/^AIEngineBase: entity '[^']+' not found in metadata — dataset skipped/],
+  error: [/^TypeError: (p\.GetAndCacheDatasetByName is not a function|Cannot read properties of undefined \(reading '(GetAndCacheDatasetByName|RunViews)'\))/],
+});
 
 /**
  * DOM coverage for <app-analytics-realtime-sessions> — the Realtime Voice sessions grid. Its filter

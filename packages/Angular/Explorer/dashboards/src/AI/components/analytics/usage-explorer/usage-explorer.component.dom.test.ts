@@ -12,6 +12,14 @@ import { MJButtonDirective, MJDropdownComponent } from '@memberjunction/ng-ui-co
 import { UsageExplorerComponent } from './usage-explorer.component';
 import { AIInstrumentationService } from '../../../services/ai-instrumentation.service';
 import { AIUsageDailyRow } from '../../../services/ai-usage-analytics.types';
+import { ExpectConsoleLines } from '../../../../__tests__/support/expected-console';
+
+/** The lines these tests log on purpose: the AI engine's load against a provider double that has no datasets, and AG Grid's warning when a test destroys the grid before its column resize. Any other line fails its test. */
+ExpectConsoleLines({
+  log: [/^AIEngineBase: entity '[^']+' not found in metadata — dataset skipped/],
+  error: [/^TypeError: (p\.GetAndCacheDatasetByName is not a function|Cannot read properties of undefined \(reading '(GetAndCacheDatasetByName|RunViews)'\))/],
+  warn: [/^AG Grid: warning #26 Grid API function autoSizeAllColumns\(\) cannot be called as the grid has been destroyed/],
+});
 
 const FIXTURE_DAILY_ROWS: Partial<AIUsageDailyRow>[] = [
     {

@@ -11,6 +11,13 @@ import { query, queryAll, renderComponentFixture } from '@memberjunction/ng-test
 import { MJButtonDirective, MJConfirmService } from '@memberjunction/ng-ui-components';
 import { VSStudioSlideInStateService } from '../services/vs-studio-slide-in-state.service';
 import { VideoStudioBrandKitsResourceComponent } from './video-studio-brand-kits-resource.component';
+import { ExpectConsoleLines } from '../../__tests__/support/expected-console';
+
+/** The lines these tests log on purpose: engine loads against doubles with no RunViews and no GraphQL server. Any other line fails its test. */
+ExpectConsoleLines({
+  log: [/^AIEngineBase: entity '[^']+' not found in metadata — dataset skipped/],
+  error: [/^TypeError: (p\.GetAndCacheDatasetByName is not a function|Cannot read properties of undefined \(reading '(GetAndCacheDatasetByName|RunViews)'\))/, /^\[GraphQL\] ExecuteGQL error caught:/, /^\{"name":"TypeError","message":"GraphQL Error \(Code: unknown\)"/, /^VSCopilotPanelComponent(\.ResolveVideoStudioAgent)?: ('Video Studio' agent not found|Video Studio isn't installed or you can't run it)/],
+});
 
 function createNavigationServiceStub(): {
   QueryParamChanged$: typeof EMPTY;
@@ -301,6 +308,8 @@ describe('VideoStudioBrandKitsResourceComponent DOM', () => {
     expect(instance.FilteredBrandKits).toHaveLength(0);
     expect(query(fixture, '[data-testid="brand-kits-empty"]')).not.toBeNull();
 
+    // Let the slide-in's pending engine load settle while the console is still captured.
+    await flushAsync();
     fixture.destroy();
     vi.restoreAllMocks();
   });

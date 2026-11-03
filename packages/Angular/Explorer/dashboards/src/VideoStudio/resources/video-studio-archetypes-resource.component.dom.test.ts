@@ -6,6 +6,13 @@ import { NavigationService } from '@memberjunction/ng-shared';
 import { query, queryAll, renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { VSStudioSlideInStateService } from '../services/vs-studio-slide-in-state.service';
 import { VideoStudioArchetypesResourceComponent } from './video-studio-archetypes-resource.component';
+import { ExpectConsoleLines } from '../../__tests__/support/expected-console';
+
+/** The lines these tests log on purpose: engine and agent lookups against doubles that hold neither companies nor the Video Studio agent. Any other line fails its test. */
+ExpectConsoleLines({
+  log: [/^AIEngineBase: entity '[^']+' not found in metadata — dataset skipped/],
+  error: [/^TypeError: (p\.GetAndCacheDatasetByName is not a function|Cannot read properties of undefined \(reading '(GetAndCacheDatasetByName|RunViews)'\))/, /^Companies view unavailable/, /^TypeError: md\.EntityByName is not a function/, /^\[GraphQL\] ExecuteGQL error caught:/, /^\{"name":"TypeError","message":"GraphQL Error \(Code: unknown\)"/, /^VSCopilotPanelComponent(\.ResolveVideoStudioAgent)?: ('Video Studio' agent not found|Video Studio isn't installed or you can't run it)/],
+});
 
 function createNavigationServiceStub(): {
   QueryParamChanged$: typeof EMPTY;

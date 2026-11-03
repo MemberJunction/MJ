@@ -10,6 +10,13 @@ import { query, renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { VSCopilotPanelComponent } from '../components/vs-copilot-panel.component';
 import { VSStudioSlideInStateService } from '../services/vs-studio-slide-in-state.service';
 import { VideoStudioProductionsResourceComponent } from './video-studio-productions-resource.component';
+import { ExpectConsoleLines } from '../../__tests__/support/expected-console';
+
+/** The lines these tests log on purpose: reads against doubles with no attribute rows, no recent-access entity, no tab id and no GraphQL server. Any other line fails its test. */
+ExpectConsoleLines({
+  log: [/^AIEngineBase: entity '[^']+' not found in metadata — dataset skipped/],
+  error: [/^TypeError: (p\.GetAndCacheDatasetByName is not a function|Cannot read properties of undefined \(reading '(GetAndCacheDatasetByName|RunViews)'\))/, /^\[GraphQL\] ExecuteGQL error caught:/, /^\{"name":"TypeError","message":"GraphQL Error \(Code: unknown\)"/, /^VSCopilotPanelComponent(\.ResolveVideoStudioAgent)?: ('Video Studio' agent not found|Video Studio isn't installed or you can't run it)/, /^Attribute query timed out/, /^RecentAccessService: Error logging access/, /^VideoStudioProductionsResourceComponent\.UpdateQueryParams: no tab id/, /^Error tracking artifact usage: TypeError: usage\.Save is not a function/],
+});
 
 function createNavigationServiceStub(): {
   QueryParamChanged$: typeof EMPTY;
@@ -1229,6 +1236,4 @@ describe('VideoStudioProductionsResourceComponent DOM', () => {
     vi.restoreAllMocks();
   });
 });
-
-
 

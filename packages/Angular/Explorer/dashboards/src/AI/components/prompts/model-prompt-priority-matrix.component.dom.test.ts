@@ -7,6 +7,13 @@ import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { renderComponentFixture, query, queryAll, text, capture, createFakeProvider, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { ModelPromptPriorityMatrixComponent } from './model-prompt-priority-matrix.component';
+import { ExpectConsoleLines } from '../../../__tests__/support/expected-console';
+
+/** The lines these tests log on purpose: the AI engine's load against a provider double that has no datasets, and the matrix's load status line. Any other line fails its test. */
+ExpectConsoleLines({
+  log: [/^AIEngineBase: entity '[^']+' not found in metadata — dataset skipped/, /^Model-prompt priority matrix loaded successfully$/],
+  error: [/^TypeError: (p\.GetAndCacheDatasetByName is not a function|Cannot read properties of undefined \(reading '(GetAndCacheDatasetByName|RunViews)'\))/],
+});
 
 /**
  * DOM coverage for <app-model-prompt-priority-matrix> — the prompt×model priority grid. In ngOnInit
