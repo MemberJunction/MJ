@@ -2040,7 +2040,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (config.AddToObject !== false) {
             (this as any)[config.PropertyName] = [];
         }
-        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: [], loadedSuccessfully: true });
+        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: [], loadedSuccessfully: true, readDenied: true });
         this.NotifyDataChange(config, []);
     }
 

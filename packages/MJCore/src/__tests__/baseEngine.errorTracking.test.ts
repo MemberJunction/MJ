@@ -89,6 +89,23 @@ describe('BaseEngine — Per-Property Error Tracking', () => {
             // Property should retain its original value (not overwritten with empty)
             expect(engine._items).toEqual([{ ID: 'existing' }]);
         });
+
+        it('marks a load that failed for lack of Read as loaded empty and read-denied, so IsPropertyLoaded is false', () => {
+            class ReadDeniedEngine extends TestEngine {
+                protected override ContextUserCanReadConfigEntity(): boolean {
+                    return false;
+                }
+            }
+            const engine = new ReadDeniedEngine();
+            const config = new BaseEnginePropertyConfig({ PropertyName: '_items', EntityName: 'Items' });
+
+            engine.HandleSingleViewResultForTest(config, makeFailureResult('Permission denied'));
+
+            // Loaded (so a restricted role's boot doesn't hang) but not data: its [] is not the table.
+            expect(engine._items).toEqual([]);
+            expect(engine.PropertyLoadedSuccessfully('_items')).toBe(true);
+            expect(engine.IsPropertyLoaded('_items')).toBe(false);
+        });
     });
 
     describe('PropertyLoadedSuccessfully', () => {
