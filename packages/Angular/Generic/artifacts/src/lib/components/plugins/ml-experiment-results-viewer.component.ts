@@ -82,9 +82,9 @@ interface MLExperimentResultsSpec {
   TargetMetric?: string;
   /**
    * The training run's stored gate outcome: `model` ships the trained finalist, `keep-simple-baseline` ships a simple
-   * baseline, `no-signal` ships nothing. Absent on an artifact written before the outcome was carried.
+   * baseline, `no-signal` ships nothing. Absent or null when the run was never evaluated under an Evaluation Protocol.
    */
-  GateOutcome?: 'model' | 'keep-simple-baseline' | 'no-signal';
+  GateOutcome?: 'model' | 'keep-simple-baseline' | 'no-signal' | null;
   /** The stored gate decision's reason, in words. */
   GateReason?: string;
 
@@ -240,12 +240,11 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
   }
 
   /**
-   * Whether the leaderboard's marked row shipped: the stored outcome is `model`, or the artifact carries no outcome
-   * (written before the outcome was carried). A finalist the gate did not ship is never crowned the winner.
+   * Whether the leaderboard's marked row shipped: only when the stored outcome is `model`. A finalist the gate did not
+   * ship, or one with no stored outcome, is never crowned the winner.
    */
   public get FinalistShipped(): boolean {
-    const outcome = this.Spec?.GateOutcome;
-    return outcome === undefined || outcome === 'model';
+    return this.Spec?.GateOutcome === 'model';
   }
 
   /** The side card's title: the winning model, or what the gate decided instead. */
@@ -253,7 +252,8 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
     switch (this.Spec?.GateOutcome) {
       case 'no-signal': return 'No model shipped';
       case 'keep-simple-baseline': return 'Kept a simple baseline';
-      default: return 'Winning Model';
+      case 'model': return 'Winning Model';
+      default: return 'Not evaluated';
     }
   }
 
@@ -304,8 +304,8 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
   public get WinningModelSubtitle(): string {
     switch (this.Spec?.GateOutcome) {
       case 'keep-simple-baseline': return "A simple baseline, not the search's finalist";
-      case 'no-signal': return '';
-      default: return this.shippedFinalistSubtitle();
+      case 'model': return this.shippedFinalistSubtitle();
+      default: return '';
     }
   }
 

@@ -31,7 +31,7 @@ afterEach(() => TestBed.resetTestingModule());
 
 describe('MLExperimentResultsViewerComponent (DOM) — leaderboard labels', () => {
   it("labels a search's score column and hero with the rows' metric, not the artifact's TargetMetric, and tags only the winner optimistic", () => {
-    const f = render({ TargetMetric: 'auc', Leaderboard: [searchRow(1, 'lr-c01', 0.331, false), searchRow(2, 'lr-c1', 0.332, true), searchRow(3, 'xgb', 0.335, false)] });
+    const f = render({ TargetMetric: 'auc', GateOutcome: 'model', Leaderboard: [searchRow(1, 'lr-c01', 0.331, false), searchRow(2, 'lr-c1', 0.332, true), searchRow(3, 'xgb', 0.335, false)] });
     const headers = queryAll(f, '.lb-table thead th').map((th) => th.textContent?.trim());
     expect(headers).toEqual(['#', 'Algorithm', 'Feature set', 'log-loss', '95% interval']);
     expect(text(f, '.hero-metric-label')).toBe('log-loss · winner');
@@ -42,7 +42,7 @@ describe('MLExperimentResultsViewerComponent (DOM) — leaderboard labels', () =
   });
 
   it("names each row's own metric when the rows disagree, under a neutral column label", () => {
-    const f = render({ TargetMetric: 'auc', Leaderboard: [searchRow(1, 'a', 0.33, true, 'log-loss'), searchRow(2, 'b', 0.2, false, 'brier')] });
+    const f = render({ TargetMetric: 'auc', GateOutcome: 'model', Leaderboard: [searchRow(1, 'a', 0.33, true, 'log-loss'), searchRow(2, 'b', 0.2, false, 'brier')] });
     expect(queryAll(f, '.lb-table thead th')[3].textContent?.trim()).toBe('Score');
     expect(queryAll(f, '.lb-row-metric').map((e) => e.textContent?.trim())).toEqual(['log-loss', 'brier']);
     expect(text(f, '.hero-metric-label')).toBe('log-loss · winner');
@@ -87,6 +87,22 @@ describe('MLExperimentResultsViewerComponent (DOM) — the stored gate outcome',
     expect(text(f, '.col-side .section-title')).toBe('Winning Model');
     expect(text(f, '.hero-metric-label')).toBe('log-loss · winner');
   });
+});
+
+describe('MLExperimentResultsViewerComponent (DOM) — no stored outcome', () => {
+  const leaderboard = [searchRow(1, 'lr-c01', 0.331, false), searchRow(2, 'xgb', 0.332, true)];
+
+  for (const [label, extra] of [['null', { GateOutcome: null }], ['absent', {}]] as const) {
+    it(`crowns nothing and titles the card "Not evaluated" when GateOutcome is ${label}`, () => {
+      const f = render({ Leaderboard: leaderboard, ...extra });
+      expect(queryAll(f, '.crown')).toHaveLength(0);
+      expect(queryAll(f, '.lb-table tbody tr.is-winner')).toHaveLength(0);
+      expect(queryAll(f, '.hero-metric')).toHaveLength(0);
+      expect(f.nativeElement.textContent).not.toContain('Winning Model');
+      expect(f.nativeElement.textContent).not.toContain('winner');
+      expect(text(f, '.col-side .section-title')).toBe('Not evaluated');
+    });
+  }
 });
 
 describe('MLExperimentResultsViewerComponent (DOM) — the optimistic tag', () => {

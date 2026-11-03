@@ -9,7 +9,7 @@ import {
   MJArtifactVersionEntity,
   MJExperimentSessionEntity,
 } from '@memberjunction/core-entities';
-import { ExperimentSessions, type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
+import { ExperimentSessions, type GateOutcome, type ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSIterationCard, PSLeaderboardEntry } from '../predictive-studio.types';
@@ -19,6 +19,8 @@ import {
   GroupIterationsToKanban,
   ParseSessionLeaderboard,
   type PSRankedScore,
+  type PSStoredGate,
+  ReadStoredGate,
 } from '../predictive-studio.view-models';
 
 /** A budget gauge derived from the session's budget JSON + actual iteration spend. */
@@ -372,12 +374,16 @@ export class PSExperimentsComponent implements OnInit {
       const winningIteration = winningRow ? this.engine.IterationsForSession(s.ID).find((it) => UUIDsEqual(it.ID, winningRow.IterationID)) : undefined;
       const winningRun = winningIteration ? this.engine.TrainingRuns.find((r) => UUIDsEqual(r.ExperimentSessionIterationID, winningIteration.ID)) : undefined;
       const winningModelId = winningRun?.ResultingModelID ?? undefined;
+      const gate = ReadStoredGate(winningRun?.ValidationResults ?? null);
+      const outcome = gate?.Outcome ?? null;
 
       const payload = {
         Name: s.Name,
         Goal: s.Goal || planSpec?.Goal || 'Predictive modeling experiment',
         TargetMetric: planSpec?.TargetDefinition?.SuccessMetric || 'Score',
-        Summary: `Experiment session completed with ${this.leaderboard.length} iterations. Winning algorithm: ${winningRow?.algorithm ?? 'None'}.`,
+        Summary: `Experiment session completed with ${this.leaderboard.length} iterations. ${this.gateSummary(gate, winningRow?.algorithm)}`,
+        GateOutcome: outcome,
+        GateReason: gate?.Reason ?? null,
         Leaderboard: this.leaderboard.map((lb) => ({
           rank: lb.rank,
           algorithm: lb.algorithm,
@@ -385,10 +391,10 @@ export class PSExperimentsComponent implements OnInit {
           featureSet: lb.features,
           score: lb.Score,
           metricName: lb.ScoreMetric,
-          isWinner: lb.best,
+          isWinner: lb.best && outcome === 'model',
         })),
         BestModelID: winningModelId,
-        BestModel: winningModelId && winningRow ? { ID: winningModelId, Name: winningRow.algorithm } : undefined,
+        BestModel: winningModelId && winningRow ? this.bestModelFor(outcome, winningModelId, winningRow.algorithm) : undefined,
         Markdown: `## Experiment Session: ${s.Name}\n\n**Status:** ${s.Status}\n**Goal:** ${s.Goal || 'N/A'}\n\n### Leaderboard\n\nRanked by metric:\n` +
           this.leaderboard.map(l => `- **#${l.rank} ${l.algorithm}**: ${l.ScoreMetric} ${l.Score.toFixed(3)} (${l.features})`).join('\n'),
       };
@@ -418,6 +424,24 @@ export class PSExperimentsComponent implements OnInit {
   /** @deprecated Use {@link ViewResultsArtifact}. */
   public async viewResultsArtifact(): Promise<void> {
     return this.ViewResultsArtifact();
+  }
+
+  /** The artifact summary's outcome sentence: a winner is named only when the stored gate shipped the model. */
+  private gateSummary(gate: PSStoredGate | null, algorithm: string | undefined): string {
+    const reason = gate?.Reason.replace(/\.$/, '');
+    switch (gate?.Outcome) {
+      case 'model': return `Winning algorithm: ${algorithm ?? 'None'}.`;
+      case 'keep-simple-baseline': return `The gate kept a simple baseline: ${reason}.`;
+      case 'no-signal': return `No model shipped: ${reason}.`;
+      default: return 'Not evaluated under an Evaluation Protocol.';
+    }
+  }
+
+  /** The artifact's model record: named by its algorithm only when the gate shipped the model; a kept baseline is not the finalist. */
+  private bestModelFor(outcome: GateOutcome | null, id: string, algorithm: string): { ID: string; Name: string } | undefined {
+    if (outcome === 'model') return { ID: id, Name: algorithm };
+    if (outcome === 'keep-simple-baseline') return { ID: id, Name: 'Kept simple baseline' };
+    return undefined;
   }
 
   /** The active session's stored leaderboard, each entry on its metric; an entry with none named is on the plan's success metric. */

@@ -143,7 +143,7 @@
         <!-- RIGHT COLUMN: winning model card + drill-through -->
         <div class="col-side">
           <div class="section-title">{{ OutcomeCardTitle }}</div>
-          <div class="winner-card" [class.no-model]="Spec.GateOutcome === 'no-signal'">
+          <div class="winner-card" [class.no-model]="Spec.GateOutcome !== 'model' && Spec.GateOutcome !== 'keep-simple-baseline'">
             <div class="winner-top">
               @if (FinalistShipped) {
                 <div class="crown"><i class="fa-solid fa-crown"></i></div>
