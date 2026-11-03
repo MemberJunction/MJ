@@ -1533,6 +1533,65 @@ describe('TransformSimpleObjectToEntityObject batched IS-A hydration & 1-query C
         });
     });
 
+    describe('a hinted child read is not repeated when it cannot change the answer', () => {
+        const TYPED_NO_ROW = 'c3000000-0000-0000-0000-000000000011';
+        const HIDDEN_ROW = 'c3000000-0000-0000-0000-000000000012';
+
+        beforeEach(async () => {
+            const productsInfo = batchedProvider.EntityByName('Products')!;
+            productsInfo.SubtypeSelector = JSON.stringify({ Path: 'ProductTypeID.ProductExtensionEntity', UseForLoadedRecords: true });
+            const ptInfo = batchedProvider.EntityByName('Product Types')!;
+            const typeEntities = await TransformSimpleObjectToEntityObject<LoadHintTestEntity>(
+                batchedProvider as object as IMetadataProvider,
+                'Product Types',
+                [MEETING_TYPE_ID, PUB_TYPE_ID].map(id => store.ViewRow(ptInfo, id)!),
+                user
+            );
+            registeredEngine = new FakeProductTypeEngine(typeEntities);
+            BaseEngineRegistry.Instance.RegisterEngine(registeredEngine);
+            for (const id of [TYPED_NO_ROW, HIDDEN_ROW]) {
+                store.Insert('Products', { ID: id, Name: `Typed ${id}`, ProductTypeID: MEETING_TYPE_ID });
+            }
+            store.Insert('Meetings', { ID: HIDDEN_ROW, Venue: 'Hidden Hall' });
+            store.HideFromLoads('Meetings', HIDDEN_ROW);
+        });
+
+        function meetingReads(): number {
+            return batchedProvider.RunViewsParams.filter(p => p.EntityName === 'Meetings').length;
+        }
+
+        it('a miss in the caller\'s own RunViews batch is not re-read from the DB', async () => {
+            // The batch fetched Meetings in the same call, for the same user: it cannot be behind.
+            const productsInfo = batchedProvider.EntityByName('Products')!;
+            const meetingsInfo = batchedProvider.EntityByName('Meetings')!;
+            const hasRow = 'c2000000-0000-0000-0000-000000000000';
+            const batchCache = new Map([['meetings', [store.ViewRow(meetingsInfo, hasRow)!]]]);
+
+            const results = await TransformSimpleObjectToEntityObject<BaseEntity>(
+                batchedProvider as object as IMetadataProvider, 'Products',
+                [hasRow, TYPED_NO_ROW].map(id => store.ViewRow(productsInfo, id)!), user, batchCache
+            );
+
+            expect(results[0].ISAChild?.EntityInfo.Name).toBe('Meetings');
+            expect(results[1].ISAChild).toBeNull();
+            expect(meetingReads()).toBe(0);
+        });
+
+        it('a hinted child that discovery finds again is not re-read after its read found no row', async () => {
+            // As the per-row path: the row exists but its load comes back empty, and would again.
+            vi.spyOn(console, 'error').mockImplementation(() => undefined);
+            const productsInfo = batchedProvider.EntityByName('Products')!;
+
+            const [result] = await TransformSimpleObjectToEntityObject<BaseEntity>(
+                batchedProvider as object as IMetadataProvider, 'Products', [store.ViewRow(productsInfo, HIDDEN_ROW)!], user
+            );
+
+            expect(result.ISAChild).toBeNull();
+            expect(batchedProvider.BatchDiscoveryCalls).toBe(1);
+            expect(meetingReads()).toBe(1);
+        });
+    });
+
     it('reports subtype-hint misses after discovery, the way the per-row path does', async () => {
         const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         const productsInfo = batchedProvider.EntityByName('Products')!;

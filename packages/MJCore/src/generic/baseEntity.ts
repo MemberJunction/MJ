@@ -5984,7 +5984,8 @@ export abstract class BaseEntity<T = unknown> {
                 effectiveUser,
                 nextLevelChildren,
                 deniedChildLogged,
-                batchUnfilteredCache
+                batchUnfilteredCache,
+                new Map(Array.from(hintNotFound, p => [p, hintedNameByParent.get(p) ?? ''] as const))
             );
             for (const p of hintNotFound) {
                 BaseEntity.reportBatchSubtypeLoadHintMiss(p, hintedNameByParent.get(p), discoveredByParent.get(p) ?? null);
@@ -6016,6 +6017,9 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Discovers and links the child of each disjoint parent.
      *
+     * @param readFoundNoRow - The child each parent's hinted read already found no row in. When
+     *   discovery names that same child, its row exists but reads back empty (a row filter), so it
+     *   is not read again; the per-row path stops there too.
      * @returns The child each parent was found to have, whether or not it could then be linked.
      *   A parent with no child, or whose child could not be determined, is absent.
      */
@@ -6028,7 +6032,8 @@ export abstract class BaseEntity<T = unknown> {
         contextUser: UserInfo | undefined,
         outLinkedChildren: BaseEntity[],
         deniedChildLogged: Set<string>,
-        batchUnfilteredCache?: ReadonlyMap<string, ReadonlyArray<BaseEntity | Record<string, unknown>>>
+        batchUnfilteredCache?: ReadonlyMap<string, ReadonlyArray<BaseEntity | Record<string, unknown>>>,
+        readFoundNoRow: ReadonlyMap<BaseEntity, string> = new Map()
     ): Promise<Map<BaseEntity, string>> {
         const discoveredByParent = new Map<BaseEntity, string>();
         const validChildren = parentInfo.ChildEntities.filter(c => c.FirstPrimaryKey != null); // first-pk-ok: IS-A children share the parent's single key
@@ -6124,9 +6129,10 @@ export abstract class BaseEntity<T = unknown> {
                 contextUser
             );
             BaseEntity.recordDiscoveredChildren(discoveredByChild, discoveredByParent);
-            if (discoveredByChild.size > 0) {
+            const toRead = BaseEntity.withoutChildrenAlreadyRead(discoveredByChild, readFoundNoRow);
+            if (toRead.size > 0) {
                 await BaseEntity.batchLoadAndLinkDisjointChildren(
-                    discoveredByChild,
+                    toRead,
                     md,
                     entityProvider,
                     rvProvider,
@@ -6167,9 +6173,10 @@ export abstract class BaseEntity<T = unknown> {
                 }
             }
             BaseEntity.recordDiscoveredChildren(discoveredByChild, discoveredByParent);
-            if (discoveredByChild.size > 0) {
+            const toRead = BaseEntity.withoutChildrenAlreadyRead(discoveredByChild, readFoundNoRow);
+            if (toRead.size > 0) {
                 await BaseEntity.batchLoadAndLinkDisjointChildren(
-                    discoveredByChild,
+                    toRead,
                     md,
                     entityProvider,
                     rvProvider,
@@ -6180,6 +6187,24 @@ export abstract class BaseEntity<T = unknown> {
             }
         }
         return discoveredByParent;
+    }
+
+    /** `byChild` without each parent whose read of that same child already found no row. */
+    private static withoutChildrenAlreadyRead(
+        byChild: ReadonlyMap<string, ReadonlyArray<BaseEntity>>,
+        readFoundNoRow: ReadonlyMap<BaseEntity, string>
+    ): Map<string, BaseEntity[]> {
+        const out = new Map<string, BaseEntity[]>();
+        for (const [childName, parents] of byChild) {
+            const toRead = parents.filter(p => {
+                const alreadyRead = readFoundNoRow.get(p);
+                return !alreadyRead || !sameEntityName(alreadyRead, childName);
+            });
+            if (toRead.length > 0) {
+                out.set(childName, toRead);
+            }
+        }
+        return out;
     }
 
     /** Copies a child-name → parents grouping into a parent → child-name map. */
@@ -6546,9 +6571,10 @@ export abstract class BaseEntity<T = unknown> {
         const unlinkedParents: BaseEntity[] = [];
 
         // Every parent here already has a known subtype (a load hint, or discovery against the
-        // DB), so a miss in a child's in-memory cache means the cache is behind the DB (the
-        // engine's event debounce window, another server node, an out-of-band write), not that
-        // the row is absent. Those parents are read from the DB with the uncached children below.
+        // DB), so a miss in a BaseEngine cache means the cache is behind the DB (the engine's event
+        // debounce window, another server node, an out-of-band write), not that the row is absent.
+        // Those parents are read from the DB with the uncached children below. A miss in the
+        // caller's own RunViews batch is final: that read ran in this same call, for this user.
         // Unhinted discovery is different: there a complete cache does prove absence, and
         // discoverAndHydrateDisjointChildren never sends such parents here.
         const remainingByChildName = new Map<string, BaseEntity[]>();
@@ -6564,10 +6590,16 @@ export abstract class BaseEntity<T = unknown> {
             if (childInfo && pkField && cachedRecords) {
                 const pkIsUuid = Boolean(pkField.IsUniqueIdentifier);
                 const byPk = BaseEntity.buildInMemoryChildLookupMap(cachedRecords, pkField.Name, pkIsUuid);
+                const fromCallerBatch = batchUnfilteredCache?.has(childInfo.Name.trim().toLowerCase()) === true;
                 const cacheMisses: BaseEntity[] = [];
                 for (const p of parents) {
                     const pkKey = CanonicalPrimaryKeyValue(String(p.PrimaryKey.Values()), pkIsUuid);
                     const matched = byPk.get(pkKey);
+                    if (!matched && fromCallerBatch) {
+                        unlinkedParents.push(p);
+                        outNotFound.add(p);
+                        continue;
+                    }
                     if (!matched) {
                         cacheMisses.push(p);
                         continue;
