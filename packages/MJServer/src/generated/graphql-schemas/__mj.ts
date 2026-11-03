@@ -38941,10 +38941,6 @@ export class MJContentSource_ {
     @MaxLength(36)
     ScheduledJobID?: string;
         
-    @Field({nullable: true, description: "Optional target Semantic Graph (MJ: Graphs) that this Content Source populates when the Content Pipeline Graph overlay stage runs. Multiple Content Sources can share the same GraphID."}) 
-    @MaxLength(36)
-    GraphID?: string;
-        
     @Field({nullable: true, description: "Per-field provenance for the pipeline: for each well-known field, the confidence the winning stage had and which stage set it."}) 
     FieldConfidence?: string;
         
@@ -38956,6 +38952,10 @@ export class MJContentSource_ {
         
     @Field({nullable: true, description: "When this source last completed a full Sync walk (reconciling removals). Stamped with the time a completed sync walk started. The shipped Sync Record Process selects sources by LastSyncedAt (LastSyncedAt IS NULL OR LastSyncedAt < DATEADD(day, -30, GETUTCDATE())), never by ForceDiscovery; to force a sync, set LastSyncedAt back or to NULL."}) 
     LastSyncedAt?: Date;
+        
+    @Field({nullable: true, description: "Optional target Semantic Graph (MJ: Graphs) that this Content Source populates when the Content Pipeline Graph overlay stage runs. Multiple Content Sources can share the same GraphID."}) 
+    @MaxLength(36)
+    GraphID?: string;
         
     @Field({nullable: true}) 
     @MaxLength(255)
@@ -39046,9 +39046,6 @@ export class CreateMJContentSourceInput {
     ScheduledJobID: string | null;
 
     @Field({ nullable: true })
-    GraphID: string | null;
-
-    @Field({ nullable: true })
     FieldConfidence: string | null;
 
     @Field(() => Boolean, { nullable: true })
@@ -39059,6 +39056,9 @@ export class CreateMJContentSourceInput {
 
     @Field({ nullable: true })
     LastSyncedAt: Date | null;
+
+    @Field({ nullable: true })
+    GraphID: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -39113,9 +39113,6 @@ export class UpdateMJContentSourceInput {
     ScheduledJobID?: string | null;
 
     @Field({ nullable: true })
-    GraphID?: string | null;
-
-    @Field({ nullable: true })
     FieldConfidence?: string | null;
 
     @Field(() => Boolean, { nullable: true })
@@ -39126,6 +39123,9 @@ export class UpdateMJContentSourceInput {
 
     @Field({ nullable: true })
     LastSyncedAt?: Date | null;
+
+    @Field({ nullable: true })
+    GraphID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

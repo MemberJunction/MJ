@@ -15723,12 +15723,6 @@ export const MJContentSourceSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Scheduled Jobs (vwScheduledJobs.ID)
         * * Description: Optional link to the Scheduled Job that runs this content source on a recurring basis. Replaces the retired ScheduledActionID link; the job is of type Action and carries its action + parameters in ScheduledJob.Configuration.`),
-    GraphID: z.string().nullable().describe(`
-        * * Field Name: GraphID
-        * * Display Name: Graph ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
-        * * Description: Optional target Semantic Graph (MJ: Graphs) that this Content Source populates when the Content Pipeline Graph overlay stage runs. Multiple Content Sources can share the same GraphID.`),
     FieldConfidence: z.string().nullable().describe(`
         * * Field Name: FieldConfidence
         * * Display Name: Field Confidence
@@ -15750,6 +15744,12 @@ export const MJContentSourceSchema = z.object({
         * * Display Name: Last Synced At
         * * SQL Data Type: datetimeoffset
         * * Description: When this source last completed a full Sync walk (reconciling removals). Stamped with the time a completed sync walk started. The shipped Sync Record Process selects sources by LastSyncedAt (LastSyncedAt IS NULL OR LastSyncedAt < DATEADD(day, -30, GETUTCDATE())), never by ForceDiscovery; to force a sync, set LastSyncedAt back or to NULL.`),
+    GraphID: z.string().nullable().describe(`
+        * * Field Name: GraphID
+        * * Display Name: Graph ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
+        * * Description: Optional target Semantic Graph (MJ: Graphs) that this Content Source populates when the Content Pipeline Graph overlay stage runs. Multiple Content Sources can share the same GraphID.`),
     ContentType: z.string().describe(`
         * * Field Name: ContentType
         * * Display Name: Content Type Name
@@ -87010,20 +87010,6 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
 
     /**
-    * * Field Name: GraphID
-    * * Display Name: Graph ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
-    * * Description: Optional target Semantic Graph (MJ: Graphs) that this Content Source populates when the Content Pipeline Graph overlay stage runs. Multiple Content Sources can share the same GraphID.
-    */
-    get GraphID(): string | null {
-        return this.Get('GraphID');
-    }
-    set GraphID(value: string | null) {
-        this.Set('GraphID', value);
-    }
-
-    /**
     * * Field Name: FieldConfidence
     * * Display Name: Field Confidence
     * * SQL Data Type: nvarchar(MAX)
@@ -87074,6 +87060,20 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
     set LastSyncedAt(value: Date | null) {
         this.Set('LastSyncedAt', value);
+    }
+
+    /**
+    * * Field Name: GraphID
+    * * Display Name: Graph ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
+    * * Description: Optional target Semantic Graph (MJ: Graphs) that this Content Source populates when the Content Pipeline Graph overlay stage runs. Multiple Content Sources can share the same GraphID.
+    */
+    get GraphID(): string | null {
+        return this.Get('GraphID');
+    }
+    set GraphID(value: string | null) {
+        this.Set('GraphID', value);
     }
 
     /**
