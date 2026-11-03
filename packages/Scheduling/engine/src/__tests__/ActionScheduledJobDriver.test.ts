@@ -255,6 +255,9 @@ describe('ActionScheduledJobDriver.Execute — run ID and heartbeat reach the ac
         const { ActionEngineServer } = await import('@memberjunction/actions');
         const engine = ActionEngineServer.Instance as unknown as { Actions: Array<Record<string, unknown>>; RunAction: ReturnType<typeof vi.fn> };
         engine.Actions = [{ ID: 'act-1', Name: 'Steward Feature Pipeline Version' }];
+        // Set the result here: restoreMocks (vitest.shared.ts) can clear the factory's resolved value
+        // before this test runs, depending on which test files share the worker.
+        engine.RunAction.mockResolvedValue({ Success: true, Message: 'Action completed', Result: { ResultCode: 'OK' }, Params: [] });
         const heartbeat = vi.fn().mockResolvedValue(undefined);
         const driver = new ActionScheduledJobDriver();
 
