@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "keyId": {
+      "type": "string",
+      "title": "Key ID",
+      "description": "Key ID sent as keyId in signed collector requests",
+      "isSecret": false,
+      "order": 0
+    },
+    "publicKey": {
+      "type": "string",
+      "title": "Public Key",
+      "description": "Ed25519 public key (SPKI, base64)",
+      "isSecret": false,
+      "order": 1
+    },
+    "privateKey": {
+      "type": "string",
+      "title": "Private Key",
+      "description": "Ed25519 private key (PKCS#8, base64)",
+      "isSecret": true,
+      "order": 2
+    }
+  },
+  "required": [
+    "keyId",
+    "publicKey",
+    "privateKey"
+  ]
+}

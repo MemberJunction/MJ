@@ -161,4 +161,18 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   'dbdoc:reset',
   'dbdoc status',
   'dbdoc:status',
+
+  // Diagnostic Bundles offline inspection & keygen - uses @memberjunction/diagnostics (L0, zero bootstrap)
+  'diag inspect',
+  'diag:inspect',
+  'diag scrub',
+  'diag:scrub',
+  'diag keygen',
+  'diag:keygen',
+  'diag timeline',
+  'diag:timeline',
+  'diag slow',
+  'diag:slow',
+  'diag export',
+  'diag:export',
 ]);

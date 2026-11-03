@@ -45,6 +45,12 @@ import { FormContextsEqual } from './base-form-component-internals';
 import { ContributionClaimedFieldNames, ContributionHiddenSectionKeys } from './panel-slot/form-contribution';
 import { DuplicateEntryCheckController, type DuplicateEntryCheckValue } from './duplicate-entry-check/duplicate-entry-check';
 
+/** Options for {@link BaseFormComponent.RefreshRecord}. */
+export interface RefreshRecordOptions {
+  /** Show the "Record refreshed" notification after a successful reload. Default true. */
+  ShowSuccessNotification?: boolean;
+}
+
 /**
  * Abstract base class for all entity record forms in MemberJunction.
  *
@@ -693,9 +699,11 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    * record. Related-entity grids are notified via the form container's
    * {@link FormRecordRefreshCoordinator} after this emits {@link RecordRefreshed}.
    *
+   * @param options `ShowSuccessNotification: false` skips the "Record refreshed" notification;
+   *   failure notifications still show.
    * @returns true if the record was reloaded from the database.
    */
-  public async RefreshRecord(): Promise<boolean> {
+  public async RefreshRecord(options?: RefreshRecordOptions): Promise<boolean> {
     if (!this.canRefreshRecord()) {
       return false;
     }
@@ -704,7 +712,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     this.cdr.markForCheck();
 
     try {
-      return await this.executeRecordRefresh();
+      return await this.executeRecordRefresh(options?.ShowSuccessNotification ?? true);
     } finally {
       this.IsRefreshing = false;
       this.cdr.markForCheck();
@@ -715,7 +723,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     return !!this.record && this.record.IsSaved && !this.EditMode;
   }
 
-  private async executeRecordRefresh(): Promise<boolean> {
+  private async executeRecordRefresh(showSuccessNotification: boolean): Promise<boolean> {
     const record = this.record;
     if (!record) {
       return false;
@@ -733,11 +741,13 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       }
 
       await this.reloadFavoriteStatusAfterRefresh(record);
-      this.Notification.emit({
-        Message: 'Record refreshed from database',
-        Type: 'info',
-        Duration: 2000,
-      });
+      if (showSuccessNotification) {
+        this.Notification.emit({
+          Message: 'Record refreshed from database',
+          Type: 'info',
+          Duration: 2000,
+        });
+      }
       this.RecordRefreshed.emit({
         EntityName: record.EntityInfo.Name,
         Record: record,

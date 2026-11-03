@@ -115,6 +115,8 @@
     "@memberjunction/data-context-server": "6.2.0-edge.7",
     "@memberjunction/database-designer-actions": "6.2.0-edge.7",
     "@memberjunction/database-designer-core": "6.2.0-edge.7",
+    "@memberjunction/diagnostics": "6.2.0-edge.7",
+    "@memberjunction/diagnostics-server": "6.2.0-edge.7",
     "@memberjunction/doc-utils": "6.2.0-edge.7",
     "@memberjunction/dynamic-packages": "6.2.0-edge.7",
     "@memberjunction/encryption": "6.2.0-edge.7",
