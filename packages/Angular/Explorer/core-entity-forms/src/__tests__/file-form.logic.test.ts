@@ -2,7 +2,7 @@
  * The Files form's viewer decisions (MJ#4947): which media types report their own load, and when a size is shown.
  */
 import { describe, it, expect } from 'vitest';
-import { ClassifyFileMediaType, DescribeFileSize, MediaLoadsByElement } from '../lib/custom/Files/file-form.logic';
+import { ClassifyFileMediaType, DescribeFileSize, IsEmbeddableMediaUrl, MediaLoadsByElement } from '../lib/custom/Files/file-form.logic';
 
 describe('MediaLoadsByElement', () => {
   it('is true for the types the viewer renders in an element with a load event, and for the Office previews, which report their own', () => {
@@ -57,5 +57,30 @@ describe('ClassifyFileMediaType', () => {
     expect(ClassifyFileMediaType(null, 'song.mp3')).toBe('audio');
     expect(ClassifyFileMediaType('text/plain', 'notes')).toBe('text');
     expect(ClassifyFileMediaType(null, 'data.csv')).toBe('text');
+  });
+});
+
+describe('IsEmbeddableMediaUrl (PR #6034 URL scheme screening)', () => {
+  const origin = 'https://explorer.example.com';
+
+  it('accepts absolute http/https URLs and same-origin relative media streaming paths', () => {
+    expect(IsEmbeddableMediaUrl('https://cdn.example.com/files/report.pdf', origin)).toBe(true);
+    expect(IsEmbeddableMediaUrl('http://localhost:4000/media/123?token=abc', origin)).toBe(true);
+    expect(IsEmbeddableMediaUrl('/media/file-123?token=signed-jwt', origin)).toBe(true);
+    expect(IsEmbeddableMediaUrl('  https://cdn.example.com/image.png  ', origin)).toBe(true);
+  });
+
+  it('rejects javascript:, data:, blob:, vbscript:, file:, scheme-relative //, and empty inputs', () => {
+    expect(IsEmbeddableMediaUrl('javascript:alert(document.domain)', origin)).toBe(false);
+    expect(IsEmbeddableMediaUrl('  JAVASCRIPT:alert(1)', origin)).toBe(false);
+    expect(IsEmbeddableMediaUrl('data:text/html,<script>alert(1)</script>', origin)).toBe(false);
+    expect(IsEmbeddableMediaUrl('blob:https://explorer.example.com/550e8400', origin)).toBe(false);
+    expect(IsEmbeddableMediaUrl('vbscript:msgbox(1)', origin)).toBe(false);
+    expect(IsEmbeddableMediaUrl('file:///etc/passwd', origin)).toBe(false);
+    expect(IsEmbeddableMediaUrl('//evil.example.com/phish.pdf', origin)).toBe(false);
+    expect(IsEmbeddableMediaUrl('', origin)).toBe(false);
+    expect(IsEmbeddableMediaUrl('   ', origin)).toBe(false);
+    expect(IsEmbeddableMediaUrl(null, origin)).toBe(false);
+    expect(IsEmbeddableMediaUrl(undefined, origin)).toBe(false);
   });
 });

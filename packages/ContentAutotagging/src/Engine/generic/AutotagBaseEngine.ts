@@ -1,5 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, IRunViewProvider, DatabaseProviderBase, Metadata, RunView, UserInfo, LogError, LogStatus, EntityInfo } from '@memberjunction/core'
-import { UUIDsEqual, NormalizeUUID, RegisterClass, uuidv4 } from '@memberjunction/global'
+import { UUIDsEqual, NormalizeUUID, EscapeSQLString, RegisterClass, uuidv4 } from '@memberjunction/global'
 import {
     MJContentSourceEntity, MJContentItemEntity, MJContentFileTypeEntity,
     MJContentProcessRunEntity, MJContentTypeEntity, MJContentSourceTypeEntity,
@@ -1083,11 +1083,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      */
     public async GetContentSourceLastRunDate(contentSourceID: string, contextUser: UserInfo): Promise<Date> {
         const rv = new RunView();
-        // Exclude 'Running' status to avoid using the current in-progress run's
-        // start time as the cutoff — that would cause the provider to skip all records.
+        // Require a Completed run with ProcessedItems > 0 so failed or 0-item runs
+        // do not advance the high-water mark cutoff.
         const results = await rv.RunView<MJContentProcessRunEntity>({
             EntityName: 'MJ: Content Process Runs',
-            ExtraFilter: `SourceID='${contentSourceID}' AND Status <> 'Running'`,
+            ExtraFilter: `SourceID='${EscapeSQLString(contentSourceID)}' AND Status = 'Completed' AND ProcessedItems > 0`,
             ResultType: 'entity_object',
             OrderBy: 'EndTime DESC'
         }, contextUser);
@@ -1991,6 +1991,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         itemById: Map<string, MJContentItemEntity>,
         directivesByItem?: Map<string, Record<string, unknown> | undefined>
     ): Promise<boolean> {
+        if (infra.vectorDB.IsReadOnly) {
+            return true;
+        }
         // Deletes carry the same per-record provider directives as the original upsert so
         // drivers can route each removal correctly (e.g. to the partition the vector lives in).
         const records: VectorRecord[] = batch.map(c => {
@@ -2601,6 +2604,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             ExtraFilter: `ID = '${itemID}'`,
             ResultType: 'simple',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         }, contextUser);
 
         if (!result.Success || result.Results.length === 0) return false;

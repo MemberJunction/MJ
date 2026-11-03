@@ -120,7 +120,8 @@ export class RecentAccessService {
         EntityName: 'MJ: User Record Logs',
         ExtraFilter: `UserID='${md.CurrentUser.ID}' AND EntityID='${entityInfo.ID}' AND RecordID='${recordIdString}'`,
         ResultType: 'entity_object',
-        MaxRows: 1
+        MaxRows: 1,
+        SkipTotalRowCount: true
       });
 
       if (!existingResult.Success) {

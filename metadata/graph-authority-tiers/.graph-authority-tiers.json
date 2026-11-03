@@ -1,0 +1,74 @@
+[
+  {
+    "fields": {
+      "Name": "Bylaws",
+      "Description": "Highest governing charter, articles of incorporation, or organizational bylaws. Supersedes all lower-tier policies and manuals.",
+      "Rank": 100,
+      "IconClass": "fa-solid fa-landmark-dome",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "631B9519-0A5E-45CA-8810-D638D1F91E79"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Board Policy",
+      "Description": "Board-approved governance resolution or enterprise-wide policy mandate.",
+      "Rank": 80,
+      "IconClass": "fa-solid fa-scale-balanced",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A9127DAB-7D11-4256-9E9F-AAB32E01A17C"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Executive SOP",
+      "Description": "Executive standard operating procedure or official cross-department operational manual.",
+      "Rank": 60,
+      "IconClass": "fa-solid fa-file-shield",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "DC982FCF-3BED-4B25-96C1-832E88C2F5EA"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Department Practice",
+      "Description": "Department-scoped playbook, desk manual, or team operating convention.",
+      "Rank": 40,
+      "IconClass": "fa-solid fa-clipboard-list",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "E42C6FAA-5808-49D9-AE67-A0D7B9B5929D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Reference",
+      "Description": "General reference documentation, knowledge base article, or training guide.",
+      "Rank": 20,
+      "IconClass": "fa-solid fa-book",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A3DD0B43-75E5-48B3-BE53-CC777729BAA7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Inferred",
+      "Description": "Unverified or machine-inferred observation extracted from unstructured content awaiting human review.",
+      "Rank": 10,
+      "IconClass": "fa-solid fa-wand-magic-sparkles",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "5E996D6A-25C3-4952-AFAE-396433E55692"
+    }
+  }
+]

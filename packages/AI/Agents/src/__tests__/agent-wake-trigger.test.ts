@@ -184,6 +184,39 @@ describe('AgentWakeTriggerService (Stage 5 Deliverable 2 — Event-Driven Wake T
             });
         });
 
+        it('names a new wake routine after the agent, like the routines Schedule Next Agent Wake creates', async () => {
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            AgentUserPolicyEngine.Instance.SetCachedPolicy(
+                createPolicy({ AgentID: COS_AGENT_ID, UserID: USER_ALICE_ID, Status: 'Active', Agent: 'Chief of Staff' })
+            );
+            runViewMock.mockResolvedValueOnce({ Success: true, Results: [] });
+
+            const approvalRequest = {
+                ID: 'req-name-1', AgentID: COS_AGENT_ID, RequestForUserID: USER_ALICE_ID,
+                Status: 'Approved', Request: 'Send the update', Response: null, ResponseData: null,
+                ResponseByUserID: USER_ALICE_ID, RespondedAt: FIXED_NOW, Comments: null,
+            } as unknown as MJAIAgentRequestEntity;
+
+            await AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(approvalRequest, aliceUser, provider, FIXED_NOW);
+
+            expect(savedRoutines[0].Name).toBe('Chief of Staff — Wake (approval-resolution)');
+        });
+
+        it('falls back to "AgentWake (<key>)" when no policy names the agent', async () => {
+            const { provider, savedRoutines } = createMockMetadataProvider();
+            runViewMock.mockResolvedValueOnce({ Success: true, Results: [] });
+
+            const approvalRequest = {
+                ID: 'req-name-2', AgentID: COS_AGENT_ID, RequestForUserID: USER_ALICE_ID,
+                Status: 'Approved', Request: 'Send the update', Response: null, ResponseData: null,
+                ResponseByUserID: USER_ALICE_ID, RespondedAt: FIXED_NOW, Comments: null,
+            } as unknown as MJAIAgentRequestEntity;
+
+            await AgentWakeTriggerService.Instance.TriggerWakeOnAgentRequestResolution(approvalRequest, aliceUser, provider, FIXED_NOW);
+
+            expect(savedRoutines[0].Name).toBe('AgentWake (approval-resolution)');
+        });
+
         it('wakes the target user Chief of Staff on incoming InterAgent request and wakes sender Chief of Staff on resolution', async () => {
             const { provider, savedRoutines } = createMockMetadataProvider();
             AgentUserPolicyEngine.Instance.SetCachedPolicy(

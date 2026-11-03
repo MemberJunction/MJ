@@ -20,6 +20,54 @@ import { LibraryRegistry } from './library-registry';
 const LIBRARY_LOADER_COMPONENT_ID = 'mj-react-runtime-library-loader-singleton';
 
 /**
+ * Validates that a script or stylesheet subresource URL resolves to `http:` or `https:` and is not
+ * a scheme-relative (`//...`) reference. Prevents dangerous schemes (`javascript:`, `data:`,
+ * `blob:`, `vbscript:`) from reaching `<script src>` or `<link href>` DOM sinks.
+ */
+export function IsAllowedSubresourceUrl(url: string | null | undefined): boolean {
+  if (typeof url !== 'string') {
+    return false;
+  }
+  const trimmed = url.trim();
+  if (!trimmed || trimmed.startsWith('//')) {
+    return false;
+  }
+  try {
+    const baseOrigin =
+      typeof window !== 'undefined' && window.location?.origin
+        ? window.location.origin
+        : 'https://localhost';
+    const parsed = new URL(trimmed, baseOrigin);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Finds an existing `<script>` or `<link>` element by exact attribute comparison rather than
+ * interpolating an untrusted URL into `document.querySelector('tag[attr="..."]')`, where quotes or
+ * brackets in a URL can break or redirect CSS selector matching.
+ */
+export function FindDomSubresourceByUrl(
+  tagName: 'script' | 'link',
+  attrName: 'src' | 'href',
+  url: string,
+): HTMLScriptElement | HTMLLinkElement | null {
+  if (typeof document === 'undefined' || typeof document.getElementsByTagName !== 'function') {
+    return null;
+  }
+  const collection = document.getElementsByTagName(tagName);
+  for (let i = 0; i < collection.length; i++) {
+    const el = collection[i];
+    if (typeof el.getAttribute === 'function' && el.getAttribute(attrName) === url) {
+      return el;
+    }
+  }
+  return null;
+}
+
+/**
  * Represents a loaded script or CSS resource
  */
 interface LoadedResource {
@@ -83,8 +131,11 @@ export class LibraryLoader {
     const coreLibraries = GetCoreRuntimeLibraries(debug);
     for (const lib of coreLibraries) {
       // Skip if already preloaded or loaded
-      if (document.querySelector(`link[href="${lib.cdnUrl}"]`) ||
-          document.querySelector(`script[src="${lib.cdnUrl}"]`)) {
+      if (
+        !IsAllowedSubresourceUrl(lib.cdnUrl) ||
+        FindDomSubresourceByUrl('link', 'href', lib.cdnUrl) ||
+        FindDomSubresourceByUrl('script', 'src', lib.cdnUrl)
+      ) {
         continue;
       }
       const link = document.createElement('link');
@@ -381,7 +432,13 @@ export class LibraryLoader {
       return existing.promise;
     }
 
+    let createdScript: HTMLScriptElement | null = null;
     const promise = new Promise((resolve, reject) => {
+      if (!IsAllowedSubresourceUrl(url)) {
+        reject(new Error(`Refused to load script from non-http(s) URL: ${url}`));
+        return;
+      }
+
       // Check if global already exists
       const existingGlobal = (window as any)[globalName];
       if (existingGlobal) {
@@ -389,8 +446,8 @@ export class LibraryLoader {
         return;
       }
 
-      // Check if script tag exists
-      const existingScript = document.querySelector(`script[src="${url}"]`);
+      // Check if script tag exists via direct attribute comparison (no CSS selector interpolation)
+      const existingScript = FindDomSubresourceByUrl('script', 'src', url);
       if (existingScript) {
         this.waitForScriptLoad(existingScript as HTMLScriptElement, globalName, resolve, reject);
         return;
@@ -400,6 +457,7 @@ export class LibraryLoader {
       // "no-cors" mode, which avoids CORS failures when CDN headers are missing
       // or browser tracking prevention interferes with the response.
       const script = document.createElement('script');
+      createdScript = script;
       script.src = url;
       script.async = true;
 
@@ -470,10 +528,13 @@ export class LibraryLoader {
       resourceManager.registerDOMElement(LIBRARY_LOADER_COMPONENT_ID, script);
     });
 
-    this.loadedResources.set(url, {
-      element: document.querySelector(`script[src="${url}"]`)!,
-      promise
-    });
+    const trackedElement = createdScript ?? FindDomSubresourceByUrl('script', 'src', url);
+    if (trackedElement) {
+      this.loadedResources.set(url, {
+        element: trackedElement,
+        promise
+      });
+    }
 
     return promise;
   }
@@ -576,11 +637,11 @@ export class LibraryLoader {
    * Load CSS from URL
    */
   private static loadCSS(url: string): void {
-    if (this.loadedResources.has(url)) {
+    if (!IsAllowedSubresourceUrl(url) || this.loadedResources.has(url)) {
       return;
     }
 
-    const existingLink = document.querySelector(`link[href="${url}"]`);
+    const existingLink = FindDomSubresourceByUrl('link', 'href', url);
     if (existingLink) {
       return;
     }

@@ -18,7 +18,7 @@
 
 import { BaseSingleton } from '@memberjunction/global';
 import { LogStatus } from '@memberjunction/core';
-import { randomBytes } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 
 /** The token's `typ` claim — the route rejects any token whose `typ` differs. */
@@ -78,7 +78,11 @@ export class MediaAccessKeyManager extends BaseSingleton<MediaAccessKeyManager> 
     }
     const configured = process.env.MJ_BASE_ENCRYPTION_KEY?.trim();
     if (configured) {
-      this.secret = configured;
+      // Key separation: never sign tokens with the field-encryption master key itself. Derive a
+      // dedicated HS256 signing key (HKDF-style HMAC expand) so a token-signing compromise and the
+      // data-at-rest key stay decoupled. Tokens are short-lived, so changing the derivation only
+      // invalidates in-flight URLs, exactly like a restart on the ephemeral path below.
+      this.secret = createHmac('sha256', configured).update('mj-media-access-token-signing-v1').digest('base64');
     } else {
       this.secret = randomBytes(32).toString('base64');
       LogStatus(

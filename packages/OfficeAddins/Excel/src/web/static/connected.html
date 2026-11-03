@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MemberJunction — Excel Connection</title>
+  <!-- Office add-ins must load office.js from Microsoft's CDN. -->
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <link rel="stylesheet" href="pane.css">
+  <script type="module" src="connected.js"></script>
+</head>
+<body>
+  <main class="dialog-container">
+    <p class="dialog-message" id="message" role="status" aria-live="polite">Finishing sign-in...</p>
+    <section class="card" id="manual-handoff" hidden>
+      <h1 class="section-heading">Finish connecting in Excel</h1>
+      <p class="muted">If Excel did not close this window automatically, copy this one-time encrypted connection code and paste it in the MemberJunction pane in Excel.</p>
+      <div class="field-group">
+        <label class="field-label" for="handoff-code">One-time connection code</label>
+        <input
+          id="handoff-code"
+          class="text-input"
+          type="text"
+          readonly
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          aria-describedby="handoff-hint"
+        >
+        <p class="field-hint" id="handoff-hint">Encrypted to your Excel window only — cannot be reused elsewhere.</p>
+      </div>
+      <div class="action-row">
+        <button type="button" class="button button-primary" id="copy-code">Copy connection code</button>
+        <span class="muted" id="copy-status" role="status" aria-live="polite"></span>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

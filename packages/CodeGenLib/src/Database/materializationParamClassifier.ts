@@ -58,7 +58,7 @@ export interface QueryParamClassification {
 /**
  * Generates ≥2 distinct probe values for a parameter type. Booleans have `[true, false]`. String/number/date
  * get truthy variants PLUS a falsy one (`''`, `0`, `''`) so a CONDITIONAL predicate (`{% if param %}WHERE …
- * {% endif %}`) reveals itself: the falsy value renders the FALSE branch (no WHERE), which the AST oracle diffs
+ * {% endif %}`) reveals itself: the falsy value renders the FALSE branch (no WHERE), which the structural oracle diffs
  * as a structural change vs. the truthy renders → the parameter is refused as `Structural` instead of being
  * mis-classified as an unconditional row filter (which would materialize broad and then WRONGLY apply the
  * predicate at read time when the param is empty/omitted, diverging from the live query). For these types an
@@ -226,7 +226,7 @@ function isValuePassthrough(param: QueryParamDef, held: Record<string, unknown>,
 }
 
 /**
- * Verifies a single parameter's role by rendering its variants and running the AST oracle. `held` is the
+ * Verifies a single parameter's role by rendering its variants and running the structural oracle. `held` is the
  * shared base value map (all params at their stable values) — computed ONCE by the caller and reused, since
  * the baseline is identical for every parameter being probed (renderVariantsForParam overrides just the one
  * varied param). Rebuilding it per-call would make classification O(N^2) in parameter count.

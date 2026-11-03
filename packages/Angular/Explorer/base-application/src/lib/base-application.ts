@@ -1,7 +1,8 @@
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { Metadata, IMetadataProvider } from '@memberjunction/core';
-import { DashboardEngine, MJDashboardUserPreferenceEntity } from '@memberjunction/core-entities';
+import { Metadata, IMetadataProvider, LogError } from '@memberjunction/core';
+import { ApplicationSettingEngine, DashboardEngine, MJDashboardUserPreferenceEntity } from '@memberjunction/core-entities';
 import { NavItem } from './interfaces/nav-item.interface';
+import { IsNavItemSettingName, MergeNavItemExtensions, NavItemSetting } from './nav-item-extensions';
 import { TabRequest } from './interfaces/tab-request.interface';
 
 /**
@@ -90,10 +91,18 @@ export class BaseApplication {
 
   private _defaultNavItems: NavItem[] | null = null;
   /**
-   * Returns navigation items for this application.
+   * Returns navigation items for this application: its `DefaultNavItems` plus any items other
+   * apps add through `NavItem.*` application settings (see `MergeNavItemExtensions`).
    * Override in subclass for dynamic behavior based on permissions, context, etc.
    */
   async GetNavItems(): Promise<NavItem[]> {
+    const appItems = this.getDefaultNavItems();
+    const settings = await this.getNavItemSettings();
+    return settings.length > 0 ? MergeNavItemExtensions(appItems, settings) : appItems;
+  }
+
+  /** The parsed `DefaultNavItems`, cached; an empty list when unset or invalid. */
+  private getDefaultNavItems(): NavItem[] {
     if (this._defaultNavItems) {
       return this._defaultNavItems;
     }
@@ -108,6 +117,26 @@ export class BaseApplication {
       }
     }
     return [];
+  }
+
+  /**
+   * This application's `NavItem.*` settings, read from the cached ApplicationSettingEngine.
+   * A failure to load settings never hides the application's own items.
+   */
+  private async getNavItemSettings(): Promise<NavItemSetting[]> {
+    if (!this.ID) {
+      return [];
+    }
+    try {
+      const engine = ApplicationSettingEngine.Instance;
+      await engine.Config(false, this.Provider.CurrentUser, this.Provider);
+      return engine.GetAllForApplication(this.ID)
+        .filter((s) => IsNavItemSettingName(s.Name))
+        .map((s) => ({ Name: s.Name, Value: s.Value }));
+    } catch (e) {
+      LogError(`Failed to load nav item settings for ${this.Name}: ${e instanceof Error ? e.message : String(e)}`);
+      return [];
+    }
   }
 
   /**

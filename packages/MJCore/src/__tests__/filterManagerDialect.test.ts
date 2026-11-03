@@ -28,3 +28,17 @@ describe('RunQuerySQLFilterManager.Dialect', () => {
         }
     });
 });
+
+describe('sqlDate', () => {
+    it('writes the same quoted ISO literal on every dialect, through the dialect writer', () => {
+        const date = new Date('2024-01-15T08:30:00.000Z');
+        for (const key of ['sqlserver', 'postgresql', 'mysql', 'snowflake', 'databricks'] as const) {
+            const filter = RunQuerySQLFilterManager.Instance.GetFiltersForDialect(key).find(f => f.name === 'sqlDate');
+            expect(filter?.implementation?.(date)).toBe("'2024-01-15T08:30:00.000Z'");
+            expect(filter?.implementation?.('2024-01-15T08:30:00Z')).toBe("'2024-01-15T08:30:00.000Z'");
+            expect(filter?.implementation?.(date.getTime())).toBe("'2024-01-15T08:30:00.000Z'");
+            expect(filter?.implementation?.('')).toBe('NULL');
+            expect(() => filter?.implementation?.('not a date')).toThrow(/Invalid date/);
+        }
+    });
+});

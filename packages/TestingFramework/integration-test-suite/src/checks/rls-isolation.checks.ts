@@ -14,9 +14,9 @@
  *   RLS5 — a live RunView as a non-exempt user returns ONLY rows satisfying its RLS predicate (real scoping)
  *   RLS6 — empty effective clause shares the slot / non-empty diverges (always-runnable fingerprint invariant)
  *   RLS7 — client smart-cache validation does not cross-serve User A's slot to User B (client transport)
- *   RLS12 — a seeded user with a filtered + an unfiltered role (and a Deny row) gets exactly the filtered
+ *   RLS13 — a seeded user with a filtered + an unfiltered role (and a Deny row) gets exactly the filtered
  *           predicate, and that predicate is in the SQL sent to the database
- *   RLS13 — that user's live row set is exactly its own rows
+ *   RLS14 — that user's live row set is exactly its own rows
  *
  * The mechanism under test is already in the product: ProviderBase computes a per-user
  * RLS WHERE clause (EntityInfo.GetUserRowLevelSecurityWhereClause) and threads it as
@@ -53,6 +53,7 @@ import {
     SEEDED_SCOPED_A_EMAIL, SEEDED_SCOPED_B_EMAIL, SEEDED_NOGRANT_EMAIL,
     SEEDED_RLS_ENTITY, SEED_FIXTURES_COMMAND
 } from '@memberjunction/testing-integration';
+import { CheckRls12TwoFilterLoadById } from './rls-two-filter-load';
 
 /** ProviderBase exposes the per-instance connection string used in the fingerprint. */
 function connStrOf(provider: IMetadataProvider): string {
@@ -530,7 +531,7 @@ async function captureEmittedSql(provider: GenericDatabaseProvider, run: () => P
 }
 
 /**
- * RLS12 — a user holding a filtered and an unfiltered role gets the filtered role's predicate,
+ * RLS13 — a user holding a filtered and an unfiltered role gets the filtered role's predicate,
  * and that predicate reaches the SQL sent to the database.
  *
  * The unit tests (entityInfo.rlsFilterCollection / rlsExemption) prove the collection logic with
@@ -541,13 +542,13 @@ async function captureEmittedSql(provider: GenericDatabaseProvider, run: () => P
  *     read filter; exactly the one bound filter is collected;
  *   - the emitted SQL: a live RunView sends a statement that carries that exact clause.
  */
-export async function CheckRls12MixedRolesEmittedSql(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckRls13MixedRolesEmittedSql(ctx: IntegrationCheckContext): Promise<void> {
     const user = requireSeededMixedUser();
     const entity = ctx.Provider.EntityByName(MIXED_RLS_ENTITY);
     Assert(entity != null, `'${MIXED_RLS_ENTITY}' not found in provider metadata`);
     const provider = ctx.Provider;
     if (!(provider instanceof GenericDatabaseProvider)) {
-        throw new Error('RLS12 needs a database provider (server transport) to observe the emitted SQL');
+        throw new Error('RLS13 needs a database provider (server transport) to observe the emitted SQL');
     }
 
     // Permission gate.
@@ -580,13 +581,13 @@ export async function CheckRls12MixedRolesEmittedSql(ctx: IntegrationCheckContex
 }
 
 /**
- * RLS13 — the live row set of the mixed-role user is exactly its own rows.
+ * RLS14 — the live row set of the mixed-role user is exactly its own rows.
  *
  * The RunView result as the seeded user must equal what an unrestricted read filtered to that user
  * returns (its two role assignments), and the unrestricted read of the whole entity must be larger,
  * so the comparison shows the filter narrowed the set rather than an empty table agreeing with itself.
  */
-export async function CheckRls13MixedRolesLiveRows(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckRls14MixedRolesLiveRows(ctx: IntegrationCheckContext): Promise<void> {
     const user = requireSeededMixedUser();
     const rv = RunView.FromMetadataProvider(ctx.Provider);
 
@@ -667,13 +668,18 @@ export const RlsIsolationChecks: NamedCheck[] = [
     },
     {
         Id: 'rls-isolation.RLS12',
-        Name: 'RLS12: a user with a filtered and an unfiltered role gets the filtered predicate, the Deny row wins the gate, and the predicate reaches the emitted SQL',
-        Fn: CheckRls12MixedRolesEmittedSql
+        Name: 'RLS12: a user holding two Read RLS filters loads one record by ID and gets exactly that record (role clause, single-record resolver, BaseEntity.Load), and list reads return exactly the rows either filter admits',
+        Fn: CheckRls12TwoFilterLoadById
     },
     {
         Id: 'rls-isolation.RLS13',
-        Name: 'RLS13: the live row set of the mixed-role user is exactly its own rows',
-        Fn: CheckRls13MixedRolesLiveRows
+        Name: 'RLS13: a user with a filtered and an unfiltered role gets the filtered predicate, the Deny row wins the gate, and the predicate reaches the emitted SQL',
+        Fn: CheckRls13MixedRolesEmittedSql
+    },
+    {
+        Id: 'rls-isolation.RLS14',
+        Name: 'RLS14: the live row set of the mixed-role user is exactly its own rows',
+        Fn: CheckRls14MixedRolesLiveRows
     }
 ];
 

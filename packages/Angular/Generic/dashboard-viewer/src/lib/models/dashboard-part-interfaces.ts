@@ -124,6 +124,7 @@ export async function LoadComponentSpec(config: PanelConfig, provider: IMetadata
         ExtraFilter: componentFilter(name, stringKey(config, COMPONENT_NAMESPACE_KEY), stringKey(config, COMPONENT_VERSION_KEY)),
         OrderBy: 'VersionSequence DESC',
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'simple',
     }, provider.CurrentUser);
     if (!result.Success) throw new Error(result.ErrorMessage || `Component "${name}" could not be loaded.`);
