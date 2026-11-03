@@ -246,7 +246,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (462 classes)
+// @memberjunction/core-entities (470 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -512,6 +512,14 @@ import {
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJGraphConceptEntity,
+    MJGraphConceptTypeEntity,
+    MJGraphEdgeEntity,
+    MJGraphEdgeProviderEntity,
+    MJGraphEdgeTypeEndpointEntity,
+    MJGraphEdgeTypeEntity,
+    MJGraphEntity,
+    MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -1334,7 +1342,7 @@ import {
     RecordProcessRunNowServerOperation,
 } from '@memberjunction/record-set-processor';
 
-// @memberjunction/content-pipeline (17 classes)
+// @memberjunction/content-pipeline (19 classes)
 import {
     ArchiveExtractor,
     CredentialAccessDriver,
@@ -1344,8 +1352,10 @@ import {
     EmbedContentItemStage,
     EmbedStage,
     ExtractStage,
+    GraphStage,
     HtmlExtractor,
     ManagedPromptClassifier,
+    ManagedPromptConceptSynthesizer,
     NoOpStage,
     PdfExtractor,
     PlainTextExtractor,
@@ -2126,6 +2136,14 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJGraphConceptEntity,
+    MJGraphConceptTypeEntity,
+    MJGraphEdgeEntity,
+    MJGraphEdgeProviderEntity,
+    MJGraphEdgeTypeEndpointEntity,
+    MJGraphEdgeTypeEntity,
+    MJGraphEntity,
+    MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -2179,6 +2197,10 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJOAuthTokenEntity,
     MJOpenAppDependencyEntity,
     MJOpenAppEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJOpenAppInstallHistoryEntity,
     MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
@@ -2187,10 +2209,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
     MJQueryDependencyEntity,
@@ -2383,6 +2401,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetBusinessCentralGeneralLedgerEntriesAction,
     GetBusinessCentralSalesInvoicesAction,
     GetChartOfAccountsAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     GetCustomersAction,
     GetDimensionsAction,
     GetGLEntriesAction,
@@ -2391,10 +2413,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetQuickBooksGLCodesAction,
     GetQuickBooksTransactionsAction,
     GetSalesInvoicesAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     AssociateContactToCompanyAction,
     GetActivitiesByContactAction,
     LogActivityAction,
@@ -2587,6 +2605,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     SemanticTextSegmenter,
     StructuralTextSegmenter,
     TranscriptSegmenter,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     DecisionReasoningProvider,
     DecisionThenPromptReasoningProvider,
     PromptReasoningProvider,
@@ -2595,10 +2617,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AutotagEntity,
     AutotagLocalFileSystem,
     AutotagRSSFeed,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     AutotagUpload,
     AutotagWebsite,
     AgentRubricEvaluator,
@@ -2690,8 +2708,10 @@ const CLASS_REGISTRATIONS_4: any[] = [
     EmbedContentItemStage,
     EmbedStage,
     ExtractStage,
+    GraphStage,
     HtmlExtractor,
     ManagedPromptClassifier,
+    ManagedPromptConceptSynthesizer,
     NoOpStage,
     PdfExtractor,
     PlainTextExtractor,
@@ -2789,6 +2809,10 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJMaterializedResultEntityServer,
     MJQueryEntityServer,
     MJQuerySQLEntityServer,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     MJRecordChangeEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
@@ -2799,10 +2823,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJRubricCriterionLevelEntityServer,
     MJRubricEvaluationEntityServer,
     MJRubricEvaluationScoreEntityServer,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     MJRubricScaleEntityServer,
     MJRubricScaleLevelEntityServer,
     MJRubricVersionEntityServer,
@@ -2993,6 +3013,10 @@ const CLASS_REGISTRATIONS_5: any[] = [
     SearchAction,
     SearchEntityAction,
     SearchQueryCatalogAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
     SearchStorageFilesAction,
     SendDocumentForSignatureAction,
     SendInterAgentRequestAction,
@@ -3003,10 +3027,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     SummarizeContentAction,
     SyncMCPToolsAction,
     TavilySearchAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
     TeamsWebhookAction,
     TestMCPConnectionAction,
     TestRuntimeActionAction,
@@ -3067,7 +3087,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1243;
+export const CLASS_REGISTRATIONS_COUNT = 1253;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -84,7 +84,7 @@ export interface GraphConceptSelection {
     ConflictCount: number;
 }
 
-const SAMPLE_GRAPH_ID = '00000000-0000-0000-0000-0000000CA101';
+const SAMPLE_GRAPH_ID = 'D1000000-0000-4000-8000-000000000004';
 
 const CONCEPT_TYPE_COLORS: Record<string, string> = {
     policy: '#f43f5e',
@@ -350,8 +350,17 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
                 };
             }).sort((a, b) => a.GraphTypeRank - b.GraphTypeRank || a.Name.localeCompare(b.Name));
 
-            // Always include the interactive Sample Canon Graph so users can explore Canon & Conflict resolution immediately
-            options.push(this.buildSampleGraphOption());
+            // Ensure the rich Association Governance Canon graph is available even on a fresh database
+            const existingAssoc = options.find(o => UUIDsEqual(o.ID, SAMPLE_GRAPH_ID));
+            if (existingAssoc) {
+                existingAssoc.ConceptCount = 5;
+                existingAssoc.ConflictCount = 1;
+                if (existingAssoc.SourceNames.length === 0) {
+                    existingAssoc.SourceNames = ['Association Bylaws (PDF)', 'Finance & Dues SOPs', 'Staff Desk Manual'];
+                }
+            } else {
+                options.push(this.buildSampleGraphOption());
+            }
 
             this.GraphOptions = options;
             if (!this.SelectedGraphID || !this.GraphOptions.some(o => UUIDsEqual(o.ID, this.SelectedGraphID))) {
@@ -612,9 +621,9 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
     private buildSampleGraphOption(): SemanticGraphOption {
         return {
             ID: SAMPLE_GRAPH_ID,
-            Name: 'Association Governance Canon (Preview)',
+            Name: 'Association Governance Canon',
             Description: 'Multi-source Canon graph illustrating ranked Concept Types, AuthorityTier precedence, grounded ABVs/Queries, and Contradicts conflict detection.',
-            GraphTypeID: 'A1E5B7C0-4D11-4F2A-8C90-100000000001',
+            GraphTypeID: 'A4B9E210-1001-4C81-9A01-000000000001',
             GraphTypeName: 'Canon',
             IsCanon: true,
             GraphTypeRank: 10,
@@ -627,6 +636,17 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
     }
 
     private loadSampleCanonGraphNodesAndEdges(): void {
+        const ID_DOMAIN_GOV = 'C3000000-0000-4000-8000-000000000001';
+        const ID_POLICY_GRACE = 'C3000000-0000-4000-8000-000000000002';
+        const ID_METRIC_NRR = 'C3000000-0000-4000-8000-000000000003';
+        const ID_PROCESS_RENEWAL = 'C3000000-0000-4000-8000-000000000004';
+        const ID_ROLE_STEWARD = 'C3000000-0000-4000-8000-000000000005';
+        const ID_CHUNK_BYLAWS = 'C3000000-0000-4000-8000-000000000006';
+        const ID_CHUNK_MANUAL = 'C3000000-0000-4000-8000-000000000007';
+        const ID_ABV_GRACE = 'B4000000-0000-4000-8000-000000000001';
+        const ID_ABV_ACTIVE = 'B4000000-0000-4000-8000-000000000002';
+        const ID_QUERY_RETENTION = 'B4000000-0000-4000-8000-000000000003';
+
         const conflictDetail: GraphConflictItem = {
             HigherAuthoritySummary: 'Association Bylaws (Article IV §4.2) — "60 days"',
             ConflictingSummary: 'Staff Desk Manual (Ch. 3 p. 42) — "90 days"',
@@ -635,14 +655,14 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
 
         const sampleChunks: GraphProvenanceChunkItem[] = [
             {
-                ChunkID: 'sample-chunk-bylaws',
+                ChunkID: ID_CHUNK_BYLAWS,
                 SourceName: 'Association Bylaws PDF',
                 Locator: 'Article IV > §4.2',
                 AuthorityTier: 'Bylaws (100)',
                 Snippet: 'A member whose dues remain unpaid 60 days after the renewal date shall be suspended.',
             },
             {
-                ChunkID: 'sample-chunk-manual',
+                ChunkID: ID_CHUNK_MANUAL,
                 SourceName: 'Staff Desk Manual',
                 Locator: 'Chapter 3 > Grace Handling',
                 AuthorityTier: 'DeptPractice (40)',
@@ -654,8 +674,8 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
             {
                 EdgeLabel: 'Defines',
                 TargetEntityName: 'MJ: Entity Alternate Base Views',
-                TargetRecordID: 'sample-abv-grace',
-                TargetDisplayName: 'MembersInGracePeriod (vwMembers_GracePeriod)',
+                TargetRecordID: ID_ABV_GRACE,
+                TargetDisplayName: 'MembersInGracePeriod (vwUsers)',
             },
         ];
 
@@ -663,20 +683,20 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
             {
                 EdgeLabel: 'Measures',
                 TargetEntityName: 'MJ: Queries',
-                TargetRecordID: 'sample-query-retention',
+                TargetRecordID: ID_QUERY_RETENTION,
                 TargetDisplayName: 'Golden Query: Annual Cohort Retention',
             },
             {
                 EdgeLabel: 'Defines',
                 TargetEntityName: 'MJ: Entity Alternate Base Views',
-                TargetRecordID: 'sample-abv-active',
-                TargetDisplayName: 'Active Subscribers (vwMembers_ActiveSubscribers)',
+                TargetRecordID: ID_ABV_ACTIVE,
+                TargetDisplayName: 'Active Subscribers (vwUsers)',
             },
         ];
 
         this.rawNodes = [
             {
-                ID: 'sample-domain-gov',
+                ID: ID_DOMAIN_GOV,
                 Label: 'Membership Governance',
                 Sublabel: 'Domain · Bylaws',
                 Category: 'Domain',
@@ -686,15 +706,16 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
                 AuthorityTier: 'Bylaws (100)',
                 Description: 'Umbrella governance domain for member standing, eligibility, dues billing, and suspension rules.',
                 Specification: '### Scope\nCovers all active membership classes, renewal cycles, and standing transitions across national and chapter tiers.',
+                Data: { EntityName: 'MJ: Graph Concepts', RecordID: ID_DOMAIN_GOV },
             },
             {
-                ID: 'sample-policy-grace',
+                ID: ID_POLICY_GRACE,
                 Label: 'Renewal Grace Period',
                 Sublabel: 'Policy · Bylaws',
                 Category: 'Policy',
                 Rank: 10,
                 Badge: '#10',
-                ParentID: 'sample-domain-gov',
+                ParentID: ID_DOMAIN_GOV,
                 Status: 'Proposed',
                 AuthorityTier: 'Bylaws (100)',
                 Description: 'Members have 60 calendar days after invoice due date before benefits are suspended.',
@@ -702,57 +723,61 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
                 Conflicts: [conflictDetail],
                 Groundings: sampleGroundingsGrace,
                 ProvenanceChunks: sampleChunks,
+                Data: { EntityName: 'MJ: Graph Concepts', RecordID: ID_POLICY_GRACE },
             },
             {
-                ID: 'sample-metric-nrr',
+                ID: ID_METRIC_NRR,
                 Label: 'Net Member Retention Rate',
                 Sublabel: 'Metric · ExecutiveSOP',
                 Category: 'Metric',
                 Rank: 20,
                 Badge: '#20',
-                ParentID: 'sample-domain-gov',
+                ParentID: ID_DOMAIN_GOV,
                 Status: 'Approved',
                 AuthorityTier: 'ExecutiveSOP (60)',
                 Description: 'Percentage of active cohort members renewing within the 60-day grace window.',
                 Specification: '### Formula\nRenewedActiveMembers / PriorPeriodActiveSubscribers * 100',
                 Groundings: sampleGroundingsMetric,
+                Data: { EntityName: 'MJ: Graph Concepts', RecordID: ID_METRIC_NRR },
             },
             {
-                ID: 'sample-process-renewal',
+                ID: ID_PROCESS_RENEWAL,
                 Label: 'Dues Renewal & Escalation',
                 Sublabel: 'Process · ExecutiveSOP',
                 Category: 'Process',
                 Rank: 30,
                 Badge: '#30',
-                ParentID: 'sample-domain-gov',
+                ParentID: ID_DOMAIN_GOV,
                 Status: 'Proposed',
                 AuthorityTier: 'ExecutiveSOP (60)',
                 Description: 'End-to-end invoice dispatch, D&B credit check, 60-day grace monitoring, and suspension workflow.',
                 Specification: '### Steps\n1. Dispatch invoice 30 days prior to expiration.\n2. Run credit risk check for enterprise tiers.\n3. Enforce 60-day Renewal Grace Period.',
                 Groundings: [
                     {
-                        EdgeLabel: 'Implements',
-                        TargetEntityName: 'MJ: AI Agents',
-                        TargetRecordID: 'sample-flow-renewal',
-                        TargetDisplayName: 'Standard Member Renewal Flow Agent',
+                        EdgeLabel: 'Defines',
+                        TargetEntityName: 'MJ: Entity Alternate Base Views',
+                        TargetRecordID: ID_ABV_GRACE,
+                        TargetDisplayName: 'MembersInGracePeriod (vwUsers)',
                     },
                 ],
+                Data: { EntityName: 'MJ: Graph Concepts', RecordID: ID_PROCESS_RENEWAL },
             },
             {
-                ID: 'sample-role-steward',
+                ID: ID_ROLE_STEWARD,
                 Label: 'Finance Policy Steward',
                 Sublabel: 'Role · Bylaws',
                 Category: 'Role',
                 Rank: 40,
                 Badge: '#40',
-                ParentID: 'sample-domain-gov',
+                ParentID: ID_DOMAIN_GOV,
                 Status: 'Approved',
                 AuthorityTier: 'Bylaws (100)',
                 Description: 'Designated officer authorized to approve grace waivers and canon policy updates.',
                 Specification: '### Authority\nApproves Proposed GraphConcepts in the Association Core Canon and resolves Contradicts edges.',
+                Data: { EntityName: 'MJ: Graph Concepts', RecordID: ID_ROLE_STEWARD },
             },
             {
-                ID: 'sample-abv-active',
+                ID: ID_ABV_ACTIVE,
                 Label: 'ABV: Active Subscribers',
                 Sublabel: 'MJ: Entity Alternate Base Views',
                 Category: 'grounding',
@@ -762,9 +787,10 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
                 AuthorityTier: 'Schema Grounded',
                 Description: 'Governed SQL cohort view filtering active paid members.',
                 Specification: "WHERE Status = 'Active' AND PaidThroughDate >= GETUTCDATE()",
+                Data: { EntityName: 'MJ: Entity Alternate Base Views', RecordID: ID_ABV_ACTIVE },
             },
             {
-                ID: 'sample-query-retention',
+                ID: ID_QUERY_RETENTION,
                 Label: 'Query: Cohort Retention',
                 Sublabel: 'MJ: Queries',
                 Category: 'grounding',
@@ -773,9 +799,10 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
                 Status: 'Approved',
                 AuthorityTier: 'Schema Grounded',
                 Description: 'Verified Golden Query computing trailing 12-month cohort retention.',
+                Data: { EntityName: 'MJ: Queries', RecordID: ID_QUERY_RETENTION },
             },
             {
-                ID: 'sample-chunk-bylaws',
+                ID: ID_CHUNK_BYLAWS,
                 Label: 'Bylaws §4.2 ("60 days")',
                 Sublabel: 'Association Bylaws PDF',
                 Category: 'chunk',
@@ -785,9 +812,10 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
                 AuthorityTier: 'Bylaws (100)',
                 Description: 'Authoritative chunk from Association Bylaws Article IV §4.2.',
                 Specification: '"A member whose dues remain unpaid 60 days after the renewal date shall be suspended from good standing."',
+                Data: { EntityName: 'MJ: Graph Concepts', RecordID: ID_CHUNK_BYLAWS },
             },
             {
-                ID: 'sample-chunk-manual',
+                ID: ID_CHUNK_MANUAL,
                 Label: 'Desk Manual p.42 ("90 days")',
                 Sublabel: 'Staff Desk Manual',
                 Category: 'chunk',
@@ -798,22 +826,23 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
                 Description: 'Conflicting lower-authority chunk from Staff Desk Manual Ch. 3.',
                 Specification: '"Customer service reps wait 90 days before deactivating member portal access."',
                 Conflicts: [conflictDetail],
+                Data: { EntityName: 'MJ: Graph Concepts', RecordID: ID_CHUNK_MANUAL },
             },
         ];
 
         this.rawEdges = [
-            { ID: 'e-1', SourceID: 'sample-domain-gov', TargetID: 'sample-policy-grace', Label: 'Broader Than', Direction: 'directed' },
-            { ID: 'e-2', SourceID: 'sample-domain-gov', TargetID: 'sample-metric-nrr', Label: 'Broader Than', Direction: 'directed' },
-            { ID: 'e-3', SourceID: 'sample-domain-gov', TargetID: 'sample-process-renewal', Label: 'Broader Than', Direction: 'directed' },
-            { ID: 'e-4', SourceID: 'sample-role-steward', TargetID: 'sample-policy-grace', Label: 'Governs', Direction: 'directed' },
-            { ID: 'e-5', SourceID: 'sample-metric-nrr', TargetID: 'sample-abv-active', Label: 'Defines', Direction: 'directed' },
-            { ID: 'e-6', SourceID: 'sample-metric-nrr', TargetID: 'sample-query-retention', Label: 'Measures', Direction: 'directed' },
-            { ID: 'e-7', SourceID: 'sample-policy-grace', TargetID: 'sample-chunk-bylaws', Label: 'SourcedFrom', Direction: 'directed', Style: 'dotted' },
-            { ID: 'e-8', SourceID: 'sample-policy-grace', TargetID: 'sample-chunk-manual', Label: 'SourcedFrom', Direction: 'directed', Style: 'dotted' },
+            { ID: 'e-1', SourceID: ID_DOMAIN_GOV, TargetID: ID_POLICY_GRACE, Label: 'Broader Than', Direction: 'directed' },
+            { ID: 'e-2', SourceID: ID_DOMAIN_GOV, TargetID: ID_METRIC_NRR, Label: 'Broader Than', Direction: 'directed' },
+            { ID: 'e-3', SourceID: ID_DOMAIN_GOV, TargetID: ID_PROCESS_RENEWAL, Label: 'Broader Than', Direction: 'directed' },
+            { ID: 'e-4', SourceID: ID_ROLE_STEWARD, TargetID: ID_POLICY_GRACE, Label: 'Governs', Direction: 'directed' },
+            { ID: 'e-5', SourceID: ID_METRIC_NRR, TargetID: ID_ABV_ACTIVE, Label: 'Defines', Direction: 'directed' },
+            { ID: 'e-6', SourceID: ID_METRIC_NRR, TargetID: ID_QUERY_RETENTION, Label: 'Measures', Direction: 'directed' },
+            { ID: 'e-7', SourceID: ID_POLICY_GRACE, TargetID: ID_CHUNK_BYLAWS, Label: 'SourcedFrom', Direction: 'directed', Style: 'dotted' },
+            { ID: 'e-8', SourceID: ID_POLICY_GRACE, TargetID: ID_CHUNK_MANUAL, Label: 'SourcedFrom', Direction: 'directed', Style: 'dotted' },
             {
                 ID: 'e-conflict-1',
-                SourceID: 'sample-chunk-bylaws',
-                TargetID: 'sample-chunk-manual',
+                SourceID: ID_CHUNK_BYLAWS,
+                TargetID: ID_CHUNK_MANUAL,
                 Label: 'Contradicts (60d vs 90d)',
                 Direction: 'directed',
                 Style: 'dashed',
@@ -823,7 +852,7 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
             },
         ];
 
-        this.SelectedNodeId = 'sample-policy-grace';
+        this.SelectedNodeId = ID_POLICY_GRACE;
     }
 }
 

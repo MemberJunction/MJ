@@ -1254,8 +1254,13 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
         if (this.IsFocalNode(node)) {
             return;
         }
-        const rawId = this.stripCategoryPrefix(String(node.Data?.['ID'] || node.ID));
-        const entityName = String(node.Data?.['EntityName'] || (node.Category === 'person' ? 'MJ_BizApps_Common: People' : 'MJ_BizApps_Common: Organizations'));
+        const rawId = this.stripCategoryPrefix(String(node.Data?.['RecordID'] || node.Data?.['ID'] || node.ID));
+        const defaultEntity = node.Category === 'person'
+            ? 'MJ_BizApps_Common: People'
+            : node.Category === 'organization'
+                ? 'MJ_BizApps_Common: Organizations'
+                : 'MJ: Graph Concepts';
+        const entityName = String(node.Data?.['EntityName'] || defaultEntity);
         const beforeEvent = new BeforeNodeNavigateEventArgs(node, entityName, rawId);
         this.BeforeNodeNavigate.emit(beforeEvent);
         if (beforeEvent.Cancel) return;
