@@ -504,10 +504,6 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Graph Edges&Name=SourceRecordID"
-          },
-          "sync": {
-            "lastModified": "2026-11-02T23:23:59.266Z",
-            "checksum": "c84b370f28697b2edb7fa5864197b85dd1da7de383ec1512f99c8268aadb081a"
           }
         },
         {
@@ -516,10 +512,6 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Graph Edges&Name=TargetRecordID"
-          },
-          "sync": {
-            "lastModified": "2026-11-02T23:23:59.279Z",
-            "checksum": "529ead15d12fd0c2cc5f80ecfec3473c2f88e1232dadc72cf71ce997e2979c5f"
           }
         }
       ]

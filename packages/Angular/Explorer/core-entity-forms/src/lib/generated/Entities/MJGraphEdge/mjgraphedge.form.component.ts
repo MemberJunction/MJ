@@ -15,12 +15,7 @@ export class MJGraphEdgeFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'edgeRelationships', sectionName: 'Edge Relationships', isExpanded: true },
-            { sectionKey: 'sourceNode', sectionName: 'Source Node', isExpanded: true },
-            { sectionKey: 'targetNode', sectionName: 'Target Node', isExpanded: true },
-            { sectionKey: 'edgeProperties', sectionName: 'Edge Properties', isExpanded: true },
-            { sectionKey: 'governanceAndOrigin', sectionName: 'Governance and Origin', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true }
         ]);
     }
 }

@@ -8,6 +8,7 @@ import {
     BeforeNodeActionEventArgs,
     NodeActionEventArgs,
 } from '@memberjunction/ng-graph-view';
+import { DEFAULT_SEMANTIC_GRAPH_CATEGORIES } from '../KnowledgeHub/components/visualize/semantic-graph/semantic-graph-explorer.component';
 import {
     VISUALIZATION_MODES,
     IsValidVisualizationMode,
@@ -16,10 +17,10 @@ import {
 } from '../KnowledgeHub/components/visualize/visualize-agent-context';
 
 describe('Semantic Graph & Canon Explorer + @memberjunction/ng-graph-view extensions', () => {
-    describe('DEFAULT_GRAPH_CATEGORIES', () => {
-        it('includes the seeded GraphConceptType categories with Rank ordering', () => {
+    describe('DEFAULT_SEMANTIC_GRAPH_CATEGORIES & DEFAULT_GRAPH_CATEGORIES', () => {
+        it('includes the seeded GraphConceptType categories with Rank ordering in DEFAULT_SEMANTIC_GRAPH_CATEGORIES', () => {
             const byCategory = new Map<string, GraphCategoryConfig>(
-                DEFAULT_GRAPH_CATEGORIES.map((c) => [c.Category, c]),
+                DEFAULT_SEMANTIC_GRAPH_CATEGORIES.map((c) => [c.Category, c]),
             );
 
             expect(byCategory.get('Policy')?.Rank).toBe(10);
@@ -28,9 +29,11 @@ describe('Semantic Graph & Canon Explorer + @memberjunction/ng-graph-view extens
             expect(byCategory.get('Role')?.Rank).toBe(40);
             expect(byCategory.get('Domain')?.Rank).toBe(50);
             expect(byCategory.get('Term')?.Rank).toBe(60);
+            expect(byCategory.get('grounding')?.Rank).toBe(90);
+            expect(byCategory.get('chunk')?.Rank).toBe(95);
         });
 
-        it('preserves standard entity relationship and grounding categories for generic graph consumers', () => {
+        it('preserves standard entity relationship categories for generic graph consumers in DEFAULT_GRAPH_CATEGORIES', () => {
             const categories = DEFAULT_GRAPH_CATEGORIES.map((c) => c.Category);
             expect(categories).toContain('person');
             expect(categories).toContain('organization');
@@ -38,8 +41,6 @@ describe('Semantic Graph & Canon Explorer + @memberjunction/ng-graph-view extens
             expect(categories).toContain('account');
             expect(categories).toContain('asset');
             expect(categories).toContain('group');
-            expect(categories).toContain('grounding');
-            expect(categories).toContain('chunk');
             expect(categories).toContain('custom');
         });
     });
@@ -109,7 +110,6 @@ describe('Semantic Graph & Canon Explorer + @memberjunction/ng-graph-view extens
 
             const beforeArgs: BeforeNodeActionEventArgs = {
                 Cancel: false,
-                Timestamp: new Date(),
                 Node: {
                     ID: 'concept-proposed-1',
                     Label: 'Net Retention Rate (NRR)',

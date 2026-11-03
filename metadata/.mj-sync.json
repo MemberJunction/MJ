@@ -26,6 +26,8 @@
     "content-source-types",
     "graph-types",
     "graph-concept-types",
+    "graph-authority-tiers",
+    "graph-edge-types",
     "integration-source-types",
     "integrations",
     "ai-model-types",

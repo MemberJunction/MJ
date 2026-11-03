@@ -10,6 +10,7 @@ import {
     ChangeDetectionStrategy,
     ChangeDetectorRef,
     ElementRef,
+    TemplateRef,
     ViewChild,
     inject
 } from '@angular/core';
@@ -45,20 +46,12 @@ import {
 } from '../events/graph-events';
 
 export const DEFAULT_GRAPH_CATEGORIES: GraphCategoryConfig[] = [
-    { Category: 'Policy', Label: 'Policy', Color: '#f43f5e', IconClass: 'fa-solid fa-gavel', Rank: 10 },
-    { Category: 'Metric', Label: 'Metric', Color: '#10b981', IconClass: 'fa-solid fa-chart-line', Rank: 20 },
-    { Category: 'Process', Label: 'Process', Color: '#8b5cf6', IconClass: 'fa-solid fa-gears', Rank: 30 },
-    { Category: 'Role', Label: 'Role', Color: '#f59e0b', IconClass: 'fa-solid fa-user-shield', Rank: 40 },
-    { Category: 'Domain', Label: 'Domain', Color: '#3b82f6', IconClass: 'fa-solid fa-layer-group', Rank: 50 },
-    { Category: 'Term', Label: 'Term', Color: '#06b6d4', IconClass: 'fa-solid fa-book-bookmark', Rank: 60 },
     { Category: 'person', Label: 'Person', Color: '#10b981', IconClass: 'fa-solid fa-user' },
     { Category: 'organization', Label: 'Organization', Color: '#38bdf8', IconClass: 'fa-solid fa-building' },
     { Category: 'committee', Label: 'Committee', Color: '#8b5cf6', IconClass: 'fa-solid fa-landmark' },
     { Category: 'account', Label: 'Holding / Account', Color: '#f59e0b', IconClass: 'fa-solid fa-building-flag' },
     { Category: 'asset', Label: 'Asset', Color: '#ec4899', IconClass: 'fa-solid fa-gem' },
     { Category: 'group', Label: 'Group', Color: '#06b6d4', IconClass: 'fa-solid fa-users' },
-    { Category: 'grounding', Label: 'Grounded Primitive', Color: '#14b8a6', IconClass: 'fa-solid fa-bolt' },
-    { Category: 'chunk', Label: 'Source Chunk', Color: '#64748b', IconClass: 'fa-solid fa-file-lines' },
     { Category: 'custom', Label: 'Custom', Color: '#64748b', IconClass: 'fa-solid fa-circle-nodes' }
 ];
 
@@ -305,8 +298,8 @@ const GRAPH_VIEW_CSS = `
 }
 
 .mj-graph-conflict-box {
-    background: rgba(244, 63, 94, 0.12);
-    border: 1px solid rgba(244, 63, 94, 0.4);
+    background: color-mix(in srgb, var(--mj-status-error, #f43f5e) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--mj-status-error, #f43f5e) 40%, transparent);
     border-radius: 8px;
     padding: 10px 12px;
     font-size: 11.5px;
@@ -331,7 +324,7 @@ const GRAPH_VIEW_CSS = `
 }
 
 .mj-graph-grounding-item:hover {
-    border-color: #10b981;
+    border-color: var(--mj-status-success, #10b981);
 }
 
 .mj-graph-inspector-actions {
@@ -391,7 +384,7 @@ const GRAPH_VIEW_CSS = `
 .mj-node-glyph {
     font-size: 11px;
     font-weight: 700;
-    fill: #ffffff;
+    fill: var(--mj-text-primary, #ffffff);
     text-anchor: middle;
     dominant-baseline: central;
     pointer-events: none;
@@ -423,7 +416,7 @@ const GRAPH_VIEW_CSS = `
  * `<mj-graph-view>` — Interactive network, entity relationship, and Semantic/Canon graph visualization.
  *
  * Supports force-directed, hierarchical, circular, and grid layouts, ranked concept categories,
- * hop-expansion, zoom/pan controls, Canon & Provenance inspector drawer, search filters,
+ * hop-expansion, zoom/pan controls, customizable inspector drawer, search filters,
  * and cancelable Before/After event pairs.
  */
 @Component({
@@ -436,7 +429,7 @@ const GRAPH_VIEW_CSS = `
             <!-- 1. Floating Action Toolbar -->
             @if (ShowToolbar) {
                 <div class="mj-graph-toolbar">
-                    <span style="font-size: 12px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 12px; font-weight: 700; color: var(--mj-text-primary, #fff); display: flex; align-items: center; gap: 6px;">
                         <i class="fa-solid fa-circle-nodes" style="color: var(--mj-brand-primary);"></i>
                         {{ Title || 'Network Graph' }}
                     </span>
@@ -488,13 +481,13 @@ const GRAPH_VIEW_CSS = `
                     @if (ConflictCount > 0 || ProposedCount > 0) {
                         <div class="mj-graph-separator"></div>
                         @if (ConflictCount > 0) {
-                            <span style="font-size: 11px; font-weight: 600; color: #fb7185; display: flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 9999px; background: rgba(244, 63, 94, 0.15); border: 1px solid rgba(244, 63, 94, 0.35);">
+                            <span style="font-size: 11px; font-weight: 600; color: var(--mj-status-error, #fb7185); display: flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 9999px; background: color-mix(in srgb, var(--mj-status-error, #f43f5e) 15%, transparent); border: 1px solid color-mix(in srgb, var(--mj-status-error, #f43f5e) 35%, transparent);">
                                 <i class="fa-solid fa-triangle-exclamation"></i>
                                 {{ ConflictCount }} {{ ConflictCount === 1 ? 'Conflict' : 'Conflicts' }}
                             </span>
                         }
                         @if (ProposedCount > 0) {
-                            <span style="font-size: 11px; font-weight: 600; color: #fbbf24; display: flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 9999px; background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.35);">
+                            <span style="font-size: 11px; font-weight: 600; color: var(--mj-status-warning, #fbbf24); display: flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 9999px; background: color-mix(in srgb, var(--mj-status-warning, #f59e0b) 15%, transparent); border: 1px solid color-mix(in srgb, var(--mj-status-warning, #f59e0b) 35%, transparent);">
                                 ● {{ ProposedCount }} Proposed
                             </span>
                         }
@@ -559,7 +552,7 @@ const GRAPH_VIEW_CSS = `
                             <i [class]="GetNodeIcon(SelectedNode)"></i>
                         </div>
                         <div style="overflow: hidden; flex: 1;">
-                            <div style="font-size: 13px; font-weight: 700; color: #fff; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+                            <div style="font-size: 13px; font-weight: 700; color: var(--mj-text-primary, #fff); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
                                 {{ SelectedNode.Label }}
                             </div>
                             <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px;">
@@ -567,25 +560,25 @@ const GRAPH_VIEW_CSS = `
                                     {{ SelectedNode.Sublabel || GetCategoryLabel(SelectedNode.Category) }}
                                 </span>
                                 @if (SelectedNode.Rank !== undefined) {
-                                    <span style="font-size: 10px; padding: 1px 6px; border-radius: 9999px; background: rgba(148, 163, 184, 0.15); color: #cbd5e1; font-weight: 600;">
+                                    <span style="font-size: 10px; padding: 1px 6px; border-radius: 9999px; background: color-mix(in srgb, var(--mj-text-secondary, #94a3b8) 15%, transparent); color: var(--mj-text-secondary, #cbd5e1); font-weight: 600;">
                                         Rank #{{ SelectedNode.Rank }}
                                     </span>
                                 }
                                 @if (SelectedNode.Status) {
                                     <span
                                         style="font-size: 10px; padding: 1px 6px; border-radius: 9999px; font-weight: 600;"
-                                        [style.background]="SelectedNode.Status === 'Proposed' ? 'rgba(245, 158, 11, 0.18)' : 'rgba(16, 185, 129, 0.18)'"
-                                        [style.color]="SelectedNode.Status === 'Proposed' ? '#fbbf24' : '#34d399'">
+                                        [style.background]="SelectedNode.Status === 'Proposed' ? 'color-mix(in srgb, var(--mj-status-warning, #f59e0b) 18%, transparent)' : 'color-mix(in srgb, var(--mj-status-success, #10b981) 18%, transparent)'"
+                                        [style.color]="SelectedNode.Status === 'Proposed' ? 'var(--mj-status-warning, #fbbf24)' : 'var(--mj-status-success, #34d399)'">
                                         {{ SelectedNode.Status }}
                                     </span>
                                 }
                                 @if (SelectedNode.AuthorityTier) {
-                                    <span style="font-size: 10px; padding: 1px 6px; border-radius: 9999px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; font-weight: 600;">
+                                    <span style="font-size: 10px; padding: 1px 6px; border-radius: 9999px; background: color-mix(in srgb, var(--mj-brand-primary, #38bdf8) 15%, transparent); color: var(--mj-brand-primary, #38bdf8); font-weight: 600;">
                                         {{ SelectedNode.AuthorityTier }}
                                     </span>
                                 }
                                 @if (IsFocalNode(SelectedNode)) {
-                                    <span style="font-size: 10px; padding: 1px 6px; border-radius: 9999px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.3);">Current Record</span>
+                                    <span style="font-size: 10px; padding: 1px 6px; border-radius: 9999px; background: color-mix(in srgb, var(--mj-brand-primary, #38bdf8) 15%, transparent); color: var(--mj-brand-primary, #38bdf8); font-weight: 600; border: 1px solid color-mix(in srgb, var(--mj-brand-primary, #38bdf8) 30%, transparent);">Current Record</span>
                                 }
                             </div>
                         </div>
@@ -597,68 +590,72 @@ const GRAPH_VIEW_CSS = `
                         </div>
                     }
 
-                    @if (SelectedNode.Specification) {
-                        <div class="mj-graph-inspector-section">
-                            <span class="mj-graph-inspector-section-label">Specification</span>
-                            <pre style="margin: 0; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 1.45; color: var(--mj-text-primary);">{{ SelectedNode.Specification }}</pre>
-                        </div>
-                    }
-
-                    @if (SelectedNode.Conflicts && SelectedNode.Conflicts.length > 0) {
-                        <div class="mj-graph-conflict-box">
-                            <div style="font-size: 11px; font-weight: 700; color: #fb7185; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
-                                <i class="fa-solid fa-triangle-exclamation"></i>
-                                Authority Conflict (Contradicts Edge)
+                    @if (InspectorCustomTemplate) {
+                        <ng-container *ngTemplateOutlet="InspectorCustomTemplate; context: { $implicit: SelectedNode }"></ng-container>
+                    } @else {
+                        @if (SelectedNode.Specification) {
+                            <div class="mj-graph-inspector-section">
+                                <span class="mj-graph-inspector-section-label">Specification</span>
+                                <pre style="margin: 0; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 1.45; color: var(--mj-text-primary);">{{ SelectedNode.Specification }}</pre>
                             </div>
-                            @for (conflict of SelectedNode.Conflicts; track conflict.HigherAuthoritySummary) {
-                                <div style="display: flex; flex-direction: column; gap: 4px; font-size: 11px;">
-                                    <div><strong>Higher Tier:</strong> {{ conflict.HigherAuthoritySummary }}</div>
-                                    <div><strong>Conflicting:</strong> {{ conflict.ConflictingSummary }}</div>
-                                    @if (conflict.ResolutionNote) {
-                                        <div style="color: var(--mj-text-secondary); margin-top: 2px;">{{ conflict.ResolutionNote }}</div>
-                                    }
+                        }
+
+                        @if (SelectedNode.Conflicts && SelectedNode.Conflicts.length > 0) {
+                            <div class="mj-graph-conflict-box">
+                                <div style="font-size: 11px; font-weight: 700; color: var(--mj-status-error, #fb7185); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                                    <i class="fa-solid fa-triangle-exclamation"></i>
+                                    Authority Conflict (Contradicts Edge)
                                 </div>
-                            }
-                        </div>
-                    }
-
-                    @if (SelectedNode.Groundings && SelectedNode.Groundings.length > 0) {
-                        <div class="mj-graph-inspector-section">
-                            <span class="mj-graph-inspector-section-label">Grounded MJ Primitives ({{ SelectedNode.Groundings.length }})</span>
-                            <div style="display: flex; flex-direction: column; gap: 6px;">
-                                @for (g of SelectedNode.Groundings; track g.TargetRecordID + g.EdgeLabel) {
-                                    <button
-                                        type="button"
-                                        class="mj-graph-grounding-item"
-                                        (click)="NavigateToGrounding(SelectedNode, g)">
-                                        <span style="color: #34d399; font-weight: 700;">{{ g.EdgeLabel }}</span>
-                                        <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right;">
-                                            {{ g.TargetDisplayName }}
-                                        </span>
-                                        <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 10px; opacity: 0.7;"></i>
-                                    </button>
-                                }
-                            </div>
-                        </div>
-                    }
-
-                    @if (SelectedNode.ProvenanceChunks && SelectedNode.ProvenanceChunks.length > 0) {
-                        <div class="mj-graph-inspector-section">
-                            <span class="mj-graph-inspector-section-label">SourcedFrom Chunks ({{ SelectedNode.ProvenanceChunks.length }})</span>
-                            <div style="display: flex; flex-direction: column; gap: 6px;">
-                                @for (chunk of SelectedNode.ProvenanceChunks; track chunk.ChunkID) {
-                                    <div style="padding: 6px 8px; border-radius: 6px; background: var(--mj-bg-surface-sunken, #090e1a); border: 1px solid var(--mj-border-default, #223254); font-size: 11px;">
-                                        <div style="display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin-bottom: 3px;">
-                                            <span>{{ chunk.SourceName }}{{ chunk.Locator ? ' · ' + chunk.Locator : '' }}</span>
-                                            @if (chunk.AuthorityTier) {
-                                                <span style="color: #fbbf24; font-size: 10px;">{{ chunk.AuthorityTier }}</span>
-                                            }
-                                        </div>
-                                        <div style="color: var(--mj-text-secondary); line-height: 1.4;">{{ chunk.Snippet }}</div>
+                                @for (conflict of SelectedNode.Conflicts; track conflict.HigherAuthoritySummary) {
+                                    <div style="display: flex; flex-direction: column; gap: 4px; font-size: 11px;">
+                                        <div><strong>Higher Tier:</strong> {{ conflict.HigherAuthoritySummary }}</div>
+                                        <div><strong>Conflicting:</strong> {{ conflict.ConflictingSummary }}</div>
+                                        @if (conflict.ResolutionNote) {
+                                            <div style="color: var(--mj-text-secondary); margin-top: 2px;">{{ conflict.ResolutionNote }}</div>
+                                        }
                                     </div>
                                 }
                             </div>
-                        </div>
+                        }
+
+                        @if (SelectedNode.Groundings && SelectedNode.Groundings.length > 0) {
+                            <div class="mj-graph-inspector-section">
+                                <span class="mj-graph-inspector-section-label">Grounded MJ Primitives ({{ SelectedNode.Groundings.length }})</span>
+                                <div style="display: flex; flex-direction: column; gap: 6px;">
+                                    @for (g of SelectedNode.Groundings; track g.TargetRecordID + g.EdgeLabel) {
+                                        <button
+                                            type="button"
+                                            class="mj-graph-grounding-item"
+                                            (click)="NavigateToGrounding(SelectedNode, g)">
+                                            <span style="color: var(--mj-status-success, #34d399); font-weight: 700;">{{ g.EdgeLabel }}</span>
+                                            <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right;">
+                                                {{ g.TargetDisplayName }}
+                                            </span>
+                                            <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 10px; opacity: 0.7;"></i>
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        @if (SelectedNode.ProvenanceChunks && SelectedNode.ProvenanceChunks.length > 0) {
+                            <div class="mj-graph-inspector-section">
+                                <span class="mj-graph-inspector-section-label">SourcedFrom Chunks ({{ SelectedNode.ProvenanceChunks.length }})</span>
+                                <div style="display: flex; flex-direction: column; gap: 6px;">
+                                    @for (chunk of SelectedNode.ProvenanceChunks; track chunk.ChunkID) {
+                                        <div style="padding: 6px 8px; border-radius: 6px; background: var(--mj-bg-surface-sunken, #090e1a); border: 1px solid var(--mj-border-default, #223254); font-size: 11px;">
+                                            <div style="display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin-bottom: 3px;">
+                                                <span>{{ chunk.SourceName }}{{ chunk.Locator ? ' · ' + chunk.Locator : '' }}</span>
+                                                @if (chunk.AuthorityTier) {
+                                                    <span style="color: var(--mj-status-warning, #fbbf24); font-size: 10px;">{{ chunk.AuthorityTier }}</span>
+                                                }
+                                            </div>
+                                            <div style="color: var(--mj-text-secondary); line-height: 1.4;">{{ chunk.Snippet }}</div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
                     }
 
                     <div style="font-size: 11.5px; color: var(--mj-text-secondary); line-height: 1.45;">
@@ -670,7 +667,7 @@ const GRAPH_VIEW_CSS = `
                             <button
                                 type="button"
                                 class="mj-graph-tool-btn"
-                                style="justify-content: center; width: 100%; background: #059669; border-color: #10b981; color: #ffffff;"
+                                style="justify-content: center; width: 100%; background: var(--mj-status-success, #059669); border-color: var(--mj-status-success, #10b981); color: var(--mj-text-primary, #ffffff);"
                                 (click)="TriggerNodeAction(SelectedNode, 'approve')">
                                 <i class="fa-solid fa-check"></i> Approve into Canon
                             </button>
@@ -836,6 +833,7 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
     @Input() public ShowToolbar = true;
     @Input() public ShowLegend = true;
     @Input() public ShowInspector = true;
+    @Input() public InspectorCustomTemplate?: TemplateRef<{ $implicit: GraphNode }>;
     @Input() public Searchable = true;
     @Input() public AutoFitOnLoad = true;
     @Input() public Physics: GraphPhysicsConfig = {
@@ -1259,7 +1257,7 @@ export class GraphViewComponent implements OnInit, OnChanges, OnDestroy {
             ? 'MJ_BizApps_Common: People'
             : node.Category === 'organization'
                 ? 'MJ_BizApps_Common: Organizations'
-                : 'MJ: Graph Concepts';
+                : 'MJ: Entities';
         const entityName = String(node.Data?.['EntityName'] || defaultEntity);
         const beforeEvent = new BeforeNodeNavigateEventArgs(node, entityName, rawId);
         this.BeforeNodeNavigate.emit(beforeEvent);

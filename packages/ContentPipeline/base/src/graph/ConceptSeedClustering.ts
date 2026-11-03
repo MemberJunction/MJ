@@ -17,6 +17,7 @@ import {
     GetConceptTypeRank,
     type ConceptTaxonomyMode,
     type GraphAuthorityTier,
+    type GraphAuthorityTierDescriptor,
     type GraphConceptType,
     type GraphConceptTypeDescriptor,
 } from './GraphOverlay.types.js';
@@ -35,6 +36,8 @@ export interface ContentChunkSeedInput {
     readonly Tags?: readonly string[];
     /** Authority tier configured on the originating `Content Source`. */
     readonly AuthorityTier?: GraphAuthorityTier;
+    /** Optional `MJ: Graph Authority Tiers` ID configured on the originating `Content Source`. */
+    readonly AuthorityTierID?: string | null;
     /** Optional document effective date for chronological supersession. */
     readonly EffectiveDate?: Date | null;
 }
@@ -50,6 +53,10 @@ export interface ExistingGraphConceptSeed {
     readonly Description?: string | null;
     readonly Specification?: string | null;
     readonly AuthorityTier?: GraphAuthorityTier;
+    /** Optional foreign key to `MJ: Graph Authority Tiers` (`__mj.GraphAuthorityTier.ID`). */
+    readonly AuthorityTierID?: string | null;
+    /** Existing governance status (`'Draft' | 'Proposed' | 'Approved' | 'Deprecated'`). */
+    readonly Status?: 'Draft' | 'Proposed' | 'Approved' | 'Deprecated';
 }
 
 /** Lightweight MJ schema/query descriptor used when `GroundingMode !== 'none'`. */
@@ -88,8 +95,10 @@ export interface ConceptSeedCluster {
     readonly ExistingConceptMatchScore: number;
     /** Chunks routed to this concept, sorted highest `AuthorityTier` first, then newest `EffectiveDate`. */
     readonly Chunks: readonly ContentChunkSeedInput[];
-    /**Highest authority tier among all contributing chunks. */
+    /** Highest authority tier among all contributing chunks. */
     readonly HighestAuthorityTier: GraphAuthorityTier;
+    /** Resolved `MJ: Graph Authority Tiers` ID for `HighestAuthorityTier` when authority tier descriptors are provided. */
+    readonly HighestAuthorityTierID?: string | null;
     /** Union of governed tag names across the cluster's chunks. */
     readonly AssociatedTags: readonly string[];
     /** Live MJ Entities, Queries, Alternate Base Views, Skills, or Actions matching this concept. */
@@ -110,6 +119,8 @@ export interface ConceptClusteringOptions {
     readonly groundingTargets?: readonly SchemaGroundingTarget[];
     /** Optional active `MJ: Graph Concept Types` rows for rank ordering and `ConceptTypeID` resolution. */
     readonly conceptTypes?: readonly GraphConceptTypeDescriptor[];
+    /** Optional active `MJ: Graph Authority Tiers` rows for rank ordering and `AuthorityTierID` resolution. */
+    readonly authorityTiers?: readonly GraphAuthorityTierDescriptor[];
 }
 
 /** Output of `ClusterContentIntoConceptSeeds`. */
@@ -135,9 +146,9 @@ const STOP_WORDS = new Set([
 export function ExtractLeafTopicFromHeading(headingPath: string | null | undefined): string | null {
     if (!headingPath || headingPath.trim().length === 0) return null;
 
-    // Split breadcrumb path (`A > B > C` or `A / B / C`) and walk from deepest leaf upward
+    // Split breadcrumb path (`A > B > C` or `A / B / C`) by character class without surrounding \s* to avoid polynomial backtracking
     const segments = headingPath
-        .split(/\s*(?:>|\/|\||»|→)\s*/)
+        .split(/[>/|»→]/)
         .map((s) => cleanHeadingSegment(s))
         .filter((s) => s.length >= 3 && !isGenericBoilerplateHeading(s));
 
@@ -248,15 +259,34 @@ export function ScoreConceptNameSimilarity(
 }
 
 /**
- * Infers the `GraphConceptType` (`'Policy' | 'Metric' | 'Process' | 'Role' | 'Domain' | 'Term'`)
- * from a topic label and its associated chunk text.
+ * Infers the `GraphConceptType` (`'Policy' | 'Metric' | 'Process' | 'Role' | 'Domain' | 'Term'`
+ * or an organization-configured custom type) from a topic label and its associated chunk text.
  */
 export function InferConceptTypeFromSignals(
     topicName: string,
     sampleTexts: readonly string[],
+    configuredTypes: readonly GraphConceptTypeDescriptor[] = [],
 ): GraphConceptType {
     const combinedHeader = topicName.toLowerCase();
     const combinedText = sampleTexts.slice(0, 3).join(' ').toLowerCase();
+
+    // Check organization-configured custom types first (those outside the standard 6 seeded names)
+    const standardNames = new Set(['policy', 'metric', 'process', 'role', 'domain', 'term', 'custom']);
+    for (const custom of configuredTypes) {
+        const lowerName = custom.Name.trim().toLowerCase();
+        if (!standardNames.has(lowerName) && lowerName.length >= 3) {
+            if (combinedHeader.includes(lowerName) || combinedText.includes(lowerName)) {
+                return custom.Name;
+            }
+            if (custom.Description) {
+                const descTokens = TokenizeConceptPhrase(custom.Description).filter((t) => t.length >= 4);
+                const headerTokens = new Set(TokenizeConceptPhrase(topicName));
+                if (descTokens.some((t) => headerTokens.has(t))) {
+                    return custom.Name;
+                }
+            }
+        }
+    }
 
     if (
         /\b(rate|ratio|metric|kpi|score|percentage|count|revenue|arr|open ar|retention|churn)\b/.test(
@@ -269,7 +299,8 @@ export function InferConceptTypeFromSignals(
         /\b(workflow|process|procedure|steps|onboarding|reinstatement|approval flow|how to|checklist)\b/.test(
             combinedHeader,
         ) ||
-        /(?:\bstep\s+1\b|\b1\.\s+[a-z]+\b.*\b2\.\s+[a-z]+\b)/i.test(combinedText)
+        /\bstep\s+1\b/i.test(combinedText) ||
+        (/\b1\.\s+[a-z]/i.test(combinedText) && /\b2\.\s+[a-z]/i.test(combinedText))
     ) {
         return 'Process';
     }
@@ -294,6 +325,47 @@ export function InferConceptTypeFromSignals(
     return 'Term';
 }
 
+interface PrecomputedPhraseTokens {
+    readonly normKey: string;
+    readonly tokens: ReadonlySet<string>;
+}
+
+function precomputePhraseTokens(phrase: string): PrecomputedPhraseTokens | null {
+    const tokens = TokenizeConceptPhrase(phrase);
+    if (tokens.length === 0) return null;
+    const sorted = [...tokens].sort();
+    return {
+        normKey: sorted.join('_'),
+        tokens: new Set(sorted),
+    };
+}
+
+function scorePrecomputedSimilarity(
+    cand: PrecomputedPhraseTokens,
+    targets: readonly PrecomputedPhraseTokens[],
+): number {
+    let bestScore = 0;
+    for (const target of targets) {
+        if (cand.normKey === target.normKey) {
+            return 1.0;
+        }
+        let intersection = 0;
+        for (const t of cand.tokens) {
+            if (target.tokens.has(t)) intersection++;
+        }
+        if (intersection === 0) continue;
+
+        const union = cand.tokens.size + target.tokens.size - intersection;
+        const jaccard = intersection / union;
+        const containment = intersection / Math.min(cand.tokens.size, target.tokens.size);
+        const combined = 0.60 * jaccard + 0.40 * containment;
+        if (combined > bestScore) {
+            bestScore = combined;
+        }
+    }
+    return Math.round(bestScore * 10000) / 10000;
+}
+
 /**
  * Deterministically groups `ContentChunkSeedInput` records into `ConceptSeedCluster`s,
  * matching against existing `GraphConcept`s, aligning with MJ `Entities` / `Queries`,
@@ -309,6 +381,15 @@ export function ClusterContentIntoConceptSeeds(
     const maxNew = options.maxNewConcepts ?? null;
     const groundingTargets = options.groundingTargets ?? [];
     const configuredConceptTypes = options.conceptTypes ?? [];
+    const configuredAuthorityTiers = options.authorityTiers ?? [];
+
+    // Pre-tokenize existing concepts once upfront
+    const precomputedExisting = existingConcepts.map((concept) => {
+        const phrases = [concept.Name, ...(concept.Synonyms ?? [])]
+            .map(precomputePhraseTokens)
+            .filter((p): p is PrecomputedPhraseTokens => p !== null);
+        return { concept, phrases };
+    });
 
     interface MutableBucket {
         key: string;
@@ -317,6 +398,7 @@ export function ClusterContentIntoConceptSeeds(
         matchScore: number;
         chunks: ContentChunkSeedInput[];
         tags: Set<string>;
+        cachedTargets: PrecomputedPhraseTokens[];
     }
 
     const buckets = new Map<string, MutableBucket>();
@@ -329,13 +411,22 @@ export function ClusterContentIntoConceptSeeds(
             continue;
         }
 
+        const precomputedCandidates = candidateTopics
+            .map((topic) => ({ topic, pre: precomputePhraseTokens(topic) }))
+            .filter((item): item is { topic: string; pre: PrecomputedPhraseTokens } => item.pre !== null);
+
+        if (precomputedCandidates.length === 0) {
+            unmatchedChunkIDs.push(chunk.ChunkID);
+            continue;
+        }
+
         // 1. Check if any candidate topic matches an existing GraphConcept above threshold
         let bestExisting: { concept: ExistingGraphConceptSeed; score: number } | null = null;
-        for (const topic of candidateTopics) {
-            for (const existing of existingConcepts) {
-                const score = ScoreConceptNameSimilarity(topic, existing.Name, existing.Synonyms ?? []);
+        for (const cand of precomputedCandidates) {
+            for (const existingEntry of precomputedExisting) {
+                const score = scorePrecomputedSimilarity(cand.pre, existingEntry.phrases);
                 if (score >= matchThreshold && (!bestExisting || score > bestExisting.score)) {
-                    bestExisting = { concept: existing, score };
+                    bestExisting = { concept: existingEntry.concept, score };
                 }
             }
         }
@@ -351,6 +442,7 @@ export function ClusterContentIntoConceptSeeds(
                     matchScore: bestExisting.score,
                     chunks: [],
                     tags: new Set<string>(),
+                    cachedTargets: [],
                 };
                 buckets.set(bucketKey, bucket);
             } else if (bestExisting.score > bucket.matchScore) {
@@ -368,33 +460,42 @@ export function ClusterContentIntoConceptSeeds(
         }
 
         // 3. Merge into an existing candidate bucket if stems overlap strongly (>= matchThreshold), else open a new candidate bucket
-        const primaryTopic = candidateTopics[0];
+        const primaryCand = precomputedCandidates[0];
         let matchedCandidateKey: string | null = null;
         let bestCandScore = 0;
 
         for (const [bKey, bucket] of buckets) {
             if (bucket.matchedConcept) continue;
-            const sim = ScoreConceptNameSimilarity(primaryTopic, bucket.displayName, Array.from(bucket.tags));
+            const sim = scorePrecomputedSimilarity(primaryCand.pre, bucket.cachedTargets);
             if (sim >= matchThreshold && sim > bestCandScore) {
                 bestCandScore = sim;
                 matchedCandidateKey = bKey;
             }
         }
 
-        const bucketKey = matchedCandidateKey ?? `candidate:${normalizeExactKey(primaryTopic)}`;
+        const bucketKey = matchedCandidateKey ?? `candidate:${primaryCand.pre.normKey}`;
         let bucket = buckets.get(bucketKey);
         if (!bucket) {
             bucket = {
                 key: bucketKey,
-                displayName: primaryTopic,
+                displayName: primaryCand.topic,
                 matchScore: 0,
                 chunks: [],
                 tags: new Set<string>(),
+                cachedTargets: [primaryCand.pre],
             };
             buckets.set(bucketKey, bucket);
         }
         bucket.chunks.push(chunk);
-        for (const t of chunk.Tags ?? []) bucket.tags.add(t);
+        for (const t of chunk.Tags ?? []) {
+            if (!bucket.tags.has(t)) {
+                bucket.tags.add(t);
+                const preTag = precomputePhraseTokens(t);
+                if (preTag) {
+                    bucket.cachedTargets.push(preTag);
+                }
+            }
+        }
     }
 
     // Build final sorted clusters, applying maxNewConcepts cap on net-new clusters if configured
@@ -408,19 +509,31 @@ export function ClusterContentIntoConceptSeeds(
             uniqueChunksMap.set(c.ChunkID, c);
         }
         const sortedChunks = Array.from(uniqueChunksMap.values()).sort((a, b) => {
-            const rankDiff = GetAuthorityTierRank(b.AuthorityTier) - GetAuthorityTierRank(a.AuthorityTier);
+            const rankDiff =
+                GetAuthorityTierRank(b.AuthorityTier, configuredAuthorityTiers) -
+                GetAuthorityTierRank(a.AuthorityTier, configuredAuthorityTiers);
             if (rankDiff !== 0) return rankDiff;
             const timeA = a.EffectiveDate?.getTime() ?? 0;
             const timeB = b.EffectiveDate?.getTime() ?? 0;
             return timeB - timeA;
         });
 
-        const highestTier = sortedChunks[0]?.AuthorityTier ?? 'Reference';
+        const highestTier = sortedChunks[0]?.AuthorityTier ?? bucket.matchedConcept?.AuthorityTier ?? 'Reference';
+        const normTier = highestTier.trim().toLowerCase().replace(/\s+/g, '');
+        const resolvedAuthorityTierID =
+            sortedChunks[0]?.AuthorityTierID ??
+            bucket.matchedConcept?.AuthorityTierID ??
+            configuredAuthorityTiers.find(
+                (t) => t.Name.trim().toLowerCase().replace(/\s+/g, '') === normTier,
+            )?.ID ??
+            null;
+
         const inferredType =
             bucket.matchedConcept?.ConceptType ??
             InferConceptTypeFromSignals(
                 bucket.displayName,
                 sortedChunks.map((c) => c.Text),
+                configuredConceptTypes,
             );
         const resolvedConceptTypeID =
             bucket.matchedConcept?.ConceptTypeID ??
@@ -435,7 +548,7 @@ export function ClusterContentIntoConceptSeeds(
             Array.from(bucket.tags),
             groundingTargets,
         );
-        const conflicts = detectPotentialChunkConflicts(sortedChunks);
+        const conflicts = detectPotentialChunkConflicts(sortedChunks, bucket.displayName);
 
         const cluster: ConceptSeedCluster = {
             ClusterKey: bucket.key,
@@ -447,6 +560,7 @@ export function ClusterContentIntoConceptSeeds(
             ExistingConceptMatchScore: bucket.matchScore,
             Chunks: sortedChunks,
             HighestAuthorityTier: highestTier,
+            ...(resolvedAuthorityTierID ? { HighestAuthorityTierID: resolvedAuthorityTierID } : {}),
             AssociatedTags: Array.from(bucket.tags).sort(),
             GroundingMatches: groundingMatches,
             PotentialConflicts: conflicts,
@@ -463,7 +577,8 @@ export function ClusterContentIntoConceptSeeds(
     candidateClusters.sort(
         (a, b) =>
             b.Chunks.length - a.Chunks.length ||
-            GetAuthorityTierRank(b.HighestAuthorityTier) - GetAuthorityTierRank(a.HighestAuthorityTier) ||
+            GetAuthorityTierRank(b.HighestAuthorityTier, configuredAuthorityTiers) -
+                GetAuthorityTierRank(a.HighestAuthorityTier, configuredAuthorityTiers) ||
             a.ConceptTypeRank - b.ConceptTypeRank ||
             a.ConceptName.localeCompare(b.ConceptName),
     );
@@ -554,15 +669,39 @@ function edgeTypeForTargetEntity(
     }
 }
 
+interface PrecomputedChunkNumericAttributes {
+    readonly days: ReadonlySet<string>;
+    readonly usd: ReadonlySet<string>;
+    readonly contextTokens: ReadonlySet<string>;
+}
+
 /**
  * Scans chunks mapped to the same concept for conflicting numeric durations/currency thresholds
  * (e.g. `"60 days"` vs `"90 days"`, or `"$500"` vs `"$1,000"`).
+ * Pre-extracts per-chunk numeric attributes once and requires both the same unit AND at least one
+ * shared subject/context noun so unrelated durations in the same broad section do not false-positive.
  */
 function detectPotentialChunkConflicts(
     chunks: readonly ContentChunkSeedInput[],
+    conceptName: string,
 ): SeedClusterConflictCandidate[] {
     if (chunks.length < 2) return [];
     const conflicts: SeedClusterConflictCandidate[] = [];
+    const conceptTokens = TokenizeConceptPhrase(conceptName);
+
+    const chunkAttributes: PrecomputedChunkNumericAttributes[] = chunks.map((chunk) => {
+        const days = extractNumericUnitValues(chunk.Text, /\b(\d+)\s*(?:-|\s)?\s*days?\b/gi);
+        const usd = extractNumericUnitValues(chunk.Text, /\$\s*([0-9,]+(?:\.[0-9]{2})?)\b/g);
+        const leafHeading = ExtractLeafTopicFromHeading(chunk.HeadingPath) ?? '';
+        const textTokens = TokenizeConceptPhrase(`${leafHeading} ${chunk.Text}`).filter(
+            (t) => t !== 'day' && !/^\d+$/.test(t),
+        );
+        return {
+            days,
+            usd,
+            contextTokens: new Set([...conceptTokens, ...textTokens]),
+        };
+    });
 
     for (let i = 0; i < chunks.length; i++) {
         for (let j = i + 1; j < chunks.length; j++) {
@@ -570,34 +709,41 @@ function detectPotentialChunkConflicts(
             const b = chunks[j];
             if (a.ContentItemID === b.ContentItemID && a.HeadingPath === b.HeadingPath) continue;
 
-            const daysA = extractNumericUnitValues(a.Text, /\b(\d+)\s*(?:-|\s)?\s*days?\b/gi);
-            const daysB = extractNumericUnitValues(b.Text, /\b(\d+)\s*(?:-|\s)?\s*days?\b/gi);
-            if (hasDisjointNumbers(daysA, daysB)) {
+            const attrA = chunkAttributes[i];
+            const attrB = chunkAttributes[j];
+            if (!hasSharedContextToken(attrA.contextTokens, attrB.contextTokens)) continue;
+
+            if (hasDisjointNumbers(attrA.days, attrB.days)) {
                 conflicts.push({
                     HigherAuthorityChunkID: a.ChunkID,
                     LowerAuthorityChunkID: b.ChunkID,
                     HigherAuthorityTier: a.AuthorityTier ?? 'Reference',
                     LowerAuthorityTier: b.AuthorityTier ?? 'Reference',
-                    Reason: `Conflicting day thresholds (${Array.from(daysA).join('/')} days vs. ${Array.from(daysB).join('/')} days)`,
+                    Reason: `Conflicting day thresholds (${Array.from(attrA.days).join('/')} days vs. ${Array.from(attrB.days).join('/')} days)`,
                 });
                 continue;
             }
 
-            const usdA = extractNumericUnitValues(a.Text, /\$\s*([0-9,]+(?:\.[0-9]{2})?)\b/g);
-            const usdB = extractNumericUnitValues(b.Text, /\$\s*([0-9,]+(?:\.[0-9]{2})?)\b/g);
-            if (hasDisjointNumbers(usdA, usdB)) {
+            if (hasDisjointNumbers(attrA.usd, attrB.usd)) {
                 conflicts.push({
                     HigherAuthorityChunkID: a.ChunkID,
                     LowerAuthorityChunkID: b.ChunkID,
                     HigherAuthorityTier: a.AuthorityTier ?? 'Reference',
                     LowerAuthorityTier: b.AuthorityTier ?? 'Reference',
-                    Reason: `Conflicting currency thresholds ($${Array.from(usdA).join('/$')} vs. $${Array.from(usdB).join('/$')})`,
+                    Reason: `Conflicting currency thresholds ($${Array.from(attrA.usd).join('/$')} vs. $${Array.from(attrB.usd).join('/$')})`,
                 });
             }
         }
     }
 
     return conflicts;
+}
+
+function hasSharedContextToken(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+    for (const token of a) {
+        if (b.has(token)) return true;
+    }
+    return false;
 }
 
 function extractNumericUnitValues(text: string, pattern: RegExp): Set<string> {

@@ -2956,11 +2956,36 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Graph Edges (Source Entity) Section -->
+    <!-- Graph Edge Type Endpoints Section -->
+    <mj-collapsible-panel
+        SectionKey="mJGraphEdgeTypeEndpoints"
+        SectionName="Graph Edge Type Endpoints"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJGraphEdgeTypeEndpoints')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Graph Edge Type Endpoints','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Graph Edge Type Endpoints','EntityID')"
+                [AllowLoad]="IsSectionExpanded('mJGraphEdgeTypeEndpoints')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJGraphEdgeTypeEndpoints', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Graph Edges (Source Entity ID) Section -->
     <mj-collapsible-panel
         SectionKey="mJGraphEdgesSourceEntityID"
-        SectionName="Graph Edges (Source Entity)"
-        Icon="fa fa-project-diagram"
+        SectionName="Graph Edges (Source Entity ID)"
+        Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
@@ -2981,11 +3006,11 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Graph Edges (Target Entity) Section -->
+    <!-- Graph Edges (Target Entity ID) Section -->
     <mj-collapsible-panel
         SectionKey="mJGraphEdgesTargetEntityID"
-        SectionName="Graph Edges (Target Entity)"
-        Icon="fa fa-project-diagram"
+        SectionName="Graph Edges (Target Entity ID)"
+        Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
@@ -3000,31 +3025,6 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJGraphEdgesTargetEntityID', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Graph Edge Type Endpoints Section -->
-    <mj-collapsible-panel
-        SectionKey="mJGraphEdgeTypeEndpoints"
-        SectionName="Graph Edge Type Endpoints"
-        Icon="fa fa-project-diagram"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJGraphEdgeTypeEndpoints')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Graph Edge Type Endpoints','EntityID')"
-                [NewRecordValues]="NewRecordValues('MJ: Graph Edge Type Endpoints','EntityID')"
-                [AllowLoad]="IsSectionExpanded('mJGraphEdgeTypeEndpoints')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJGraphEdgeTypeEndpoints', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

@@ -17,6 +17,7 @@
 
 import { RunView } from '@memberjunction/core';
 import {
+    MJGraphAuthorityTierEntity,
     MJGraphConceptEntity,
     MJGraphConceptTypeEntity,
     MJGraphEdgeEntity,
@@ -88,6 +89,12 @@ const GRAPH_ENTITIES: ReadonlyArray<{
         RequiredFields: ['ID', 'Name', 'Description', 'Rank', 'IconClass', 'Status'],
     },
     {
+        EntityName: 'MJ: Graph Authority Tiers',
+        BaseTable: 'GraphAuthorityTier',
+        BaseView: 'vwGraphAuthorityTiers',
+        RequiredFields: ['ID', 'Name', 'Description', 'Rank', 'IconClass', 'Status'],
+    },
+    {
         EntityName: 'MJ: Graphs',
         BaseTable: 'Graph',
         BaseView: 'vwGraphs',
@@ -145,6 +152,7 @@ const GRAPH_ENTITIES: ReadonlyArray<{
             'Description',
             'Specification',
             'Synonyms',
+            'AuthorityTierID',
             'AuthorityTier',
             'Status',
         ],
@@ -177,13 +185,19 @@ async function checkSg1MetadataCoherence(ctx: IntegrationCheckContext): Promise<
         'MJ: Graphs.GraphTypeID RelatedEntity',
     );
 
-    // Verify GraphConcept.ConceptTypeID FK metadata points to MJ: Graph Concept Types
+    // Verify GraphConcept.ConceptTypeID & AuthorityTierID FK metadata
     const conceptsEnt = ctx.Provider.Entities.find((e) => e.Name === 'MJ: Graph Concepts')!;
     const conceptTypeIdField = conceptsEnt.Fields.find((f) => f.Name === 'ConceptTypeID');
     AssertEqual(
         conceptTypeIdField?.RelatedEntity,
         'MJ: Graph Concept Types',
         'MJ: Graph Concepts.ConceptTypeID RelatedEntity',
+    );
+    const authorityTierIdField = conceptsEnt.Fields.find((f) => f.Name === 'AuthorityTierID');
+    AssertEqual(
+        authorityTierIdField?.RelatedEntity,
+        'MJ: Graph Authority Tiers',
+        'MJ: Graph Concepts.AuthorityTierID RelatedEntity',
     );
 
     // Verify polymorphic EntityIDFieldName on MJ: Graph Edges (SourceRecordID -> SourceEntityID, TargetRecordID -> TargetEntityID)
@@ -222,6 +236,9 @@ async function checkSg2PhysicalConstraints(ctx: IntegrationCheckContext): Promis
         'PK_GraphConceptType',
         'UQ_GraphConceptType_Name',
         'CK_GraphConceptType_Status',
+        'PK_GraphAuthorityTier',
+        'UQ_GraphAuthorityTier_Name',
+        'CK_GraphAuthorityTier_Status',
         'PK_Graph',
         'FK_Graph_GraphType',
         'UQ_Graph_Name',
@@ -229,7 +246,6 @@ async function checkSg2PhysicalConstraints(ctx: IntegrationCheckContext): Promis
         'CK_Graph_Status',
         'PK_GraphEdgeType',
         'FK_GraphEdgeType_Graph',
-        'UQ_GraphEdgeType_Graph_Name',
         'CK_GraphEdgeType_DefaultWeight',
         'PK_GraphEdgeTypeEndpoint',
         'FK_GraphEdgeTypeEndpoint_EdgeType',
@@ -254,9 +270,9 @@ async function checkSg2PhysicalConstraints(ctx: IntegrationCheckContext): Promis
         'FK_GraphConcept_Graph',
         'FK_GraphConcept_Parent',
         'FK_GraphConcept_GraphConceptType',
+        'FK_GraphConcept_GraphAuthorityTier',
         'UQ_GraphConcept_GraphID_Name',
         'CK_GraphConcept_NoSelfParent',
-        'CK_GraphConcept_AuthorityTier',
         'CK_GraphConcept_Status',
         'FK_ContentSource_Graph',
     ];
@@ -330,6 +346,7 @@ async function checkSg4LiveEntityCrudAndConstraints(ctx: IntegrationCheckContext
     let graphType: MJGraphTypeEntity | null = null;
     let domainConceptType: MJGraphConceptTypeEntity | null = null;
     let policyConceptType: MJGraphConceptTypeEntity | null = null;
+    let authorityTier: MJGraphAuthorityTierEntity | null = null;
     let graph: MJGraphEntity | null = null;
     let parentConcept: MJGraphConceptEntity | null = null;
     let childConcept: MJGraphConceptEntity | null = null;
@@ -337,7 +354,7 @@ async function checkSg4LiveEntityCrudAndConstraints(ctx: IntegrationCheckContext
     let edge: MJGraphEdgeEntity | null = null;
 
     try {
-        // 1. Create a custom canonical GraphType (IsCanon = true, Rank = 15) and two ranked GraphConceptTypes
+        // 1. Create a custom canonical GraphType (IsCanon = true, Rank = 15), AuthorityTier, and two ranked GraphConceptTypes
         graphType = await ctx.Provider.GetEntityObject<MJGraphTypeEntity>('MJ: Graph Types', ctx.User);
         graphType.NewRecord();
         graphType.Name = `__IT162_Governance_Canon_${suffix}`;
@@ -349,6 +366,18 @@ async function checkSg4LiveEntityCrudAndConstraints(ctx: IntegrationCheckContext
         Assert(
             await graphType.Save(),
             `Failed to save MJGraphTypeEntity: ${graphType.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+        );
+
+        authorityTier = await ctx.Provider.GetEntityObject<MJGraphAuthorityTierEntity>('MJ: Graph Authority Tiers', ctx.User);
+        authorityTier.NewRecord();
+        authorityTier.Name = `__IT162_Bylaws_${suffix}`;
+        authorityTier.Description = 'Integration test Bylaws authority tier';
+        authorityTier.Rank = 100;
+        authorityTier.IconClass = 'fa-solid fa-gavel';
+        authorityTier.Status = 'Active';
+        Assert(
+            await authorityTier.Save(),
+            `Failed to save MJGraphAuthorityTierEntity: ${authorityTier.LatestResult?.CompleteMessage ?? 'unknown error'}`,
         );
 
         domainConceptType = await ctx.Provider.GetEntityObject<MJGraphConceptTypeEntity>('MJ: Graph Concept Types', ctx.User);
@@ -396,13 +425,14 @@ async function checkSg4LiveEntityCrudAndConstraints(ctx: IntegrationCheckContext
         parentConcept.Name = `Membership Governance ${suffix}`;
         parentConcept.ConceptTypeID = domainConceptType.ID;
         parentConcept.Description = 'Governance domain for membership policies.';
-        parentConcept.AuthorityTier = 'Bylaws';
+        parentConcept.AuthorityTierID = authorityTier.ID;
         parentConcept.Status = 'Approved';
         Assert(
             await parentConcept.Save(),
             `Failed to save parent MJGraphConceptEntity: ${parentConcept.LatestResult?.CompleteMessage ?? 'unknown'}`,
         );
         AssertEqual(parentConcept.ConceptType, domainConceptType.Name, 'parentConcept.ConceptType virtual field');
+        AssertEqual(parentConcept.AuthorityTier, authorityTier.Name, 'parentConcept.AuthorityTier virtual field');
 
         childConcept = await ctx.Provider.GetEntityObject<MJGraphConceptEntity>('MJ: Graph Concepts', ctx.User);
         childConcept.NewRecord();
@@ -413,17 +443,18 @@ async function checkSg4LiveEntityCrudAndConstraints(ctx: IntegrationCheckContext
         childConcept.Description = 'Members have 60 days from invoice due date before suspension.';
         childConcept.Specification = '### Rule\nGrace period is strictly 60 days per Article IV.';
         childConcept.Synonyms = JSON.stringify(['Dues Grace Window']);
-        childConcept.AuthorityTier = 'Bylaws';
+        childConcept.AuthorityTierID = authorityTier.ID;
         childConcept.Status = 'Proposed';
         Assert(
             await childConcept.Save(),
             `Failed to save child MJGraphConceptEntity: ${childConcept.LatestResult?.CompleteMessage ?? 'unknown'}`,
         );
 
-        // Verify base view virtual fields (Graph, Parent, ConceptType) populated on reload
+        // Verify base view virtual fields (Graph, Parent, ConceptType, AuthorityTier) populated on reload
         AssertEqual(childConcept.Graph, graph.Name, 'childConcept.Graph virtual field');
         AssertEqual(childConcept.Parent, parentConcept.Name, 'childConcept.Parent virtual field');
         AssertEqual(childConcept.ConceptType, policyConceptType.Name, 'childConcept.ConceptType virtual field');
+        AssertEqual(childConcept.AuthorityTier, authorityTier.Name, 'childConcept.AuthorityTier virtual field');
 
         // 4. Verify CK_GraphConcept_NoSelfParent rejects setting ParentID = ID
         childConcept.ParentID = childConcept.ID;
@@ -500,6 +531,7 @@ async function checkSg4LiveEntityCrudAndConstraints(ctx: IntegrationCheckContext
         if (graph?.IsSaved) await graph.Delete();
         if (policyConceptType?.IsSaved) await policyConceptType.Delete();
         if (domainConceptType?.IsSaved) await domainConceptType.Delete();
+        if (authorityTier?.IsSaved) await authorityTier.Delete();
         if (graphType?.IsSaved) await graphType.Delete();
     }
 }
@@ -528,7 +560,7 @@ class IntegrationTestGraphOverlayStore implements IGraphOverlayStore {
     public async UpsertConcept(
         _graphID: string,
         concept: SynthesizedGraphConcept,
-        status: 'Proposed' | 'Approved',
+        status: NonNullable<SynthesizedGraphConcept['ExistingStatus']>,
     ): Promise<string> {
         const id = concept.ExistingConceptID ?? `concept-${this.PersistedConcepts.length + 1}`;
         this.PersistedConcepts.push({ ID: id, Status: status, Concept: concept });

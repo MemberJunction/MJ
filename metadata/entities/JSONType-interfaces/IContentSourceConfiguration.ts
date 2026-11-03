@@ -187,8 +187,10 @@ export interface IContentSourceGraphOverlayConfig {
      * - 'free-flow': synthesize and merge GraphConcepts across the target Graph without subtree restrictions.
      */
     ConceptTaxonomyMode?: 'constrained' | 'auto-grow' | 'free-flow';
-    /** Default evidentiary authority tier assigned to concepts synthesized from this Content Source. */
-    DefaultAuthorityTier?: 'Bylaws' | 'BoardPolicy' | 'ExecutiveSOP' | 'DepartmentPractice' | 'Reference' | 'Inferred';
+    /** Default evidentiary authority tier name (from MJ: Graph Authority Tiers) assigned to concepts synthesized from this Content Source. */
+    DefaultAuthorityTier?: string;
+    /** Optional default GraphAuthorityTier ID assigned to concepts synthesized from this Content Source. */
+    DefaultAuthorityTierID?: string;
     /** Whether to synthesize higher-level GraphConcept records from chunk clusters. Default true when Enabled. */
     SynthesizeConcepts?: boolean;
     /** Minimum supporting chunks required to form a new concept seed cluster. Default 2. */
@@ -199,7 +201,7 @@ export interface IContentSourceGraphOverlayConfig {
     AutoApproveThreshold?: number;
     /** Whether to detect and emit Contradicts edges when chunks conflict on thresholds, dates, or formulas. Default true. */
     DetectContradictions?: boolean;
-    /** ClassFactory key for the BaseConceptSynthesizer implementation. Default 'ManagedPromptConceptSynthesizer'. */
+    /** ClassFactory key for the BaseConceptSynthesizer implementation. Default 'DeterministicConceptSynthesizer'. */
     SynthesizerKey?: string;
     /** Maximum concept clusters synthesized by the LLM per pipeline run. NULL/unset = unlimited. */
     MaxConceptsPerRun?: number;

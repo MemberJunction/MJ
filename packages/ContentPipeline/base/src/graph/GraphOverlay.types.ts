@@ -73,29 +73,69 @@ export function GetConceptTypeRank(
 
 /**
  * Governance / evidentiary weight of a source document or concept.
+ * Seeded `MJ: Graph Authority Tiers` names plus any organization-configured authority tier defined in `MJ: Graph Authority Tiers`.
  * Higher-ranked tiers outrank lower tiers when resolving contradictions across multiple Content Sources.
  */
 export type GraphAuthorityTier =
     | 'Bylaws'
     | 'BoardPolicy'
+    | 'Board Policy'
     | 'ExecutiveSOP'
+    | 'Executive SOP'
     | 'DepartmentPractice'
+    | 'Department Practice'
     | 'Reference'
-    | 'Inferred';
+    | 'Inferred'
+    | (string & {});
 
-/** Numeric precedence rank for each `GraphAuthorityTier` (higher = more authoritative). */
-export const AuthorityTierPrecedence: Readonly<Record<GraphAuthorityTier, number>> = {
+/** Descriptor for a row in `MJ: Graph Authority Tiers` (`__mj.GraphAuthorityTier`). */
+export interface GraphAuthorityTierDescriptor {
+    readonly ID: string;
+    readonly Name: GraphAuthorityTier;
+    readonly Description?: string | null;
+    /** Evidentiary precedence rank (higher = more authoritative, e.g., Bylaws = 100, Reference = 20). */
+    readonly Rank: number;
+    readonly IconClass?: string | null;
+}
+
+/** Numeric precedence rank for seeded `GraphAuthorityTier` values (higher = more authoritative). */
+export const AuthorityTierPrecedence: Readonly<Record<string, number>> = {
     Bylaws: 100,
     BoardPolicy: 80,
+    'Board Policy': 80,
     ExecutiveSOP: 60,
+    'Executive SOP': 60,
     DepartmentPractice: 40,
+    'Department Practice': 40,
     Reference: 20,
     Inferred: 10,
 } as const;
 
-/** Returns the numeric precedence rank of an authority tier. */
-export function GetAuthorityTierRank(tier: GraphAuthorityTier | undefined | null): number {
-    return tier ? (AuthorityTierPrecedence[tier] ?? AuthorityTierPrecedence.Reference) : AuthorityTierPrecedence.Reference;
+/**
+ * Returns the numeric precedence rank of an authority tier (higher = more authoritative),
+ * consulting organization-configured `MJ: Graph Authority Tiers` descriptors first and
+ * falling back to {@link AuthorityTierPrecedence} (default `20`).
+ */
+export function GetAuthorityTierRank(
+    tier: GraphAuthorityTier | undefined | null,
+    configuredTiers?: readonly GraphAuthorityTierDescriptor[],
+): number {
+    if (!tier) return AuthorityTierPrecedence.Reference;
+    const normalized = tier.trim().toLowerCase().replace(/\s+/g, '');
+    if (configuredTiers && configuredTiers.length > 0) {
+        const match = configuredTiers.find(
+            (t) =>
+                t.Name.trim().toLowerCase().replace(/\s+/g, '') === normalized ||
+                t.ID.trim().toLowerCase() === tier.trim().toLowerCase(),
+        );
+        if (match) return match.Rank;
+    }
+    for (const [key, rank] of Object.entries(AuthorityTierPrecedence)) {
+        if (key.toLowerCase().replace(/\s+/g, '') === normalized) {
+            return rank;
+        }
+    }
+    return AuthorityTierPrecedence.Reference;
 }
 
 /**
@@ -172,50 +212,58 @@ export function ResolveGraphOverlayConfig(
 ): ResolvedGraphOverlayConfig {
     const merged: ContentSourceGraphOverlayConfig = {};
 
-    for (const cfg of configurations) {
-        if (!cfg) continue;
-        const optionsObj = cfg.Options as Record<string, unknown> | undefined;
-        const overlay = (cfg.GraphOverlay ?? optionsObj?.GraphOverlay ?? cfg) as Partial<ContentSourceGraphOverlayConfig>;
+    for (let i = 0; i < configurations.length; i++) {
+        const cfg = configurations[i];
+        if (cfg) {
+            const optionsObj = cfg.Options as Record<string, unknown> | undefined;
+            const overlay = (cfg.GraphOverlay ?? optionsObj?.GraphOverlay ?? cfg) as Partial<ContentSourceGraphOverlayConfig>;
 
-        if (typeof overlay.EnableGraphOverlay === 'boolean') {
-            merged.EnableGraphOverlay = overlay.EnableGraphOverlay;
+            if (typeof overlay.EnableGraphOverlay === 'boolean') {
+                merged.EnableGraphOverlay = overlay.EnableGraphOverlay;
+            }
+            if (typeof overlay.GraphID === 'string' && overlay.GraphID.trim().length > 0) {
+                merged.GraphID = overlay.GraphID.trim();
+            }
+            if (isValidGraphType(overlay.TargetGraphType)) {
+                merged.TargetGraphType = overlay.TargetGraphType.trim();
+            }
+            if (typeof overlay.IsCanon === 'boolean') {
+                merged.IsCanon = overlay.IsCanon;
+            }
+            if (isValidTaxonomyMode(overlay.ConceptTaxonomyMode)) {
+                merged.ConceptTaxonomyMode = overlay.ConceptTaxonomyMode;
+            }
+            if (isValidAuthorityTier(overlay.AuthorityTier)) {
+                merged.AuthorityTier = overlay.AuthorityTier;
+            }
+            if (isValidGroundingMode(overlay.GroundingMode)) {
+                merged.GroundingMode = overlay.GroundingMode;
+            }
+            if (
+                typeof overlay.ConceptMatchThreshold === 'number' &&
+                Number.isFinite(overlay.ConceptMatchThreshold) &&
+                overlay.ConceptMatchThreshold >= 0 &&
+                overlay.ConceptMatchThreshold <= 1
+            ) {
+                merged.ConceptMatchThreshold = overlay.ConceptMatchThreshold;
+            }
+            if (
+                overlay.MaxNewConceptsPerRun === null ||
+                (typeof overlay.MaxNewConceptsPerRun === 'number' &&
+                    Number.isFinite(overlay.MaxNewConceptsPerRun) &&
+                    overlay.MaxNewConceptsPerRun >= 0)
+            ) {
+                merged.MaxNewConceptsPerRun = overlay.MaxNewConceptsPerRun;
+            }
+            if (typeof overlay.SynthesizerKey === 'string' && overlay.SynthesizerKey.trim().length > 0) {
+                merged.SynthesizerKey = overlay.SynthesizerKey.trim();
+            }
         }
-        if (typeof overlay.GraphID === 'string' && overlay.GraphID.trim().length > 0) {
-            merged.GraphID = overlay.GraphID.trim();
-        }
-        if (isValidGraphType(overlay.TargetGraphType)) {
-            merged.TargetGraphType = overlay.TargetGraphType.trim();
-        }
-        if (typeof overlay.IsCanon === 'boolean') {
-            merged.IsCanon = overlay.IsCanon;
-        }
-        if (isValidTaxonomyMode(overlay.ConceptTaxonomyMode)) {
-            merged.ConceptTaxonomyMode = overlay.ConceptTaxonomyMode;
-        }
-        if (isValidAuthorityTier(overlay.AuthorityTier)) {
-            merged.AuthorityTier = overlay.AuthorityTier;
-        }
-        if (isValidGroundingMode(overlay.GroundingMode)) {
-            merged.GroundingMode = overlay.GroundingMode;
-        }
-        if (
-            typeof overlay.ConceptMatchThreshold === 'number' &&
-            Number.isFinite(overlay.ConceptMatchThreshold) &&
-            overlay.ConceptMatchThreshold >= 0 &&
-            overlay.ConceptMatchThreshold <= 1
-        ) {
-            merged.ConceptMatchThreshold = overlay.ConceptMatchThreshold;
-        }
-        if (
-            overlay.MaxNewConceptsPerRun === null ||
-            (typeof overlay.MaxNewConceptsPerRun === 'number' &&
-                Number.isFinite(overlay.MaxNewConceptsPerRun) &&
-                overlay.MaxNewConceptsPerRun >= 0)
-        ) {
-            merged.MaxNewConceptsPerRun = overlay.MaxNewConceptsPerRun;
-        }
-        if (typeof overlay.SynthesizerKey === 'string' && overlay.SynthesizerKey.trim().length > 0) {
-            merged.SynthesizerKey = overlay.SynthesizerKey.trim();
+        // The first-class ContentSource.GraphID FK column takes precedence over any GraphID
+        // inside source-level JSON configuration (configurations[0]), while still allowing
+        // explicit per-run overrides (configurations[1+]) to target a different graph.
+        if (i === 0 && explicitGraphID?.trim()) {
+            merged.GraphID = explicitGraphID.trim();
         }
     }
 
@@ -233,7 +281,7 @@ export function ResolveGraphOverlayConfig(
         GroundingMode: merged.GroundingMode ?? (isCanon ? 'full-canon' : 'none'),
         ConceptMatchThreshold: merged.ConceptMatchThreshold ?? 0.82,
         MaxNewConceptsPerRun: merged.MaxNewConceptsPerRun ?? null,
-        SynthesizerKey: merged.SynthesizerKey ?? 'ManagedPrompt',
+        SynthesizerKey: merged.SynthesizerKey ?? 'Deterministic',
     };
 }
 
@@ -246,14 +294,7 @@ function isValidTaxonomyMode(val: unknown): val is ConceptTaxonomyMode {
 }
 
 function isValidAuthorityTier(val: unknown): val is GraphAuthorityTier {
-    return (
-        val === 'Bylaws' ||
-        val === 'BoardPolicy' ||
-        val === 'ExecutiveSOP' ||
-        val === 'DepartmentPractice' ||
-        val === 'Reference' ||
-        val === 'Inferred'
-    );
+    return typeof val === 'string' && val.trim().length > 0;
 }
 
 function isValidGroundingMode(val: unknown): val is GraphGroundingMode {

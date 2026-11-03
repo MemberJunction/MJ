@@ -30,6 +30,8 @@ export interface ConceptChunkCitation {
 export interface SynthesizedGraphConcept {
     /** Existing `ConceptID` when updating/enriching an existing concept, or `undefined` when creating a new one. */
     readonly ExistingConceptID?: string;
+    /** Existing governance status when matched to an existing `GraphConcept` so `GraphStage` never overwrites it. */
+    readonly ExistingStatus?: 'Draft' | 'Proposed' | 'Approved' | 'Deprecated';
     readonly Name: string;
     readonly ConceptType: GraphConceptType;
     /** Optional foreign key to `MJ: Graph Concept Types` (`__mj.GraphConceptType.ID`). */
@@ -41,6 +43,8 @@ export interface SynthesizedGraphConcept {
     readonly Synonyms: readonly string[];
     readonly ParentConceptName?: string | null;
     readonly AuthorityTier: GraphAuthorityTier;
+    /** Optional foreign key to `MJ: Graph Authority Tiers` (`__mj.GraphAuthorityTier.ID`). */
+    readonly AuthorityTierID?: string | null;
     readonly Confidence: number;
     readonly Citations: readonly ConceptChunkCitation[];
 }
@@ -57,7 +61,9 @@ export interface SynthesizedGraphEdge {
         | 'Implements'
         | 'Governs'
         | 'Contradicts'
-        | 'Related To';
+        | 'RelatedTo'
+        | 'Related To'
+        | (string & {});
     readonly SourceEntityName: string;
     /** Record ID (or concept name placeholder when referencing the newly synthesized concept). */
     readonly SourceRecordID: string;
@@ -65,6 +71,8 @@ export interface SynthesizedGraphEdge {
     readonly TargetRecordID: string;
     readonly Weight: number;
     readonly Confidence: number;
+    /** Provenance origin (`'Inferred'` when synthesized by `GraphStage`, `'Declared'` when explicitly authored). */
+    readonly Origin?: 'Declared' | 'Inferred';
     readonly Description: string;
     readonly Attributes?: Record<string, unknown>;
 }

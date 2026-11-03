@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (470 classes)
+// @memberjunction/core-entities (471 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -302,6 +302,7 @@ import {
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJGraphAuthorityTierEntity,
     MJGraphConceptEntity,
     MJGraphConceptTypeEntity,
     MJGraphEdgeEntity,
@@ -1167,6 +1168,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJGraphAuthorityTierEntity,
     MJGraphConceptEntity,
     MJGraphConceptTypeEntity,
     MJGraphEdgeEntity,
@@ -1289,11 +1291,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
     MJScopedNotificationConfigEntity,
-    MJScopedPromptConfigEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
     MJSearchProviderEntity,
@@ -1493,11 +1495,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJQueryFormComponentExtended,
     MJRubricBandFormComponentExtended,
     MJRubricCategoryFormComponentExtended,
-    MJRubricCriterionFormComponentExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MJRubricCriterionFormComponentExtended,
     MJRubricEvaluationFormComponentExtended,
     MJRubricEvaluationScoreFormComponentExtended,
     MJRubricFormComponentExtended,
@@ -1682,7 +1684,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 770;
+export const CLASS_REGISTRATIONS_COUNT = 771;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

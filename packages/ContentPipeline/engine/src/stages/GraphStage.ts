@@ -16,7 +16,7 @@
  * @module @memberjunction/content-pipeline
  */
 
-import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 import {
     KnowledgeHubMetadataEngine,
     MJContentItemChunkEntity,
@@ -31,11 +31,11 @@ import {
     ClassifiedTag,
     ClusterContentIntoConceptSeeds,
     ConceptClusteringResult,
-    ConceptSeedCluster,
     ContentChunkSeedInput,
     ExistingGraphConceptSeed,
     FatalStageError,
     GraphAuthorityTier,
+    GraphAuthorityTierDescriptor,
     GraphConceptTypeDescriptor,
     Outcome,
     ResolvedGraphOverlayConfig,
@@ -50,9 +50,16 @@ import {
     WorkingRecord,
     WorkingRecordEntity,
 } from '@memberjunction/content-pipeline-base';
-import { MANAGED_PROMPT_CONCEPT_SYNTHESIZER, ManagedPromptConceptSynthesizer } from '../ManagedPromptConceptSynthesizer.js';
+import { WhereEqual } from '../Filters.js';
+import {
+    DETERMINISTIC_CONCEPT_SYNTHESIZER,
+    DeterministicConceptSynthesizer,
+    ManagedPromptConceptSynthesizer,
+} from '../ManagedPromptConceptSynthesizer.js';
+import { EntityGraphOverlayStore } from './EntityGraphOverlayStore.js';
 import { TAG_STAGE } from './TagStage.js';
 
+void DeterministicConceptSynthesizer;
 void ManagedPromptConceptSynthesizer;
 
 /** Stage registration key for the Graph overlay stage. */
@@ -83,6 +90,12 @@ export interface IGraphOverlayStore {
         contextUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<GraphConceptTypeDescriptor[]>;
+
+    /** Optional loader for active `MJ: Graph Authority Tiers` (`__mj.GraphAuthorityTier`) to resolve `AuthorityTierID` and rank order. */
+    LoadAuthorityTiers?(
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<GraphAuthorityTierDescriptor[]>;
 
     /** Load candidate MJ schema/operational targets for grounding edges (`Describes`, `Defines`, `Measures`, `Implements`). */
     LoadGroundingTargets?(
@@ -138,7 +151,8 @@ export interface GraphStageExecutionSummary {
     ClusteringResult: ConceptClusteringResult;
     SynthesizedResults: Array<{
         ConceptID: string;
-        Status: GraphStageUpsertStatus;
+        Status: MJGraphConceptEntity['Status'];
+        EdgeStatus: GraphStageUpsertStatus;
         Concept: SynthesizedGraphConcept;
         Edges: readonly SynthesizedGraphEdge[];
         PromptRunID: string | null;
@@ -195,13 +209,13 @@ export class GraphStage extends BasePipelineStage {
         }
 
         const targetGraphID = overlayConfig.GraphID;
-        const synthesizerKey = overlayConfig.SynthesizerKey || MANAGED_PROMPT_CONCEPT_SYNTHESIZER;
+        const synthesizerKey = overlayConfig.SynthesizerKey || DETERMINISTIC_CONCEPT_SYNTHESIZER;
         const synthesizer = BaseConceptSynthesizer.Resolve(synthesizerKey);
         if (!synthesizer) {
             throw new FatalStageError(`Concept synthesizer '${synthesizerKey}' is not registered`);
         }
 
-        const store = this.resolveStore(context.Configuration);
+        const store = this.resolveStore(context.Configuration, context.IsTest);
         const tagNames = await this.loadTagsForRecord(record, store, context);
         const chunks = await this.loadChunksForRecord(
             record,
@@ -221,6 +235,9 @@ export class GraphStage extends BasePipelineStage {
         const conceptTypes = store?.LoadConceptTypes
             ? await store.LoadConceptTypes(context.ContextUser, context.Provider)
             : [];
+        const authorityTiers = store?.LoadAuthorityTiers
+            ? await store.LoadAuthorityTiers(context.ContextUser, context.Provider)
+            : [];
         const groundingTargets =
             store?.LoadGroundingTargets && overlayConfig.GroundingMode !== 'none'
                 ? await store.LoadGroundingTargets(
@@ -236,6 +253,7 @@ export class GraphStage extends BasePipelineStage {
             maxNewConcepts: overlayConfig.MaxNewConceptsPerRun,
             groundingTargets: groundingTargets,
             conceptTypes: conceptTypes,
+            authorityTiers: authorityTiers,
         });
 
         if (clusteringResult.Clusters.length === 0) {
@@ -246,7 +264,7 @@ export class GraphStage extends BasePipelineStage {
         let persistedConceptCount = 0;
         let persistedEdgeCount = 0;
 
-        const targetStatus: 'Proposed' | 'Approved' =
+        const targetStatus: GraphStageUpsertStatus =
             overlayConfig.ConceptTaxonomyMode === 'propose-only' ? 'Proposed' : 'Approved';
 
         for (const cluster of clusteringResult.Clusters) {
@@ -268,9 +286,15 @@ export class GraphStage extends BasePipelineStage {
                 continue;
             }
 
-            const conceptStatus: 'Proposed' | 'Approved' = synthResult.Concept.ExistingConceptID
-                ? 'Approved'
+            // Preserve existing concept's status when matched; never silently promote Proposed/Deprecated/Draft to Approved
+            const existingStatus = synthResult.Concept.ExistingStatus ?? cluster.MatchedExistingConcept?.Status;
+            const conceptStatus: MJGraphConceptEntity['Status'] = synthResult.Concept.ExistingConceptID
+                ? (existingStatus ?? targetStatus)
                 : targetStatus;
+            const upsertConceptStatus: GraphStageUpsertStatus =
+                conceptStatus === 'Approved' ? 'Approved' : 'Proposed';
+            // New edges synthesized in propose-only mode always start as Proposed regardless of whether the concept already existed
+            const edgeStatus: GraphStageUpsertStatus = targetStatus;
 
             let conceptID =
                 synthResult.Concept.ExistingConceptID ??
@@ -280,7 +304,7 @@ export class GraphStage extends BasePipelineStage {
                 conceptID = await store.UpsertConcept(
                     targetGraphID,
                     synthResult.Concept,
-                    conceptStatus,
+                    upsertConceptStatus,
                     context.ContextUser,
                     context.Provider,
                 );
@@ -290,7 +314,7 @@ export class GraphStage extends BasePipelineStage {
                     targetGraphID,
                     conceptID,
                     synthResult.Edges,
-                    conceptStatus,
+                    edgeStatus,
                     context.ContextUser,
                     context.Provider,
                 );
@@ -300,6 +324,7 @@ export class GraphStage extends BasePipelineStage {
             synthesizedResults.push({
                 ConceptID: conceptID,
                 Status: conceptStatus,
+                EdgeStatus: edgeStatus,
                 Concept: synthResult.Concept,
                 Edges: synthResult.Edges,
                 PromptRunID: synthResult.PromptRunID ?? null,
@@ -325,12 +350,18 @@ export class GraphStage extends BasePipelineStage {
         );
     }
 
-    private resolveStore(configuration: Record<string, unknown>): IGraphOverlayStore | null {
+    private resolveStore(configuration: Record<string, unknown>, isTest: boolean): IGraphOverlayStore | null {
         const configStore = configuration['GraphOverlayStore'];
         if (configStore && typeof configStore === 'object' && 'UpsertConcept' in configStore) {
             return configStore as IGraphOverlayStore;
         }
-        return GraphStage._defaultStore;
+        if (GraphStage._defaultStore) {
+            return GraphStage._defaultStore;
+        }
+        if (!isTest) {
+            return new EntityGraphOverlayStore();
+        }
+        return null;
     }
 
     private async resolveSourceConfiguration(
@@ -354,7 +385,10 @@ export class GraphStage extends BasePipelineStage {
                 explicitGraphID: source.GraphID ?? null,
                 sourceConfig: parsedConfig,
             };
-        } catch {
+        } catch (err) {
+            LogError(
+                `GraphStage.resolveSourceConfiguration failed for ContentSourceID '${contentSourceID}': ${err instanceof Error ? err.message : String(err)}`,
+            );
             return { explicitGraphID: null, sourceConfig: undefined };
         }
     }
@@ -410,14 +444,14 @@ export class GraphStage extends BasePipelineStage {
 
         // 3. Query persisted MJ: Content Item Chunks via RunView when a RecordID is present
         if (record.Identity.RecordID) {
-            const rv = new RunView(context.Provider as never);
-            const escapedID = record.Identity.RecordID.replace(/'/g, "''");
+            const rv = RunView.FromMetadataProvider(context.Provider);
             const res = await rv.RunView<MJContentItemChunkEntity>(
                 {
                     EntityName: 'MJ: Content Item Chunks',
-                    ExtraFilter: `ContentItemID = '${escapedID}'`,
+                    ExtraFilter: WhereEqual({ ContentItemID: record.Identity.RecordID }),
                     OrderBy: 'Sequence ASC',
                     ResultType: 'simple',
+                    IgnoreMaxRows: true,
                 },
                 context.ContextUser,
             );
@@ -429,7 +463,7 @@ export class GraphStage extends BasePipelineStage {
                     ContentItemTitle: itemTitle,
                     Text: row.Text,
                     HeadingPath: itemDecorator,
-                    Sequence: idx,
+                    Sequence: typeof row.Sequence === 'number' ? row.Sequence : idx,
                     Tags: tags,
                     AuthorityTier: authorityTier,
                 }));
@@ -475,12 +509,11 @@ export class GraphStage extends BasePipelineStage {
 
         // 3. Query persisted MJ: Content Item Tags via RunView
         if (record.Identity.RecordID) {
-            const rv = new RunView(context.Provider as never);
-            const escapedID = record.Identity.RecordID.replace(/'/g, "''");
+            const rv = RunView.FromMetadataProvider(context.Provider);
             const res = await rv.RunView<MJContentItemTagEntity>(
                 {
                     EntityName: 'MJ: Content Item Tags',
-                    ExtraFilter: `ItemID = '${escapedID}'`,
+                    ExtraFilter: WhereEqual({ ItemID: record.Identity.RecordID }),
                     ResultType: 'simple',
                 },
                 context.ContextUser,

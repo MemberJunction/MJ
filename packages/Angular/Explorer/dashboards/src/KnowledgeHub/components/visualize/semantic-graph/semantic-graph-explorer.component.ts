@@ -23,6 +23,7 @@ import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import type {
     MJGraphTypeEntity,
     MJGraphConceptTypeEntity,
+    MJGraphAuthorityTierEntity,
     MJGraphEntity,
     MJGraphConceptEntity,
     MJGraphEdgeEntity,
@@ -40,6 +41,19 @@ import {
     type NodeActionEventArgs,
     type NodeSelectedEventArgs,
 } from '@memberjunction/ng-graph-view';
+
+/** Default ranked Canon & Semantic Graph categories used by the Knowledge Hub explorer. */
+export const DEFAULT_SEMANTIC_GRAPH_CATEGORIES: GraphCategoryConfig[] = [
+    { Category: 'Policy', Label: 'Policy', Color: '#f43f5e', IconClass: 'fa-solid fa-gavel', Rank: 10 },
+    { Category: 'Metric', Label: 'Metric', Color: '#10b981', IconClass: 'fa-solid fa-chart-line', Rank: 20 },
+    { Category: 'Process', Label: 'Process', Color: '#8b5cf6', IconClass: 'fa-solid fa-gears', Rank: 30 },
+    { Category: 'Role', Label: 'Role', Color: '#f59e0b', IconClass: 'fa-solid fa-user-shield', Rank: 40 },
+    { Category: 'Domain', Label: 'Domain', Color: '#3b82f6', IconClass: 'fa-solid fa-layer-group', Rank: 50 },
+    { Category: 'Term', Label: 'Term', Color: '#06b6d4', IconClass: 'fa-solid fa-book-bookmark', Rank: 60 },
+    { Category: 'grounding', Label: 'Grounded Primitive', Color: '#14b8a6', IconClass: 'fa-solid fa-bolt', Rank: 90 },
+    { Category: 'chunk', Label: 'Source Chunk', Color: '#64748b', IconClass: 'fa-solid fa-file-lines', Rank: 95 },
+    ...DEFAULT_GRAPH_CATEGORIES,
+];
 
 /** Summary of a selectable `MJ: Graphs` partition in the left rail. */
 export interface SemanticGraphOption {
@@ -117,12 +131,15 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
     // ================================================================
 
     public IsLoading = true;
+    public LoadError: string | null = null;
+    public ActionError: string | null = null;
     public GraphOptions: SemanticGraphOption[] = [];
     public ConceptTypeOptions: ConceptTypeFilterOption[] = [];
     public SelectedGraphID = '';
     public OnlyCanonGraphs = false;
     public ActiveConceptTypeFilter: string | null = null;
     public LayoutMode: GraphLayoutMode = 'force';
+    private authorityTiersById = new Map<string, MJGraphAuthorityTierEntity>();
 
     /** Edge / Node Overlay Toggles */
     public ShowGroundedPrimitives = true;
@@ -134,7 +151,7 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
     private rawEdges: GraphEdge[] = [];
     public Nodes: GraphNode[] = [];
     public Edges: GraphEdge[] = [];
-    public Categories: GraphCategoryConfig[] = [...DEFAULT_GRAPH_CATEGORIES];
+    public Categories: GraphCategoryConfig[] = [...DEFAULT_SEMANTIC_GRAPH_CATEGORIES];
     public SelectedNodeId?: string;
 
     // ================================================================
@@ -233,25 +250,51 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
     public async OnNodeAction(event: NodeActionEventArgs): Promise<void> {
         if (event.Action === 'approve') {
             const node = event.Node;
-            node.Status = 'Approved';
-            if (!node.ID.startsWith('sample-')) {
-                try {
-                    const provider = this.ProviderToUse;
-                    const conceptEntity = await provider.GetEntityObject<MJGraphConceptEntity>(
-                        'MJ: Graph Concepts',
-                        provider.CurrentUser,
-                    );
-                    if (await conceptEntity.Load(node.ID)) {
-                        conceptEntity.Status = 'Approved';
-                        await conceptEntity.Save();
-                    }
-                } catch (err) {
-                    console.warn('[SemanticGraphExplorer] Failed to persist concept approval:', err);
-                }
+            this.ActionError = null;
+            if (node.ID.startsWith('sample-') || this.SelectedGraph?.IsSample) {
+                node.Status = 'Approved';
+                this.Nodes = [...this.Nodes];
+                this.cdr.detectChanges();
+                return;
             }
-            this.Nodes = [...this.Nodes];
+            try {
+                const provider = this.ProviderToUse;
+                const conceptEntity = await provider.GetEntityObject<MJGraphConceptEntity>(
+                    'MJ: Graph Concepts',
+                    provider.CurrentUser,
+                );
+                if (await conceptEntity.Load(node.ID)) {
+                    conceptEntity.Status = 'Approved';
+                    const saved = await conceptEntity.Save();
+                    if (saved) {
+                        node.Status = 'Approved';
+                        this.Nodes = [...this.Nodes];
+                    } else {
+                        this.ActionError =
+                            conceptEntity.LatestResult?.CompleteMessage || 'Failed to save concept approval.';
+                    }
+                } else {
+                    this.ActionError = `Could not load Graph Concept ${node.ID}.`;
+                }
+            } catch (err) {
+                this.ActionError = err instanceof Error ? err.message : String(err);
+            }
             this.cdr.detectChanges();
         }
+    }
+
+    public LoadSampleGraphPreview(): void {
+        this.LoadError = null;
+        this.ActionError = null;
+        const sampleOpt = this.buildSampleGraphOption();
+        if (!this.GraphOptions.some(o => UUIDsEqual(o.ID, sampleOpt.ID))) {
+            this.GraphOptions = [...this.GraphOptions, sampleOpt];
+        }
+        this.SelectedGraphID = sampleOpt.ID;
+        this.loadSampleCanonGraphNodesAndEdges();
+        this.applyOverlayFilters();
+        this.rebuildConceptTypeCounts();
+        this.cdr.detectChanges();
     }
 
     // ================================================================
@@ -260,6 +303,8 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
 
     public async LoadGraphCatalog(): Promise<void> {
         this.IsLoading = true;
+        this.LoadError = null;
+        this.ActionError = null;
         this.cdr.detectChanges();
 
         try {
@@ -267,38 +312,49 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
             const rv = RunView.FromMetadataProvider(provider);
             const user = provider.CurrentUser;
 
-            const [graphTypesRes, conceptTypesRes, graphsRes, sourcesRes] = await Promise.all([
-                rv.RunView<MJGraphTypeEntity>({
+            const [graphTypesRes, conceptTypesRes, authorityTiersRes, graphsRes, sourcesRes] = await rv.RunViews([
+                {
                     EntityName: 'MJ: Graph Types',
                     ExtraFilter: `Status = 'Active'`,
                     OrderBy: 'Rank ASC, Name ASC',
                     ResultType: 'simple',
-                }, user),
-                rv.RunView<MJGraphConceptTypeEntity>({
+                },
+                {
                     EntityName: 'MJ: Graph Concept Types',
                     ExtraFilter: `Status = 'Active'`,
                     OrderBy: 'Rank ASC, Name ASC',
                     ResultType: 'simple',
-                }, user),
-                rv.RunView<MJGraphEntity>({
+                },
+                {
+                    EntityName: 'MJ: Graph Authority Tiers',
+                    ExtraFilter: `Status = 'Active'`,
+                    OrderBy: 'Rank DESC, Name ASC',
+                    ResultType: 'simple',
+                },
+                {
                     EntityName: 'MJ: Graphs',
                     ExtraFilter: `Status = 'Active'`,
                     OrderBy: 'Name ASC',
                     ResultType: 'simple',
-                }, user),
-                rv.RunView<{ ID: string; Name: string; GraphID: string | null }>({
+                },
+                {
                     EntityName: 'MJ: Content Sources',
                     Fields: ['ID', 'Name', 'GraphID'],
                     ResultType: 'simple',
-                }, user),
-            ]);
+                },
+            ], user);
 
             const graphTypesById = new Map<string, MJGraphTypeEntity>();
-            for (const gt of graphTypesRes.Results ?? []) {
+            for (const gt of (graphTypesRes?.Results ?? []) as MJGraphTypeEntity[]) {
                 graphTypesById.set(NormalizeUUID(gt.ID), gt);
             }
 
-            const conceptTypes = conceptTypesRes.Results ?? [];
+            this.authorityTiersById.clear();
+            for (const at of (authorityTiersRes?.Results ?? []) as MJGraphAuthorityTierEntity[]) {
+                this.authorityTiersById.set(NormalizeUUID(at.ID), at);
+            }
+
+            const conceptTypes = (conceptTypesRes?.Results ?? []) as MJGraphConceptTypeEntity[];
             this.ConceptTypeOptions = conceptTypes.length > 0
                 ? conceptTypes.map(ct => ({
                     ID: ct.ID,
@@ -323,7 +379,7 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
             ];
 
             const sourcesByGraphId = new Map<string, string[]>();
-            for (const src of sourcesRes.Results ?? []) {
+            for (const src of (sourcesRes?.Results ?? []) as Array<{ ID: string; Name: string; GraphID: string | null }>) {
                 if (src.GraphID) {
                     const key = NormalizeUUID(src.GraphID);
                     const list = sourcesByGraphId.get(key) ?? [];
@@ -332,7 +388,7 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
                 }
             }
 
-            const dbGraphs = graphsRes.Results ?? [];
+            const dbGraphs = (graphsRes?.Results ?? []) as MJGraphEntity[];
             const options: SemanticGraphOption[] = dbGraphs.map(g => {
                 const gt = graphTypesById.get(NormalizeUUID(g.GraphTypeID));
                 return {
@@ -350,30 +406,25 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
                 };
             }).sort((a, b) => a.GraphTypeRank - b.GraphTypeRank || a.Name.localeCompare(b.Name));
 
-            // Ensure the rich Association Governance Canon graph is available even on a fresh database
-            const existingAssoc = options.find(o => UUIDsEqual(o.ID, SAMPLE_GRAPH_ID));
-            if (existingAssoc) {
-                existingAssoc.ConceptCount = 5;
-                existingAssoc.ConflictCount = 1;
-                if (existingAssoc.SourceNames.length === 0) {
-                    existingAssoc.SourceNames = ['Association Bylaws (PDF)', 'Finance & Dues SOPs', 'Staff Desk Manual'];
-                }
-            } else {
-                options.push(this.buildSampleGraphOption());
-            }
-
             this.GraphOptions = options;
-            if (!this.SelectedGraphID || !this.GraphOptions.some(o => UUIDsEqual(o.ID, this.SelectedGraphID))) {
-                this.SelectedGraphID = this.GraphOptions[0].ID;
+            if (this.GraphOptions.length > 0) {
+                if (!this.SelectedGraphID || !this.GraphOptions.some(o => UUIDsEqual(o.ID, this.SelectedGraphID))) {
+                    this.SelectedGraphID = this.GraphOptions[0].ID;
+                }
+                await this.LoadSelectedGraphData();
+            } else {
+                this.rawNodes = [];
+                this.rawEdges = [];
+                this.Nodes = [];
+                this.Edges = [];
             }
-
-            await this.LoadSelectedGraphData();
         } catch (err) {
-            console.warn('[SemanticGraphExplorer] Falling back to sample graph:', err);
+            this.LoadError = err instanceof Error ? err.message : String(err);
             this.ConceptTypeOptions = this.buildDefaultConceptTypeOptions();
-            this.GraphOptions = [this.buildSampleGraphOption()];
-            this.SelectedGraphID = SAMPLE_GRAPH_ID;
-            await this.LoadSelectedGraphData();
+            this.rawNodes = [];
+            this.rawEdges = [];
+            this.Nodes = [];
+            this.Edges = [];
         } finally {
             this.IsLoading = false;
             this.cdr.detectChanges();
@@ -382,7 +433,15 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
 
     public async LoadSelectedGraphData(): Promise<void> {
         const selected = this.SelectedGraph;
-        if (!selected || selected.IsSample || UUIDsEqual(selected.ID, SAMPLE_GRAPH_ID)) {
+        if (!selected) {
+            this.rawNodes = [];
+            this.rawEdges = [];
+            this.applyOverlayFilters();
+            this.rebuildConceptTypeCounts();
+            this.cdr.detectChanges();
+            return;
+        }
+        if (selected.IsSample) {
             this.loadSampleCanonGraphNodesAndEdges();
             this.applyOverlayFilters();
             this.rebuildConceptTypeCounts();
@@ -390,33 +449,39 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
             return;
         }
 
+        if (!this.isValidUUID(selected.ID)) {
+            this.LoadError = `Invalid Graph ID: ${selected.ID}`;
+            return;
+        }
+
         this.IsLoading = true;
+        this.LoadError = null;
         this.cdr.detectChanges();
 
         try {
             const provider = this.ProviderToUse;
             const rv = RunView.FromMetadataProvider(provider);
             const user = provider.CurrentUser;
-            const safeGraphId = selected.ID.replace(/'/g, "''");
+            const normalizedGraphId = NormalizeUUID(selected.ID);
 
-            const [conceptsRes, edgesRes] = await Promise.all([
-                rv.RunView<MJGraphConceptEntity>({
+            const [conceptsRes, edgesRes] = await rv.RunViews([
+                {
                     EntityName: 'MJ: Graph Concepts',
-                    ExtraFilter: `GraphID = '${safeGraphId}'`,
+                    ExtraFilter: `GraphID = '${normalizedGraphId}'`,
                     OrderBy: 'Name ASC',
                     MaxRows: 500,
                     ResultType: 'simple',
-                }, user),
-                rv.RunView<MJGraphEdgeEntity>({
+                },
+                {
                     EntityName: 'MJ: Graph Edges',
-                    ExtraFilter: `GraphID = '${safeGraphId}'`,
+                    ExtraFilter: `GraphID = '${normalizedGraphId}'`,
                     MaxRows: 1000,
                     ResultType: 'simple',
-                }, user),
-            ]);
+                },
+            ], user);
 
-            const concepts = conceptsRes.Results ?? [];
-            const edges = edgesRes.Results ?? [];
+            const concepts = (conceptsRes?.Results ?? []) as MJGraphConceptEntity[];
+            const edges = (edgesRes?.Results ?? []) as MJGraphEdgeEntity[];
 
             if (concepts.length === 0 && edges.length === 0) {
                 this.rawNodes = [];
@@ -436,16 +501,18 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
             const nodes: GraphNode[] = concepts.map(c => {
                 const typeName = c.ConceptType || 'Term';
                 const rank = rankByTypeName.get(typeName.toLowerCase()) ?? 60;
+                const tierEntity = c.AuthorityTierID ? this.authorityTiersById.get(NormalizeUUID(c.AuthorityTierID)) : undefined;
+                const tierLabel = tierEntity ? `${tierEntity.Name} (${tierEntity.Rank})` : (c.AuthorityTier || 'Reference');
                 return {
                     ID: c.ID,
                     Label: c.Name,
-                    Sublabel: `${typeName} · ${c.AuthorityTier}`,
+                    Sublabel: `${typeName} · ${tierEntity?.Name ?? c.AuthorityTier ?? 'Reference'}`,
                     Category: typeName,
                     Rank: rank,
                     Badge: `#${rank}`,
                     Status: c.Status,
-                    AuthorityTier: `${c.AuthorityTier}`,
-                    ParentID: c.ParentID,
+                    AuthorityTier: tierLabel,
+                    ParentID: c.ParentID ?? undefined,
                     Description: c.Description,
                     Specification: c.Specification ?? undefined,
                     Conflicts: [],
@@ -601,6 +668,19 @@ export class SemanticGraphExplorerComponent extends BaseAngularComponent impleme
                 RecordID: recordId,
             },
         };
+    }
+
+    public OpenGroundingRecord(grounding: GraphGroundingItem): void {
+        if (grounding.TargetEntityName && grounding.TargetRecordID && !grounding.TargetRecordID.startsWith('sample-')) {
+            this.OpenRecordRequested.emit({
+                EntityName: grounding.TargetEntityName,
+                RecordID: grounding.TargetRecordID,
+            });
+        }
+    }
+
+    private isValidUUID(id: string): boolean {
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id.trim());
     }
 
     private resolveConceptTypeColor(name: string): string {

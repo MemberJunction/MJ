@@ -1,5 +1,5 @@
 /**
- * @fileoverview Default {@link BaseConceptSynthesizer} implementation (`ManagedPrompt`).
+ * @fileoverview Default {@link BaseConceptSynthesizer} implementation (`Deterministic` / `ManagedPrompt`).
  *
  * Synthesizes `MJ: Graph Concepts` and `MJ: Graph Edges` from a {@link ConceptSeedCluster},
  * combining deterministic authority-ranked specification assembly, schema-grounding alignment,
@@ -20,18 +20,21 @@ import {
     SynthesizedGraphEdge,
 } from '@memberjunction/content-pipeline-base';
 
-/** Registration key for the default concept synthesizer. */
+/** Primary registration key for the deterministic concept synthesizer. */
+export const DETERMINISTIC_CONCEPT_SYNTHESIZER = 'Deterministic';
+
+/** Backward-compatible registration alias for the concept synthesizer. */
 export const MANAGED_PROMPT_CONCEPT_SYNTHESIZER = 'ManagedPrompt';
 
 /**
- * Default {@link BaseConceptSynthesizer} registered under `'ManagedPrompt'`.
+ * Default {@link BaseConceptSynthesizer} registered under `'Deterministic'`.
  *
  * Produces a complete, deterministic {@link SynthesizeConceptResult} from the cluster's
  * supporting chunks, tags, authority tiers, threshold conflicts, and schema grounding matches.
  */
-@RegisterClass(BaseConceptSynthesizer, MANAGED_PROMPT_CONCEPT_SYNTHESIZER)
-export class ManagedPromptConceptSynthesizer extends BaseConceptSynthesizer {
-    public readonly Key = MANAGED_PROMPT_CONCEPT_SYNTHESIZER;
+@RegisterClass(BaseConceptSynthesizer, DETERMINISTIC_CONCEPT_SYNTHESIZER)
+export class DeterministicConceptSynthesizer extends BaseConceptSynthesizer {
+    public readonly Key: string = DETERMINISTIC_CONCEPT_SYNTHESIZER;
 
     public async SynthesizeCluster(request: SynthesizeConceptRequest): Promise<SynthesizeConceptResult> {
         return this.SynthesizeDeterministically(request);
@@ -72,8 +75,10 @@ export class ManagedPromptConceptSynthesizer extends BaseConceptSynthesizer {
         const conceptRecordPlaceholder = existingMatch?.ConceptID ?? `concept:${conceptName}`;
 
         const resolvedConceptTypeID = existingMatch?.ConceptTypeID ?? cluster.InferredConceptTypeID ?? null;
+        const resolvedAuthorityTierID = existingMatch?.AuthorityTierID ?? cluster.HighestAuthorityTierID ?? null;
         const concept: SynthesizedGraphConcept = {
             ExistingConceptID: existingMatch?.ConceptID,
+            ...(existingMatch?.Status ? { ExistingStatus: existingMatch.Status } : {}),
             Name: conceptName,
             ConceptType: existingMatch ? existingMatch.ConceptType : cluster.InferredConceptType,
             ...(resolvedConceptTypeID ? { ConceptTypeID: resolvedConceptTypeID } : {}),
@@ -82,6 +87,7 @@ export class ManagedPromptConceptSynthesizer extends BaseConceptSynthesizer {
             Synonyms: this.mergeSynonyms(cluster.AssociatedTags, existingMatch?.Synonyms ?? [], conceptName),
             ParentConceptName: parentConceptName,
             AuthorityTier: cluster.HighestAuthorityTier,
+            ...(resolvedAuthorityTierID ? { AuthorityTierID: resolvedAuthorityTierID } : {}),
             Confidence: Number(confidence.toFixed(4)),
             Citations: citations,
         };
@@ -99,6 +105,7 @@ export class ManagedPromptConceptSynthesizer extends BaseConceptSynthesizer {
                 TargetRecordID: chunk.ChunkID,
                 Weight: 1.0,
                 Confidence: 1.0,
+                Origin: 'Inferred',
                 Description: `Concept '${conceptName}' is sourced from chunk '${chunk.ChunkID}'.`,
                 Attributes: {
                     contentItemID: chunk.ContentItemID,
@@ -118,6 +125,7 @@ export class ManagedPromptConceptSynthesizer extends BaseConceptSynthesizer {
                     TargetRecordID: conceptRecordPlaceholder,
                     Weight: Number(Math.min(1, confidence).toFixed(4)),
                     Confidence: Number(Math.min(1, confidence).toFixed(4)),
+                    Origin: 'Inferred',
                     Description: `Content item '${chunk.ContentItemID}' mentions concept '${conceptName}'.`,
                     Attributes: {
                         contentSourceID: chunk.ContentSourceID,
@@ -137,6 +145,7 @@ export class ManagedPromptConceptSynthesizer extends BaseConceptSynthesizer {
                 TargetRecordID: conceptRecordPlaceholder,
                 Weight: 0.9,
                 Confidence: 0.85,
+                Origin: 'Inferred',
                 Description: `Parent concept '${parentConceptName}' is broader than '${conceptName}'.`,
             });
         }
@@ -157,6 +166,7 @@ export class ManagedPromptConceptSynthesizer extends BaseConceptSynthesizer {
                     TargetRecordID: match.Target.RecordID,
                     Weight: Number(Math.min(1, match.MatchScore).toFixed(4)),
                     Confidence: Number(Math.min(1, match.MatchScore).toFixed(4)),
+                    Origin: 'Inferred',
                     Description: `Concept '${conceptName}' ${match.SuggestedEdgeType.toLowerCase()} ${match.Target.EntityName} '${match.Target.Name}'.`,
                     Attributes: {
                         targetName: match.Target.Name,
@@ -176,7 +186,8 @@ export class ManagedPromptConceptSynthesizer extends BaseConceptSynthesizer {
                     TargetEntityName: 'MJ: Content Item Chunks',
                     TargetRecordID: conflict.HigherAuthorityChunkID,
                     Weight: 1.0,
-                    Confidence: 0.9,
+                    Confidence: 0.75,
+                    Origin: 'Inferred',
                     Description: conflict.Reason,
                     Attributes: {
                         higherAuthorityChunkID: conflict.HigherAuthorityChunkID,
@@ -219,7 +230,7 @@ export class ManagedPromptConceptSynthesizer extends BaseConceptSynthesizer {
             return `${cluster.ConceptName} (${cluster.InferredConceptType}) synthesized from content pipeline.`;
         }
         const cleanText = primaryChunk.Text.replace(/\s+/g, ' ').trim();
-        const sentences = cleanText.split(/(?<=[.!?])\s+/).filter((s) => s.trim().length > 0);
+        const sentences = cleanText.split(/(?<=[.!?]) /).filter((s) => s.trim().length > 0);
         const summary = sentences.slice(0, 2).join(' ');
         return this.buildExcerpt(summary || cleanText, 320);
     }
@@ -287,7 +298,7 @@ export class ManagedPromptConceptSynthesizer extends BaseConceptSynthesizer {
                 continue;
             }
             const parts = chunk.HeadingPath
-                .split(/\s*(?:>|\/|»|::|—|--)\s*/)
+                .split(/(?:>|\/|»|::|—|--)/)
                 .map((p) => p.replace(/^#+\s*/, '').trim())
                 .filter((p) => p.length > 0);
             if (parts.length >= 2) {
@@ -296,4 +307,13 @@ export class ManagedPromptConceptSynthesizer extends BaseConceptSynthesizer {
         }
         return null;
     }
+}
+
+/**
+ * Backward-compatible alias registered under `'ManagedPrompt'` so existing configurations
+ * with `SynthesizerKey: 'ManagedPrompt'` continue to resolve.
+ */
+@RegisterClass(BaseConceptSynthesizer, MANAGED_PROMPT_CONCEPT_SYNTHESIZER)
+export class ManagedPromptConceptSynthesizer extends DeterministicConceptSynthesizer {
+    public override readonly Key = MANAGED_PROMPT_CONCEPT_SYNTHESIZER;
 }

@@ -124,8 +124,24 @@
     </div>
   </aside>
 
-  <!-- Main Canvas: <mj-graph-view> with Force/Hierarchy/Circular Layouts & Built-In Canon Inspector -->
+  <!-- Main Canvas: <mj-graph-view> with Force/Hierarchy/Circular Layouts & Projected Canon Inspector -->
   <main class="semantic-graph-canvas">
+    @if (LoadError || ActionError) {
+      <div class="semantic-graph-alert" role="alert">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span>{{ LoadError || ActionError }}</span>
+      </div>
+    }
+
+    @if (!IsLoading && Nodes.length === 0) {
+      <div class="semantic-graph-empty-banner">
+        <span>No concepts or edges in this graph yet.</span>
+        <button type="button" class="sample-preview-btn" (click)="LoadSampleGraphPreview()">
+          Load Example Canon Graph
+        </button>
+      </div>
+    }
+
     @if (IsLoading) {
       <div class="semantic-graph-loading">
         <mj-loading text="Loading Semantic Graph &amp; Canon concepts..."></mj-loading>
@@ -143,6 +159,7 @@
         [ShowToolbar]="true"
         [ShowLegend]="true"
         [ShowInspector]="true"
+        [InspectorCustomTemplate]="canonInspectorTemplate"
         [Searchable]="true"
         (NodeSelected)="OnNodeSelected($event)"
         (NodeNavigated)="OnNodeNavigated($event)"
@@ -150,5 +167,69 @@
         (CategoryFilterChanged)="OnCategoryFilterChangedFromCanvas($event)">
       </mj-graph-view>
     }
+
+    <ng-template #canonInspectorTemplate let-node>
+      @if (node.Specification) {
+        <div class="canon-inspector-section">
+          <span class="canon-inspector-section-label">Specification</span>
+          <pre class="canon-inspector-spec">{{ node.Specification }}</pre>
+        </div>
+      }
+
+      @if (node.Conflicts && node.Conflicts.length > 0) {
+        <div class="canon-conflict-box">
+          <div class="canon-conflict-title">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            Authority Conflict (Contradicts Edge)
+          </div>
+          @for (conflict of node.Conflicts; track conflict.HigherAuthoritySummary) {
+            <div class="canon-conflict-details">
+              <div><strong>Higher Tier:</strong> {{ conflict.HigherAuthoritySummary }}</div>
+              <div><strong>Conflicting:</strong> {{ conflict.ConflictingSummary }}</div>
+              @if (conflict.ResolutionNote) {
+                <div class="canon-conflict-note">{{ conflict.ResolutionNote }}</div>
+              }
+            </div>
+          }
+        </div>
+      }
+
+      @if (node.Groundings && node.Groundings.length > 0) {
+        <div class="canon-inspector-section">
+          <span class="canon-inspector-section-label">Grounded MJ Primitives ({{ node.Groundings.length }})</span>
+          <div class="canon-grounding-list">
+            @for (g of node.Groundings; track g.TargetRecordID + g.EdgeLabel) {
+              <button
+                type="button"
+                class="canon-grounding-item"
+                (click)="OpenGroundingRecord(g)">
+                <span class="canon-grounding-edge">{{ g.EdgeLabel }}</span>
+                <span class="canon-grounding-target">{{ g.TargetDisplayName }}</span>
+                <i class="fa-solid fa-arrow-up-right-from-square canon-grounding-icon"></i>
+              </button>
+            }
+          </div>
+        </div>
+      }
+
+      @if (node.ProvenanceChunks && node.ProvenanceChunks.length > 0) {
+        <div class="canon-inspector-section">
+          <span class="canon-inspector-section-label">SourcedFrom Chunks ({{ node.ProvenanceChunks.length }})</span>
+          <div class="canon-chunk-list">
+            @for (chunk of node.ProvenanceChunks; track chunk.ChunkID) {
+              <div class="canon-chunk-card">
+                <div class="canon-chunk-header">
+                  <span>{{ chunk.SourceName }}{{ chunk.Locator ? ' · ' + chunk.Locator : '' }}</span>
+                  @if (chunk.AuthorityTier) {
+                    <span class="canon-chunk-tier">{{ chunk.AuthorityTier }}</span>
+                  }
+                </div>
+                <div class="canon-chunk-snippet">{{ chunk.Snippet }}</div>
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </ng-template>
   </main>
 </div>

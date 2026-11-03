@@ -1,7 +1,7 @@
 [
   {
     "fields": {
-      "TypeID": "@lookup:MJ: Test Types.Name=Integration Check",
+      "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
       "Name": "IT162 - Semantic Graph, Graph Concepts, and Content Pipeline Graph Overlay",
       "Description": "Verifies the Semantic Graph substrate (MJ: Graphs, MJ: Graph Concepts, MJ: Graph Edges, MJ: Graph Edge Types, MJ: Graph Edge Providers, ContentSource.GraphID), the Content Pipeline GraphStage overlay, and Executable Canon deterministic TaskGraph DAG similarity & workflow health telemetry.",
       "Status": "Active",

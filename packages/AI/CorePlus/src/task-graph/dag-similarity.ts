@@ -181,9 +181,17 @@ export interface PromotionDiscoveryOptions {
     readonly evolutionMinSimilarity?: number;
     /** Ignore trivial 1-node graphs when looking for multi-step workflow promotions. Default 2. */
     readonly minNodesPerGraph?: number;
+    /**
+     * Maximum number of executed task graphs to cluster in a single invocation (most recent runs
+     * are prioritized when the input exceeds this cap). Default `MAX_CLUSTERING_GRAPHS` (500).
+     */
+    readonly maxGraphsToCluster?: number;
     readonly fingerprintOptions?: DAGFingerprintOptions;
     readonly similarityWeights?: DAGSimilarityWeights;
 }
+
+/** Default upper bound on executed task graphs clustered per call to bound pairwise matrix memory/CPU. */
+export const MAX_CLUSTERING_GRAPHS = 500;
 
 /** Complete output of `DiscoverWorkflowPromotionCandidates`. */
 export interface WorkflowPromotionAnalysis {
@@ -607,8 +615,9 @@ export function DiscoverWorkflowPromotionCandidates(
     const existingMatchThreshold = options.existingWorkflowMatchThreshold ?? 0.85;
     const evolutionMinSim = options.evolutionMinSimilarity ?? 0.40;
     const minNodes = options.minNodesPerGraph ?? 2;
+    const maxGraphs = Math.max(1, options.maxGraphsToCluster ?? MAX_CLUSTERING_GRAPHS);
 
-    const eligibleRuns = executedGraphs.filter((r) => (r.Spec.tasks?.length ?? 0) >= minNodes);
+    let eligibleRuns = executedGraphs.filter((r) => (r.Spec.tasks?.length ?? 0) >= minNodes);
     if (eligibleRuns.length === 0) {
         return {
             Findings: [],
@@ -616,6 +625,16 @@ export function DiscoverWorkflowPromotionCandidates(
             EvolutionCandidates: [],
             DiscoveryGaps: [],
         };
+    }
+
+    if (eligibleRuns.length > maxGraphs) {
+        eligibleRuns = [...eligibleRuns]
+            .sort((a, b) => {
+                const timeA = a.ExecutedAt ? new Date(a.ExecutedAt).getTime() : 0;
+                const timeB = b.ExecutedAt ? new Date(b.ExecutedAt).getTime() : 0;
+                return timeB - timeA;
+            })
+            .slice(0, maxGraphs);
     }
 
     const runFingerprints = eligibleRuns.map((run) => ({
@@ -644,8 +663,12 @@ export function DiscoverWorkflowPromotionCandidates(
         }
     }
 
-    // Complete-linkage agglomerative clustering so every pair in a cluster has similarity >= simThreshold
-    const rawClusters = clusterByCompleteLinkage(n, simMatrix, simThreshold);
+    // Complete-linkage agglomerative clustering (pre-bucketed by ExactStructureHash and updated in O(k) per merge)
+    const rawClusters = clusterByCompleteLinkage(
+        runFingerprints.map((r) => r.fp),
+        simMatrix,
+        simThreshold,
+    );
 
     const findings: WorkflowClusterFinding[] = [];
 
@@ -781,24 +804,58 @@ export function DiscoverWorkflowPromotionCandidates(
 }
 
 /**
- * Complete-linkage agglomerative clustering: merges the closest pair of clusters as long as
- * ALL cross-cluster member pairs have similarity >= threshold.
+ * Complete-linkage agglomerative clustering:
+ * 1. Pre-buckets runs with identical `(ExactStructureHash, NodeCount, EdgeCount)` in O(N) because
+ *    isomorphic fingerprints have similarity 1.0 with each other and identical similarity to any third DAG.
+ * 2. Maintains a cluster-to-cluster complete-linkage similarity matrix and updates only the merged
+ *    row/column in O(k) (`Math.min(sim(a, k), sim(b, k))`) at each merge step.
  */
 function clusterByCompleteLinkage(
-    n: number,
+    fingerprints: readonly DAGFingerprint[],
     simMatrix: readonly (readonly number[])[],
     threshold: number,
 ): number[][] {
-    const clusters: number[][] = Array.from({ length: n }, (_, i) => [i]);
+    // Step 1: Pre-bucket exact structural matches
+    const bucketMap = new Map<string, number[]>();
+    for (let i = 0; i < fingerprints.length; i++) {
+        const fp = fingerprints[i];
+        const key = `${fp.ExactStructureHash}:${fp.NodeCount}:${fp.EdgeCount}`;
+        const existing = bucketMap.get(key);
+        if (existing) {
+            existing.push(i);
+        } else {
+            bucketMap.set(key, [i]);
+        }
+    }
 
-    while (clusters.length > 1) {
+    const clusters: number[][] = Array.from(bucketMap.values());
+    const kCount = clusters.length;
+    if (kCount <= 1) {
+        return clusters;
+    }
+
+    // Step 2: Initialize cluster-level complete-linkage similarity matrix
+    const clusterSim: number[][] = Array.from({ length: kCount }, () => new Array<number>(kCount).fill(1));
+    const active: boolean[] = new Array<boolean>(kCount).fill(true);
+    for (let i = 0; i < kCount; i++) {
+        for (let j = i + 1; j < kCount; j++) {
+            const sim = simMatrix[clusters[i][0]][clusters[j][0]];
+            clusterSim[i][j] = sim;
+            clusterSim[j][i] = sim;
+        }
+    }
+
+    let activeCount = kCount;
+    while (activeCount > 1) {
         let bestI = -1;
         let bestJ = -1;
         let bestMinSim = -1;
 
-        for (let i = 0; i < clusters.length; i++) {
-            for (let j = i + 1; j < clusters.length; j++) {
-                const minSim = completeLinkageSimilarity(clusters[i], clusters[j], simMatrix);
+        for (let i = 0; i < kCount; i++) {
+            if (!active[i]) continue;
+            for (let j = i + 1; j < kCount; j++) {
+                if (!active[j]) continue;
+                const minSim = clusterSim[i][j];
                 if (minSim >= threshold && minSim > bestMinSim) {
                     bestMinSim = minSim;
                     bestI = i;
@@ -811,27 +868,26 @@ function clusterByCompleteLinkage(
             break;
         }
 
-        clusters[bestI] = [...clusters[bestI], ...clusters[bestJ]];
-        clusters.splice(bestJ, 1);
-    }
+        // Merge bestJ into bestI and update complete-linkage similarities in O(k)
+        clusters[bestI].push(...clusters[bestJ]);
+        active[bestJ] = false;
+        activeCount--;
 
-    return clusters;
-}
-
-function completeLinkageSimilarity(
-    clusterA: readonly number[],
-    clusterB: readonly number[],
-    simMatrix: readonly (readonly number[])[],
-): number {
-    let minSim = Infinity;
-    for (const a of clusterA) {
-        for (const b of clusterB) {
-            if (simMatrix[a][b] < minSim) {
-                minSim = simMatrix[a][b];
-            }
+        for (let k = 0; k < kCount; k++) {
+            if (!active[k] || k === bestI) continue;
+            const mergedSim = Math.min(clusterSim[bestI][k], clusterSim[bestJ][k]);
+            clusterSim[bestI][k] = mergedSim;
+            clusterSim[k][bestI] = mergedSim;
         }
     }
-    return minSim;
+
+    const result: number[][] = [];
+    for (let i = 0; i < kCount; i++) {
+        if (active[i]) {
+            result.push(clusters[i]);
+        }
+    }
+    return result;
 }
 
 function computeClusterConfidence(

@@ -403,5 +403,50 @@ describe('GraphStage (@memberjunction/content-pipeline)', () => {
         expect(edgeTypes).toContain('Broader Than');
         expect(edgeTypes).toContain('Measures'); // MJ: Queries included in schema-and-queries mode
         expect(edgeTypes).not.toContain('Implements'); // MJ: Actions excluded in schema-and-queries mode
+        expect(synth.Edges.every((e) => e.Origin === 'Inferred')).toBe(true);
+    });
+
+    it('preserves existing concept Status (e.g., Deprecated) and keeps new edges Proposed in propose-only mode', async () => {
+        store.ExistingConcepts = [
+            {
+                ConceptID: 'EXISTING-DEPRECATED-POLICY',
+                Name: 'Legacy Paper Check Policy',
+                ConceptType: 'Policy',
+                Status: 'Deprecated',
+                AuthorityTier: 'ExecutiveSOP',
+            },
+        ];
+
+        const stage = new GraphStage();
+        const record = buildWorkingItemWithChunks([
+            {
+                recordId: 'CHUNK-PAPER-CHECK-1',
+                decorator: 'Finance > Legacy Paper Check Policy',
+                text: 'Legacy Paper Check Policy required manual countersignatures on paper checks.',
+            },
+        ]);
+
+        const outcome = await stage.Run(
+            record,
+            buildStageContext({
+                GraphOverlay: {
+                    EnableGraphOverlay: true,
+                    GraphID: 'GRAPH-CANON-GOV',
+                    TargetGraphType: 'Canon',
+                    ConceptTaxonomyMode: 'propose-only',
+                },
+                GraphOverlayStore: store,
+            }),
+        );
+
+        expect(outcome.Status).toBe('Complete');
+        const summary = record.GetExtension<GraphStageExecutionSummary>(GRAPH_STAGE, 'summary')!;
+        expect(summary.SynthesizedResults).toHaveLength(1);
+        expect(summary.SynthesizedResults[0].ConceptID).toBe('EXISTING-DEPRECATED-POLICY');
+        expect(summary.SynthesizedResults[0].Status).toBe('Deprecated');
+        expect(summary.SynthesizedResults[0].EdgeStatus).toBe('Proposed');
+        expect(store.SavedEdges.length).toBeGreaterThan(0);
+        expect(store.SavedEdges.every((e) => e.Status === 'Proposed')).toBe(true);
+        expect(store.SavedEdges.every((e) => e.Edge.Origin === 'Inferred')).toBe(true);
     });
 });

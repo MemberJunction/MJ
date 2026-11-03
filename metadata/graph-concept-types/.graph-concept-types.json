@@ -2,97 +2,85 @@
   {
     "fields": {
       "Name": "Policy",
-      "Description": "Governing rules, eligibility requirements, compliance mandates, approval thresholds, grace periods, and exception handling procedures.",
+      "Description": "Governing rule, threshold, requirement, compliance mandate, or exception criterion.",
       "Rank": 10,
       "IconClass": "fa-solid fa-gavel",
       "Status": "Active"
     },
     "primaryKey": {
-      "ID": "B2F6C8D1-5E22-4A3B-9D81-200000000001"
-    },
-    "sync": {
-      "lastModified": "2026-11-02T23:24:15.636Z",
-      "checksum": "00188625e2d25e645681be1fcf8d53d90a1e64636c2dbc94f14671d46635fac0"
+      "ID": "25B4B503-6623-4266-9C2A-E2F96F4A47BC"
     }
   },
   {
     "fields": {
       "Name": "Metric",
-      "Description": "Canonical KPIs, financial formulas, retention calculations, scoring definitions, and quantitative benchmarks.",
+      "Description": "Quantifiable KPI, formula, financial measure, retention rate, or operational score.",
       "Rank": 20,
       "IconClass": "fa-solid fa-chart-line",
       "Status": "Active"
     },
     "primaryKey": {
-      "ID": "B2F6C8D1-5E22-4A3B-9D81-200000000002"
-    },
-    "sync": {
-      "lastModified": "2026-11-02T23:24:15.661Z",
-      "checksum": "8eda406d290d0f79c574f209026b627db22cc8182ec4b9dd5e8ea18021a8af6d"
+      "ID": "93D22E29-54F7-4B02-93D2-6B231944027D"
     }
   },
   {
     "fields": {
       "Name": "Process",
-      "Description": "Multi-step operational procedures, standard operating workflows, lifecycle stages, and escalation playbooks.",
+      "Description": "Repeatable business workflow, operational SOP, lifecycle transition, or approval sequence.",
       "Rank": 30,
       "IconClass": "fa-solid fa-gears",
       "Status": "Active"
     },
     "primaryKey": {
-      "ID": "B2F6C8D1-5E22-4A3B-9D81-200000000003"
-    },
-    "sync": {
-      "lastModified": "2026-11-02T23:24:15.675Z",
-      "checksum": "1d4c0f05b2b4c2f67bfeab36dc7aa89d227d615b01ec8361e6384d1b8f0d9d8f"
+      "ID": "E5459B71-EF30-453A-9A2C-D3050EEBD7B2"
     }
   },
   {
     "fields": {
       "Name": "Role",
-      "Description": "Organizational roles, committees, fiduciary responsibilities, decision authorities, and ownership designations.",
+      "Description": "Organizational persona, steward, committee office, or decision-making authority.",
       "Rank": 40,
       "IconClass": "fa-solid fa-user-shield",
       "Status": "Active"
     },
     "primaryKey": {
-      "ID": "B2F6C8D1-5E22-4A3B-9D81-200000000004"
-    },
-    "sync": {
-      "lastModified": "2026-11-02T23:24:15.689Z",
-      "checksum": "60a942bde1d8799719dcfc82a0a9d8366fbd2ada8154e79e39a3990f54577fa1"
+      "ID": "60905F1F-EBEF-4955-9972-AB974189C33E"
     }
   },
   {
     "fields": {
       "Name": "Domain",
-      "Description": "High-level subject areas, functional divisions, or taxonomy umbrellas that group narrower concepts.",
+      "Description": "High-level subject area, functional department, or taxonomy umbrella grouping related concepts.",
       "Rank": 50,
       "IconClass": "fa-solid fa-layer-group",
       "Status": "Active"
     },
     "primaryKey": {
-      "ID": "B2F6C8D1-5E22-4A3B-9D81-200000000005"
-    },
-    "sync": {
-      "lastModified": "2026-11-02T23:24:15.701Z",
-      "checksum": "a9aa544c9302f95ddf04945b932a7810064d96d82836a2fe2add270fb6e1a860"
+      "ID": "56FE6257-2FA9-4176-BFE8-D75FCE58B02E"
     }
   },
   {
     "fields": {
       "Name": "Term",
-      "Description": "Domain vocabulary, acronyms, entity definitions, and canonical terminology.",
+      "Description": "Canonical vocabulary term, acronym, entity cohort definition, or domain glossary entry.",
       "Rank": 60,
       "IconClass": "fa-solid fa-book-bookmark",
       "Status": "Active"
     },
     "primaryKey": {
-      "ID": "B2F6C8D1-5E22-4A3B-9D81-200000000006"
+      "ID": "C037123B-AE2A-4A4B-A1D8-5F279FBD6BF7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Custom",
+      "Description": "Organization-defined custom concept classification.",
+      "Rank": 100,
+      "IconClass": "fa-solid fa-circle-dot",
+      "Status": "Active"
     },
-    "sync": {
-      "lastModified": "2026-11-02T23:24:15.715Z",
-      "checksum": "092e83e48adfdaa6bbdca3b623ba064fbd161a7d0c1c2fb2c821385801ff7c6b"
+    "primaryKey": {
+      "ID": "FA303758-455B-45B1-8728-CCF2CDFE9FE4"
     }
   }
 ]

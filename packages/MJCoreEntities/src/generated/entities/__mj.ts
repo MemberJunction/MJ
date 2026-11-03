@@ -15722,6 +15722,12 @@ export const MJContentSourceSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Scheduled Jobs (vwScheduledJobs.ID)
         * * Description: Optional link to the Scheduled Job that runs this content source on a recurring basis. Replaces the retired ScheduledActionID link; the job is of type Action and carries its action + parameters in ScheduledJob.Configuration.`),
+    GraphID: z.string().nullable().describe(`
+        * * Field Name: GraphID
+        * * Display Name: Graph ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
+        * * Description: Optional target Semantic Graph (MJ: Graphs) that this Content Source populates when the Content Pipeline Graph overlay stage runs. Multiple Content Sources can share the same GraphID.`),
     FieldConfidence: z.string().nullable().describe(`
         * * Field Name: FieldConfidence
         * * Display Name: Field Confidence
@@ -15743,12 +15749,6 @@ export const MJContentSourceSchema = z.object({
         * * Display Name: Last Synced At
         * * SQL Data Type: datetimeoffset
         * * Description: When this source last completed a full Sync walk (reconciling removals). Stamped with the time a completed sync walk started. The shipped Sync Record Process selects sources by LastSyncedAt (LastSyncedAt IS NULL OR LastSyncedAt < DATEADD(day, -30, GETUTCDATE())), never by ForceDiscovery; to force a sync, set LastSyncedAt back or to NULL.`),
-    GraphID: z.string().nullable().describe(`
-        * * Field Name: GraphID
-        * * Display Name: Graph
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
-        * * Description: Optional target Semantic Graph (MJ: Graphs) that this Content Source populates when the Content Pipeline Graph overlay stage runs. Multiple Content Sources can share the same GraphID.`),
     ContentType: z.string().describe(`
         * * Field Name: ContentType
         * * Display Name: Content Type Name
@@ -15783,7 +15783,7 @@ export const MJContentSourceSchema = z.object({
         * * SQL Data Type: nvarchar(200)`),
     Graph: z.string().nullable().describe(`
         * * Field Name: Graph
-        * * Display Name: Graph Name
+        * * Display Name: Graph
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -23850,6 +23850,60 @@ export const MJGeneratedCodeSchema = z.object({
 export type MJGeneratedCodeEntityType = z.infer<typeof MJGeneratedCodeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Graph Authority Tiers
+ */
+export const MJGraphAuthorityTierSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique display name of the authority tier (e.g., Bylaws, Board Policy, Executive SOP, Department Practice, Reference, Inferred).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Plain-language description of what sources belong to this authority tier and how conflicts involving this tier should be resolved.`),
+    Rank: z.number().describe(`
+        * * Field Name: Rank
+        * * Display Name: Rank
+        * * SQL Data Type: int
+        * * Default Value: 20
+        * * Description: Numeric evidentiary precedence weight of the authority tier (higher numbers outrank lower numbers during conflict resolution, e.g., 100 for Bylaws vs 20 for Reference).`),
+    IconClass: z.string().nullable().describe(`
+        * * Field Name: IconClass
+        * * Display Name: Icon Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Optional Font Awesome CSS icon class used to render authority tier badges in the UI.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Operational status of the authority tier (Active or Inactive).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJGraphAuthorityTierEntityType = z.infer<typeof MJGraphAuthorityTierSchema>;
+
+/**
  * zod schema definition for the entity MJ: Graph Concept Types
  */
 export const MJGraphConceptTypeSchema = z.object({
@@ -23867,7 +23921,7 @@ export const MJGraphConceptTypeSchema = z.object({
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: Plain-language definition and LLM extraction guidance describing what qualifies as a concept of this type.`),
+        * * Description: Plain-language definition and classification guidance describing what qualifies as a concept of this type.`),
     Rank: z.number().describe(`
         * * Field Name: Rank
         * * Display Name: Rank
@@ -23914,12 +23968,12 @@ export const MJGraphConceptSchema = z.object({
         * * Default Value: newsequentialid()`),
     GraphID: z.string().describe(`
         * * Field Name: GraphID
-        * * Display Name: Graph
+        * * Display Name: Graph ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent Concept
+        * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Graph Concepts (vwGraphConcepts.ID)`),
     Name: z.string().describe(`
@@ -23929,10 +23983,16 @@ export const MJGraphConceptSchema = z.object({
         * * Description: Canonical name of the concept, unique within its owning GraphID.`),
     ConceptTypeID: z.string().describe(`
         * * Field Name: ConceptTypeID
-        * * Display Name: Concept Type
+        * * Display Name: Concept Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Graph Concept Types (vwGraphConceptTypes.ID)
         * * Description: Foreign key to GraphConceptType classifying the structural role and priority rank of this concept.`),
+    AuthorityTierID: z.string().nullable().describe(`
+        * * Field Name: AuthorityTierID
+        * * Display Name: Authority Tier ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Authority Tiers (vwGraphAuthorityTiers.ID)
+        * * Description: Optional foreign key to GraphAuthorityTier indicating the highest evidentiary authority tier backing this concept.`),
     Description: z.string().describe(`
         * * Field Name: Description
         * * Display Name: Description
@@ -23948,20 +24008,6 @@ export const MJGraphConceptSchema = z.object({
         * * Display Name: Synonyms
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of alternative names, acronyms, and surface forms that resolve to this concept.`),
-    AuthorityTier: z.union([z.literal('BoardPolicy'), z.literal('Bylaws'), z.literal('DepartmentPractice'), z.literal('ExecutiveSOP'), z.literal('Inferred'), z.literal('Reference')]).describe(`
-        * * Field Name: AuthorityTier
-        * * Display Name: Authority Tier
-        * * SQL Data Type: nvarchar(50)
-        * * Default Value: Reference
-    * * Value List Type: List
-    * * Possible Values 
-    *   * BoardPolicy
-    *   * Bylaws
-    *   * DepartmentPractice
-    *   * ExecutiveSOP
-    *   * Inferred
-    *   * Reference
-        * * Description: Highest evidentiary authority tier backing this concept: Bylaws, BoardPolicy, ExecutiveSOP, DepartmentPractice, Reference, or Inferred.`),
     Status: z.union([z.literal('Approved'), z.literal('Deprecated'), z.literal('Draft'), z.literal('Proposed')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
@@ -23986,15 +24032,19 @@ export const MJGraphConceptSchema = z.object({
         * * Default Value: getutcdate()`),
     Graph: z.string().describe(`
         * * Field Name: Graph
-        * * Display Name: Graph Name
+        * * Display Name: Graph
         * * SQL Data Type: nvarchar(255)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Name
+        * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
     ConceptType: z.string().describe(`
         * * Field Name: ConceptType
-        * * Display Name: Concept Type Name
+        * * Display Name: Concept Type
+        * * SQL Data Type: nvarchar(100)`),
+    AuthorityTier: z.string().nullable().describe(`
+        * * Field Name: AuthorityTier
+        * * Display Name: Authority Tier
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -24011,7 +24061,7 @@ export const MJGraphEdgeProviderSchema = z.object({
         * * Default Value: newsequentialid()`),
     GraphID: z.string().describe(`
         * * Field Name: GraphID
-        * * Display Name: Graph
+        * * Display Name: Graph ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)`),
     Name: z.string().describe(`
@@ -24042,7 +24092,7 @@ export const MJGraphEdgeProviderSchema = z.object({
         * * Description: Execution order of this provider relative to other providers on the same graph.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Active
+        * * Display Name: Is Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When 1, this provider participates in graph expansion queries; when 0, it is skipped.`),
@@ -24125,7 +24175,7 @@ export const MJGraphEdgeTypeSchema = z.object({
         * * Default Value: newsequentialid()`),
     GraphID: z.string().nullable().describe(`
         * * Field Name: GraphID
-        * * Display Name: Graph
+        * * Display Name: Graph ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)`),
     Name: z.string().describe(`
@@ -24173,7 +24223,7 @@ export const MJGraphEdgeTypeSchema = z.object({
         * * Default Value: getutcdate()`),
     Graph: z.string().nullable().describe(`
         * * Field Name: Graph
-        * * Display Name: Graph Details
+        * * Display Name: Graph
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -24190,17 +24240,17 @@ export const MJGraphEdgeSchema = z.object({
         * * Default Value: newsequentialid()`),
     GraphID: z.string().describe(`
         * * Field Name: GraphID
-        * * Display Name: Graph
+        * * Display Name: Graph ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)`),
     EdgeTypeID: z.string().describe(`
         * * Field Name: EdgeTypeID
-        * * Display Name: Edge Type
+        * * Display Name: Edge Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Graph Edge Types (vwGraphEdgeTypes.ID)`),
     SourceEntityID: z.string().describe(`
         * * Field Name: SourceEntityID
-        * * Display Name: Source Entity
+        * * Display Name: Source Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     SourceRecordID: z.string().describe(`
@@ -24210,7 +24260,7 @@ export const MJGraphEdgeSchema = z.object({
         * * Description: Record ID of the source node (compact URL segment for composite primary keys), paired with SourceEntityID.`),
     TargetEntityID: z.string().describe(`
         * * Field Name: TargetEntityID
-        * * Display Name: Target Entity
+        * * Display Name: Target Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     TargetRecordID: z.string().describe(`
@@ -24272,19 +24322,19 @@ export const MJGraphEdgeSchema = z.object({
         * * Default Value: getutcdate()`),
     Graph: z.string().describe(`
         * * Field Name: Graph
-        * * Display Name: Graph Name
+        * * Display Name: Graph
         * * SQL Data Type: nvarchar(255)`),
     EdgeType: z.string().describe(`
         * * Field Name: EdgeType
-        * * Display Name: Edge Type Name
+        * * Display Name: Edge Type
         * * SQL Data Type: nvarchar(100)`),
     SourceEntity: z.string().describe(`
         * * Field Name: SourceEntity
-        * * Display Name: Source Entity Name
+        * * Display Name: Source Entity
         * * SQL Data Type: nvarchar(255)`),
     TargetEntity: z.string().describe(`
         * * Field Name: TargetEntity
-        * * Display Name: Target Entity Name
+        * * Display Name: Target Entity
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -24371,7 +24421,7 @@ export const MJGraphSchema = z.object({
         * * Description: Plain-language description of the domain, purpose, and governance scope of this graph.`),
     GraphTypeID: z.string().describe(`
         * * Field Name: GraphTypeID
-        * * Display Name: Graph Type
+        * * Display Name: Graph Type ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Graph Types (vwGraphTypes.ID)
         * * Description: Foreign key to GraphType defining the semantic classification of this graph and whether it feeds institutional Canon.`),
@@ -24407,7 +24457,7 @@ export const MJGraphSchema = z.object({
         * * Default Value: getutcdate()`),
     GraphType: z.string().describe(`
         * * Field Name: GraphType
-        * * Display Name: Graph Type Name
+        * * Display Name: Graph Type
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -86431,8 +86481,10 @@ export interface MJContentSourceEntity_IContentSourceGraphOverlayConfig {
      * - 'free-flow': synthesize and merge GraphConcepts across the target Graph without subtree restrictions.
      */
     ConceptTaxonomyMode?: 'constrained' | 'auto-grow' | 'free-flow';
-    /** Default evidentiary authority tier assigned to concepts synthesized from this Content Source. */
-    DefaultAuthorityTier?: 'Bylaws' | 'BoardPolicy' | 'ExecutiveSOP' | 'DepartmentPractice' | 'Reference' | 'Inferred';
+    /** Default evidentiary authority tier name (from MJ: Graph Authority Tiers) assigned to concepts synthesized from this Content Source. */
+    DefaultAuthorityTier?: string;
+    /** Optional default GraphAuthorityTier ID assigned to concepts synthesized from this Content Source. */
+    DefaultAuthorityTierID?: string;
     /** Whether to synthesize higher-level GraphConcept records from chunk clusters. Default true when Enabled. */
     SynthesizeConcepts?: boolean;
     /** Minimum supporting chunks required to form a new concept seed cluster. Default 2. */
@@ -86443,7 +86495,7 @@ export interface MJContentSourceEntity_IContentSourceGraphOverlayConfig {
     AutoApproveThreshold?: number;
     /** Whether to detect and emit Contradicts edges when chunks conflict on thresholds, dates, or formulas. Default true. */
     DetectContradictions?: boolean;
-    /** ClassFactory key for the BaseConceptSynthesizer implementation. Default 'ManagedPromptConceptSynthesizer'. */
+    /** ClassFactory key for the BaseConceptSynthesizer implementation. Default 'DeterministicConceptSynthesizer'. */
     SynthesizerKey?: string;
     /** Maximum concept clusters synthesized by the LLM per pipeline run. NULL/unset = unlimited. */
     MaxConceptsPerRun?: number;
@@ -86854,6 +86906,20 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
 
     /**
+    * * Field Name: GraphID
+    * * Display Name: Graph ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
+    * * Description: Optional target Semantic Graph (MJ: Graphs) that this Content Source populates when the Content Pipeline Graph overlay stage runs. Multiple Content Sources can share the same GraphID.
+    */
+    get GraphID(): string | null {
+        return this.Get('GraphID');
+    }
+    set GraphID(value: string | null) {
+        this.Set('GraphID', value);
+    }
+
+    /**
     * * Field Name: FieldConfidence
     * * Display Name: Field Confidence
     * * SQL Data Type: nvarchar(MAX)
@@ -86904,20 +86970,6 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
     set LastSyncedAt(value: Date | null) {
         this.Set('LastSyncedAt', value);
-    }
-
-    /**
-    * * Field Name: GraphID
-    * * Display Name: Graph
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
-    * * Description: Optional target Semantic Graph (MJ: Graphs) that this Content Source populates when the Content Pipeline Graph overlay stage runs. Multiple Content Sources can share the same GraphID.
-    */
-    get GraphID(): string | null {
-        return this.Get('GraphID');
-    }
-    set GraphID(value: string | null) {
-        this.Set('GraphID', value);
     }
 
     /**
@@ -86994,7 +87046,7 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
 
     /**
     * * Field Name: Graph
-    * * Display Name: Graph Name
+    * * Display Name: Graph
     * * SQL Data Type: nvarchar(255)
     */
     get Graph(): string | null {
@@ -109008,11 +109060,147 @@ export class MJGeneratedCodeEntity extends BaseEntity<MJGeneratedCodeEntityType>
 
 
 /**
+ * MJ: Graph Authority Tiers - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GraphAuthorityTier
+ * * Base View: vwGraphAuthorityTiers
+ * * @description Configurable evidentiary authority tiers (such as Governing Charter / Bylaws, Board Policy, Executive SOP, Department Practice, Reference, or Inferred) with numeric precedence weight (Rank) used for Canon conflict resolution.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graph Authority Tiers')
+export class MJGraphAuthorityTierEntity extends BaseEntity<MJGraphAuthorityTierEntityType> {
+    /**
+    * Loads the MJ: Graph Authority Tiers record from the database
+    * @param ID: string - primary key value to load the MJ: Graph Authority Tiers record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphAuthorityTierEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique display name of the authority tier (e.g., Bylaws, Board Policy, Executive SOP, Department Practice, Reference, Inferred).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Plain-language description of what sources belong to this authority tier and how conflicts involving this tier should be resolved.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Rank
+    * * Display Name: Rank
+    * * SQL Data Type: int
+    * * Default Value: 20
+    * * Description: Numeric evidentiary precedence weight of the authority tier (higher numbers outrank lower numbers during conflict resolution, e.g., 100 for Bylaws vs 20 for Reference).
+    */
+    get Rank(): number {
+        return this.Get('Rank');
+    }
+    set Rank(value: number) {
+        this.Set('Rank', value);
+    }
+
+    /**
+    * * Field Name: IconClass
+    * * Display Name: Icon Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Optional Font Awesome CSS icon class used to render authority tier badges in the UI.
+    */
+    get IconClass(): string | null {
+        return this.Get('IconClass');
+    }
+    set IconClass(value: string | null) {
+        this.Set('IconClass', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Operational status of the authority tier (Active or Inactive).
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: Graph Concept Types - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: GraphConceptType
  * * Base View: vwGraphConceptTypes
- * * @description Configurable semantic concept classifications (such as Policy, Metric, Process, Role, Domain, or Term) with rank ordering and synthesis guidance, seeded via metadata and extensible per organization.
+ * * @description Configurable semantic concept classifications (such as Policy, Metric, Process, Role, Domain, or Term) with rank ordering and classification guidance, seeded via metadata and extensible per organization.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -109067,7 +109255,7 @@ export class MJGraphConceptTypeEntity extends BaseEntity<MJGraphConceptTypeEntit
     * * Field Name: Description
     * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: Plain-language definition and LLM extraction guidance describing what qualifies as a concept of this type.
+    * * Description: Plain-language definition and classification guidance describing what qualifies as a concept of this type.
     */
     get Description(): string | null {
         return this.Get('Description');
@@ -109148,7 +109336,7 @@ export class MJGraphConceptTypeEntity extends BaseEntity<MJGraphConceptTypeEntit
  * * Schema: __mj
  * * Base Table: GraphConcept
  * * Base View: vwGraphConcepts
- * * @description Higher-level semantic concept nodes scoped to a Graph (referencing GraphConceptType such as Policy, Metric, Process, Role, Domain, or Term), serving as organizing hubs for Canon governance and Content Source GraphRAG overlays.
+ * * @description Higher-level semantic concept nodes scoped to a Graph (referencing GraphConceptType and GraphAuthorityTier), serving as organizing hubs for Canon governance and Content Source GraphRAG overlays.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -109188,7 +109376,7 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
 
     /**
     * * Field Name: GraphID
-    * * Display Name: Graph
+    * * Display Name: Graph ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
     */
@@ -109201,7 +109389,7 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent Concept
+    * * Display Name: Parent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Graph Concepts (vwGraphConcepts.ID)
     */
@@ -109227,7 +109415,7 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
 
     /**
     * * Field Name: ConceptTypeID
-    * * Display Name: Concept Type
+    * * Display Name: Concept Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Graph Concept Types (vwGraphConceptTypes.ID)
     * * Description: Foreign key to GraphConceptType classifying the structural role and priority rank of this concept.
@@ -109237,6 +109425,20 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
     }
     set ConceptTypeID(value: string) {
         this.Set('ConceptTypeID', value);
+    }
+
+    /**
+    * * Field Name: AuthorityTierID
+    * * Display Name: Authority Tier ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Authority Tiers (vwGraphAuthorityTiers.ID)
+    * * Description: Optional foreign key to GraphAuthorityTier indicating the highest evidentiary authority tier backing this concept.
+    */
+    get AuthorityTierID(): string | null {
+        return this.Get('AuthorityTierID');
+    }
+    set AuthorityTierID(value: string | null) {
+        this.Set('AuthorityTierID', value);
     }
 
     /**
@@ -109276,28 +109478,6 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
     }
     set Synonyms(value: string | null) {
         this.Set('Synonyms', value);
-    }
-
-    /**
-    * * Field Name: AuthorityTier
-    * * Display Name: Authority Tier
-    * * SQL Data Type: nvarchar(50)
-    * * Default Value: Reference
-    * * Value List Type: List
-    * * Possible Values 
-    *   * BoardPolicy
-    *   * Bylaws
-    *   * DepartmentPractice
-    *   * ExecutiveSOP
-    *   * Inferred
-    *   * Reference
-    * * Description: Highest evidentiary authority tier backing this concept: Bylaws, BoardPolicy, ExecutiveSOP, DepartmentPractice, Reference, or Inferred.
-    */
-    get AuthorityTier(): 'BoardPolicy' | 'Bylaws' | 'DepartmentPractice' | 'ExecutiveSOP' | 'Inferred' | 'Reference' {
-        return this.Get('AuthorityTier');
-    }
-    set AuthorityTier(value: 'BoardPolicy' | 'Bylaws' | 'DepartmentPractice' | 'ExecutiveSOP' | 'Inferred' | 'Reference') {
-        this.Set('AuthorityTier', value);
     }
 
     /**
@@ -109342,7 +109522,7 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
 
     /**
     * * Field Name: Graph
-    * * Display Name: Graph Name
+    * * Display Name: Graph
     * * SQL Data Type: nvarchar(255)
     */
     get Graph(): string {
@@ -109351,7 +109531,7 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent Name
+    * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -109360,11 +109540,20 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
 
     /**
     * * Field Name: ConceptType
-    * * Display Name: Concept Type Name
+    * * Display Name: Concept Type
     * * SQL Data Type: nvarchar(100)
     */
     get ConceptType(): string {
         return this.Get('ConceptType');
+    }
+
+    /**
+    * * Field Name: AuthorityTier
+    * * Display Name: Authority Tier
+    * * SQL Data Type: nvarchar(100)
+    */
+    get AuthorityTier(): string | null {
+        return this.Get('AuthorityTier');
     }
 }
 
@@ -109414,7 +109603,7 @@ export class MJGraphEdgeProviderEntity extends BaseEntity<MJGraphEdgeProviderEnt
 
     /**
     * * Field Name: GraphID
-    * * Display Name: Graph
+    * * Display Name: Graph ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
     */
@@ -109493,7 +109682,7 @@ export class MJGraphEdgeProviderEntity extends BaseEntity<MJGraphEdgeProviderEnt
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Active
+    * * Display Name: Is Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When 1, this provider participates in graph expansion queries; when 0, it is skipped.
@@ -109707,7 +109896,7 @@ export class MJGraphEdgeTypeEntity extends BaseEntity<MJGraphEdgeTypeEntityType>
 
     /**
     * * Field Name: GraphID
-    * * Display Name: Graph
+    * * Display Name: Graph ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
     */
@@ -109821,7 +110010,7 @@ export class MJGraphEdgeTypeEntity extends BaseEntity<MJGraphEdgeTypeEntityType>
 
     /**
     * * Field Name: Graph
-    * * Display Name: Graph Details
+    * * Display Name: Graph
     * * SQL Data Type: nvarchar(255)
     */
     get Graph(): string | null {
@@ -109875,7 +110064,7 @@ export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
 
     /**
     * * Field Name: GraphID
-    * * Display Name: Graph
+    * * Display Name: Graph ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
     */
@@ -109888,7 +110077,7 @@ export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
 
     /**
     * * Field Name: EdgeTypeID
-    * * Display Name: Edge Type
+    * * Display Name: Edge Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Graph Edge Types (vwGraphEdgeTypes.ID)
     */
@@ -109901,7 +110090,7 @@ export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
 
     /**
     * * Field Name: SourceEntityID
-    * * Display Name: Source Entity
+    * * Display Name: Source Entity ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -109927,7 +110116,7 @@ export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
 
     /**
     * * Field Name: TargetEntityID
-    * * Display Name: Target Entity
+    * * Display Name: Target Entity ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -110063,7 +110252,7 @@ export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
 
     /**
     * * Field Name: Graph
-    * * Display Name: Graph Name
+    * * Display Name: Graph
     * * SQL Data Type: nvarchar(255)
     */
     get Graph(): string {
@@ -110072,7 +110261,7 @@ export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
 
     /**
     * * Field Name: EdgeType
-    * * Display Name: Edge Type Name
+    * * Display Name: Edge Type
     * * SQL Data Type: nvarchar(100)
     */
     get EdgeType(): string {
@@ -110081,7 +110270,7 @@ export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
 
     /**
     * * Field Name: SourceEntity
-    * * Display Name: Source Entity Name
+    * * Display Name: Source Entity
     * * SQL Data Type: nvarchar(255)
     */
     get SourceEntity(): string {
@@ -110090,7 +110279,7 @@ export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
 
     /**
     * * Field Name: TargetEntity
-    * * Display Name: Target Entity Name
+    * * Display Name: Target Entity
     * * SQL Data Type: nvarchar(255)
     */
     get TargetEntity(): string {
@@ -110320,7 +110509,7 @@ export class MJGraphEntity extends BaseEntity<MJGraphEntityType> {
 
     /**
     * * Field Name: GraphTypeID
-    * * Display Name: Graph Type
+    * * Display Name: Graph Type ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Graph Types (vwGraphTypes.ID)
     * * Description: Foreign key to GraphType defining the semantic classification of this graph and whether it feeds institutional Canon.
@@ -110390,7 +110579,7 @@ export class MJGraphEntity extends BaseEntity<MJGraphEntityType> {
 
     /**
     * * Field Name: GraphType
-    * * Display Name: Graph Type Name
+    * * Display Name: Graph Type
     * * SQL Data Type: nvarchar(100)
     */
     get GraphType(): string {

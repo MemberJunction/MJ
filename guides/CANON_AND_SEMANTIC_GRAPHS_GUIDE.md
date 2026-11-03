@@ -3,9 +3,9 @@
 **Read this before building or customizing Semantic Graphs (`MJ: Graphs`, `MJ: Graph Concepts`, `MJ: Graph Edges`), configuring Content Pipeline Graph Overlays (`GraphStage`), or working with Executable Canon workflow promotion and health telemetry.**
 
 - **Packages**:
-  - [`@memberjunction/core-entities`](../packages/MJCoreEntities/README.md) — Generated entity classes for `MJ: Graph Types`, `MJ: Graph Concept Types`, `MJ: Graphs`, `MJ: Graph Concepts`, `MJ: Graph Edge Types`, `MJ: Graph Edge Type Endpoints`, `MJ: Graph Edge Providers`, `MJ: Graph Edges`, and `MJ: Content Sources` (`GraphID`, `Configuration.GraphOverlay`)
-  - [`@memberjunction/content-pipeline-base`](../packages/ContentPipeline/base/README.md) — `ContentSourceGraphOverlayConfig`, `ResolveGraphOverlayConfig`, `GraphTypeDescriptor`, `GraphConceptTypeDescriptor`, `ClusterContentIntoConceptSeeds`, `BaseConceptSynthesizer`, `AuthorityTierPrecedence`
-  - [`@memberjunction/content-pipeline`](../packages/ContentPipeline/engine/README.md) — `GraphStage` (`@RegisterClass(BasePipelineStage, 'Graph')`) and `ManagedPromptConceptSynthesizer`
+  - [`@memberjunction/core-entities`](../packages/MJCoreEntities/package.json) — Generated entity classes for `MJ: Graph Types`, `MJ: Graph Concept Types`, `MJ: Graph Authority Tiers`, `MJ: Graphs`, `MJ: Graph Concepts`, `MJ: Graph Edge Types`, `MJ: Graph Edge Type Endpoints`, `MJ: Graph Edge Providers`, `MJ: Graph Edges`, and `MJ: Content Sources` (`GraphID`, `Configuration.GraphOverlay`)
+  - [`@memberjunction/content-pipeline-base`](../packages/ContentPipeline/base/README.md) — `ContentSourceGraphOverlayConfig`, `ResolveGraphOverlayConfig`, `GraphTypeDescriptor`, `GraphConceptTypeDescriptor`, `GraphAuthorityTierDescriptor`, `ClusterContentIntoConceptSeeds`, `BaseConceptSynthesizer`, `AuthorityTierPrecedence`
+  - [`@memberjunction/content-pipeline`](../packages/ContentPipeline/engine/README.md) — `GraphStage` (`@RegisterClass(BasePipelineStage, 'Graph')`), `EntityGraphOverlayStore`, and `DeterministicConceptSynthesizer`
   - [`@memberjunction/ai-core-plus`](../packages/AI/CorePlus/README.md) — Deterministic `TaskGraph` DAG fingerprinting, Weisfeiler-Lehman similarity, clustering, promotion discovery (`dag-similarity.ts`), and saved-workflow health telemetry (`workflow-telemetry.ts`)
 - **Companion Guides**:
   - **[Alternate Base Views Guide](ALTERNATE_BASE_VIEWS_GUIDE.md)** — **Canon Layer 1**: Governed SQL cohort views (`MJ: Entity Alternate Base Views`) that define canonical entity slices (e.g., *Active Subscribers*)
