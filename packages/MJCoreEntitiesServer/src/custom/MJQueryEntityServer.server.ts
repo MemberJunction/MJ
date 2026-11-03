@@ -767,10 +767,20 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         const md = this.extractionProvider;
         if (!md) return;
 
-        // Look up existing record from QueryEngine cache instead of a RunView call
-        const existing = QueryEngine.Instance.QuerySQLs.find(
-            qs => UUIDsEqual(qs.QueryID, this.ID) && UUIDsEqual(qs.SQLDialectID, targetDialect.ID)
-        );
+        // Read through this entity's own provider rather than QueryEngine's cache. A cached record is
+        // bound to whichever provider loaded the engine, so saving it here would write outside the
+        // caller's transaction, blind to what that transaction has written.
+        const existingResult = await md.RunView<MJQuerySQLEntity>({
+            EntityName: 'MJ: Query SQLs',
+            ExtraFilter: `QueryID='${EscapeSQLString(this.ID)}' AND SQLDialectID='${EscapeSQLString(targetDialect.ID)}'`,
+            ResultType: 'entity_object',
+            BypassCache: true,
+        }, this.ContextCurrentUser);
+        if (!existingResult.Success) {
+            console.warn(`Query "${this.Name}" - Could not read QuerySQL record for dialect "${targetDialect.Name}": ${existingResult.ErrorMessage}`);
+            return;
+        }
+        const existing = existingResult.Results?.[0];
 
         let record: MJQuerySQLEntity;
         if (existing) {
