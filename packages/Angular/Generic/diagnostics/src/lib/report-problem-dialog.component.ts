@@ -63,8 +63,8 @@ function errorText(err: unknown): string {
                         class="mj-input"
                         [value]="ScrubberProfile"
                         (change)="OnScrubberProfileChange($event)">
-                        <option value="FullRaw">FullRaw (default): credentials removed, SQL and filter literals kept</option>
-                        <option value="Standard">Standard: credentials removed, SQL and filter literals replaced with ?</option>
+                        <option value="Standard">Standard (default): credentials removed, SQL and filter literals replaced with ?</option>
+                        <option value="FullRaw">FullRaw: credentials removed, SQL and filter literals kept</option>
                     </select>
                 </div>
 

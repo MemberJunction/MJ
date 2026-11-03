@@ -17,24 +17,27 @@ const CONTROL_SELECTOR = [
     '[role="checkbox"]',
     '[role="switch"]',
 ].join(', ');
-const FORM_FIELD_TAGS = new Set(['input', 'select', 'textarea']);
-const MAX_LABEL_LENGTH = 80;
 const MAX_MESSAGE_LENGTH = 300;
-const MAX_CLASS_NAMES = 2;
+const MAX_ATTRIBUTE_LENGTH = 60;
+/** Attributes a click breadcrumb may name, after `#id`. None of them holds visible text. */
+const DESCRIBED_ATTRIBUTES = ['role', 'type', 'name', 'data-testid', 'data-test-id'];
 
 /**
- * Names a clicked element for a breadcrumb. A control is named as `tag#id[type=…][name=…] "label"`,
- * with the label from `aria-label`, `title`, a field's placeholder or the control's own text.
- * A plain element is named as `tag#id.class`. A field's value and a plain element's text are never read.
+ * Names a clicked element for a breadcrumb as `tag#id[role=…][type=…][name=…][data-testid=…]`.
+ * A click inside a control names the control. Visible text, labels, titles, placeholders, classes
+ * and field values are never recorded; an identifier that repeats the element's text is left out.
  */
 export function DescribeClickTarget(clicked: Element): string {
-    const control = clicked.closest(CONTROL_SELECTOR);
-    if (!control) {
-        return `${clicked.tagName.toLowerCase()}${idPart(clicked)}${classPart(clicked)}`;
-    }
-    const tag = control.tagName.toLowerCase();
-    const label = controlLabel(control, tag);
-    return `${tag}${idPart(control)}${fieldPart(control, tag)}${label ? ` "${label}"` : ''}`;
+    const target = clicked.closest(CONTROL_SELECTOR) ?? clicked;
+    const text = (target.textContent ?? '').replace(/\s+/g, ' ').trim();
+    const usable = (value: string | null): value is string =>
+        !!value && value.length <= MAX_ATTRIBUTE_LENGTH && value.trim() !== text;
+    const id = usable(target.id) ? `#${target.id}` : '';
+    const attributes = DESCRIBED_ATTRIBUTES.map((name) => {
+        const value = target.getAttribute(name);
+        return usable(value) ? `[${name}=${value}]` : '';
+    }).join('');
+    return `${target.tagName.toLowerCase()}${id}${attributes}`;
 }
 
 /** The breadcrumb for a click, or `null` when the click did not hit an element. */
@@ -109,37 +112,6 @@ function recordSafely(record: (crumb: DiagnosticBreadcrumb) => void, build: () =
 
 function isElement(target: EventTarget | null): target is Element {
     return !!target && typeof (target as Element).closest === 'function';
-}
-
-function idPart(element: Element): string {
-    return element.id ? `#${element.id}` : '';
-}
-
-/** Up to two class names, without Angular's generated `ng-` classes. */
-function classPart(element: Element): string {
-    const names = (element.getAttribute('class') ?? '')
-        .split(/\s+/)
-        .filter((name) => name.length > 0 && !name.startsWith('ng-'))
-        .slice(0, MAX_CLASS_NAMES);
-    return names.map((name) => `.${name}`).join('');
-}
-
-function fieldPart(control: Element, tag: string): string {
-    if (!FORM_FIELD_TAGS.has(tag)) {
-        return '';
-    }
-    return ['type', 'name']
-        .map((attribute) => {
-            const value = control.getAttribute(attribute);
-            return value ? `[${attribute}=${value}]` : '';
-        })
-        .join('');
-}
-
-function controlLabel(control: Element, tag: string): string {
-    const ownText = FORM_FIELD_TAGS.has(tag) ? control.getAttribute('placeholder') : control.textContent;
-    const raw = control.getAttribute('aria-label') || control.getAttribute('title') || ownText || '';
-    return shorten(raw, MAX_LABEL_LENGTH);
 }
 
 /** Collapses whitespace and cuts the text to `max` characters. */

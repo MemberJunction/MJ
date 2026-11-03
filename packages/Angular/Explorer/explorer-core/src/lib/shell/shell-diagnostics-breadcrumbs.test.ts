@@ -37,4 +37,12 @@ describe('ShellComponent diagnostics route breadcrumbs', () => {
 
         expect(init).toContain('this.subscribeRouteBreadcrumbs();');
     });
+
+    it('reads the diagnostics server status once the user is signed in, so capture follows Diagnostics.Capture.Enabled', () => {
+        const source = readFileSync(new URL('./shell.component.ts', import.meta.url), 'utf8');
+        const start = source.indexOf('async InitializeShell()');
+        const afterUser = source.slice(source.indexOf("throw new Error('No current user found');", start));
+
+        expect(afterUser.slice(0, 400)).toContain('this.diagnosticsService?.LoadServerStatus()');
+    });
 });

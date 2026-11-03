@@ -121,21 +121,32 @@ export class MJDiagnosticBundleViewerComponent {
             this.cdr.markForCheck();
             return;
         }
+        try {
+            await this.showArchive(bytes);
+        } catch (err) {
+            this.showError(`The archive could not be read: ${err instanceof Error ? err.message : String(err)}`);
+        }
+        this.cdr.markForCheck();
+    }
+
+    /** Verifies and reads the archive; a failed verification is shown as the error. */
+    private async showArchive(bytes: Uint8Array): Promise<void> {
         const verification = await VerifyBundleArchive(bytes);
         if (!verification.valid || !verification.manifest) {
-            this.Manifest = null;
-            this.Findings = [];
-            this.VerificationError = verification.reason ?? 'Invalid .mjdiag archive';
-            this.FileCount = 0;
-            this.cdr.markForCheck();
+            this.showError(verification.reason ?? 'Invalid .mjdiag archive');
             return;
         }
-
         const parsed = ParseBundleDataFromArchive(verification);
         this.VerificationError = null;
         this.Manifest = verification.manifest;
         this.FileCount = Object.keys(verification.manifest.files).length;
         this.Findings = parsed.findings;
-        this.cdr.markForCheck();
+    }
+
+    private showError(message: string): void {
+        this.Manifest = null;
+        this.Findings = [];
+        this.VerificationError = message;
+        this.FileCount = 0;
     }
 }

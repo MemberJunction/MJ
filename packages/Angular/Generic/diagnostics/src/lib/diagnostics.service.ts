@@ -12,6 +12,7 @@ import {
     DiagnosticsStartSessionOperation,
     DiagnosticsStopSessionOperation,
     DiagnosticsGetMySessionStatusOperation,
+    DiagnosticsGetMySessionStatusOutput,
     DiagnosticsUploadClientCaptureOperation,
     DiagnosticsBuildBundleOperation,
     DiagnosticsGetBundlePreviewOperation,
@@ -40,6 +41,7 @@ import {
 import {
     GraphQLDataProvider,
     GraphQLResponseHeaders,
+    PACKAGE_VERSION,
     RegisterNetworkDiagnosticObserver,
     RegisterResponseHeaderObserver,
 } from '@memberjunction/graphql-dataprovider';
@@ -54,16 +56,16 @@ import {
 } from './live-recording';
 import { RegisterBreadcrumbListeners, RouteBreadcrumb } from './breadcrumbs';
 
-export const MJ_DIAGNOSTICS_IDB_NAME = 'MJ_Diagnostics';
-
 /**
- * Scrubber profile used when a caller gives none. It matches the server default (`ScrubLiterals = false`).
+ * Scrubber profile used when a caller gives none.
+ * `Standard` = Stage 1 credential scrubbing plus Stage 2, which replaces SQL and filter literals with `?`.
  * `FullRaw` = Stage 1 credential scrubbing only; SQL and filter literals are kept.
- * `Standard` = Stage 1 plus Stage 2, which replaces SQL and filter literals with `?`.
  * The bundle manifest records the same name in `scrubberProfile`.
  */
-export const DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE: DiagnosticScrubberProfile = 'FullRaw';
-const IDB_STORE_NAME = 'session_buffer';
+export const DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE: DiagnosticScrubberProfile = 'Standard';
+
+/** Shortest time between two uploads to one server watch session. */
+const TRIGGER_UPLOAD_INTERVAL_MS = 30_000;
 
 export interface ActiveRecordingState {
     isRecording: boolean;
@@ -120,6 +122,15 @@ interface ClientCapture {
     network: DiagnosticNetworkEntry[];
     telemetry: DiagnosticTelemetryEntry[];
     breadcrumbs: DiagnosticBreadcrumb[];
+}
+
+/** The environment block every upload and client bundle carries. */
+function clientEnvironment(mjVersion: string = PACKAGE_VERSION): { mjVersion: string; browserUserAgent: string; timezone: string } {
+    return {
+        mjVersion,
+        browserUserAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'headless',
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    };
 }
 
 /** The upload fields that carry a client capture. */
@@ -183,9 +194,16 @@ export class MJDiagnosticsService {
     private unregisterBreadcrumbListeners: (() => void) | null = null;
     /** True while a recording keeps telemetry on that was off before it started. */
     private telemetryEnabledByRecording = false;
-    private idbFlushTimer: ReturnType<typeof setTimeout> | null = null;
     private sessionIdHook: ((sessionId: string | null) => void) | null = null;
-    private readonly flushedTriggerSessions = new Set<string>();
+    /** Server sessions this service started or a Submit created; a trigger header naming one is ignored. */
+    private readonly ownSessions = new Set<string>();
+    /** Server watch sessions that triggered an upload, with the time of the last upload to each. */
+    private readonly triggerUploadTimes = new Map<string, number>();
+    /** The server's diagnostics status for the signed-in user; `null` until it is read. */
+    private serverStatus: DiagnosticsGetMySessionStatusOutput | null = null;
+    private serverStatusLoad: Promise<void> | null = null;
+    /** True while the background flight recorder listens for logs, telemetry and breadcrumbs. */
+    private backgroundCaptureOn = false;
     private unregisterNetworkObserver: (() => void) | null = null;
     private unregisterResponseHeaders: (() => void) | null = null;
     /** Server session this service started for the current live recording; stopped with the recording. */
@@ -236,15 +254,85 @@ export class MJDiagnosticsService {
     }
 
     /**
-     * Initializes background client-side capture inside NgZone.runOutsideAngular()
-     * so high-frequency log, telemetry, and performance events never trigger Angular CD.
+     * Starts listening for the server's `X-MJ-Diagnostic-Trigger` header and, when a user is signed
+     * in, reads the server status (see {@link LoadServerStatus}). Background capture starts only when
+     * the server reports `Diagnostics.Capture.Enabled`.
      */
     public Initialize(): void {
         if (this.initialized) {
             return;
         }
         this.initialized = true;
+        this.runOutsideZone(() => {
+            this.unregisterResponseHeaders = RegisterResponseHeaderObserver((headers) => {
+                this.onResponseHeaders(headers);
+            });
+        });
+        if (this.signedInProvider()) {
+            void this.LoadServerStatus();
+        }
+    }
 
+    /**
+     * Reads the server's diagnostics status for the signed-in user. Call it after sign-in.
+     * Background capture runs only while the status reports `CaptureEnabled === true`; a missing
+     * or failed status means off. `RequireLiteralScrubbing` forces the `Standard` profile.
+     */
+    public async LoadServerStatus(): Promise<void> {
+        const load = this.readServerStatus().then((status) => {
+            this.serverStatus = status;
+            this.applyCaptureSwitch(status?.CaptureEnabled === true);
+        });
+        this.serverStatusLoad = load;
+        await load;
+    }
+
+    /** True when the server requires literal scrubbing on every bundle. */
+    public get LiteralScrubbingRequired(): boolean {
+        return this.serverStatus?.RequireLiteralScrubbing === true;
+    }
+
+    private signedInProvider(): IMetadataProvider | null {
+        const provider = this.Provider ?? Metadata.Provider;
+        return provider?.CurrentUser ? provider : null;
+    }
+
+    private async readServerStatus(): Promise<DiagnosticsGetMySessionStatusOutput | null> {
+        try {
+            const provider = this.ProviderToUse;
+            const result = await new DiagnosticsGetMySessionStatusOperation().Execute(
+                { BrowserSessionID: BrowserSessionIdOf(provider) },
+                { provider },
+            );
+            return result.Success && result.Output ? result.Output : null;
+        } catch {
+            return null;
+        }
+    }
+
+    /** The profile a bundle is built with: `Standard` when the server requires literal scrubbing. */
+    private async effectiveProfile(requested: DiagnosticScrubberProfile | undefined): Promise<DiagnosticScrubberProfile> {
+        await this.serverStatusLoad;
+        return this.LiteralScrubbingRequired ? 'Standard' : requested ?? DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE;
+    }
+
+    private applyCaptureSwitch(enabled: boolean): void {
+        if (enabled && this.initialized) {
+            this.startBackgroundCapture();
+        } else if (!enabled) {
+            this.stopBackgroundCapture();
+        }
+    }
+
+    /**
+     * Starts the flight recorder inside NgZone.runOutsideAngular(), so high-frequency log,
+     * telemetry and click events never trigger Angular change detection.
+     */
+    private startBackgroundCapture(): void {
+        if (this.backgroundCaptureOn) {
+            return;
+        }
+        this.backgroundCaptureOn = true;
         this.runOutsideZone(() => {
             this.unregisterLoggerSink = RegisterLogSink((entry) => {
                 const severityMap: Record<string, DiagnosticLogEntry['severity']> = {
@@ -268,34 +356,27 @@ export class MJDiagnosticsService {
                 this.recordTelemetryEvent(event);
             });
 
-            this.unregisterResponseHeaders = RegisterResponseHeaderObserver((headers) => {
-                this.onResponseHeaders(headers);
-            });
-
             this.unregisterBreadcrumbListeners = RegisterBreadcrumbListeners((crumb) => this.RecordBreadcrumb(crumb));
         });
     }
 
-    /**
-     * Disposes listeners and timers.
-     */
-    public Dispose(): void {
-        if (this.unregisterLoggerSink) {
-            this.unregisterLoggerSink();
-            this.unregisterLoggerSink = null;
-        }
-        if (this.unsubscribeTelemetry) {
-            this.unsubscribeTelemetry();
-            this.unsubscribeTelemetry = null;
-        }
-        if (this.idbFlushTimer) {
-            clearTimeout(this.idbFlushTimer);
-            this.idbFlushTimer = null;
-        }
-        this.unregisterResponseHeaders?.();
-        this.unregisterResponseHeaders = null;
+    private stopBackgroundCapture(): void {
+        this.unregisterLoggerSink?.();
+        this.unregisterLoggerSink = null;
+        this.unsubscribeTelemetry?.();
+        this.unsubscribeTelemetry = null;
         this.unregisterBreadcrumbListeners?.();
         this.unregisterBreadcrumbListeners = null;
+        this.backgroundCaptureOn = false;
+    }
+
+    /**
+     * Disposes listeners.
+     */
+    public Dispose(): void {
+        this.stopBackgroundCapture();
+        this.unregisterResponseHeaders?.();
+        this.unregisterResponseHeaders = null;
         this.unregisterNetworkObserver?.();
         this.unregisterNetworkObserver = null;
         if (this.ownedServerSessionId) {
@@ -341,7 +422,7 @@ export class MJDiagnosticsService {
         const serverSessionId = await this.startServerSession(provider);
         if (serverSessionId) {
             this.ensureSessionHeaderHook(provider);
-            this.flushedTriggerSessions.add(serverSessionId);
+            this.ownSessions.add(serverSessionId);
         }
         const sessionId = serverSessionId ?? `rec-${Date.now()}`;
         this.beginRecording(sessionId, scrubberProfile, serverSessionId);
@@ -373,7 +454,6 @@ export class MJDiagnosticsService {
         if (this.sessionIdHook) {
             this.sessionIdHook(serverSessionId);
         }
-        this.scheduleIdbFlush();
     }
 
     /** Turns telemetry on for the recording when it is off, so `client/telemetry.ndjson` has data. */
@@ -498,23 +578,14 @@ export class MJDiagnosticsService {
 
     public RecordLogEntry(entry: DiagnosticLogEntry): void {
         this.logBuffer.Push(entry);
-        if (this.recordingStateSubject.value.isRecording) {
-            this.scheduleIdbFlush();
-        }
     }
 
     public RecordTelemetryEntry(entry: DiagnosticTelemetryEntry): void {
         this.telemetryBuffer.Push(entry);
-        if (this.recordingStateSubject.value.isRecording) {
-            this.scheduleIdbFlush();
-        }
     }
 
     public RecordNetworkEntry(entry: DiagnosticNetworkEntry): void {
         this.networkBuffer.Push(entry);
-        if (this.recordingStateSubject.value.isRecording) {
-            this.scheduleIdbFlush();
-        }
     }
 
     /**
@@ -525,9 +596,14 @@ export class MJDiagnosticsService {
         this.breadcrumbBuffer.Push(crumb);
     }
 
-    /** Adds a page the user went to as a breadcrumb. The query string and fragment are left out. */
+    /**
+     * Adds a page the user went to as a breadcrumb, while background capture or a recording runs.
+     * The query string and fragment are left out.
+     */
     public RecordRouteBreadcrumb(url: string): void {
-        this.RecordBreadcrumb(RouteBreadcrumb(url));
+        if (this.backgroundCaptureOn || this.recordingStateSubject.value.isRecording) {
+            this.RecordBreadcrumb(RouteBreadcrumb(url));
+        }
     }
 
     /** The buffered entries that `sessionId` does not hold yet; every buffered entry when no session is given. */
@@ -556,34 +632,50 @@ export class MJDiagnosticsService {
     }
 
     /**
-     * Handles the server-sent `X-MJ-Diagnostic-Trigger: <sessionId>` header when an admin/server
-     * Watch Session matches the current user or GraphQL operation. Automatically flushes the
-     * browser flight-recorder buffers to the server session once per triggered session ID.
+     * Handles the server-sent `X-MJ-Diagnostic-Trigger: <sessionId>` header that a server watch session
+     * adds to the responses it captures. The first header for a session records that session and,
+     * when no recording runs, starts a recording under it; an active user recording keeps its own
+     * session. Entries captured before the first header are never sent to the watch session. Later
+     * headers upload the entries captured since, at most once every 30 seconds.
+     * Returns true when an upload succeeded.
      */
     public async HandleServerTriggerHeader(sessionId: string): Promise<boolean> {
         const trimmed = sessionId?.trim();
-        if (!trimmed || this.flushedTriggerSessions.has(trimmed)) {
+        if (!trimmed || this.ownSessions.has(trimmed) || !this.triggerUploadDue(trimmed)) {
             return false;
         }
-        this.flushedTriggerSessions.add(trimmed);
-        this.StartRecording(trimmed, 'Standard');
+        if (!this.triggerUploadTimes.has(trimmed)) {
+            this.beginWatchSession(trimmed);
+        }
+        this.triggerUploadTimes.set(trimmed, Date.now());
+        return this.uploadToWatchSession(trimmed);
+    }
 
-        const capture = this.captureToUpload(trimmed);
-        const uploadOp = new DiagnosticsUploadClientCaptureOperation();
-        const result = await uploadOp.Execute({
-            SessionID: trimmed,
+    private triggerUploadDue(sessionId: string): boolean {
+        const last = this.triggerUploadTimes.get(sessionId);
+        return last === undefined || Date.now() - last >= TRIGGER_UPLOAD_INTERVAL_MS;
+    }
+
+    /** Excludes what is already buffered from the watch session and records under it when no recording runs. */
+    private beginWatchSession(sessionId: string): void {
+        this.markUploaded(sessionId, this.captureToUpload(sessionId));
+        if (!this.recordingStateSubject.value.isRecording) {
+            this.StartRecording(sessionId, 'Standard');
+        }
+    }
+
+    private async uploadToWatchSession(sessionId: string): Promise<boolean> {
+        const capture = this.captureToUpload(sessionId);
+        const result = await new DiagnosticsUploadClientCaptureOperation().Execute({
+            SessionID: sessionId,
             CreateSelfServiceSession: false,
             Reason: 'ServerWatchTrigger',
             ScrubLiterals: true,
-            Environment: {
-                mjVersion: '6.2.0',
-                browserUserAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'headless',
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            },
+            Environment: clientEnvironment(),
             ...captureUploadFields(capture),
         }, { provider: this.ProviderToUse });
         if (result.Success) {
-            this.markUploaded(trimmed, capture);
+            this.markUploaded(sessionId, capture);
         }
         return result.Success;
     }
@@ -597,7 +689,7 @@ export class MJDiagnosticsService {
     public async SubmitBundleToSupport(
         options: SubmitBundleToSupportOptions = {},
     ): Promise<SubmitBundleToSupportResult> {
-        const scrubberProfile: DiagnosticScrubberProfile = options.scrubberProfile ?? DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE;
+        const scrubberProfile = await this.effectiveProfile(options.scrubberProfile);
         const scrubLiterals = scrubberProfile === 'Standard';
         const provider = this.ProviderToUse;
         await this.pendingStop;
@@ -611,11 +703,7 @@ export class MJDiagnosticsService {
             CreateSelfServiceSession: !activeSessionId,
             Reason: options.ticketNumber ? `Ticket:${options.ticketNumber}` : 'UserReportedProblem',
             ScrubLiterals: scrubLiterals,
-            Environment: {
-                mjVersion: '6.2.0',
-                browserUserAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'headless',
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            },
+            Environment: clientEnvironment(),
             ...captureUploadFields(capture),
         }, { provider });
 
@@ -625,7 +713,7 @@ export class MJDiagnosticsService {
 
         const resolvedSessionId = uploadRes.Output.SessionID;
         this.markUploaded(resolvedSessionId, capture);
-        this.flushedTriggerSessions.add(resolvedSessionId);
+        this.ownSessions.add(resolvedSessionId);
         const buildOp = new DiagnosticsBuildBundleOperation();
         const buildRes = await buildOp.Execute({
             SessionID: resolvedSessionId,
@@ -754,15 +842,11 @@ export class MJDiagnosticsService {
      * Builds a scrubbed `.mjdiag` archive from the current client-side buffers.
      */
     public async BuildClientBundle(options: ClientBundleBuildOptions = {}): Promise<ClientBundleBuildResult> {
-        const scrubberProfile: DiagnosticScrubberProfile = options.scrubberProfile ?? DEFAULT_DIAGNOSTIC_SCRUBBER_PROFILE;
+        const scrubberProfile = await this.effectiveProfile(options.scrubberProfile);
         const bundleId = `diag-client-${Date.now()}`;
 
         const rawBundleData: DiagnosticBundleData = {
-            environment: {
-                mjVersion: options.mjVersion ?? '6.2.0',
-                browserUserAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'headless',
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            },
+            environment: clientEnvironment(options.mjVersion),
             repro: {
                 userComment: options.note ? ScrubString(options.note, { scrubberProfile }) : undefined,
                 breadcrumbs: this.breadcrumbBuffer.ToArray(),
@@ -814,7 +898,8 @@ export class MJDiagnosticsService {
         this.networkBuffer.Clear();
         this.breadcrumbBuffer.Clear();
         this.uploadedToSession.clear();
-        this.flushedTriggerSessions.clear();
+        this.ownSessions.clear();
+        this.triggerUploadTimes.clear();
     }
 
     private recordTelemetryEvent(event: TelemetryEvent): void {
@@ -828,61 +913,6 @@ export class MJDiagnosticsService {
             traceId: event.traceId,
             params: event.params as Record<string, unknown>,
         });
-    }
-
-    private scheduleIdbFlush(): void {
-        if (this.idbFlushTimer !== null) {
-            return;
-        }
-        this.runOutsideZone(() => {
-            this.idbFlushTimer = setTimeout(() => {
-                this.idbFlushTimer = null;
-                void this.flushToIndexedDb();
-            }, 1_000);
-        });
-    }
-
-    private async flushToIndexedDb(): Promise<void> {
-        if (typeof indexedDB === 'undefined') {
-            return;
-        }
-        try {
-            const db = await new Promise<IDBDatabase>((resolve, reject) => {
-                const req = indexedDB.open(MJ_DIAGNOSTICS_IDB_NAME, 1);
-                req.onupgradeneeded = () => {
-                    const database = req.result;
-                    if (!database.objectStoreNames.contains(IDB_STORE_NAME)) {
-                        database.createObjectStore(IDB_STORE_NAME);
-                    }
-                };
-                req.onsuccess = () => resolve(req.result);
-                req.onerror = () => reject(req.error);
-            });
-
-            await new Promise<void>((resolve, reject) => {
-                const tx = db.transaction(IDB_STORE_NAME, 'readwrite');
-                const store = tx.objectStore(IDB_STORE_NAME);
-                store.put(
-                    {
-                        updatedAt: new Date().toISOString(),
-                        sessionId: this.recordingStateSubject.value.sessionId,
-                        logs: this.logBuffer.ToArray(),
-                        telemetry: this.telemetryBuffer.ToArray(),
-                    },
-                    'active_recording',
-                );
-                tx.oncomplete = () => {
-                    db.close();
-                    resolve();
-                };
-                tx.onerror = () => {
-                    db.close();
-                    reject(tx.error);
-                };
-            });
-        } catch {
-            // Ignore IndexedDB quota/availability errors in private browsing
-        }
     }
 
     private runOutsideZone(fn: () => void): void {

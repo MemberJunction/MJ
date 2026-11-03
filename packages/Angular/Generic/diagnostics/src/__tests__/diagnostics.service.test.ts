@@ -485,7 +485,7 @@ describe('MJDiagnosticsService', () => {
 
                 await service.SubmitBundleToSupport();
                 service.RecordLogEntry(second);
-                service.RecordRouteBreadcrumb('/app/two');
+                service.RecordBreadcrumb({ timestamp: '2026-11-02T12:01:00.000Z', type: 'route', target: '/app/two' });
                 await service.SubmitBundleToSupport();
 
                 const [firstUpload, secondUpload] = uploadSpy.mock.calls.map((c) => c[0]);
@@ -494,7 +494,7 @@ describe('MJDiagnosticsService', () => {
                 expect(secondUpload.Repro?.['breadcrumbs']).toEqual([expect.objectContaining({ target: '/app/two' })]);
             });
 
-            it('a Submit after a server trigger upload sends only what the trigger did not', async () => {
+            it('a Submit after a server trigger upload sends what was captured from the trigger on', async () => {
                 const early = logEntry('before the trigger');
                 const late = logEntry('after the trigger');
                 service.RecordLogEntry(early);
@@ -504,7 +504,7 @@ describe('MJDiagnosticsService', () => {
                 await service.SubmitBundleToSupport();
 
                 expect(uploadSpy.mock.calls.map((c) => [c[0].SessionID, c[0].ClientLogs])).toEqual([
-                    ['watch-1', [early]],
+                    ['watch-1', []],
                     ['watch-1', [late]],
                 ]);
             });
@@ -591,12 +591,18 @@ describe('MJDiagnosticsService', () => {
         let doc: ReturnType<typeof fakeEventTarget>;
         let win: ReturnType<typeof fakeEventTarget>;
 
-        beforeEach(() => {
+        beforeEach(async () => {
             doc = fakeEventTarget();
             win = fakeEventTarget({ location: { pathname: '/app/home' } });
             vi.stubGlobal('document', doc);
             vi.stubGlobal('window', win);
+            vi.spyOn(DiagnosticsGetMySessionStatusOperation.prototype, 'Execute').mockResolvedValue({
+                Success: true,
+                Output: { Active: false, SelfServiceRecordingAllowed: false, CaptureEnabled: true },
+            });
+            service.Provider = fakeProvider(false);
             service.Initialize();
+            await service.LoadServerStatus();
         });
 
         afterEach(() => {
@@ -614,7 +620,7 @@ describe('MJDiagnosticsService', () => {
             doc.fire('click', { target: fakeElement('I', { control: button }) });
 
             expect(await bundleBreadcrumbs()).toEqual([
-                expect.objectContaining({ type: 'click', target: 'button#save "Save Record"', route: '/app/home' }),
+                expect.objectContaining({ type: 'click', target: 'button#save', route: '/app/home' }),
             ]);
         });
 
@@ -623,7 +629,7 @@ describe('MJDiagnosticsService', () => {
             doc.fire('click', { target: fakeElement('DIV', { attributes: { class: 'ag-cell ng-star-inserted' }, text: 'alice@example.com', control: null }) });
 
             const crumbs = await bundleBreadcrumbs();
-            expect(crumbs.map((c) => c.target)).toEqual(['input[type=password][name=pwd]', 'div.ag-cell']);
+            expect(crumbs.map((c) => c.target)).toEqual(['input[type=password][name=pwd]', 'div']);
         });
 
         it('records uncaught errors and unhandled promise rejections', async () => {
@@ -657,15 +663,21 @@ describe('MJDiagnosticsService', () => {
                 Success: true,
                 Output: { BundleID: 'bundle-crumbs', Status: 'Sent', Destination: 'MJC' },
             });
+            const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
             service.RecordRouteBreadcrumb('/app/home');
 
             await service.SubmitBundleToSupport();
             await service.HandleServerTriggerHeader('watch-crumbs');
+            service.RecordRouteBreadcrumb('/app/next');
+            now.mockReturnValue(1_000_000 + 60_000);
+            await service.HandleServerTriggerHeader('watch-crumbs');
 
-            expect(uploadSpy).toHaveBeenCalledTimes(2);
-            for (const [input] of uploadSpy.mock.calls) {
-                expect(input.Repro?.['breadcrumbs']).toEqual([expect.objectContaining({ type: 'route', target: '/app/home' })]);
-            }
+            const crumbs = uploadSpy.mock.calls.map(([input]) => input.Repro?.['breadcrumbs']);
+            expect(crumbs).toEqual([
+                [expect.objectContaining({ type: 'route', target: '/app/home' })],
+                [],
+                [expect.objectContaining({ type: 'route', target: '/app/next' })],
+            ]);
         });
 
         it('stops listening when the service is disposed', () => {
