@@ -1453,3 +1453,94 @@ describe('GetDuplicateRecords — bounded result retention', () => {
     });
 });
 
+
+// ─────────────────────────────────────────────
+// #5203: batch runs reuse the vectors sync stored instead of embedding every record again
+// ─────────────────────────────────────────────
+
+describe('stored vectors in batch runs', () => {
+    const INDEX = 'index-1';
+    const DOC = { ID: 'doc-1', Name: 'Contacts dupes', VectorIndexID: INDEX } as unknown as Parameters<StoredVectorDetector['Load']>[1];
+    const UPDATED = new Date('2026-03-01T00:00:00Z');
+
+    class StoredVectorDetector extends DuplicateRecordDetector {
+        public Load(records: Parameters<DuplicateRecordDetector['LoadStoredVectors']>[0], doc: Parameters<DuplicateRecordDetector['LoadStoredVectors']>[1]) {
+            return this.LoadStoredVectors(records, doc);
+        }
+        public Vectors(records: Parameters<DuplicateRecordDetector['VectorsForRecords']>[0], stored: Map<string, number[]>) {
+            return this.VectorsForRecords(records, records.map((_, i) => `text ${i}`), stored, DOC, { ID: 'user-1' } as UserInfo);
+        }
+    }
+
+    function record(id: string, updatedAt: Date = UPDATED) {
+        return {
+            PrimaryKey: { ToCompactURLSegment: () => id },
+            Fields: [{ Name: '__mj_UpdatedAt', Value: updatedAt }],
+        } as unknown as Parameters<DuplicateRecordDetector['LoadStoredVectors']>[0][number];
+    }
+
+    function erd(recordID: string, vector: number[], overrides: Record<string, unknown> = {}) {
+        return {
+            RecordID: recordID,
+            VectorIndexID: INDEX,
+            VectorBinary: null,
+            VectorJSON: JSON.stringify(vector),
+            EntityRecordUpdatedAt: new Date('2026-03-02T00:00:00Z'),
+            __mj_UpdatedAt: new Date('2026-03-02T00:00:00Z'),
+            ...overrides,
+        };
+    }
+
+    function detectorWithWidth(width: number): StoredVectorDetector {
+        const d = new StoredVectorDetector();
+        (d as unknown as { embeddingDimensions: number }).embeddingDimensions = width;
+        return d;
+    }
+
+    beforeEach(() => {
+        mockRunEmbeddingFn.mockClear();
+    });
+
+    it('a batch whose records all have fresh stored vectors makes no embedding call', async () => {
+        mockRunViewFn.mockResolvedValueOnce({ Success: true, Results: [erd('a', [1, 0]), erd('b', [0, 1])] });
+        const d = detectorWithWidth(2);
+        const records = [record('a'), record('b')];
+        const stored = await d.Load(records, DOC);
+        const vectors = await d.Vectors(records, stored);
+
+        expect(mockRunEmbeddingFn).not.toHaveBeenCalled();
+        // the query runs with exactly the stored vectors, so a record whose stored vector equals
+        // another's finds that record the same way sync indexed it
+        expect(vectors).toEqual([[1, 0], [0, 1]]);
+        const params = mockRunViewFn.mock.calls.at(-1)?.[0] as { EntityName: string; BypassCache: boolean; ExtraFilter: string };
+        expect(params.EntityName).toBe('MJ: Entity Record Documents');
+        expect(params.BypassCache).toBe(true);
+        expect(params.ExtraFilter).toContain("RecordID IN ('a','b')");
+    });
+
+    it('stale, missing, wrong-index and wrong-width vectors are re-embedded; the rest are reused', async () => {
+        mockRunViewFn.mockResolvedValueOnce({ Success: true, Results: [
+            erd('fresh', [1, 0]),
+            erd('stale', [1, 0], { EntityRecordUpdatedAt: new Date('2026-02-01T00:00:00Z') }),
+            erd('other-index', [1, 0], { VectorIndexID: 'index-2' }),
+            erd('wrong-width', [1, 0, 0]),
+        ] });
+        const d = detectorWithWidth(2);
+        const records = [record('fresh'), record('stale'), record('missing'), record('other-index'), record('wrong-width')];
+        const vectors = await d.Vectors(records, await d.Load(records, DOC));
+
+        expect(mockRunEmbeddingFn).toHaveBeenCalledTimes(1);
+        const texts = (mockRunEmbeddingFn.mock.calls[0][0] as { Texts: string[] }).Texts;
+        expect(texts).toEqual(['text 1', 'text 2', 'text 3', 'text 4']);
+        expect(vectors[0]).toEqual([1, 0]);
+        expect(vectors.slice(1)).toEqual([[0.1, 0.2], [0.1, 0.2], [0.1, 0.2], [0.1, 0.2]]);
+    });
+
+    it('a failed stored-vector read falls back to embedding every record', async () => {
+        mockRunViewFn.mockResolvedValueOnce({ Success: false, ErrorMessage: 'boom', Results: [] });
+        const d = detectorWithWidth(2);
+        const records = [record('a')];
+        await d.Vectors(records, await d.Load(records, DOC));
+        expect(mockRunEmbeddingFn).toHaveBeenCalledTimes(1);
+    });
+});

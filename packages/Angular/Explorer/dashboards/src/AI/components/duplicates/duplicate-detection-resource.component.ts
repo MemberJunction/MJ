@@ -32,8 +32,11 @@ import {
 import {
     BuildMatchQueriesForDetailIDs,
     BuildRunScopedDetailsQuery,
+    BuildRunSourceOptionsQuery,
     GroupMatchesByDetail,
     PickDefaultEntityDocument,
+    RunRecordScope,
+    RunSourceFields,
     SelectCurrentRunForDocument,
 } from './duplicate-detection-run-scope';
 import { ValidateStringParam } from '../../../shared/agent-tool-validation';
@@ -307,8 +310,54 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         }
     }
 
+    /** Which records the next run scans: the whole entity (default), one list, or one saved view. */
+    public RunRecordScope: RunRecordScope = 'all';
+    /** The list or view picked for the next run when {@link RunRecordScope} is not 'all'. */
+    public RunSourceID = '';
+    /** The lists or views of the selected document's entity, for the picker. */
+    public RunSourceOptions: { ID: string; Name: string }[] = [];
+    public IsLoadingRunSources = false;
+
+    /** True when the run scope needs a list or view and none is picked yet. */
+    public get RunSourceMissing(): boolean {
+        return RunSourceFields(this.RunRecordScope, this.RunSourceID) === null;
+    }
+
+    /** Switches the next run's record scope and loads the entity's lists or views for the picker. */
+    public async OnRunRecordScopeChanged(scope: RunRecordScope): Promise<void> {
+        this.RunRecordScope = scope;
+        this.RunSourceID = '';
+        this.RunSourceOptions = [];
+        const doc = this.SelectedDocumentThresholds;
+        if (scope === 'all' || !doc) {
+            this.cdr.detectChanges();
+            return;
+        }
+        this.IsLoadingRunSources = true;
+        this.cdr.detectChanges();
+        try {
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            const result = await rv.RunView<{ ID: string; Name: string }>(
+                BuildRunSourceOptionsQuery(scope, doc.EntityID, this.ProviderToUse.CurrentUser.ID)
+            );
+            // Ignore a late answer for a scope the user has already moved off.
+            if (this.RunRecordScope === scope) {
+                this.RunSourceOptions = result.Success ? result.Results : [];
+            }
+        } finally {
+            this.IsLoadingRunSources = false;
+            this.cdr.detectChanges();
+        }
+    }
+
     /** Store the selection and sync the per-document threshold controls; never triggers a reload. */
     private applyEntityDocumentSelection(value: string): void {
+        if (!UUIDsEqual(this._selectedEntityDocumentID || null, value || null)) {
+            // Lists and views belong to an entity, so a new document starts from the whole entity.
+            this.RunRecordScope = 'all';
+            this.RunSourceID = '';
+            this.RunSourceOptions = [];
+        }
         this._selectedEntityDocumentID = value;
         const doc = this.EntityDocuments.find(d => UUIDsEqual(d.ID, value));
         if (doc) {
@@ -827,6 +876,13 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
      */
     public async RunDetection(): Promise<void> {
         if (this.IsDetecting || !this.SelectedEntityDocumentID) return;
+        const source = RunSourceFields(this.RunRecordScope, this.RunSourceID);
+        if (!source) {
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Pick a ${this.RunRecordScope} to scan, or choose All records`, 'warning', 4000
+            );
+            return;
+        }
 
         const selectedDoc = this.EntityDocuments.find(d => UUIDsEqual(d.ID, this.SelectedEntityDocumentID));
         if (!selectedDoc) return;
@@ -880,6 +936,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             dupeRun.EntityID = entityInfo.ID;
             // The run uses the document picked here, not whichever document the entity updated last.
             dupeRun.EntityDocumentID = selectedDoc.ID;
+            dupeRun.SourceListID = source.SourceListID;
+            dupeRun.SourceViewID = source.SourceViewID;
             dupeRun.StartedByUserID = this.ProviderToUse.CurrentUser.ID;
             dupeRun.StartedAt = new Date();
             dupeRun.ProcessingStatus = 'In Progress';

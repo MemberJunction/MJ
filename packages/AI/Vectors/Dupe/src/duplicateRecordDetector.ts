@@ -46,6 +46,7 @@ import {
 import { VectorBase } from "@memberjunction/ai-vectors";
 import { CombineExtraFilters, EntityDocumentTemplateDataBuilder, EntityVectorSyncer, GetEntityDocumentRecordFilter, VectorizeEntityParams } from "@memberjunction/ai-vector-sync";
 import { AIEngine } from "@memberjunction/aiengine";
+import { SelectStoredVector, StoredVectorRow } from "./storedVectors";
 import { EntityDocumentTemplateParser } from "@memberjunction/entity-documents";
 import { TemplateEngineServer } from "@memberjunction/templates";
 import type { MJTemplateEntityExtended, MJTemplateContentEntity } from "@memberjunction/core-entities";
@@ -234,6 +235,10 @@ export class DuplicateRecordDetector extends VectorBase {
      * default then applies on both paths.
      */
     private embeddingDimensions: number | undefined = undefined;
+    /** Records in the current batch run whose stored vector was reused (#5203). */
+    private storedVectorHits = 0;
+    /** Records in the current batch run that were embedded because no usable stored vector existed. */
+    private embeddedRecords = 0;
     /**
      * The EntityDocumentID for this run. Passed as the vector query `id` for providers that key
      * by EntityDocumentID (the in-process SimpleVectorServiceProvider — see
@@ -275,6 +280,8 @@ export class DuplicateRecordDetector extends VectorBase {
     public async GetDuplicateRecords(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse> {
         this.CurrentUser = contextUser;
         this._seenPairs.clear(); // Reset for each new run
+        this.storedVectorHits = 0;
+        this.embeddedRecords = 0;
         const options = params.Options ?? {};
         const startTime = Date.now();
 
@@ -407,7 +414,8 @@ export class DuplicateRecordDetector extends VectorBase {
         await this.ProcessAutoMerges(autoMergeQueue, entityDocument, options);
 
         response.Status = 'Success';
-        LogStatus(`Duplicate detection complete: ${recordIDs.length} records checked, ${totalMatchesFound} matches found`);
+        LogStatus(`Duplicate detection complete: ${recordIDs.length} records checked, ${totalMatchesFound} matches found ` +
+            `(${this.storedVectorHits} stored vector(s) reused, ${this.embeddedRecords} record(s) embedded)`);
         return response;
     }
 
@@ -908,28 +916,23 @@ export class DuplicateRecordDetector extends VectorBase {
         const allQueryResults: RecordQueryResult[] = [];
         const subBatches = chunkArray(records, VECTOR_QUERY_BATCH_SIZE);
 
+        // The vectors sync already stored for these records (#5203): reused when current, so only
+        // records without a usable one are embedded again.
+        const storedVectors = await this.LoadStoredVectors(records, entityDocument);
+
         let subBatchOffset = 0;
         for (let i = 0; i < subBatches.length; i++) {
             const subRecords = subBatches[i];
 
-            // Embed this sub-batch
+            // Template text for every record: the hybrid keyword half of the query uses it.
             this.reportProgress(options, 'Embedding', totalRecords, processedSoFar + subBatchOffset, matchesSoFar, startTime);
             const subTemplateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, subRecords, contextUser);
-            const subEmbedResult = await this.EmbeddingRunner.RunEmbedding({
-                Texts: subTemplateTexts,
-                ModelID: this.embeddingModelID ?? undefined,
-                Dimensions: this.embeddingDimensions,
-                ContextUser: contextUser,
-                Description: `Duplicate detection batch (${entityDocument.Name})`
-            });
-            if (!subEmbedResult.Success || !subEmbedResult.Vectors || subEmbedResult.Vectors.length === 0) {
-                throw new Error(`Embedding failed for duplicate detection batch: ${subEmbedResult.ErrorMessage ?? 'Unknown error'}`);
-            }
+            const subVectors = await this.VectorsForRecords(subRecords, subTemplateTexts, storedVectors, entityDocument, contextUser);
 
             // Query vector DB for each record in the sub-batch with concurrency control
             this.reportProgress(options, 'Querying', totalRecords, processedSoFar + subBatchOffset, matchesSoFar, startTime);
             const subQueryResults = await this.QueryDuplicatesForRecords(
-                subRecords, subEmbedResult.Vectors, subTemplateTexts, entityDocument, queryTopK, options, concurrency
+                subRecords, subVectors, subTemplateTexts, entityDocument, queryTopK, options, concurrency
             );
             allQueryResults.push(...subQueryResults);
             subBatchOffset += subRecords.length;
@@ -952,6 +955,83 @@ export class DuplicateRecordDetector extends VectorBase {
 
         const batchMatches = results.reduce((sum, r) => sum + r.Duplicates.length, 0);
         return { Results: results, MatchesFound: batchMatches };
+    }
+
+    /**
+     * Reads the stored vectors (`MJ: Entity Record Documents`) for a batch of records in one RunView
+     * and returns the usable one per record, keyed by the record's compact key. See
+     * {@link SelectStoredVector} for when a stored vector is usable. A failed read logs and returns an
+     * empty map, so every record is embedded as before.
+     */
+    protected async LoadStoredVectors(records: BaseEntity[], entityDocument: MJEntityDocumentEntity): Promise<Map<string, number[]>> {
+        const usable = new Map<string, number[]>();
+        if (records.length === 0 || !entityDocument.VectorIndexID) return usable;
+        const recordIDs = records.map(r => r.PrimaryKey.ToCompactURLSegment());
+        const inClause = recordIDs.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
+        const result = await this.RunView.RunView<StoredVectorRow>({
+            EntityName: 'MJ: Entity Record Documents',
+            ExtraFilter: `EntityDocumentID='${entityDocument.ID}' AND RecordID IN (${inClause})`,
+            Fields: ['RecordID', 'VectorIndexID', 'VectorBinary', 'VectorJSON', 'EntityRecordUpdatedAt', '__mj_UpdatedAt'],
+            ResultType: 'simple',
+            IgnoreMaxRows: true,
+            BypassCache: true,
+        }, this.CurrentUser);
+        if (!result.Success) {
+            LogError(`Duplicate detection: could not read stored vectors, embedding the batch instead: ${result.ErrorMessage}`);
+            return usable;
+        }
+        const rowsByRecord = new Map<string, StoredVectorRow[]>();
+        for (const row of result.Results) {
+            const key = String(row.RecordID);
+            const list = rowsByRecord.get(key);
+            if (list) list.push(row); else rowsByRecord.set(key, [row]);
+        }
+        records.forEach((record, index) => {
+            const rows = rowsByRecord.get(recordIDs[index]);
+            if (!rows) return;
+            const vector = SelectStoredVector(rows, entityDocument.VectorIndexID, this.embeddingDimensions, this.recordUpdatedAt(record));
+            if (vector) usable.set(recordIDs[index], vector);
+        });
+        return usable;
+    }
+
+    /**
+     * One query vector per record, in record order: the stored vector when there is a usable one,
+     * otherwise a fresh embedding of the record's template text (one RunEmbedding call for all of them).
+     */
+    protected async VectorsForRecords(
+        records: BaseEntity[],
+        templateTexts: string[],
+        storedVectors: Map<string, number[]>,
+        entityDocument: MJEntityDocumentEntity,
+        contextUser: UserInfo
+    ): Promise<number[][]> {
+        const vectors: (number[] | null)[] = records.map(r =>
+            storedVectors.size > 0 ? storedVectors.get(r.PrimaryKey.ToCompactURLSegment()) ?? null : null
+        );
+        const missing = vectors.map((v, i) => (v ? -1 : i)).filter(i => i >= 0);
+        this.storedVectorHits += records.length - missing.length;
+        if (missing.length > 0) {
+            const embedResult = await this.EmbeddingRunner.RunEmbedding({
+                Texts: missing.map(i => templateTexts[i]),
+                ModelID: this.embeddingModelID ?? undefined,
+                Dimensions: this.embeddingDimensions,
+                ContextUser: contextUser,
+                Description: `Duplicate detection batch (${entityDocument.Name})`
+            });
+            if (!embedResult.Success || !embedResult.Vectors || embedResult.Vectors.length !== missing.length) {
+                throw new Error(`Embedding failed for duplicate detection batch: ${embedResult.ErrorMessage ?? 'Unknown error'}`);
+            }
+            missing.forEach((recordIndex, k) => { vectors[recordIndex] = embedResult.Vectors[k]; });
+            this.embeddedRecords += missing.length;
+        }
+        return vectors as number[][];
+    }
+
+    /** The record's `__mj_UpdatedAt`, or null when the entity has none. */
+    private recordUpdatedAt(record: BaseEntity): Date | null {
+        const value = record.Fields?.find(f => f.Name === '__mj_UpdatedAt')?.Value;
+        return value instanceof Date ? value : value != null ? new Date(String(value)) : null;
     }
 
     // ─────────────────────────────────────────────

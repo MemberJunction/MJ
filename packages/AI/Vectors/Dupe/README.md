@@ -149,6 +149,12 @@ Each record is matched by embedding its entity document's template text and quer
 
 If a related param's rows can't be loaded, the batch fails rather than query with text that can't match. An unsaved record (the entry-time check) renders from its own values, with empty related rows.
 
+### Batch runs reuse the stored vector
+
+A batch run first reads the vectors sync already stored for the batch's records (`MJ: Entity Record Documents.VectorBinary`, falling back to `VectorJSON`) in one `RunView`, and queries with those instead of embedding the records again. A stored vector is used only when it was written to the document's current vector index, has the index's `Dimensions`, and its `EntityRecordUpdatedAt` is not older than the record's `__mj_UpdatedAt`; with several rows for a record, the newest is used. Every other record is embedded as before, in one call. This saves one embedding call per record per run and queries with exactly the vector that was indexed. The template text is still rendered for every record, because the hybrid keyword half of the query uses it. The run's completion log line counts stored vectors reused and records embedded. The single-record and entry-time checks always embed.
+
+A run started from a `MJ: Duplicate Runs` record scans the whole entity, one list (`SourceListID`), or one saved view (`SourceViewID`); never a list and a view together.
+
 ## DuplicateDetectionOptions Reference
 
 Options are passed via the `Options` property on `PotentialDuplicateRequest`, or directly to `CheckSingleRecord`.
