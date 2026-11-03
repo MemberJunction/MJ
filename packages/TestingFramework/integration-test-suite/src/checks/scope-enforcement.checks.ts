@@ -29,6 +29,8 @@
  *          Asserting the DIFFERENCE across two evaluators over the identical key + cache is non-vacuous,
  *          and pins that `GetAPIKeyEngine()` defaults to `'deny'` (the safe default) even though the
  *          bare `ScopeEvaluator` constructor defaults to `'allow'`.
+ *   SE6 ★ OUT-OF-PROCESS REVOCATION: a key-scope row deleted with direct SQL (no entity event, so no
+ *          in-process cache refresh) stops granting once the base engine's timed refresh runs.
  *   SE5 ★ full_access IS AN ORDINARY SCOPE AT THE ENGINE: a key granted `full_access` is allowed for
  *          `full_access` but the engine does NOT implicitly grant an unrelated scope it has no rule
  *          for. The god-mode bypass is a RESOLVER concern (ResolverBase full_access fast-path), not an
@@ -445,6 +447,65 @@ export async function CheckSe5_FullAccessIsOrdinaryAtEngine(ctx: IntegrationChec
     }
 }
 
+/** Refresh interval SE6 uses so the check waits seconds, not the 60 s default TTL. */
+const SE6_REFRESH_MS = 1500;
+
+/** Polls `probe` until it returns true or `timeoutMs` elapses. */
+async function waitFor(probe: () => Promise<boolean>, timeoutMs: number): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        if (await probe()) {
+            return true;
+        }
+        await new Promise(resolve => setTimeout(resolve, 250));
+    }
+    return probe();
+}
+
+/**
+ * SE6 ★ — out-of-process revocation. A key-scope row removed by another process (here: direct SQL,
+ * which raises no entity event, so nothing in this process invalidates the cache) must stop granting
+ * once the base engine's timed refresh re-reads the table. Before the timed refresh existed the
+ * removed scope kept granting until restart. SQL Server transport only (needs the raw pool).
+ */
+export async function CheckSe6OutOfProcessScopeRevocation(ctx: IntegrationCheckContext): Promise<void> {
+    const pool = ctx.Pool;
+    if (!pool) {
+        console.warn('  ⚠ scope-enforcement.SE6 SKIPPED (pass) — no raw SQL pool on this transport, cannot simulate an out-of-process delete');
+        return;
+    }
+    const engine = GetAPIKeyEngine();
+    await engine.Config(true, ctx.User);
+    const readScopeId = scopeIdByPath(engine, 'entity:read');
+    if (!readScopeId) {
+        console.warn("  ⚠ scope-enforcement.SE6 SKIPPED (pass) — seeded scope 'entity:read' not present");
+        return;
+    }
+    const previousTTL = engine.ScopeCacheTTLMs;
+    const cleanup: Cleanup[] = [];
+    try {
+        const key = await createKey(engine, ctx, cleanup);
+        await addKeyScope(ctx, cleanup, key.apiKeyId, readScopeId, { isDeny: false, priority: 0 });
+        await engine.Config(true, ctx.User);
+
+        const authorize = () => engine.Authorize(key.hash, 'MJAPI', 'entity:read', 'Users', ctx.User, undefined, { skipLogging: true });
+        const before = await authorize();
+        Assert(before.Allowed, `fixture key was denied before the delete — not a revocation proof: ${before.Reason}`);
+
+        engine.SetScopeCacheTTL(SE6_REFRESH_MS);
+        await pool.request().query(
+            `DELETE FROM [${ctx.Schema}].[APIKeyScope] WHERE [APIKeyID] = '${key.apiKeyId}'`
+        );
+
+        const revoked = await waitFor(async () => !(await authorize()).Allowed, SE6_REFRESH_MS * 4);
+        Assert(revoked, `a key scope deleted out of process still granted access after ${SE6_REFRESH_MS * 4} ms (SECURITY)`);
+        console.log(`      → entity:read: allowed, row deleted by SQL, denied within the ${SE6_REFRESH_MS} ms refresh`);
+    } finally {
+        engine.SetScopeCacheTTL(previousTTL);
+        await runCleanup(cleanup);
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────────────────
 // registration
 // ─────────────────────────────────────────────────────────────────────────────────────────
@@ -454,7 +515,8 @@ export const ScopeEnforcementChecks: NamedCheck[] = [
     { Id: 'scope-enforcement.SE2', Name: 'SE2: the application scope ceiling caps a key that grants a scope the ceiling omits', Fn: CheckSe2_AppCeilingCapsKey },
     { Id: 'scope-enforcement.SE3', Name: 'SE3: a key bound to app X is refused against app Y (binding runs before the ceiling)', Fn: CheckSe3_AppBinding },
     { Id: 'scope-enforcement.SE4', Name: 'SE4: an unscoped key resolves by defaultBehaviorNoScopes; the shared engine defaults to deny', Fn: CheckSe4_UnscopedKeyDefault },
-    { Id: 'scope-enforcement.SE5', Name: 'SE5: full_access is an ordinary scope at the engine (the bypass is a resolver-only concern)', Fn: CheckSe5_FullAccessIsOrdinaryAtEngine }
+    { Id: 'scope-enforcement.SE5', Name: 'SE5: full_access is an ordinary scope at the engine (the bypass is a resolver-only concern)', Fn: CheckSe5_FullAccessIsOrdinaryAtEngine },
+    { Id: 'scope-enforcement.SE6', Name: 'SE6: a key scope deleted out of process stops granting after the timed refresh', Fn: CheckSe6OutOfProcessScopeRevocation }
 ];
 
 for (const check of ScopeEnforcementChecks) {

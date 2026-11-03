@@ -41,6 +41,12 @@ export function setMockBaseKeyScopes(keyScopes: MJAPIKeyScopeEntity[]): void {
 }
 
 let _loaded = true;
+let _refreshIntervalMs: number | undefined;
+
+/** The last interval passed to APIKeysEngineBase.SetRefreshInterval. */
+export function GetMockBaseRefreshInterval(): number | undefined {
+    return _refreshIntervalMs;
+}
 
 export function setMockBaseLoaded(loaded: boolean): void {
     _loaded = loaded;
@@ -53,6 +59,7 @@ export function clearMockBaseState(): void {
     _keyApplications = [];
     _keyScopes = [];
     _loaded = true;
+    _refreshIntervalMs = undefined;
 }
 
 // ---- Mock APIKeysEngineBase ----
@@ -65,6 +72,10 @@ export class APIKeysEngineBase {
 
     async Config(): Promise<void> {
         // No-op in mock
+    }
+
+    SetRefreshInterval(intervalMs: number | undefined): void {
+        _refreshIntervalMs = intervalMs;
     }
 
     get Scopes(): MJAPIScopeEntity[] {

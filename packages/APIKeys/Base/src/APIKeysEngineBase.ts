@@ -4,7 +4,7 @@
  * @module @memberjunction/api-keys-base
  */
 
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, UserInfo } from "@memberjunction/core";
 import {
     MJAPIApplicationEntity,
     MJAPIApplicationScopeEntity,
@@ -90,41 +90,85 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
     private _applicationsById: Map<string, MJAPIApplicationEntity> = new Map();
 
     /**
+     * How often (ms) the cached tables are re-read from the database, or undefined for no
+     * timed refresh. See {@link SetRefreshInterval}.
+     */
+    private _refreshIntervalMs: number | undefined;
+
+    /**
+     * The current timed-refresh interval in milliseconds, or undefined when the cache only
+     * refreshes on in-process saves and cross-server invalidation events.
+     */
+    public get RefreshIntervalMs(): number | undefined {
+        return this._refreshIntervalMs;
+    }
+
+    /**
+     * Bounds how stale the cached API-key tables can get. With an interval set, every table is
+     * re-read from the database on that timer (not from the local cache), so a key scope, key
+     * application or application change made by another process — a second server, an admin
+     * script, a direct database edit — takes effect within one interval instead of at restart.
+     *
+     * The server's API key engine sets this to its `scopeCacheTTLMs`. Without a call (browser
+     * use) the engine keeps its previous behaviour: no timed refresh, local cache enabled.
+     *
+     * If the engine has already loaded, it reloads once so the new interval applies.
+     *
+     * @param intervalMs - Refresh interval in milliseconds; 0, negative or undefined disables it.
+     */
+    public SetRefreshInterval(intervalMs: number | undefined): void {
+        const next = intervalMs !== undefined && intervalMs > 0 ? intervalMs : undefined;
+        if (next === this._refreshIntervalMs) {
+            return;
+        }
+        this._refreshIntervalMs = next;
+        if (this.Loaded) {
+            this.Config(true, this.ContextUser).catch((e: Error) =>
+                LogError(`APIKeysEngineBase: reload after refresh-interval change failed — ${e.message}`)
+            );
+        }
+    }
+
+    /**
      * Configure the engine and load all API key metadata.
      * @param forceRefresh - If true, forces a reload even if already loaded
      * @param contextUser - User context for database operations (required on server)
      * @param provider - Optional metadata provider override
      */
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
-        const params: Array<Partial<BaseEnginePropertyConfig>> = [
-            {
-                PropertyName: '_scopes',
-                EntityName: 'MJ: API Scopes',
-                CacheLocal: true
-            },
-            {
-                PropertyName: '_applications',
-                EntityName: 'MJ: API Applications',
-                CacheLocal: true
-            },
-            {
-                PropertyName: '_applicationScopes',
-                EntityName: 'MJ: API Application Scopes',
-                CacheLocal: true
-            },
-            {
-                PropertyName: '_keyApplications',
-                EntityName: 'MJ: API Key Applications',
-                CacheLocal: true
-            },
-            {
-                PropertyName: '_keyScopes',
-                EntityName: 'MJ: API Key Scopes',
-                CacheLocal: true
-            }
+        const entityNames: Array<{ PropertyName: string; EntityName: string }> = [
+            { PropertyName: '_scopes', EntityName: 'MJ: API Scopes' },
+            { PropertyName: '_applications', EntityName: 'MJ: API Applications' },
+            { PropertyName: '_applicationScopes', EntityName: 'MJ: API Application Scopes' },
+            { PropertyName: '_keyApplications', EntityName: 'MJ: API Key Applications' },
+            { PropertyName: '_keyScopes', EntityName: 'MJ: API Key Scopes' }
         ];
+        const params: Array<Partial<BaseEnginePropertyConfig>> = entityNames.map(e => this.BuildTableConfig(e.PropertyName, e.EntityName));
 
         return await this.Load(params, provider, forceRefresh, contextUser);
+    }
+
+    /**
+     * One table's load config. With a refresh interval the table expires on that timer and is
+     * not kept in the local cache, whose copy could outlive the interval and defeat the refresh.
+     */
+    protected BuildTableConfig(propertyName: string, entityName: string): Partial<BaseEnginePropertyConfig> {
+        const interval = this._refreshIntervalMs;
+        return {
+            PropertyName: propertyName,
+            EntityName: entityName,
+            CacheLocal: interval === undefined,
+            ...(interval !== undefined ? { Expiration: interval } : {})
+        };
+    }
+
+    /**
+     * Re-reads one table (the timed refresh calls this) and rebuilds the lookup maps, which would
+     * otherwise keep the previous rows (an application deactivated elsewhere would still read active).
+     */
+    public override async RefreshItem(propertyName: string): Promise<void> {
+        await super.RefreshItem(propertyName);
+        await this.AdditionalLoading(this.ContextUser);
     }
 
     /**

@@ -220,6 +220,11 @@ export class APIKeyEngine {
 
         this._scopeEvaluator = new ScopeEvaluator(this._config.defaultBehaviorNoScopes);
         this._usageLogger = new UsageLogger();
+
+        // Scope, key-application and application rows are read from the base engine's cache.
+        // Re-read them on the same TTL as the key and user validation caches, so a scope removed
+        // or an application deactivated by another process stops granting within one TTL.
+        this.Base.SetRefreshInterval(this._config.scopeCacheTTLMs);
     }
 
     /**
@@ -301,6 +306,21 @@ export class APIKeyEngine {
      */
     public get IsConfigured(): boolean {
         return this._configured;
+    }
+
+    /** The cache TTL in milliseconds (see `APIKeyEngineConfig.scopeCacheTTLMs`). */
+    public get ScopeCacheTTLMs(): number {
+        return this._config.scopeCacheTTLMs;
+    }
+
+    /**
+     * Changes the cache TTL at runtime: the key and user validation caches use it from the next
+     * entry on, and the scope, application and key-binding tables are re-read on the new interval.
+     * @param ttlMs - TTL in milliseconds; 0 disables the caches and the timed re-read.
+     */
+    public SetScopeCacheTTL(ttlMs: number): void {
+        this._config.scopeCacheTTLMs = ttlMs;
+        this.Base.SetRefreshInterval(ttlMs);
     }
 
     // =========================================================================
