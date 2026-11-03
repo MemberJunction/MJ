@@ -893,10 +893,11 @@ ${indentedFormHTML}
                         break;
                 }
             }
-            // next, generate HTML for the field, use fillContainer if we have just one field
-            html += `        <mj-form-field ${section.Fields.length === 1 ? '' : ''}
+            // next, generate HTML for the field. The space after the tag name is kept so the
+            // regenerated forms stay byte-identical apart from their labels.
+            html += `        <mj-form-field${' '}
             [Record]="record"
-            [ShowLabel]="${ section.Fields.length > 1 ? 'true' : 'false'}"
+            [ShowLabel]="${ this.shouldShowFieldLabel(section, field) ? 'true' : 'false'}"
             FieldName="${field.CodeName}"
             Type="${editControl}"
             [EditMode]="EditMode"
@@ -906,6 +907,19 @@ ${indentedFormHTML}
           }
       
           return html;
+      }
+
+      /**
+       * Whether a generated form field shows its label. Every field is labelled, except the only
+       * field of a section whose title already names it (the section title equals the field's
+       * display name, ignoring case and surrounding whitespace); there the label would repeat
+       * the section header right above it.
+       */
+      protected shouldShowFieldLabel(section: AngularFormSectionInfo, field: EntityFieldInfo): boolean {
+          if ((section.Fields?.length ?? 0) !== 1) return true;
+          const sectionTitle = (section.Name ?? '').trim().toLowerCase();
+          const fieldTitle = (field.DisplayNameOrName ?? '').trim().toLowerCase();
+          return sectionTitle.length === 0 || sectionTitle !== fieldTitle;
       }
 
       /**
