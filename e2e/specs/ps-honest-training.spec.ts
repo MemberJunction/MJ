@@ -148,7 +148,8 @@ test.describe.serial('Predictive Studio — unit and protocol surfaces', () => {
     await expect(page.locator('[data-testid="ps-eval-outcome"]')).toBeVisible();
     await expect(page.locator('[data-testid="ps-eval-reason"]')).toContainText('[');
     expect(await page.locator('[data-testid="ps-eval-baseline"]').count()).toBeGreaterThanOrEqual(3);
-    await expect(page.locator('[data-testid="ps-eval-optimistic"]')).toContainText('optimistic');
+    // The C1 run trains one candidate, so its finalist score carries no selection optimism and is tagged as the only one.
+    await expect(page.locator('[data-testid="ps-eval-optimistic"]')).toHaveText('only candidate');
     await expect(page.locator('[data-testid="ps-eval-calibration"]')).toContainText('slope');
     await expect(page.locator('[data-testid="ps-eval-leakage"], [data-testid="ps-eval-leakage-none"]')).toHaveCount(1);
     await expectReadable(page, '[data-testid="ps-eval"]');
