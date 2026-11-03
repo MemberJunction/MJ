@@ -111,6 +111,7 @@ import { VideoGenerationCostChecks } from '../checks/video-generation-cost.check
 import { VideoStudioHandoffChecks } from '../checks/video-studio-handoff.checks';
 import { VideoStudioProductionChecks } from '../checks/video-studio-production.checks';
 import { VideoStudioLiveSmokeChecks } from '../checks/video-studio-live-smoke.checks';
+import { SemanticGraphChecks } from '../checks/semantic-graph.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -175,7 +176,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['remote-operations', RemoteOperationsChecks, 7],
         ['ai-skills', AiSkillsChecks, 21],
         ['api-keys', ApiKeysChecks, 3],
-        ['diagnostics', DiagnosticsChecks, 4], // DIAG1-DIAG4 session capture, bundle assembly, encrypted intake (IT162)
+        ['diagnostics', DiagnosticsChecks, 4], // DIAG1-DIAG4 session capture, bundle assembly, encrypted intake (IT163)
         ['predictive-studio', PredictiveStudioChecks, 5],
         ['remote-op-wire-progress', RemoteOpWireProgressChecks, 1],
         ['prompt-runner', PromptRunnerChecks, 1],
@@ -274,6 +275,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['entity-status-fanout-client', EntityStatusFanoutClientChecks, 3], // SF1-SF3 entity save pushes reach every session of the user (IT159)
         ['encrypted-read-client', EncryptedReadClientChecks, 4], // ER1-ER4 encrypted field plaintext over GraphQL, miss and hit (IT160)
         ['ciphertext-cache', CiphertextCacheChecks, 5], // CT0-CT4 ciphertext at rest in the RunViewCache, plaintext to the caller (IT161)
+        ['semantic-graph', SemanticGraphChecks, 7], // SG1-SG7 Semantic Graph substrate, Content Pipeline GraphStage overlay, and Executable Canon DAG similarity & telemetry (IT162)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -470,6 +472,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'search-provider-trust': 2,
         'search-scope-bound': 3,
         'self-avatar-client': 6,
+        'semantic-graph': 7,
         'server-cache': 35,
         'shipped-agents-live': 4,
         'sqlpipe-extraction-fixtures': 40,
@@ -880,6 +883,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'self-avatar-client.AV4',
         'self-avatar-client.AV5',
         'self-avatar-client.AV6',
+        'semantic-graph.SG4',
         'server-cache.S17',
         'server-cache.S23',
         'server-cache.S24',

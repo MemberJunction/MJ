@@ -5215,6 +5215,9 @@ importers:
       '@memberjunction/ng-filter-builder':
         specifier: 6.2.0-edge.7
         version: link:../../Generic/filter-builder
+      '@memberjunction/ng-graph-view':
+        specifier: 6.2.0-edge.7
+        version: link:../../Generic/graph-view
       '@memberjunction/ng-list-management':
         specifier: 6.2.0-edge.7
         version: link:../../Generic/list-management

@@ -42,6 +42,7 @@ export type {
     RunAIAgentFromConversationDetailParams,
     AgentReplyAcknowledgement,
     AutotagPipelineResult,
+    MergeTagsResult,
     VectorizeEntityParams,
     VectorizeEntityResult,
     DuplicateEntryCheckParams,

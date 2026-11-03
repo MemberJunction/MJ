@@ -223,7 +223,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (467 classes)
+// @memberjunction/core-entities (476 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -493,6 +493,15 @@ import {
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJGraphAuthorityTierEntity,
+    MJGraphConceptEntity,
+    MJGraphConceptTypeEntity,
+    MJGraphEdgeEntity,
+    MJGraphEdgeProviderEntity,
+    MJGraphEdgeTypeEndpointEntity,
+    MJGraphEdgeTypeEntity,
+    MJGraphEntity,
+    MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -1820,6 +1829,15 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJGraphAuthorityTierEntity,
+    MJGraphConceptEntity,
+    MJGraphConceptTypeEntity,
+    MJGraphEdgeEntity,
+    MJGraphEdgeProviderEntity,
+    MJGraphEdgeTypeEndpointEntity,
+    MJGraphEdgeTypeEntity,
+    MJGraphEntity,
+    MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -1879,6 +1897,10 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJPermissionDomainEntity,
     MJPhoneNumberEntity,
     MJProcessRunDetailEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJProcessRunEntity,
     MJProjectEntity,
     MJProjectEntityExtended,
@@ -1888,10 +1910,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJQueryEntity,
     MJQueryEntityEntity,
     MJQueryEntityExtended,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJQueryFieldEntity,
     MJQueryParameterEntity,
     MJQueryPermissionEntity,
@@ -2083,6 +2101,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     CreateJotFormAction,
     CreateSurveyMonkeyAction,
     CreateTypeformAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     ExportGoogleFormsCSVAction,
     ExportJotFormCSVAction,
     ExportSurveyMonkeyCSVAction,
@@ -2092,10 +2114,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetJotFormAction,
     GetJotFormStatisticsAction,
     GetJotFormSubmissionsAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     GetSingleGoogleFormsResponseAction,
     GetSingleJotFormSubmissionAction,
     GetSingleSurveyMonkeyResponseAction,
@@ -2287,6 +2305,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     CodexAdapter,
     GeminiCliAdapter,
     HarnessAgentBase,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     HarnessAgentType,
     OpenCodeAdapter,
     PiAdapter,
@@ -2296,10 +2318,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PlanningDesignerAgent,
     WorkflowAgentWriter,
     FormBuilderAgent,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     FormBuilderBuilderAgent,
     FormBuilderDesignerAgent,
     RecordProcessCancelRunServerOperation,
@@ -2491,6 +2509,10 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GetDownloadUrlAction,
     GetEntityDetailsAction,
     GetEntityListAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     GetEntitySchemaForFormAction,
     GetFileContentAction,
     GetFormCompositionForEntityAction,
@@ -2500,10 +2522,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GetMyCalendarAndAvailabilityAction,
     GetObjectAction,
     GetRecordAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     GetRecordListMembershipAction,
     GetRecordsAction,
     GetSignatureStatusAction,
@@ -2648,7 +2666,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1128;
+export const CLASS_REGISTRATIONS_COUNT = 1137;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -263,6 +263,15 @@ import { MJFileStorageProviderFormComponent } from "./Entities/MJFileStorageProv
 import { MJFormChromeRuleFormComponent } from "./Entities/MJFormChromeRule/mjformchromerule.form.component";
 import { MJGeneratedCodeCategoryFormComponent } from "./Entities/MJGeneratedCodeCategory/mjgeneratedcodecategory.form.component";
 import { MJGeneratedCodeFormComponent } from "./Entities/MJGeneratedCode/mjgeneratedcode.form.component";
+import { MJGraphAuthorityTierFormComponent } from "./Entities/MJGraphAuthorityTier/mjgraphauthoritytier.form.component";
+import { MJGraphConceptFormComponent } from "./Entities/MJGraphConcept/mjgraphconcept.form.component";
+import { MJGraphConceptTypeFormComponent } from "./Entities/MJGraphConceptType/mjgraphconcepttype.form.component";
+import { MJGraphEdgeFormComponent } from "./Entities/MJGraphEdge/mjgraphedge.form.component";
+import { MJGraphEdgeProviderFormComponent } from "./Entities/MJGraphEdgeProvider/mjgraphedgeprovider.form.component";
+import { MJGraphEdgeTypeEndpointFormComponent } from "./Entities/MJGraphEdgeTypeEndpoint/mjgraphedgetypeendpoint.form.component";
+import { MJGraphEdgeTypeFormComponent } from "./Entities/MJGraphEdgeType/mjgraphedgetype.form.component";
+import { MJGraphFormComponent } from "./Entities/MJGraph/mjgraph.form.component";
+import { MJGraphTypeFormComponent } from "./Entities/MJGraphType/mjgraphtype.form.component";
 import { MJIdentityClaimFormComponent } from "./Entities/MJIdentityClaim/mjidentityclaim.form.component";
 import { MJIdentityClaimTypeFormComponent } from "./Entities/MJIdentityClaimType/mjidentityclaimtype.form.component";
 import { MJInstanceConfigurationFormComponent } from "./Entities/MJInstanceConfiguration/mjinstanceconfiguration.form.component";
@@ -462,6 +471,7 @@ declarations: [
     MJActionContextFormComponent,
     MJEncryptionKeySourceFormComponent,
     MJEntityActionFormComponent,
+    MJGraphAuthorityTierFormComponent,
     MJQueryDependencyFormComponent,
     MJRubricFormComponent,
     MJRubricScaleFormComponent,
@@ -552,6 +562,7 @@ declarations: [
     MJContentSourceTypeFormComponent,
     MJEmployeeFormComponent,
     MJEmployeeRoleFormComponent,
+    MJGraphEdgeTypeEndpointFormComponent,
     MJOAuthTokenFormComponent,
     MJQueryCategoryFormComponent,
     MJRecommendationItemFormComponent,
@@ -921,6 +932,7 @@ declarations: [
     MJDashboardCategoryLinkFormComponent,
     MJFeaturePipelineTypeFormComponent,
     MJGeneratedCodeFormComponent,
+    MJGraphConceptTypeFormComponent,
     MJInteractionLinkFormComponent,
     MJMLTrainingRunFormComponent,
     MJUserApplicationEntityFormComponent
@@ -946,6 +958,7 @@ declarations: [
     MJArtifactUseFormComponent,
     MJCommunicationRunFormComponent,
     MJContentTypeFormComponent,
+    MJGraphEdgeTypeFormComponent,
     MJIntegrationObjectFormComponent,
     MJSearchScopeExternalIndexFormComponent,
     MJSearchScopeProviderFormComponent,
@@ -1168,6 +1181,8 @@ declarations: [
     MJCompanyIntegrationObjectFieldFormComponent,
     MJConversationSkillFormComponent,
     MJDashboardCategoryFormComponent,
+    MJGraphFormComponent,
+    MJGraphTypeFormComponent,
     MJInteractionFormComponent,
     MJMLModelScoringBindingFormComponent,
     MJRoleFormComponent,
@@ -1203,6 +1218,7 @@ declarations: [
     MJCompanyIntegrationFieldMapFormComponent,
     MJEntityFormOverrideFormComponent,
     MJFileStorageAccountPermissionFormComponent,
+    MJGraphEdgeFormComponent,
     MJMCPServerToolFormComponent,
     MJMLAlgorithmUseCaseRankingFormComponent,
     MJMLTrainingPipelineFormComponent,
@@ -1415,6 +1431,8 @@ declarations: [
     MJConversationDetailArtifactFormComponent,
     MJDashboardFormComponent,
     MJEntityRelationshipDisplayComponentFormComponent,
+    MJGraphConceptFormComponent,
+    MJGraphEdgeProviderFormComponent,
     MJIntegrationURLFormatFormComponent,
     MJMCPServerConnectionPermissionFormComponent,
     MJQuerySQLFormComponent,
