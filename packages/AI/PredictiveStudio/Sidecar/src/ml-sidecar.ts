@@ -187,7 +187,8 @@ export class MLSidecar {
 
   constructor(options?: MLSidecarOptions) {
     const url = options?.url ?? process.env.PREDICTIVE_STUDIO_SIDECAR_URL?.trim();
-    this.remoteUrl = url && url.length > 0 ? url.replace(/\/+$/, '') : null;
+    // Only the URL's protocol, host and port are read (requestTarget), so trailing slashes need no trimming.
+    this.remoteUrl = url && url.length > 0 ? url : null;
 
     this.pythonPath = MLSidecar.ResolvePython(options?.pythonPath, process.env, resolveBundledPython());
     this.serverPath = DEFAULT_SERVER_PATH;

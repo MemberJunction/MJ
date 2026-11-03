@@ -105,6 +105,16 @@ describe('MLSidecar (remote mode)', () => {
     expect(s.IsRemote).toBe(true);
   });
 
+  it('reads a remote url with trailing slashes, and a long run of slashes, in linear time', async () => {
+    const started = Date.now();
+    const slashes = new MLSidecar({ url: `${URL_BASE}${'/'.repeat(100_000)}a` });
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(slashes.IsRemote).toBe(true);
+    queue(200, { status: 'ok' });
+    await new MLSidecar({ url: `${URL_BASE}///` }).Start();
+    expect(requestLog[0].path).toBe('/health');
+  });
+
   it('Start() verifies /health in remote mode (no spawn)', async () => {
     queue(200, { status: 'ok' });
     const s = new MLSidecar({ url: URL_BASE });
