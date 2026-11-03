@@ -945,7 +945,8 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
 
    protected async EndActionLog(logEntity: MJActionExecutionLogEntity, params: RunActionParams, result: ActionResult): Promise<void> {
       // Capture the 'ended' state NOW (accurate EndedAt + final merged params); the queued UPDATE applies
-      // + persists it only AFTER the 'started' INSERT commits (see _logQueue). Caller awaits neither save.
+      // + persists it only AFTER the 'started' INSERT commits (see _logQueue). Outside a transaction the
+      // caller awaits neither save (see IsRunInOpenTransaction).
       const endedAt = new Date();
       // Persist the final merged param set (inputs + outputs) — Runtime actions return a fresh array
       // from the sandbox executor that lives on `result.Params`, so logging `params.Params` would lose
@@ -980,6 +981,30 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       // StartAndEndActionLog, whose force-persisted UPDATE is the write that creates the row), and the
       // FailuresOnly-success path that drops the LogEntry never reaches it.
       result.LogEntryPersisted = this._logQueue.Settled(logEntity);
+      if (this.IsRunInOpenTransaction(logEntity)) {
+         // The queued writes run in the caller's transaction, so they must land before it settles.
+         await result.LogEntryPersisted;
+      }
+   }
+
+   /**
+    * Whether this run executes inside a transaction that is open on the log row's provider: for
+    * example a Durable entity action, which runs inside the save's transaction so its submission
+    * commits or rolls back with the record.
+    *
+    * The log queue's writes are fire-and-forget and run in the caller's async scope, so there they
+    * join that transaction. A write still queued when the transaction commits is refused by the
+    * provider ("The ambient transaction ended before this query ran"), which loses the row's 'ended'
+    * UPDATE — its outcome and message. {@link EndActionLog} therefore waits for the writes in this
+    * case; outside a transaction they stay fire-and-forget.
+    */
+   protected IsRunInOpenTransaction(logEntity: MJActionExecutionLogEntity): boolean {
+      const provider = logEntity.ProviderToUse;
+      if (!(provider instanceof DatabaseProviderBase)) {
+         return false;
+      }
+      const token = provider.CapturePostCommitToken();
+      return token !== undefined && token.Epoch !== null;
    }
 
    protected async StartAndEndActionLog(params: RunActionParams, result: ActionResult, inputSnapshot?: string): Promise<MJActionExecutionLogEntity> {
