@@ -29,7 +29,7 @@ import type {
     RunViewParams,
     UserInfo,
 } from '@memberjunction/core';
-import { uuidv4 } from '@memberjunction/global';
+import { uuidv4, UUIDsEqual } from '@memberjunction/global';
 import type { MJActionCategoryEntity, MJQueryCategoryEntity, MJQueryEntity, MJUserSettingEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Assert, AssertEqual, AssertRowShape, RowKeys } from '@memberjunction/testing-integration';
@@ -790,8 +790,8 @@ export const ClientCacheChecks: NamedCheck[] = [
 
                 AssertEqual(callsMatching(calls, 'RunViewsWithCacheCheck').length, 1, 'F5 reload must use RunViewsWithCacheCheck');
                 AssertEqual(f5Engine.Categories.length, 3, 'F5 engine must hold all 3 categories after differential merge');
-                const hydratedB = f5Engine.Categories.find(c => c.ID.toUpperCase() === catB.ID.toUpperCase());
-                const hydratedC = f5Engine.Categories.find(c => c.ID.toUpperCase() === catC!.ID.toUpperCase());
+                const hydratedB = f5Engine.Categories.find(c => UUIDsEqual(c.ID, catB.ID));
+                const hydratedC = f5Engine.Categories.find(c => UUIDsEqual(c.ID, catC!.ID));
                 Assert(hydratedB !== undefined, 'updated catB must be present after F5 merge');
                 AssertEqual(hydratedB?.Description, 'Updated B out-of-band', 'catB Description must reflect server update');
                 Assert(hydratedC !== undefined, 'newly inserted catC must be present after F5 merge');
@@ -810,7 +810,7 @@ export const ClientCacheChecks: NamedCheck[] = [
         Id: 'client-cache.C18',
         Name: 'C18: simulated F5 RunQuery with CacheLocal validates status=current on 2nd call and refreshes after out-of-band server mutation',
         Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
             const rq = new RunQuery();
             const schema = ctx.Schema ?? '__mj';
             const prefix = `mj-it-c18-${uuidv4()}`;
