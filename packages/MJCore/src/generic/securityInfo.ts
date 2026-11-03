@@ -572,7 +572,46 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
      * @returns {string} The filter text with all user tokens replaced with actual values
      */
     public MarkupFilterText(user: UserInfo, options?: MarkupFilterOptions): string {
-        let ret = this.FilterText
+        const ret = this.substituteTokens(this.FilterText, user);
+        const unresolvedMatch = ret.match(/\{\{(?:User|Acting)\w+\}\}/);
+        if (unresolvedMatch) {
+            if (options?.unresolvedBehavior === 'match-nothing') {
+                // API-key row filters fail closed AND diagnosably: '' substitution is only
+                // safe for equality shapes (Col <> '' or LIKE '%%' match everything), so an
+                // unresolved token collapses the ENTIRE filter to a predicate that matches
+                // nothing regardless of the expression's operators.
+                LogError('Row filter has unresolved token after markup — resolving filter to (1=0): ' + unresolvedMatch[0] + ' in filter: ' + this.FilterText);
+                return '(1=0)';
+            }
+            LogError('RLS filter has unresolved token after markup: ' + unresolvedMatch[0] + ' in filter: ' + this.FilterText);
+        }
+        return ret;
+    }
+
+    /**
+     * {@link MarkupFilterText} with the user's values bound as query parameters where that cannot
+     * change the filter's meaning (#5713): a token that is a whole quoted literal on its own
+     * (`'{{UserID}}'`, `N'{{UserEmail}}'`, `'{{ScopeResourceID}}'`, a scalar `'{{Acting…}}'`) is
+     * replaced, quotes included, by the placeholder `binder` returns. Every other placement (inside a
+     * `LIKE` pattern, unquoted, the `{{ActingCompanyIDs}}` list) keeps literal text, escaped as in
+     * {@link MarkupFilterText}. Unresolved tokens are handled exactly as there, and a filter that
+     * resolves to `(1=0)` binds nothing.
+     *
+     * The text is the same for every user whose tokens resolve, so SQL Server compiles one plan per
+     * query shape instead of one per user. Placeholders follow the order tokens appear in, so the
+     * same filters always produce the same text.
+     */
+    public MarkupFilterParameterized(user: UserInfo, binder: RowFilterParameterBinder, options?: MarkupFilterOptions): string {
+        const literal = this.MarkupFilterText(user, options);
+        if (!user || (literal === '(1=0)' && options?.unresolvedBehavior === 'match-nothing')) {
+            return literal;
+        }
+        return this.substituteTokens(this.bindWholeLiteralTokens(this.FilterText, user, binder), user);
+    }
+
+    /** Substitutes every token the user resolves as escaped literal text; unresolved tokens are left in place. */
+    private substituteTokens(text: string, user: UserInfo): string {
+        let ret = text
         if (user) {
             const keys = Object.keys(user)
             for (let i = 0; i < keys.length; i++) {
@@ -607,19 +646,101 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
 
             ret = this.resolveActingTokens(ret, user);
         }
-        const unresolvedMatch = ret.match(/\{\{(?:User|Acting)\w+\}\}/);
-        if (unresolvedMatch) {
-            if (options?.unresolvedBehavior === 'match-nothing') {
-                // API-key row filters fail closed AND diagnosably: '' substitution is only
-                // safe for equality shapes (Col <> '' or LIKE '%%' match everything), so an
-                // unresolved token collapses the ENTIRE filter to a predicate that matches
-                // nothing regardless of the expression's operators.
-                LogError('Row filter has unresolved token after markup — resolving filter to (1=0): ' + unresolvedMatch[0] + ' in filter: ' + this.FilterText);
-                return '(1=0)';
-            }
-            LogError('RLS filter has unresolved token after markup: ' + unresolvedMatch[0] + ' in filter: ' + this.FilterText);
-        }
         return ret;
+    }
+
+    /**
+     * The value a scalar token resolves to for `user`, unescaped, or undefined when it does not
+     * resolve (or is the list token, which stays literal). Same rules as {@link substituteTokens}.
+     */
+    private scalarTokenValue(token: string, user: UserInfo): string | undefined {
+        if (token === 'ScopeResourceID') {
+            return user.MagicLinkScope?.ResourceID ?? '';
+        }
+        if (token === 'ScopeResourceType') {
+            return user.MagicLinkScope?.ResourceType ?? '';
+        }
+        if (token === 'ActingOrganizationID' || token === 'ActingPersonID' || token === 'ActingScopeID') {
+            const value = user.APIKeyActingContext?.[token];
+            return value != null && value.length > 0 ? value : undefined;
+        }
+        if (token.startsWith('User')) {
+            const key = token.slice('User'.length);
+            if (!Object.keys(user).includes(key)) {
+                return undefined;
+            }
+            const val = (user as unknown as Record<string, unknown>)[key];
+            return val != null && typeof val !== 'object' ? String(val) : undefined;
+        }
+        return undefined;
+    }
+
+    /**
+     * Replaces each string literal whose whole content is one resolvable scalar token with the
+     * placeholder `binder` gives for its value. Walks the text the way the SQL parser does (string
+     * literals with `''` escapes, `[...]` and `"..."` identifiers, `--` and block comments), so a
+     * token is bound only where it is a complete literal.
+     */
+    private bindWholeLiteralTokens(text: string, user: UserInfo, binder: RowFilterParameterBinder): string {
+        let out = '';
+        let i = 0;
+        while (i < text.length) {
+            const ch = text[i];
+            const skipTo = RowLevelSecurityFilterInfo.endOfNonLiteralSpan(text, i);
+            if (skipTo > i) {
+                out += text.slice(i, skipTo);
+                i = skipTo;
+                continue;
+            }
+            if (ch !== "'") {
+                out += ch;
+                i++;
+                continue;
+            }
+            let end = i + 1;
+            while (end < text.length) {
+                if (text[end] === "'" && text[end + 1] === "'") {
+                    end += 2;
+                } else if (text[end] === "'") {
+                    break;
+                } else {
+                    end++;
+                }
+            }
+            const literal = text.slice(i, end + 1);
+            const tokenMatch = /^'\{\{(\w+)\}\}'$/.exec(literal);
+            const value = tokenMatch ? this.scalarTokenValue(tokenMatch[1], user) : undefined;
+            const placeholder = tokenMatch && value !== undefined ? binder.Bind(tokenMatch[1], value) : null;
+            if (placeholder !== null) {
+                // An N'' prefix belongs to the literal being replaced.
+                if (/[Nn]$/.test(out) && !/[\w@#$]$/.test(out.slice(0, -1))) {
+                    out = out.slice(0, -1);
+                }
+                out += placeholder;
+            } else {
+                out += literal;
+            }
+            i = end + 1;
+        }
+        return out;
+    }
+
+    /** Where a bracketed or double-quoted identifier or a comment starting at `i` ends; `i` when none starts there. */
+    private static endOfNonLiteralSpan(text: string, i: number): number {
+        const ch = text[i];
+        if (ch === '[' || ch === '"') {
+            const close = text.indexOf(ch === '[' ? ']' : '"', i + 1);
+            return close < 0 ? text.length : close + 1;
+        }
+        if (ch === '-' && text[i + 1] === '-') {
+            const eol = text.indexOf('\n', i);
+            return eol < 0 ? text.length : eol;
+        }
+        if (ch === '/' && text[i + 1] === '*') {
+            const close = text.indexOf('*/', i + 2);
+            return close < 0 ? text.length : close + 2;
+        }
+        return i;
     }
 
     /**
@@ -656,6 +777,20 @@ export class RowLevelSecurityFilterInfo extends BaseInfo {
         }
         return ret;
     }
+}
+
+/**
+ * Receives the values {@link RowLevelSecurityFilterInfo.MarkupFilterParameterized} binds instead of
+ * writing them into the SQL text. The data provider implements it: it chooses the placeholder form
+ * its driver binds and keeps the parameter list it passes with the statement.
+ */
+export interface RowFilterParameterBinder {
+    /**
+     * Records one occurrence of `token` with `value` and returns the placeholder to write in its
+     * place, or null to keep the value as literal text (for example a value the parameter type
+     * cannot hold).
+     */
+    Bind(token: string, value: string): string | null;
 }
 
 /**

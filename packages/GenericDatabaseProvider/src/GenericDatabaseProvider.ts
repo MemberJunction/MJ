@@ -111,6 +111,7 @@ import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
 import { SQLParser, SqlDocument, IsReadOnlyQuery, CheckAggregateExpression, IsBalancedSQLFragment, SplitTopLevelAndTerms, type BalancedFragmentOptions } from '@memberjunction/sql-parser';
 import { DescribeStatementFailure, type DescribedColumn, type DescribeStatementResult } from './describeStatement.js';
 import { NamedQueryParameter, TypedBindValue, TypedQueryParameter } from './typedQueryParameter.js';
+import { RowFilterBoundParameter, RowFilterParameterCollector } from './rowFilterParameters.js';
 import type { TypedQueryParameterValue } from './typedQueryParameter.js';
 import { StatementMemo } from './statementMemo.js';
 import { FindProjectionStars } from './fieldSecurity/projectionStars.js';
@@ -1606,6 +1607,43 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      */
     protected getDialect(): SQLDialect | null {
         return null;
+    }
+
+    /**
+     * The binder a RunView's row filter binds the user's values into (#5713), or null to keep them
+     * literal. The default binds untyped named parameters with the dialect's placeholders (`$n` on
+     * PostgreSQL); a provider with no dialect keeps literals. Providers override it to choose the
+     * parameter type.
+     */
+    protected CreateRowFilterParameterBinder(): RowFilterParameterCollector | null {
+        const dialect = this.getDialect();
+        if (!dialect) {
+            return null;
+        }
+        return new RowFilterParameterCollector((index, value) => {
+            const placeholder = dialect.Binding.ParameterPlaceholder(index);
+            return { Placeholder: placeholder, Parameter: new NamedQueryParameter(placeholder.startsWith('@') ? placeholder.slice(1) : placeholder, value) };
+        });
+    }
+
+    /**
+     * Runs several statements that all reference the same `parameters` (one RunView's data, count
+     * and aggregate statements share its WHERE, row-filter parameters included). The default runs
+     * each with the full list; SQL Server overrides it to send one batch that declares them once.
+     */
+    protected async ExecuteSQLBatchWithSharedParameters(
+        queries: string[],
+        parameters: RowFilterBoundParameter[],
+        options?: ExecuteSQLBatchOptions,
+        contextUser?: UserInfo,
+    ): Promise<Record<string, unknown>[][]> {
+        const execOptions: ExecuteSQLOptions | undefined = options ? {
+            description: options.description,
+            ignoreLogging: options.ignoreLogging,
+            isMutation: options.isMutation,
+            ignoreAmbientTransaction: options.ignoreAmbientTransaction,
+        } : undefined;
+        return Promise.all(queries.map(query => this.ExecuteSQL<Record<string, unknown>>(query, parameters, execOptions, contextUser)));
     }
 
     /**
@@ -3217,7 +3255,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             }
 
             // 5. Row-Level Security — role RLS AND API-key row filters (GetEffectiveRowFilterWhereClause; the role-RLS exemption applies only to the role layer)
-            const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '');
+            //    The user's values bind as parameters (#5713), so every user runs the same SQL text and
+            //    the database reuses one plan per query shape. Two paths keep literals because their
+            //    statement cannot carry parameters: the coalesced count batch (one UNION ALL across
+            //    views) and view-run logging (which rebuilds the statement around this WHERE).
+            const logsViewRun = !!(viewEntity?.ID && String(viewEntity.ID).length > 0 && saveViewResults && user);
+            const rlsBinder = countExecutor || logsViewRun
+                ? null
+                : this.CreateRowFilterParameterBinder();
+            const rlsWhereClause = rlsBinder
+                ? entityInfo.GetEffectiveRowFilterParameterized(user, EntityPermissionType.Read, rlsBinder)
+                : entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '');
+            const rlsParameters: RowFilterBoundParameter[] = rlsBinder?.Parameters ?? [];
+            const boundParameters: RowFilterBoundParameter[] | undefined = rlsParameters.length > 0 ? rlsParameters : undefined;
             if (rlsWhereClause && rlsWhereClause.length > 0) {
                 whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
                 bHasWhere = true;
@@ -3366,7 +3416,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
             const resultMap: Record<string, unknown> = {};
             if (sqlQueries.length === 1 && !countExecutorPromise) {
-                resultMap[sqlQueryKeys[0]] = await this.ExecuteSQL(sqlQueries[0], undefined, undefined, contextUser);
+                resultMap[sqlQueryKeys[0]] = await this.ExecuteSQL(sqlQueries[0], boundParameters, undefined, contextUser);
+            } else if (sqlQueries.length > 1 && boundParameters) {
+                const batchResults = await this.ExecuteSQLBatchWithSharedParameters(sqlQueries, boundParameters, undefined, contextUser);
+                sqlQueryKeys.forEach((key, index) => { resultMap[key] = batchResults[index]; });
             } else if (sqlQueries.length > 0 && countExecutorPromise) {
                 const [batchResults, countRes] = await Promise.all([
                     sqlQueries.length === 1
@@ -3408,7 +3461,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                 // time in the window, with nothing reading a single result. Callers that only read
                 // `Results` opt out explicitly with RunViewParams.SkipTotalRowCount; the provider
                 // never infers that from the value of MaxRows.
-                const countResult = await this.ExecuteSQL<{ TotalRowCount: number }>(countSQL, undefined, undefined, contextUser);
+                const countResult = await this.ExecuteSQL<{ TotalRowCount: number }>(countSQL, boundParameters, undefined, contextUser);
                 if (countResult && countResult.length > 0) rowCount = countResult[0].TotalRowCount;
             }
 
