@@ -32,3 +32,19 @@ describe('metric direction', () => {
     expect(MetricDirections.MetricDirectionOf('explained_variance')).toBeNull();
   });
 });
+
+describe('MetricDirections.OnMetricScale / MetricScaleLabel — a normalized score back on its metric', () => {
+  it('un-negates a lower-is-better score: a normalized -12.5 rmse reads 12.5 rmse', () => {
+    expect([MetricDirections.OnMetricScale(-12.5, 'rmse'), MetricDirections.MetricScaleLabel('rmse')]).toEqual([12.5, 'rmse']);
+    expect(MetricDirections.OnMetricScale(-0.31, 'log-loss')).toBe(0.31);
+  });
+
+  it('reads a closer-to-one score as its distance from 1, under that label', () => {
+    expect([MetricDirections.OnMetricScale(-0.05, 'calibration-slope'), MetricDirections.MetricScaleLabel('calibration-slope')]).toEqual([0.05, 'calibration-slope distance from 1']);
+  });
+
+  it('keeps a higher-is-better score, and a metric of unknown direction, as stored', () => {
+    expect([MetricDirections.OnMetricScale(0.81, 'auc'), MetricDirections.MetricScaleLabel('auc')]).toEqual([0.81, 'auc']);
+    expect([MetricDirections.OnMetricScale(3, 'mystery'), MetricDirections.MetricScaleLabel('mystery')]).toEqual([3, 'mystery']);
+  });
+});

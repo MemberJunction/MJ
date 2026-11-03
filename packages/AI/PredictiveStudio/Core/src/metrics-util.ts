@@ -40,6 +40,30 @@ export class MetricDirections {
     return ERROR_METRIC_KEYS.has(metricKey.trim().toLowerCase());
   }
 
+  /**
+   * A normalized score (higher is better: a lower-is-better metric negated, a closer-to-one metric minus its distance
+   * from one) back on its metric's own scale: a loss reads as the loss, a closer-to-one score as its distance from 1
+   * (label it with {@link MetricScaleLabel}), a higher-is-better or unknown metric as stored. The one inverse of the
+   * leaderboard normalization; every display of a normalized score goes through it.
+   *
+   * @param normalized the normalized score
+   * @param metricKey the metric the score was read from
+   */
+  public static OnMetricScale(normalized: number, metricKey: string): number {
+    switch (MetricDirections.MetricDirectionOf(metricKey)) {
+      case 'lower-is-better':
+      case 'closer-to-one':
+        return -normalized;
+      default:
+        return normalized;
+    }
+  }
+
+  /** The label {@link OnMetricScale}'s value reads under: the metric, or "<metric> distance from 1" for a closer-to-one metric. */
+  public static MetricScaleLabel(metricKey: string): string {
+    return MetricDirections.MetricDirectionOf(metricKey) === 'closer-to-one' ? `${metricKey} distance from 1` : metricKey;
+  }
+
   /** The declared direction of a metric, or null for a key Predictive Studio does not know (callers must not rank on it). */
   public static MetricDirectionOf(metricKey: string): MetricDirection | null {
     const k = metricKey.trim().toLowerCase();

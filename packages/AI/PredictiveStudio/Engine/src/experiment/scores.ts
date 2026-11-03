@@ -31,22 +31,6 @@ export class ExperimentScores {
     return ExperimentScores.scoreOn(metrics, successMetric.trim().toLowerCase()) || ExperimentScores.scoreOn(metrics, ExperimentScores.primaryProperScore(metrics));
   }
 
-  /**
-   * A normalized score written on its metric's own scale, labelled with the metric: a negated loss reads as the loss,
-   * a closer-to-one score as its distance from 1 (the inverse of the normalization {@link ExtractNormalizedScore}
-   * applies). A metric whose direction is not known is written as stored.
-   *
-   * @param score the normalized score (higher is better)
-   * @param metric the metric the score was read from
-   */
-  public static OnOwnScale(score: number, metric: string): string {
-    switch (MetricDirections.MetricDirectionOf(metric)) {
-      case 'lower-is-better': return `${metric} ${-score}`;
-      case 'closer-to-one': return `${metric} distance from 1 ${-score}`;
-      default: return `${metric} ${score}`;
-    }
-  }
-
   /** Whether a score's metric is the plan's success metric (case- and whitespace-insensitive, as the score is read). */
   public static IsSuccessMetric(scoreMetric: string, successMetric: string): boolean {
     return scoreMetric.trim().toLowerCase() === successMetric.trim().toLowerCase();

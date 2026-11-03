@@ -40,6 +40,7 @@
 
 import { LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { MetricDirections } from '@memberjunction/predictive-studio-core';
 import type {
   ModelingPlanSpec,
   Budget,
@@ -550,8 +551,8 @@ export class ExperimentOrchestrator {
     iteration.Status = 'Pruned';
     // Each score on its own metric's scale and labelled with it: the leaderboard holds normalized (higher-is-better)
     // numbers, which read as a negated loss if written raw.
-    const scored = entry ? ExperimentScores.OnOwnScale(entry.Metric, entry.ScoreMetric) : 'n/a';
-    const topNote = best ? ` (top-ranked so far: ${ExperimentScores.OnOwnScale(best.Metric, best.ScoreMetric)})` : '';
+    const scored = entry ? ExperimentOrchestrator.onMetricScale(entry) : 'n/a';
+    const topNote = best ? ` (top-ranked so far: ${ExperimentOrchestrator.onMetricScale(best)})` : '';
     iteration.Rationale = `${iteration.Rationale ?? ''}\nPruned: dominated branch, scored ${scored}${topNote}.`.trim();
     const ok = await iteration.Save();
     if (!ok) {
@@ -560,6 +561,11 @@ export class ExperimentOrchestrator {
       );
     }
     return ok;
+  }
+
+  /** A leaderboard entry's normalized score written on its metric's own scale, after its label (Core's one inverse). */
+  private static onMetricScale(entry: ExperimentLeaderboardEntry): string {
+    return `${MetricDirections.MetricScaleLabel(entry.ScoreMetric)} ${MetricDirections.OnMetricScale(entry.Metric, entry.ScoreMetric)}`;
   }
 
   // region: budget gate ---------------------------------------------------------

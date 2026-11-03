@@ -446,13 +446,9 @@ function rankGroupOf(entry: PSRankedScore): string {
   return entry.OnSuccessMetric ? '' : entry.ScoreMetric;
 }
 
-/** A normalized score on its metric's own scale, and the label that scale reads under. */
+/** A normalized score on its metric's own scale, and the label that scale reads under (Core's one inverse, `MetricDirections`). */
 export function ScoreOnMetric(entry: PSRankedScore): { Value: number; Label: string } {
-  switch (MetricDirections.MetricDirectionOf(entry.ScoreMetric)) {
-    case 'lower-is-better': return { Value: -entry.Metric, Label: entry.ScoreMetric };
-    case 'closer-to-one': return { Value: -entry.Metric, Label: `${entry.ScoreMetric} distance from 1` };
-    default: return { Value: entry.Metric, Label: entry.ScoreMetric };
-  }
+  return { Value: MetricDirections.OnMetricScale(entry.Metric, entry.ScoreMetric), Label: MetricDirections.MetricScaleLabel(entry.ScoreMetric) };
 }
 
 /**
