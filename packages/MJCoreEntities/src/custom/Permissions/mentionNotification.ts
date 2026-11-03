@@ -294,8 +294,12 @@ async function resolveAuthorDisplayName(
         if (await userEntity.Load(authorUserId)) {
             return userEntity.Name || userEntity.Email || 'Someone';
         }
-    } catch {
-        // Fallback below
+    } catch (error) {
+        LogError(
+            `resolveAuthorDisplayName failed for ${authorUserId}: ${
+                error instanceof Error ? error.message : String(error)
+            }`
+        );
     }
     return 'Someone';
 }
@@ -307,10 +311,6 @@ async function canRecipientAccessConversation(
     recipientUserId: string,
     customResolver?: (userId: string) => Promise<UserInfo | null> | UserInfo | null
 ): Promise<boolean> {
-    if (!conversation.LinkedEntityID || !conversation.LinkedRecordID) {
-        return true;
-    }
-
     const recipientUser = customResolver
         ? await customResolver(recipientUserId)
         : await loadRecipientUserInfo(provider, contextUser, recipientUserId);
@@ -318,8 +318,21 @@ async function canRecipientAccessConversation(
         return false;
     }
 
+    if (!conversation.LinkedEntityID || !conversation.LinkedRecordID) {
+        return canRecipientAccessUnlinkedConversation(
+            provider,
+            contextUser,
+            conversation,
+            recipientUser
+        );
+    }
+
     const entityInfo =
-        provider?.Entities?.find((e) => UUIDsEqual(e.ID, conversation.LinkedEntityID)) ?? null;
+        (typeof provider?.EntityByID === 'function'
+            ? provider.EntityByID(conversation.LinkedEntityID)
+            : undefined) ??
+        provider?.Entities?.find((e) => UUIDsEqual(e.ID, conversation.LinkedEntityID)) ??
+        null;
     if (!entityInfo) {
         return false;
     }
@@ -345,6 +358,58 @@ async function canRecipientAccessConversation(
         conversation.LinkedRecordID
     );
     return recordAccess.Allowed;
+}
+
+/**
+ * Verifies whether `recipientUser` can read a private (unlinked) `MJ: Conversations` record.
+ * Only the conversation owner (`conversation.UserID`) or a user/role granted an `'Approved'`
+ * `MJ: Resource Permissions` record for `conversation.ID` may receive `@mention` notifications,
+ * preventing private unshared chats from leaking message previews to arbitrary users.
+ */
+async function canRecipientAccessUnlinkedConversation(
+    provider: IMetadataProvider,
+    contextUser: UserInfo,
+    conversation: MJConversationEntity,
+    recipientUser: UserInfo
+): Promise<boolean> {
+    if (conversation.UserID && UUIDsEqual(conversation.UserID, recipientUser.ID)) {
+        return true;
+    }
+    if (!conversation.ID) {
+        return false;
+    }
+    try {
+        const rv = RunView.FromMetadataProvider(provider);
+        const escapedConvId = EscapeSQLString(conversation.ID);
+        const escapedUserId = EscapeSQLString(recipientUser.ID);
+        const roleIds = (recipientUser.UserRoles ?? [])
+            .map((r) => (r.RoleID ?? '').trim())
+            .filter((id) => id.length > 0)
+            .map((id) => `'${EscapeSQLString(id)}'`);
+        const granteeClause =
+            roleIds.length > 0
+                ? `((Type='User' AND UserID='${escapedUserId}') OR (Type='Role' AND RoleID IN (${roleIds.join(',')})))`
+                : `(Type='User' AND UserID='${escapedUserId}')`;
+
+        const permRes = await rv.RunView<{ ID: string }>(
+            {
+                EntityName: 'MJ: Resource Permissions',
+                ExtraFilter: `ResourceRecordID='${escapedConvId}' AND Status='Approved' AND ${granteeClause}`,
+                Fields: ['ID'],
+                MaxRows: 1,
+                ResultType: 'simple'
+            },
+            contextUser
+        );
+        return Boolean(permRes?.Success && (permRes.Results?.length ?? 0) > 0);
+    } catch (error) {
+        LogError(
+            `canRecipientAccessUnlinkedConversation failed for conversation ${conversation.ID}: ${
+                error instanceof Error ? error.message : String(error)
+            }`
+        );
+        return false;
+    }
 }
 
 async function loadRecipientUserInfo(

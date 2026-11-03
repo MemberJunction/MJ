@@ -21,7 +21,8 @@ import {
     ConversationAnchorType,
     MJConversationDetailEntity,
     MJConversationEntity,
-    ParseConversationAnchorMetadata
+    ParseConversationAnchorMetadata,
+    UserInfoEngine
 } from '@memberjunction/core-entities';
 import { EscapeHTML, EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -114,6 +115,11 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
     private readonly hostRef = inject(ElementRef<HTMLElement>);
     public readonly Coordinator = inject(FormRecordCommentsCoordinatorService, { optional: true });
 
+    public static readonly COMMENTS_WIDTH_SETTING_KEY = 'MJ_CommentsPanel_Width';
+    public static readonly DEFAULT_DRAWER_WIDTH_PX = 400;
+    public static readonly MIN_DRAWER_WIDTH_PX = 340;
+    public static readonly MAX_DRAWER_WIDTH_PX = 860;
+
     @Input() Record: BaseEntity | null = null;
     @Input() Mode: 'drawer' | 'popover' = 'drawer';
     @Input() IsOpen = false;
@@ -124,6 +130,7 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
     @Output() RollupChange = new EventEmitter<AnchoredCommentRollup>();
     @Output() NavigateToAnchor = new EventEmitter<FormCommentAnchorNavigationRequest>();
     @Output() Navigate = new EventEmitter<FormNavigationEvent>();
+    @Output() WidthChanged = new EventEmitter<number>();
 
     @ViewChild('newThreadTextarea') private newThreadTextarea?: ElementRef<HTMLTextAreaElement>;
 
@@ -153,8 +160,11 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
     private lastCompositionEndAt: number | null = null;
 
     private coordinatorSub: Subscription | null = null;
+    private mentionSearchTimer: ReturnType<typeof setTimeout> | null = null;
+    private lastSearchedMentionQuery = '';
 
     public ngOnInit(): void {
+        this.loadPersistedDrawerWidth();
         if (this.Coordinator) {
             this.coordinatorSub = this.Coordinator.Changed$.subscribe(() => {
                 const rollup = this.Coordinator!.Rollup;
@@ -165,6 +175,34 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
             if (this.Record) {
                 this.Coordinator.BindRecord(this.Record, this.ProviderToUse);
             }
+        }
+    }
+
+    public get EffectiveDrawerWidthPx(): number {
+        if (this.WidthPx > 0) {
+            return Math.max(
+                MjRecordCommentsComponent.MIN_DRAWER_WIDTH_PX,
+                Math.min(MjRecordCommentsComponent.MAX_DRAWER_WIDTH_PX, this.WidthPx)
+            );
+        }
+        return MjRecordCommentsComponent.DEFAULT_DRAWER_WIDTH_PX;
+    }
+
+    private loadPersistedDrawerWidth(): void {
+        if (this.Mode !== 'drawer') return;
+        try {
+            const saved = UserInfoEngine.Instance.GetSetting(MjRecordCommentsComponent.COMMENTS_WIDTH_SETTING_KEY);
+            if (saved) {
+                const parsed = parseInt(saved, 10);
+                if (!isNaN(parsed) && parsed > 0) {
+                    this.WidthPx = Math.max(
+                        MjRecordCommentsComponent.MIN_DRAWER_WIDTH_PX,
+                        Math.min(MjRecordCommentsComponent.MAX_DRAWER_WIDTH_PX, parsed)
+                    );
+                }
+            }
+        } catch {
+            // Fall back to default width when UserInfoEngine is not initialized (e.g. unit tests)
         }
     }
 
@@ -187,6 +225,10 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
         this.coordinatorSub = null;
         this.drawerResizeCleanup?.();
         this.drawerResizeCleanup = null;
+        if (this.mentionSearchTimer) {
+            clearTimeout(this.mentionSearchTimer);
+            this.mentionSearchTimer = null;
+        }
     }
 
     public get CanUserPostComments(): boolean {
@@ -261,13 +303,17 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
         const onMouseMove = (moveEvent: MouseEvent) => {
             const viewportW = window.innerWidth || 1280;
             const desiredWidth = viewportW - moveEvent.clientX;
-            this.WidthPx = Math.max(340, Math.min(860, Math.round(desiredWidth)));
+            this.WidthPx = Math.max(
+                MjRecordCommentsComponent.MIN_DRAWER_WIDTH_PX,
+                Math.min(MjRecordCommentsComponent.MAX_DRAWER_WIDTH_PX, Math.round(desiredWidth))
+            );
             this.cdr.markForCheck();
         };
         const onMouseUp = () => {
             this.IsResizingDrawer = false;
             this.drawerResizeCleanup?.();
             this.drawerResizeCleanup = null;
+            this.PersistDrawerWidth(this.WidthPx);
             this.cdr.markForCheck();
         };
 
@@ -277,6 +323,26 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
             window.removeEventListener('mousemove', onMouseMove);
             window.removeEventListener('mouseup', onMouseUp);
         };
+    }
+
+    /**
+     * Persists the comments drawer width in `UserInfoEngine` (`MJ_CommentsPanel_Width`) and emits `WidthChanged`.
+     */
+    public PersistDrawerWidth(widthPx: number): void {
+        const clamped = Math.max(
+            MjRecordCommentsComponent.MIN_DRAWER_WIDTH_PX,
+            Math.min(MjRecordCommentsComponent.MAX_DRAWER_WIDTH_PX, Math.round(widthPx))
+        );
+        this.WidthPx = clamped;
+        this.WidthChanged.emit(clamped);
+        try {
+            UserInfoEngine.Instance.SetSettingDebounced(
+                MjRecordCommentsComponent.COMMENTS_WIDTH_SETTING_KEY,
+                String(clamped)
+            );
+        } catch {
+            // Ignore when UserInfoEngine is not initialized in unit tests
+        }
     }
 
     public get StatusFilter(): 'open' | 'resolved' | 'all' {
@@ -612,6 +678,13 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
             const target = this.TargetFilter;
             const anchorType: ConversationAnchorType = target?.AnchorType ?? 'Record';
             const anchorKey = target?.AnchorKey ?? null;
+            const fieldInfo =
+                anchorType === 'Field' && anchorKey
+                    ? this.Record?.EntityInfo?.Fields.find(
+                          (f) => f.Name.toLowerCase() === anchorKey.toLowerCase()
+                      )
+                    : undefined;
+            const isProtectedField = Boolean(fieldInfo?.HasFieldPermissions || fieldInfo?.Encrypt);
             const metadata: ConversationAnchorMetadata = {
                 anchorDisplayName: target?.Label || this.Record?.EntityInfo?.DisplayNameOrName || 'Record Comment',
                 fieldName: anchorType === 'Field' ? (anchorKey ?? undefined) : undefined,
@@ -619,7 +692,7 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
                 sectionDisplayName: target?.SectionDisplayName,
                 groupKey: target?.GroupKey,
                 groupDisplayName: target?.GroupDisplayName,
-                quotedValue: target?.QuotedValue
+                quotedValue: isProtectedField ? undefined : target?.QuotedValue
             };
 
             await this.Coordinator.StartAnchoredThread({
@@ -1000,6 +1073,98 @@ export class MjRecordCommentsComponent extends BaseAngularComponent implements O
             void this.loadMentionCandidates();
         } else {
             this.filterMentionCandidates(query);
+        }
+
+        const trimmedQuery = query.trim();
+        if (trimmedQuery.length >= 1 && trimmedQuery.toLowerCase() !== this.lastSearchedMentionQuery) {
+            if (this.mentionSearchTimer) {
+                clearTimeout(this.mentionSearchTimer);
+            }
+            this.mentionSearchTimer = setTimeout(() => {
+                this.mentionSearchTimer = null;
+                void this.searchMentionCandidatesFromServer(trimmedQuery);
+            }, 180);
+        }
+    }
+
+    /**
+     * Queries `MJ: Users` and `MJ: AI Agents` dynamically by `Name` / `Email` so organizations
+     * with more than 50 active users can `@mention` any person regardless of alphabetical order.
+     */
+    public async searchMentionCandidatesFromServer(query: string): Promise<void> {
+        const trimmed = query.trim();
+        if (!trimmed) return;
+        const provider: IMetadataProvider | null = this.ProviderToUse;
+        if (!provider) return;
+
+        this.lastSearchedMentionQuery = trimmed.toLowerCase();
+        const escaped = EscapeSQLString(trimmed);
+        try {
+            const rv = RunView.FromMetadataProvider(provider);
+            const [usersResult, agentsResult] = await rv.RunViews([
+                {
+                    EntityName: 'MJ: Users',
+                    ExtraFilter: `IsActive=1 AND (Name LIKE '%${escaped}%' OR Email LIKE '%${escaped}%')`,
+                    Fields: ['ID', 'Name', 'Email'],
+                    OrderBy: 'Name ASC',
+                    MaxRows: 20,
+                    ResultType: 'simple'
+                },
+                {
+                    EntityName: 'MJ: AI Agents',
+                    ExtraFilter: `Status='Active' AND (IsRestricted IS NULL OR IsRestricted=0) AND Name LIKE '%${escaped}%'`,
+                    Fields: ['ID', 'Name', 'Description'],
+                    OrderBy: 'Name ASC',
+                    MaxRows: 10,
+                    ResultType: 'simple'
+                }
+            ]);
+
+            const existingKeys = new Set(
+                (this.MentionCandidates ?? []).map((c) => `${c.Type}:${NormalizeUUID(c.ID)}`)
+            );
+            const merged = [...(this.MentionCandidates ?? [])];
+
+            if (usersResult?.Success && Array.isArray(usersResult.Results)) {
+                for (const u of usersResult.Results as Array<{ ID: string; Name?: string; Email?: string }>) {
+                    const key = `user:${NormalizeUUID(u.ID || '')}`;
+                    if (u.ID && u.Name && !existingKeys.has(key)) {
+                        existingKeys.add(key);
+                        merged.push({
+                            Type: 'user',
+                            ID: u.ID,
+                            Name: u.Name,
+                            Subtitle: u.Email ?? null
+                        });
+                    }
+                }
+            }
+            if (agentsResult?.Success && Array.isArray(agentsResult.Results)) {
+                for (const a of agentsResult.Results as Array<{ ID: string; Name?: string; Description?: string }>) {
+                    const key = `agent:${NormalizeUUID(a.ID || '')}`;
+                    if (a.ID && a.Name && !existingKeys.has(key)) {
+                        existingKeys.add(key);
+                        merged.push({
+                            Type: 'agent',
+                            ID: a.ID,
+                            Name: a.Name,
+                            Subtitle: 'AI Agent'
+                        });
+                    }
+                }
+            }
+
+            this.MentionCandidates = merged;
+            if (this.ActiveMentionContext) {
+                this.filterMentionCandidates(this.ActiveMentionContext.Query);
+            }
+            this.cdr.markForCheck();
+        } catch (error) {
+            LogError(
+                `MjRecordCommentsComponent.searchMentionCandidatesFromServer failed: ${
+                    error instanceof Error ? error.message : String(error)
+                }`
+            );
         }
     }
 

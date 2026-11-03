@@ -16,9 +16,12 @@ import {
     UserMayWriteConversation
 } from '@memberjunction/core-entities';
 import {
+    AnchoredConversationPostRunViewHook,
+    EnsureAnchoredConversationReadHookRegistered,
     InspectAndStampRestrictedFieldsForComment,
     RegisterRestrictedFieldLLMClassifier
 } from '@memberjunction/core-entities-server';
+import { GetDataHooks, PostRunViewHook, RunViewParams, RunViewResult, WellKnownUserSource } from '@memberjunction/core';
 
 function buildEntityWithFLS(deniedFieldsForUser: Map<string, Set<string>>): EntityInfo {
     return {
@@ -35,6 +38,7 @@ function buildEntityWithFLS(deniedFieldsForUser: Map<string, Set<string>>): Enti
             { Name: 'SSN', IsPrimaryKey: false, DisplayName: 'Social Security Number', DisplayNameOrName: 'Social Security Number', NeedsQuotes: true, TSType: 'string', HasFieldPermissions: true, Description: 'Tax identifier' }
         ],
         GetUserPermisions: vi.fn().mockReturnValue({ CanRead: true }),
+        CanUserComment: vi.fn().mockReturnValue(true),
         GetDeniedReadFields: vi.fn((user: UserInfo) => deniedFieldsForUser.get(user.ID) ?? new Set<string>()),
         IsFieldReadableByUser: vi.fn((fieldName: string, user: UserInfo) => {
             const denied = deniedFieldsForUser.get(user.ID);
@@ -257,6 +261,45 @@ describe('Anchored Record Comments Cross-Package Security & Notification Integra
             expect(savedNotifications[0].UserID).toBe(teamPeer.ID);
             expect(savedNotifications[0].Title).toContain('HR Director mentioned you');
             expect(savedNotifications[0].Message).toContain('Job Title');
+
+            // 7. Server-side PostRunView hook enforcement: even a raw RunView on MJ: Conversations or
+            //    MJ: Conversation Details (bypassing ConversationEngine) strips FLS-restricted threads and details!
+            EnsureAnchoredConversationReadHookRegistered();
+            const postHooks = GetDataHooks<PostRunViewHook>('PostRunView');
+            expect(postHooks).toContain(AnchoredConversationPostRunViewHook);
+
+            vi.spyOn(WellKnownUserSource.Instance, 'IsSystemUser').mockReturnValue(false);
+            vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue(hrDirector);
+            Object.defineProperty(teamPeer, 'OwningProvider', {
+                value: provider,
+                configurable: true
+            });
+
+            const rawConvResult = await AnchoredConversationPostRunViewHook(
+                { EntityName: 'MJ: Conversations' } as RunViewParams,
+                {
+                    Success: true,
+                    Results: [recordLevelConversation, titleConversation],
+                    RowCount: 2,
+                    TotalRowCount: 2
+                } as unknown as RunViewResult,
+                teamPeer
+            );
+            expect(rawConvResult.Results.map((c: { ID: string }) => c.ID)).toEqual([titleConversation.ID]);
+
+            // 8. Refusal-oracle prevention: if Team Peer (denied Salary) posts a comment guessing the exact
+            //    Salary value ("215000"), the save succeeds without revealing whether the guess matched.
+            const guessInspection = await InspectAndStampRestrictedFieldsForComment({
+                Provider: provider,
+                ContextUser: teamPeer,
+                Conversation: titleConversation,
+                EntityInfo: employeesEntity,
+                MessageText: 'Is the number 215000 or 220000?',
+                RecordValues: { ID: 'EMP-1', Title: 'Staff Engineer', Salary: 215000, SSN: '999-00-1234' },
+                SkipLLMStage: true
+            });
+            expect(guessInspection.Allowed).toBe(true);
+            expect(guessInspection.DetectedFields).toEqual([]);
         } finally {
             RegisterRestrictedFieldLLMClassifier(null);
         }

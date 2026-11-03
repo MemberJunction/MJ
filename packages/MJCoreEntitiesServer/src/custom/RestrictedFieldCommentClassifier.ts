@@ -8,8 +8,8 @@ import {
     UserInfo,
     WellKnownUserSource
 } from '@memberjunction/core';
-import { MJGlobal } from '@memberjunction/global';
-import { BaseLLM, ChatParams, ChatResult, GetAIAPIKeyGlobal } from '@memberjunction/ai';
+import { AIPromptParams } from '@memberjunction/ai-core-plus';
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
 import {
     BuildLinkedRecordPrimaryKeyFilter,
@@ -127,26 +127,46 @@ export async function InspectAndStampRestrictedFieldsForComment(params: {
         };
     }
 
-    // Load the linked record's restricted field values when not already supplied so Stage 1 can
-    // catch comments that quote a restricted value directly without naming the column.
-    let recordValues = params.RecordValues ?? null;
-    if (!recordValues && Conversation.LinkedRecordID && (MessageText ?? '').trim().length > 0) {
-        recordValues = await loadLinkedRecordRestrictedFieldValues(
-            Provider,
-            ContextUser,
-            entityInfo,
-            Conversation.LinkedRecordID,
-            restrictedFields
-        );
+    // Security invariant: never value-match against fields the authoring user is denied Read access to.
+    // An author who cannot read a field cannot be disclosing its value from the record, and matching their
+    // comment text against hidden system-loaded values would create a yes/no guessing oracle.
+    // Only fields the author CAN read are eligible for record-value matching (to stamp restrictedFields
+    // so downstream readers who lack access to that field do not see the thread).
+    const deniedLower = entityInfo.GetDeniedReadFields(ContextUser);
+    const authorReadableRestrictedFields = restrictedFields.filter(
+        (f) => !deniedLower.has(f.Name.trim().toLowerCase())
+    );
+
+    let readableRecordValues: Record<string, unknown> | null = null;
+    if (authorReadableRestrictedFields.length > 0 && (MessageText ?? '').trim().length > 0) {
+        const rawRecordValues =
+            params.RecordValues ??
+            (Conversation.LinkedRecordID
+                ? await loadLinkedRecordRestrictedFieldValues(
+                      Provider,
+                      ContextUser,
+                      entityInfo,
+                      Conversation.LinkedRecordID,
+                      authorReadableRestrictedFields
+                  )
+                : null);
+        if (rawRecordValues) {
+            readableRecordValues = {};
+            for (const f of authorReadableRestrictedFields) {
+                if (Object.prototype.hasOwnProperty.call(rawRecordValues, f.Name)) {
+                    readableRecordValues[f.Name] = rawRecordValues[f.Name];
+                }
+            }
+        }
     }
 
-    // Stage 1: Deterministic detection (field anchor + field names/labels + record values)
+    // Stage 1: Deterministic detection (field anchor + field names/labels + author-readable record values)
     const deterministicMatches = DetectReferencedRestrictedFieldsDeterministic(
         entityInfo,
         MessageText,
         Conversation.AnchorType,
         Conversation.AnchorKey,
-        recordValues
+        readableRecordValues
     );
     const detectedSet = new Set<string>(deterministicMatches);
 
@@ -182,15 +202,15 @@ export async function InspectAndStampRestrictedFieldsForComment(params: {
         }
     }
 
-    // Check whether the authoring user is denied Read access on any referenced restricted field
-    const deniedLower = entityInfo.GetDeniedReadFields(ContextUser);
+    // Check whether the authoring user is denied Read access on any referenced restricted field.
+    // Return a generic message without naming which field matched.
     const authorDeniedFields = [...allThreadRestrictedFields].filter((f) =>
         deniedLower.has(f.trim().toLowerCase())
     );
     if (authorDeniedFields.length > 0) {
         return {
             Allowed: false,
-            Reason: `You do not have permission to comment on restricted field(s): ${authorDeniedFields.join(', ')}.`,
+            Reason: 'You do not have permission to comment on restricted fields.',
             DetectedFields: detectedFields,
             AuthorDeniedFields: authorDeniedFields
         };
@@ -232,10 +252,10 @@ async function loadLinkedRecordRestrictedFieldValues(
     linkedRecordId: string,
     restrictedFields: readonly EntityFieldInfo[]
 ): Promise<Record<string, unknown> | null> {
-    if (provider?.ProviderType !== 'Database') {
+    if (provider?.ProviderType !== 'Database' || restrictedFields.length === 0) {
         return null;
     }
-    const pkFilter = BuildLinkedRecordPrimaryKeyFilter(entityInfo, linkedRecordId);
+    const pkFilter = BuildLinkedRecordPrimaryKeyFilter(entityInfo, linkedRecordId, provider);
     if (!pkFilter) {
         return null;
     }
@@ -332,6 +352,8 @@ function normalizeMatchedFieldNames(
     return [...canonical];
 }
 
+const RESTRICTED_FIELD_CLASSIFIER_PROMPT_NAME = 'Anchored Comment Restricted Field Classifier';
+
 async function runDefaultAIEngineRestrictedFieldClassifier(
     prompt: RestrictedFieldClassifierPrompt,
     contextUser: UserInfo,
@@ -339,103 +361,49 @@ async function runDefaultAIEngineRestrictedFieldClassifier(
 ): Promise<string[]> {
     try {
         await AIEngine.Instance.Config(false, contextUser);
-    } catch {
-        return [];
-    }
-
-    const activeModels = AIEngine.Instance.LanguageModels.filter(
-        (m) => m.IsActive === true && Boolean(m.DriverClass)
-    );
-    if (activeModels.length === 0) {
-        return [];
-    }
-
-    // Prefer a fast, lightweight model (lowest positive PowerRank first, falling back to first active model)
-    const sorted = [...activeModels].sort((a, b) => (a.PowerRank ?? 999) - (b.PowerRank ?? 999));
-    let selectedLLM: BaseLLM | null = null;
-    let selectedApiName = '';
-
-    for (const model of sorted) {
-        const driverClass = model.DriverClass;
-        if (!driverClass) {
-            continue;
-        }
-        const apiKey = GetAIAPIKeyGlobal(driverClass);
-        if (!apiKey) {
-            continue;
-        }
-        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
-            BaseLLM,
-            driverClass,
-            apiKey
+    } catch (error) {
+        LogStatus(
+            `[RestrictedFieldCommentClassifier] AIEngine.Config unavailable; skipping Stage 2 semantic classification: ${
+                error instanceof Error ? error.message : String(error)
+            }`
         );
-        if (instance) {
-            selectedLLM = instance;
-            selectedApiName = model.APINameOrName;
-            break;
-        }
-    }
-
-    if (!selectedLLM) {
         return [];
     }
 
-    const systemMessage =
-        `You are a data security classifier for an enterprise application. ` +
-        `Given an entity's Field-Level Security (FLS) restricted fields and a user comment posted on a record, ` +
-        `identify which restricted fields (if any) the comment is semantically discussing, disclosing, or asking about ` +
-        `(even if the comment uses synonyms, paraphrases, or indirect references like "six figures" for Salary). ` +
-        `Return STRICT JSON ONLY with shape: {"restrictedFields": ["<ExactFieldName>"]}. ` +
-        `If the comment does not discuss any of the listed restricted fields, return {"restrictedFields": []}.`;
-
-    const fieldLines = prompt.CandidateFields.map(
-        (f) =>
-            `- ${f.Name} (Label: "${f.DisplayName}"${
-                f.Description ? `, Description: ${f.Description}` : ''
-            })`
-    ).join('\n');
-
-    const userMessage =
-        `Entity: ${prompt.EntityDisplayName} (${prompt.EntityName})\n` +
-        `Restricted Fields:\n${fieldLines}\n\n` +
-        `Comment (${prompt.AnchorType ?? 'Record'}${prompt.AnchorKey ? ` / ${prompt.AnchorKey}` : ''}):\n` +
-        `${prompt.MessageText}`;
-
-    const chatParams: ChatParams = {
-        model: selectedApiName,
-        messages: [
-            { role: 'system', content: systemMessage },
-            { role: 'user', content: userMessage }
-        ],
-        temperature: 0,
-        responseFormat: 'JSON'
-    };
+    const aiPrompt = AIEngine.Instance.Prompts?.find(
+        (p) => p.Name === RESTRICTED_FIELD_CLASSIFIER_PROMPT_NAME && p.Status === 'Active'
+    );
+    if (!aiPrompt) {
+        return [];
+    }
 
     try {
-        const result: ChatResult = await selectedLLM.ChatCompletion(chatParams);
-        if (!result.success) {
+        const runner = new AIPromptRunner();
+        const params = new AIPromptParams();
+        params.prompt = aiPrompt;
+        params.data = prompt as unknown as Record<string, unknown>;
+        params.contextUser = contextUser;
+
+        const execution = await runner.ExecutePrompt<{ restrictedFields?: unknown }>(params);
+        if (!execution.success || !execution.result) {
             LogStatus(
-                `[RestrictedFieldCommentClassifier] LLM classification skipped: ${result.errorMessage ?? 'unknown'}`
+                `[RestrictedFieldCommentClassifier] Governed prompt "${RESTRICTED_FIELD_CLASSIFIER_PROMPT_NAME}" returned unsuccessful result: ${
+                    execution.errorMessage ?? 'unknown'
+                }`
             );
             return [];
         }
-        const content = result.data?.choices?.[0]?.message?.content;
-        if (!content) {
-            return [];
-        }
-        const parsed: unknown = JSON.parse(content);
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-            const list = (parsed as { restrictedFields?: unknown }).restrictedFields;
-            if (Array.isArray(list)) {
-                return normalizeMatchedFieldNames(
-                    list.filter((item): item is string => typeof item === 'string'),
-                    validByLower
-                );
-            }
+
+        const list = execution.result.restrictedFields;
+        if (Array.isArray(list)) {
+            return normalizeMatchedFieldNames(
+                list.filter((item): item is string => typeof item === 'string'),
+                validByLower
+            );
         }
     } catch (error) {
         LogStatus(
-            `[RestrictedFieldCommentClassifier] LLM classification exception: ${
+            `[RestrictedFieldCommentClassifier] Governed prompt "${RESTRICTED_FIELD_CLASSIFIER_PROMPT_NAME}" threw: ${
                 error instanceof Error ? error.message : String(error)
             }`
         );

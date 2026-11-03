@@ -715,8 +715,10 @@
     [Record]="EffectiveRecord"
     [Mode]="'drawer'"
     [IsOpen]="ShowRecordComments"
+    [WidthPx]="CommentsPanelWidth"
     (Close)="OnRecordCommentsClosed()"
     (CommentCountChange)="OnCommentCountChanged($event)"
+    (WidthChanged)="OnCommentsPanelWidthChanged($event)"
     (Navigate)="OnNavigate($event)">
   </mj-record-comments>
 }

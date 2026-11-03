@@ -57,10 +57,33 @@ export class MJConversationEntityServer extends MJConversationEntity {
 
         const provider = this.ProviderToUse as unknown as IMetadataProvider;
         const entityInfo =
-            provider?.Entities?.find((e) => UUIDsEqual(e.ID, this.LinkedEntityID)) ?? null;
+            (typeof provider?.EntityByID === 'function'
+                ? provider.EntityByID(this.LinkedEntityID)
+                : undefined) ??
+            provider?.Entities?.find((e) => UUIDsEqual(e.ID, this.LinkedEntityID)) ??
+            null;
 
         if (this.AnchorType && entityInfo && entityInfo.AllowRecordComments === false) {
             return `Record commenting is disabled for ${entityInfo.DisplayNameOrName}.`;
+        }
+
+        // Security invariant: never persist quotedValue snapshots for restricted (FLS) or encrypted fields,
+        // so protected field values cannot escape into plain AnchorMetadata JSON, Record Changes, or indexes.
+        if (entityInfo && this.AnchorType === 'Field' && this.AnchorKey) {
+            const targetLower = this.AnchorKey.trim().toLowerCase();
+            const targetField = entityInfo.Fields.find(
+                (f) => f.Name.toLowerCase() === targetLower
+            );
+            if (targetField && (targetField.HasFieldPermissions || targetField.Encrypt)) {
+                const existingMeta = ParseConversationAnchorMetadata(
+                    this.AnchorMetadataObject ?? this.AnchorMetadata
+                );
+                if (existingMeta && existingMeta.quotedValue !== undefined) {
+                    const sanitized = { ...existingMeta };
+                    delete sanitized.quotedValue;
+                    this.AnchorMetadataObject = sanitized;
+                }
+            }
         }
 
         // Auto-stamp restrictedFields when anchored directly to an FLS-governed field

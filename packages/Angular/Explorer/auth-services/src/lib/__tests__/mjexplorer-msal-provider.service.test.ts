@@ -179,16 +179,55 @@ describe('MJMSALProvider fast token extraction & refresh without iframe hangs', 
     const extracted = await (provider as unknown as { extractIdTokenInternal: () => Promise<string | null> }).extractIdTokenInternal();
     expect(extracted).toBeNull();
     expect(acquireTokenSilent).toHaveBeenCalledTimes(1);
-    expect(acquireTokenSilent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cacheLookupPolicy: 'AccessTokenAndRefreshToken'
-      })
-    );
 
     // Calling refreshTokenInternal immediately afterward should short-circuit without a second slow network/iframe call
     const refreshResult = await (provider as unknown as { refreshTokenInternal: () => Promise<{ success: boolean; error?: { type: string } }> }).refreshTokenInternal();
     expect(refreshResult.success).toBe(false);
     expect(refreshResult.error?.type).toBe('INTERACTION_REQUIRED');
     expect(acquireTokenSilent).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not short-circuit to INTERACTION_REQUIRED on a transient network error', async () => {
+    const activeAcct = account('user-1', 'user@example.com');
+    const acquireTokenSilent = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error('network_error'), { errorCode: 'network_error' }))
+      .mockResolvedValueOnce({
+        idToken: 'eyJhbGciOiJIUzI1NiJ9.' + btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 })) + '.sig',
+        accessToken: 'acc-1',
+        expiresOn: new Date(Date.now() + 3600000),
+        scopes: ['User.Read']
+      });
+
+    const mockMsalService = {
+      instance: {
+        initialize: vi.fn().mockResolvedValue(undefined),
+        handleRedirectPromise: vi.fn().mockResolvedValue(null),
+        getAllAccounts: vi.fn().mockReturnValue([activeAcct]),
+        getActiveAccount: vi.fn().mockReturnValue(activeAcct),
+        setActiveAccount: vi.fn(),
+        acquireTokenSilent
+      }
+    };
+    const mockBroadcast = {
+      inProgress$: {
+        pipe: () => ({ subscribe: () => {} })
+      }
+    };
+
+    const provider = new MJMSALProvider(
+      mockMsalService as unknown as ConstructorParameters<typeof MJMSALProvider>[0],
+      mockBroadcast as unknown as ConstructorParameters<typeof MJMSALProvider>[1]
+    );
+    (provider as unknown as { updateAuthState: () => void }).updateAuthState = vi.fn();
+    (provider as unknown as { updateUserInfo: () => void }).updateUserInfo = vi.fn();
+
+    const extracted = await (provider as unknown as { extractIdTokenInternal: () => Promise<string | null> }).extractIdTokenInternal();
+    expect(extracted).toBeNull();
+
+    // Subsequent refreshTokenInternal retries normally and succeeds instead of forcing INTERACTION_REQUIRED
+    const refreshResult = await (provider as unknown as { refreshTokenInternal: () => Promise<{ success: boolean; error?: { type: string } }> }).refreshTokenInternal();
+    expect(refreshResult.success).toBe(true);
+    expect(acquireTokenSilent).toHaveBeenCalledTimes(2);
   });
 });

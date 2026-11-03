@@ -45,7 +45,11 @@ export async function UserMayWriteConversation(
 
     if (conversation.AnchorType != null && conversation.LinkedEntityID && conversation.LinkedRecordID) {
         const entityInfo =
-            provider.Entities?.find((e) => UUIDsEqual(e.ID, conversation.LinkedEntityID)) ?? null;
+            (typeof provider.EntityByID === 'function'
+                ? provider.EntityByID(conversation.LinkedEntityID)
+                : undefined) ??
+            provider.Entities?.find((e) => UUIDsEqual(e.ID, conversation.LinkedEntityID)) ??
+            null;
         if (entityInfo) {
             if (entityInfo.AllowRecordComments === false) {
                 return {
@@ -55,7 +59,7 @@ export async function UserMayWriteConversation(
                     Loaded: true
                 };
             }
-            if (!entityInfo.CanUserComment(user)) {
+            if (typeof entityInfo.CanUserComment === 'function' && !entityInfo.CanUserComment(user)) {
                 return {
                     Allowed: false,
                     Reason: `You do not have permission to post comments on ${entityInfo.DisplayNameOrName} records.`,

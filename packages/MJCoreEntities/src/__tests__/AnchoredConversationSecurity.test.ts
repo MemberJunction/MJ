@@ -147,6 +147,16 @@ describe('AnchoredConversationSecurity', () => {
                 "[OrderID]=N'ord-1' AND [LineNumber]=42"
             );
         });
+
+        it('uses provider.QuoteIdentifier for PostgreSQL double-quoted identifiers without N-prefix', () => {
+            const entity = makeEntityInfo({
+                fields: [{ Name: 'ID', IsPrimaryKey: true, TSType: EntityFieldTSType.String }]
+            });
+            const pgProvider = {
+                QuoteIdentifier: (col: string) => `"${col}"`
+            } as unknown as IMetadataProvider;
+            expect(BuildLinkedRecordPrimaryKeyFilter(entity, 'rec-123', pgProvider)).toBe(`"ID"='rec-123'`);
+        });
     });
 
     describe('UserCanReadLinkedRecord & FilterAnchoredConversationsForUser (RLS + FLS)', () => {
@@ -381,6 +391,81 @@ describe('AnchoredConversationSecurity', () => {
             });
 
             // Alice gets notified; Bob is denied Read on Salary via FLS so Bob MUST NOT receive a notification!
+            expect(deliveredCount).toBe(1);
+            expect(savedNotifications).toHaveLength(1);
+            expect(savedNotifications[0].UserID).toBe('user-alice');
+        });
+
+        it('suppresses mention notifications in private unlinked conversations unless the recipient has Resource Permissions', async () => {
+            const savedNotifications: Array<{ UserID: string; Title: string }> = [];
+            const privateConv = {
+                ID: 'conv-private',
+                Name: 'My Private Chat',
+                UserID: 'user-author',
+                LinkedEntityID: null,
+                LinkedRecordID: null,
+                AnchorType: null,
+                AnchorKey: null,
+                AnchorMetadata: null,
+                AnchorMetadataObject: null,
+                Load: vi.fn().mockResolvedValue(true)
+            } as unknown as MJConversationEntity;
+
+            const usersById: Record<string, UserInfo> = {
+                'user-author': makeUser('user-author', 'Author'),
+                'user-alice': makeUser('user-alice', 'Alice Shared'),
+                'user-bob': makeUser('user-bob', 'Bob Unshared')
+            };
+
+            const provider = {
+                ProviderType: 'Database',
+                GetEntityObject: vi.fn().mockImplementation(async (entityName: string) => {
+                    if (entityName === 'MJ: Conversations') return privateConv;
+                    if (entityName === 'MJ: Users') {
+                        return {
+                            Name: 'Author',
+                            Email: 'author@example.com',
+                            Load: vi.fn().mockResolvedValue(true)
+                        };
+                    }
+                    if (entityName === 'MJ: User Notifications') {
+                        const notif: Record<string, unknown> = {
+                            NewRecord: vi.fn(),
+                            Save: vi.fn().mockImplementation(async () => {
+                                savedNotifications.push({
+                                    UserID: String(notif['UserID']),
+                                    Title: String(notif['Title'])
+                                });
+                                return true;
+                            })
+                        };
+                        return notif;
+                    }
+                    throw new Error(`Unexpected entity: ${entityName}`);
+                })
+            } as unknown as IMetadataProvider;
+
+            vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+                RunView: vi.fn().mockImplementation(async (params: { ExtraFilter: string }) => {
+                    if (params.ExtraFilter.includes("'user-alice'")) {
+                        return { Success: true, Results: [{ ID: 'perm-alice' }] };
+                    }
+                    return { Success: true, Results: [] };
+                })
+            } as unknown as RunView);
+
+            const deliveredCount = await DispatchConversationMentionNotifications({
+                Provider: provider,
+                ContextUser: usersById['user-author'],
+                ConversationID: 'conv-private',
+                ConversationDetailID: 'detail-priv-1',
+                AuthorUserID: 'user-author',
+                Message: `Hey ${mentionAlice} and ${mentionBob}, secret note.`,
+                Conversation: privateConv,
+                ResolveRecipientUserInfo: (id) => usersById[id] ?? null
+            });
+
+            // Only Alice (who has an Approved Resource Permission on conv-private) gets notified; Bob does not!
             expect(deliveredCount).toBe(1);
             expect(savedNotifications).toHaveLength(1);
             expect(savedNotifications[0].UserID).toBe('user-alice');

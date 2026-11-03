@@ -1192,7 +1192,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         environmentId: string,
         contextUser: UserInfo,
         forceRefresh: boolean = false,
-        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean }
+        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean; includeRecordLinked?: boolean }
     ): Promise<void> {
         // Skip if already loaded for this environment (unless forcing)
         if (!forceRefresh && this._lastEnvironmentId === environmentId && this._conversations$.value.length > 0) {
@@ -1285,7 +1285,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     public async GetVisibleConversationsFilter(
         environmentId: string,
         contextUser: UserInfo,
-        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean }
+        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean; includeRecordLinked?: boolean }
     ): Promise<string> {
         const sharedPermissions = await this.getSharedConversationPermissions(contextUser);
         return this.buildVisibleConversationsFilter(
@@ -1309,7 +1309,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         environmentId: string,
         userId: string,
         sharedConversationIds: string[],
-        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean }
+        options?: { includeApplicationScoped?: boolean; includeAnchored?: boolean; includeRecordLinked?: boolean }
     ): string {
         const ownershipClause = `UserID='${userId}'`;
         const sharedClause =
@@ -1326,7 +1326,12 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const anchorClause = options?.includeAnchored
             ? ''
             : ` AND AnchorType IS NULL`;
-        return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}${anchorClause}`;
+        // Record-bound AI conversations (e.g. "Ask AI" on an entity record form) stay
+        // attached to their owning record and do not pollute the general-purpose Chat sidebar.
+        const recordLinkedClause = options?.includeRecordLinked
+            ? ''
+            : ` AND LinkedEntityID IS NULL`;
+        return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}${anchorClause}${recordLinkedClause}`;
     }
 
     /**
@@ -1766,11 +1771,63 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // out on next refresh.
         // The GetConversation() check is belt-and-suspenders against a save event that
         // slips past _selfMutating (e.g. async dispatch) — never add the same ID twice.
-        if (conversation.ApplicationScope !== 'Application' && conversation.AnchorType == null && !this.GetConversation(conversation.ID)) {
+        if (
+            conversation.ApplicationScope !== 'Application' &&
+            conversation.AnchorType == null &&
+            conversation.LinkedEntityID == null &&
+            !this.GetConversation(conversation.ID)
+        ) {
             const updated = [conversation, ...this._conversations$.value];
             this._conversations$.next(updated);
         }
         return conversation;
+    }
+
+    /**
+     * Loads non-anchored AI conversations (`AnchorType IS NULL`) bound to a specific
+     * `(linkedEntityId, linkedRecordId)` for `contextUser`, ordered by most-recently updated.
+     * Used by `<mj-chat-agents-overlay>` ("Ask AI") when a user opens an entity record form.
+     */
+    public async LoadRecordConversations(
+        linkedEntityId: string,
+        linkedRecordId: string,
+        contextUser: UserInfo,
+        environmentId?: string,
+        provider?: IMetadataProvider
+    ): Promise<MJConversationEntity[]> {
+        const cleanEntityId = linkedEntityId?.trim();
+        const cleanRecordId = linkedRecordId?.trim();
+        if (!cleanEntityId || !cleanRecordId || !contextUser?.ID) {
+            return [];
+        }
+
+        const md = provider ?? this.ProviderToUse;
+        const rv = RunView.FromMetadataProvider(md);
+        const safeEntityId = EscapeSQLString(cleanEntityId);
+        const safeRecordId = EscapeSQLString(cleanRecordId);
+        const safeUserId = EscapeSQLString(contextUser.ID);
+        const envClause = environmentId?.trim()
+            ? ` AND EnvironmentID='${EscapeSQLString(environmentId.trim())}'`
+            : '';
+
+        const result = await rv.RunView<MJConversationEntity>(
+            {
+                EntityName: 'MJ: Conversations',
+                ExtraFilter:
+                    `LinkedEntityID='${safeEntityId}'` +
+                    ` AND (LinkedRecordID='${safeRecordId}' OR LinkedRecordID='ID|${safeRecordId}')` +
+                    ` AND AnchorType IS NULL` +
+                    ` AND UserID='${safeUserId}'` +
+                    ` AND (IsArchived IS NULL OR IsArchived=0)` +
+                    envClause,
+                OrderBy: '__mj_UpdatedAt DESC',
+                MaxRows: 50,
+                ResultType: 'entity_object'
+            },
+            contextUser
+        );
+
+        return result.Success && result.Results ? result.Results : [];
     }
 
     // ========================================================================
@@ -2011,9 +2068,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return null;
         }
 
-        // App-scoped conversations live inside their owning Application's embedded surface,
-        // not the main-chat list this engine caches — mirror CreateConversation and skip them.
-        if (conversation.ApplicationScope === 'Application') {
+        // App-scoped, anchored, and record-bound conversations live inside their owning
+        // surface, not the main-chat list this engine caches — mirror CreateConversation and skip them.
+        if (
+            conversation.ApplicationScope === 'Application' ||
+            conversation.AnchorType != null ||
+            conversation.LinkedEntityID != null
+        ) {
             return conversation;
         }
 
@@ -4394,12 +4455,19 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 // archived rows don't belong in the active list.
                 const scope = data['ApplicationScope'] as string | undefined;
                 const anchorType = data['AnchorType'] as string | null | undefined;
+                const linkedEntityId = data['LinkedEntityID'] as string | null | undefined;
                 const environmentId = data['EnvironmentID'] as string | undefined;
                 const isArchived = data['IsArchived'] === true;
                 const inLoadedEnvironment =
                     !this._lastEnvironmentId ||
                     (environmentId != null && UUIDsEqual(environmentId, this._lastEnvironmentId));
-                if (scope !== 'Application' && anchorType == null && !isArchived && inLoadedEnvironment) {
+                if (
+                    scope !== 'Application' &&
+                    anchorType == null &&
+                    linkedEntityId == null &&
+                    !isArchived &&
+                    inLoadedEnvironment
+                ) {
                     this._conversations$.next([event.baseEntity as MJConversationEntity, ...this._conversations$.value]);
                 }
             }

@@ -397,7 +397,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const btn = event.currentTarget as HTMLElement | null;
     const rect = btn?.getBoundingClientRect();
     const hostPanel = this.sectionHost as { SectionKey?: string; SectionName?: string } | null;
-    const formattedVal = this.FormatValue();
+    // Never snapshot restricted (FLS) or encrypted field values into plain AnchorMetadata JSON
+    const isProtectedField = Boolean(this.FieldInfo?.HasFieldPermissions || this.FieldInfo?.Encrypt);
+    const formattedVal = isProtectedField ? '' : this.FormatValue();
 
     this.commentsCoordinator.OpenPopoverForTarget({
       AnchorType: 'Field',

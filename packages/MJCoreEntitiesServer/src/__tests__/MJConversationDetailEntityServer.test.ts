@@ -265,7 +265,7 @@ describe('MJConversationEntityServer.Save (anchored RLS + FLS)', () => {
             AnchorType: 'Field' as const,
             AnchorKey: 'salary',
             AnchorMetadata: null,
-            AnchorMetadataObject: { anchorDisplayName: 'Salary' } as Record<string, unknown>,
+            AnchorMetadataObject: { anchorDisplayName: 'Salary', quotedValue: '$215,000' } as Record<string, unknown>,
             ContextCurrentUser: { ID: 'user-hr' } as unknown as UserInfo,
             ProviderToUse: {
                 ProviderType: 'Database',
@@ -285,6 +285,7 @@ describe('MJConversationEntityServer.Save (anchored RLS + FLS)', () => {
         expect(saved).toBe(true);
         expect(parentSave).toHaveBeenCalledOnce();
         expect(convStub.AnchorMetadataObject.restrictedFields).toEqual(['Salary']);
+        expect(convStub.AnchorMetadataObject.quotedValue).toBeUndefined();
     });
 
     it('blocks Save when the caller is denied FLS read access on the anchored field', async () => {
@@ -342,5 +343,30 @@ describe('MJConversationEntityServer.Save (anchored RLS + FLS)', () => {
         expect(saved).toBe(false);
         expect(parentSave).not.toHaveBeenCalled();
         expect(results[0]?.Message).toContain('restricted field');
+    });
+
+    it('skips CheckAndStampAnchoredRestrictedFields on non-anchored record-linked conversations (AnchorType == null)', async () => {
+        vi.spyOn(WellKnownUserSource.Instance, 'GetSystemUser').mockResolvedValue({ ID: 'sys' } as unknown as UserInfo);
+        const detailStub = {
+            IsSaved: false,
+            ConversationID: 'conv-record-chat',
+            Message: 'Ask AI about Salary',
+            ContextCurrentUser: { ID: 'user-1' } as unknown as UserInfo,
+            ProviderToUse: {
+                ProviderType: 'Database',
+                GetEntityObject: vi.fn().mockResolvedValue({
+                    ID: 'conv-record-chat',
+                    LinkedEntityID: 'entity-emp',
+                    LinkedRecordID: 'EMP-1',
+                    AnchorType: null,
+                    Load: vi.fn().mockResolvedValue(true)
+                })
+            }
+        };
+
+        const refusal = await MJConversationDetailEntityServer.prototype.CheckAndStampAnchoredRestrictedFields.call(
+            detailStub as unknown as MJConversationDetailEntityServer
+        );
+        expect(refusal).toBeNull();
     });
 });

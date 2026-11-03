@@ -260,6 +260,10 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   /** Controls visibility of anchored record comments slide-in drawer */
   ShowRecordComments = false;
 
+  /** Persisted comments panel width */
+  CommentsPanelWidth = 0;
+  private static readonly COMMENTS_WIDTH_KEY = 'MJ_CommentsPanel_Width';
+
   /** Number of open anchored comment threads on this record */
   CommentCount = 0;
 
@@ -822,9 +826,11 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   // ---- Lifecycle ----
 
   ngAfterContentInit(): void {
-    // Load saved tags panel width
+    // Load saved tags and comments panel widths
     const savedWidth = UserInfoEngine.Instance.GetSetting(MjRecordFormContainerComponent.TAGS_WIDTH_KEY);
     if (savedWidth) this.TagsPanelWidth = parseInt(savedWidth, 10) || 0;
+    const savedCommentsWidth = UserInfoEngine.Instance.GetSetting(MjRecordFormContainerComponent.COMMENTS_WIDTH_KEY);
+    if (savedCommentsWidth) this.CommentsPanelWidth = parseInt(savedCommentsWidth, 10) || 0;
 
     // Subscribe to panel Navigate events and relay them
     this.subscribeToPanelNavigateEvents();
@@ -3145,6 +3151,11 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   OnCommentCountChanged(count: number): void {
     this.CommentCount = count;
     this.cdr.markForCheck();
+  }
+
+  OnCommentsPanelWidthChanged(width: number): void {
+    this.CommentsPanelWidth = width;
+    UserInfoEngine.Instance.SetSettingDebounced(MjRecordFormContainerComponent.COMMENTS_WIDTH_KEY, String(width));
   }
 
   /**

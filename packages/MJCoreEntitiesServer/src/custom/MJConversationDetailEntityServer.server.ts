@@ -78,21 +78,25 @@ export class MJConversationDetailEntityServer extends MJConversationDetailEntity
                 systemUser
             );
             const loaded = await conversation.Load(this.ConversationID);
-            if (!loaded || !conversation.LinkedEntityID || !conversation.LinkedRecordID) {
+            if (!loaded || !conversation.AnchorType || !conversation.LinkedEntityID || !conversation.LinkedRecordID) {
                 return null;
             }
 
             const entityInfo =
-                provider.Entities?.find((e) => UUIDsEqual(e.ID, conversation.LinkedEntityID)) ?? null;
+                (typeof provider.EntityByID === 'function'
+                    ? provider.EntityByID(conversation.LinkedEntityID)
+                    : undefined) ??
+                provider.Entities?.find((e) => UUIDsEqual(e.ID, conversation.LinkedEntityID)) ??
+                null;
             if (!entityInfo) {
                 return null;
             }
 
-            if (conversation.AnchorType && !WellKnownUserSource.Instance.IsSystemUser(user)) {
+            if (!WellKnownUserSource.Instance.IsSystemUser(user)) {
                 if (entityInfo.AllowRecordComments === false) {
                     return `Record commenting is disabled for ${entityInfo.DisplayNameOrName}.`;
                 }
-                if (!entityInfo.CanUserComment(user)) {
+                if (typeof entityInfo.CanUserComment === 'function' && !entityInfo.CanUserComment(user)) {
                     return `You do not have permission to post comments on ${entityInfo.DisplayNameOrName} records.`;
                 }
             }

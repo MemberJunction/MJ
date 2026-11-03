@@ -3,7 +3,8 @@ import { BaseEntity, EntityInfo, IMetadataProvider, UserInfo } from '@memberjunc
 import {
     ConversationEngine,
     MJConversationDetailEntity,
-    MJConversationEntity
+    MJConversationEntity,
+    UserInfoEngine
 } from '@memberjunction/core-entities';
 import { FormRecordCommentsCoordinatorService } from '../form-record-comments-coordinator.service';
 import { MjRecordCommentsComponent } from '../record-comments.component';
@@ -456,6 +457,34 @@ describe('MjRecordCommentsComponent', () => {
         } finally {
             loadConvSpy.mockRestore();
             loadDetailsSpy.mockRestore();
+        }
+    });
+
+    it('persists drawer width to UserInfoEngine (MJ_CommentsPanel_Width) and emits WidthChanged', () => {
+        const setSettingSpy = vi
+            .spyOn(UserInfoEngine.Instance, 'SetSettingDebounced')
+            .mockResolvedValue(undefined);
+        const getSettingSpy = vi
+            .spyOn(UserInfoEngine.Instance, 'GetSetting')
+            .mockReturnValue('480');
+
+        try {
+            const emittedWidths: number[] = [];
+            const comp = Object.assign(Object.create(MjRecordCommentsComponent.prototype), {
+                Mode: 'drawer' as const,
+                WidthPx: 380,
+                WidthChanged: { emit: (w: number) => emittedWidths.push(w) },
+                cdr: { markForCheck: vi.fn() }
+            }) as unknown as MjRecordCommentsComponent;
+
+            comp.PersistDrawerWidth(512);
+            expect(comp.WidthPx).toBe(512);
+            expect(comp.EffectiveDrawerWidthPx).toBe(512);
+            expect(emittedWidths).toEqual([512]);
+            expect(setSettingSpy).toHaveBeenCalledWith('MJ_CommentsPanel_Width', '512');
+        } finally {
+            setSettingSpy.mockRestore();
+            getSettingSpy.mockRestore();
         }
     });
 });

@@ -139,10 +139,12 @@ export function IsConversationHiddenByFieldSecurity(
  * Builds a SQL `WHERE` filter expression matching `linkedRecordId` against `entityInfo`'s primary key(s).
  * Supports both plain scalar PK strings (`'81D4BC3D-...'` or `'42'`) and `CompositeKey.ToURLSegment()`
  * formatted strings (`'ID|81D4BC3D-...'` or `'Key1|Val1||Key2|Val2'`).
+ * Uses `provider.QuoteIdentifier` when available so filters work across both SQL Server (`[ID]`) and PostgreSQL (`"ID"`).
  */
 export function BuildLinkedRecordPrimaryKeyFilter(
     entityInfo: EntityInfo,
-    linkedRecordId: string
+    linkedRecordId: string,
+    provider?: IMetadataProvider | null
 ): string | null {
     const raw = (linkedRecordId ?? '').trim();
     if (!raw || entityInfo.PrimaryKeys.length === 0) {
@@ -164,7 +166,7 @@ export function BuildLinkedRecordPrimaryKeyFilter(
                 if (!field) {
                     return null;
                 }
-                const clause = formatSinglePrimaryKeyClause(field, String(kv.Value ?? ''));
+                const clause = formatSinglePrimaryKeyClause(field, String(kv.Value ?? ''), provider);
                 if (!clause) {
                     return null;
                 }
@@ -178,25 +180,52 @@ export function BuildLinkedRecordPrimaryKeyFilter(
 
     // Single primary key plain value
     if (entityInfo.PrimaryKeys.length === 1) {
-        return formatSinglePrimaryKeyClause(entityInfo.FirstPrimaryKey, raw); // first-pk-ok: guarded by entityInfo.PrimaryKeys.length === 1
+        return formatSinglePrimaryKeyClause(entityInfo.FirstPrimaryKey, raw, provider); // first-pk-ok: guarded by entityInfo.PrimaryKeys.length === 1
     }
 
     return null;
 }
 
-function formatSinglePrimaryKeyClause(field: EntityFieldInfo, rawValue: string): string | null {
+function formatSinglePrimaryKeyClause(
+    field: EntityFieldInfo,
+    rawValue: string,
+    provider?: IMetadataProvider | null
+): string | null {
     const trimmed = rawValue.trim();
     if (!trimmed) {
         return null;
     }
+    const quotable = provider as { QuoteIdentifier?: (name: string) => string } | null | undefined;
+    const quotedCol =
+        typeof quotable?.QuoteIdentifier === 'function'
+            ? quotable.QuoteIdentifier(field.Name)
+            : `[${field.Name}]`;
+    const isPostgresQuoted = quotedCol.startsWith('"');
     if (field.TSType === EntityFieldTSType.Number) {
         const num = Number(trimmed);
         if (!Number.isFinite(num)) {
             return null;
         }
-        return `[${field.Name}]=${num}`;
+        return `${quotedCol}=${num}`;
     }
-    return `[${field.Name}]=N'${EscapeSQLString(trimmed)}'`;
+    const stringPrefix = isPostgresQuoted ? '' : 'N';
+    return `${quotedCol}=${stringPrefix}'${EscapeSQLString(trimmed)}'`;
+}
+
+function resolveEntityInfoById(
+    provider: IMetadataProvider | null | undefined,
+    entityId: string
+): EntityInfo | null {
+    if (!provider || !entityId) {
+        return null;
+    }
+    if (typeof provider.EntityByID === 'function') {
+        const found = provider.EntityByID(entityId);
+        if (found) {
+            return found;
+        }
+    }
+    return provider.Entities?.find((e) => UUIDsEqual(e.ID, entityId)) ?? null;
 }
 
 /**
@@ -221,7 +250,7 @@ export async function UserCanReadLinkedRecord(
         return { Allowed: false, Reason: 'User context is required.', EntityInfo: null };
     }
 
-    const entityInfo = provider?.Entities?.find((e) => UUIDsEqual(e.ID, linkedEntityId)) ?? null;
+    const entityInfo = resolveEntityInfoById(provider, linkedEntityId);
     if (!entityInfo) {
         return { Allowed: false, Reason: 'Linked entity was not found.', EntityInfo: null };
     }
@@ -239,7 +268,7 @@ export async function UserCanReadLinkedRecord(
         return { Allowed: true, Reason: null, EntityInfo: entityInfo };
     }
 
-    const pkFilter = BuildLinkedRecordPrimaryKeyFilter(entityInfo, linkedRecordId);
+    const pkFilter = BuildLinkedRecordPrimaryKeyFilter(entityInfo, linkedRecordId, provider);
     if (!pkFilter) {
         return {
             Allowed: false,
