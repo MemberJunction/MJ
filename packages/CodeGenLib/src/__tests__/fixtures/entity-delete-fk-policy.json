@@ -329,6 +329,27 @@
       "reason": "Nullable reference; cleared so the row survives without the entity."
     },
     {
+      "table": "GraphEdge",
+      "column": "SourceEntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "GraphEdge",
+      "column": "TargetEntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
+      "table": "GraphEdgeTypeEndpoint",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
       "table": "IdentityClaim",
       "column": "EntityID",
       "nullable": true,
