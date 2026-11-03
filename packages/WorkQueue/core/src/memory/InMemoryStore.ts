@@ -137,9 +137,14 @@ export class InMemoryStore {
                 continue;
             }
             delivery.LastError = LEASE_EXPIRED_REASON;
-            if (delivery.AttemptCount < this.policyOf(delivery.SubscriptionName).MaxAttempts) {
+            const policy = this.policyOf(delivery.SubscriptionName);
+            if (delivery.AttemptCount < policy.MaxAttempts) {
                 delivery.Status = 'Pending';
                 delivery.VisibleAtMs = now;
+            } else if (policy.ExhaustionBehavior === 'Discard') {
+                delivery.Status = 'Discarded';
+                delivery.CompletedAtMs = now;
+                delivery.ResolutionNote = LEASE_EXPIRED_REASON;
             } else {
                 delivery.Status = 'DeadLettered';
                 delivery.DeadLetterReason = LEASE_EXPIRED_REASON;
@@ -195,6 +200,19 @@ export class InMemoryStore {
         delivery.Status = 'DeadLettered';
         delivery.DeadLetterReason = reason;
         delivery.DeadLetteredAtMs = this.now();
+        delivery.LastError = error;
+        return settled(delivery);
+    }
+
+    public DiscardExhausted(handle: DeliveryHandle, reason: string, error: string | null): SettleResult {
+        const delivery = this.held(handle);
+        if (delivery === null) {
+            return lost(handle);
+        }
+        clearLease(delivery);
+        delivery.Status = 'Discarded';
+        delivery.CompletedAtMs = this.now();
+        delivery.ResolutionNote = reason.slice(0, MAX_RESOLUTION_NOTE_LENGTH);
         delivery.LastError = error;
         return settled(delivery);
     }

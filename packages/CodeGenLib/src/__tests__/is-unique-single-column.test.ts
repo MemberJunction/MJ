@@ -69,7 +69,10 @@ describe('IsUnique means "unique on its own" (#4536)', () => {
 
    it('4. PostgreSQL update routine', () => {
       const sql = new PostgreSQLCodeGenProvider().getMetadataSupportObjectsSQL('__mj') ?? '';
-      expect(sql).toMatch(/CREATE TEMP TABLE _uef_uk AS[\s\S]*?WHERE u\."KeyColumnCount" = 1\s+AND NOT u\."IsFiltered";/);
+      // create-once + TRUNCATE + INSERT: the filter lives on the INSERT that loads the table
+      expect(sql).toContain('CREATE TEMP TABLE IF NOT EXISTS _uef_uk AS');
+      expect(sql).toMatch(/INSERT INTO _uef_uk\s+SELECT DISTINCT[\s\S]*?WHERE u\."KeyColumnCount" = 1\s+AND NOT u\."IsFiltered";/);
+      expect(sql).toMatch(/INSERT INTO _uef_pk\s+SELECT p\.\*, COUNT\(\*\) OVER/);
       expect(sql).toContain('COUNT(*) OVER (PARTITION BY p."SchemaName", p."TableName") AS "KeyColumnCount"');
       expect(sql).not.toContain('(pk."ColumnName" IS NOT NULL OR uk."ColumnName" IS NOT NULL)');
       // computed value, material-change test and change reason

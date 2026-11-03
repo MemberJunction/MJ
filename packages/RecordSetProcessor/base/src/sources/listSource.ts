@@ -31,6 +31,7 @@ export class ListSource implements IRecordSetSource {
             Fields: ['EntityID'],
             ResultType: 'simple',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         }, contextUser);
         if (!result.Success) {
             throw new Error(`ListSource: failed loading list '${this.listID}': ${result.ErrorMessage}`);
@@ -68,7 +69,7 @@ export class ListSource implements IRecordSetSource {
         if (!result.Success) {
             throw new Error(`ListSource: failed loading members for list '${this.listID}': ${result.ErrorMessage}`);
         }
-        const rows = (result.Results ?? []) as { ID?: string; RecordID: string }[];
+        const rows = ((result.Results ?? []) as { ID?: string; RecordID: string }[]).slice(0, batchSize);
         const records: RecordRef[] = rows.map((row) => ({ EntityID: entityID, RecordID: String(row.RecordID) }));
         const lastRowId = rows.length > 0 ? rows[rows.length - 1].ID : undefined;
         const lastId = lastRowId != null ? String(lastRowId) : cursor?.Key;

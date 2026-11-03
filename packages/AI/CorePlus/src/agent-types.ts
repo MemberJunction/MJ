@@ -19,7 +19,7 @@ import { AgentScratchpad } from './agent-scratchpad';
 import { AgentDecisionRequest, AgentDecisionResult, AgentFinishIf } from './agent-decisions';
 import { AIAPIKey, AICredentialScope } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
-import { ActionParam } from '@memberjunction/actions-base';
+import { ActionParam, type ActionOutputTrustLevel } from '@memberjunction/actions-base';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
 import { AgentRequestAssignmentStrategy } from './assignment-strategy';
 import { MJAIAgentRunEntityExtended } from './MJAIAgentRunEntityExtended';
@@ -181,6 +181,12 @@ export interface MediaOutput {
     /** Base64 encoded data (only if NOT from prompt run) */
     data?: string;
 
+    /**
+     * `MJ: Files` ID set once the media bytes are in MJStorage; downstream consumers
+     * reuse it instead of uploading the same bytes again.
+     */
+    fileId?: string;
+
     /** URL if available (some providers return URLs) */
     url?: string;
 
@@ -313,6 +319,20 @@ export type AgentAction = {
  * or a dedicated entity. The LLM sees Name + Description + InputSchema
  * in its system prompt to know how to invoke the tool.
  */
+/**
+ * One external or semi-trusted source a run ingested: which step, what produced it, and how far it is
+ * trusted. A run with any of these is tainted — its memory writes land `Pending`, and a parent run
+ * absorbs its sub-agents' sources so delegation cannot launder external content.
+ */
+export interface AgentTaintedSource {
+    /** The step that ingested the source, numbered as the run's steps are. */
+    stepNumber: number;
+    /** `action:<name>`, `client-tool:<name>`, or `sub-agent:<name>/<the child's source>`. */
+    sourceName: string;
+    /** How far the source is trusted; `'Trusted'` sources are not recorded. */
+    trustLevel: Exclude<ActionOutputTrustLevel, 'Trusted'>;
+}
+
 export interface ClientToolMetadata {
     /** Unique identifier for this tool */
     Name: string;
@@ -326,6 +346,8 @@ export interface ClientToolMetadata {
     Category?: string;
     /** Default timeout in ms for this specific tool (overrides agent default) */
     DefaultTimeoutMs?: number;
+    /** Optional output trust classification; when 'Untrusted' or 'SemiTrusted', tool output is wrapped in <untrusted_external_data> */
+    TrustLevel?: ActionOutputTrustLevel;
 }
 
 /**
@@ -405,6 +427,8 @@ export interface ClientToolResultSummary {
     Media?: ClientToolMediaItem[];
     /** Error message if the tool failed */
     ErrorMessage?: string;
+    /** Optional output trust classification; when 'Untrusted' or 'SemiTrusted', tool output is wrapped in <untrusted_external_data> */
+    TrustLevel?: ActionOutputTrustLevel;
 }
 
 /**
@@ -442,6 +466,17 @@ export type AgentSubAgentRequest<TContext = any> = {
     message: string;
     /** Whether to terminate the parent agent after sub-agent completes */
     terminateAfter: boolean;
+    /**
+     * The ID of this sub-agent's earlier run that ended with a question to this agent;
+     * set it only to answer that question; the framework resumes that run (its payload,
+     * its question, then your message).
+     */
+    resumeRunId?: string;
+    /**
+     * Optional configuration preset of the target sub-agent, by name (or display name).
+     * Overrides the relationship's default `ConfigurationPresetID` and the parent's `configurationId`.
+     */
+    presetName?: string;
     /** The native tool call (ChatToolCall.id) this dispatch answers — set only on native turns. */
     toolCallId?: string;
     /** Optional template parameters for sub-agent invocation */
@@ -587,6 +622,43 @@ export interface AgentToolCallRequest {
 }
 
 /**
+ * Maximum number of agent-to-agent handoffs allowed within a single user turn.
+ * Shared across `BaseAgent` handoff validation/execution and messaging adapters.
+ */
+export const MAX_HANDOFF_HOPS = 3;
+
+/**
+ * Request emitted by an agent to transfer the conversation turn to another agent (`step === 'Handoff'`).
+ * The target agent runs as itself in the same conversation rather than as a nested sub-agent.
+ */
+export type AgentHandoffRequest = {
+    /** Name of the target agent to transfer the conversation to. */
+    agentName: string;
+    /** Self-contained brief carrying the context and requirements the target agent needs to handle the turn. */
+    brief: string;
+    /** Explanation of why the source agent is transferring the turn to the target agent. */
+    reason: string;
+};
+
+/**
+ * Outcome recorded when a run ends with a `'Handoff'` step, read by the host to execute the transfer.
+ */
+export type AgentHandoffResult = {
+    /** Resolved ID of the target agent receiving the handoff. */
+    targetAgentId: string;
+    /** Canonical Name of the target agent receiving the handoff. */
+    targetAgentName: string;
+    /** ID of the source agent that initiated the handoff. */
+    sourceAgentId: string;
+    /** Self-contained brief passed from the source agent to the target agent. */
+    brief: string;
+    /** Explanation of why the turn was transferred. */
+    reason: string;
+    /** ID of the recorded `AIAgentRunStep` row (`StepType = 'Handoff'`). */
+    runStepId: string;
+};
+
+/**
  * Represents the next step determination from an agent type.
  * 
  * Agent types analyze the output of prompt execution and determine what should
@@ -620,6 +692,9 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * - 'Decision': non-terminal in the same way. Runs {@link decisions} as `Decision` run steps with
      *   no LLM turn, and returns a 'Retry' carrying {@link decisionResults}. A Flow agent's Decision
      *   step emits it.
+     * - 'Handoff': detaches by recording a `Handoff` run step, storing {@link AgentHandoffResult} on
+     *   `ExecuteAgentResult.handoff`, and concluding the source agent's run with `'Success'`. Use
+     *   `'Handoff' as typeof nextStep.step` at assignment and switch sites.
      *
      * Note: To expand a compacted message, set step to 'Retry', set messageIndex to the message to expand,
      * and optionally set expandReason to explain why expansion is needed. The framework will expand the message
@@ -828,6 +903,12 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
         foldReason?: string;
     };
     /**
+     * Request to transfer the conversation turn to another agent when `step` is `'Handoff'`.
+     * Records a `Handoff` run step and terminates the current agent run with `Success` so the
+     * host can invoke the target agent in the same conversation.
+     */
+    handoff?: AgentHandoffRequest;
+    /**
      * When true, the agent should terminate after executing the current step.
      * Used by ClientTools: the main loop needs `terminate: false` so it continues
      * to dispatch the tool execution, but `executeClientToolsStep` checks this
@@ -957,6 +1038,19 @@ export type ExecuteAgentResult<P = any> = {
      * @since 5.12.0
      */
     feedbackRequestId?: string;
+
+    /**
+     * The untrusted and semi-trusted sources this run ingested, when there were any. A parent run
+     * folds these into its own taint when the sub-agent step completes, so a run that delegated web
+     * search is as tainted as one that searched itself.
+     */
+    taintedSources?: AgentTaintedSource[];
+
+    /**
+     * Populated when the run concluded with a `'Handoff'` step. Carries the resolved target agent
+     * and brief so the conversation host can execute the transfer in the same conversation.
+     */
+    handoff?: AgentHandoffResult;
 
     /**
      * The resolved FileStorageAccount ID for file artifact storage, determined during
@@ -1245,6 +1339,23 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * ```
      */
     SecondaryScopes?: Record<string, SecondaryScopeValue>;
+
+    /**
+     * Search scopes the HOST assigns to this run (for example the space a conversation belongs to). Scoped Search,
+     * called by this agent or any sub-agent it runs, then searches only these (the first when the model names none),
+     * and the host's assignment stands in for the agent's own `SearchScopeAccess` and assigned-scope list, so any agent
+     * the host runs can search what the host allows. It never grants: the acting user's own permission on the scope,
+     * the scope's dimension rules and row-level security still apply. Server code sets it; it is never read from `data`.
+     *
+     * What it covers: the Scoped Search action, in this run and in every agent it starts (sub-agents, `Execute Agent`,
+     * realtime delegation, runtime actions). The plain Search action refuses in such a run, and the run is not offered
+     * task graphs (a graph's nodes run without it). Pre-execution RAG still uses only the agent's own `PreExecution`
+     * scopes. It is not written to the run row, so a continuation (`lastRunId`) must pass it again, as with `actionChanges`.
+     *
+     * An empty list means not assigned: the agent's own search access applies. To forbid search in a run, remove Scoped
+     * Search (and Search) with `actionChanges`.
+     */
+    SearchScopeIDs?: string[];
     /** Optional cancellation token to abort the agent execution */
     cancellationToken?: AbortSignal;
     /** Optional callback for receiving execution progress updates */
@@ -1522,6 +1633,15 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     ConversationBranchID?: string;
 
     /**
+     * Ordered list of agent IDs that have already handed this user turn on, oldest first.
+     *
+     * A host that carries out handoffs sets this property, even to `[]` on the initial run.
+     * When absent (`undefined`), this host does not carry out handoffs (e.g., MCP, scheduled jobs,
+     * evals, or API-key callers), so the run is not offered the `Handoff` step type.
+     */
+    handoffChain?: string[];
+
+    /**
      * Optional flag to automatically populate the payload from the last run.
      * When true and lastRunId is provided, the framework will:
      * 1. Load the last run's FinalPayload
@@ -1580,8 +1700,9 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     /**
      * Optional AI Configuration ID to use for this agent execution.
      * When provided, this configuration will be passed to all prompts executed
-     * by this agent and its sub-agents, enabling environment-specific model
-     * selection (e.g., Prod vs Dev configurations).
+     * by this agent, enabling environment-specific model selection (e.g., Prod vs Dev configurations).
+     * Sub-agents inherit this configuration ID by default unless overridden by a
+     * per-call `presetName` or the relationship's `ConfigurationPresetID`.
      * 
      * The configuration ID filters which AI models are available for prompt
      * execution and can provide configuration parameters for dynamic behavior.
@@ -2240,6 +2361,12 @@ export type AgentContextData = {
     planModeActive?: boolean;
     /** Whether Plan Mode's gate has already been satisfied (a prior plan was approved on this run chain) */
     planApproved?: boolean;
+    /** Whether ChatHandlingOption='Consult' is active for at least one listed sub-agent */
+    subAgentConsultEnabled?: boolean;
+    /** Whether this sub-agent's parent resolves ChatHandlingOption='Consult' for this pairing */
+    parentConsults?: boolean;
+    /** Whether at least one listed sub-agent has one or more active configuration presets */
+    subAgentPresetsAvailable?: boolean;
     /** Markdown formatted snapshot of the user's current application context */
     appContext?: string;
 }
@@ -2290,10 +2417,10 @@ export type AgentChatMessageMetadata = {
     /** Whether this message has expired */
     isExpired?: boolean;
     /** Type of message (for lifecycle management and logging) */
-    messageType?: 'action-result' | 'client-tool-result' | 'tool-result' | 'loop-result' | 'sub-agent-result' | 'skill-activation' | 'skill-activation-refused' | 'chat' | 'system' | 'user';
-    /** Name of the sub-agent (only for sub-agent-result messages) */
+    messageType?: 'action-result' | 'client-tool-result' | 'tool-result' | 'loop-result' | 'sub-agent-result' | 'sub-agent-consult' | 'skill-activation' | 'skill-activation-refused' | 'chat' | 'system' | 'user';
+    /** Name of the sub-agent (only for sub-agent-result and sub-agent-consult messages) */
     subAgentName?: string;
-    /** ID of the sub-agent (only for sub-agent-result messages) */
+    /** ID of the sub-agent (only for sub-agent-result and sub-agent-consult messages) */
     subAgentId?: string;
     /**
      * `ConversationDetail.Sequence` of the row this message came from. Stamped by
@@ -2309,6 +2436,18 @@ export type AgentChatMessageMetadata = {
     isConversationSummary?: boolean;
     /** On the summary message: the boundary row's Sequence — the summary covers all rows below it */
     summaryBoundarySequence?: number;
+    /** ID of the user who wrote this message, when populated on `ConversationDetail` */
+    userId?: string | null;
+    /** Display name of the user who wrote this message, when available */
+    userName?: string | null;
+    /** ID of the AI agent that wrote this message, when populated on `ConversationDetail` */
+    agentId?: string | null;
+    /** Display name of the AI agent that wrote this message, when available */
+    agentName?: string | null;
+    /** Parent `ConversationDetail.ID` when this message replies to an earlier row */
+    parentId?: string | null;
+    /** Un-prefixed `ConversationDetail.Message` text when speaker attribution formatted `content` */
+    rawContent?: string;
     /**
      * True on the framework-authored trailing message that carries the loop agent's volatile
      * per-iteration state (date/time, Scratchpad, Payload, and a relocated specialization) as the

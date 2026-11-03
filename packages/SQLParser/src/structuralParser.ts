@@ -17,6 +17,7 @@
  */
 
 import { SQLParser } from './sql-parser.js';
+import { FrozenExtractCTEs } from './legacy/frozenCTEExtraction.js';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import { AnalyzeTopLevelOrderBy } from './orderByAnalyzer.js';
 import type {
@@ -40,6 +41,7 @@ import type {
  * @param sql - Raw SQL with potential {{query:"..."}}, {{ var }}, {% %} tokens
  * @param dialect - SQL dialect for parsing and identifier quoting
  * @returns Structural IR for composition manipulation
+ * @deprecated Use `QueryTemplate.Parse(sql, dialect)` for the template layer and `SqlDocument.Parse` for the SQL.
  */
 export function ParseToIR(sql: string, dialect: SQLParserDialect): QueryIR {
     if (!sql || sql.trim().length === 0) {
@@ -82,6 +84,7 @@ export function ParseToIR(sql: string, dialect: SQLParserDialect): QueryIR {
  *
  * This is the single code path that emits SQL from the composition engine.
  * All template tokens are preserved verbatim for downstream Nunjucks evaluation.
+ * @deprecated Use `QueryTemplate` and `EditSet` to change query text.
  */
 export function RenderIR(ir: QueryIR, _dialect: SQLParserDialect): string {
     const parts: string[] = [];
@@ -197,8 +200,8 @@ interface CTEStructure {
 }
 
 /**
- * Extracts CTE definitions from the SQL. Uses SQLParser.ExtractCTEs for
- * robust splitting, then maps the results to IR nodes.
+ * Extracts CTE definitions from the SQL with the IR's own frozen CTE split, then maps the
+ * results to IR nodes.
  */
 function extractCTEStructure(
     sql: string,
@@ -211,8 +214,7 @@ function extractCTEStructure(
         return { ctes: [], body: fragments, hasUserCTEs: false };
     }
 
-    // Use SQLParser.ExtractCTEs for the actual splitting
-    const extraction = SQLParser.ExtractCTEs(sql, dialect);
+    const extraction = FrozenExtractCTEs(sql, dialect);
     if (!extraction) {
         return { ctes: [], body: fragments, hasUserCTEs: false };
     }

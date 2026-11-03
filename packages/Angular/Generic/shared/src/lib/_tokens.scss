@@ -124,6 +124,7 @@
   /* Indigo Colors (updated actions, indicators) */
   --mj-color-indigo-50: #eef2ff;
   --mj-color-indigo-100: #e0e7ff;
+  --mj-color-indigo-400: #818cf8;
   --mj-color-indigo-500: #6366f1;
   --mj-color-indigo-600: #4f46e5;
 
@@ -150,6 +151,8 @@
   --mj-text-inverse: var(--mj-color-neutral-0);
   --mj-text-link: var(--mj-color-brand-500);
   --mj-text-link-hover: var(--mj-color-brand-600);
+  /* Violet text/accent (special features, role chips); dark mode lifts it to the 300 step. */
+  --mj-text-violet: var(--mj-color-violet-700);
 
   /* Border Colors */
   --mj-border-default: var(--mj-color-neutral-200);
@@ -182,6 +185,17 @@
   --mj-brand-tertiary-subtle: var(--mj-color-tertiary-50);
   --mj-brand-on-tertiary: var(--mj-color-neutral-0);
 
+  /* Agent Categorical Accents (semantic)
+     Six theme-aware accent hues for multi-agent conversation attribution
+     (handoff cards, "via" rails, owner chips). Dark mode shifts each hue to a
+     lighter primitive step for contrast on dark surfaces. */
+  --mj-agent-accent-brand: var(--mj-color-brand-500);
+  --mj-agent-accent-accent: var(--mj-color-accent-500);
+  --mj-agent-accent-indigo: var(--mj-color-indigo-500);
+  --mj-agent-accent-violet: var(--mj-color-violet-500);
+  --mj-agent-accent-tertiary: var(--mj-color-tertiary-500);
+  --mj-agent-accent-info: var(--mj-color-info-500);
+
   /* Status Colors (semantic) */
   --mj-status-success: var(--mj-color-success-500);
   --mj-status-success-bg: var(--mj-color-success-50);
@@ -192,6 +206,9 @@
   --mj-status-warning-bg: var(--mj-color-warning-50);
   --mj-status-warning-text: var(--mj-color-warning-700);
   --mj-status-warning-border: var(--mj-color-warning-500);
+  /* Text on a SOLID --mj-status-warning fill. The amber fill is too light for
+     white text, so this stays dark in both themes. */
+  --mj-status-on-warning: var(--mj-color-neutral-900);
 
   --mj-status-error: var(--mj-color-error-500);
   --mj-status-error-bg: var(--mj-color-error-50);
@@ -536,6 +553,7 @@
   --mj-text-inverse: var(--mj-color-neutral-900);
   --mj-text-link: var(--mj-color-brand-300);
   --mj-text-link-hover: var(--mj-color-brand-200);
+  --mj-text-violet: var(--mj-color-violet-300);
 
   /* Border Colors */
   --mj-border-default: var(--mj-color-neutral-700);
@@ -562,6 +580,14 @@
   --mj-brand-tertiary-active: var(--mj-color-tertiary-200);
   --mj-brand-tertiary-subtle: color-mix(in srgb, var(--mj-color-tertiary-500) 15%, transparent);
 
+  /* Agent Categorical Accents (adjusted for dark surfaces) */
+  --mj-agent-accent-brand: var(--mj-color-brand-400);
+  --mj-agent-accent-accent: var(--mj-color-accent-300);
+  --mj-agent-accent-indigo: var(--mj-color-indigo-400);
+  --mj-agent-accent-violet: var(--mj-color-violet-400);
+  --mj-agent-accent-tertiary: var(--mj-color-tertiary-400);
+  --mj-agent-accent-info: var(--mj-color-info-400);
+
   /* Highlight (adjusted for dark) */
   --mj-highlight: var(--mj-color-accent-300);
   --mj-highlight-hover: var(--mj-color-accent-200);
@@ -585,6 +611,8 @@
   --mj-status-warning-bg: rgba(245, 158, 11, 0.15);
   --mj-status-warning-text: var(--mj-color-warning-300);
   --mj-status-warning-border: var(--mj-color-warning-600);
+  /* --mj-status-warning keeps its light-mode amber in dark mode, so the text on it stays dark. */
+  --mj-status-on-warning: var(--mj-color-neutral-900);
 
   /* Slightly stronger search highlight on dark surfaces so it stays visible. */
   --mj-search-highlight-bg: color-mix(in srgb, var(--mj-status-warning) 30%, transparent);

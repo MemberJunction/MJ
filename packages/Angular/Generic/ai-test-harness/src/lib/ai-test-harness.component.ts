@@ -1942,6 +1942,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             ResultType: 'simple',
             BypassCache: true,
             MaxRows: 1,
+            SkipTotalRowCount: true,
         });
         const id = result.Success ? result.Results?.[0]?.ID : undefined;
         if (!id) return;
