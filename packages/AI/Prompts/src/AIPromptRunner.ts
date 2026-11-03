@@ -1796,7 +1796,9 @@ export class AIPromptRunner extends BaseModelRunner {
     // Get failover configuration (used for errorScope filtering)
     const failoverConfig = this.getFailoverConfiguration(prompt);
 
-    // If no candidates provided or failover disabled, execute normally with first model
+    // If no candidates provided or failover disabled, execute normally with first model. A returned
+    // result carries its own tool-calling decision; a thrown error carries the one executeModel
+    // tagged it with.
     if (!allCandidates || allCandidates.length === 0 || failoverConfig.strategy === 'None') {
       return this.executeModel(
         model, renderedPrompt, prompt, params, vendorId,
@@ -1805,27 +1807,47 @@ export class AIPromptRunner extends BaseModelRunner {
         promptModelConfiguration
       );
     }
+
+    // The tool-calling decision of the latest attempt. The error result built after the last
+    // candidate fails is a new object, so without this it would record no ToolCallingMode.
+    let lastDecision: NativeToolCallingDecision | undefined;
     return this.ExecuteWithFailover(
       prompt,
       params,
       allCandidates,
       failoverConfig,
-      (candidate) => this.executeModel(
-        candidate.model,
-        renderedPrompt,
-        prompt,
-        params,
-        candidate.vendorId || null,
-        conversationMessages,
-        templateMessageRole,
-        cancellationToken,
-        candidate.driverClass,
-        candidate.apiName,
-        candidate.supportsEffortLevel,
-        candidate.effortLevel,
-        candidate.promptModelConfiguration
-      ),
-      (lastError, failoverAttempts) => this.createFailoverErrorResult(lastError, failoverAttempts),
+      async (candidate) => {
+        lastDecision = undefined;
+        try {
+          const result = await this.executeModel(
+            candidate.model,
+            renderedPrompt,
+            prompt,
+            params,
+            candidate.vendorId || null,
+            conversationMessages,
+            templateMessageRole,
+            cancellationToken,
+            candidate.driverClass,
+            candidate.apiName,
+            candidate.supportsEffortLevel,
+            candidate.effortLevel,
+            candidate.promptModelConfiguration
+          );
+          lastDecision = GetToolCallingDecision(result);
+          return result;
+        } catch (error) {
+          lastDecision = error instanceof Error ? GetToolCallingDecision(error) : undefined;
+          throw error;
+        }
+      },
+      (lastError, failoverAttempts) => {
+        const errorResult = this.createFailoverErrorResult(lastError, failoverAttempts);
+        if (lastDecision) {
+          RecordToolCallingDecision(errorResult, lastDecision);
+        }
+        return errorResult;
+      },
       promptRun,
       credentialAvailability
     );
@@ -2232,6 +2254,8 @@ export class AIPromptRunner extends BaseModelRunner {
       { ...(params.data ?? {}), _NATIVE_TOOL_CALLING: false, _NATIVE_CONTROL_FLOW: 'envelope' });
     chatParams.messages = this.replaceRenderedPrompt(chatParams.messages, renderedPrompt, envelopePrompt);
     const sentPrefix = this.guardReplayedReasoningPrefix(chatParams, params, model);
+    // The request is now the fallback, so a throw from it is recorded as one.
+    RecordToolCallingMode(chatParams, 'NativeFallback');
     const fallbackResult = await this.runChatCompletionBounded(llm, chatParams, executionBound);
     RecordToolCallingMode(fallbackResult, 'NativeFallback');
     RecordSentPrefixFingerprint(fallbackResult, sentPrefix);
@@ -2284,7 +2308,7 @@ export class AIPromptRunner extends BaseModelRunner {
     let driverClass: string;
     let apiName: string | undefined;
     let llm: BaseLLM;
-    let chatParams: ChatParams;
+    let chatParams: ChatParams | undefined;
 
     // Compose the caller's cancellation token (if any) with the resolved model-call timeout (if any)
     // into a SINGLE signal that bounds this model call. Both bounds always apply — whichever fires
@@ -2592,6 +2616,12 @@ export class AIPromptRunner extends BaseModelRunner {
       RecordSentPrefixFingerprint(chatResult, sentPrefix);
       return chatResult;
     } catch (error) {
+      // The failover loop builds its own error result from what was thrown; tagging the error with
+      // the gate's decision is what lets that result record which tool-calling path this call took.
+      const thrownDecision = GetToolCallingDecision(chatParams);
+      if (thrownDecision && error instanceof Error) {
+        RecordToolCallingDecision(error, thrownDecision);
+      }
       const errorInfo = ErrorAnalyzer.analyzeError(error, driverClass)
       // A caller cancellation is not a model failure. Whoever handles it logs it once, at info level.
       if (this.IsCallerCancellation(errorInfo)) {
@@ -3334,63 +3364,6 @@ export class AIPromptRunner extends BaseModelRunner {
     // Should not reach here, but just in case
     throw lastError || new Error('Execution failed after all retry attempts');
   }
-
-  /**
-   * Transitions to the next failover candidate.
-   * Returns the next candidate info or null if no candidates are available.
-   */
-  private async transitionToNextCandidate(
-    currentModel: MJAIModelEntityExtended,
-    currentVendorId: string | undefined,
-    failoverConfig: FailoverConfiguration,
-    allCandidates: ModelVendorCandidate[],
-    failoverAttempts: FailoverAttempt[],
-    promptId: string,
-    failoverAttempt: FailoverAttempt,
-    attemptNumber: number
-  ): Promise<{
-    model: MJAIModelEntityExtended;
-    vendorId: string | undefined;
-    driverClass: string;
-    apiName: string | undefined;
-    supportsEffortLevel: boolean;
-  } | null> {
-    // Select next candidate using failover strategy
-    const nextCandidates = this.selectFailoverCandidates(
-      currentModel,
-      currentVendorId,
-      failoverConfig.strategy,
-      failoverConfig.modelStrategy,
-      allCandidates,
-      failoverAttempts
-    );
-
-    if (nextCandidates.length === 0) {
-      // No more candidates available
-      this.logFailoverAttempt(promptId, failoverAttempt, false);
-      return null;
-    }
-
-    const nextCandidate = nextCandidates[0];
-
-    // Log the successful transition
-    this.logFailoverAttempt(promptId, failoverAttempt, true);
-
-    // Apply delay before next attempt (if not the last attempt)
-    if (attemptNumber < failoverConfig.maxAttempts) {
-      const delay = this.calculateFailoverDelay(attemptNumber, failoverConfig.delaySeconds);
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-
-    return {
-      model: nextCandidate.model,
-      vendorId: nextCandidate.vendorId,
-      driverClass: nextCandidate.driverClass,
-      apiName: nextCandidate.apiName,
-      supportsEffortLevel: nextCandidate.supportsEffortLevel || false
-    };
-  }
-
 
   /**
    * Generates a JSON schema from an example object for validation

@@ -39,7 +39,7 @@ vi.mock('@memberjunction/aiengine', async (importOriginal) => {
 });
 
 import { AIPromptRunner } from '../AIPromptRunner';
-import { GetToolCallingMode, GetToolCallingDecision } from '../nativeToolCallingGate';
+import { GetToolCallingMode, GetToolCallingDecision, RecordToolCallingDecision, NativeToolCallingDecision } from '../nativeToolCallingGate';
 import type { AIPromptParams } from '@memberjunction/ai-core-plus';
 
 const VENDOR_ID = 'A1111111-1111-1111-1111-111111111111';
@@ -476,5 +476,93 @@ describe('retryWithToolsStripped — the retry sees an envelope-shaped history',
         expect(seen?.messages[1].content).toBe('[Called get_entity_details({"entityName":"Members"})]');
         expect(seen?.messages[2].content).toBe('[Action Result] get_entity_details succeeded. # Members');
         expect(seen?.messages.some((m) => m.toolCalls || m.role === 'tool')).toBe(false);
+    });
+});
+
+/**
+ * #5963: a failover that ends in failure returns an error result the loop builds itself, after the
+ * last attempt. It must carry that attempt's tool-calling decision, or the prompt run records NULL.
+ */
+describe('executeModelWithFailover — the last attempt\'s mode reaches the error result', () => {
+    type FailoverInternals = {
+        executeModelWithFailover(...args: unknown[]): Promise<ChatResult>;
+        executeModel(...args: unknown[]): Promise<ChatResult>;
+        HasCredentialsAvailable(...args: unknown[]): boolean;
+    };
+    const decision = (mode: NativeToolCallingDecision['mode']): NativeToolCallingDecision => ({
+        useNativeTools: mode !== 'Envelope',
+        mode,
+        controlFlow: mode === 'NativeImplicit' ? 'implicit' : 'envelope',
+        toolResults: false
+    });
+    const candidate = (id: string, vendorId: string) => ({
+        model: { ID: id, Name: id, ModelVendors: [] },
+        vendorId, vendorName: vendorId, driverClass: 'TestDriver', apiName: id,
+        isPreferredVendor: false, priority: 1, source: 'prompt-model'
+    });
+    const eligibleFailure = (message: string, mode: NativeToolCallingDecision['mode']): ChatResult => {
+        const r = failedResult(message);
+        r.errorInfo = { canFailover: true, errorType: 'NetworkError', severity: 'Retriable' };
+        RecordToolCallingDecision(r, decision(mode));
+        return r;
+    };
+    const run = (r: AIPromptRunner): Promise<ChatResult> => {
+        const candidates = [candidate('m-1', 'v-1'), candidate('m-2', 'v-2')];
+        return (r as unknown as FailoverInternals).executeModelWithFailover(
+            candidates[0].model, 'rendered prompt',
+            { ID: 'p-1', Name: 'Failover Prompt', FailoverStrategy: 'NextBestModel', MaxRetries: 0, RetryDelayMS: 0 },
+            { verbose: false }, 'v-1', undefined, 'system', undefined, candidates, undefined,
+            'TestDriver', 'm-1', false, undefined
+        );
+    };
+    const stub = (r: AIPromptRunner, attempts: Array<() => Promise<ChatResult>>): void => {
+        const internals = r as unknown as FailoverInternals;
+        vi.spyOn(internals, 'HasCredentialsAvailable').mockReturnValue(true);
+        const execute = vi.spyOn(internals, 'executeModel');
+        for (const attempt of attempts) {
+            execute.mockImplementationOnce(attempt);
+        }
+    };
+
+    it('records the mode of the last returned failure, not the first', async () => {
+        stub(runner, [
+            async () => eligibleFailure('fetch failed', 'Native'),
+            async () => eligibleFailure('socket hang up', 'NativeImplicit')
+        ]);
+        vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+        const result = await run(runner);
+
+        expect(result.success).toBe(false);
+        expect(GetToolCallingMode(result)).toBe('NativeImplicit');
+        expect(GetToolCallingDecision(result)?.controlFlow).toBe('implicit');
+    });
+
+    it('records the mode a thrown non-tool error was tagged with', async () => {
+        const thrown = new Error('connect ECONNREFUSED 10.0.0.5:443');
+        RecordToolCallingDecision(thrown, decision('Native'));
+        stub(runner, [
+            async () => eligibleFailure('fetch failed', 'Envelope'),
+            async () => { throw thrown; }
+        ]);
+        vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+        const result = await run(runner);
+
+        expect(result.success).toBe(false);
+        expect(GetToolCallingMode(result)).toBe('Native');
+    });
+
+    it('records no mode when the last attempt failed before reaching the gate', async () => {
+        stub(runner, [
+            async () => eligibleFailure('fetch failed', 'Native'),
+            async () => { throw new Error('connect ECONNREFUSED 10.0.0.5:443'); }
+        ]);
+        vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+        const result = await run(runner);
+
+        expect(result.success).toBe(false);
+        expect(GetToolCallingMode(result)).toBeUndefined();
     });
 });

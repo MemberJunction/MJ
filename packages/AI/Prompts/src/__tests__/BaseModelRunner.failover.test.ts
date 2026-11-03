@@ -350,6 +350,65 @@ describe('BaseModelRunner.ExecuteWithFailover', () => {
     expect(result.errorInfo?.canFailover).toBe(false);
   });
 
+  it('records a non-eligible returned failure as an attempt, without moving the run to that candidate', async () => {
+    const runner = new TestModelRunner();
+    const c1 = createCandidate('m-1', 'Model 1', 'Driver1', 'v-1', 'Vendor 1', 10);
+    const c2 = createCandidate('m-2', 'Model 2', 'Driver2', 'v-2', 'Vendor 2', 5);
+    const c3 = createCandidate('m-3', 'Model 3', 'Driver3', 'v-3', 'Vendor 3', 1);
+    runner.availableDrivers.add('Driver1');
+    runner.availableDrivers.add('Driver2');
+    runner.availableDrivers.add('Driver3');
+    const promptRun = new FakePromptRun();
+    promptRun.OriginalModelID = 'm-1';
+    promptRun.ModelID = 'm-1';
+    promptRun.VendorID = 'v-1';
+
+    const executeOnCandidate = vi.fn(async (candidate: ModelVendorCandidate): Promise<TestResult> => {
+      if (candidate.model.ID === 'm-1') {
+        return new TestResult(false, undefined, { canFailover: true, errorType: 'NetworkError', severity: 'Retriable' }, 'Connection reset by peer');
+      }
+      return new TestResult(false, undefined, { canFailover: false, errorType: 'InvalidRequest', severity: 'Fatal' }, 'Prompt schema violation');
+    });
+    const createErrorResult = vi.fn((lastError: Error | null): TestResult => new TestResult(false, undefined, undefined, lastError?.message));
+
+    const result = await runner.invokeExecuteWithFailover(
+      createPrompt(), params, [c1, c2, c3], failoverConfig, executeOnCandidate, createErrorResult,
+      promptRun as unknown as MJAIPromptRunEntityExtended
+    );
+
+    expect(executeOnCandidate).toHaveBeenCalledTimes(2);
+    expect(result.errorMessage).toBe('Prompt schema violation');
+    expect(promptRun.FailoverAttempts).toBe(2);
+    const errors = JSON.parse(promptRun.FailoverErrors ?? '[]') as Array<{ model: string; errorType: string }>;
+    expect(errors.map((e) => [e.model, e.errorType])).toEqual([['m-1', 'NetworkError'], ['m-2', 'InvalidRequest']]);
+    expect(promptRun.ModelID).toBe('m-1');
+    expect(promptRun.VendorID).toBe('v-1');
+  });
+
+  it('calls the next surviving candidate after a VendorValidationError drops the rest of that vendor', async () => {
+    const runner = new TestModelRunner();
+    const a = createCandidate('m-a', 'Model A', 'Driver1', 'v-x', 'X', 10);
+    const b = createCandidate('m-b', 'Model B', 'Driver1', 'v-x', 'X', 9);
+    const c = createCandidate('m-c', 'Model C', 'Driver2', 'v-y', 'Y', 8);
+    const d = createCandidate('m-d', 'Model D', 'Driver3', 'v-z', 'Z', 7);
+    runner.availableDrivers.add('Driver1');
+    runner.availableDrivers.add('Driver2');
+    runner.availableDrivers.add('Driver3');
+
+    const executeOnCandidate = vi.fn(async (candidate: ModelVendorCandidate): Promise<TestResult> => {
+      if (candidate.model.ID === 'm-a') {
+        return new TestResult(false, undefined, { canFailover: true, errorType: 'VendorValidationError', severity: 'Retriable' }, 'PartListUnion is required');
+      }
+      return new TestResult(true, `answered by ${candidate.model.ID}`);
+    });
+    const createErrorResult = vi.fn((lastError: Error | null): TestResult => new TestResult(false, undefined, undefined, lastError?.message));
+
+    const result = await runner.invokeExecuteWithFailover(createPrompt(), params, [a, b, c, d], failoverConfig, executeOnCandidate, createErrorResult);
+
+    expect(executeOnCandidate.mock.calls.map(([cand]) => cand.model.ID)).toEqual(['m-a', 'm-c']);
+    expect(result.value).toBe('answered by m-c');
+  });
+
   it('RaceWithinBound leaves no abort listener on a caller token reused across calls', async () => {
     const runner = new TestModelRunner();
     const controller = new AbortController();

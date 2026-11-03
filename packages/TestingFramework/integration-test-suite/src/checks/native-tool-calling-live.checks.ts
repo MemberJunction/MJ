@@ -407,6 +407,8 @@ interface RunOutcome {
     ErrorMessage: string | null;
     /** `ToolCallingMode` of every prompt call, oldest first. */
     Modes: string[];
+    /** Each prompt call's mode with ` (failed)` after a call whose run did not succeed, for reports. */
+    ModeReport: string[];
     /** The arguments each Action call received, from its execution log. */
     Calls: Array<{ ActionID: string; Args: Record<string, unknown> }>;
 }
@@ -423,25 +425,31 @@ async function runAgent(ctx: IntegrationCheckContext, agentID: string, request: 
     const runID = result.agentRun?.ID ?? null;
     if (runID) fixture(ctx).RunIds.push(runID);
     await Sleep(AGENT_LIVE_SETTLE_MS);
+    const promptCalls = runID ? await promptCallModes(ctx, runID) : [];
     return {
         RunID: runID,
         Status: result.agentRun?.Status ?? 'Unknown',
         ErrorMessage: result.agentRun?.ErrorMessage ?? null,
-        Modes: runID ? await toolCallingModes(ctx, runID) : [],
+        Modes: promptCalls.map((p) => p.Mode),
+        ModeReport: promptCalls.map((p) => (p.Success === false ? `${p.Mode} (failed)` : p.Mode)),
         Calls: runID ? await actionCalls(ctx, runID) : []
     };
 }
 
-async function toolCallingModes(ctx: IntegrationCheckContext, runID: string): Promise<string[]> {
+/**
+ * Each prompt call's `ToolCallingMode` and `Success`, oldest first. `Success` tells a failed or
+ * failover attempt from a call that answered, so a NULL mode on a failed call is told apart in reports.
+ */
+async function promptCallModes(ctx: IntegrationCheckContext, runID: string): Promise<Array<{ Mode: string; Success: boolean | null }>> {
     // Reached through the run's Prompt steps — the shared helper owns that linkage.
     const promptRunIDs = await ResolvePromptRunIdsForAgentRuns([runID], ctx.User, ctx.Provider, ['Prompt']);
     if (promptRunIDs.length === 0) return [];
-    const r = await new RunView().RunView<{ ToolCallingMode: string | null }>({
+    const r = await new RunView().RunView<{ ToolCallingMode: string | null; Success: boolean | null }>({
         EntityName: 'MJ: AI Prompt Runs',
         ExtraFilter: `ID IN (${promptRunIDs.map((id) => `'${id}'`).join(',')})`,
-        OrderBy: '__mj_CreatedAt ASC', Fields: ['ToolCallingMode'], ResultType: 'simple', BypassCache: true
+        OrderBy: '__mj_CreatedAt ASC', Fields: ['ToolCallingMode', 'Success'], ResultType: 'simple', BypassCache: true
     }, ctx.User);
-    return (r.Results ?? []).map((p) => p.ToolCallingMode ?? 'null');
+    return (r.Results ?? []).map((p) => ({ Mode: p.ToolCallingMode ?? 'null', Success: p.Success }));
 }
 
 async function actionCalls(ctx: IntegrationCheckContext, runID: string): Promise<RunOutcome['Calls']> {
@@ -489,7 +497,7 @@ function judge(target: NativeTarget, outcome: RunOutcome, expected: Expectation)
     const problems: string[] = [];
     const wrongModes = outcome.Modes.filter((m) => (expected.Mode === 'native' ? !NATIVE_MODES.has(m) : m !== 'Envelope'));
     if (outcome.Modes.length === 0 || wrongModes.length > 0) {
-        problems.push(`${who}: expected every call ${expected.Mode}, got ToolCallingMode [${outcome.Modes.join(', ')}]`);
+        problems.push(`${who}: expected every call ${expected.Mode}, got ToolCallingMode [${outcome.ModeReport.join(', ')}]`);
     }
     const call = outcome.Calls.find((c) => UUIDsEqual(c.ActionID, expected.ActionID));
     if (!call) return [...problems, `${who}: model-noncompliance — the Action was never called in ${COMPLIANCE_ATTEMPTS} attempts`];
@@ -541,7 +549,7 @@ async function runAndJudge(ctx: IntegrationCheckContext, target: NativeTarget, a
             continue;
         }
         const problems = judge(target, outcome, expected);
-        console.log(`      ● ${label(target)} ${expected.Mode}: ${outcome.Status}; modes [${outcome.Modes.join(', ')}]; ${problems.length === 0 ? 'arguments match the schemas' : problems.join('; ')}${gap ? `; known gap: ${gap}` : ''}`);
+        console.log(`      ● ${label(target)} ${expected.Mode}: ${outcome.Status}; modes [${outcome.ModeReport.join(', ')}]; ${problems.length === 0 ? 'arguments match the schemas' : problems.join('; ')}${gap ? `; known gap: ${gap}` : ''}`);
         return gap ? [] : problems;
     }
     return [];

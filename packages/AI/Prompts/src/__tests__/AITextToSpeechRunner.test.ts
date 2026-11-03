@@ -401,7 +401,8 @@ describe('AITextToSpeechRunner', () => {
       expect(result.Success).toBe(false);
       expect(result.ErrorMessage).toBe(error.message);
       expect(MediaHarness.LastRun?.Status).toBe('Failed');
-      expect(MediaHarness.LastRun?.FailoverAttempts).toBe(0);
+      // The one failed call is counted as an attempt; one driver call is what shows there was no failover.
+      expect(MediaHarness.LastRun?.FailoverAttempts).toBe(1);
     });
 
     it.each([

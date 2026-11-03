@@ -184,7 +184,14 @@ export function ResolveToolChoiceForRequest(
  * A WeakMap keyed by the request/result object is safe under concurrency — every prompt run builds
  * its own `ChatParams` — and leaks nothing, since entries disappear with the objects.
  */
-const toolCallingDecisionByObject = new WeakMap<ChatParams | ChatResult, NativeToolCallingDecision>();
+const toolCallingDecisionByObject = new WeakMap<ToolCallingTagTarget, NativeToolCallingDecision>();
+
+/**
+ * What a tool-calling decision can be recorded on: the request, its result, or the error a model call
+ * threw. A thrown error carries the decision so a failover error result built from it can still record
+ * which path the failed call took.
+ */
+export type ToolCallingTagTarget = ChatParams | ChatResult | Error;
 
 /**
  * Tags a request (at gate time) or a result (after a fallback) with the tool-calling mode.
@@ -204,13 +211,13 @@ export function RecordToolCallingMode(target: ChatParams | ChatResult, mode: Too
     });
 }
 
-/** Tags a request (at gate time) or a result with the gate's whole decision; the loop reads `toolResults` back. */
-export function RecordToolCallingDecision(target: ChatParams | ChatResult, decision: NativeToolCallingDecision): void {
+/** Tags a request (at gate time), a result or a thrown error with the gate's whole decision; the loop reads `toolResults` back. */
+export function RecordToolCallingDecision(target: ToolCallingTagTarget, decision: NativeToolCallingDecision): void {
     toolCallingDecisionByObject.set(target, decision);
 }
 
-/** Reads back the whole decision for a request or result, or undefined when nothing tagged it. */
-export function GetToolCallingDecision(target: ChatParams | ChatResult | null | undefined): NativeToolCallingDecision | undefined {
+/** Reads back the whole decision for a request, result or thrown error, or undefined when nothing tagged it. */
+export function GetToolCallingDecision(target: ToolCallingTagTarget | null | undefined): NativeToolCallingDecision | undefined {
     return target ? toolCallingDecisionByObject.get(target) : undefined;
 }
 
