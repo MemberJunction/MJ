@@ -266,12 +266,12 @@ export type WizardStep = 'goal' | 'features' | 'preprocessing' | 'algorithm';
                 <div class="recipe-icon"><i class="fa-solid fa-fill-drip"></i></div>
                 <div class="recipe-details">
                   <h4>Missing Value Imputation</h4>
-                  <p class="ps-small ps-muted">Strategy for filling null or missing entries in training matrices.</p>
+                  <p class="ps-small ps-muted">Strategy for filling null or missing entries in numeric columns. Text columns always get their own "missing" category.</p>
                   <select class="mj-input" [(ngModel)]="ImputeStrategy">
                     <option value="median">Median (Robust against numeric outliers)</option>
                     <option value="mean">Mean (Standard arithmetic average)</option>
-                    <option value="mode">Mode (Most frequent category)</option>
-                    <option value="constant">Constant (Zero / Missing category token)</option>
+                    <option value="mode">Mode (Most frequent value)</option>
+                    <option value="constant">Constant (Zero)</option>
                   </select>
                 </div>
               </div>
@@ -283,7 +283,6 @@ export type WizardStep = 'goal' | 'features' | 'preprocessing' | 'algorithm';
                   <p class="ps-small ps-muted">Scales numeric features to prevent large magnitudes from dominating.</p>
                   <select class="mj-input" [(ngModel)]="StandardizeStrategy">
                     <option value="standard">Standard Scaling (Z-score: mean 0, variance 1)</option>
-                    <option value="minmax">Min-Max Scaling (Bounding values to [0, 1])</option>
                     <option value="none">None (Native tree-based scaling)</option>
                   </select>
                 </div>
@@ -466,7 +465,7 @@ export class PSPipelineWizardComponent implements OnInit {
 
   public ImputeStrategy: 'mean' | 'median' | 'mode' | 'constant' = 'median';
 
-  public StandardizeStrategy: 'standard' | 'minmax' | 'none' = 'standard';
+  public StandardizeStrategy: 'standard' | 'none' = 'standard';
 
 
   // Step 4: Algorithm & Validation
@@ -787,6 +786,19 @@ export class PSPipelineWizardComponent implements OnInit {
         },
       ];
 
+      // A text column's missing values always encode as their own level in the trainer, so only numeric columns take a policy.
+      for (const c of this.selectedNumericColumns()) {
+        steps.push({
+          Id: `step_impute_${c}`,
+          Kind: 'impute',
+          Label: `Impute ${c}`,
+          Inputs: ['step_select'],
+          Column: c,
+          Strategy: this.ImputeStrategy,
+          ...(this.ImputeStrategy === 'constant' ? { FillValue: 0 } : {}),
+        });
+      }
+
       if (this.CategoricalEncoding === 'onehot') {
         const catCols = this.FieldItems
           .filter((i) => i.selected && !i.isDenyList && !i.isTarget)
@@ -808,19 +820,7 @@ export class PSPipelineWizardComponent implements OnInit {
       }
 
       if (this.StandardizeStrategy !== 'none') {
-        const numCols = this.FieldItems
-          .filter((i) => i.selected && !i.isDenyList && !i.isTarget)
-          .filter((i) => {
-            const t = i.field.Type?.toLowerCase() ?? '';
-            return (
-              t.includes('int') ||
-              t.includes('decimal') ||
-              t.includes('float') ||
-              t.includes('money') ||
-              t.includes('numeric')
-            );
-          })
-          .map((i) => i.field.Name);
+        const numCols = this.selectedNumericColumns();
 
         if (numCols.length > 0) {
           steps.push({
@@ -913,6 +913,8 @@ export class PSPipelineWizardComponent implements OnInit {
 
       this.populateFieldItems();
       this.readClonedHyperparameters(cp.Hyperparameters);
+      this.restoreClonedFeatureSteps(cp.FeatureSteps);
+      this.restoreClonedValidation(cp.ValidationStrategy);
       void this.refreshAdverseClassChoices();
 
       // Read leakage guard
@@ -937,6 +939,56 @@ export class PSPipelineWizardComponent implements OnInit {
         // Ignore
       }
     }
+  }
+
+  /** The selected feature columns the trainer treats as numeric. */
+  private selectedNumericColumns(): string[] {
+    return this.FieldItems
+      .filter((i) => i.selected && !i.isDenyList && !i.isTarget)
+      .filter((i) => {
+        const t = i.field.Type?.toLowerCase() ?? '';
+        return t.includes('int') || t.includes('decimal') || t.includes('float') || t.includes('money') || t.includes('numeric');
+      })
+      .map((i) => i.field.Name);
+  }
+
+  /**
+   * The cloned pipeline's saved feature columns and preprocessing choices. Unreadable JSON, or a graph without a
+   * select step, leaves every default; a preprocessing step the wizard does not write is ignored.
+   */
+  private restoreClonedFeatureSteps(json: string | null): void {
+    const graph = this.jsonObject(json);
+    const steps = graph === null ? null : JsonParse.JsonArrayField(graph, 'Steps');
+    if (steps === null) return;
+    const objects = steps.filter((st): st is JsonObject => JsonParse.IsJsonObject(st));
+    const kind = (st: JsonObject): string | null => JsonParse.JsonString(st, 'Kind');
+
+    const select = objects.find((st) => kind(st) === 'select');
+    const columns = select === undefined ? null : JsonParse.JsonStringArray(select, 'Columns');
+    if (columns !== null) {
+      const chosen = new Set(columns.map((c) => c.toLowerCase()));
+      for (const item of this.FieldItems) {
+        if (!item.isTarget) item.selected = chosen.has(item.field.Name.toLowerCase());
+      }
+    }
+
+    const impute = objects.find((st) => kind(st) === 'impute');
+    const strategy = impute === undefined ? null : JsonParse.JsonString(impute, 'Strategy');
+    if (strategy === 'mean' || strategy === 'median' || strategy === 'mode' || strategy === 'constant') this.ImputeStrategy = strategy;
+    this.StandardizeStrategy = objects.some((st) => kind(st) === 'standardize') ? 'standard' : 'none';
+    this.CategoricalEncoding = objects.some((st) => kind(st) === 'onehot') ? 'onehot' : 'none';
+  }
+
+  /** The cloned pipeline's saved validation split; unreadable JSON leaves the defaults. */
+  private restoreClonedValidation(json: string | null): void {
+    const saved = this.jsonObject(json);
+    if (saved === null) return;
+    const strategy = JsonParse.JsonString(saved, 'Strategy');
+    if (strategy === 'train_test_split' || strategy === 'kfold') this.ValidationStrategyType = strategy;
+    const testSize = JsonParse.JsonNumber(saved, 'TestSize');
+    if (testSize !== null) this.TestSplitRatio = testSize;
+    const k = JsonParse.JsonInteger(saved, 'K');
+    if (k !== null) this.KFolds = k;
   }
 
   /** The cloned pipeline's saved values for the wizard's hyperparameter inputs. */
