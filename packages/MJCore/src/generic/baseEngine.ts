@@ -1896,7 +1896,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             if (!fresh) {
                 return null;
             }
-            await BaseEntity.CloneEntityWithISAChain(source, fresh, provider, this._contextUser);
+            if (source.EntityInfo?.IsParentType) {
+                await BaseEntity.CloneEntityWithISAChain(source, fresh, provider, this._contextUser);
+            } else {
+                await fresh.LoadFromData(source.GetAll());
+            }
             return fresh;
         }
         catch (e) {
