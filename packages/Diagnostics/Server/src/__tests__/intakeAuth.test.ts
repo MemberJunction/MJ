@@ -817,7 +817,7 @@ describe('diagnostics intake sender authentication', () => {
             expect(res.StatusCode).toBe(413);
         });
 
-        it('limits failed attempts per IP but still accepts a signed request from that IP', async () => {
+        it('limits failed attempts per IP, signed requests included', async () => {
             const body = createBody(fixture, collectorKey);
             const statuses: number[] = [];
             for (let i = 0; i < 61; i++) {
@@ -826,10 +826,10 @@ describe('diagnostics intake sender authentication', () => {
             expect(statuses.slice(0, 60).every((code) => code === 401)).toBe(true);
             expect(statuses[60]).toBe(429);
             const signed = await postCreate(handlers, sender, body);
-            expect(signed.StatusCode).toBe(201);
+            expect(signed.StatusCode).toBe(429);
         });
 
-        it('never IP-limits signed requests', async () => {
+        it('does not IP-limit successful signed requests', async () => {
             DiagnosticIntakeService.Instance.Configure({ maxOpenIntakesPerSender: 20 });
             const senders: SenderKeys[] = [];
             for (let i = 0; i < 4; i++) {

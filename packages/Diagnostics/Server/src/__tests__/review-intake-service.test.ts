@@ -151,6 +151,6 @@ describe('DiagnosticIntakeService sender checks', () => {
             proof: 'proof',
         });
 
-        expect(outcome).toMatchObject({ Ok: false, Status: 401 });
+        expect(outcome).toMatchObject({ Ok: false, Status: 401, Reason: 'enrolment is not configured' });
     });
 });

@@ -64,6 +64,29 @@ describe('EnrolSender collector signing key', () => {
         expect(settings[SIGNING_SETTING]).toBe(pinned.publicKeyBase64);
     });
 
+    it.each([
+        ['the same key', ''],
+        ['the same key with surrounding whitespace', ' \n'],
+    ])('accepts a re-enrolment that returns %s as the pinned signing key', async (_label, padding) => {
+        const pinned = await GenerateDiagnosticKeyPair('Ed25519', 'collector-signing-old');
+        const settings: Record<string, string> = {
+            'Diagnostics.External.CollectorUrl': COLLECTOR_URL,
+            [SIGNING_SETTING]: pinned.publicKeyBase64,
+        };
+        mockSettings(settings);
+        stubCollector('collector-x25519', `${padding}${pinned.publicKeyBase64}${padding}`);
+        vi.spyOn(CredentialEngine.Instance, 'Config').mockResolvedValue(undefined);
+        const store = vi
+            .spyOn(CredentialEngine.Instance, 'StoreCredential')
+            .mockResolvedValue({ ID: 'CRED-SENDER-4' } as unknown as MJCredentialEntity);
+
+        const result = await EnrolSender({ RegistrationCode: 'CODE-123', ContextUser: ownerUser });
+
+        expect(result.KeyID).toBeTruthy();
+        expect(store).toHaveBeenCalledTimes(1);
+        expect(settings['Diagnostics.External.SenderCredentialID']).toBe('CRED-SENDER-4');
+    });
+
     it('refuses an enrolment response without a collector signing key', async () => {
         mockSettings({ 'Diagnostics.External.CollectorUrl': COLLECTOR_URL });
         stubCollector('collector-x25519', '');
