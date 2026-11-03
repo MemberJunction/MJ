@@ -31,7 +31,7 @@ import {
   type ProblemType,
 } from '@memberjunction/predictive-studio-core';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
-import { PipelineWizardBindings, type WizardPipelineFields } from './ps-pipeline-wizard.bindings';
+import { PipelineWizardBindings, type BoundTargetRead, type WizardPipelineFields } from './ps-pipeline-wizard.bindings';
 
 /** The wizard's tree hyperparameter inputs and the estimator keyword each one sets. */
 const HYPERPARAMETER_INPUTS = { Estimators: 'n_estimators', MaxDepth: 'max_depth', LearningRate: 'learning_rate' } as const;
@@ -550,6 +550,13 @@ export class PSPipelineWizardComponent implements OnInit {
   /** The target column is the label, never a feature: it is marked, unchecked and locked; the previous target is freed. */
   public OnTargetVariableChanged(name: string): void {
     this.clonedAdverse = null;
+    this.markTarget(name);
+    void this.refreshAdverseClassChoices();
+    this.cdr.detectChanges();
+  }
+
+  /** Makes `name` the target: marked, unchecked and locked; the previous target is selected again unless denied. */
+  private markTarget(name: string): void {
     this.TargetVariable = name;
     const target = name.toLowerCase();
     for (const item of this.FieldItems) {
@@ -558,8 +565,6 @@ export class PSPipelineWizardComponent implements OnInit {
       else if (item.isTarget) item.selected = !item.isDenyList && !this.isSystemField(item.field.Name);
       item.isTarget = isTarget;
     }
-    void this.refreshAdverseClassChoices();
-    this.cdr.detectChanges();
   }
 
   /** Reads the target's class labels and offers the adverse-class choice when nothing else decides it. */
@@ -845,47 +850,84 @@ export class PSPipelineWizardComponent implements OnInit {
       this.SelectedAlgorithmId = this.engine!.Algorithms[0].ID;
     }
 
-    // If cloning from existing pipeline
-    if (this.CloneFromPipeline) {
-      const cp = this.CloneFromPipeline;
-      this.IsEditing = false; // clone creates new
-      this.PipelineName = `${cp.Name} (Copy)`;
-      this.PipelineDescription = cp.Description || '';
-      this.SelectedEntityId = cp.TargetEntityID;
-      this.TargetVariable = cp.TargetVariable;
-      this.ProblemType = (cp.ProblemType as ProblemType) || 'classification';
-      if (cp.AlgorithmID) this.SelectedAlgorithmId = cp.AlgorithmID;
+    if (this.CloneFromPipeline) this.initFromClone(this.CloneFromPipeline);
+  }
 
-      this.populateFieldItems();
-      this.readClonedHyperparameters(cp.Hyperparameters);
-      this.restoreClonedFeatureSteps(cp.FeatureSteps);
-      this.restoreClonedValidation(cp.ValidationStrategy);
-      const clonedClass = PipelineWizardBindings.AdverseClassFromFeatureSteps(cp.FeatureSteps);
-      this.clonedAdverse = clonedClass === '' ? null : { Entity: this.SelectedEntity?.Name ?? '', Target: cp.TargetVariable, Class: clonedClass };
-      void this.refreshAdverseClassChoices();
+  /**
+   * Opens the wizard on a copy of a saved pipeline. A pipeline bound to a Prediction Unit stores the unit's rule text
+   * in `TargetVariable` (the bindings' `bind()`), so its target column is read back from the unit; every other
+   * setting is restored at once.
+   */
+  private initFromClone(cp: MJMLTrainingPipelineEntity): void {
+    this.IsEditing = false; // clone creates new
+    this.PipelineName = `${cp.Name} (Copy)`;
+    this.PipelineDescription = cp.Description || '';
+    this.SelectedEntityId = cp.TargetEntityID;
+    this.TargetVariable = cp.PredictionUnitID ? '' : cp.TargetVariable;
+    this.ProblemType = (cp.ProblemType as ProblemType) || 'classification';
+    if (cp.AlgorithmID) this.SelectedAlgorithmId = cp.AlgorithmID;
 
-      // Read leakage guard
-      try {
-        if (cp.LeakageGuard) {
-          const lg = JSON.parse(cp.LeakageGuard) as Record<string, unknown>;
-          const deny = (lg['DenyFields'] ?? lg['DenyList']) as string[] | undefined;
-          if (Array.isArray(deny)) {
-            const denySet = new Set(deny.map((d) => d.toLowerCase()));
-            for (const item of this.FieldItems) {
-              if (denySet.has(item.field.Name.toLowerCase())) {
-                item.isDenyList = true;
-                item.selected = false;
-              }
-            }
-          }
-          if (typeof lg['SingleFeatureDominanceThreshold'] === 'number') {
-            this.DominanceThreshold = lg['SingleFeatureDominanceThreshold'];
-          }
+    this.populateFieldItems();
+    this.readClonedHyperparameters(cp.Hyperparameters);
+    this.restoreClonedFeatureSteps(cp.FeatureSteps);
+    this.restoreClonedValidation(cp.ValidationStrategy);
+    this.restoreClonedLeakageGuard(cp.LeakageGuard);
+    const clonedClass = PipelineWizardBindings.AdverseClassFromFeatureSteps(cp.FeatureSteps);
+    if (cp.PredictionUnitID) {
+      void this.restoreBoundTarget(cp.PredictionUnitID, clonedClass);
+      return;
+    }
+    this.clonedAdverse = clonedClass === '' ? null : { Entity: this.SelectedEntity?.Name ?? '', Target: cp.TargetVariable, Class: clonedClass };
+    void this.refreshAdverseClassChoices();
+  }
+
+  /**
+   * Restores a bound clone's target from its unit's label rule, then its adverse class against that column. A rule
+   * that names no column of the entity leaves the target unset, with a note naming why. A target or entity the user
+   * picked while the unit was read wins.
+   */
+  private async restoreBoundTarget(unitId: string, clonedClass: string): Promise<void> {
+    const entityId = this.SelectedEntityId;
+    const read = await this.readBoundTarget(unitId);
+    if (this.TargetVariable !== '' || !UUIDsEqual(this.SelectedEntityId, entityId)) return;
+    const field = read.Ok ? this.AvailableFields.find((f) => f.Name.toLowerCase() === read.Column.toLowerCase()) : undefined;
+    if (field === undefined) {
+      const reason = read.Ok ? `its Prediction Unit reads the column "${read.Column}", which ${this.SelectedEntity?.Name || 'the entity'} does not have` : read.Reason;
+      this.notifications.CreateSimpleNotification(`The copy's target column could not be restored: ${reason}. Choose the target in step 1.`, 'warning', 6000);
+      this.cdr.detectChanges();
+      return;
+    }
+    this.markTarget(field.Name);
+    this.clonedAdverse = clonedClass === '' ? null : { Entity: this.SelectedEntity?.Name ?? '', Target: field.Name, Class: clonedClass };
+    void this.refreshAdverseClassChoices();
+    this.cdr.detectChanges();
+  }
+
+  /** The bound unit's target column; a read that throws becomes its reason. */
+  private async readBoundTarget(unitId: string): Promise<BoundTargetRead> {
+    try {
+      return await PipelineWizardBindings.ReadBoundTargetColumn(unitId, this.providerToUse, this.CurrentUser || undefined);
+    } catch (err) {
+      return { Ok: false, Reason: `reading its Prediction Unit failed: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  }
+
+  /** The cloned pipeline's leakage deny-list and dominance threshold; unreadable JSON leaves the defaults. */
+  private restoreClonedLeakageGuard(json: string | null): void {
+    const lg = this.jsonObject(json);
+    if (lg === null) return;
+    const deny = JsonParse.JsonStringArray(lg, 'DenyFields') ?? JsonParse.JsonStringArray(lg, 'DenyList');
+    if (deny !== null) {
+      const denySet = new Set(deny.map((d) => d.toLowerCase()));
+      for (const item of this.FieldItems) {
+        if (denySet.has(item.field.Name.toLowerCase())) {
+          item.isDenyList = true;
+          item.selected = false;
         }
-      } catch {
-        // Ignore
       }
     }
+    const threshold = lg['SingleFeatureDominanceThreshold'];
+    if (typeof threshold === 'number') this.DominanceThreshold = threshold;
   }
 
   /** The selected feature columns the trainer treats as numeric. */

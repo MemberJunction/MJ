@@ -4,8 +4,9 @@ import { getTestBed } from '@angular/core/testing';
 import type { ComponentFixture } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { RenderComponentFixture, Query, QueryAll } from '@memberjunction/ng-test-utils';
-import type { EntityFieldInfo, EntityInfo, IMetadataProvider } from '@memberjunction/core';
+import type { EntityFieldInfo, EntityInfo, IMetadataProvider, RunViewParams, RunViewResult } from '@memberjunction/core';
 import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import type { FeatureStepGraph } from '@memberjunction/predictive-studio-core';
 import type { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PipelineWizardBindings } from './ps-pipeline-wizard.bindings';
@@ -87,6 +88,21 @@ function captureSave(): { Saved: MJMLTrainingPipelineEntity[] } {
 /** A pipeline double the wizard fills in place of a saved entity object. */
 function pipelineDouble(): MJMLTrainingPipelineEntity {
   return Object.assign(Object.create(null), { NewRecord: (): boolean => true, Hyperparameters: null, FeatureSteps: null });
+}
+
+/** A saved Prediction Unit (or protocol) row double: the columns the row writer set. */
+interface UnitRowDouble {
+  ID: string;
+  LabelRule?: string;
+  Name?: string;
+  [column: string]: string | number | boolean | null | object | undefined;
+}
+
+/** A provider double that saves through the real binding, with the pipelines and units it saved, in order. */
+interface BoundWorld {
+  readonly Provider: IMetadataProvider;
+  readonly Pipelines: MJMLTrainingPipelineEntity[];
+  readonly Units: UnitRowDouble[];
 }
 
 afterEach(() => vi.restoreAllMocks());
@@ -374,6 +390,89 @@ describe('PSPipelineWizardComponent (DOM) — every control round-trips', () => 
     const card = Query(fixture, '[data-testid="ps-wizard-validation"]');
     expect(card?.querySelectorAll('input[type="range"]').length).toBe(0);
     expect(Query(fixture, '[data-testid="ps-wizard-protocol-note"]')?.textContent?.replace(/\s+/g, ' ')).toContain('Evaluation Protocol "Segment model — protocol"');
+  });
+
+  /**
+   * A provider whose entity objects save through the real `SaveWithBindings` (unit, protocol, then the pipeline, which
+   * `bind()` rewrites), and whose view returns the saved unit rows by ID — the wizard's clone reads its unit back here.
+   */
+  function boundWorld(): BoundWorld {
+    const w: BoundWorld = { Provider: Object.create(null), Pipelines: [], Units: [] };
+    const saveable = <T extends { ID: string }>(into: T[], prefix: string, extra: Record<string, null>): T => {
+      const r: T = Object.assign(Object.create(null), {
+        ID: '', LatestResult: null, ...extra, NewRecord: (): boolean => true,
+        Save: async (): Promise<boolean> => {
+          // a pipeline's ID is minted on save; a unit's row writer already set its own
+          if (!r.ID) r.ID = `${prefix}-${into.length + 1}`;
+          into.push(r);
+          return true;
+        },
+      });
+      return r;
+    };
+    Object.assign(w.Provider, {
+      Entities: [ENTITY, WIDE], CurrentUser: { ID: 'U1' },
+      GetEntityObject: async (entity: string): Promise<MJMLTrainingPipelineEntity | UnitRowDouble> => {
+        if (entity === 'MJ: ML Training Pipelines') return saveable(w.Pipelines, 'P', { Hyperparameters: null, FeatureSteps: null, PredictionUnitID: null });
+        return saveable<UnitRowDouble>(entity === 'MJ: Prediction Units' ? w.Units : [], entity === 'MJ: Prediction Units' ? 'U' : 'EP', {});
+      },
+      RunView: async (params: RunViewParams): Promise<RunViewResult<UnitRowDouble>> => {
+        const rows = params.EntityName === 'MJ: Prediction Units' ? w.Units.filter((u) => typeof params.ExtraFilter === 'string' && params.ExtraFilter.includes(`'${u.ID}'`)) : [];
+        return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
+      },
+    });
+    return w;
+  }
+
+  /** The label read as the view answers it: the classes of a real column, and the view's error for any other name. */
+  function readLabelsOfRealColumns(): void {
+    vi.spyOn(PipelineWizardBindings, 'ReadClassLabels').mockImplementation(async (f) => {
+      if (!WIDE.Fields.some((x) => x.Name === f.TargetVariable)) throw new Error(`Invalid column name '${f.TargetVariable}'`);
+      return ['A', 'B'];
+    });
+  }
+
+  it('clones a pipeline saved through the real binding: B gets back the target column, adverse class and steps, with no error notice', async () => {
+    readLabelsOfRealColumns();
+    const notify = vi.spyOn(MJNotificationService.prototype, 'CreateSimpleNotification');
+    const w = boundWorld();
+    const first = RenderComponentFixture(PSPipelineWizardComponent, { inputs: { provider: w.Provider, engine: Object.assign(Object.create(null), { Algorithms: [XGB] }) } });
+    await goalStep(first, 'Segment', 'W1');
+    choose(first, '#adverse-class', 'B');
+    await first.componentInstance.SaveDraft();
+    const a = w.Pipelines[0];
+    // bind() wrote the unit's rule text over the label column, as the server requires
+    expect([a?.TargetVariable, Boolean(a?.PredictionUnitID)]).toEqual(['Segment within 1 days', true]);
+
+    const second = RenderComponentFixture(PSPipelineWizardComponent, { inputs: { provider: w.Provider, engine: Object.assign(Object.create(null), { Algorithms: [XGB] }), CloneFromPipeline: a } });
+    await settle(second);
+    const b = second.componentInstance;
+    const segment = b.FieldItems.find((i) => i.field.Name === 'Segment');
+    expect([b.TargetVariable, segment?.isTarget, segment?.selected, b.AdverseClass, b.CanSave()]).toEqual(['Segment', true, false, 'B', true]);
+    await b.SaveDraft();
+    const pipelineB = w.Pipelines[1];
+    expect([w.Units[1]?.LabelRule, pipelineB?.TargetVariable]).toEqual([w.Units[0]?.LabelRule, a?.TargetVariable]);
+    expect(PipelineWizardBindings.AdverseClassFromFeatureSteps(pipelineB?.FeatureSteps || null)).toBe('B');
+    expect(pipelineB?.FeatureSteps).toEqual(a?.FeatureSteps);
+    expect(notify.mock.calls.filter(([, style]) => style === 'error' || style === 'warning')).toEqual([]);
+  });
+
+  it('opens a clone whose unit labels rows by a rule, not a column, with the target unset and a note naming the unit', async () => {
+    readLabelsOfRealColumns();
+    const notify = vi.spyOn(MJNotificationService.prototype, 'CreateSimpleNotification');
+    const w = boundWorld();
+    const first = RenderComponentFixture(PSPipelineWizardComponent, { inputs: { provider: w.Provider, engine: Object.assign(Object.create(null), { Algorithms: [XGB] }) } });
+    await goalStep(first, 'Segment', 'W1');
+    choose(first, '#adverse-class', 'B');
+    await first.componentInstance.SaveDraft();
+    const unit = w.Units[0];
+    if (unit) unit.LabelRule = JSON.stringify({ kind: 'next-period', periodIndexField: 'Tenure', offset: 1 });
+
+    const second = RenderComponentFixture(PSPipelineWizardComponent, { inputs: { provider: w.Provider, engine: Object.assign(Object.create(null), { Algorithms: [XGB] }), CloneFromPipeline: w.Pipelines[0] } });
+    await settle(second);
+    const b = second.componentInstance;
+    expect([b.TargetVariable, b.FieldItems.some((i) => i.isTarget), b.CanSave()]).toEqual(['', false, false]);
+    expect(notify.mock.calls.map(([message]) => message).filter((m) => m.includes(String(unit?.Name)))).toHaveLength(1);
   });
 
   it('keeps the defaults, and does not throw, when the cloned FeatureSteps or ValidationStrategy is unreadable', async () => {

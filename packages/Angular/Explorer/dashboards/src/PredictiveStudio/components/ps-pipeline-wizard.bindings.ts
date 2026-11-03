@@ -6,11 +6,13 @@
  * would have pointed at are deleted again. Browser-safe (L0): no router, no Explorer import.
  */
 import { CompositeKey, RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import type { MJEvaluationProtocolEntity, MJMLTrainingPipelineEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
 import {
   ADVERSE_CLASS_HOLD_REASON, JsonParse, LegacyPipelines, PredictionUnit, ProtocolRows, TaskTypeRules, UtcDay,
   type Actor, type LegacyProtocolOutcome, type LegacyStop, type OutcomeConfig, type PredictionUnitSpec, type UnitDraft,
 } from '@memberjunction/predictive-studio-core';
+import { UNIT_VERSION_FIELDS, type UnitVersionRow } from './versioned-list/lineage-reads';
 
 /** Why the wizard will not save a two-class target it cannot tell the adverse class of, naming the control that fixes it. */
 export const WIZARD_ADVERSE_CLASS_REASON =
@@ -41,6 +43,9 @@ export interface WizardBindingPlan {
 export type WizardPipelineFields = Pick<MJMLTrainingPipelineEntity, 'Name' | 'TargetVariable' | 'ProblemType' | 'AsOfStrategy' | 'ValidationStrategy' | 'LeakageGuard' | 'FeatureSteps' | 'Hyperparameters'> & {
   readonly TargetEntity: string;
 };
+
+/** The label column a bound pipeline's Prediction Unit reads, or why there is none to restore. */
+export type BoundTargetRead = { readonly Ok: true; readonly Column: string } | { readonly Ok: false; readonly Reason: string };
 
 /** Saving a pipeline with its bindings: success, or why it was not saved. */
 export type WizardSaveResult = { readonly Ok: true } | { readonly Ok: false; readonly Reason: string };
@@ -97,6 +102,30 @@ export class PipelineWizardBindings {
       if (JsonParse.IsJsonObject(style) && JsonParse.JsonString(style, 'BadgeColor') === 'red') return label;
     }
     return '';
+  }
+
+  /**
+   * The label column a pipeline bound to `unitId` was saved with. A bound pipeline's `TargetVariable` holds the unit's
+   * rule text (`bind()`), so the column comes from the unit's label rule: a column rule names it; any other rule has
+   * no column the wizard can offer. One keyed read of the unit version.
+   */
+  public static async ReadBoundTargetColumn(unitId: string, provider: IMetadataProvider, user: UserInfo | undefined): Promise<BoundTargetRead> {
+    const r = await RunView.FromMetadataProvider(provider).RunView<UnitVersionRow>({
+      EntityName: 'MJ: Prediction Units', ExtraFilter: `ID='${EscapeSQLString(unitId)}'`, Fields: [...UNIT_VERSION_FIELDS], ResultType: 'simple',  // pk-filter-ok: MJ core entity keyed by ID
+    }, user);
+    if (!r.Success) return { Ok: false, Reason: `reading its Prediction Unit failed: ${r.ErrorMessage}` };
+    const row = r.Results[0];
+    if (row === undefined) return { Ok: false, Reason: `its Prediction Unit ${unitId} was not found` };
+    const parsed = PredictionUnit.ParsePredictionUnitRow(row);
+    if (parsed.Ok === false) return { Ok: false, Reason: `its Prediction Unit "${row.Name}" cannot be read: ${parsed.Errors.join('; ')}` };
+    return PipelineWizardBindings.TargetColumnOfUnit(parsed.Value);
+  }
+
+  /** Pure: the column a unit's label rule reads, or why its rule names none. */
+  public static TargetColumnOfUnit(unit: PredictionUnitSpec): BoundTargetRead {
+    const rule = unit.label.rule;
+    if (rule.kind === 'column') return { Ok: true, Column: rule.column };
+    return { Ok: false, Reason: `its Prediction Unit "${unit.name}" labels rows by a ${rule.kind} rule, not a column` };
   }
 
   /**
