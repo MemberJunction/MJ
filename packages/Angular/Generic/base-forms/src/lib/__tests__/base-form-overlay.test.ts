@@ -13,7 +13,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // ----- Module mocks -------------------------------------------------------
 
 // Note: defined inside the factory — vi.mock is hoisted above module scope.
+const overlayCdr = vi.hoisted(() => ({ markForCheck: vi.fn() }));
 vi.mock('@angular/core', () => ({
+  ChangeDetectorRef: class {},
+  inject: () => overlayCdr,
   Directive: () => (t: Function) => t,
   Input: () => () => {},
   Output: () => () => {},
@@ -159,5 +162,15 @@ describe('BaseFormOverlay title derivation (onFormCreated)', () => {
     overlay.Title = 'Custom Title';
     overlay.onFormCreated(formWith('Accounts', true));
     expect(overlay.effectiveTitle).toBe('Custom Title');
+  });
+});
+
+describe('BaseFormOverlay onSaveClick', () => {
+  it('re-enables the buttons and asks for a render when the save fails without an event', async () => {
+    overlayCdr.markForCheck.mockClear();
+    (overlay as unknown as { host: unknown }).host = { Save: vi.fn().mockResolvedValue(false) };
+    await overlay.onSaveClick();
+    expect(overlay.saving).toBe(false);
+    expect(overlayCdr.markForCheck).toHaveBeenCalled();
   });
 });

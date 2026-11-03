@@ -352,6 +352,29 @@ export class MyDashboardComponent extends BaseResourceComponent {
 export function LoadMyDashboardResource() {}
 ```
 
+### Re-rendering and Cache Reattach
+
+The Explorer shell mounts each tab's resource component with `createComponent()` + `ApplicationRef.attachView()`. A root view like that is re-rendered only when it is flagged dirty, so a field a component changes from async work (a `RunView` continuation, a timer, an RxJS subscription) does not reach the DOM on its own.
+
+- **`RefreshView()`** flags the view and schedules a render. The framework calls it from `NotifyLoadStarted()`, `NotifyLoadComplete()` and after every `OnQueryParamsChanged()` delivery. Call it yourself after any other async state change.
+- **`OnReattached()`** runs each time the component cache reattaches the component to a tab (the user came back to a cached tab or nav item). A cached component keeps its instance and runs no init on reattach, so data it loaded can be stale. Override it to reload on every return.
+- **`WatchEntities(...names)` + `OnStaleOnReattach()`**: call `WatchEntities` once from init with the entities the component reads. A save or delete of one of them in this browser marks the component stale, and the next reattach calls `OnStaleOnReattach()` once. Reload there, then call `RefreshView()`.
+
+```typescript
+ngAfterViewInit(): void {
+  this.WatchEntities('MJ: Credentials');
+  this.loadConfiguration();
+  this.NotifyLoadComplete();
+}
+
+protected override async OnStaleOnReattach(): Promise<void> {
+  this.AvailableCredentials = await this.loadCredentials();
+  this.RefreshView();
+}
+```
+
+The Knowledge Hub configuration resource is the reference adopter. `e2e/specs/attached-view-refresh.spec.ts` is the browser regression probe for the re-render rule.
+
 ### Presentational Components
 
 Lightweight, focused components that receive data via `@Input` and emit events via `@Output`:

@@ -21,6 +21,8 @@ import { Subject } from 'rxjs';
 const injectStub = {
    // NavigationService usage: QueryParamChanged$.pipe(...).subscribe(...)
    QueryParamChanged$: new Subject<unknown>(),
+   // ResourceReattached$.pipe(...).subscribe(...) — the cache-reattach hook
+   ResourceReattached$: new Subject<unknown>(),
    ObserveTabQueryParams: () => new Subject<unknown>(),
    // ChangeDetectorRef usage: markForCheck()
    markForCheck: vi.fn(),

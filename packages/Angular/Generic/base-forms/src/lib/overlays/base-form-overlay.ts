@@ -1,4 +1,4 @@
-import { Directive, Input, Output, EventEmitter, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Directive, Input, Output, EventEmitter, ViewChild, inject } from '@angular/core';
 import { BaseEntity, CompositeKey } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
@@ -23,6 +23,8 @@ export type FormOverlayCloseReason = 'save' | 'cancel';
  */
 @Directive()
 export abstract class BaseFormOverlay extends BaseAngularComponent {
+  private readonly overlayCdr = inject(ChangeDetectorRef);
+
   /** Reference to the hosted form (template must name the host `#host`). */
   @ViewChild('host') protected host?: MjEntityFormHostComponent;
 
@@ -149,6 +151,9 @@ export abstract class BaseFormOverlay extends BaseAngularComponent {
       await this.host.Save();
     } finally {
       this.saving = false;
+      // The overlay is a root view the presenter attached; a save that fails without the host
+      // emitting an output would otherwise leave the buttons disabled.
+      this.overlayCdr.markForCheck();
     }
   }
 
