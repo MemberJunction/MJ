@@ -17,10 +17,16 @@
 
 import { WebClient } from '@slack/web-api';
 import { LogError, LogStatus } from '@memberjunction/core';
+import { SanitizeForLog } from '@memberjunction/global';
 import type { AgentResponseForm } from '@memberjunction/ai-core-plus';
 import { BuildFormModal, GetFullResponseText } from './slack-block-builder.js';
 import type { SlackAdapter } from './SlackAdapter.js';
 import type { IncomingMessage } from '../base/types.js';
+
+/** Returns a request-supplied value as one length-capped line for a log message. */
+function logValue(value: unknown): string {
+    return SanitizeForLog(String(value));
+}
 
 /**
  * In-memory store for active response forms, keyed by `channelId:threadTs`.
@@ -106,7 +112,7 @@ export async function HandleSlackInteraction(
     }
 
     if (payload.type !== 'block_actions') {
-        LogStatus(`Slack interaction: ignoring type '${payload.type}'`);
+        LogStatus(`Slack interaction: ignoring type '${logValue(payload.type)}'`);
         return;
     }
 
@@ -135,7 +141,7 @@ async function routeAction(
     adapter?: SlackAdapter
 ): Promise<void> {
     const actionId = action.action_id;
-    LogStatus(`Slack interaction: action_id='${actionId}', user='${payload.user?.name}'`);
+    LogStatus(`Slack interaction: action_id='${logValue(actionId)}', user='${logValue(payload.user?.name)}'`);
 
     if (actionId.startsWith('mj:view_full:')) {
         await handleViewFull(action, payload, client);
@@ -147,9 +153,9 @@ async function routeAction(
     } else if (actionId.startsWith('mj:form_choice:')) {
         await handleFormChoice(action, payload, client, adapter);
     } else if (actionId.startsWith('mj:action_')) {
-        LogStatus(`Slack interaction: custom action '${actionId}' clicked by ${payload.user?.name}`);
+        LogStatus(`Slack interaction: custom action '${logValue(actionId)}' clicked by ${logValue(payload.user?.name)}`);
     } else {
-        LogStatus(`Slack interaction: unhandled action_id '${actionId}'`);
+        LogStatus(`Slack interaction: unhandled action_id '${logValue(actionId)}'`);
     }
 }
 
@@ -359,7 +365,7 @@ async function handleModalSubmission(
             return;
         }
 
-        LogStatus(`Slack modal submit: user='${payload.user?.name}', fields=${fields.length}`);
+        LogStatus(`Slack modal submit: user='${logValue(payload.user?.name)}', fields=${fields.length}`);
 
         await postFormSubmission({
             fields,
@@ -399,7 +405,7 @@ async function handleFormChoice(
         const chosenValue = parts.slice(3).join(':') || action.value || 'unknown';
         const displayValue = action.value || chosenValue;
 
-        LogStatus(`Slack form choice: user='${payload.user?.name}', question='${questionId}', value='${chosenValue}'`);
+        LogStatus(`Slack form choice: user='${logValue(payload.user?.name)}', question='${logValue(questionId)}', value='${logValue(chosenValue)}'`);
 
         const channelId = payload.channel?.id;
         const threadTs = payload.message?.thread_ts ?? payload.message?.ts;

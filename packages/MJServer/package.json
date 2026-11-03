@@ -15,6 +15,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./middleware/BaseServerMiddleware": {
+      "types": "./dist/middleware/BaseServerMiddleware.d.ts",
+      "default": "./dist/middleware/BaseServerMiddleware.js"
     }
   },
   "scripts": {

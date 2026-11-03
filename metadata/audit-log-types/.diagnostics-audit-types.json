@@ -1,0 +1,101 @@
+[
+  {
+    "fields": {
+      "Name": "Diagnostics Session Started",
+      "Description": "A diagnostic recording session was started on the instance.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-205000000001"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diagnostics Session Stopped",
+      "Description": "A diagnostic recording session was stopped and its chunks were flushed.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-205000000002"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diagnostics Bundle Built",
+      "Description": "A .mjdiag diagnostic bundle was assembled, scrubbed, and verified.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-205000000003"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diagnostics Bundle Previewed",
+      "Description": "An operator inspected a diagnostic bundle's manifest, scrubbing summary, and findings.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-205000000004"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diagnostics Bundle Downloaded",
+      "Description": "A diagnostic bundle archive was downloaded via a single-use signed capability token.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-205000000005"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diagnostics Bundle Sent",
+      "Description": "An encrypted diagnostic bundle was transmitted to an external collector or storage account.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-205000000006"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diagnostics Bundle Send Failed",
+      "Description": "An attempt to transmit an encrypted diagnostic bundle externally failed.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-205000000007"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diagnostics Bundle Received",
+      "Description": "An external .mjdiag.enc bundle was ingested, cryptographically verified, structurally validated, and malware-checked by the MJAPI intake endpoint.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-205000000008"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diagnostics Sharing Settings Changed",
+      "Description": "Instance configuration settings governing diagnostic capture, literal scrubbing, or external transmission were modified.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-205000000009"
+    }
+  }
+]
