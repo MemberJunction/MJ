@@ -30,6 +30,38 @@
       } catch (e) { /* swallow — theme just falls back to light */ }
     })();
   </script>
+  <!--
+    Page background pre-paint — sets the page background the ThemeService last resolved inline
+    on <html>, so the frame before the bundle's stylesheet loads is not the critical CSS's light
+    page for dark-mode users (critical-CSS inlining drops the [data-theme="dark"] override). Runs
+    after the theme script above, whose data-theme / data-theme-overlay it checks the record
+    against. This is PAGE_BACKGROUND_PREPAINT_SCRIPT from @memberjunction/ng-shared-generic,
+    verbatim; a spec there pins this copy to the export.
+  -->
+  <script>
+    (function () {
+      try {
+        var raw = localStorage.getItem('mj-theme-page');
+        if (!raw) return;
+        var page = JSON.parse(raw);
+        var root = document.documentElement;
+        var scheme = root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+        var overlay = root.getAttribute('data-theme-overlay') || null;
+        if (!page || typeof page.bg !== 'string' || !page.bg || page.scheme !== scheme || (page.overlay || null) !== overlay) return;
+        root.style.setProperty('--mj-bg-page', page.bg);
+        root.style.setProperty('background-color', page.bg);
+        root.style.setProperty('color-scheme', scheme);
+        root.setAttribute('data-mj-prepaint-page', '');
+        window.addEventListener('load', function () {
+          if (!root.hasAttribute('data-mj-prepaint-page')) return;
+          root.style.removeProperty('--mj-bg-page');
+          root.style.removeProperty('background-color');
+          root.style.removeProperty('color-scheme');
+          root.removeAttribute('data-mj-prepaint-page');
+        });
+      } catch (e) { /* fail open: the critical CSS paints the first frame */ }
+    })();
+  </script>
   <link rel="icon" href="favicon.ico" sizes="48x48">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
