@@ -1813,5 +1813,30 @@
       "lastModified": "2026-08-07T23:58:25.816Z",
       "checksum": "05e7c1f89fec03dbd13514f5e06d769ba71dedaec03bd87869825f4384bfaed6"
     }
+  },
+  {
+    "fields": {
+      "Name": "Anchored Comment Restricted Field Classifier",
+      "Description": "Classifies whether an anchored record comment semantically references any Field-Level Security (FLS) restricted fields on the linked entity so restrictedFields can be stamped into AnchorMetadata.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/system/anchored-comment-restricted-field-classifier.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Default",
+      "PowerPreference": "Lowest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/system/anchored-comment-restricted-field-classifier.example.json",
+      "ValidationBehavior": "Warn",
+      "MaxRetries": 1,
+      "RetryDelayMS": 500,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "primaryKey": {
+      "ID": "9B96AFAE-6C09-4C78-9C60-690BC5807A76"
+    }
   }
 ]

@@ -854,7 +854,21 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     // Snapshot the bridge ids first — StopAgentRoomSession mutates the roster (removeFromRoster) as it runs.
     const bridgeIDs = (this.roomRosters.get(roomKey) ?? []).map((e) => e.SessionBridgeID);
     await Promise.all(bridgeIDs.map((id) => this.StopAgentRoomSession(id, reason, contextUser, provider)));
+    if (this.roomTeardownHook) {
+      try {
+        await this.roomTeardownHook(roomName, contextUser, provider);
+      } catch (err) {
+        LogError(`[LiveKitAgentRoomCoordinator] roomTeardownHook failed for ${roomName}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
     return bridgeIDs.length;
+  }
+
+  private roomTeardownHook?: (roomName: string, contextUser?: UserInfo, provider?: IMetadataProvider) => Promise<void>;
+
+  /** Registers an optional room teardown hook (e.g., for LiveKit SIP to hang up phone legs when a room is ended for everyone). */
+  public SetRoomTeardownHook(hook: ((roomName: string, contextUser?: UserInfo, provider?: IMetadataProvider) => Promise<void>) | undefined): void {
+    this.roomTeardownHook = hook;
   }
 
   /**
