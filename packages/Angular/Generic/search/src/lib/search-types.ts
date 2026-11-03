@@ -45,6 +45,8 @@ export interface SearchResultItem {
     ProviderLabel?: string;
     /** Font Awesome icon class from the SearchProvider metadata */
     ProviderIcon?: string;
+    /** Searchable fields whose text contained the query (keyword lane); unset when no text lane matched. */
+    MatchedFields?: string[];
 }
 
 /** Breakdown of score contribution from each search source */
@@ -232,4 +234,101 @@ export interface RecentRecordItem {
     RecordID: string;
     /** Resolved display name (falls back to the ID when resolution fails) */
     RecordName: string;
+}
+
+/**
+ * One "how this result matched" chip. Results show these instead of the fused `Score` as a
+ * percentage: that score is rank-based (RRF ÷ max), so it read like confidence while tying an
+ * exact match with a look-alike, and showing 100% on a query only the semantic lane answered.
+ */
+export interface MatchChip {
+    /** `name`: a keyword hit on a name field; `text`: any other text hit; `meaning`: the semantic lane; `relevance`: a re-ranker's score. */
+    Kind: 'name' | 'text' | 'meaning' | 'relevance';
+    Label: string;
+    /** Longer explanation for a tooltip. */
+    Title: string;
+}
+
+/** What {@link MatchChipsFor} needs to know about an entity's fields. */
+export interface MatchChipFieldLookup {
+    /** True when the field is one of the entity's name fields. */
+    IsNameField(entityName: string, fieldName: string): boolean;
+    /** The field's display name (falls back to the field name). */
+    DisplayName(entityName: string, fieldName: string): string;
+}
+
+/** Whether any text lane (keyword, full-text, storage, tag) matched the result. */
+export function HasTextMatch(result: Pick<SearchResultItem, 'ScoreBreakdown' | 'MatchedFields'>): boolean {
+    const b = result.ScoreBreakdown ?? {};
+    return (result.MatchedFields?.length ?? 0) > 0 || b.Entity != null || b.FullText != null || b.Storage != null || b.Tag != null;
+}
+
+/** Whether the semantic (vector) lane matched the result. */
+export function HasSemanticMatch(result: Pick<SearchResultItem, 'ScoreBreakdown'>): boolean {
+    return result.ScoreBreakdown?.Vector != null;
+}
+
+/**
+ * The chips that say how a result matched: "Name match" (a keyword hit on a name field),
+ * "Text match · <field>" (any other text hit), "Similar meaning" (the semantic lane), both kinds
+ * when both lanes matched, and "Relevance N%" only when a re-ranker scored the result (that score
+ * is a calibrated relevance; the fused score is not).
+ */
+export function MatchChipsFor(result: Pick<SearchResultItem, 'EntityName' | 'ScoreBreakdown' | 'MatchedFields'>, fields?: MatchChipFieldLookup): MatchChip[] {
+    const chips: MatchChip[] = [];
+    if (HasTextMatch(result)) {
+        const matched = result.MatchedFields ?? [];
+        const nameField = matched.find(f => fields?.IsNameField(result.EntityName, f));
+        if (nameField) {
+            chips.push({ Kind: 'name', Label: 'Name match', Title: `The search text appears in ${fields?.DisplayName(result.EntityName, nameField) ?? nameField}` });
+        } else if (matched.length > 0) {
+            const first = fields?.DisplayName(result.EntityName, matched[0]) ?? matched[0];
+            const more = matched.length > 1 ? ` +${matched.length - 1}` : '';
+            chips.push({ Kind: 'text', Label: `Text match · ${first}${more}`, Title: `The search text appears in: ${matched.map(f => fields?.DisplayName(result.EntityName, f) ?? f).join(', ')}` });
+        } else {
+            chips.push({ Kind: 'text', Label: 'Text match', Title: 'The search text matched this result\'s text' });
+        }
+    }
+    if (HasSemanticMatch(result)) {
+        chips.push({ Kind: 'meaning', Label: 'Similar meaning', Title: 'Found by meaning rather than exact words' });
+    }
+    const reRank = result.ScoreBreakdown?.ReRank;
+    if (reRank != null) {
+        chips.push({ Kind: 'relevance', Label: `Relevance ${Math.round(reRank * 100)}%`, Title: 'Relevance from the re-ranker' });
+    }
+    return chips;
+}
+
+/**
+ * Whether a search found nothing as text: no keyword and no full-text hits. A UI then says
+ * "No exact matches" so a page of semantic look-alikes is not read as matches.
+ */
+export function HasNoExactMatches(sourceCounts: { Entity?: number; FullText?: number } | null | undefined): boolean {
+    if (!sourceCounts) return false;
+    return (sourceCounts.Entity ?? 0) + (sourceCounts.FullText ?? 0) === 0;
+}
+
+/** A match-type filter: every result, text matches only, or semantic matches only. */
+export type MatchTypeFilter = 'all' | 'text' | 'meaning';
+
+/** Whether a result passes a match-type filter. A result both lanes matched passes either one. */
+export function PassesMatchType(result: Pick<SearchResultItem, 'ScoreBreakdown' | 'MatchedFields'>, filter: MatchTypeFilter): boolean {
+    if (filter === 'text') return HasTextMatch(result);
+    if (filter === 'meaning') return HasSemanticMatch(result);
+    return true;
+}
+
+/** The similar-meaning cutoff used when the `Search.DefaultMinScore` setting is missing or unusable, in percent. */
+export const FALLBACK_MIN_SCORE_PERCENT = 30;
+
+/**
+ * The similar-meaning cutoff a results page starts at, in percent, from the `Search.DefaultMinScore`
+ * instance setting (a 0-1 similarity). Falls back to {@link FALLBACK_MIN_SCORE_PERCENT} when the
+ * setting is missing or outside 0-1.
+ */
+export function MinScorePercentFromSetting(setting: number | null | undefined): number {
+    if (setting == null || !Number.isFinite(setting) || setting < 0 || setting > 1) {
+        return FALLBACK_MIN_SCORE_PERCENT;
+    }
+    return Math.round(setting * 100);
 }

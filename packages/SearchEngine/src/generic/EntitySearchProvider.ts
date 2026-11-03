@@ -561,6 +561,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
 
             // Calculate relevance: how many fields match the query, and the best kind of match
             let matchedFields = 0;
+            const matchedFieldNames: string[] = [];
             let best: KeywordMatchKind | null = null;
             let bestOnNameField = false;
             for (const field of searchFields) {
@@ -569,6 +570,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
                 const kind = ClassifyKeywordMatch(String(val).toLowerCase(), queryLower);
                 if (kind == null) continue;
                 matchedFields++;
+                matchedFieldNames.push(field.Name);
                 const onNameField = nameFields.some(nf => nf.Name === field.Name);
                 const rank = KEYWORD_MATCH_RANK[kind];
                 if (best == null || rank > KEYWORD_MATCH_RANK[best]) {
@@ -601,7 +603,8 @@ export class EntitySearchProvider extends BaseSearchProvider {
                 Tags: [],
                 EntityIcon: entityInfo?.Icon ?? undefined,
                 RecordName: title !== 'Record' ? title : undefined,
-                MatchedAt: new Date()
+                MatchedAt: new Date(),
+                MatchedFields: matchedFieldNames
             };
             return resultItem;
         }).filter((item): item is SearchResultItem => item != null);

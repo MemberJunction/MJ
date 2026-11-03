@@ -67,14 +67,50 @@ describe('SearchResultsComponent (DOM)', () => {
     expect(query(fixture, '.results-summary')).toBeNull();
   });
 
-  it('hides score badges when ShowScores is false', () => {
-    const fixture = render({ FlatResults: [makeResult()], TotalCount: 1, ShowScores: false });
-    expect(query(fixture, '.result-card-score')).toBeNull();
+  it('hides the match chips when ShowScores is false', () => {
+    const fixture = render({ FlatResults: [makeResult({ ScoreBreakdown: { Entity: 0.9 } })], TotalCount: 1, ShowScores: false });
+    expect(query(fixture, '.result-card-match')).toBeNull();
   });
 
-  it('shows score badges with a formatted percentage when ShowScores is true', () => {
-    const fixture = render({ FlatResults: [makeResult({ Score: 0.42 })], TotalCount: 1, ShowScores: true });
-    expect(text(fixture, '.score-value')).toBe('42%');
+  // #5123: the fused Score is rank-based, so the card says how a result matched instead of
+  // showing it as a percentage.
+  it('a keyword-only result shows a text match naming the field, and no percentage', () => {
+    const fixture = render({
+      FlatResults: [makeResult({ Score: 1, ScoreBreakdown: { Entity: 0.9 }, MatchedFields: ['Email', 'Notes'] })],
+      TotalCount: 1,
+    });
+    const chips = queryAll(fixture, '.match-chip');
+    expect(chips.map(c => c.textContent?.trim())).toEqual(['Text match · Email +1']);
+    expect(text(fixture, '.result-card-match')).not.toContain('%');
+  });
+
+  it('a semantic-only result shows "Similar meaning" and no percentage', () => {
+    const fixture = render({ FlatResults: [makeResult({ Score: 1, ScoreBreakdown: { Vector: 0.82 } })], TotalCount: 1 });
+    expect(queryAll(fixture, '.match-chip').map(c => c.textContent?.trim())).toEqual(['Similar meaning']);
+  });
+
+  it('a result both lanes matched shows both chips', () => {
+    const fixture = render({
+      FlatResults: [makeResult({ ScoreBreakdown: { Entity: 0.9, Vector: 0.8 }, MatchedFields: ['Notes'] })],
+      TotalCount: 1,
+    });
+    expect(queryAll(fixture, '.match-chip').map(c => c.textContent?.trim())).toEqual(['Text match · Notes', 'Similar meaning']);
+  });
+
+  it('a re-ranked result also shows the re-ranker relevance', () => {
+    const fixture = render({ FlatResults: [makeResult({ ScoreBreakdown: { Vector: 0.8, ReRank: 0.734 } })], TotalCount: 1 });
+    expect(queryAll(fixture, '.match-chip').map(c => c.textContent?.trim())).toEqual(['Similar meaning', 'Relevance 73%']);
+  });
+
+  it('the expanded card shows the technical details: rank, matched fields, raw similarity', () => {
+    const result = makeResult({ ID: 'tech', Score: 0.5, ScoreBreakdown: { Vector: 0.8123 }, MatchedFields: ['Email'] });
+    const fixture = render({ FlatResults: [result], TotalCount: 1 });
+    click(fixture, '.result-card-main');
+    const details = text(fixture, '.detail-technical');
+    expect(details).toContain('Technical details');
+    expect(details).toContain('#1');
+    expect(details).toContain('Email');
+    expect(details).toContain('0.812');
   });
 
   it('does not render the pager when there is a single page', () => {
@@ -126,24 +162,5 @@ describe('SearchResultsComponent (DOM)', () => {
     click(fixture, 'button.result-open-btn');
     expect(opens.length).toBe(1);
     expect(opens[0].ID).toBe('open-me');
-  });
-
-  it('colors each score circle by its relevance tier (high/medium/low)', () => {
-    const fixture = render({
-      FlatResults: [
-        makeResult({ ID: 'r1', Score: 0.5 }), // >= 0.40 -> high
-        makeResult({ ID: 'r2', Score: 0.2 }), // 0.15..0.40 -> medium
-        makeResult({ ID: 'r3', Score: 0.05 }), // < 0.15 -> low
-      ],
-      TotalCount: 3,
-      DisplayMode: 'flat',
-      ShowScores: true,
-      PageSize: 10,
-    });
-    const circles = queryAll(fixture, '.score-circle');
-    expect(circles.length).toBe(3);
-    expect(circles[0].classList.contains('score-high')).toBe(true);
-    expect(circles[1].classList.contains('score-medium')).toBe(true);
-    expect(circles[2].classList.contains('score-low')).toBe(true);
   });
 });

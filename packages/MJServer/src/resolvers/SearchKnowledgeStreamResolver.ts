@@ -244,7 +244,7 @@ export class SearchKnowledgeStreamResolver extends ResolverBase {
 
     private toNotification(streamID: string, ev: SearchStreamEvent): SearchStreamNotification {
         // Reuse the same item shape as the synchronous resolver.
-        const mapItem = (r: { ID: string; EntityName: string; RecordID: string; SourceType: string; ResultType: string; Title: string; Snippet: string; Score: number; ScoreBreakdown: SearchScoreBreakdown; Tags: string[]; EntityIcon?: string; RecordName?: string; MatchedAt: Date; RawMetadata?: string; ProviderId?: string; ProviderLabel?: string; ProviderIcon?: string }): SearchKnowledgeResultItem => ({
+        const mapItem = (r: { ID: string; EntityName: string; RecordID: string; SourceType: string; ResultType: string; Title: string; Snippet: string; Score: number; ScoreBreakdown: SearchScoreBreakdown; Tags: string[]; EntityIcon?: string; RecordName?: string; MatchedAt: Date; RawMetadata?: string; MatchedFields?: string[]; ProviderId?: string; ProviderLabel?: string; ProviderIcon?: string }): SearchKnowledgeResultItem => ({
             ID: r.ID,
             EntityName: r.EntityName,
             RecordID: r.RecordID,
@@ -259,6 +259,7 @@ export class SearchKnowledgeStreamResolver extends ResolverBase {
             RecordName: r.RecordName,
             MatchedAt: r.MatchedAt,
             RawMetadata: r.RawMetadata,
+            MatchedFields: r.MatchedFields,
             ProviderId: r.ProviderId,
             ProviderLabel: r.ProviderLabel,
             ProviderIcon: r.ProviderIcon,

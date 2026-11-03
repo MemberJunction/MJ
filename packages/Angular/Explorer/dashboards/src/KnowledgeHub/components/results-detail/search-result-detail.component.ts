@@ -14,7 +14,7 @@ import {
     ChangeDetectorRef,
     inject
 } from '@angular/core';
-import { SearchResultItem, ScoreBreakdown } from '@memberjunction/ng-search';
+import { SearchResultItem, MatchChip, MatchChipsFor } from '@memberjunction/ng-search';
 
 /** Related item for the sidebar */
 interface RelatedItem {
@@ -72,16 +72,14 @@ export class SearchResultDetailComponent {
         return `${Math.round(score * 100)}%`;
     }
 
-    /** Get the width percentage for score bar visualization */
+    /** Get the width percentage for score bar visualization (clamped to 0-100%) */
     public GetScoreBarWidth(score: number): string {
-        return `${Math.round(score * 100)}%`;
+        return `${Math.max(0, Math.min(100, Math.round(score * 100)))}%`;
     }
 
-    /** Get the CSS class for a score level */
-    public GetScoreClass(score: number): string {
-        if (score >= 0.8) return 'score-high';
-        if (score >= 0.5) return 'score-medium';
-        return 'score-low';
+    /** How the result matched, as chips (Name match, Text match, Similar meaning, re-ranker relevance). */
+    public get MatchChips(): MatchChip[] {
+        return this.Result ? MatchChipsFor(this.Result) : [];
     }
 
     /** Get score breakdown entries for visualization */
@@ -96,7 +94,10 @@ export class SearchResultDetailComponent {
             entries.push({ Label: 'Full-Text Match', Score: breakdown.FullText });
         }
         if (breakdown.Entity !== undefined) {
-            entries.push({ Label: 'Entity Match', Score: breakdown.Entity });
+            entries.push({ Label: 'Keyword Match', Score: breakdown.Entity });
+        }
+        if (breakdown.ReRank !== undefined) {
+            entries.push({ Label: 'Re-ranker', Score: breakdown.ReRank });
         }
         return entries;
     }

@@ -538,6 +538,16 @@ describe('EntitySearchProvider', () => {
             expect(score('Leads')).toBeGreaterThan(score('Notes'));
         });
 
+        it('lists the searchable fields that matched in MatchedFields (#5123)', async () => {
+            mockEntities.push(wideEntity('Contacts', 3));
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [{ ID: 'c1', Name: 'Pat Doe', Field1: 'pat@example.com', Field2: 'unrelated' }],
+            });
+            const results = await provider.Search('pat', 10, undefined, contextUser);
+            expect(results[0].MatchedFields).toEqual(['Name', 'Field1']);
+        });
+
         it('the match is case-insensitive', () => {
             expect(ClassifyKeywordMatch('acme-001', 'acme-001')).toBe('exact');
             expect(ClassifyKeywordMatch('acme-0012', 'acme-001')).toBe('prefix');
