@@ -621,7 +621,7 @@ function scoreDelta(entry: PSRankedScore | undefined, groupBest: PSRankedScore |
 export interface PSHomeKpis {
   PublishedCount: number;
   ActiveExperiments: number;
-  /** Best holdout AUC across published models, formatted, or '—' when none. */
+  /** The highest holdout AUC across published models (no gate decides it), formatted, or '—' when none. */
   BestHoldout: string;
   /** Sum of SuccessCount across recent non-dry-run ML scoring runs this week. */
   ScoredThisWeek: string;
