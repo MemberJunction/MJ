@@ -20,8 +20,13 @@ export interface IsaDescendantInfo {
  * Supports a tree structure via `Children` for nested sub-card rendering.
  */
 export interface IsaRelatedItem {
-  /** The entity name (e.g., "Members", "Speakers") */
+  /** The entity name (e.g., "Members", "Speakers"). Used for navigation. */
   EntityName: string;
+  /**
+   * The entity's display name, for labels. Optional: callers that show labels fill it from
+   * metadata (`EntityInfo.DisplayNameOrName`); when absent, show `EntityName`.
+   */
+  DisplayName?: string;
   /** Relationship to the current form's entity */
   Relationship: 'sibling' | 'child';
   /** Depth in the IS-A hierarchy relative to the form's entity (0 = direct, 1 = grandchild, etc.) */

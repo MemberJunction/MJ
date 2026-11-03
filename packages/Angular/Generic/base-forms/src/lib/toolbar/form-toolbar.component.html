@@ -419,14 +419,14 @@
       <div class="mj-entity-hierarchy">
         @for (parent of ParentChain; track parent.ID) {
           <button type="button" class="mj-entity-badge mj-entity-badge--parent"
-             [title]="'Navigate to parent: ' + parent.Name"
+             [title]="'Navigate to parent: ' + parent.DisplayNameOrName"
              (click)="OnParentBadgeClick(parent, $event)">
             <i class="fa-solid fa-arrow-up"></i>
-            {{ parent.Name }}
+            {{ parent.DisplayNameOrName }}
           </button>
           <span class="mj-hierarchy-arrow"><i class="fa-solid fa-chevron-right"></i></span>
         }
-        <span class="mj-entity-badge mj-entity-badge--current">{{ EntityInfo?.Name }}</span>
+        <span class="mj-entity-badge mj-entity-badge--current">{{ EntityInfo?.DisplayNameOrName }}</span>
         @if (DescendantTree.length > 0) {
           <ng-container [ngTemplateOutlet]="descendantTreeTpl"
             [ngTemplateOutletContext]="{ items: DescendantTree }"></ng-container>
@@ -550,10 +550,10 @@
   @if (items.length === 1) {
     <span class="mj-hierarchy-arrow"><i class="fa-solid fa-chevron-right"></i></span>
     <button type="button" class="mj-entity-badge mj-entity-badge--child"
-       [title]="'Navigate to: ' + items[0].EntityName"
+       [title]="'Navigate to: ' + (items[0].DisplayName || items[0].EntityName)"
        (click)="OnDescendantBadgeClick(items[0].EntityName, $event)">
       <i class="fa-solid fa-arrow-down"></i>
-      {{ items[0].EntityName }}
+      {{ items[0].DisplayName || items[0].EntityName }}
     </button>
     @if (items[0].Children.length > 0) {
       <ng-container [ngTemplateOutlet]="descendantTreeTpl"
@@ -564,10 +564,10 @@
       @for (item of items; track item.EntityName) {
         <div class="mj-descendant-chain">
           <button type="button" class="mj-entity-badge mj-entity-badge--child"
-             [title]="'Navigate to: ' + item.EntityName"
+             [title]="'Navigate to: ' + (item.DisplayName || item.EntityName)"
              (click)="OnDescendantBadgeClick(item.EntityName, $event)">
             <i class="fa-solid fa-arrow-down"></i>
-            {{ item.EntityName }}
+            {{ item.DisplayName || item.EntityName }}
           </button>
           @if (item.Children.length > 0) {
             <ng-container [ngTemplateOutlet]="descendantTreeTpl"

@@ -634,7 +634,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         return true;
       }
 
-      const serverMsg = this.record.LatestResult?.Message || '';
+      const serverMsg = this.latestResultMessage();
       const errorMsg = serverMsg ? `Save failed: ${serverMsg}` : 'Error saving record';
       // A server-side Validate()/ValidateAsync() refusal comes back with its field-named
       // reasons in LatestResult.Errors (rehydrated by the provider). When any of them names a
@@ -1699,6 +1699,18 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   /**
+   * The reason the last save or delete failed, as the record's `LatestResult` states it.
+   * `CompleteMessage` joins the message with every error the server returned, so a server-side
+   * refusal (a validation rule, a permission, a referencing row) reaches the user instead of a
+   * generic "Error ..." text. Empty when the record has no result or the result has no message.
+   */
+  private latestResultMessage(): string {
+    const latest = this.record?.LatestResult;
+    if (!latest) return '';
+    return latest.CompleteMessage || latest.Message || '';
+  }
+
+  /**
    * Handles delete requests from the form container.
    * Emits RecordDeleted on success, RecordDeleteFailed on failure.
    * Generated form templates bind this as: (DeleteRequested)="OnDeleteRequested()"
@@ -1714,7 +1726,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
           RecordId: this.record.PrimaryKey.ToString()
         });
       } else {
-        const errorMsg = 'Error deleting record';
+        const serverMsg = this.latestResultMessage();
+        const errorMsg = serverMsg ? `Delete failed: ${serverMsg}` : 'Error deleting record';
         this.Notification.emit({ Message: errorMsg, Type: 'error', Duration: 5000 });
         this.RecordDeleteFailed.emit({ EntityName: this.record.EntityInfo.Name, ErrorMessage: errorMsg });
       }
