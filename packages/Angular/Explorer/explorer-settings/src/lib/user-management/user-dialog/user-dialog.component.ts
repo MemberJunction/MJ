@@ -7,6 +7,7 @@ import { MJUserEntity, MJRoleEntity, MJUserRoleEntity } from '@memberjunction/co
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { EnrolledRow, ServerRefusalReasons } from '../transaction-group-refusals';
+import { CanChangeUser, OWNER_ONLY_NOTE } from '../owner-gate';
 export interface UserDialogData {
   user?: MJUserEntity;
   mode: 'create' | 'edit';
@@ -122,6 +123,12 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
       } else {
         this.resetForm();
       }
+      // A non-Owner viewing another user gets the form read-only: the server refuses that save.
+      if (this.IsReadOnly) {
+        this.UserForm.disable();
+      } else {
+        this.UserForm.enable();
+      }
     }
     
     // Reset form when dialog becomes visible and not in edit mode
@@ -166,6 +173,14 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
 
   public get IsEditMode(): boolean {
     return this.Data?.mode === 'edit';
+  }
+
+  /** Shown in place of the save button when the dialog is read-only. */
+  public readonly OwnerOnlyNote = OWNER_ONLY_NOTE;
+
+  /** True for a non-Owner opening another user: only an Owner may change other users. */
+  public get IsReadOnly(): boolean {
+    return this.IsEditMode && !!this.Data?.user && !CanChangeUser(this.ProviderToUse.CurrentUser, this.Data.user.ID);
   }
 
   /** @deprecated Use {@link IsEditMode}. */
@@ -228,6 +243,7 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
   }
 
   public ToggleRole(roleId: string): void {
+    if (this.IsReadOnly) return;
     if (this.SelectedRoleIds.has(roleId)) {
       this.SelectedRoleIds.delete(roleId);
     } else {
@@ -241,6 +257,7 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
   }
 
   public async OnSubmit(): Promise<void> {
+    if (this.IsReadOnly) return;
     if (this.UserForm.invalid) {
       this.markFormGroupTouched(this.UserForm);
       return;
