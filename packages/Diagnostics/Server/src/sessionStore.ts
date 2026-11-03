@@ -1,9 +1,21 @@
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { IsValidUUID } from '@memberjunction/global';
+import { Base64ToBytes, EscapeSQLString, IsValidUUID, UUIDMap } from '@memberjunction/global';
 import { MJDiagnosticSessionEntity, MJDiagnosticSessionEntity_IDiagnosticSessionScope as IDiagnosticSessionScope } from '@memberjunction/core-entities';
 import { ActiveDiagnosticSession, DiagnosticSessionManager } from './sessionManager.js';
 
 const SESSION_ENTITY = 'MJ: Diagnostic Sessions';
+const CHUNK_ENTITY = 'MJ: Diagnostic Session Chunks';
+
+/** The byte counts of a session's saved chunks. */
+interface SavedChunkBytes {
+  /** Compressed bytes as stored. */
+  compressed: number;
+  /** Serialized NDJSON bytes before compression. */
+  serialized: number;
+}
+
+/** A saved chunk row as the restore reads it. */
+type ChunkSizeRow = { DiagnosticSessionID: string; Data: string | null };
 
 /** The session values saved when a session starts; the row supplies the ID. */
 export type NewDiagnosticSession = Omit<ActiveDiagnosticSession, 'id'>;
@@ -138,9 +150,11 @@ export async function EndSessionRow(
 
 /**
  * Makes the session manager save a session's row as `Expired` when the session passes its end time
- * while this process holds it. A failed save is logged.
+ * while this process holds it, and save session buffers outside a request as `contextUser`.
+ * A failed save is logged.
  */
 export function WatchSessionExpiry(contextUser: UserInfo | undefined, provider?: IMetadataProvider): void {
+  DiagnosticSessionManager.Instance.SetBackgroundSaveContext(contextUser, provider);
   DiagnosticSessionManager.Instance.SetSessionExpiredHandler((session) => {
     void expireSessionRow(session.id, contextUser, provider);
   });
@@ -167,7 +181,8 @@ async function expireRow(row: MJDiagnosticSessionEntity): Promise<void> {
 
 /**
  * Loads the `Active` session rows into the session manager so a restart or another instance
- * keeps capturing them. Rows whose end time has passed are saved as `Expired`. Returns the number loaded.
+ * keeps capturing them, with the byte counts of the chunks they already saved. Rows whose end
+ * time has passed are saved as `Expired`. Returns the number loaded.
  */
 export async function RestoreActiveSessions(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<number> {
   const md = provider ?? Metadata.Provider;
@@ -179,14 +194,74 @@ export async function RestoreActiveSessions(contextUser?: UserInfo, provider?: I
     throw new Error(`Could not load active diagnostic sessions: ${result.ErrorMessage}`);
   }
   const now = Date.now();
-  let loaded = 0;
+  const live: ActiveDiagnosticSession[] = [];
   for (const row of result.Results ?? []) {
     if (new Date(row.EndsAt).getTime() <= now) {
       await expireRow(row);
       continue;
     }
-    DiagnosticSessionManager.Instance.RegisterActiveSession(SessionFromRow(row));
-    loaded++;
+    live.push(SessionFromRow(row));
   }
-  return loaded;
+  const savedBytes = await readSavedChunkBytes(live.map((s) => s.id), contextUser, md);
+  for (const session of live) {
+    const bytes = savedBytes.Get(session.id);
+    session.bytesWritten = bytes?.compressed ?? 0;
+    session.bytesCaptured = bytes?.serialized ?? 0;
+    DiagnosticSessionManager.Instance.RegisterActiveSession(session);
+  }
+  return live.length;
+}
+
+/**
+ * Sums the saved chunk sizes of each session. The serialized size comes from each chunk's gzip
+ * trailer, so no chunk is decompressed. A failed read is logged and the sessions count from zero.
+ */
+async function readSavedChunkBytes(
+  sessionIds: string[],
+  contextUser: UserInfo | undefined,
+  md: IMetadataProvider
+): Promise<UUIDMap<SavedChunkBytes>> {
+  const totals = new UUIDMap<SavedChunkBytes>();
+  if (sessionIds.length === 0) {
+    return totals;
+  }
+  const idList = sessionIds.map((id) => `'${EscapeSQLString(id)}'`).join(', ');
+  const res = await RunView.FromMetadataProvider(md).RunView<ChunkSizeRow>(
+    {
+      EntityName: CHUNK_ENTITY,
+      ExtraFilter: `DiagnosticSessionID IN (${idList})`,
+      Fields: ['DiagnosticSessionID', 'Data'],
+      ResultType: 'simple'
+    },
+    contextUser
+  );
+  if (!res.Success) {
+    LogError(`Could not read the saved chunk sizes of the restored diagnostic sessions: ${res.ErrorMessage}`);
+    return totals;
+  }
+  for (const row of res.Results ?? []) {
+    addChunkBytes(totals, row);
+  }
+  return totals;
+}
+
+/** Adds one chunk row's compressed and serialized sizes to its session's totals. */
+function addChunkBytes(totals: UUIDMap<SavedChunkBytes>, row: ChunkSizeRow): void {
+  if (!row.DiagnosticSessionID || !row.Data) {
+    return;
+  }
+  const bytes = Base64ToBytes(row.Data);
+  const current = totals.Get(row.DiagnosticSessionID) ?? { compressed: 0, serialized: 0 };
+  current.compressed += bytes.byteLength;
+  current.serialized += gzipSerializedSize(bytes);
+  totals.Set(row.DiagnosticSessionID, current);
+}
+
+/** The uncompressed size a single-member gzip stream records in its last four bytes (little-endian), or 0 when it is too short. */
+function gzipSerializedSize(bytes: Uint8Array): number {
+  if (bytes.byteLength < 18) {
+    return 0;
+  }
+  const end = bytes.byteLength;
+  return (bytes[end - 4] | (bytes[end - 3] << 8) | (bytes[end - 2] << 16) | (bytes[end - 1] << 24)) >>> 0;
 }

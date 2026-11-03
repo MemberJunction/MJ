@@ -106,8 +106,9 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
 
   /**
    * Starts the session manager, loads the `Diagnostics.*` settings, configures intake from them,
-   * saves sessions that expire in memory as `Expired` and loads the active sessions. MJServer calls
-   * this after metadata and the user cache are loaded. When the settings fail to load, the error is logged and capture and intake stay off.
+   * saves sessions that expire in memory as `Expired` and loads the active sessions. The capture hooks
+   * are installed only while capture is enabled and a session is held. MJServer calls this after
+   * metadata and the user cache are loaded. When the settings fail to load, the error is logged and capture and intake stay off.
    */
   public override async Initialize(context?: ServerMiddlewareContext): Promise<void> {
     this.serverContext = context;
@@ -115,6 +116,7 @@ export class DiagnosticsServerMiddleware extends BaseServerMiddleware {
     DiagnosticSessionManager.Instance.Initialize({ enableConsoleTap: true, enablePolling: false });
     const systemUser = UserCache.Instance.GetSystemUser();
     const settings = await this.loadSettings(systemUser);
+    DiagnosticSessionManager.Instance.SyncCaptureHooks();
     if (!settings) {
       return;
     }
