@@ -930,6 +930,22 @@
       "reason": "NOT NULL reference to a MLTrainingPipeline row this proc deletes; deleted first."
     },
     {
+      "table": "TrainingSnapshot",
+      "column": "PipelineID",
+      "references": "MLTrainingPipeline",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to a MLTrainingPipeline row this proc deletes; deleted first."
+    },
+    {
+      "table": "MLTrainingRun",
+      "column": "TrainingSnapshotID",
+      "references": "TrainingSnapshot",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a TrainingSnapshot row this proc deletes; cleared."
+    },
+    {
       "table": "FeatureValue",
       "column": "ProcessRunDetailID",
       "references": "ProcessRunDetail",
