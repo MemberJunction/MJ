@@ -448,8 +448,8 @@ export class PSPipelineWizardComponent implements OnInit {
   /** The class the user chose as the adverse outcome; empty until chosen. */
   public AdverseClass = '';
 
-  /** A cloned pipeline's adverse class, applied once the target's class read resolves and offers it. */
-  private clonedAdverseClass = '';
+  /** A cloned pipeline's adverse class with the entity and target it was saved for; applied only to a read of that same target. */
+  private clonedAdverse: { Entity: string; Target: string; Class: string } | null = null;
 
   /** Bumped per label read, so a slower earlier read cannot overwrite the choices for a newer target. */
   private labelReadSeq = 0;
@@ -564,6 +564,7 @@ export class PSPipelineWizardComponent implements OnInit {
 
   /** A new entity clears the target, so the target's adverse-class choice goes with it (and any read still in flight). */
   public OnEntitySelected(entityId: string): void {
+    this.clonedAdverse = null;
     this.SelectedEntityId = entityId;
     this.TargetVariable = '';
     this.populateFieldItems();
@@ -579,6 +580,7 @@ export class PSPipelineWizardComponent implements OnInit {
 
   /** The target column is the label, never a feature: it is marked, unchecked and locked; the previous target is freed. */
   public OnTargetVariableChanged(name: string): void {
+    this.clonedAdverse = null;
     this.TargetVariable = name;
     const target = name.toLowerCase();
     for (const item of this.FieldItems) {
@@ -607,8 +609,10 @@ export class PSPipelineWizardComponent implements OnInit {
     }
     if (seq !== this.labelReadSeq) return;
     this.AdverseClassChoices = choices;
-    if (!choices.includes(this.AdverseClass)) this.AdverseClass = choices.includes(this.clonedAdverseClass) ? this.clonedAdverseClass : '';
-    this.clonedAdverseClass = '';
+    const cloned = this.clonedAdverse;
+    const forThisTarget = cloned !== null && fields !== null && cloned.Entity === fields.TargetEntity && cloned.Target.toLowerCase() === fields.TargetVariable.toLowerCase();
+    if (forThisTarget) this.clonedAdverse = null;
+    if (!choices.includes(this.AdverseClass)) this.AdverseClass = forThisTarget && choices.includes(cloned.Class) ? cloned.Class : '';
     this.cdr.detectChanges();
   }
 
@@ -919,7 +923,8 @@ export class PSPipelineWizardComponent implements OnInit {
       this.readClonedHyperparameters(cp.Hyperparameters);
       this.restoreClonedFeatureSteps(cp.FeatureSteps);
       this.restoreClonedValidation(cp.ValidationStrategy);
-      this.clonedAdverseClass = PipelineWizardBindings.AdverseClassFromFeatureSteps(cp.FeatureSteps);
+      const clonedClass = PipelineWizardBindings.AdverseClassFromFeatureSteps(cp.FeatureSteps);
+      this.clonedAdverse = clonedClass === '' ? null : { Entity: this.SelectedEntity?.Name ?? '', Target: cp.TargetVariable, Class: clonedClass };
       void this.refreshAdverseClassChoices();
 
       // Read leakage guard

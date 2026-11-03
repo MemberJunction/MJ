@@ -290,6 +290,29 @@ describe('PSPipelineWizardComponent (DOM) — every control round-trips', () => 
     expect(JSON.parse(captured.Saved[1]?.FeatureSteps || '{}').OutcomeConfig.OutcomeStyles).toEqual({ A: { BadgeColor: 'green' }, B: { BadgeColor: 'red' } });
   });
 
+  it('does not carry a cloned adverse class over to another target chosen before the first class read resolves', async () => {
+    const read = vi.spyOn(PipelineWizardBindings, 'ReadClassLabels').mockResolvedValue(['A', 'B']);
+    const captured = captureSave();
+    const first = saveable();
+    await goalStep(first, 'Segment', 'W1');
+    choose(first, '#adverse-class', 'B');
+    await first.componentInstance.SaveDraft();
+
+    let finishCloneRead: (labels: string[]) => void = () => undefined;
+    read.mockReset();
+    read.mockImplementationOnce(() => new Promise<string[]>((resolve) => { finishCloneRead = resolve; }));
+    read.mockResolvedValue(['A', 'B']);
+    const second = saveable(captured.Saved[0]);
+    choose(second, '#target-variable', 'Region');
+    await settle(second);
+    finishCloneRead(['A', 'B']);
+    await settle(second);
+    const b = second.componentInstance;
+    expect([b.TargetVariable, b.AdverseClassChoices, b.AdverseClass, b.CanSave()]).toEqual(['Region', ['A', 'B'], '', false]);
+    choose(second, '#adverse-class', 'A');
+    expect(b.CanSave()).toBe(true);
+  });
+
   it('clones a train/test split and the native categorical handling', async () => {
     vi.spyOn(PipelineWizardBindings, 'ReadClassLabels').mockResolvedValue(['A', 'B', 'C']);
     const captured = captureSave();
