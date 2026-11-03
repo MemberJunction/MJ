@@ -352,6 +352,36 @@ export function PositiveInt(v: unknown): number | undefined {
     return typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : undefined;
 }
 
+/** A record-map row as the sweep and full push read it. */
+interface RecordMapRow {
+    ID: string;
+    EntityRecordID: string;
+    ExternalSystemRecordID: string;
+    /** 'Created' when the sync inserted the MJ row, 'Adopted' when it matched one that already existed (#3528). */
+    Origin?: string | null;
+}
+
+/** How a record map came to point at its MJ row (#3528). */
+export type RecordMapOrigin = 'Created' | 'Adopted';
+
+/** Engine-side keys read from an entity map's Configuration JSON. */
+interface EntityMapEngineConfig {
+    partitionReconcile?: boolean;
+    partitionCount?: number;
+    /** #5202 — source field whose value marks a record deleted. */
+    sourceDeleteField?: string;
+    /** #5202 — the value of {@link sourceDeleteField} that means deleted (compared as a trimmed string). */
+    sourceDeleteValue?: string | number | boolean;
+}
+
+/** The integration tombstone columns; an entity with neither cannot be archived (#3528). */
+export const TOMBSTONE_COLUMNS: ReadonlyArray<string> = ['__mj_integration_IsTombstoned', '__mj_integration_SyncStatus'];
+
+/** True when an entity has at least one integration tombstone column, so SoftDelete can actually archive it. */
+export function CanArchive(fields: ReadonlyArray<{ Name: string }> | undefined): boolean {
+    return (fields ?? []).some(f => TOMBSTONE_COLUMNS.includes(f.Name));
+}
+
 /** Default safety cap on pages fetched per object per run; Configuration `maxBatchesPerMap` overrides it. */
 export const DEFAULT_MAX_BATCHES_PER_MAP = 5000;
 
@@ -2909,6 +2939,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         abortSignal?: AbortSignal,
         logger?: SyncLogger
     ): Promise<SyncResult> {
+        this.softDeleteUnsupportedWarned.delete(entityMap.ID); // SOFT_DELETE_UNSUPPORTED warns once per map per run
         const entityMapID = entityMap.ID;
         // An object this ACCOUNT cannot serve costs a request, an error event and a retry ladder
         // every run, forever, and says nothing new after the first time. While the marker is fresh
@@ -4364,7 +4395,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     createResult.ExternalID,
                     entityMap.EntityID,
                     change.RecordID,
-                    contextUser
+                    contextUser,
+                    'Adopted' // the MJ row existed before this push mapped it
                 );
                 result.RecordsCreated++;
             } else {
@@ -4582,7 +4614,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Streamed: the orphan test is per row and needs nothing from the rows that pass it, so each
         // page is filtered and dropped. What stays resident is the ORPHANS — normally a handful —
         // instead of every mapping the entity has (see loadAllRecordMaps' STREAMING note).
-        const orphans: Array<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }> = [];
+        const orphans: Array<RecordMapRow> = [];
         const allMaps = await this.loadAllRecordMaps(
             companyIntegration.ID, entityMap.EntityID, contextUser,
             page => {
@@ -4658,21 +4690,29 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     await this.deleteRecordMapRow(orphan.ID, contextUser);
                     continue;
                 }
-                if (entityMap.DeleteBehavior === 'SoftDelete') {
-                    // Same archive shape as DeleteRecord's SoftDelete branch: the row stays,
-                    // marked Archived/tombstoned. The MAP row goes either way — the mapping's
-                    // job is done, and keeping it would re-detect this orphan forever.
-                    const fields = entity.Fields ?? [];
-                    const hasField = (n: string) => fields.some(f => f.Name === n);
-                    if (hasField('__mj_integration_SyncStatus')) entity.Set('__mj_integration_SyncStatus', 'Archived');
-                    if (hasField('__mj_integration_LastSyncedAt')) entity.Set('__mj_integration_LastSyncedAt', new Date().toISOString());
-                    if (hasField('__mj_integration_IsTombstoned')) entity.Set('__mj_integration_IsTombstoned', true);
-                    if (hasField('__mj_integration_DeletedDetectedAt')) entity.Set('__mj_integration_DeletedDetectedAt', new Date().toISOString());
-                    const archived = await entity.Save(this.syncSaveOptions);
-                    if (archived) {
+                // #3528 — a row the integration ADOPTED (it existed before the sync matched it) is never
+                // hard-deleted: a source deletion is no proof it may go. It is archived when the entity can
+                // be archived, else left alone with a warning.
+                const adopted = orphan.Origin === 'Adopted';
+                if (entityMap.DeleteBehavior === 'SoftDelete' || adopted) {
+                    // The MAP row goes once archived — the mapping's job is done, and keeping it would
+                    // re-detect this orphan forever. A refused archive keeps both row and map.
+                    const outcome = await this.archiveRecord(entity, entityMap, logger);
+                    if (outcome === 'archived') {
                         result.RecordsDeleted++;
                         await this.deleteRecordMapRow(orphan.ID, contextUser);
                         console.log(`[IntegrationEngine] Archived orphan ${entityMap.Entity} ${orphan.EntityRecordID} (external ${orphan.ExternalSystemRecordID} no longer exists)`);
+                    } else if (outcome === 'refused') {
+                        result.RecordsSkipped++;
+                        if (adopted && entityMap.DeleteBehavior === 'HardDelete') {
+                            logger?.warning(
+                                entityMap.ExternalObjectName ?? entityMap.ID,
+                                'ADOPTED_ROW_KEPT',
+                                `${entityMap.Entity} ${orphan.EntityRecordID} was not created by this integration (it was matched to an existing row), ` +
+                                `so it is not hard-deleted, and the entity has no tombstone columns to archive it.`,
+                                { entityRecordID: orphan.EntityRecordID, externalID: orphan.ExternalSystemRecordID },
+                            );
+                        }
                     } else {
                         const reason = entity.LatestResult?.CompleteMessage ?? 'unknown reason';
                         console.warn(`[IntegrationEngine] Orphan archive blocked for ${entityMap.Entity} ${orphan.EntityRecordID} — ${reason}`);
@@ -4781,10 +4821,24 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     }
 
     /** Parses the entity map's Configuration JSON (best-effort) for engine-side feature toggles. */
-    private parseEntityMapConfig(entityMap: ICompanyIntegrationEntityMap): { partitionReconcile?: boolean; partitionCount?: number } | null {
+    private parseEntityMapConfig(entityMap: ICompanyIntegrationEntityMap): EntityMapEngineConfig | null {
         const raw = entityMap.Configuration;
         if (!raw) return null;
-        try { return JSON.parse(raw) as { partitionReconcile?: boolean; partitionCount?: number }; } catch { return null; }
+        try { return JSON.parse(raw) as EntityMapEngineConfig; } catch { return null; }
+    }
+
+    /**
+     * #5202 — true when the source marks this record deleted: the entity map's Configuration names a
+     * `sourceDeleteField` and the record's value for it equals `sourceDeleteValue` (both compared as
+     * trimmed strings). Sources like NetForum flag deletions on a live row instead of dropping it.
+     */
+    private isSourceFlaggedDeleted(record: MappedRecord, entityMap: ICompanyIntegrationEntityMap): boolean {
+        const cfg = this.parseEntityMapConfig(entityMap);
+        const field = typeof cfg?.sourceDeleteField === 'string' ? cfg.sourceDeleteField.trim() : '';
+        if (!field || cfg?.sourceDeleteValue === undefined || cfg.sourceDeleteValue === null) return false;
+        const value = record.ExternalRecord.Fields?.[field];
+        if (value === undefined || value === null) return false;
+        return String(value).trim() === String(cfg.sourceDeleteValue).trim();
     }
 
     /** Opt-in partition (Merkle) reconcile flag from the entity map Configuration (GQL-managed). */
@@ -4944,7 +4998,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             this.ProviderToUse,
             companyIntegration.ID,
             contextUser,
-            (ciID, extID, entID, recID, user) => this.saveRecordMap(ciID, extID, entID, recID, user),
+            (ciID, extID, entID, recID, user, origin) => this.saveRecordMap(ciID, extID, entID, recID, user, origin),
         );
 
         for (let i = 0; i < records.length; i += APPLY_BATCH_SIZE) {
@@ -5481,6 +5535,26 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             d: result.RecordsDeleted, s: result.RecordsSkipped,
         };
 
+        // #5202 — the source flags this record deleted. DoNothing writes it as before; SoftDelete writes it
+        // tombstoned (inserting it tombstoned when MJ has no row yet, so history stays queryable); HardDelete
+        // removes an existing row and skips the insert of a new one.
+        if (record.ChangeType !== 'Delete' && record.ChangeType !== 'Skip' && this.isSourceFlaggedDeleted(record, entityMap)) {
+            if (entityMap.DeleteBehavior === 'HardDelete') {
+                if (record.MatchedMJRecordID) {
+                    const outcome = await this.deleteRecord(record, entityMap, contextUser, logger);
+                    if (outcome === 'deleted') result.RecordsDeleted++;
+                    else if (outcome === 'refused') result.RecordsSkipped++;
+                    else result.RecordsErrored++;
+                } else {
+                    result.RecordsSkipped++;
+                }
+                return;
+            }
+            if (entityMap.DeleteBehavior === 'SoftDelete') {
+                record.SourceDeleted = true;
+            }
+        }
+
         try {
             switch (record.ChangeType) {
                 case 'Create': {
@@ -5494,8 +5568,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     await this.updateRecord(record, companyIntegration, entityMap, result, contextUser, precheckHashes, reconciledSkipIds, recordMaps, logger);
                     break;
                 case 'Delete': {
-                    const didDelete = await this.deleteRecord(record, entityMap, contextUser);
-                    if (didDelete) result.RecordsDeleted++;
+                    const outcome = await this.deleteRecord(record, entityMap, contextUser, logger);
+                    if (outcome === 'deleted') result.RecordsDeleted++;
+                    else if (outcome === 'refused') result.RecordsSkipped++;
                     else result.RecordsErrored++;
                     break;
                 }
@@ -5638,7 +5713,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     && storedHash === ComputeContentHash(record.MappedFields ?? {})) {
                     await this.queueRecordMap(
                         recordMaps, companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
-                        entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser,
+                        entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser, 'Adopted',
                     );
                     return 'skipped';
                 }
@@ -5651,7 +5726,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (!entity.Dirty && !this.needsSyncStateRepair(entity, entityInfo, record)) {
                 await this.queueRecordMap(
                     recordMaps, companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
-                    entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser,
+                    entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser, 'Adopted',
                 );
                 return 'skipped';
             }
@@ -5695,7 +5770,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             record.ExternalRecord.ExternalID,
             entityMap.EntityID,
             entityRecordID,
-            contextUser
+            contextUser,
+            existed ? 'Adopted' : 'Created'
         );
         return existed ? 'updated' : 'created';
     }
@@ -5791,7 +5867,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // (PrimaryKeys order, '|'-joined), which is the EntityRecordID the map stores.
                 await this.queueRecordMap(
                     recordMaps, companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
-                    record.MatchedMJRecordID, contextUser,
+                    record.MatchedMJRecordID, contextUser, 'Adopted',
                 );
                 // The record IS still present and confirmed-unchanged on the source — but skipping
                 // the write here means SetStandardIntegrationFields never runs, so __mj_integration_
@@ -5841,7 +5917,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // The entity is loaded here, so use its actual PK as the EntityRecordID. Idempotent upsert.
             await this.queueRecordMap(
                 recordMaps, companyIntegration.ID, record.ExternalRecord.ExternalID, entityMap.EntityID,
-                entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser,
+                entity.PrimaryKey.KeyValuePairs.map(kv => String(kv.Value)).join('|'), contextUser, 'Adopted',
             );
             // Same reasoning as the content-hash skip: the record IS confirmed present on the
             // source, so let the batch refresh LastReconciledAt in one set-based touch rather
@@ -5875,7 +5951,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             record.ExternalRecord.ExternalID,
             entityMap.EntityID,
             entityRecordID,
-            contextUser
+            contextUser,
+            'Adopted'
         );
         result.RecordsUpdated++;
     }
@@ -6003,18 +6080,23 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
     /**
      * Deletes (or soft-deletes) an MJ record based on the entity map's DeleteBehavior.
+     *
+     * @returns `deleted` when the row was removed or archived; `refused` when SoftDelete cannot archive
+     * because the entity has no tombstone columns (#3528 — reported once per map per run, not counted as a
+     * delete); `failed` otherwise (no map entry, row missing, DoNothing, or the write failed).
      */
     private async deleteRecord(
         record: MappedRecord,
         entityMap: ICompanyIntegrationEntityMap,
-        contextUser: UserInfo
-    ): Promise<boolean> {
+        contextUser: UserInfo,
+        logger?: SyncLogger
+    ): Promise<'deleted' | 'refused' | 'failed'> {
         if (!record.MatchedMJRecordID) {
             console.log(`[IntegrationEngine] Skipping delete for ${record.ExternalRecord.ObjectType} ExternalID=${record.ExternalRecord.ExternalID} — no MJ record map entry (record was never synced)`);
-            return false;
+            return 'failed';
         }
 
-        if (entityMap.DeleteBehavior === 'DoNothing') return false;
+        if (entityMap.DeleteBehavior === 'DoNothing') return 'failed';
 
         const md = this.ProviderToUse;
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
@@ -6024,27 +6106,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const loaded = await entity.InnerLoad(this.buildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
             console.log(`[IntegrationEngine] Skipping delete for ${record.MJEntityName} ${record.MatchedMJRecordID} — record not found in MJ DB (may have been deleted already)`);
-            return false;
+            return 'failed';
         }
 
-        // SoftDelete = mark the mirror row Archived (the standard sync-status for records
-        // removed upstream) and keep it; HardDelete physically removes it. (DoNothing
-        // already returned above.) Previously both behaviors hit entity.Delete() — so
-        // SoftDelete was indistinguishable from HardDelete.
+        // SoftDelete = mark the mirror row Archived and keep it; HardDelete physically removes it.
         if (entityMap.DeleteBehavior === 'SoftDelete') {
-            const fields = entity.Fields ?? [];
-            const hasField = (n: string) => fields.some(f => f.Name === n);
-            if (hasField('__mj_integration_SyncStatus')) entity.Set('__mj_integration_SyncStatus', 'Archived');
-            if (hasField('__mj_integration_LastSyncedAt')) entity.Set('__mj_integration_LastSyncedAt', new Date().toISOString());
-            // Explicit, queryable tombstone (plan §2.5) — distinct from parsing SyncStatus='Archived'.
-            if (hasField('__mj_integration_IsTombstoned')) entity.Set('__mj_integration_IsTombstoned', true);
-            if (hasField('__mj_integration_DeletedDetectedAt')) entity.Set('__mj_integration_DeletedDetectedAt', new Date().toISOString());
-            const archived = await entity.Save(this.syncSaveOptions);
-            if (!archived) {
+            const outcome = await this.archiveRecord(entity, entityMap, logger);
+            if (outcome === 'failed') {
                 const reason = entity.LatestResult?.CompleteMessage ?? 'unknown reason';
                 console.warn(`[IntegrationEngine] Soft-delete (archive) failed for ${record.MJEntityName} ${record.MatchedMJRecordID} — ${reason}`);
             }
-            return archived;
+            return outcome === 'archived' ? 'deleted' : outcome;
         }
 
         const deleted = await entity.Delete(this.syncDeleteOptions);
@@ -6052,7 +6124,51 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const reason = entity.LatestResult?.CompleteMessage ?? 'unknown reason';
             console.warn(`[IntegrationEngine] Delete blocked for ${record.MJEntityName} ${record.MatchedMJRecordID} — ${reason}`);
         }
-        return deleted;
+        return deleted ? 'deleted' : 'failed';
+    }
+
+    /** Entity maps already warned this run that SoftDelete cannot archive (#3528). Reset per map at each pull. */
+    private _softDeleteUnsupportedWarned?: Set<string>;
+    private get softDeleteUnsupportedWarned(): Set<string> {
+        return (this._softDeleteUnsupportedWarned ??= new Set<string>());
+    }
+
+    /**
+     * Archives a loaded row: SyncStatus 'Archived', IsTombstoned, and DeletedDetectedAt stamped once (#3528).
+     *
+     * An entity with none of the tombstone columns cannot be archived — setting nothing and saving a clean
+     * entity used to "succeed" and count a delete that never happened. Such a row is refused: no save, no
+     * count, no record-map prune, and one `SOFT_DELETE_UNSUPPORTED` warning per map per run.
+     */
+    private async archiveRecord(
+        entity: BaseEntity,
+        entityMap: ICompanyIntegrationEntityMap,
+        logger?: SyncLogger
+    ): Promise<'archived' | 'refused' | 'failed'> {
+        const fields = entity.Fields ?? [];
+        if (!CanArchive(fields)) {
+            this.warnSoftDeleteUnsupported(entityMap, logger);
+            return 'refused';
+        }
+        const hasField = (n: string) => fields.some(f => f.Name === n);
+        const now = new Date().toISOString();
+        if (hasField('__mj_integration_SyncStatus')) entity.Set('__mj_integration_SyncStatus', 'Archived');
+        if (hasField('__mj_integration_LastSyncedAt')) entity.Set('__mj_integration_LastSyncedAt', now);
+        if (hasField('__mj_integration_IsTombstoned')) entity.Set('__mj_integration_IsTombstoned', true);
+        if (hasField('__mj_integration_DeletedDetectedAt') && !entity.Get('__mj_integration_DeletedDetectedAt')) {
+            entity.Set('__mj_integration_DeletedDetectedAt', now);
+        }
+        return (await entity.Save(this.syncSaveOptions)) ? 'archived' : 'failed';
+    }
+
+    private warnSoftDeleteUnsupported(entityMap: ICompanyIntegrationEntityMap, logger?: SyncLogger): void {
+        if (this.softDeleteUnsupportedWarned.has(entityMap.ID)) return;
+        this.softDeleteUnsupportedWarned.add(entityMap.ID);
+        const message =
+            `${entityMap.Entity} has no integration tombstone columns, so SoftDelete cannot archive its rows; ` +
+            `nothing was deleted. Set DeleteBehavior to DoNothing or HardDelete, or add the columns.`;
+        console.warn(`[IntegrationEngine] ${message}`);
+        logger?.warning(entityMap.ExternalObjectName ?? entityMap.ID, 'SOFT_DELETE_UNSUPPORTED', message, { entity: entityMap.Entity });
     }
 
     /**
@@ -6329,7 +6445,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      * Silently skips if the entity doesn't have these columns (e.g., __mj targets).
      */
     private setStandardIntegrationFields(
-        entity: { Set(fieldName: string, value: unknown): void; Fields?: Array<{ Name: string }> },
+        entity: { Set(fieldName: string, value: unknown): void; Get(fieldName: string): unknown; Fields?: Array<{ Name: string }> },
         record: MappedRecord
     ): void {
         const fieldNames = entity.Fields?.map(f => f.Name) ?? [];
@@ -6404,10 +6520,24 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (hasField('__mj_integration_LastWriterDirection')) {
             entity.Set('__mj_integration_LastWriterDirection', 'Pull');
         }
+        // #5202 — the source flags this record deleted under SoftDelete: write it tombstoned, keeping the
+        // first DeletedDetectedAt across syncs that still see the flag.
+        if (record.SourceDeleted) {
+            if (hasField('__mj_integration_SyncStatus')) entity.Set('__mj_integration_SyncStatus', 'Archived');
+            if (hasField('__mj_integration_IsTombstoned')) entity.Set('__mj_integration_IsTombstoned', true);
+            if (hasField('__mj_integration_DeletedDetectedAt') && !entity.Get('__mj_integration_DeletedDetectedAt')) {
+                entity.Set('__mj_integration_DeletedDetectedAt', new Date().toISOString());
+            }
+            return;
+        }
         // A live (non-deleted) record. The soft-delete path flips this to true + stamps
         // DeletedDetectedAt — an explicit, queryable tombstone instead of parsing SyncStatus text.
+        // A row coming back to life also clears DeletedDetectedAt, so the tombstone reads as one fact.
         if (hasField('__mj_integration_IsTombstoned')) {
             entity.Set('__mj_integration_IsTombstoned', false);
+        }
+        if (hasField('__mj_integration_DeletedDetectedAt') && entity.Get('__mj_integration_DeletedDetectedAt')) {
+            entity.Set('__mj_integration_DeletedDetectedAt', null);
         }
     }
 
@@ -6452,9 +6582,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         companyIntegrationID: string,
         entityID: string,
         contextUser: UserInfo,
-        onPage?: (rows: ReadonlyArray<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }>) => void,
+        onPage?: (rows: ReadonlyArray<RecordMapRow>) => void,
     ): Promise<{
-        Rows: Array<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }>;
+        Rows: Array<RecordMapRow>;
         /** Rows READ, whether or not they were accumulated — the only row count a streaming caller has. */
         RowsRead: number;
         Complete: boolean;
@@ -6468,7 +6598,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const filter = `CompanyIntegrationID='${companyIntegrationID}' AND EntityID='${entityID}'`;
 
         const rv = new RunView();
-        const rows: Array<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }> = [];
+        const rows: Array<RecordMapRow> = [];
         let rowsRead = 0;
         let afterID: string | undefined;
 
@@ -6476,7 +6606,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const page = await rv.RunView<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }>({
                 EntityName: 'MJ: Company Integration Record Maps',
                 ExtraFilter: filter,
-                Fields: ['ID', 'EntityRecordID', 'ExternalSystemRecordID'],
+                Fields: ['ID', 'EntityRecordID', 'ExternalSystemRecordID', 'Origin'],
                 // Keyset requires the sort to be on the PK alone; it is also what makes the seek
                 // below well-defined.
                 OrderBy: 'ID ASC',
@@ -6528,16 +6658,17 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         externalID: string,
         entityID: string,
         entityRecordID: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        origin: RecordMapOrigin
     ): Promise<void> {
         if (recordMaps) {
             // Queue only — the apply loop flushes after the batch transaction commits. Writing here
             // (or auto-flushing on a full chunk) would put map rows inside a transaction that
             // Discard() can no longer take back on rollback.
-            recordMaps.Queue({ EntityID: entityID, ExternalID: externalID, EntityRecordID: entityRecordID });
+            recordMaps.Queue({ EntityID: entityID, ExternalID: externalID, EntityRecordID: entityRecordID, Origin: origin });
             return;
         }
-        await this.saveRecordMap(companyIntegrationID, externalID, entityID, entityRecordID, contextUser);
+        await this.saveRecordMap(companyIntegrationID, externalID, entityID, entityRecordID, contextUser, origin);
     }
 
     /**
@@ -6548,7 +6679,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         externalID: string,
         entityID: string,
         entityRecordID: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        origin: RecordMapOrigin
     ): Promise<void> {
         const md = this.ProviderToUse;
         const recordMap = await md.GetEntityObject<MJCompanyIntegrationRecordMapEntity>(
@@ -6585,9 +6717,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // this case; the per-record fallback now agrees with it.
             if (existing.Results[0].EntityRecordID === entityRecordID) return;
             const loaded = await recordMap.Load(existing.Results[0].ID);
-            if (!loaded) recordMap.NewRecord();
+            if (!loaded) {
+                recordMap.NewRecord();
+                recordMap.Origin = origin;
+            }
         } else {
             recordMap.NewRecord();
+            // An existing mapping keeps the origin it was written with (#3528).
+            recordMap.Origin = origin;
         }
 
         recordMap.CompanyIntegrationID = companyIntegrationID;

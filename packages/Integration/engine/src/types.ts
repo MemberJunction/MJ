@@ -204,6 +204,11 @@ export interface MappedRecord {
      * pervasive keys to real columns. Backend staging only — see {@link CustomOverflow}.
      */
     UnmappedFields?: Record<string, unknown>;
+    /**
+     * #5202 — the source flags this record as deleted (entity-map Configuration `sourceDeleteField` /
+     * `sourceDeleteValue`) and the map's DeleteBehavior is SoftDelete: the row is written tombstoned.
+     */
+    SourceDeleted?: boolean;
 }
 
 /**

@@ -220,3 +220,23 @@ Set in `CompanyIntegration.Configuration` (JSON) for one connection. Only positi
 | `watermarkLookbackSeconds` | connector's `WatermarkLookbackSeconds` (0; 300 for external-data-source connectors) | For connectors whose watermark is a monotonic timestamp, the next incremental's fetch filter starts this many seconds before the saved watermark, so rows that commit late are still fetched. The saved watermark is unchanged. `0` turns the overlap off. Ignored for non-timestamp watermarks. |
 
 A run also ends `Failed` when an object stops on a missing or stale CRUD routine (`SchemaNotGeneratedError`, reason `Missing` or `Stale`): the first write that fails with "could not find stored procedure", "too many arguments specified" or "expects parameter ... which was not supplied" stops that object with one Critical error, and the fix is to run CodeGen for the entity.
+
+## Deletes: DeleteBehavior, source delete flags and adopted rows
+
+An entity map's `DeleteBehavior` decides what a deletion does to the MJ row — whether the source sent a delete, a full sync's orphan sweep found the record gone, or the source flagged it:
+
+| DeleteBehavior | What happens |
+|---|---|
+| `DoNothing` | The MJ row is left as it is. |
+| `SoftDelete` | The row is archived: `__mj_integration_SyncStatus = 'Archived'`, `__mj_integration_IsTombstoned = 1`, `__mj_integration_DeletedDetectedAt` stamped once. An entity with neither tombstone column cannot be archived: nothing is written or counted, and the run logs one `SOFT_DELETE_UNSUPPORTED` warning per map. |
+| `HardDelete` | The row is deleted, except a row the integration **adopted** (below). |
+
+**Source delete flags.** Sources that mark deletions on a live row (NetForum's `*_delete_flag = '1'`) are configured on the entity map's `Configuration`:
+
+```json
+{ "sourceDeleteField": "cst_delete_flag", "sourceDeleteValue": "1" }
+```
+
+A record whose field equals the value (compared as trimmed strings) follows `DeleteBehavior`: `SoftDelete` writes it tombstoned (inserting it tombstoned when MJ has no row, so its history stays queryable), `HardDelete` deletes an existing row and skips inserting a new one, `DoNothing` writes it as usual. When the flag clears, the row comes back: `IsTombstoned = 0` and `DeletedDetectedAt = NULL`.
+
+**Adopted rows.** Each record map records its `Origin`: `Created` when the sync inserted the MJ row, `Adopted` when the row already existed and the sync matched it by key fields or primary key (rows mapped before this column existed are `Created`). The orphan sweep never hard-deletes an adopted row: it archives it when the entity has tombstone columns, and otherwise keeps it with an `ADOPTED_ROW_KEPT` warning.
