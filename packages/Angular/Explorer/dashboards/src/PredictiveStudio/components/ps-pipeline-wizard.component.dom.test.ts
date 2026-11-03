@@ -323,19 +323,46 @@ describe('PSPipelineWizardComponent (DOM) — every control round-trips', () => 
     expect(b.CanSave()).toBe(true);
   });
 
-  it('clones a train/test split and the native categorical handling', async () => {
+  it('clones the protocol-default inner validation and the native categorical handling', async () => {
     vi.spyOn(PipelineWizardBindings, 'ReadClassLabels').mockResolvedValue(['A', 'B', 'C']);
     const captured = captureSave();
     const first = saveable();
     await goalStep(first, 'Segment', 'W1');
     first.componentInstance.CategoricalEncoding = 'none';
-    first.componentInstance.TestSplitRatio = 0.3;
     await first.componentInstance.SaveDraft();
     const second = saveable(captured.Saved[0]);
     await settle(second);
     await second.componentInstance.SaveDraft();
     expect([captured.Saved[1]?.FeatureSteps, captured.Saved[1]?.ValidationStrategy]).toEqual([captured.Saved[0]?.FeatureSteps, captured.Saved[0]?.ValidationStrategy]);
-    expect([second.componentInstance.CategoricalEncoding, second.componentInstance.TestSplitRatio]).toEqual(['none', 0.3]);
+    expect([second.componentInstance.CategoricalEncoding, second.componentInstance.ValidationStrategyType]).toEqual(['none', 'train_test_split']);
+  });
+
+  it('saves only the ValidationStrategy fields the protocol mapping reads: Strategy, K for k-fold, the fixed holdout share; never a TestSize', async () => {
+    vi.spyOn(PipelineWizardBindings, 'ReadClassLabels').mockResolvedValue(['A', 'B', 'C']);
+    const captured = captureSave();
+    const first = saveable();
+    await goalStep(first, 'Segment', 'W1');
+    await first.componentInstance.SaveDraft();
+    const kfold = saveable();
+    await goalStep(kfold, 'Segment', 'W1');
+    kfold.componentInstance.ValidationStrategyType = 'kfold';
+    kfold.componentInstance.KFolds = 7;
+    await kfold.componentInstance.SaveDraft();
+    expect(captured.Saved.map((p) => JSON.parse(p.ValidationStrategy || '{}'))).toEqual([
+      { Strategy: 'train_test_split', LockedHoldoutFraction: 0.15 },
+      { Strategy: 'kfold', LockedHoldoutFraction: 0.15, K: 7 },
+    ]);
+  });
+
+  it('offers no test-holdout slider, and says evaluation follows the Evaluation Protocol the pipeline is bound to, by name', async () => {
+    vi.spyOn(PipelineWizardBindings, 'ReadClassLabels').mockResolvedValue(['A', 'B', 'C']);
+    const fixture = saveable();
+    await goalStep(fixture, 'Segment', 'W1');
+    fixture.componentInstance.GoToStep('algorithm');
+    fixture.detectChanges();
+    const card = Query(fixture, '[data-testid="ps-wizard-validation"]');
+    expect(card?.querySelectorAll('input[type="range"]').length).toBe(0);
+    expect(Query(fixture, '[data-testid="ps-wizard-protocol-note"]')?.textContent?.replace(/\s+/g, ' ')).toContain('Evaluation Protocol "Segment model — protocol"');
   });
 
   it('keeps the defaults, and does not throw, when the cloned FeatureSteps or ValidationStrategy is unreadable', async () => {
@@ -347,7 +374,7 @@ describe('PSPipelineWizardComponent (DOM) — every control round-trips', () => 
     const fixture = saveable(broken);
     await settle(fixture);
     const c = fixture.componentInstance;
-    expect([c.ImputeStrategy, c.StandardizeStrategy, c.CategoricalEncoding, c.ValidationStrategyType, c.KFolds, c.TestSplitRatio, c.SelectedFeaturesCount])
-      .toEqual(['median', 'standard', 'onehot', 'train_test_split', 5, 0.2, 5]);
+    expect([c.ImputeStrategy, c.StandardizeStrategy, c.CategoricalEncoding, c.ValidationStrategyType, c.KFolds, c.SelectedFeaturesCount])
+      .toEqual(['median', 'standard', 'onehot', 'train_test_split', 5, 5]);
   });
 });

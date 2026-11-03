@@ -47,6 +47,11 @@ export type WizardSaveResult = { readonly Ok: true } | { readonly Ok: false; rea
 
 /** Binding the pipelines the wizard creates. */
 export class PipelineWizardBindings {
+  /** The name of the Evaluation Protocol a wizard pipeline is bound to: one rule, read by the save and the wizard's copy. */
+  public static ProtocolNameFor(pipelineName: string): string {
+    return `${pipelineName} — protocol`;
+  }
+
   /** Pure: the unit and protocol a new pipeline maps to, or why it gets none (an undeclared binary target is held). */
   public static Plan(p: WizardPipelineFields, labels: readonly string[], today: string): WizardBindingPlan | LegacyStop {
     const outcome = LegacyPipelines.LegacyOutcomeCandidates({
@@ -150,7 +155,7 @@ export class PipelineWizardBindings {
     const author: Actor = { kind: 'human', userId: user ? user.ID : provider.CurrentUser.ID };
     const unit = await PipelineWizardBindings.saveUnit(plan.Unit, author, provider, user);
     if (unit.Ok === false) return unit;
-    const protocol = await PipelineWizardBindings.saveProtocol(unit.Spec, plan.Protocol, `${fields.Name} — protocol`, author, provider, user);
+    const protocol = await PipelineWizardBindings.saveProtocol(unit.Spec, plan.Protocol, PipelineWizardBindings.ProtocolNameFor(fields.Name), author, provider, user);
     if (protocol.Ok === false) return PipelineWizardBindings.undo([unit.Row], protocol.Reason);
     PipelineWizardBindings.bind(pipeline, unit.Spec, unit.Row.ID, protocol.Row.ID);
     if (await pipeline.Save()) return { Ok: true };

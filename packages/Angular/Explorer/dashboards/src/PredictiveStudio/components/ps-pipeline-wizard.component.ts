@@ -332,28 +332,27 @@ export type WizardStep = 'goal' | 'features' | 'preprocessing' | 'algorithm';
                 </div>
               </div>
 
-              <!-- Validation strategy -->
-              <div class="ps-card">
+              <!-- Evaluation: the Evaluation Protocol the save binds; only its inner cross-validation is chosen here -->
+              <div class="ps-card" data-testid="ps-wizard-validation">
                 <div class="ps-card-head">
                   <i class="fa-solid fa-scissors"></i>
-                  <h4>Validation Strategy</h4>
+                  <h4>Evaluation</h4>
                 </div>
                 <div class="ps-card-body">
+                  <p class="ps-muted ps-small" data-testid="ps-wizard-protocol-note">
+                    Evaluation follows the Evaluation Protocol "{{ BoundProtocolName }}", version 1, which saving binds this pipeline to:
+                    it sets the held-back test rows, the score runs are ranked on and the gate. Here you choose only its inner cross-validation.
+                  </p>
                   <div class="ps-grid-2">
                     <div class="ps-field">
-                      <label>Strategy</label>
+                      <label>Inner cross-validation</label>
                       <select class="mj-input" [(ngModel)]="ValidationStrategyType">
-                        <option value="train_test_split">Train / Test Split</option>
-                        <option value="kfold">K-Fold Cross-Validation</option>
+                        <option value="train_test_split">Protocol default (5 folds, 3 repeats)</option>
+                        <option value="kfold">K folds (3 repeats)</option>
                       </select>
                     </div>
 
-                    @if (ValidationStrategyType === 'train_test_split') {
-                      <div class="ps-field">
-                        <label>Test Holdout Percentage: <strong>{{ TestSplitRatio | percent }}</strong></label>
-                        <input type="range" min="0.1" max="0.4" step="0.05" [(ngModel)]="TestSplitRatio" />
-                      </div>
-                    } @else {
+                    @if (ValidationStrategyType === 'kfold') {
                       <div class="ps-field">
                         <label>Number of Folds (K)</label>
                         <input class="mj-input" type="number" min="2" max="10" [(ngModel)]="KFolds" />
@@ -476,7 +475,6 @@ export class PSPipelineWizardComponent implements OnInit {
 
   public ValidationStrategyType: 'train_test_split' | 'kfold' = 'train_test_split';
 
-  public TestSplitRatio = 0.2;
 
   public KFolds = 5;
 
@@ -498,6 +496,11 @@ export class PSPipelineWizardComponent implements OnInit {
 
   public get AvailableFields(): EntityFieldInfo[] {
     return this.SelectedEntity?.Fields ?? [];
+  }
+
+  /** The name of the Evaluation Protocol saving binds the pipeline to (PipelineWizardBindings writes version 1 under it). */
+  public get BoundProtocolName(): string {
+    return PipelineWizardBindings.ProtocolNameFor(this.PipelineName.trim() || 'this pipeline');
   }
 
   public get AvailableAlgorithms(): MJMLAlgorithmEntity[] {
@@ -851,7 +854,6 @@ export class PSPipelineWizardComponent implements OnInit {
       const valStrategy: ValidationStrategy = {
         Strategy: this.ValidationStrategyType,
         LockedHoldoutFraction: 0.15,
-        ...(this.ValidationStrategyType === 'train_test_split' ? { TestSize: this.TestSplitRatio } : {}),
         ...(this.ValidationStrategyType === 'kfold' ? { K: this.KFolds } : {}),
       };
       p.ValidationStrategy = JSON.stringify(valStrategy);
@@ -975,14 +977,15 @@ export class PSPipelineWizardComponent implements OnInit {
     this.CategoricalEncoding = objects.some((st) => kind(st) === 'onehot') ? 'onehot' : 'none';
   }
 
-  /** The cloned pipeline's saved validation split; unreadable JSON leaves the defaults. */
+  /**
+   * The cloned pipeline's saved inner-validation choice (Strategy, and K for k-fold: the fields the protocol mapping
+   * reads, LegacyPipelines.innerValidation); unreadable JSON leaves the defaults.
+   */
   private restoreClonedValidation(json: string | null): void {
     const saved = this.jsonObject(json);
     if (saved === null) return;
     const strategy = JsonParse.JsonString(saved, 'Strategy');
     if (strategy === 'train_test_split' || strategy === 'kfold') this.ValidationStrategyType = strategy;
-    const testSize = JsonParse.JsonNumber(saved, 'TestSize');
-    if (testSize !== null) this.TestSplitRatio = testSize;
     const k = JsonParse.JsonInteger(saved, 'K');
     if (k !== null) this.KFolds = k;
   }
