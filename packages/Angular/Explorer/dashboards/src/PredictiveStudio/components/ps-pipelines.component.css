@@ -163,7 +163,7 @@
 
 .ps-pipelines .pl-search-box input {
   width: 100%;
-  background: var(--mj-bg-surface-subtle);
+  background: var(--mj-bg-surface-card);
   border: 1px solid var(--mj-border-default);
   border-radius: 6px;
   padding: 7px 10px 7px 30px;
@@ -201,7 +201,7 @@
 }
 
 .ps-pipelines .pl-filter-chip.active {
-  background: var(--mj-bg-surface-subtle);
+  background: var(--mj-bg-surface-card);
   border-color: var(--mj-text-secondary);
   color: var(--mj-text-primary);
   font-weight: 600;
@@ -275,7 +275,7 @@
   font-family: monospace;
   font-size: 11px;
   color: var(--mj-brand-primary);
-  background: var(--mj-brand-primary-subtle);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
   padding: 2px 6px;
   border-radius: 4px;
   font-weight: 500;
@@ -285,7 +285,7 @@
   font-family: monospace;
   font-size: 11px;
   color: var(--mj-text-secondary);
-  background: var(--mj-bg-surface-subtle);
+  background: var(--mj-bg-surface-card);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -294,7 +294,7 @@
   font-size: 11px;
   font-weight: 700;
   color: var(--mj-text-primary);
-  background: var(--mj-bg-surface-subtle);
+  background: var(--mj-bg-surface-card);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -406,7 +406,7 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: var(--mj-brand-primary-subtle);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
   color: var(--mj-brand-primary);
   display: grid;
   place-items: center;
@@ -445,7 +445,7 @@
 }
 
 .ps-pipelines .pl-metric-box {
-  background: var(--mj-bg-surface-subtle);
+  background: var(--mj-bg-surface-card);
   border: 1px solid var(--mj-border-default);
   border-radius: 8px;
   padding: 12px 14px;
@@ -476,6 +476,19 @@
   color: var(--mj-text-secondary);
 }
 
+.ps-pipelines .pl-readiness.ready {
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
+}
+
+.ps-pipelines .pl-readiness.ready .val {
+  color: var(--mj-brand-primary);
+}
+
+.ps-pipelines .pl-readiness:not(.ready) .val {
+  color: var(--mj-status-warning-text);
+}
+
 /* Feature Group Cards */
 .ps-pipelines .pl-feature-group {
   border: 1px solid var(--mj-border-default);
@@ -488,7 +501,7 @@
 
 .ps-pipelines .pl-fg-head {
   padding: 10px 12px;
-  background: var(--mj-bg-surface-subtle);
+  background: var(--mj-bg-surface-card);
   border-bottom: 1px solid var(--mj-border-default);
   display: flex;
   align-items: center;
@@ -511,7 +524,7 @@
   justify-content: space-between;
   font-size: 12px;
   padding: 5px 8px;
-  background: var(--mj-bg-surface-subtle);
+  background: var(--mj-bg-surface-card);
   border-radius: 4px;
 }
 
@@ -527,7 +540,7 @@
   gap: 4px;
   font-size: 12px;
   padding: 6px 8px;
-  background: var(--mj-bg-surface-subtle);
+  background: var(--mj-bg-surface-card);
   border-radius: 4px;
   border: 1px solid var(--mj-border-subtle);
   cursor: pointer;
@@ -574,7 +587,7 @@
 
 /* Leakage Guard Box */
 .ps-pipelines .pl-leakage-box {
-  background: var(--mj-status-warning-subtle);
+  background: var(--mj-status-warning-bg);
   border: 1px solid color-mix(in srgb, var(--mj-status-warning) 25%, transparent);
   border-radius: 8px;
   padding: 12px 14px;
@@ -612,7 +625,7 @@
 .ps-pipelines .pl-table th {
   text-align: left;
   padding: 8px 12px;
-  background: var(--mj-bg-surface-subtle);
+  background: var(--mj-bg-surface-card);
   color: var(--mj-text-muted);
   font-size: 11px;
   font-weight: 700;
@@ -628,7 +641,7 @@
 }
 
 .ps-pipelines .pl-table tr.winner-row {
-  background: var(--mj-brand-primary-subtle);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
   font-weight: 600;
 }
 
@@ -745,7 +758,7 @@
 .ps-pipelines .ps-zoom-controls {
   display: flex;
   align-items: center;
-  background: var(--mj-bg-surface-subtle);
+  background: var(--mj-bg-surface-card);
   border: 1px solid var(--mj-border-default);
   border-radius: 6px;
   overflow: hidden;
@@ -889,7 +902,7 @@
   font-weight: 600;
   padding: 2px 5px;
   border-radius: 4px;
-  background: var(--mj-bg-surface-subtle);
+  background: var(--mj-bg-surface-card);
   color: var(--mj-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.3px;

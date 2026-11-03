@@ -113,7 +113,7 @@
                       </td>
                       <td class="num muted">
                         @if (row.Interval) { [{{ FormatScore(row.Interval[0]) }}, {{ FormatScore(row.Interval[1]) }}] } @else { — }
-                        @if (row.OptimisticTag) { <span class="lb-optimistic" title="The winner's inner-CV score is optimistic: it was the best of several tries.">optimistic</span> }
+                        @if (row.OptimisticTag) { <span class="lb-optimistic" [title]="OptimisticNote">{{ OptimisticTagText }}</span> }
                       </td>
                     </tr>
                   }

@@ -88,3 +88,54 @@ describe('MLExperimentResultsViewerComponent (DOM) — the stored gate outcome',
     expect(text(f, '.hero-metric-label')).toBe('log-loss · winner');
   });
 });
+
+describe('MLExperimentResultsViewerComponent (DOM) — the optimistic tag', () => {
+  const note = (f: ReturnType<typeof render>): string => queryAll(f, '.lb-optimistic')[0]?.getAttribute('title') || '';
+
+  it('says the winner was the best of several tries when the search had several candidates and the finalist shipped', () => {
+    const f = render({ Leaderboard: [searchRow(1, 'lr', 0.331, false), searchRow(2, 'xgb', 0.332, true)], GateOutcome: 'model' });
+    expect(note(f)).toContain('best of several tries');
+  });
+
+  it('does not call the finalist the winner when the gate did not ship it', () => {
+    const f = render({ Leaderboard: [searchRow(1, 'lr', 0.331, false), searchRow(2, 'xgb', 0.332, true)], GateOutcome: 'keep-simple-baseline' });
+    expect([note(f).includes('best of several tries'), note(f).includes('did not ship')]).toEqual([false, true]);
+  });
+
+  it('does not claim a selection when the search had one candidate', () => {
+    const f = render({ Leaderboard: [searchRow(1, 'xgb', 0.332, true)], GateOutcome: 'model' });
+    expect([note(f).includes('best of several tries'), note(f).includes('only candidate')]).toEqual([false, true]);
+  });
+});
+
+describe('MLExperimentResultsViewerComponent (DOM) — the outcome card subtitle', () => {
+  const rows = [{ ...searchRow(1, 'lr', 0.331, false), featureSet: 'Pipeline feature set' }, { ...searchRow(2, 'xgb', 0.332, true), featureSet: 'Pipeline feature set' }];
+  const subtitle = (f: ReturnType<typeof render>): string | null => queryAll(f, '.winner-head .muted')[0]?.textContent?.trim() ?? null;
+
+  it("names the shipped finalist's feature set and version when the gate shipped it", () => {
+    const f = render({ Leaderboard: rows, GateOutcome: 'model', BestModel: { ID: 'm2', Name: 'Renewal (v2)', Version: 2 } });
+    expect(subtitle(f)).toBe('Pipeline feature set · 2');
+  });
+
+  it("says the kept baseline is not the search's finalist, never naming the finalist's feature set", () => {
+    const f = render({ Leaderboard: rows, GateOutcome: 'keep-simple-baseline', BestModel: { ID: 'm1', Name: 'Renewal (v1)', Version: 1 } });
+    expect(subtitle(f)).toBe("A simple baseline, not the search's finalist");
+  });
+
+  it('shows no subtitle when the gate shipped nothing', () => {
+    const f = render({ Leaderboard: rows, GateOutcome: 'no-signal', GateReason: 'No signal.' });
+    expect([subtitle(f), f.nativeElement.textContent.includes('Pipeline feature set · ')]).toEqual([null, false]);
+  });
+});
+
+describe('MLExperimentResultsViewerComponent (DOM) — the tag on a lone candidate', () => {
+  const tagText = (f: ReturnType<typeof render>): string => queryAll(f, '.lb-optimistic')[0]?.textContent?.trim() || '';
+
+  it('tags a lone candidate "only candidate", never optimistic', () => {
+    expect(tagText(render({ Leaderboard: [searchRow(1, 'xgb', 0.332, true)], GateOutcome: 'model' }))).toBe('only candidate');
+  });
+
+  it('tags the finalist of several candidates "optimistic"', () => {
+    expect(tagText(render({ Leaderboard: [searchRow(1, 'lr', 0.331, false), searchRow(2, 'xgb', 0.332, true)], GateOutcome: 'model' }))).toBe('optimistic');
+  });
+});

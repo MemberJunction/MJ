@@ -78,6 +78,14 @@ const STEP_ICONS: Record<FeatureStepKind, string> = {
   series: 'fa-solid fa-chart-line',
 };
 
+/** Whether a pipeline can score, read from its stored state, and the sentence that says why. */
+export interface PSInferenceReadiness {
+  /** True only when a published model's training run stored a gate decision that shipped it. */
+  Ready: boolean;
+  /** What the readiness rests on: the published model the gate shipped, or why there is none. */
+  Detail: string;
+}
+
 const PS_PIPELINES_STARTER_PROMPT =
   'Help me build a training pipeline. I will tell you what I want to predict and on which entity; ' +
   'you assemble the features (guarding against leakage), pick an algorithm, and train a versioned model.';
@@ -475,24 +483,30 @@ const PS_PIPELINES_STARTER_PROMPT =
                   </div>
 
                   <div class="pl-serving-box">
-                    <div class="pl-metric-box">
+                    <div class="pl-metric-box" data-testid="ps-pipelines-serving-model">
                       <label>Active Serving Model</label>
                       <div class="val">
-                        @if (PublishedModel; as pub) {
-                          <span>v{{ pub.Version }} ({{ pub.Algorithm || 'Model' }}) &bull; ID: {{ pub.ID.slice(0, 8) }}…</span>
+                        @if (ServingModel; as srv) {
+                          <span>v{{ srv.Version }} ({{ srv.Algorithm || 'Model' }}) &bull; ID: {{ srv.ID.slice(0, 8) }}…</span>
                         } @else {
                           <span style="color:var(--mj-text-muted);">No published model serving live predictions yet.</span>
                         }
                       </div>
-                      <div class="sub">Model: {{ PublishedModel?.Status || 'None' }} &bull; Pipeline: {{ SelectedPipeline?.Status }}</div>
+                      <div class="sub">Model: {{ ServingModel?.Status || 'None published' }} &bull; Pipeline: {{ SelectedPipeline?.Status }}</div>
                     </div>
-                    <div class="pl-metric-box" style="background:var(--mj-brand-primary-subtle); border-color:rgba(0,118,182,0.2);">
-                      <label>Inference Readiness</label>
-                      <div class="val" style="color:var(--mj-brand-primary)">
-                        <i class="fa-solid fa-circle-check"></i> Ready
+                    @if (InferenceReadiness; as readiness) {
+                      <div class="pl-metric-box pl-readiness" [class.ready]="readiness.Ready" data-testid="ps-pipelines-readiness">
+                        <label>Inference Readiness</label>
+                        <div class="val">
+                          @if (readiness.Ready) {
+                            <i class="fa-solid fa-circle-check"></i> Ready
+                          } @else {
+                            <i class="fa-solid fa-circle-xmark"></i> Not ready
+                          }
+                        </div>
+                        <div class="sub">{{ readiness.Detail }}</div>
                       </div>
-                      <div class="sub">Batch & on-demand scoring enabled</div>
-                    </div>
+                    }
                   </div>
                 </div>
 
@@ -659,13 +673,13 @@ const PS_PIPELINES_STARTER_PROMPT =
                         <div class="ps-field"><label>Algorithm</label><select class="mj-input" [value]="EditAlgorithmId" (change)="SetAlgorithm(InputVal($event))">@for (a of Algorithms; track a.ID) { <option [value]="a.ID">{{ a.Name }}</option> }</select></div>
                         <div class="ps-field"><label>Hyperparameters (JSON)</label><textarea class="mj-textarea" rows="4" [value]="EditHyperparams" (input)="SetHyperparams(InputVal($event))"></textarea></div>
                         @if (PublishedModel; as pub) {
-                          <div style="margin-top:12px;padding:10px;border-radius:var(--mj-radius-sm);background:var(--mj-bg-surface-sunken);border:1px solid var(--mj-border-default);">
-                            <div class="ps-small ps-muted" style="margin-bottom:6px;">{{ ModelTag(pub) === 'kept-baseline' ? 'Kept a simple baseline' : 'Current Serving Winner' }}</div>
+                          <div data-testid="ps-pipelines-model-card" style="margin-top:12px;padding:10px;border-radius:var(--mj-radius-sm);background:var(--mj-bg-surface-sunken);border:1px solid var(--mj-border-default);">
+                            <div class="ps-small ps-muted" style="margin-bottom:6px;">{{ ModelCardTitle(pub) }}</div>
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                               <span style="font-size:var(--mj-text-xs);font-weight:600;">v{{ pub.Version }} ({{ pub.Algorithm || 'Model' }})</span>
                               @if (ModelTag(pub) === 'winner') {
                                 <span class="ps-tag success"><i class="fa-solid fa-trophy"></i> Active</span>
-                              } @else {
+                              } @else if (pub.Status === 'Published') {
                                 <span class="ps-tag">Active</span>
                               }
                             </div>
@@ -1098,8 +1112,40 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     return this.engine.Models.filter((m) => UUIDsEqual(m.PipelineID, this.SelectedPipelineId));
   }
 
+  /** The pipeline's published model, else its first model (the card and header actions show the latest when none is published). */
   public get PublishedModel(): MJMLModelEntity | undefined {
     return this.PipelineModels.find((m) => m.Status === 'Published') ?? this.PipelineModels[0];
+  }
+
+  /** The pipeline's published model, the one that serves predictions; undefined when none is published (no draft stands in). */
+  public get ServingModel(): MJMLModelEntity | undefined {
+    return this.PipelineModels.find((m) => m.Status === 'Published');
+  }
+
+  /**
+   * Whether the pipeline can score, from what is stored: ready only when a model of the pipeline is published and the gate
+   * decision its training run stored shipped it (`model`); otherwise not ready, saying why.
+   */
+  public get InferenceReadiness(): PSInferenceReadiness {
+    const serving = this.ServingModel;
+    if (serving) return this.readinessOf(serving, this.storedGateOutcome(serving.ID));
+    return this.PipelineModels.length === 0
+      ? { Ready: false, Detail: 'No model has been trained for this pipeline yet.' }
+      : { Ready: false, Detail: 'No model of this pipeline is published; publish a validated model to score with it.' };
+  }
+
+  /** The readiness a published model's stored gate outcome gives: only a shipped trained model (`model`) is ready. */
+  private readinessOf(serving: MJMLModelEntity, outcome: GateOutcome | null): PSInferenceReadiness {
+    switch (outcome) {
+      case 'model':
+        return { Ready: true, Detail: `v${serving.Version} is published, and its training run's gate shipped it.` };
+      case 'keep-simple-baseline':
+        return { Ready: false, Detail: `The published v${serving.Version}'s training run kept a simple baseline instead of shipping a trained model.` };
+      case 'no-signal':
+        return { Ready: false, Detail: `The published v${serving.Version}'s training run found no signal and shipped no model.` };
+      default:
+        return { Ready: false, Detail: `The published v${serving.Version}'s training run stores no gate decision, so it was not evaluated under an Evaluation Protocol.` };
+    }
   }
 
   public SelectedModelVersionId: string | null = null;
@@ -1157,6 +1203,20 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     const outcome = this.storedGateOutcome(m.ID);
     if (outcome === null || outcome === 'model') return 'winner';
     return outcome === 'keep-simple-baseline' ? 'kept-baseline' : 'none';
+  }
+
+  /**
+   * The algorithm card's title for the model it shows: the published model by its gate outcome (the serving winner only
+   * when its run shipped it, or stores no gate record), or, when no model of the pipeline is published, the latest model,
+   * which nothing serves yet.
+   */
+  public ModelCardTitle(m: MJMLModelEntity): string {
+    if (m.Status !== 'Published') return 'Latest model (not published)';
+    switch (this.ModelTag(m)) {
+      case 'winner': return 'Current Serving Winner';
+      case 'kept-baseline': return 'Kept a simple baseline';
+      default: return 'Published model';
+    }
   }
 
   /** The stored gate outcome of the run that produced a model; null when the run is missing or stores no readable gate record. */

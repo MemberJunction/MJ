@@ -9,6 +9,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { PSPipelinesComponent } from './ps-pipelines.component';
 import { WidgetFixtures } from './evaluation-results/widget-fixtures';
 import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
+import type { GateDecision, GateOutcome } from '@memberjunction/predictive-studio-core';
 
 try {
   getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
@@ -217,9 +218,15 @@ describe('PSPipelinesComponent (DOM)', () => {
   describe('the kept model after a run', () => {
     const publishedModel = (over: Record<string, unknown> = {}) =>
       ({ ID: 'm1', PipelineID: 'p1', Version: 2, Status: 'Published', Algorithm: 'Logistic Regression', HoldoutMetrics: JSON.stringify({ 'log-loss': 0.41234, brier: 0.1 }), ...over }) as unknown as MJMLModelEntity;
-    const runWithOutcome = (outcome: 'model' | 'keep-simple-baseline' | null) => {
+    /** A stored decision of each outcome, with the branch and shipped role the stored record requires of it. */
+    const DECISIONS: Record<GateOutcome, GateDecision> = {
+      model: { outcome: 'model', branch: 'a:beats-best-simple', shipped: 'xgb', shippedRole: 'model', note: null },
+      'keep-simple-baseline': { outcome: 'keep-simple-baseline', branch: 'b:keep-simple-baseline', shipped: 'glm', shippedRole: 'simpleBaseline', note: null },
+      'no-signal': { outcome: 'no-signal', branch: 'c:no-signal', shipped: null, shippedRole: null, note: null },
+    };
+    const runWithOutcome = (outcome: GateOutcome | null) => {
       const stored = WidgetFixtures.StoredRunEnvelope();
-      const gate = stored.gate === null || outcome === null ? null : { ...stored.gate, decision: { ...stored.gate.decision, outcome } };
+      const gate = stored.gate === null || outcome === null ? null : { ...stored.gate, transcribed: DECISIONS[outcome], decision: DECISIONS[outcome] };
       return { ID: 'r1', PipelineID: 'p1', ResultingModelID: 'm1', ValidationResults: JSON.stringify({ ...stored, gate }) } as unknown as MJMLTrainingRunEntity;
     };
     const renderWith = (model: MJMLModelEntity, run: MJMLTrainingRunEntity, viewMode: 'stages' | 'dag' = 'stages') => {
@@ -259,6 +266,60 @@ describe('PSPipelinesComponent (DOM)', () => {
       const row = fixture.nativeElement.querySelector('.pl-model-row') as HTMLElement;
       expect(row.textContent).toContain('log-loss 0.4123');
       expect(row.textContent).not.toContain('Scored');
+    });
+
+    const algorithmCard = (model: MJMLModelEntity, run: MJMLTrainingRunEntity): Element | null => {
+      const fixture = renderWith(model, run, 'dag');
+      const node = queryAll(fixture, '[data-testid="ps-pipelines-node"]').find((n) => n.textContent?.includes('Algorithm'));
+      (node as HTMLElement).click();
+      fixture.detectChanges();
+      return query(fixture, '[data-testid="ps-pipelines-model-card"]');
+    };
+
+    it('titles the algorithm card "Latest model (not published)" with no Active tag or trophy when no model is published', () => {
+      for (const outcome of ['model', 'keep-simple-baseline'] as const) {
+        const card = algorithmCard(publishedModel({ Status: 'Draft' }), runWithOutcome(outcome));
+        expect(card?.textContent).toContain('Latest model (not published)');
+        expect([card?.textContent?.includes('Current Serving Winner'), card?.textContent?.includes('Active'), card?.querySelector('.fa-trophy') !== null]).toEqual([false, false, false]);
+      }
+    });
+
+    it('titles the algorithm card "Current Serving Winner" with an Active trophy for a published model whose run shipped it', () => {
+      const card = algorithmCard(publishedModel(), runWithOutcome('model'));
+      expect(card?.textContent).toContain('Current Serving Winner');
+      expect(card?.querySelector('.fa-trophy')).not.toBeNull();
+    });
+
+    it('never calls a published model whose run found no signal the serving winner', () => {
+      const card = algorithmCard(publishedModel(), runWithOutcome('no-signal'));
+      expect([card?.textContent?.includes('Current Serving Winner'), card?.textContent?.includes('Published model')]).toEqual([false, true]);
+    });
+
+    const flat = (el: Element | null): string => (el?.textContent || '').replace(/\s+/g, ' ').trim();
+    const readiness = (fixture: ReturnType<typeof renderWith>): string => flat(query(fixture, '[data-testid="ps-pipelines-readiness"]'));
+
+    it('reads Inference Readiness "Ready" for a published model whose stored gate outcome shipped it', () => {
+      const shown = readiness(renderWith(publishedModel(), runWithOutcome('model')));
+      expect([shown.startsWith('Inference Readiness Ready'), shown.includes('v2 is published')]).toEqual([true, true]);
+    });
+
+    it('says inference is not ready, and why, whenever no published model was shipped by its gate', () => {
+      const cases: [MJMLModelEntity, MJMLTrainingRunEntity, string][] = [
+        [publishedModel({ Status: 'Draft' }), runWithOutcome('model'), 'No model of this pipeline is published'],
+        [publishedModel(), runWithOutcome('keep-simple-baseline'), 'kept a simple baseline'],
+        [publishedModel(), runWithOutcome('no-signal'), 'found no signal'],
+        [publishedModel(), runWithOutcome(null), 'stores no gate decision'],
+      ];
+      for (const [model, run, why] of cases) {
+        const shown = readiness(renderWith(model, run));
+        expect([shown.startsWith('Inference Readiness Not ready'), shown.includes(why), shown.includes('scoring enabled')]).toEqual([true, true, false]);
+      }
+      expect(readiness(render([makePipeline()]))).toContain('No model has been trained for this pipeline yet');
+    });
+
+    it('names no active serving model while the only model is a draft', () => {
+      const fixture = renderWith(publishedModel({ Status: 'Draft' }), runWithOutcome('model'));
+      expect(flat(query(fixture, '[data-testid="ps-pipelines-serving-model"]'))).toContain('No published model serving live predictions yet');
     });
 
     it('puts a trophy on the pipeline card and header score only when the stored gate outcome shipped a model', () => {

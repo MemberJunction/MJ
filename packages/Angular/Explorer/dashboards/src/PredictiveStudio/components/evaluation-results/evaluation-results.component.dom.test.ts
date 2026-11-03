@@ -4,6 +4,7 @@ import { PSEvaluationResultsComponent } from './evaluation-results.component';
 import { EvaluationViews } from './evaluation-view';
 import { WidgetFixtures } from './widget-fixtures';
 import { PSDomQueries } from '../ps-dom-queries.test-support';
+import type { GateDecision, StoredGateRecord } from '@memberjunction/predictive-studio-core';
 
 describe('PSEvaluationResultsComponent (DOM)', () => {
   function render(json: string | null, runStatus: 'Completed' | 'Failed' | 'Running' | null = 'Completed', uncovered: string | null = null): HTMLElement {
@@ -66,5 +67,35 @@ describe('PSEvaluationResultsComponent (DOM)', () => {
   it('says when stored results cannot be read', () => {
     const host = render(JSON.stringify({ schema: 'ps-run-results/v2', status: 'completed' }));
     expect(host.querySelector('[data-testid="ps-eval-unreadable"]')?.textContent).toContain('cannot be read');
+  });
+
+  describe('the finalist tag', () => {
+    const shipped: GateDecision = { outcome: 'model', branch: 'a:Q15-only-model-beats-dummy', shipped: 'xgb', shippedRole: 'model', note: null };
+    const stored = WidgetFixtures.StoredRunEnvelope();
+    const title = (host: HTMLElement): string => host.querySelector('[data-testid="ps-eval-optimistic"]')?.getAttribute('title') || '';
+    const shippedGate = (): StoredGateRecord | null => (stored.gate === null ? null : { ...stored.gate, transcribed: shipped, decision: shipped });
+
+    it('says the winner was the best of several tries when the search had several candidates and the finalist shipped', () => {
+      expect(title(render(WidgetFixtures.StoredRunJson({ gate: shippedGate() })))).toContain('best of several tries');
+    });
+
+    it('does not call the finalist the winner when the gate kept a simple baseline', () => {
+      const text = title(render(WidgetFixtures.StoredRunJson()));
+      expect([text.includes('best of several tries'), text.includes('did not ship')]).toEqual([false, true]);
+    });
+
+    it('does not claim a selection when the search had one candidate', () => {
+      const one = stored.trainer === null ? null : { ...stored.trainer, innerScores: stored.trainer.innerScores.slice(0, 1) };
+      const text = title(render(WidgetFixtures.StoredRunJson({ trainer: one, gate: shippedGate() })));
+      expect([text.includes('best of several tries'), text.includes('only candidate')]).toEqual([false, true]);
+    });
+
+    const tag = (host: HTMLElement): string => host.querySelector('[data-testid="ps-eval-optimistic"]')?.textContent?.trim() || '';
+
+    it('tags a lone candidate "only candidate", never optimistic, and the finalist of several "finalist · optimistic"', () => {
+      const one = stored.trainer === null ? null : { ...stored.trainer, innerScores: stored.trainer.innerScores.slice(0, 1) };
+      expect(tag(render(WidgetFixtures.StoredRunJson({ trainer: one, gate: shippedGate() })))).toBe('only candidate');
+      expect(tag(render(WidgetFixtures.StoredRunJson({ gate: shippedGate() })))).toBe('finalist · optimistic');
+    });
   });
 });

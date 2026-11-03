@@ -5,7 +5,8 @@ import { EvaluationViews, type EvaluationRunState, type EvaluationView, type Int
 /**
  * L1 widget: a training run's protocol results — outcome and reason, the rows the run read, kept and excluded (with the
  * snapshot's uncovered history rows), test-set scores with intervals, baselines on the
- * same rows, improvement over the flat guess, candidates (the winner's inner score labelled optimistic), calibration
+ * same rows, improvement over the flat guess, candidates (the finalist's inner score labelled optimistic when the search chose
+ * among several), calibration
  * and leakage flags — or, for a run without protocol results, why: never evaluated under a protocol, not finished,
  * refused at a stage, or unreadable. Renders the state it is given; reads no data.
  */
@@ -81,7 +82,7 @@ import { EvaluationViews, type EvaluationRunState, type EvaluationView, type Int
             @for (s of v.InnerScores; track s.Candidate) {
               <tr>
                 <td>{{ s.Candidate }}</td><td>{{ Cell(s.Cell) }}</td>
-                <td>@if (s.IsFinalist) { <span class="ps-eval-optimistic" data-testid="ps-eval-optimistic" title="The winner's inner score was the best of several tries, so it is optimistic.">finalist · optimistic</span> }</td>
+                <td>@if (s.IsFinalist) { <span class="ps-eval-optimistic" data-testid="ps-eval-optimistic" [title]="FinalistNote(v)">{{ FinalistTag(v) }}</span> }</td>
               </tr>
             }
           </tbody>
@@ -146,6 +147,24 @@ export class PSEvaluationResultsComponent {
   /** The uncovered fields of a counted snapshot; empty otherwise. */
   public UncoveredFields(v: EvaluationView): readonly UncoveredField[] {
     return v.Rows.Uncovered.Kind === 'counted' ? v.Rows.Uncovered.Fields : [];
+  }
+
+  /**
+   * The finalist tag's text. "Optimistic" only when the search chose among several candidates: a lone candidate was never
+   * selected, so its inner score carries no selection bias.
+   */
+  public FinalistTag(v: EvaluationView): string {
+    return v.InnerScores.length < 2 ? 'only candidate' : 'finalist · optimistic';
+  }
+
+  /**
+   * The finalist tag's tooltip. "Best of several tries" only when the search had more than one candidate and the gate
+   * shipped the finalist; a lone candidate was never selected, and a finalist the gate did not ship is not the winner.
+   */
+  public FinalistNote(v: EvaluationView): string {
+    if (v.InnerScores.length < 2) return "The only candidate's inner cross-validation score on the development rows.";
+    if (v.Outcome === 'model') return "The winner's inner score was the best of several tries, so it is optimistic.";
+    return `The finalist's inner cross-validation score, chosen among ${v.InnerScores.length} candidates; the gate did not ship it.`;
   }
 
   /** A value with its interval, as the tables show it. */

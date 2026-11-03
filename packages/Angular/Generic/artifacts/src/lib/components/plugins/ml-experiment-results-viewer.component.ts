@@ -262,6 +262,17 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
     return this.Spec?.GateReason || '';
   }
 
+  /**
+   * The "optimistic" tag's tooltip. "Best of several tries" only when the search had more than one candidate and the
+   * gate shipped the finalist; a lone candidate was never selected, and a finalist the gate did not ship is not the winner.
+   */
+  public get OptimisticNote(): string {
+    const candidates = this.LeaderboardRows.length;
+    if (candidates < 2) return "The only candidate's inner-CV score on the development rows.";
+    if (this.FinalistShipped) return "The winner's inner-CV score is optimistic: it was the best of several tries.";
+    return `The finalist's inner-CV score, chosen among ${candidates} candidates; the gate did not ship it.`;
+  }
+
   /** Whether a row is shown as the winner: the row the artifact marks, and only when it shipped. */
   public IsCrowned(row: NormalizedLeaderboardRow): boolean {
     return row.IsWinner && this.FinalistShipped;
@@ -285,16 +296,22 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
     return named || this.WinningRow?.Algorithm || 'Winning model';
   }
 
+  /**
+   * The outcome card's subtitle, following the stored outcome: the shipped finalist's feature set and version; for a kept
+   * baseline, that the shipped model is not the leaderboard's finalist (whose feature set it does not use); nothing when
+   * the gate shipped nothing.
+   */
   public get WinningModelSubtitle(): string {
-    const parts: string[] = [];
-    if (this.WinningRow?.FeatureSet) {
-      parts.push(this.WinningRow.FeatureSet);
+    switch (this.Spec?.GateOutcome) {
+      case 'keep-simple-baseline': return "A simple baseline, not the search's finalist";
+      case 'no-signal': return '';
+      default: return this.shippedFinalistSubtitle();
     }
-    const version = this.Spec?.BestModel?.Version ?? this.Spec?.report?.bestModelVersion;
-    if ((version !== null && version !== undefined) && `${version}`.trim()) {
-      parts.push(`${version}`);
-    }
-    return parts.join(' · ');
+  }
+
+  /** The "optimistic" tag's text: only a finalist chosen among several candidates is optimistic by selection. */
+  public get OptimisticTagText(): string {
+    return this.LeaderboardRows.length < 2 ? 'only candidate' : 'optimistic';
   }
 
   /** Extra headline metrics for the winning-model card. */
@@ -360,6 +377,19 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────
+
+  /** A shipped finalist's subtitle: its leaderboard feature set and the model's version, whichever are known. */
+  private shippedFinalistSubtitle(): string {
+    const parts: string[] = [];
+    if (this.WinningRow?.FeatureSet) {
+      parts.push(this.WinningRow.FeatureSet);
+    }
+    const version = this.Spec?.BestModel?.Version ?? this.Spec?.report?.bestModelVersion;
+    if ((version !== null && version !== undefined) && `${version}`.trim()) {
+      parts.push(`${version}`);
+    }
+    return parts.join(' · ');
+  }
 
   /**
    * Resolve the winning model ID. Priority (canonical PascalCase first):
