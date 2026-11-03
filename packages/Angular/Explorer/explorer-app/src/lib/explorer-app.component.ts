@@ -647,14 +647,18 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
             if (token) {
               await this.HandleLogin(token, userInfo);
             } else {
-              // Token expired or missing — attempt a full refresh which will
-              // redirect to the identity provider if interaction is required.
+              // Token expired or missing — attempt a fast refresh which will
+              // immediately redirect to the identity provider if interaction is required.
               console.warn('User info available but no token found, attempting refresh...');
+              this.SubHeaderText = 'Session expired — redirecting to sign in...';
+              this.cdr.detectChanges();
               try {
                 const refreshedToken = await this.AuthBase.refreshToken();
                 await this.HandleLogin(refreshedToken.idToken, userInfo);
               } catch (e) {
                 console.error('Token refresh failed, redirecting to login:', e);
+                this.SubHeaderText = 'Your session has expired. Redirecting to sign in...';
+                this.cdr.detectChanges();
                 // refreshToken() normally redirects (and never returns) when
                 // interaction is required.  If we reach here, force login as
                 // a last-resort safety net.

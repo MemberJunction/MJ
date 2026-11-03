@@ -14,3 +14,4 @@ export * from './access/index.js';
 export * from './discover/index.js';
 export * from './extract/index.js';
 export * from './tag/index.js';
+export * from './graph/index.js';
