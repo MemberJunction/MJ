@@ -104,6 +104,7 @@ async function main(): Promise<void> {
         EntityName: 'MJ: AI Agents',
         Fields: ['ID', 'Name'],
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'simple',
     }, contextUser);
     if (!agentResult.Success || !agentResult.Results?.length) {

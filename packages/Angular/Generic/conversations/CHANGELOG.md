@@ -1,5 +1,162 @@
 # @memberjunction/ng-conversations
 
+## 6.2.0-edge.7
+
+### Minor Changes
+
+- ecf36eb: `AIAgentSession.CloseReason` now accepts `TimeLimit` (the session's authored deadline passed) and `Idle` (no activity beyond the idle threshold), so an expiry close records why the session ended instead of the generic `Janitor`. `RealtimeChannelCloseReason` in `@memberjunction/ai` widens to the same six values. The realtime dashboards, the session review and agent banner in conversations, and the conversations-runtime session timeline label the two new reasons, and the realtime overview's KPI, now named "System closes", counts every close not made by a person (orphan, idle and time-limit); a time-limit close is not titled as a janitor close, since the browser's verified deadline alarm records it too. A stale session whose `LastActiveAt` will not parse now closes as `Idle` with a logged error instead of staying open.
+- efbe5f5: The realtime runtime now runs the session-deadline alarm. `SetSessionDeadline(deadline, { autoEnd?, warnBeforeMs? })` arms it; `SessionDeadlineWarning$` fires once per offset and `SessionDeadlineReached$` at the deadline, then (unless `autoEnd: false`) the runtime ends the call with the new `SessionEndReason` `'deadline'`. A server-verified deadline (`identity.verified`) also arms the alarm with the current options, so a host that receives one now gets the call ended at that deadline unless it calls `SetSessionDeadline(d, { autoEnd: false })`. A deadline reached before the call goes live (while it is minted, or while the microphone and connect are in flight) is announced only after `SessionStarted$`, with the call live, and then ends it. `EndRealtimeSession('deadline')` lets a host that owns the hang-up report the same end. A deadline end claims `CloseReason` `TimeLimit`; `CloseAgentSession` accepts the claim and `SessionManager.CloseSession` verifies it against the session's stored deadline (passed or within 60 s), otherwise records `Explicit` and logs it, so a deadline known only to the browser records `Explicit`; channel plugins are told the verified reason. `RealtimeSessionStartOptions.SessionDeadline` hands the deadline in with the start: the runtime arms it in the same tick it takes the call slot, so a start refused on a busy runtime never arms it. The realtime widget drops its own deadline timer, reports the runtime's `'deadline'`, and passes its guest deadline with the start, so it never sets, clears or replaces the deadline of a call it does not own; the conversations chat area shows no failure notice for a deadline end; the sessions adapter's `SessionEndReason` gains `'deadline'`.
+- b0b2cc9: Add Video Studio (`@memberjunction/video-studio-core`, `@memberjunction/video-studio`, `@memberjunction/video-studio-render-worker`), including the Video Studio orchestrator agent and its Pre-Production, Render, Critic, and Repair stages, deterministic G1–G6 quality gates and rubric scoring, optional spoken voiceover narration (`VideoNarrationSpec.Enabled`) with automatic `<audio>` track injection in `BuildRenderBundle`, the isolated HyperFrames render worker and `LocalWorker`, `Remote`, and `Docker` render drivers, the Video Studio application (`Productions`, `Brand Kits`, `Archetypes`) with a built-in `ng-conversations` right-side slide-in copilot pinned to the Video Studio agent, the `Video Production` artifact type and viewer plugin, the `Produce Video` action, and the `VideoStudio.SetupHealth` remote operation and setup health card. Add general `MJ: Brand Kits` (`@memberjunction/ng-brand-kits`) for shared palette, typography, logo, voice, and generation policy management. The Video Studio pages share one right-side slide-in (chat from the first open, the brief above the composer, Iterate on the same conversation), pages can hide the floating chat bubble with `SuppressChatOverlay` in their agent context, and `@memberjunction/ng-brand-kits` adds a brand kit creator with a live preview. Add video generation (`BaseVideoGenerator`, `AIVideoRunner`, the Black Forest Labs FLUX 3 video driver, the `Generate Video` action, and `Per Second` pricing unit support), pre-call generation spend-cap enforcement, and FLUX.2 Pro endpoint, polling, and reported-cost recording fixes. Generated assets are always disclosed in the viewer, inline preview, review notes, and manifest provenance, never stand in for data or `NeverInvent` items, and any integrity criterion failure or synthetic person violation blocks delivery even when repair rounds are exhausted.
+
+  Add the `Consult` sub-agent chat-handling channel (`AIAgent.ChatHandlingOption`, `AIAgent.MaxSubAgentConsultRounds`, `AIAgentRelationship.ChatHandlingOption`), caller-chosen sub-agent configuration presets (`AIAgentRelationship.ConfigurationPresetID`), sub-agent consultation and `resumeRunId` resumption across child, related, parallel, and native sub-agent paths, and root escalation to `MJ: AI Agent Requests` when consult rounds are exhausted. Add peer-to-peer Sage transfers (`Handoff` step type, inline `mj-agent-handoff-card`, conversation ownership chrome, and `FollowHandoffs` messaging-adapter support). `SaveAgentRunMedia` now persists `FileID` on `MJ: AI Agent Run Medias` rows, the artifact viewer registers dedicated Video and Audio plugins, and `AgentScheduledJobDriver` forwards `ConfigurationID` when starting scheduled agent runs.
+
+  Task graphs opted in through agent metadata (`enableTaskGraphs`) now run through `LoopAgentType` with merged prompt parameters and parent hierarchy cycle guards. Explicit `@Sage` mentions or clicking Return to Sage ends specialist agent continuity in every conversation. Follow-up messages to a continued specialist agent resolve that agent's own configuration preset rather than forwarding the conversation manager's preset. Typing a reply in the conversation thread resumes an open sub-agent consult escalated to the user, matching the requests dashboard flow. `ChatHandlingOption = 'Retry'` re-prompts the loop and returns a sub-agent's question to the parent as a result rather than ending the run, capped by the unproductive-retry limit. Claude Opus 5.5, Claude Fable 5.1, Claude Sonnet 5.5, and Gemini 3.8 Flash now declare Image and File (and Gemini also Audio and Video) input modalities; Computer Use auto-select now picks Claude Opus 5.5 or Claude Fable 5.1 instead of the text-only fallback, which can change that feature's cost, and chat file attachments turn on for agents using these models. Also harden regex parsing in `@memberjunction/ai-form-builder` and `@memberjunction/database-designer-core` against polynomial backtracking (ReDoS).
+
+  The Video Studio render worker requires Node >= 22 and system `ffmpeg` on `PATH`; the `Docker` render driver is recommended for production deployments.
+
+### Patch Changes
+
+- 1ea684f: Add an opt-in `CollapseThreadReplies` input to `mj-conversation-chat-area`. When on, thread replies leave the main message list so a host can show them collapsed under their root message (for example through the `messageExtra` slot). A person's reply to a loaded message is a thread reply, and so is any message under a thread reply; an agent's direct answer to a top-level message stays in the main flow. Off by default, so existing hosts are unchanged.
+- 9d6f675: A text conversation can open a Remote Browser its agents drive. The server must opt in with `realtime.conversationBrowser.enabled` (default false); `allowAnonymous` (default false), `maxPerUser` (default 2, counted per anonymous guest for guests), `maxAnonymousTotal` (default 4, across all guests), `idleMinutes` (default 15) and `allowedPrivateHosts` (default none) tune it. `<mj-conversation-chat-area>` takes `AllowRemoteBrowser` (default false); when set, a Browser button opens a drawer with a live view and URL bar, and the conversation's agents get the `browser_*` tools (not AchieveGoal), including the new `browser_Inspect` (fields `f1…`, buttons and links `a1…`) and `browser_Fill`. The browser belongs to the conversation: it ends when the drawer closes, the conversation changes, the chat area is destroyed (new `EndRemoteBrowserSession` mutation), it goes unused for `idleMinutes` (used means an agent or the user acts on it, or its open drawer polls for a snapshot), or the server shuts down gracefully, and only its owner can drive or end it. A conversation browser refuses loopback, link-local and private-network hostnames (private IPv4 and IPv6 ranges, `localhost`, names under `.local`, `.localdomain`, `.internal`, `.intranet`, `.lan`, `.corp`, `.home`, `.home.arpa`, `.private` and `.svc`, and the Docker, Kubernetes and cloud-metadata names), including where a main-frame redirect lands and in popups; this is a best-effort hostname check (names that resolve to private addresses, WebSockets, service-worker fetches, iframes that redirect to a private host, redirects of the page's own requests and the redirect request itself get through), so run browsers under network egress rules for real isolation. Every remote browser now opens only http(s) pages, and refuses a click, Enter or Space that would activate a control labelled to submit, pay, place an order, confirm a payment, transfer, delete or sign in. Adapters gain `EvaluateInPage` (default `null`) and `RestrictNavigation`.
+- 953086f: Chief of Staff cockpit: the Priorities & OKRs tab failed with `Invalid column name 'PersonID'` as soon as the signed-in user had a linked `MJ_BizApps_Common: People` record. `ResolvePersonTaskScope` now matches `MJ_BizApps_Tasks: Task Assignments` on the polymorphic assignee pair (`AssigneeEntityID` = the People entity, `AssigneeRecordID` = the person) and takes the People entity ID as a parameter; the cockpit resolves it through its provider and reports no linked person when the BizApps Common app is not installed.
+
+  The cockpit also falls back to an exact, case-insensitive match on the user's email when no People record is linked to their user, so an administrator-entered person works without a manual link.
+
+  The task scope now covers the whole tree of every root objective the person owns: milestones added under their objective by an administrator, a teammate or the agent load with it, whoever created them. Children of a task the person is only assigned to are not pulled in.
+
+  Chief of Staff prompt (metadata): the agent resolves the user's People record (`LinkedUserID`, then email) before reading or writing tasks, sets `CreatedByPersonID` on every task or issue it creates so the cockpit can show them, and, when no person exists, says so and offers to create one, deferring to an administrator on `PERMISSION_DENIED`. The built-in agents guide documents the People record as a setup step. The prompt also tells the user that a scheduled wake reports in the routine's own conversation and a notification rather than in the chat it was asked from, and no longer creates new recurring routines on its own at the end of a wake; the guide documents where wake output lands.
+
+  Chat area: a reply whose row had already settled could stay in the in-flight list, so the composer kept showing "<agent> is working" with a running timer and a Stop button long after the run finished (seen in the overlay after Regenerate-as-fork). Every reconcile path scanned the rows for `In-Progress`, so nothing ever looked at that ID again. The chat area now drops any in-flight ID whose row has settled: after a completion is handled, whatever the context check said after the row was loaded; when a settled row arrives through `OnMessageSent`; and before the reconnect scan.
+
+  A routine run's output is now reachable by click. The dispatcher's in-app notification carries the routine's `conversationId`; clicking it opens that conversation in the Chat app (a notification written before the field existed reads it off the routine, and a routine with no conversation opens in the Routines app). The Routines app's "Conversation" button, which Explorer never handled, deep-links into the Chat app the same way. The Chat app's Conversations resource loads a selected conversation the sidebar does not list (an application-scoped one, such as a wake thread) through the engine, so the title and pinned agent show.
+
+  Chief of Staff cockpit: every wake routine card has "Read Briefing", which opens the routine's conversation in a slide-in reader inside the cockpit (read-only, the embedded chat area), and "Open in Chat", which deep-links into the Chat app. Both are disabled until the routine has run once, since the conversation is created on the first run. The Overview tab's routine list gets the same "Read" button.
+
+  Chief of Staff cockpit: reloads itself when something it shows changes. MJAPI broadcasts every entity save and delete to browsers (a wake run creating an approval request included) as a `remote-invalidate` event; the cockpit now listens for its own entities, reloads once per burst, and defers the reload while its tab is detached.
+
+  Chief of Staff cockpit: a person assigned to a milestone now sees the objective it belongs to. The task scope adds the root above every assigned milestone (read off `RootParentID`), so the assignee's Priorities tab shows the objective card. The objective is shared context, the milestone list is not: the objective's owner (its creator, or a person assigned to the objective itself) sees every milestone, while anyone else sees only the milestones assigned to them, with a "Yours: n of m" note; progress always counts all milestones. Each objective card names its owner (the creator, from the Tasks view's `CreatedByPerson`) beside the people assigned to it. Objective cards and milestone rows show who is assigned, from `MJ_BizApps_Tasks: Task Assignments`, with the signed-in person's own rows highlighted.
+
+  Chief of Staff: to-dos and reminders. The prompt turns a request like "remind me to call Mom on Wednesday" into a General task with a due date (no objective fields) plus a one-shot wake at that time whose reply is the reminder itself. The cockpit Overview gets a "To-dos & Reminders" panel listing open root tasks of to-do types (General, Action Item, Follow-up, Reminder) soonest due first, with overdue and due-today marking and a tick control that marks the task Completed through the `Update Record` action.
+
+  Chief of Staff for regular users: a user with only the `UI` role could not complete onboarding because that role was read-only on `MJ: AI Agent User Policies`, so Configure Agent User Policy failed and the agent claimed to have kept the preferences "in durable memory", which nothing did. The same role could not create `MJ: AI Agent Requests`, so no approval could be raised for such a user. New metadata grants the UI role Create + Update on both entities (`metadata/entity-permissions/.chief-of-staff-permissions.json`). Two server-side entity subclasses keep the rows private: `MJAIAgentUserPolicyEntityServer` (new, in core-entities-server) lets a non-Owner user save only their own policy and defaults `UserID` to the context user on first save; `MJAIAgentRequestEntityServer` now lets a non-Owner user create requests only for themselves and update only requests that were already theirs, judged by the pre-save `RequestForUserID`. Owner-type users and the scheduler's system user are exempt. The prompt tells the agent to report a failed policy save plainly and never to claim the preferences were stored elsewhere.
+
+  Wake routines: "Wake Now" no longer spends a one-shot. It used to set `NextRunAt` to now, which made the dispatcher claim the routine on its next sweep, and a claimed one-shot is Disabled after it runs, so a reminder wanted tomorrow fired today and never again. The scheduling engine gains `UserRoutineDispatcherDriver.RunRoutineNow`, a manual-run path that skips the claim and the wake gate, and a `Run User Routine Now` action (metadata in `metadata/actions/.user-routine-actions.json`) that the cockpit's Wake Now now calls; the caller must own the routine, bookkeeping runs as the scheduler's system user and the target as the owner. The cockpit shows a spent one-shot as "Fired" with the time it ran instead of "Disabled", sorts it below the live schedule, hides Pause/Resume on it, and keeps fired wakes behind a "Show fired" toggle.
+
+  Chief of Staff email: a new outbound email could never become an approval. `Manage My Email Inbox and Drafts` had no send operation (only draft, reply and forward), the prompt named operations the action did not recognise, and the approval request was queued only after a mail provider and the mailbox gate had passed, so a blocked mailbox silently prevented the approval and the agent pasted a draft into the chat instead. The action gains `Send`, accepts the older operation names, and for any sending operation under a sending mode with `RequireApprovalForExternalComms` queues the approval before touching a provider (`APPROVAL_REQUIRED`); on the approved request it is called again with `ConfirmedApprovalRequestID` and only then resolves the provider, failing honestly (`NO_EMAIL_PROVIDER`) when none can act. Metadata declares `Send`, `ConfirmedApprovalRequestID`, `ApprovalRequestID` and the two result codes. The prompt tells the agent to send through the action rather than pre-empt it with a draft when the mailbox preflight looks blocked, and how to act on the approved request.
+
+  Chief of Staff cockpit: an approval request that carries an outbound email can be opened on its card. "View draft" shows To, CC, From, Subject and the body inline, read from the request's `Comments` JSON, and "Copy" puts the draft on the clipboard as plain text (headers, a blank line, the body) for pasting into a mail client. Requests that are not emails are unchanged.
+
+  Chief of Staff email: the provider chooser took the first Active provider named Gmail or Microsoft Graph and gave up when that provider's class was not loaded in the server, so a database with Gmail Active but only Graph and SendGrid installed could never draft or send ("No active communication provider is configured"). Active providers are now tried in preference order, skipping those this server cannot load, and the failure message names what was tried.
+
+  Agent user policies: the `AgentUserPolicyEngine` cache now follows the entity layer. A policy saved anywhere in the process (the cockpit's Governance tab through GraphQL, a script) replaces the cached copy, a delete evicts it, and a remote invalidation from another server clears the cache. Before this the agent kept running on the policy it first loaded until the API restarted, so a Governance edit (DraftOnly to Send on Behalf of User, say) showed on the page but never reached the agent.
+
+  User routines: a one-shot routine created through the entity layer with an explicit `NextRunAt` lost it when a schedule field had been written twice before the first save (for example a default cron cleared to null). After `NewRecord()` a field's first write also becomes its old value, so the cron read dirty while `NextRunAt` did not; the entity server recomputed the time, which for a one-shot with no cron is null, and the dispatcher then disabled the routine after its next run. On an unsaved record a non-null `NextRunAt` now counts as explicit. Found by the new IT22 check. `Run User Routine Now` also returns `ROUTINE_NOT_FOUND` instead of throwing when the caller cannot read the routine.
+
+  Review follow-ups: `Manage My Email Inbox and Drafts` returns `INVALID_OPERATION` for an operation it does not recognise instead of silently listing messages. In the cockpit the to-do done control is an `mjButton` icon button and the "Show fired" toggle is an `mj-filter-chip`.
+
+- 42df19d: Explorer surfaces stop reporting state the server never sent:
+  - A client holding a metadata snapshot keeps serving it when the metadata status check cannot reach the server (connection refused, DNS failure, offline, or a gateway/timeout status), instead of failing with "System Error". Only a transport failure degrades this way (`IsTransportError` in `@memberjunction/core`; `SafeGraphQLError.IsTransportFailure` carries the verdict past the GraphQL error sanitizer); a server that answered — an access denial, a validation rejection — propagates as before.
+  - A run the server force-failed no longer keeps spinning, and an agent run that ended by asking the user a question (AwaitingFeedback) or is parked on a workflow (Paused) is no longer painted as a failure.
+  - A dashboard no longer reports 0% for a run of successes, and global search reports incomplete results through `EntitySearchProvider.OnIncompleteResults` and the log instead of dropping them silently (no UI shows the report yet).
+  - An app with more than 1000 entities shows all of them, and an unwarmed template cache no longer crashes the form that fixes it.
+  - Opening a record works on entities whose primary key is not called `ID`.
+  - List membership filters run on PostgreSQL for uuid and integer keys (`ListMembershipFilter` in `@memberjunction/core`).
+  - List sources resolve every match as the acting user, not the entity's UserViewMaxRows page.
+- b081ac9: Memory-leak audit round 20: cap the hidden message-input composers kept mounted per visited conversation in the chat area (LRU, 10) while preserving composers with active agent turns, unsent attachments, or live voice calls and scoping voice teardown to the owning conversation; bound the record preview-popover summary cache and record-links dependency cache with provider-scoped `MJLruCache` keys.
+- 6779eed: Extend conversation context assembly and Jev decision routing for multi-party, multi-agent conversations (`MentionOnly` / `MentionPeople`). `ConversationEngine.AssembleContextWindow` and `GetAgentContextWindow` now include author/agent/reply fields (`UserID`, `User`, `AgentID`, `Agent`, `ParentID`) and support `speakerAttribution` (`'off' | 'auto' | 'always'`) plus `speakerLabels` so agents can distinguish human and AI speakers without altering single-user/single-agent transcripts. `BuildRoutingQuestions` and `InterpretRoutingAnswers` support `AllowNoAgentOption` (`ROUTING_NO_AGENT = 'no_agent'`) and host-allowed restricted agents (`AllowedAgentIDs`), while `ResolveAgentTurn`, `ShouldRunRoutingDecision`, and `MessageInputComponent` short-circuit human `@Person` mentions and `ParentID` thread replies (`Route: 'ThreadReply'`) and route subsequent untagged turns in active `MentionOnly` chats via Jev decision routing (`Route: 'DecisionRouted'`) while keeping cold conversations silent until an agent is `@`-mentioned.
+- 5984aea: Realtime overlay: every host switch now reaches its control. New `AllowTyping` input (also implied by `AllowTextReveal=false`) removes every road to the typed composer; `ShowEnd`, `ShowCaptionsControl` and `ShowDevLinks` are honoured by the composer, banner, thread, surface tabs and focus pill; captions over the agent's video and the narration line respect `AllowTextReveal`; a forced console with no text allowed shows the orb. `AutoHideControls` is a deprecated no-op. Dead resolver outputs `showComposer`, `connecting`, `autoHideControls` and `allowResize` are removed and a test now fails if a resolved output is never read. An explicit `undefined` in a `UiConfig` bag now means "use the default". The gear hides when both the density picker and developer links are off. Review shows the thread even under `AllowTextReveal=false`, and a forced console with no text allowed shows the orb. The lean dock's "•••" hides when its sheet would be empty, and the focus pill's exit stays (as "Back to the call") when text is disallowed. The typing box is open only while the conversation is readable, thread shown and captions on (opening it reveals the conversation; captions off closes it and keeps the draft), and the narration line shows only while the thread does. `ShowSurfacePanel=false` also removes the Details control, opening the typing box keeps the conversation when the agent's video arrives later, and taking the gear away closes its open popover. Fixes #6101.
+- 9a2d7cc: RunView's `TotalRowCount` contract is now explicit: a number is always a real total, and `undefined` means the caller passed `SkipTotalRowCount: true`.
+
+  **Contract change.** `RunViewResult.TotalRowCount` is now optional (`TotalRowCount?: number`). With `SkipTotalRowCount: true` it is always `undefined`, including on a page that was not full, where it used to be the number of rows returned. A caller that needs a total must not pass the flag. Strict TypeScript consumers that read the field will see a compile error; a call without the flag always gets a number, so `?? 0` is safe there. `ResultType: 'count_only'` ignores the flag and always counts.
+
+  `MaxRows: 1` is no longer special-cased: a full page of one row now runs the same count as any other full page and reports the real total. Callers that only read `Results` should pass `SkipTotalRowCount: true` to avoid that second query; about 270 such reads in this repo now do. `SkipTotalRowCount` is now sent over GraphQL, so browser callers can use it too.
+
+- 36a3f9e: Security hardening across SQL filter construction, expression sandboxing, token verification, fail-closed endpoints, and client URL/selector screening:
+  - **Pure AST transform evaluation (`@memberjunction/global`)**: Replace `new Function` in `FieldTransformEngine` with an Acorn-based AST interpreter (`SafeTransformAstEvaluator`) that blocks prototype climbs, ambient global callback smuggling, and dynamic code generation, while supporting standard string/array transform methods (`split`, `slice`, `join`, `substring`, `replace`, `padStart`, `padEnd`, etc.). Harden `SafeExpressionEvaluator` against higher-order callback smuggling.
+  - **SQL filter & token hardening (`@memberjunction/server`, `@memberjunction/external-change-detection`, `@memberjunction/metadata-sync`)**: Enforce strict UUID shape validation and SQL string escaping on `ExtraFilter` interpolations across resolvers and REST handlers, reject non-primitive/non-literal primary key and lookup filter values in `MetadataSync`, perform non-short-circuiting constant-time access-token lookups in `GetDataResolver` with full token redaction from error messages, derive a domain-separated HS256 media-access signing subkey from `MJ_BASE_ENCRYPTION_KEY`, and default `SetupRESTEndpoints` to disabled (`enabled: false`).
+  - **Fail-closed registry auth (`@memberjunction/component-registry-server`)**: Refuse requests by default in `ComponentRegistryAPIServer.checkAPIKey` until overridden by a subclass, and protect both `/components` and `/feedback` routes when `requireAuth` is enabled.
+  - **Client URL-scheme & DOM selector screening (`@memberjunction/ng-core-entity-forms`, `@memberjunction/ng-conversations`, `@memberjunction/react-runtime`)**: Screen media and subresource URLs to `http:` / `https:` (rejecting `javascript:`, `data:`, `blob:`, and scheme-relative `//` targets) across viewer, open-in-tab, download, session-state rehydration, and dynamic `<script>` / `<link>` loaders, and replace interpolated `document.querySelector` URL lookups with direct attribute comparison.
+
+- f8ddfdc: Realtime agents can now inspect, operate and call actions inside live whiteboard HTML widgets, and widget state persists. Three new tools (`Whiteboard_InspectWidget`, `Whiteboard_OperateWidget`, `Whiteboard_CallWidget`) run over a two-way bridge into the sandboxed iframe (the sandbox stays `allow-scripts` only). Widgets can register actions (`MJWhiteboard.onAction`) and save state (`setState`/`onRestore`); widgets that don't get automatic form state, so answers survive re-mounts, page switches, `UpdateContent` and session resume, while undo never rewinds them and they stay out of `ToJSON` (LiveKit sync and artifacts). Widget submit and interaction events carry an optional `Author` (`'agent'` when an agent's command caused them), and the channel no longer reports an agent's own submit back to it as the user's. Access is controlled by the channel config key `widgetAccess` (`full` | `inspect-only` | `off`), `persistWidgetState`, protected subclass hooks (`MaxWidgetAccess`, `ResolveWidgetAccess()`, `OnBeforeWidgetCommand()`), per-widget opt-outs, and exposure (`ReturnsChannelData: 'state'`).
+
+  Note for subclasses of `RealtimeWhiteboardChannel`: `ApplyAgentTool` now returns `string | Promise<string>` (board tools stay synchronous; the three widget tools are async). Code that assigns `super.ApplyAgentTool(...)` to a `string` should route `IsWhiteboardWidgetToolName(toolName)` calls straight to `super`; see the Realtime Channels Guide.
+
+- Updated dependencies [1419ba7]
+- Updated dependencies [7d0885a]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [91cba84]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [8f370b3]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [953086f]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [08f8966]
+- Updated dependencies [48c9cd2]
+- Updated dependencies [4a30c52]
+- Updated dependencies [0fb3649]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [b081ac9]
+- Updated dependencies [6779eed]
+- Updated dependencies [c018cb9]
+- Updated dependencies [397ae9a]
+- Updated dependencies [89a5b59]
+- Updated dependencies [efbe5f5]
+- Updated dependencies [6b0de38]
+- Updated dependencies [84a0c60]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [da449bb]
+- Updated dependencies [b0b2cc9]
+- Updated dependencies [f8ddfdc]
+- Updated dependencies [17d1336]
+  - @memberjunction/ai-core-plus@6.2.0-edge.7
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/ng-realtime-media@6.2.0-edge.7
+  - @memberjunction/ai@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/conversations-runtime@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.7
+  - @memberjunction/ai-engine-base@6.2.0-edge.7
+  - @memberjunction/ng-base-forms@6.2.0-edge.7
+  - @memberjunction/interactive-component-types@6.2.0-edge.7
+  - @memberjunction/realtime-runtime@6.2.0-edge.7
+  - @memberjunction/ai-realtime-client@6.2.0-edge.7
+  - @memberjunction/ng-artifacts@6.2.0-edge.7
+  - @memberjunction/ng-shared-generic@6.2.0-edge.7
+  - @memberjunction/ng-code-editor@6.2.0-edge.7
+  - @memberjunction/ng-media-player@6.2.0-edge.7
+  - @memberjunction/ng-whiteboard@6.2.0-edge.7
+  - @memberjunction/ng-user-routines@6.2.0-edge.7
+  - @memberjunction/ai-agent-client@6.2.0-edge.7
+  - @memberjunction/ng-forms@6.2.0-edge.7
+  - @memberjunction/ng-realtime-channels@6.2.0-edge.7
+  - @memberjunction/ng-task-graph-editor@6.2.0-edge.7
+  - @memberjunction/ng-tasks@6.2.0-edge.7
+  - @memberjunction/ng-testing@6.2.0-edge.7
+  - @memberjunction/ng-agent-client@6.2.0-edge.7
+  - @memberjunction/ng-base-types@6.2.0-edge.7
+  - @memberjunction/ng-composer@6.2.0-edge.7
+  - @memberjunction/ng-container-directives@6.2.0-edge.7
+  - @memberjunction/ng-notifications@6.2.0-edge.7
+  - @memberjunction/ng-react@6.2.0-edge.7
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.7
+  - @memberjunction/ng-markdown@6.2.0-edge.7
+  - @memberjunction/ng-ui-components@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Minor Changes

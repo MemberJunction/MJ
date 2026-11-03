@@ -1,5 +1,95 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 6.2.0-edge.7
+
+### Minor Changes
+
+- 4c0eaec: Local embeddings move to `@huggingface/transformers` 4.3.1 and can switch models safely; EmbeddingGemma 2 is available as an opt-in model.
+  - `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` names the local model every process embeds with (default: the highest-PowerRank active local model). Agent note, example, tag and query indexes leave out vectors from other models, a save re-embeds such a row, and the new "Re-embed Local Vectors" action moves them all.
+  - Embedding calls take an optional `inputType` (`'query' | 'document'`); Cohere and Bedrock map it natively, and catalog prefixes come from `ModelConfiguration.Embedding`. `LocalEmbedding` batches, honors `dimensions`, truncates to the catalog's `MaxInputTokens`, and sizes ONNX Runtime's thread pool to the CPUs the process may use (in a 2-CPU container, queries were about 10× faster).
+  - A failed embed now returns `null` from `AIEngine.EmbedText` instead of an empty vector.
+
+  **Upgrade notes:**
+  - After upgrading, run `mj ai actions run -n "Re-embed Local Vectors" --param "Force=true"`, then restart the MJ server processes. The new runtime changes all-mpnet-base-v2's vectors (about 0.95 cosine on Linux x64) under the same model ID, and long texts are now truncated at `MaxInputTokens` (256 tokens for all-MiniLM-L6-v2, matching sentence-transformers).
+  - A `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` that names no active local model turns local embedding off, with an error. An inactive model is no longer picked as the default.
+  - TagEngine embeds with the default local model whenever one exists, even if the "Tag Semantic Matching" prompt names a hosted model.
+  - `LocalEmbedding` honors a vector index's `Dimensions`: a value above the model's size now fails instead of being ignored.
+  - The GraphQL `EmbedText` mutation's `modelSize: 'medium'` now means the default local model.
+  - `LocalEmbedding` no longer reads the `useQuantized` / `localURL` settings or `TRANSFORMERS_LOCAL_URL`; it always loads the 8-bit weights.
+
+- b0b2cc9: Add Video Studio (`@memberjunction/video-studio-core`, `@memberjunction/video-studio`, `@memberjunction/video-studio-render-worker`), including the Video Studio orchestrator agent and its Pre-Production, Render, Critic, and Repair stages, deterministic G1–G6 quality gates and rubric scoring, optional spoken voiceover narration (`VideoNarrationSpec.Enabled`) with automatic `<audio>` track injection in `BuildRenderBundle`, the isolated HyperFrames render worker and `LocalWorker`, `Remote`, and `Docker` render drivers, the Video Studio application (`Productions`, `Brand Kits`, `Archetypes`) with a built-in `ng-conversations` right-side slide-in copilot pinned to the Video Studio agent, the `Video Production` artifact type and viewer plugin, the `Produce Video` action, and the `VideoStudio.SetupHealth` remote operation and setup health card. Add general `MJ: Brand Kits` (`@memberjunction/ng-brand-kits`) for shared palette, typography, logo, voice, and generation policy management. The Video Studio pages share one right-side slide-in (chat from the first open, the brief above the composer, Iterate on the same conversation), pages can hide the floating chat bubble with `SuppressChatOverlay` in their agent context, and `@memberjunction/ng-brand-kits` adds a brand kit creator with a live preview. Add video generation (`BaseVideoGenerator`, `AIVideoRunner`, the Black Forest Labs FLUX 3 video driver, the `Generate Video` action, and `Per Second` pricing unit support), pre-call generation spend-cap enforcement, and FLUX.2 Pro endpoint, polling, and reported-cost recording fixes. Generated assets are always disclosed in the viewer, inline preview, review notes, and manifest provenance, never stand in for data or `NeverInvent` items, and any integrity criterion failure or synthetic person violation blocks delivery even when repair rounds are exhausted.
+
+  Add the `Consult` sub-agent chat-handling channel (`AIAgent.ChatHandlingOption`, `AIAgent.MaxSubAgentConsultRounds`, `AIAgentRelationship.ChatHandlingOption`), caller-chosen sub-agent configuration presets (`AIAgentRelationship.ConfigurationPresetID`), sub-agent consultation and `resumeRunId` resumption across child, related, parallel, and native sub-agent paths, and root escalation to `MJ: AI Agent Requests` when consult rounds are exhausted. Add peer-to-peer Sage transfers (`Handoff` step type, inline `mj-agent-handoff-card`, conversation ownership chrome, and `FollowHandoffs` messaging-adapter support). `SaveAgentRunMedia` now persists `FileID` on `MJ: AI Agent Run Medias` rows, the artifact viewer registers dedicated Video and Audio plugins, and `AgentScheduledJobDriver` forwards `ConfigurationID` when starting scheduled agent runs.
+
+  Task graphs opted in through agent metadata (`enableTaskGraphs`) now run through `LoopAgentType` with merged prompt parameters and parent hierarchy cycle guards. Explicit `@Sage` mentions or clicking Return to Sage ends specialist agent continuity in every conversation. Follow-up messages to a continued specialist agent resolve that agent's own configuration preset rather than forwarding the conversation manager's preset. Typing a reply in the conversation thread resumes an open sub-agent consult escalated to the user, matching the requests dashboard flow. `ChatHandlingOption = 'Retry'` re-prompts the loop and returns a sub-agent's question to the parent as a result rather than ending the run, capped by the unproductive-retry limit. Claude Opus 5.5, Claude Fable 5.1, Claude Sonnet 5.5, and Gemini 3.8 Flash now declare Image and File (and Gemini also Audio and Video) input modalities; Computer Use auto-select now picks Claude Opus 5.5 or Claude Fable 5.1 instead of the text-only fallback, which can change that feature's cost, and chat file attachments turn on for agents using these models. Also harden regex parsing in `@memberjunction/ai-form-builder` and `@memberjunction/database-designer-core` against polynomial backtracking (ReDoS).
+
+  The Video Studio render worker requires Node >= 22 and system `ffmpeg` on `PATH`; the `Docker` render driver is recommended for production deployments.
+
+### Patch Changes
+
+- 3bace5a: - **Optimistic concurrency & non-overlapping field merge (`ResolverBase.TestAndSetClientOldValuesToDBValues`)**: Reject conflicting overlapping concurrent field edits where `ClientNewValue !== DBValue` with `CONCURRENT_MODIFICATION_CONFLICT` after logging `SAVE_INCONSISTENCY` to `MJ: Error Logs`, allow idempotent concurrent writes to the same value, and preserve concurrent database modifications on non-overlapping fields instead of overwriting them with stale client values. The conflict comparison ignores representation drift: JSON strings are compared by canonical content, and `datetime` / `smalldatetime` values are compared at the column's resolution, so a cosmetic rewrite or a sub-tick timestamp difference is not a conflict. Encrypted fields the API never decrypts (`AllowDecryptInAPI === false`) are left out of the comparison, because a client only ever holds the sentinel or fresh ciphertext for them; an echoed sentinel or unchanged ciphertext in the new values is dropped rather than written. Conflict diagnostics replace every encrypted field's values with the sentinel before they reach the console, the error log or `MJ: Error Logs`.
+  - **Multi-user WebSocket entity message routing (`ResolverBase.ListenForEntityMessages`)**: Track active sessions dynamically per entity type so status updates fan out to every active matching session rather than closing over only the first caller's `userPayload`/`pubSub`, while still emitting CloudEvents once per event.
+  - **Ciphertext-preserving cache & zero decrypt-then-re-encrypt API reads**: Persist pre-decryption ciphertext in `LocalCacheManager` / Redis across `RunView`, `RunViews`, `RunViewsWithCacheCheck`, and `GetDatasetByName`, materialize decrypted rows on in-process cache hits, keep the ciphertext copy when an external entity's rows are narrowed by field-level security, guard against plaintext `BaseEntity` `save` cache writes, skip `Decrypt()` + `Encrypt()` for `AllowDecryptInAPI === false` fields on GraphQL reads (`PreserveRestrictedApiCiphertext`), and apply `ArrayFilterEncryptedFieldsForAPI` on `RunViewResolver.RunViewsWithCacheCheck` stale and differential responses.
+  - **Update response carries every loaded field (`GraphQLDataProvider.Save`)**: the update mutation's selection set now requests all loaded non-binary fields, not only the dirty ones, so a concurrent change the server preserved on an untouched column reaches the client entity instead of leaving it stale until the next load. The input stays delta-only.
+  - **Integration bundles for the three fixes (`@memberjunction/integration-test-suite`)**: IT158 optimistic concurrency across two GraphQL sessions, IT159 entity status push fan-out over two WebSocket sessions, IT160 encrypted field reads over GraphQL (miss and server-cache hit), and IT161 ciphertext at rest in the RunView cache. All four are mutation-gated members of the deterministic suite.
+- f4cd5fb: Guard `ProviderBase` dataset caching and staleness checks against failed or undated dataset results (`LatestUpdateDate: null`), extend `BaseEngine` permission pre-checking and empty-load classification to `Type: 'dataset'` configs, and make `TemplateEngineBase` safe for least-privilege roles without template read permissions.
+- 42df19d: Explorer surfaces stop reporting state the server never sent:
+  - A client holding a metadata snapshot keeps serving it when the metadata status check cannot reach the server (connection refused, DNS failure, offline, or a gateway/timeout status), instead of failing with "System Error". Only a transport failure degrades this way (`IsTransportError` in `@memberjunction/core`; `SafeGraphQLError.IsTransportFailure` carries the verdict past the GraphQL error sanitizer); a server that answered — an access denial, a validation rejection — propagates as before.
+  - A run the server force-failed no longer keeps spinning, and an agent run that ended by asking the user a question (AwaitingFeedback) or is parked on a workflow (Paused) is no longer painted as a failure.
+  - A dashboard no longer reports 0% for a run of successes, and global search reports incomplete results through `EntitySearchProvider.OnIncompleteResults` and the log instead of dropping them silently (no UI shows the report yet).
+  - An app with more than 1000 entities shows all of them, and an unwarmed template cache no longer crashes the form that fixes it.
+  - Opening a record works on entities whose primary key is not called `ID`.
+  - List membership filters run on PostgreSQL for uuid and integer keys (`ListMembershipFilter` in `@memberjunction/core`).
+  - List sources resolve every match as the acting user, not the entity's UserViewMaxRows page.
+- d6b39c4: Enhance `BaseRemotableOperation` with transport context (`requestOrigin`, `clientIp`, `sessionId`, `apiKeyHash`), 3-arg `Authorize(input, user, context)`, 4-arg CodeGen `InternalExecute`, structured `RemoteOperationError`, end-to-end `ContractFingerprint` validation, and opt-in Agent/MCP tool discovery; extend `ServerExtensionServiceRegistry` and `MagicLinkService` with programmatic invite management (`RedirectUrl` with RS256 binding, `SendEmail` control, `RevokeInvite`, `UpdateInviteExpiry`, `VerifySessionToken`) and host runtime services (`CreateIsolatedProvider`, `GetSystemUser`, `ResolvePrincipal`).
+- 08f8966: Preserve IS-A parent field dirty state and `OldValue` across `IsParentEntitySave` in `GraphQLDataProvider.Save()` and `GraphQLTransactionGroup` serialization, and invalidate stale parent snapshots if a leaf save aborts before reaching the provider.
+- 48c9cd2: Evict only the mismatched field entry in `GraphQLDataProvider.getParentPreSaveFieldSnapshot` so other dirty parent fields on the same IS-A entity remain intact, and remove unreachable fallback code in `GraphQLTransactionGroup`.
+- 9a2d7cc: RunView's `TotalRowCount` contract is now explicit: a number is always a real total, and `undefined` means the caller passed `SkipTotalRowCount: true`.
+
+  **Contract change.** `RunViewResult.TotalRowCount` is now optional (`TotalRowCount?: number`). With `SkipTotalRowCount: true` it is always `undefined`, including on a page that was not full, where it used to be the number of rows returned. A caller that needs a total must not pass the flag. Strict TypeScript consumers that read the field will see a compile error; a call without the flag always gets a number, so `?? 0` is safe there. `ResultType: 'count_only'` ignores the flag and always counts.
+
+  `MaxRows: 1` is no longer special-cased: a full page of one row now runs the same count as any other full page and reports the real total. Callers that only read `Results` should pass `SkipTotalRowCount: true` to avoid that second query; about 270 such reads in this repo now do. `SkipTotalRowCount` is now sent over GraphQL, so browser callers can use it too.
+
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [91cba84]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [8f370b3]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [953086f]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [6779eed]
+- Updated dependencies [c018cb9]
+- Updated dependencies [397ae9a]
+- Updated dependencies [89a5b59]
+- Updated dependencies [6b0de38]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/actions-base@6.2.0-edge.7
+  - @memberjunction/ai-core-plus@6.2.0-edge.7
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/ai@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/interactive-component-types@6.2.0-edge.7
+  - @memberjunction/lists-base@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Minor Changes

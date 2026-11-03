@@ -77,6 +77,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 EntityName: 'MJ: Vector Indexes',
                 Fields: ['ID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple'
             }, contextUser);
             this.available = result.Success && result.Results.length > 0;

@@ -1,4 +1,4 @@
-import { Component, ElementRef, EventEmitter, HostListener, Input, Output, ViewChild, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, ElementRef, EventEmitter, HostListener, Input, Output, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
@@ -54,6 +54,26 @@ export class RealtimeComposerComponent {
    * Default `false` (the full 5-button strip is unchanged).
    */
   @Input() Compact = false;
+
+  /**
+   * Whether the Type buttons render (the strip's Type control and the lean dock's "Type" entry
+   * in the "•••" sheet). The overlay binds its resolved `allowTyping`. Only the controls that
+   * OPEN the typed-input dock are gated: an already-open dock keeps its hide control and Send.
+   * Default `true`.
+   */
+  @Input() AllowTyping = true;
+
+  /**
+   * Whether the End-call button renders in every layout. The overlay binds its resolved
+   * end-control switch; a host that ends the call elsewhere turns it off. Default `true`.
+   */
+  @Input() ShowEnd = true;
+
+  /**
+   * Whether the Captions toggle renders in every layout. This hides the control only; the
+   * caption state itself (`CaptionsOn`) is unaffected. Default `true`.
+   */
+  @Input() ShowCaptionsControl = true;
 
   /** Emitted when the user opens (Type control / typing) or closes (hide control) the dock. */
   @Output() OpenChanged = new EventEmitter<boolean>();
@@ -134,6 +154,7 @@ export class RealtimeComposerComponent {
   @ViewChild('dockInput') private dockInput?: ElementRef<HTMLInputElement | HTMLTextAreaElement>;
 
   private realtime = inject(RealtimeSessionService);
+  private cdr = inject(ChangeDetectorRef);
 
   /** The captions control's tooltip: what a click does. */
   public get CaptionsTitle(): string {
@@ -151,10 +172,19 @@ export class RealtimeComposerComponent {
   }
 
   /**
-   * Whether the compact "•••" overflow sheet (Captions / Details / Type) is open. Only used
-   * in {@link Compact} strip mode; any outside click or action selection closes it.
+   * Whether the compact "•••" overflow sheet (inactive Camera / Share, Details, Type) is open. Only
+   * used in {@link Compact} strip mode; any outside click or action selection closes it.
    */
   public MoreOpen = false;
+
+  /**
+   * Whether the compact "•••" sheet has anything to hold: an inactive camera or share, Details, or
+   * Type. When the host switches all of them off, the "•••" itself goes, so it never opens an empty
+   * sheet. Mirrors the sheet's own `@if` blocks in the template, so keep the two in step.
+   */
+  public get HasMoreItems(): boolean {
+    return this.AllowTyping || this.ShowDetails || (this.ShowCamera && !this.CameraOn) || (this.ShowShare && !this.Sharing);
+  }
 
   /** Open/close the compact overflow sheet (stops propagation so the outside-click close skips it). */
   public ToggleMore(event: MouseEvent): void {
@@ -198,6 +228,7 @@ export class RealtimeComposerComponent {
    */
   public AppendAndFocus(text: string): void {
     this.Draft = (this.Draft ?? '') + text;
+    this.cdr.markForCheck();
     const el = this.dockInput?.nativeElement;
     if (el) {
       el.value = this.Draft;

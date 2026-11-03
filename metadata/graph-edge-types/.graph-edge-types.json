@@ -1,0 +1,184 @@
+[
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "SourcedFrom",
+      "Description": "Connects a synthesized or curated GraphConcept to a supporting ContentItemChunk or document.",
+      "IsDirected": true,
+      "InverseName": "SourceOf",
+      "DefaultWeight": 0.9,
+      "AllowStored": true
+    },
+    "primaryKey": {
+      "ID": "BF510E50-BDD5-4B44-8688-BF6689F44E00"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Mentions",
+      "Description": "Connects a ContentItemChunk or document to a GraphConcept or entity record mentioned within its text.",
+      "IsDirected": true,
+      "InverseName": "MentionedIn",
+      "DefaultWeight": 0.75,
+      "AllowStored": true
+    },
+    "primaryKey": {
+      "ID": "183EF614-BB17-4918-9DB2-491B77291218"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Broader Than",
+      "Description": "Connects a parent or umbrella concept to a more specific child concept.",
+      "IsDirected": true,
+      "InverseName": "Narrower Than",
+      "DefaultWeight": 0.85,
+      "AllowStored": true
+    },
+    "primaryKey": {
+      "ID": "12797109-63C1-4581-BDB4-F1816020ACBF"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "NarrowerThan",
+      "Description": "Connects a specific concept to its broader parent concept.",
+      "IsDirected": true,
+      "InverseName": "BroaderThan",
+      "DefaultWeight": 0.85,
+      "AllowStored": true
+    },
+    "primaryKey": {
+      "ID": "2AC4EAD6-1FF7-44FB-9C6C-BE13451FE40D"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Defines",
+      "Description": "Connects a canonical Term or Policy concept to the Entity, Alternate Base View, or Concept it formally defines.",
+      "IsDirected": true,
+      "InverseName": "DefinedBy",
+      "DefaultWeight": 1,
+      "AllowStored": true
+    },
+    "primaryKey": {
+      "ID": "8DB67056-D702-46E4-82ED-A7E2A11D15CA"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Describes",
+      "Description": "Connects a Domain or Policy concept to the Entity or resource it describes.",
+      "IsDirected": true,
+      "InverseName": "DescribedBy",
+      "DefaultWeight": 0.9,
+      "AllowStored": true
+    },
+    "primaryKey": {
+      "ID": "8FE3F834-989C-44F6-9F86-45848284CC68"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Measures",
+      "Description": "Connects a Metric concept to the Golden Query, Entity, or Alternate Base View that computes it.",
+      "IsDirected": true,
+      "InverseName": "MeasuredBy",
+      "DefaultWeight": 0.95,
+      "AllowStored": true
+    },
+    "primaryKey": {
+      "ID": "57EC0A4D-B9FD-4C63-ADB1-8D5C3A70A3DA"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Implements",
+      "Description": "Connects a Process concept to the Action, AI Agent, or Workflow that implements it.",
+      "IsDirected": true,
+      "InverseName": "ImplementedBy",
+      "DefaultWeight": 0.95,
+      "AllowStored": true
+    },
+    "primaryKey": {
+      "ID": "F38FBF6D-95F2-4775-A370-DC47A5DFB069"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Governs",
+      "Description": "Connects a Policy or Steward Role concept to the Process, Domain, or Entity it governs.",
+      "IsDirected": true,
+      "InverseName": "GovernedBy",
+      "DefaultWeight": 0.95,
+      "AllowStored": true
+    },
+    "primaryKey": {
+      "ID": "8FC20B23-DBFC-4172-B761-63C615A36B90"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "DependsOn",
+      "Description": "Connects a concept, metric, or workflow to another concept it depends upon.",
+      "IsDirected": true,
+      "InverseName": "RequiredBy",
+      "DefaultWeight": 0.9,
+      "AllowStored": true
+    },
+    "primaryKey": {
+      "ID": "7D0D294E-5574-4DE4-A91D-361EEB1F65C2"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Contradicts",
+      "Description": "Flags a discrepancy or conflicting numeric/policy threshold between two chunks or concepts for steward review.",
+      "IsDirected": true,
+      "InverseName": "ContradictedBy",
+      "DefaultWeight": 1,
+      "AllowStored": true
+    },
+    "primaryKey": {
+      "ID": "C6DAD64F-47EE-4C36-A073-0506F7C5412C"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Supersedes",
+      "Description": "Indicates that a newer or higher-authority concept or policy supersedes an older one.",
+      "IsDirected": true,
+      "InverseName": "SupersededBy",
+      "DefaultWeight": 0.9,
+      "AllowStored": true
+    },
+    "primaryKey": {
+      "ID": "AD211AAB-6F32-4BC7-8F5E-8AD956575215"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "RelatedTo",
+      "Description": "General symmetric association between two concepts or records.",
+      "IsDirected": false,
+      "InverseName": "RelatedTo",
+      "DefaultWeight": 0.7,
+      "AllowStored": true
+    },
+    "primaryKey": {
+      "ID": "74F99704-2356-4CBE-8938-AEB8388DCDD5"
+    }
+  }
+]

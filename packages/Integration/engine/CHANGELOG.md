@@ -1,5 +1,121 @@
 # @memberjunction/integration-engine
 
+## 6.2.0-edge.7
+
+### Minor Changes
+
+- ccfd553: Integration GraphQL additions: `IntegrationStartSchemaRefresh` (detached discovery start returning a tailable run id), live `RecordsCreated/Updated/Errored/Skipped` that actually count, offset paging on sync history and run listing with per-entity counts recovered from the run artifact, `IntegrationGetActiveOperations`, and `IntegrationProbeCredentials` (tests credentials without persisting anything).
+
+### Patch Changes
+
+- 794660a: Discovery no longer caps a sampled string width at 4000 when twice the observed value exceeds it: past 2,000 observed characters it returns MAX, and `MergeLength` treats MAX as unbounded (1,001–2,000 observed keeps 4000, which holds 2–4x it); fixes that lived only in a deployed patch set — the first-discovery heal (now scoped to the objects it missed, reported as a warning if it fails, and reporting the first pass's counts), the run-boundary watermark pin, the prefetch-cache leak — are in source with pinning tests; a relative import without `.js` is a guarded boot error. A keyset scan whose page hits the fetch timeout is suspended for the run (no retry, no page-skip re-request stacked on the abandoned attempt) and resumes from its persisted key next run, where the page is retried; the record-map and run-detail saves enrol in an active write group like the entity saves. A run that leaves objects INCOMPLETE — suspended, aborted, pages skipped or overlapped, or short of the source's stated total — names them in its completion message after any error count, and the REST base now passes the API's stated total out as `SourceTotalRecords`.
+- 4283a82: `SafeExpressionEvaluator` now allowlists identifiers instead of denying a fixed list, and field-rule / integration formulas go through the same screen before they compile (#5569, CodeQL #183, #184, #185).
+  - **Identifiers.** A free name must be an evaluation-context key, an arrow-function parameter in scope, `undefined`/`NaN`/`Infinity`, or an approved global (`APPROVED_EXPRESSION_GLOBALS`) used as a call. `fetch`, `setTimeout` and every other host global are refused, as are approved globals used as values or callbacks (`Math.PI`, `items.map(Number)`, `Object.assign`).
+  - **Callbacks.** `.some()`, `.every()`, `.find()`, `.filter()`, `.map()` and `.reduce()` take only an inline arrow function. Arrow functions are not allowed anywhere else. `JSON.parse`/`JSON.stringify` take only a literal or array literal as the reviver/replacer.
+  - **Context keys** must match `/^[A-Za-z_$][\w$]*$/`; any other key fails the evaluation. Function-valued properties of class instances are dropped from the cloned context.
+  - **New API.** `SafeExpressionEvaluator.ScreenExpression(expression, allowedIdentifiers)` screens without compiling. `ValidateSyntax` takes optional `contextKeys`.
+  - **Formulas.** `FieldTransformEngine` screens `formula` and `custom` expressions with `value` and `fields` as the only names. A rejected expression throws `Expression rejected: ...` and is handled by the step's `OnError` policy like a compile error.
+  - **Methods.** Added pure string/array/number methods to the safe-method list: `split`, `slice`, `substring`, `join`, `concat`, `charAt`, `at`, `padStart`, `padEnd`, `toFixed`, `toPrecision`.
+  - Unbalanced-parenthesis errors are reported only when the expression fails to parse, so a parenthesis inside a string literal no longer rejects it.
+  - Tests in `ai-core-plus` and `integration-engine` updated for the new rules (approved namespace methods are no longer readable as values; a malformed custom expression is now refused by the screen before `Function` is reached).
+
+- d659bb2: `ActionMetadataGenerator` writes a `primaryKey` on every generated Action, Action Param and Action Result Code. Before, its records carried only `fields`, so `mj sync push` inserted every action again on each push of regenerated metadata. A new optional `ExistingActionRecords` config takes the previously generated records and reuses their IDs: actions match by `Name`, params by `Name` + `Type`, result codes by `ResultCode`. A regenerated file then updates the rows it created before. No ID is handed out twice.
+- 2c38278: `IntegrationEngineBase` no longer loads `MJ: Company Integration Field Maps` at startup. A consumer reads the field maps of one entity map on demand with `LoadFieldMapsForEntityMap(entityMapID, contextUser?, provider?)`.
+
+  The engine is `@RegisterForStartup`, so every server process and every browser tab loaded the whole field-map table. A deployment with about 86,000 field maps read about 88 MB per load. That result is larger than the per-entry cache limit, so it was never cached and every load went back to the database. On a production API each load blocked the event loop for 9 to 13 seconds. The only reader, the integration mapping workspace, reads one entity map at a time.
+  - Removed from `IntegrationEngineBase`: the `FieldMaps` getter, `GetFieldMapsForEntityMap`, and the `FieldMaps` option of `SeedForTesting`.
+  - Removed from `IntegrationEngine`: the `FieldMaps` pass-through. `GetFieldMapsForEntityMap` is replaced by `LoadFieldMapsForEntityMap(entityMapID, contextUser?)`.
+  - `IntegrationDataService.LoadFieldMaps` reads through `LoadFieldMapsForEntityMap` and now uses the provider it is given.
+  - `LoadFieldMapsForEntityMap` throws when the read fails, so a failed read is not taken for an entity map with no field maps.
+
+- 9a2d7cc: RunView's `TotalRowCount` contract is now explicit: a number is always a real total, and `undefined` means the caller passed `SkipTotalRowCount: true`.
+
+  **Contract change.** `RunViewResult.TotalRowCount` is now optional (`TotalRowCount?: number`). With `SkipTotalRowCount: true` it is always `undefined`, including on a page that was not full, where it used to be the number of rows returned. A caller that needs a total must not pass the flag. Strict TypeScript consumers that read the field will see a compile error; a call without the flag always gets a number, so `?? 0` is safe there. `ResultType: 'count_only'` ignores the flag and always counts.
+
+  `MaxRows: 1` is no longer special-cased: a full page of one row now runs the same count as any other full page and reports the real total. Callers that only read `Results` should pass `SkipTotalRowCount: true` to avoid that second query; about 270 such reads in this repo now do. `SkipTotalRowCount` is now sent over GraphQL, so browser callers can use it too.
+
+- 3f92ec2: Sync lifecycle: `IntegrationGetResourcePressure` plus run warnings before a host runs out of memory or disk; deactivating a connection pauses its schedules, requests cancel of an in-flight sync and refuses refresh/evolution with a named reason; schema evolution offers accumulated custom columns and materialises accepted ones in the same migration; connectors declare a `SettingsSchema` exposed by `IntegrationGetConnectorSettingsSchema`.
+- 48d2b32: Sync sheds load under host memory pressure instead of only warning about it.
+
+  `ResourcePressure` previously watched the V8 heap, which cannot see the memory that actually
+  kills a sync: `--max-old-space-size` bounds old space only, while an HTTP response body lives in
+  `Buffer`/`ArrayBuffer` — external, and counted in neither. A throttle watching the heap reads
+  healthy right up to the kill. Measured on a 3,830 MB box: the kernel killed node at 3,478 MB RSS
+  against a 1,964 MB heap ceiling — 1.8x — with heap usage unremarkable.
+
+  It now also reads host RAM from `/proc/meminfo` (MemAvailable, not MemFree, which excludes
+  reclaimable page cache and reads far tighter than what a process can obtain) and reports
+  `ResidentFraction`. Where both thresholds trip, the worse of the two is reported under one code,
+  so a caller has a single number to act on.
+
+  `MemoryGovernor` decides and `RunMemoryControl` applies, split so the decision is testable without
+  a live sync. The governor runs PER BATCH rather than between entity maps: a table fetching twelve
+  consecutive 2,000-record pages allocates all of it without ever reaching a boundary, which is the
+  difference between noticing and dying. One control per run, never shared — the engine is a
+  singleton across concurrent syncs, so calibration held on it would let one connection's behaviour
+  throttle another's.
+
+  `AdaptiveConcurrency` gains `Hold()`/`Release()`: stop the cap GROWING without lowering it. The
+  cheapest possible response — everything in flight keeps running and nothing new is admitted — so
+  it costs no throughput. Without it the only options were "carry on" and "halve", and halving work
+  that is already succeeding is a real cost paid for a problem holding would have solved.
+
+  Memory pressure feeds the SAME AIMD signal a source rate-limit uses, so no per-connector tuning
+  and no advance knowledge of which connector misbehaves is required: a connector returning 10x the
+  requested batch costs 10x the memory, the reading notices, and the cap follows. The floor is 1, so
+  a sync always makes progress rather than deadlocking on a full box.
+
+  `ResourcePressureOutput` exposes `ResidentFraction`, `HostMemTotalMB` and `HostMemAvailableMB`.
+
+  The governor judges pressure on the HOST — memory in use, `MemTotal - MemAvailable` — not this
+  process's RSS, and sheds above 0.85 / releases below 0.75. RSS counts heap the deployment gave V8
+  on purpose: with the heap sized at (RAM - 1 GB) x 0.70, a large workspace sits at 72.7% of RAM five
+  minutes after a restart with nothing running, so a 0.70 trigger fired on ordinary work and a 0.55
+  release line sat below the idle floor. It takes at most one step per run every 10 s
+  (`DECISION_INTERVAL_MS`), whichever map reports, and under the release line gives one step back:
+  `ReleaseAdmissions` lets the concurrency controller ramp again and the page doubles back to its
+  configured size. Measured on a 825-table sync before this: five tables at 25 records a page for 75
+  minutes while 711 never started. `EvaluatePressure` uses the same reading and line.
+
+- 94e3a12: A sync's numbers, warnings and successes now correspond to what the run did: `RecordsSynced` counts records written (not created+updated+skipped+errored) and is finalised after the loop, so an object that completes in one page no longer sits at 0 forever; a discovery re-checks its connection before persisting and refuses when it has been deleted (which on the shared catalog used to succeed and overwrite the declared floor); discovery completion messages name the field counts, so a run that created 69 fields no longer reports "0 objects created, 0 updated"; repeated warnings are rolled up by code instead of burying a run under one cause, and the rollup keeps what each rolled-up occurrence reported; the batch apply and the schema evolution surface the declared-but-deactivated row warnings the single apply already had; the single apply reads `APIRestarted` from the pipeline, filters its fallback describe, and invalidates the catalog caches the batch always did; and the record-map read streams to its caller rather than holding every row of the table in memory.
+- c8fb9d7: Keep the real row total where a variable `MaxRows` can be 1 (#6000). Run-history retention reads `keep + 1` runs and counts them, so `MJ_INTEGRATION_MAX_RUNS_PER_CI=1` prunes again. The list, view and filter record-set sources read two rows for a batch of one and keep the first, so the reported progress total stays the full count.
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [91cba84]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [2c38278]
+- Updated dependencies [ccfd553]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [6779eed]
+- Updated dependencies [397ae9a]
+- Updated dependencies [89a5b59]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [14c7719]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/integration-engine-base@6.2.0-edge.7
+  - @memberjunction/integration-progress-artifacts@6.2.0-edge.7
+  - @memberjunction/integration-pk-classifier@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes
