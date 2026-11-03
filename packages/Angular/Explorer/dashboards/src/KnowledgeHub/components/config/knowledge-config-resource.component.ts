@@ -10,7 +10,7 @@ import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '
 import { Subject } from 'rxjs';
 import { CompositeKey, Metadata, RunView, LogError } from '@memberjunction/core';
 import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity, MJEntityDocumentEntity, MJCredentialEntity, KnowledgeHubMetadataEngine, MJSearchScopeEntity } from '@memberjunction/core-entities';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual, UUIDMap, IndexByUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
@@ -613,23 +613,23 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
      * so the unscoped audit-only path still gets human-readable labels.
      */
     private async computeAnalyticsTopScopes(rows: AnalyticsRow[]): Promise<void> {
-        const byScope = new Map<string, { Count: number; LatencySum: number; ScopeID: string }>();
+        const byScope = new UUIDMap<{ Count: number; LatencySum: number; ScopeID: string }>();
         for (const r of rows) {
             const id = r.SearchScopeID ?? '__unscoped__';
-            const cur = byScope.get(id) ?? { Count: 0, LatencySum: 0, ScopeID: id };
+            const cur = byScope.Get(id) ?? { Count: 0, LatencySum: 0, ScopeID: id };
             cur.Count++;
             cur.LatencySum += r.TotalDurationMs ?? 0;
-            byScope.set(id, cur);
+            byScope.Set(id, cur);
         }
-        const scopeNameMap = new Map(this.SearchScopes.map(s => [s.ID, s.Name]));
-        if (this.SearchScopes.length === 0 && byScope.size > 0) {
+        const scopeNameMap = new UUIDMap(this.SearchScopes.map(s => [s.ID, s.Name] as const));
+        if (this.SearchScopes.length === 0 && byScope.Size > 0) {
             await this.LoadSearchScopes();
-            this.SearchScopes.forEach(s => scopeNameMap.set(s.ID, s.Name));
+            this.SearchScopes.forEach(s => scopeNameMap.Set(s.ID, s.Name));
         }
-        this.AnalyticsTopScopes = Array.from(byScope.values())
+        this.AnalyticsTopScopes = Array.from(byScope.Values())
             .map(g => ({
                 ScopeID: g.ScopeID,
-                Name: scopeNameMap.get(g.ScopeID) ?? (g.ScopeID === '__unscoped__' ? '— unscoped —' : `(${g.ScopeID.slice(0, 8)}…)`),
+                Name: scopeNameMap.Get(g.ScopeID) ?? (g.ScopeID === '__unscoped__' ? '— unscoped —' : `(${g.ScopeID.slice(0, 8)}…)`),
                 Count: g.Count,
                 AvgLatencyMs: Math.round(g.LatencySum / g.Count),
             }))
@@ -780,22 +780,22 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         users: Array<{ ID: string; Name: string; Email: string }>;
         roles: Array<{ ID: string; Name: string }>;
     }): typeof this.PermissionsRows {
-        const scopeName = new Map(data.scopes.map(s => [s.ID, s.Name]));
-        const userByID = new Map(data.users.map(u => [u.ID, u]));
-        const roleName = new Map(data.roles.map(r => [r.ID, r.Name]));
+        const scopeName = new UUIDMap(data.scopes.map(s => [s.ID, s.Name] as const));
+        const userByID = IndexByUUID(data.users);
+        const roleName = new UUIDMap(data.roles.map(r => [r.ID, r.Name] as const));
         return data.perms
-            .filter(p => scopeName.has(p.SearchScopeID))
+            .filter(p => scopeName.Has(p.SearchScopeID))
             .map(p => {
-                const u = p.UserID ? userByID.get(p.UserID) : null;
+                const u = p.UserID ? userByID.Get(p.UserID) : null;
                 return {
                     ID: p.ID,
                     SearchScopeID: p.SearchScopeID,
-                    SearchScopeName: scopeName.get(p.SearchScopeID) ?? '(unknown)',
+                    SearchScopeName: scopeName.Get(p.SearchScopeID) ?? '(unknown)',
                     UserID: p.UserID,
                     UserName: u?.Name ?? null,
                     UserEmail: u?.Email ?? null,
                     RoleID: p.RoleID,
-                    RoleName: p.RoleID ? (roleName.get(p.RoleID) ?? '(unknown)') : null,
+                    RoleName: p.RoleID ? (roleName.Get(p.RoleID) ?? '(unknown)') : null,
                     PermissionLevel: p.PermissionLevel,
                 };
             });

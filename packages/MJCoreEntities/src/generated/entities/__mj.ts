@@ -9886,10 +9886,11 @@ export const MJActionSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
         * * Description: Default prompt for compacting/summarizing this action's results when used by agents with CompactMode=AISummary. Action designers define how their specific results should be summarized. Can be overridden per agent in AIAgentAction.CompactPromptID.`),
-    Config_: z.string().nullable().describe(`
+    Config_: z.any().nullable().describe(`
         * * Field Name: Config
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJActionEntity_IActionConfiguration
         * * Description: Optional JSON configuration for the action. For integration actions, contains routing info: integrationName, objectName, verb, and optional connectorConfig. Non-integration actions leave this NULL.`),
     RuntimeActionConfiguration: z.any().nullable().describe(`
         * * Field Name: RuntimeActionConfiguration
@@ -15743,6 +15744,12 @@ export const MJContentSourceSchema = z.object({
         * * Display Name: Last Synced At
         * * SQL Data Type: datetimeoffset
         * * Description: When this source last completed a full Sync walk (reconciling removals). Stamped with the time a completed sync walk started. The shipped Sync Record Process selects sources by LastSyncedAt (LastSyncedAt IS NULL OR LastSyncedAt < DATEADD(day, -30, GETUTCDATE())), never by ForceDiscovery; to force a sync, set LastSyncedAt back or to NULL.`),
+    GraphID: z.string().nullable().describe(`
+        * * Field Name: GraphID
+        * * Display Name: Graph ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
+        * * Description: Optional target Semantic Graph (MJ: Graphs) that this Content Source populates when the Content Pipeline Graph overlay stage runs. Multiple Content Sources can share the same GraphID.`),
     ContentType: z.string().describe(`
         * * Field Name: ContentType
         * * Display Name: Content Type Name
@@ -15775,6 +15782,10 @@ export const MJContentSourceSchema = z.object({
         * * Field Name: ScheduledJob
         * * Display Name: Scheduled Job Name
         * * SQL Data Type: nvarchar(200)`),
+    Graph: z.string().nullable().describe(`
+        * * Field Name: Graph
+        * * Display Name: Graph
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJContentSourceEntityType = z.infer<typeof MJContentSourceSchema>;
@@ -17040,6 +17051,49 @@ export const MJConversationSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
         * * Description: Conversation-altitude returning-visitor chain (R2). Self-foreign-key to the visitor's immediately prior Conversation (found by VisitorKey or the resolved LinkedEntityID/LinkedRecordID pair at mint time). History and memory are conversation-scoped, so the chain lives here — NOT on AIAgentSession.LastSessionID, which owns reconnect/resume semantics and is walked by the replay viewer. Named to mirror AIAgentSession.LastSessionID. NULL for a brand-new visitor's first conversation.`),
+    AnchorType: z.union([z.literal('Contribution'), z.literal('DocBlock'), z.literal('Field'), z.literal('Group'), z.literal('Record'), z.literal('Section'), z.literal('SheetRange'), z.literal('SlideRegion')]).nullable().describe(`
+        * * Field Name: AnchorType
+        * * Display Name: Anchor Type
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Contribution
+    *   * DocBlock
+    *   * Field
+    *   * Group
+    *   * Record
+    *   * Section
+    *   * SheetRange
+    *   * SlideRegion
+        * * Description: Fine-grained anchor discriminator when this conversation acts as an inline comment thread on a linked record or artifact. NULL for standard chat conversations. Allowed values: Record (whole-record comment), Field (anchored to an EntityField), Section (anchored to a CollapsiblePanel section), Group (anchored to a left-nav rail group/tab), Contribution (anchored to a related-entity grid or form contribution), DocBlock (anchored to a document block in MJ Docs), SlideRegion (anchored to a slide or element in MJ Slides), SheetRange (anchored to a cell range in MJ Sheets). Requires LinkedEntityID and LinkedRecordID when non-null.`),
+    AnchorKey: z.string().nullable().describe(`
+        * * Field Name: AnchorKey
+        * * Display Name: Anchor Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Identifier of the specific element within the linked record to which this conversation is anchored. For AnchorType = 'Field', stores EntityField.Name (for example 'AnnualRevenue'). For 'Section', stores the CollapsiblePanel SectionKey. For 'Group', stores the form nav GroupKey. For 'Contribution', stores the contribution or related-grid key. For 'DocBlock', 'SlideRegion', or 'SheetRange', stores the block ID, slide/region key, or A1 cell range. NULL when AnchorType is NULL or 'Record'.`),
+    AnchorMetadata: z.any().nullable().describe(`
+        * * Field Name: AnchorMetadata
+        * * Display Name: Anchor Metadata
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJConversationEntity_IConversationAnchorMetadata
+        * * Description: JSON payload (IConversationAnchorMetadata) capturing display labels, parent section/group keys for badge rollup, quoted field value snapshot at comment creation time, FLS restrictedFields referenced by the thread, or document/slide/sheet selection coordinates.`),
+    IsResolved: z.boolean().describe(`
+        * * Field Name: IsResolved
+        * * Display Name: Is Resolved
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this anchored comment thread has been marked resolved. Defaults to 0 (open). Resolved threads remain queryable for audit and history but are hidden from open-comment count badges on form fields, sections, and navigation rails.`),
+    ResolvedByUserID: z.string().nullable().describe(`
+        * * Field Name: ResolvedByUserID
+        * * Display Name: Resolved By User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: User who most recently marked this anchored conversation thread as resolved. NULL when IsResolved = 0.`),
+    ResolvedAt: z.date().nullable().describe(`
+        * * Field Name: ResolvedAt
+        * * Display Name: Resolved At
+        * * SQL Data Type: datetimeoffset
+        * * Description: UTC timestamp when this anchored conversation thread was most recently marked resolved. NULL when IsResolved = 0.`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -17080,6 +17134,10 @@ export const MJConversationSchema = z.object({
         * * Field Name: LastConversation
         * * Display Name: Last Conversation
         * * SQL Data Type: nvarchar(255)`),
+    ResolvedByUser: z.string().nullable().describe(`
+        * * Field Name: ResolvedByUser
+        * * Display Name: Resolved By User
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJConversationEntityType = z.infer<typeof MJConversationSchema>;
@@ -23838,6 +23896,620 @@ export const MJGeneratedCodeSchema = z.object({
 });
 
 export type MJGeneratedCodeEntityType = z.infer<typeof MJGeneratedCodeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Graph Authority Tiers
+ */
+export const MJGraphAuthorityTierSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique display name of the authority tier (e.g., Bylaws, Board Policy, Executive SOP, Department Practice, Reference, Inferred).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Plain-language description of what sources belong to this authority tier and how conflicts involving this tier should be resolved.`),
+    Rank: z.number().describe(`
+        * * Field Name: Rank
+        * * Display Name: Rank
+        * * SQL Data Type: int
+        * * Default Value: 20
+        * * Description: Numeric evidentiary precedence weight of the authority tier (higher numbers outrank lower numbers during conflict resolution, e.g., 100 for Bylaws vs 20 for Reference).`),
+    IconClass: z.string().nullable().describe(`
+        * * Field Name: IconClass
+        * * Display Name: Icon Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Optional Font Awesome CSS icon class used to render authority tier badges in the UI.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Operational status of the authority tier (Active or Inactive).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJGraphAuthorityTierEntityType = z.infer<typeof MJGraphAuthorityTierSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Graph Concept Types
+ */
+export const MJGraphConceptTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique name of the concept type (e.g., Policy, Metric, Process, Role, Domain, Term).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Plain-language definition and classification guidance describing what qualifies as a concept of this type.`),
+    Rank: z.number().describe(`
+        * * Field Name: Rank
+        * * Display Name: Rank
+        * * SQL Data Type: int
+        * * Default Value: 100
+        * * Description: Precedence and display rank order of this concept type (lower numbers represent higher-order institutional concepts such as Policy and Metric ahead of granular Terms).`),
+    IconClass: z.string().nullable().describe(`
+        * * Field Name: IconClass
+        * * Display Name: Icon Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Optional Font Awesome CSS icon class used to render concept nodes of this type in graph explorers and cards.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Operational status of the concept type (Active or Inactive).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJGraphConceptTypeEntityType = z.infer<typeof MJGraphConceptTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Graph Concepts
+ */
+export const MJGraphConceptSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    GraphID: z.string().describe(`
+        * * Field Name: GraphID
+        * * Display Name: Graph ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Concepts (vwGraphConcepts.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Canonical name of the concept, unique within its owning GraphID.`),
+    ConceptTypeID: z.string().describe(`
+        * * Field Name: ConceptTypeID
+        * * Display Name: Concept Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Concept Types (vwGraphConceptTypes.ID)
+        * * Description: Foreign key to GraphConceptType classifying the structural role and priority rank of this concept.`),
+    AuthorityTierID: z.string().nullable().describe(`
+        * * Field Name: AuthorityTierID
+        * * Display Name: Authority Tier ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Authority Tiers (vwGraphAuthorityTiers.ID)
+        * * Description: Optional foreign key to GraphAuthorityTier indicating the highest evidentiary authority tier backing this concept.`),
+    Description: z.string().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Concise 1-3 sentence definition (~100 tokens) injected into agent subgraphs and search results.`),
+    Specification: z.string().nullable().describe(`
+        * * Field Name: Specification
+        * * Display Name: Specification
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Structured markdown specification containing authoritative rules, thresholds, decision tables, exceptions, and chunk citations.`),
+    Synonyms: z.string().nullable().describe(`
+        * * Field Name: Synonyms
+        * * Display Name: Synonyms
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of alternative names, acronyms, and surface forms that resolve to this concept.`),
+    Status: z.union([z.literal('Approved'), z.literal('Deprecated'), z.literal('Draft'), z.literal('Proposed')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Deprecated
+    *   * Draft
+    *   * Proposed
+        * * Description: Governance lifecycle status of the concept: Draft, Proposed, Approved, or Deprecated.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Graph: z.string().describe(`
+        * * Field Name: Graph
+        * * Display Name: Graph
+        * * SQL Data Type: nvarchar(255)`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)`),
+    ConceptType: z.string().describe(`
+        * * Field Name: ConceptType
+        * * Display Name: Concept Type
+        * * SQL Data Type: nvarchar(100)`),
+    AuthorityTier: z.string().nullable().describe(`
+        * * Field Name: AuthorityTier
+        * * Display Name: Authority Tier
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJGraphConceptEntityType = z.infer<typeof MJGraphConceptSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Graph Edge Providers
+ */
+export const MJGraphEdgeProviderSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    GraphID: z.string().describe(`
+        * * Field Name: GraphID
+        * * Display Name: Graph ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name of this provider registration within the graph.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of which derived edges this provider projects into the graph.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: ClassFactory registration key of the BaseGraphEdgeProvider subclass.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Provider-specific JSON configuration object passed to the provider at query time.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Execution order of this provider relative to other providers on the same graph.`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, this provider participates in graph expansion queries; when 0, it is skipped.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Graph: z.string().describe(`
+        * * Field Name: Graph
+        * * Display Name: Graph
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJGraphEdgeProviderEntityType = z.infer<typeof MJGraphEdgeProviderSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Graph Edge Type Endpoints
+ */
+export const MJGraphEdgeTypeEndpointSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EdgeTypeID: z.string().describe(`
+        * * Field Name: EdgeTypeID
+        * * Display Name: Edge Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Edge Types (vwGraphEdgeTypes.ID)`),
+    Side: z.union([z.literal('Source'), z.literal('Target')]).describe(`
+        * * Field Name: Side
+        * * Display Name: Side
+        * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Source
+    *   * Target
+        * * Description: Which endpoint of the edge this entity constraint applies to (Source or Target).`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    EdgeType: z.string().describe(`
+        * * Field Name: EdgeType
+        * * Display Name: Edge Type
+        * * SQL Data Type: nvarchar(100)`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJGraphEdgeTypeEndpointEntityType = z.infer<typeof MJGraphEdgeTypeEndpointSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Graph Edge Types
+ */
+export const MJGraphEdgeTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    GraphID: z.string().nullable().describe(`
+        * * Field Name: GraphID
+        * * Display Name: Graph ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Forward-direction label of the edge type (e.g., Broader Than, Defines, SourcedFrom).`),
+    Description: z.string().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Plain-language definition of what this relationship type means when connecting two nodes.`),
+    IsDirected: z.boolean().describe(`
+        * * Field Name: IsDirected
+        * * Display Name: Is Directed
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, the edge is directed from Source to Target; when 0, the relationship is symmetric/undirected.`),
+    InverseName: z.string().nullable().describe(`
+        * * Field Name: InverseName
+        * * Display Name: Inverse Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Inverse label shown when traversing a directed edge from Target back to Source (e.g., Narrower Than for Broader Than).`),
+    DefaultWeight: z.number().describe(`
+        * * Field Name: DefaultWeight
+        * * Display Name: Default Weight
+        * * SQL Data Type: decimal(5, 4)
+        * * Default Value: 1.0
+        * * Description: Default retrieval weight (0.0000 to 1.0000) assigned to edges of this type during multi-hop graph expansion.`),
+    AllowStored: z.boolean().describe(`
+        * * Field Name: AllowStored
+        * * Display Name: Allow Stored
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, rows of this edge type may be persisted in GraphEdge; when 0, edges of this type are produced exclusively at read time by a GraphEdgeProvider.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Graph: z.string().nullable().describe(`
+        * * Field Name: Graph
+        * * Display Name: Graph
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJGraphEdgeTypeEntityType = z.infer<typeof MJGraphEdgeTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Graph Edges
+ */
+export const MJGraphEdgeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    GraphID: z.string().describe(`
+        * * Field Name: GraphID
+        * * Display Name: Graph ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)`),
+    EdgeTypeID: z.string().describe(`
+        * * Field Name: EdgeTypeID
+        * * Display Name: Edge Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Edge Types (vwGraphEdgeTypes.ID)`),
+    SourceEntityID: z.string().describe(`
+        * * Field Name: SourceEntityID
+        * * Display Name: Source Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+    SourceRecordID: z.string().describe(`
+        * * Field Name: SourceRecordID
+        * * Display Name: Source Record ID
+        * * SQL Data Type: nvarchar(400)
+        * * Description: Record ID of the source node (compact URL segment for composite primary keys), paired with SourceEntityID.`),
+    TargetEntityID: z.string().describe(`
+        * * Field Name: TargetEntityID
+        * * Display Name: Target Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+    TargetRecordID: z.string().describe(`
+        * * Field Name: TargetRecordID
+        * * Display Name: Target Record ID
+        * * SQL Data Type: nvarchar(400)
+        * * Description: Record ID of the target node (compact URL segment for composite primary keys), paired with TargetEntityID.`),
+    Weight: z.number().describe(`
+        * * Field Name: Weight
+        * * Display Name: Weight
+        * * SQL Data Type: decimal(5, 4)
+        * * Default Value: 1.0
+        * * Description: Retrieval pull weight (0.0000 to 1.0000) used when scoring multi-hop graph paths.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human-readable explanation or provenance summary for why this edge connects the source and target nodes.`),
+    Attributes: z.string().nullable().describe(`
+        * * Field Name: Attributes
+        * * Display Name: Attributes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON object holding structured edge metadata (such as citations, authority tiers, or conflict details).`),
+    Origin: z.union([z.literal('Declared'), z.literal('Inferred')]).describe(`
+        * * Field Name: Origin
+        * * Display Name: Origin
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Declared
+    *   * Inferred
+        * * Description: How this edge was created: Declared (explicitly authored by a human or seed metadata) or Inferred (proposed by an AI or content pipeline stage).`),
+    Status: z.union([z.literal('Approved'), z.literal('Proposed'), z.literal('Rejected')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Approved
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Proposed
+    *   * Rejected
+        * * Description: Governance lifecycle status of the edge: Proposed, Approved, or Rejected. Default graph traversal includes Approved edges only.`),
+    Confidence: z.number().nullable().describe(`
+        * * Field Name: Confidence
+        * * Display Name: Confidence
+        * * SQL Data Type: decimal(5, 4)
+        * * Description: Confidence score (0.0000 to 1.0000) for Inferred edges; NULL for Declared edges.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Graph: z.string().describe(`
+        * * Field Name: Graph
+        * * Display Name: Graph
+        * * SQL Data Type: nvarchar(255)`),
+    EdgeType: z.string().describe(`
+        * * Field Name: EdgeType
+        * * Display Name: Edge Type
+        * * SQL Data Type: nvarchar(100)`),
+    SourceEntity: z.string().describe(`
+        * * Field Name: SourceEntity
+        * * Display Name: Source Entity
+        * * SQL Data Type: nvarchar(255)`),
+    TargetEntity: z.string().describe(`
+        * * Field Name: TargetEntity
+        * * Display Name: Target Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJGraphEdgeEntityType = z.infer<typeof MJGraphEdgeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Graph Types
+ */
+export const MJGraphTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique display name of the graph type (e.g., Canon, Knowledge, Network, Custom).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Plain-language description of what graphs of this type represent and how agents should use them.`),
+    IsCanon: z.boolean().describe(`
+        * * Field Name: IsCanon
+        * * Display Name: Is Canon
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, graphs of this type feed governed institutional Canon (authoritative definitions, policies, metrics, and workflows); when 0, the graph is non-canonical (such as exploratory Knowledge or Network graphs).`),
+    Rank: z.number().describe(`
+        * * Field Name: Rank
+        * * Display Name: Rank
+        * * SQL Data Type: int
+        * * Default Value: 100
+        * * Description: Sort and priority rank order of the graph type (lower numbers have higher priority).`),
+    IconClass: z.string().nullable().describe(`
+        * * Field Name: IconClass
+        * * Display Name: Icon Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Optional Font Awesome CSS icon class used to render badges for graphs of this type in the UI.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+        * * Description: Operational status of the graph type (Active or Inactive).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJGraphTypeEntityType = z.infer<typeof MJGraphTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Graphs
+ */
+export const MJGraphSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Unique name of the semantic graph partition (e.g., MJ Canon, Industry Research Graph).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Plain-language description of the domain, purpose, and governance scope of this graph.`),
+    GraphTypeID: z.string().describe(`
+        * * Field Name: GraphTypeID
+        * * Display Name: Graph Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Graph Types (vwGraphTypes.ID)
+        * * Description: Foreign key to GraphType defining the semantic classification of this graph and whether it feeds institutional Canon.`),
+    LoadMode: z.union([z.literal('OnDemand'), z.literal('Preload')]).describe(`
+        * * Field Name: LoadMode
+        * * Display Name: Load Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Preload
+    * * Value List Type: List
+    * * Possible Values 
+    *   * OnDemand
+    *   * Preload
+        * * Description: Whether the graph is preloaded into memory at startup (Preload, for compact metadata/Canon graphs) or traversed on demand (OnDemand, for large data/document graphs).`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Operational status of the graph (Active or Disabled).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    GraphType: z.string().describe(`
+        * * Field Name: GraphType
+        * * Display Name: Graph Type
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJGraphEntityType = z.infer<typeof MJGraphSchema>;
 
 /**
  * zod schema definition for the entity MJ: Identity Claim Types
@@ -70436,6 +71108,46 @@ export class MJActionResultCodeEntity extends BaseEntity<MJActionResultCodeEntit
 
 
 /**
+ * Configuration stored on Action.Config (`Config_` in TypeScript): the per-action settings that
+ * need neither a foreign key nor an index, so they live in one evolvable JSON bag instead of a
+ * column each. New optional keys can be added without a schema migration.
+ *
+ * Two kinds of setting share it today:
+ *
+ *  - Integration routing, written by IntegrationActionGenerator for actions with
+ *    DriverClass='IntegrationActionExecutor' and read by that executor to dispatch the call.
+ *  - Output trust, read by the agent runtime (BaseAgent.resolveActionTrustLevel) to decide
+ *    how far to trust what the action returns.
+ *
+ * NULL for actions that need neither.
+ */
+export interface MJActionEntity_IActionConfiguration {
+    /** Integration routing: the MJ: Integrations record the generated action calls. */
+    IntegrationName?: string;
+
+    /** Integration routing: the external object (table, endpoint, resource) the action operates on. */
+    ObjectName?: string;
+
+    /** Integration routing: the operation the action performs on the object (Get, List, Create, Update, Upsert, Delete, ...). */
+    Verb?: string;
+
+    /** Integration routing: connector-specific options passed through to the integration connector. */
+    connectorConfig?: Record<string, unknown>;
+
+    /**
+     * How far the agent runtime trusts this action's output. The action's metadata is the source
+     * of truth; a per-agent or per-run override lives in AgentTypePromptParams.
+     *
+     *  - 'Trusted' (the default when absent): internal structured data or platform-validated output.
+     *  - 'SemiTrusted': may carry user-authored or partner content; wrapped in a data envelope.
+     *  - 'Untrusted': content fetched from outside MJ (web pages, search results, mail, feeds,
+     *    arbitrary HTTP responses, MCP tool output). Wrapped in <untrusted_external_data>, its
+     *    AIDirectives are dropped, and the run is marked tainted so its memory writes land Pending.
+     */
+    outputTrustLevel?: 'Trusted' | 'SemiTrusted' | 'Untrusted';
+}
+
+/**
  * Configuration stored on Action.RuntimeActionConfiguration when Action.Type='Runtime'.
  *
  * Runtime actions are JavaScript payloads executed inside MJ's isolated-vm
@@ -71047,6 +71759,7 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     * * Field Name: Config
     * * Display Name: Configuration
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJActionEntity_IActionConfiguration
     * * Description: Optional JSON configuration for the action. For integration actions, contains routing info: integrationName, objectName, verb, and optional connectorConfig. Non-integration actions leave this NULL.
     * * NOTE: Property renamed to `Config_` to avoid conflict with BaseEntity.Config
     */
@@ -71055,6 +71768,21 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     }
     set Config_(value: string | null) {
         this.Set('Config', value);
+    }
+
+    /**
+    * Typed accessor for Config — a live view of the parsed JSON as MJActionEntity_IActionConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Config field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get Config_Object(): MJActionEntity_IActionConfiguration | null {
+        return this.GetJSONFieldObject<MJActionEntity_IActionConfiguration>('Config');
+    }
+    set Config_Object(value: MJActionEntity_IActionConfiguration | null) {
+        this.SetJSONFieldObject<MJActionEntity_IActionConfiguration>('Config', value);
     }
 
     /**
@@ -85834,6 +86562,47 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
      * implementation; other source types will follow the same pattern as their knobs grow.
      */
     Website?: MJContentSourceEntity_IContentSourceWebsiteConfiguration;
+    /**
+     * Optional Semantic Graph overlay configuration for the Content Pipeline `Graph` stage
+     * (`@RegisterClass(BasePipelineStage, 'Graph')`). When enabled on a Content Source that
+     * is linked to a `GraphID` (either a Canon graph or a shared/per-source Knowledge graph),
+     * the pipeline clusters ingested chunks into higher-level `MJ: Graph Concepts` and emits
+     * typed `MJ: Graph Edges` (`SourcedFrom`, `Mentions`, `Broader Than`, `Contradicts`, etc.).
+     */
+    GraphOverlay?: MJContentSourceEntity_IContentSourceGraphOverlayConfig;
+}
+
+/**
+ * Per-source Semantic Graph overlay configuration for the Content Pipeline `Graph` stage.
+ */
+export interface MJContentSourceEntity_IContentSourceGraphOverlayConfig {
+    /** Enable the Graph overlay stage after Embed for this Content Source. Default false. */
+    Enabled?: boolean;
+    /**
+     * Concept taxonomy mode:
+     * - 'constrained': only link chunks to existing approved/proposed GraphConcepts in the target Graph.
+     * - 'auto-grow': link to existing GraphConcepts when matched; synthesize new proposed GraphConcepts for unmatched clusters.
+     * - 'free-flow': synthesize and merge GraphConcepts across the target Graph without subtree restrictions.
+     */
+    ConceptTaxonomyMode?: 'constrained' | 'auto-grow' | 'free-flow';
+    /** Default evidentiary authority tier name (from MJ: Graph Authority Tiers) assigned to concepts synthesized from this Content Source. */
+    DefaultAuthorityTier?: string;
+    /** Optional default GraphAuthorityTier ID assigned to concepts synthesized from this Content Source. */
+    DefaultAuthorityTierID?: string;
+    /** Whether to synthesize higher-level GraphConcept records from chunk clusters. Default true when Enabled. */
+    SynthesizeConcepts?: boolean;
+    /** Minimum supporting chunks required to form a new concept seed cluster. Default 2. */
+    MinChunksForConceptCluster?: number;
+    /** Cosine similarity threshold (0.0-1.0) for clustering chunk vectors or matching existing concepts. Default 0.82. */
+    ConceptSimilarityThreshold?: number;
+    /**Confidence threshold (0.0-1.0) at or above which inferred edges/concepts are auto-approved; below routes to Proposed. Default 0.90. */
+    AutoApproveThreshold?: number;
+    /** Whether to detect and emit Contradicts edges when chunks conflict on thresholds, dates, or formulas. Default true. */
+    DetectContradictions?: boolean;
+    /** ClassFactory key for the BaseConceptSynthesizer implementation. Default 'DeterministicConceptSynthesizer'. */
+    SynthesizerKey?: string;
+    /** Maximum concept clusters synthesized by the LLM per pipeline run. NULL/unset = unlimited. */
+    MaxConceptsPerRun?: number;
 }
 
 /**
@@ -86294,6 +87063,20 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     }
 
     /**
+    * * Field Name: GraphID
+    * * Display Name: Graph ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
+    * * Description: Optional target Semantic Graph (MJ: Graphs) that this Content Source populates when the Content Pipeline Graph overlay stage runs. Multiple Content Sources can share the same GraphID.
+    */
+    get GraphID(): string | null {
+        return this.Get('GraphID');
+    }
+    set GraphID(value: string | null) {
+        this.Set('GraphID', value);
+    }
+
+    /**
     * * Field Name: ContentType
     * * Display Name: Content Type Name
     * * SQL Data Type: nvarchar(255)
@@ -86363,6 +87146,15 @@ export class MJContentSourceEntity extends BaseEntity<MJContentSourceEntityType>
     */
     get ScheduledJob(): string | null {
         return this.Get('ScheduledJob');
+    }
+
+    /**
+    * * Field Name: Graph
+    * * Display Name: Graph
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Graph(): string | null {
+        return this.Get('Graph');
     }
 }
 
@@ -89604,6 +90396,114 @@ export class MJConversationWidgetInstanceEntity extends BaseEntity<MJConversatio
 
 
 /**
+ * Structured anchor payload stored on `MJ: Conversations.AnchorMetadata` (`AnchorMetadataObject`)
+ * when a conversation acts as an inline comment thread anchored to a record, form field,
+ * form section, left-nav rail group, contribution grid, or document/slide/sheet element.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+export interface MJConversationEntity_IConversationAnchorMetadata {
+    /**
+     * Human-readable display label of the anchored target at the time the thread was created
+     * (for example "Annual Revenue" for a Field anchor, "Financial Summary" for a Section anchor,
+     * or "Overview" for a Group anchor).
+     */
+    anchorDisplayName?: string;
+
+    /**
+     * Optional field name (`EntityField.Name`) when `AnchorType === 'Field'`.
+     * Mirrors `Conversation.AnchorKey` for convenience in self-contained metadata inspection.
+     */
+    fieldName?: string;
+
+    /**
+     * Optional section key (`CollapsiblePanel.SectionKey`) into which a Field or Section anchor belongs,
+     * enabling section-level and left-nav rail group rollup even when a field is not currently mounted in the DOM.
+     */
+    sectionKey?: string;
+
+    /**
+     * Optional human-readable title of the parent collapsible section containing the anchored field.
+     */
+    sectionDisplayName?: string;
+
+    /**
+     * Optional left-nav rail group key (`GroupKey`) containing the anchored section or field,
+     * used to roll up open comment counts onto the left-nav rail and collapsed spine.
+     */
+    groupKey?: string;
+
+    /**
+     * Optional human-readable title of the parent left-nav rail group.
+     */
+    groupDisplayName?: string;
+
+    /**
+     * Snapshot of the field's formatted value at the moment the comment thread was opened
+     * (for example "$145,000" or "Pending Approval"). Enables the UI to show a diff indicator
+     * ("Commented when value was X") if the field's live value subsequently changes.
+     */
+    quotedValue?: string;
+
+    /**
+     * Optional `MJ: Record Changes.ID` capturing the exact version of the record when the thread was created.
+     */
+    recordChangeId?: string;
+
+    /**
+     * Field names (`EntityField.Name`) on the linked entity that are governed by Field-Level Security (FLS)
+     * and referenced or discussed within this conversation thread.
+     *
+     * Populated deterministically when `AnchorType === 'Field'` on a restricted field, or by the
+     * write-time FLS restricted-field detector when a comment posted at the Record/Section/Group level
+     * references a restricted field's name, label, or value. Read-path security projectors hide the
+     * entire thread from any user who is denied read access to any field in `restrictedFields`.
+     */
+    restrictedFields?: string[];
+
+    /**
+     * Document block identifier (`BlockID`) when `AnchorType === 'DocBlock'` (MJ Docs).
+     */
+    blockId?: string;
+
+    /**
+     * Quoted document text selection when `AnchorType === 'DocBlock'` (MJ Docs).
+     */
+    quotedText?: string;
+
+    /**
+     * Base64-encoded Y.RelativePosition start anchor when `AnchorType === 'DocBlock'` (MJ Docs).
+     */
+    yjsRelativeStart?: string;
+
+    /**
+     * Base64-encoded Y.RelativePosition end anchor when `AnchorType === 'DocBlock'` (MJ Docs).
+     */
+    yjsRelativeEnd?: string;
+
+    /**
+     * Slide identifier when `AnchorType === 'SlideRegion'` (MJ Slides).
+     */
+    slideId?: string;
+
+    /**
+     * Optional region/element identifier or bounding box key when `AnchorType === 'SlideRegion'` (MJ Slides).
+     */
+    regionId?: string;
+
+    /**
+     * Worksheet identifier when `AnchorType === 'SheetRange'` (MJ Sheets).
+     */
+    sheetId?: string;
+
+    /**
+     * A1-notation cell or range reference (for example "B4:D12") when `AnchorType === 'SheetRange'` (MJ Sheets).
+     */
+    cellRange?: string;
+}
+
+/**
  * MJ: Conversations - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Conversation
@@ -90070,6 +90970,112 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     }
 
     /**
+    * * Field Name: AnchorType
+    * * Display Name: Anchor Type
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Contribution
+    *   * DocBlock
+    *   * Field
+    *   * Group
+    *   * Record
+    *   * Section
+    *   * SheetRange
+    *   * SlideRegion
+    * * Description: Fine-grained anchor discriminator when this conversation acts as an inline comment thread on a linked record or artifact. NULL for standard chat conversations. Allowed values: Record (whole-record comment), Field (anchored to an EntityField), Section (anchored to a CollapsiblePanel section), Group (anchored to a left-nav rail group/tab), Contribution (anchored to a related-entity grid or form contribution), DocBlock (anchored to a document block in MJ Docs), SlideRegion (anchored to a slide or element in MJ Slides), SheetRange (anchored to a cell range in MJ Sheets). Requires LinkedEntityID and LinkedRecordID when non-null.
+    */
+    get AnchorType(): 'Contribution' | 'DocBlock' | 'Field' | 'Group' | 'Record' | 'Section' | 'SheetRange' | 'SlideRegion' | null {
+        return this.Get('AnchorType');
+    }
+    set AnchorType(value: 'Contribution' | 'DocBlock' | 'Field' | 'Group' | 'Record' | 'Section' | 'SheetRange' | 'SlideRegion' | null) {
+        this.Set('AnchorType', value);
+    }
+
+    /**
+    * * Field Name: AnchorKey
+    * * Display Name: Anchor Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Identifier of the specific element within the linked record to which this conversation is anchored. For AnchorType = 'Field', stores EntityField.Name (for example 'AnnualRevenue'). For 'Section', stores the CollapsiblePanel SectionKey. For 'Group', stores the form nav GroupKey. For 'Contribution', stores the contribution or related-grid key. For 'DocBlock', 'SlideRegion', or 'SheetRange', stores the block ID, slide/region key, or A1 cell range. NULL when AnchorType is NULL or 'Record'.
+    */
+    get AnchorKey(): string | null {
+        return this.Get('AnchorKey');
+    }
+    set AnchorKey(value: string | null) {
+        this.Set('AnchorKey', value);
+    }
+
+    /**
+    * * Field Name: AnchorMetadata
+    * * Display Name: Anchor Metadata
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJConversationEntity_IConversationAnchorMetadata
+    * * Description: JSON payload (IConversationAnchorMetadata) capturing display labels, parent section/group keys for badge rollup, quoted field value snapshot at comment creation time, FLS restrictedFields referenced by the thread, or document/slide/sheet selection coordinates.
+    */
+    get AnchorMetadata(): string | null {
+        return this.Get('AnchorMetadata');
+    }
+    set AnchorMetadata(value: string | null) {
+        this.Set('AnchorMetadata', value);
+    }
+
+    /**
+    * Typed accessor for AnchorMetadata — a live view of the parsed JSON as MJConversationEntity_IConversationAnchorMetadata.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying AnchorMetadata field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get AnchorMetadataObject(): MJConversationEntity_IConversationAnchorMetadata | null {
+        return this.GetJSONFieldObject<MJConversationEntity_IConversationAnchorMetadata>('AnchorMetadata');
+    }
+    set AnchorMetadataObject(value: MJConversationEntity_IConversationAnchorMetadata | null) {
+        this.SetJSONFieldObject<MJConversationEntity_IConversationAnchorMetadata>('AnchorMetadata', value);
+    }
+
+    /**
+    * * Field Name: IsResolved
+    * * Display Name: Is Resolved
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this anchored comment thread has been marked resolved. Defaults to 0 (open). Resolved threads remain queryable for audit and history but are hidden from open-comment count badges on form fields, sections, and navigation rails.
+    */
+    get IsResolved(): boolean {
+        return this.Get('IsResolved');
+    }
+    set IsResolved(value: boolean) {
+        this.Set('IsResolved', value);
+    }
+
+    /**
+    * * Field Name: ResolvedByUserID
+    * * Display Name: Resolved By User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: User who most recently marked this anchored conversation thread as resolved. NULL when IsResolved = 0.
+    */
+    get ResolvedByUserID(): string | null {
+        return this.Get('ResolvedByUserID');
+    }
+    set ResolvedByUserID(value: string | null) {
+        this.Set('ResolvedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ResolvedAt
+    * * Display Name: Resolved At
+    * * SQL Data Type: datetimeoffset
+    * * Description: UTC timestamp when this anchored conversation thread was most recently marked resolved. NULL when IsResolved = 0.
+    */
+    get ResolvedAt(): Date | null {
+        return this.Get('ResolvedAt');
+    }
+    set ResolvedAt(value: Date | null) {
+        this.Set('ResolvedAt', value);
+    }
+
+    /**
     * * Field Name: User
     * * Display Name: User
     * * SQL Data Type: nvarchar(100)
@@ -90157,6 +91163,15 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     */
     get LastConversation(): string | null {
         return this.Get('LastConversation');
+    }
+
+    /**
+    * * Field Name: ResolvedByUser
+    * * Display Name: Resolved By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ResolvedByUser(): string | null {
+        return this.Get('ResolvedByUser');
     }
 }
 
@@ -95223,12 +96238,48 @@ export interface MJEntityEntity_IEntityConfiguration {
     Clone?: MJEntityEntity_IEntityCloneConfiguration;
 
     /**
+     * Optional anchored record commenting configuration for this entity.
+     * Controls whether anchored conversations (`MJ: Conversations` with `AnchorType` set)
+     * are permitted on records of this entity and which permissions/roles may post or resolve comments.
+     */
+    Comments?: MJEntityEntity_IEntityCommentsConfiguration;
+
+    /**
      * Controls which columns a save operation (`spCreate` / `spUpdate`) returns from the database.
      * - `'full'` (default when omitted): Re-queries `SELECT * FROM <BaseView>` after `INSERT`/`UPDATE`.
      * - `'datestamps_only'`: Selects only the primary key(s) and `__mj_CreatedAt`/`__mj_UpdatedAt`
      *   directly from `<BaseTable>`, preserving in-memory field values on the saved entity.
      */
     SaveReturnMode?: MJEntityEntity_EntitySaveReturnMode;
+}
+
+/**
+ * Configuration for entity-level anchored record comments (`MJ: Conversations`).
+ */
+export interface MJEntityEntity_IEntityCommentsConfiguration {
+    /**
+     * Master switch for anchored record commenting on this entity.
+     * Defaults to `true` when omitted. Set to `false` to disable record, field, and section
+     * commenting on this entity in both the form UI and server-side validation.
+     */
+    Enabled?: boolean;
+
+    /**
+     * Minimum entity permission required on this entity to create, reply to, or resolve
+     * anchored comments on its records:
+     * - `'Read'` (default): Any user who can read the record (including RLS) can participate
+     *   in anchored discussions on it without needing column-level `Update` rights.
+     * - `'Update'`: Only users with `Update` permission on the entity can post or resolve
+     *   comments; users with `Read`-only permission can still view existing comments.
+     */
+    RequiredPermission?: 'Read' | 'Update';
+
+    /**
+     * Optional list of role names (`MJ: Roles.Name`, case-insensitive) allowed to post or
+     * resolve comments on this entity. When omitted or empty, any user meeting
+     * {@link RequiredPermission} may comment.
+     */
+    AllowedRoles?: string[];
 }
 
 /**
@@ -108367,6 +109418,1535 @@ export class MJGeneratedCodeEntity extends BaseEntity<MJGeneratedCodeEntityType>
     */
     get LinkedEntity(): string | null {
         return this.Get('LinkedEntity');
+    }
+}
+
+
+/**
+ * MJ: Graph Authority Tiers - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GraphAuthorityTier
+ * * Base View: vwGraphAuthorityTiers
+ * * @description Configurable evidentiary authority tiers (such as Governing Charter / Bylaws, Board Policy, Executive SOP, Department Practice, Reference, or Inferred) with numeric precedence weight (Rank) used for Canon conflict resolution.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graph Authority Tiers')
+export class MJGraphAuthorityTierEntity extends BaseEntity<MJGraphAuthorityTierEntityType> {
+    /**
+    * Loads the MJ: Graph Authority Tiers record from the database
+    * @param ID: string - primary key value to load the MJ: Graph Authority Tiers record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphAuthorityTierEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique display name of the authority tier (e.g., Bylaws, Board Policy, Executive SOP, Department Practice, Reference, Inferred).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Plain-language description of what sources belong to this authority tier and how conflicts involving this tier should be resolved.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Rank
+    * * Display Name: Rank
+    * * SQL Data Type: int
+    * * Default Value: 20
+    * * Description: Numeric evidentiary precedence weight of the authority tier (higher numbers outrank lower numbers during conflict resolution, e.g., 100 for Bylaws vs 20 for Reference).
+    */
+    get Rank(): number {
+        return this.Get('Rank');
+    }
+    set Rank(value: number) {
+        this.Set('Rank', value);
+    }
+
+    /**
+    * * Field Name: IconClass
+    * * Display Name: Icon Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Optional Font Awesome CSS icon class used to render authority tier badges in the UI.
+    */
+    get IconClass(): string | null {
+        return this.Get('IconClass');
+    }
+    set IconClass(value: string | null) {
+        this.Set('IconClass', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Operational status of the authority tier (Active or Inactive).
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Graph Concept Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GraphConceptType
+ * * Base View: vwGraphConceptTypes
+ * * @description Configurable semantic concept classifications (such as Policy, Metric, Process, Role, Domain, or Term) with rank ordering and classification guidance, seeded via metadata and extensible per organization.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graph Concept Types')
+export class MJGraphConceptTypeEntity extends BaseEntity<MJGraphConceptTypeEntityType> {
+    /**
+    * Loads the MJ: Graph Concept Types record from the database
+    * @param ID: string - primary key value to load the MJ: Graph Concept Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphConceptTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name of the concept type (e.g., Policy, Metric, Process, Role, Domain, Term).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Plain-language definition and classification guidance describing what qualifies as a concept of this type.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Rank
+    * * Display Name: Rank
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Precedence and display rank order of this concept type (lower numbers represent higher-order institutional concepts such as Policy and Metric ahead of granular Terms).
+    */
+    get Rank(): number {
+        return this.Get('Rank');
+    }
+    set Rank(value: number) {
+        this.Set('Rank', value);
+    }
+
+    /**
+    * * Field Name: IconClass
+    * * Display Name: Icon Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Optional Font Awesome CSS icon class used to render concept nodes of this type in graph explorers and cards.
+    */
+    get IconClass(): string | null {
+        return this.Get('IconClass');
+    }
+    set IconClass(value: string | null) {
+        this.Set('IconClass', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Operational status of the concept type (Active or Inactive).
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Graph Concepts - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GraphConcept
+ * * Base View: vwGraphConcepts
+ * * @description Higher-level semantic concept nodes scoped to a Graph (referencing GraphConceptType and GraphAuthorityTier), serving as organizing hubs for Canon governance and Content Source GraphRAG overlays.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graph Concepts')
+export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
+    /**
+    * Loads the MJ: Graph Concepts record from the database
+    * @param ID: string - primary key value to load the MJ: Graph Concepts record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphConceptEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: GraphID
+    * * Display Name: Graph ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
+    */
+    get GraphID(): string {
+        return this.Get('GraphID');
+    }
+    set GraphID(value: string) {
+        this.Set('GraphID', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Concepts (vwGraphConcepts.ID)
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Canonical name of the concept, unique within its owning GraphID.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: ConceptTypeID
+    * * Display Name: Concept Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Concept Types (vwGraphConceptTypes.ID)
+    * * Description: Foreign key to GraphConceptType classifying the structural role and priority rank of this concept.
+    */
+    get ConceptTypeID(): string {
+        return this.Get('ConceptTypeID');
+    }
+    set ConceptTypeID(value: string) {
+        this.Set('ConceptTypeID', value);
+    }
+
+    /**
+    * * Field Name: AuthorityTierID
+    * * Display Name: Authority Tier ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Authority Tiers (vwGraphAuthorityTiers.ID)
+    * * Description: Optional foreign key to GraphAuthorityTier indicating the highest evidentiary authority tier backing this concept.
+    */
+    get AuthorityTierID(): string | null {
+        return this.Get('AuthorityTierID');
+    }
+    set AuthorityTierID(value: string | null) {
+        this.Set('AuthorityTierID', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Concise 1-3 sentence definition (~100 tokens) injected into agent subgraphs and search results.
+    */
+    get Description(): string {
+        return this.Get('Description');
+    }
+    set Description(value: string) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Specification
+    * * Display Name: Specification
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Structured markdown specification containing authoritative rules, thresholds, decision tables, exceptions, and chunk citations.
+    */
+    get Specification(): string | null {
+        return this.Get('Specification');
+    }
+    set Specification(value: string | null) {
+        this.Set('Specification', value);
+    }
+
+    /**
+    * * Field Name: Synonyms
+    * * Display Name: Synonyms
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of alternative names, acronyms, and surface forms that resolve to this concept.
+    */
+    get Synonyms(): string | null {
+        return this.Get('Synonyms');
+    }
+    set Synonyms(value: string | null) {
+        this.Set('Synonyms', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Deprecated
+    *   * Draft
+    *   * Proposed
+    * * Description: Governance lifecycle status of the concept: Draft, Proposed, Approved, or Deprecated.
+    */
+    get Status(): 'Approved' | 'Deprecated' | 'Draft' | 'Proposed' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Approved' | 'Deprecated' | 'Draft' | 'Proposed') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Graph
+    * * Display Name: Graph
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Graph(): string {
+        return this.Get('Graph');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: ConceptType
+    * * Display Name: Concept Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ConceptType(): string {
+        return this.Get('ConceptType');
+    }
+
+    /**
+    * * Field Name: AuthorityTier
+    * * Display Name: Authority Tier
+    * * SQL Data Type: nvarchar(100)
+    */
+    get AuthorityTier(): string | null {
+        return this.Get('AuthorityTier');
+    }
+}
+
+
+/**
+ * MJ: Graph Edge Providers - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GraphEdgeProvider
+ * * Base View: vwGraphEdgeProviders
+ * * @description Registers a BaseGraphEdgeProvider class on a Graph to project derived edges at read time without duplicating underlying relational data.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graph Edge Providers')
+export class MJGraphEdgeProviderEntity extends BaseEntity<MJGraphEdgeProviderEntityType> {
+    /**
+    * Loads the MJ: Graph Edge Providers record from the database
+    * @param ID: string - primary key value to load the MJ: Graph Edge Providers record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphEdgeProviderEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: GraphID
+    * * Display Name: Graph ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
+    */
+    get GraphID(): string {
+        return this.Get('GraphID');
+    }
+    set GraphID(value: string) {
+        this.Set('GraphID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of this provider registration within the graph.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Description of which derived edges this provider projects into the graph.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: ClassFactory registration key of the BaseGraphEdgeProvider subclass.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Provider-specific JSON configuration object passed to the provider at query time.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Execution order of this provider relative to other providers on the same graph.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, this provider participates in graph expansion queries; when 0, it is skipped.
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Graph
+    * * Display Name: Graph
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Graph(): string {
+        return this.Get('Graph');
+    }
+}
+
+
+/**
+ * MJ: Graph Edge Type Endpoints - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GraphEdgeTypeEndpoint
+ * * Base View: vwGraphEdgeTypeEndpoints
+ * * @description Optional endpoint constraints restricting which MJ Entities may appear on the Source or Target side of a GraphEdgeType.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graph Edge Type Endpoints')
+export class MJGraphEdgeTypeEndpointEntity extends BaseEntity<MJGraphEdgeTypeEndpointEntityType> {
+    /**
+    * Loads the MJ: Graph Edge Type Endpoints record from the database
+    * @param ID: string - primary key value to load the MJ: Graph Edge Type Endpoints record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphEdgeTypeEndpointEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EdgeTypeID
+    * * Display Name: Edge Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Edge Types (vwGraphEdgeTypes.ID)
+    */
+    get EdgeTypeID(): string {
+        return this.Get('EdgeTypeID');
+    }
+    set EdgeTypeID(value: string) {
+        this.Set('EdgeTypeID', value);
+    }
+
+    /**
+    * * Field Name: Side
+    * * Display Name: Side
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Source
+    *   * Target
+    * * Description: Which endpoint of the edge this entity constraint applies to (Source or Target).
+    */
+    get Side(): 'Source' | 'Target' {
+        return this.Get('Side');
+    }
+    set Side(value: 'Source' | 'Target') {
+        this.Set('Side', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: EdgeType
+    * * Display Name: Edge Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get EdgeType(): string {
+        return this.Get('EdgeType');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+}
+
+
+/**
+ * MJ: Graph Edge Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GraphEdgeType
+ * * Base View: vwGraphEdgeTypes
+ * * @description Defines relationship types for semantic graph edges (e.g., Broader Than, Describes, Defines, Measures, Implements, SourcedFrom, Mentions, Contradicts). Global when GraphID is NULL, or scoped to a specific Graph.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graph Edge Types')
+export class MJGraphEdgeTypeEntity extends BaseEntity<MJGraphEdgeTypeEntityType> {
+    /**
+    * Loads the MJ: Graph Edge Types record from the database
+    * @param ID: string - primary key value to load the MJ: Graph Edge Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphEdgeTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: GraphID
+    * * Display Name: Graph ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
+    */
+    get GraphID(): string | null {
+        return this.Get('GraphID');
+    }
+    set GraphID(value: string | null) {
+        this.Set('GraphID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Forward-direction label of the edge type (e.g., Broader Than, Defines, SourcedFrom).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Plain-language definition of what this relationship type means when connecting two nodes.
+    */
+    get Description(): string {
+        return this.Get('Description');
+    }
+    set Description(value: string) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: IsDirected
+    * * Display Name: Is Directed
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, the edge is directed from Source to Target; when 0, the relationship is symmetric/undirected.
+    */
+    get IsDirected(): boolean {
+        return this.Get('IsDirected');
+    }
+    set IsDirected(value: boolean) {
+        this.Set('IsDirected', value);
+    }
+
+    /**
+    * * Field Name: InverseName
+    * * Display Name: Inverse Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Inverse label shown when traversing a directed edge from Target back to Source (e.g., Narrower Than for Broader Than).
+    */
+    get InverseName(): string | null {
+        return this.Get('InverseName');
+    }
+    set InverseName(value: string | null) {
+        this.Set('InverseName', value);
+    }
+
+    /**
+    * * Field Name: DefaultWeight
+    * * Display Name: Default Weight
+    * * SQL Data Type: decimal(5, 4)
+    * * Default Value: 1.0
+    * * Description: Default retrieval weight (0.0000 to 1.0000) assigned to edges of this type during multi-hop graph expansion.
+    */
+    get DefaultWeight(): number {
+        return this.Get('DefaultWeight');
+    }
+    set DefaultWeight(value: number) {
+        this.Set('DefaultWeight', value);
+    }
+
+    /**
+    * * Field Name: AllowStored
+    * * Display Name: Allow Stored
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, rows of this edge type may be persisted in GraphEdge; when 0, edges of this type are produced exclusively at read time by a GraphEdgeProvider.
+    */
+    get AllowStored(): boolean {
+        return this.Get('AllowStored');
+    }
+    set AllowStored(value: boolean) {
+        this.Set('AllowStored', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Graph
+    * * Display Name: Graph
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Graph(): string | null {
+        return this.Get('Graph');
+    }
+}
+
+
+/**
+ * MJ: Graph Edges - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GraphEdge
+ * * Base View: vwGraphEdges
+ * * @description Persisted polymorphic graph edges connecting any two entity records within a Graph, carrying retrieval weight, origin (Declared vs Inferred), approval status, and confidence.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graph Edges')
+export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
+    /**
+    * Loads the MJ: Graph Edges record from the database
+    * @param ID: string - primary key value to load the MJ: Graph Edges record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphEdgeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: GraphID
+    * * Display Name: Graph ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
+    */
+    get GraphID(): string {
+        return this.Get('GraphID');
+    }
+    set GraphID(value: string) {
+        this.Set('GraphID', value);
+    }
+
+    /**
+    * * Field Name: EdgeTypeID
+    * * Display Name: Edge Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Edge Types (vwGraphEdgeTypes.ID)
+    */
+    get EdgeTypeID(): string {
+        return this.Get('EdgeTypeID');
+    }
+    set EdgeTypeID(value: string) {
+        this.Set('EdgeTypeID', value);
+    }
+
+    /**
+    * * Field Name: SourceEntityID
+    * * Display Name: Source Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    */
+    get SourceEntityID(): string {
+        return this.Get('SourceEntityID');
+    }
+    set SourceEntityID(value: string) {
+        this.Set('SourceEntityID', value);
+    }
+
+    /**
+    * * Field Name: SourceRecordID
+    * * Display Name: Source Record ID
+    * * SQL Data Type: nvarchar(400)
+    * * Description: Record ID of the source node (compact URL segment for composite primary keys), paired with SourceEntityID.
+    */
+    get SourceRecordID(): string {
+        return this.Get('SourceRecordID');
+    }
+    set SourceRecordID(value: string) {
+        this.Set('SourceRecordID', value);
+    }
+
+    /**
+    * * Field Name: TargetEntityID
+    * * Display Name: Target Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    */
+    get TargetEntityID(): string {
+        return this.Get('TargetEntityID');
+    }
+    set TargetEntityID(value: string) {
+        this.Set('TargetEntityID', value);
+    }
+
+    /**
+    * * Field Name: TargetRecordID
+    * * Display Name: Target Record ID
+    * * SQL Data Type: nvarchar(400)
+    * * Description: Record ID of the target node (compact URL segment for composite primary keys), paired with TargetEntityID.
+    */
+    get TargetRecordID(): string {
+        return this.Get('TargetRecordID');
+    }
+    set TargetRecordID(value: string) {
+        this.Set('TargetRecordID', value);
+    }
+
+    /**
+    * * Field Name: Weight
+    * * Display Name: Weight
+    * * SQL Data Type: decimal(5, 4)
+    * * Default Value: 1.0
+    * * Description: Retrieval pull weight (0.0000 to 1.0000) used when scoring multi-hop graph paths.
+    */
+    get Weight(): number {
+        return this.Get('Weight');
+    }
+    set Weight(value: number) {
+        this.Set('Weight', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable explanation or provenance summary for why this edge connects the source and target nodes.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Attributes
+    * * Display Name: Attributes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON object holding structured edge metadata (such as citations, authority tiers, or conflict details).
+    */
+    get Attributes(): string | null {
+        return this.Get('Attributes');
+    }
+    set Attributes(value: string | null) {
+        this.Set('Attributes', value);
+    }
+
+    /**
+    * * Field Name: Origin
+    * * Display Name: Origin
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Declared
+    *   * Inferred
+    * * Description: How this edge was created: Declared (explicitly authored by a human or seed metadata) or Inferred (proposed by an AI or content pipeline stage).
+    */
+    get Origin(): 'Declared' | 'Inferred' {
+        return this.Get('Origin');
+    }
+    set Origin(value: 'Declared' | 'Inferred') {
+        this.Set('Origin', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Approved
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Proposed
+    *   * Rejected
+    * * Description: Governance lifecycle status of the edge: Proposed, Approved, or Rejected. Default graph traversal includes Approved edges only.
+    */
+    get Status(): 'Approved' | 'Proposed' | 'Rejected' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Approved' | 'Proposed' | 'Rejected') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Confidence
+    * * Display Name: Confidence
+    * * SQL Data Type: decimal(5, 4)
+    * * Description: Confidence score (0.0000 to 1.0000) for Inferred edges; NULL for Declared edges.
+    */
+    get Confidence(): number | null {
+        return this.Get('Confidence');
+    }
+    set Confidence(value: number | null) {
+        this.Set('Confidence', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Graph
+    * * Display Name: Graph
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Graph(): string {
+        return this.Get('Graph');
+    }
+
+    /**
+    * * Field Name: EdgeType
+    * * Display Name: Edge Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get EdgeType(): string {
+        return this.Get('EdgeType');
+    }
+
+    /**
+    * * Field Name: SourceEntity
+    * * Display Name: Source Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SourceEntity(): string {
+        return this.Get('SourceEntity');
+    }
+
+    /**
+    * * Field Name: TargetEntity
+    * * Display Name: Target Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TargetEntity(): string {
+        return this.Get('TargetEntity');
+    }
+}
+
+
+/**
+ * MJ: Graph Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GraphType
+ * * Base View: vwGraphTypes
+ * * @description Configurable semantic graph classifications (such as Canon, Knowledge, Network, or Custom), defining whether graphs of this type participate in governed organizational Canon (IsCanon) and their precedence rank.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graph Types')
+export class MJGraphTypeEntity extends BaseEntity<MJGraphTypeEntityType> {
+    /**
+    * Loads the MJ: Graph Types record from the database
+    * @param ID: string - primary key value to load the MJ: Graph Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique display name of the graph type (e.g., Canon, Knowledge, Network, Custom).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Plain-language description of what graphs of this type represent and how agents should use them.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: IsCanon
+    * * Display Name: Is Canon
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, graphs of this type feed governed institutional Canon (authoritative definitions, policies, metrics, and workflows); when 0, the graph is non-canonical (such as exploratory Knowledge or Network graphs).
+    */
+    get IsCanon(): boolean {
+        return this.Get('IsCanon');
+    }
+    set IsCanon(value: boolean) {
+        this.Set('IsCanon', value);
+    }
+
+    /**
+    * * Field Name: Rank
+    * * Display Name: Rank
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Sort and priority rank order of the graph type (lower numbers have higher priority).
+    */
+    get Rank(): number {
+        return this.Get('Rank');
+    }
+    set Rank(value: number) {
+        this.Set('Rank', value);
+    }
+
+    /**
+    * * Field Name: IconClass
+    * * Display Name: Icon Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Optional Font Awesome CSS icon class used to render badges for graphs of this type in the UI.
+    */
+    get IconClass(): string | null {
+        return this.Get('IconClass');
+    }
+    set IconClass(value: string | null) {
+        this.Set('IconClass', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    * * Description: Operational status of the graph type (Active or Inactive).
+    */
+    get Status(): 'Active' | 'Inactive' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Graphs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Graph
+ * * Base View: vwGraphs
+ * * @description Named semantic graph partitions (such as MJ Canon, Knowledge Hub GraphRAG graphs, or Member Network graphs) that own concepts, edge types, derived edge providers, and stored edges.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graphs')
+export class MJGraphEntity extends BaseEntity<MJGraphEntityType> {
+    /**
+    * Loads the MJ: Graphs record from the database
+    * @param ID: string - primary key value to load the MJ: Graphs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Unique name of the semantic graph partition (e.g., MJ Canon, Industry Research Graph).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Plain-language description of the domain, purpose, and governance scope of this graph.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: GraphTypeID
+    * * Display Name: Graph Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Types (vwGraphTypes.ID)
+    * * Description: Foreign key to GraphType defining the semantic classification of this graph and whether it feeds institutional Canon.
+    */
+    get GraphTypeID(): string {
+        return this.Get('GraphTypeID');
+    }
+    set GraphTypeID(value: string) {
+        this.Set('GraphTypeID', value);
+    }
+
+    /**
+    * * Field Name: LoadMode
+    * * Display Name: Load Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Preload
+    * * Value List Type: List
+    * * Possible Values 
+    *   * OnDemand
+    *   * Preload
+    * * Description: Whether the graph is preloaded into memory at startup (Preload, for compact metadata/Canon graphs) or traversed on demand (OnDemand, for large data/document graphs).
+    */
+    get LoadMode(): 'OnDemand' | 'Preload' {
+        return this.Get('LoadMode');
+    }
+    set LoadMode(value: 'OnDemand' | 'Preload') {
+        this.Set('LoadMode', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Operational status of the graph (Active or Disabled).
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: GraphType
+    * * Display Name: Graph Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get GraphType(): string {
+        return this.Get('GraphType');
     }
 }
 

@@ -49,7 +49,7 @@ export type SipClientLike = Pick<
 >;
 
 /** The room operations the service uses (a `Pick` so tests inject a fake). */
-export type RoomServiceClientLike = Pick<RoomServiceClient, 'listParticipants' | 'removeParticipant'>;
+export type RoomServiceClientLike = Pick<RoomServiceClient, 'listRooms' | 'listParticipants' | 'removeParticipant'>;
 
 /** One participant in a room, reduced to what MJ looks at. */
 export interface RoomParticipantSummary {
@@ -135,6 +135,13 @@ export class LiveKitSipService {
   }
 
   // ── presence ─────────────────────────────────────────────────────────────────
+
+  /** The names of the currently active rooms on the LiveKit server, optionally filtered to those starting with `prefix`. */
+  public async ListRooms(prefix?: string): Promise<string[]> {
+    const rooms = await this.roomClient().listRooms();
+    const names = rooms.map((r) => r.name).filter((n): n is string => Boolean(n));
+    return prefix ? names.filter((n) => n.startsWith(prefix)) : names;
+  }
 
   /** The participants currently in a room. A room that does not exist (nobody has joined) has none. */
   public async ListParticipants(roomName: string): Promise<RoomParticipantSummary[]> {
