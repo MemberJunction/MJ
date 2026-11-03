@@ -2457,15 +2457,20 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return row;
     }
 
+    /**
+     * An IS-A parent field's save state, captured before the parent's short-circuited save
+     * finalizes it. `written` records that the caller set the field, which a create needs: the
+     * parent's finalize sets every field it returns, so afterwards each one looks written.
+     */
     private _isaParentPreSaveSnapshot = new WeakMap<
         BaseEntity,
-        Map<string, { dirty: boolean; value: unknown; oldValue: unknown }>
+        Map<string, { dirty: boolean; written: boolean; value: unknown; oldValue: unknown }>
     >();
 
     private getParentPreSaveFieldSnapshot(
         entity: BaseEntity,
         field: EntityField
-    ): { dirty: boolean; value: unknown; oldValue: unknown } | undefined {
+    ): { dirty: boolean; written: boolean; value: unknown; oldValue: unknown } | undefined {
         const snapshot = this._isaParentPreSaveSnapshot.get(entity);
         if (!snapshot) {
             return undefined;
@@ -2505,6 +2510,49 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      */
     public IsFieldDirtyOnChain(entity: BaseEntity, field: EntityField): boolean {
         return this.isFieldDirtyOnChain(entity, field);
+    }
+
+    /**
+     * Whether a create must send `field` (#5972). Creates send the fields the caller set and leave
+     * the rest to the server, which applies the same metadata defaults on its own `NewRecord()`, so
+     * a client whose metadata predates a field-level security change does not name a field it never
+     * touched. A field is sent when:
+     *
+     * - the caller wrote it, on this record or, for an IS-A parent field, anywhere up the chain
+     *   (an explicit set, a subclass default set in `NewRecord()`, a value set before the first save);
+     * - or it is writable, required and has no default, so omitting it could not produce a valid row.
+     *
+     * Primary keys are decided by the caller: they are always sent when the save sends them at all.
+     * Metadata defaults applied when the record is constructed are not writes; the server applies
+     * the same defaults.
+     */
+    public IsFieldSentOnCreate(entity: BaseEntity, field: EntityField): boolean {
+        if (this.isFieldWrittenOnChain(entity, field)) {
+            return true;
+        }
+        return !field.ReadOnly && !field.EntityFieldInfo.AllowsNull && !field.EntityFieldInfo.HasDefaultValue;
+    }
+
+    /**
+     * Whether `field` holds a value the caller set: dirty, or written since construction. Walks the
+     * IS-A chain for parent-owned fields, preferring the snapshot taken before a parent's
+     * short-circuited save finalized it.
+     */
+    private isFieldWrittenOnChain(entity: BaseEntity, field: EntityField): boolean {
+        const snap = this.getParentPreSaveFieldSnapshot(entity, field);
+        if (snap) {
+            return snap.dirty || snap.written;
+        }
+        if (field.Dirty || !field.NeverSet) {
+            return true;
+        }
+        if (entity.ISAParent && entity.EntityInfo?.ParentEntityFieldNames?.has(field.Name)) {
+            const parentField = entity.ISAParent.Fields.find(pf => pf.Name === field.Name);
+            if (parentField) {
+                return this.isFieldWrittenOnChain(entity.ISAParent, parentField);
+            }
+        }
+        return false;
     }
 
     private isFieldDirtyOnChain(entity: BaseEntity, field: EntityField): boolean {
@@ -2598,10 +2646,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         // already ran in BaseEntity._InnerSave(). Skip the network call — the leaf entity's
         // mutation will include all chain fields. Return current entity state.
         if (options?.IsParentEntitySave) {
-            const snapshot = new Map<string, { dirty: boolean; value: unknown; oldValue: unknown }>();
+            const snapshot = new Map<string, { dirty: boolean; written: boolean; value: unknown; oldValue: unknown }>();
             for (const f of entity.Fields) {
                 snapshot.set(f.Name, {
                     dirty: this.isFieldDirtyOnChain(entity, f),
+                    written: this.isFieldWrittenOnChain(entity, f),
                     value: f.Value,
                     oldValue: this.getFieldOldValueOnChain(entity, f),
                 });
@@ -2652,7 +2701,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             //
             // On an Update (when options.IgnoreDirtyState is not set), only primary keys and dirty
             // writable fields are included in vars.input (generated Update*Input types mark all
-            // non-PK fields optional).
+            // non-PK fields optional). On a Create, only the fields the caller set and required
+            // fields with no default are included (IsFieldSentOnCreate); generated Create*Input
+            // types mark every non-PK field optional too.
             //
             // NotLoaded fields are OMITTED from the mutation input entirely (legal — the
             // generated Update input types mark every non-PK field optional): their value is
@@ -2673,6 +2724,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const isaPromotionCreate = !entity.IsSaved && entity.EntityInfo.IsChildType && entity.ISAParent?.IsSaved === true;
             const isUpdate = entity.IsSaved && !isaPromotionCreate;
             const filterToDirtyOnly = isUpdate && !options?.IgnoreDirtyState;
+            // Creates send only the fields the caller set, plus required fields with no default
+            // (#5972); see IsFieldSentOnCreate. Kept apart from filterToDirtyOnly, which also
+            // narrows the response and merges it as a delta: a create's response is the whole row.
+            const filterCreateToSetFields = !isUpdate && !options?.IgnoreDirtyState;
             const effectiveReturnMode = options?.SaveReturnMode ?? entity.EntityInfo.SaveReturnMode;
             const shouldMergeDeltaResponse = filterToDirtyOnly || effectiveReturnMode === 'datestamps_only';
             const deniedReadFields = this.getDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
@@ -2705,7 +2760,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     !f.NotLoaded &&
                     !isDeniedRead(f.Name) &&
                     (!isNonActiveField(f) || isFieldWrittenForSave(f)) &&
-                    (!filterToDirtyOnly || this.isFieldDirtyOnChain(entity, f))
+                    (!filterToDirtyOnly || this.isFieldDirtyOnChain(entity, f)) &&
+                    (!filterCreateToSetFields || this.IsFieldSentOnCreate(entity, f))
                 )));
             const serverDerivedFields = GraphQLDataProvider._serverDerivedUpdateFieldsByEntity.get(entity.EntityInfo.Name);
             const returnFields = entity.Fields.filter(f => {

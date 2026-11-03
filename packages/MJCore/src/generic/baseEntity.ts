@@ -4309,6 +4309,25 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * Whether a one-node save must still go through the graph path (#5528).
+     *
+     * A companion can hold data without adding a record to the plan (inputs the server-side
+     * subclass reads in its own `Save()`). On a provider without entity transactions the plain
+     * save sends field values only, so that data would never reach the server; the graph
+     * operation carries it, and the server deserializes it before the root saves. A server
+     * provider holds the companions in process, so it does not need this. A record enrolled in a
+     * transaction group keeps its plain group save: the graph executes outside the group, which
+     * would break the group's atomicity.
+     */
+    private mustShipCompanionsAsGraph(): boolean {
+        return (
+            !this.TransactionGroup &&
+            this.ProviderToUse?.SupportsEntityTransactions !== true &&
+            this.companionsDirty
+        );
+    }
+
+    /**
      * Returns an array of all primary key fields for the entity. If the entity has a composite primary key, this method will return an array of all primary key fields.
      * If the entity has a single primary key, this method will return an array with a single field in it.
      */
@@ -5481,7 +5500,7 @@ export abstract class BaseEntity<T = unknown> {
         // and composites whose collections happen to be empty, behave exactly as they did before.
         if (this.HasCompanions) {
             const plan = this.BuildSavePlan(true, options);
-            if (plan.NodeCount > 1) {
+            if (plan.NodeCount > 1 || this.mustShipCompanionsAsGraph()) {
                 // A TransactionGroup defers this record's own write until Submit(), while a graph
                 // executes its child nodes immediately (or ships the whole graph to the server) —
                 // children would insert rows pointing at a parent whose write is still queued, and
