@@ -41,10 +41,13 @@
  * a real column on its entity's row — the FeatureAssembly `select` reads straight off the
  * target row (no joins).
  *
- * THROWAWAY: it creates ONE shared driver-named ML Algorithm row, then per model a Training
- * Pipeline + Model + Training Run(s); it cleans up every per-model row in that model's finally
- * block, and the shared algorithm row only at the very end. It is NOT part of any build or
- * run-all harness.
+ * THROWAWAY: it reuses (or creates) ONE shared ML Algorithm row for the driver, then per model
+ * creates a Training Pipeline bound to version 1 of its Prediction Unit and Evaluation Protocol
+ * through the harness's pipeline migration (`lib/ps-rig-lifecycle.ts`, every row saved over
+ * GraphQL) and trains it. Each model's finally block deletes everything that model created
+ * through the harness cleanup (pipeline, unit, protocol, model, training runs, Training Snapshot
+ * and stored files), children first; the shared algorithm row (only when created) goes at the very
+ * end. A row it cannot delete fails the rig. It is NOT part of any build or run-all harness.
  *
  * AUTH: system API key from MJ_API_KEY (x-mj-api-key) via the shared harness — no secrets here.
  *
@@ -55,19 +58,19 @@
  *   - AssociationDemo data loaded (Memberships / Event Registrations / Enrollments populated).
  *   - MJ_API_KEY set in the environment (or .env resolved by the harness).
  *
- * USAGE (from the repo root, with MJAPI already up on :4000):
- *   npx tsx packages/MJServer/integration-test-scripts/ps-live-multimodel-lifecycle.ts
+ * USAGE (from the repo root, with MJAPI already up on :4000 and its Python sidecar reachable):
+ *   PS_INTEGRATION=1 npx tsx packages/TestingFramework/integration-test-suite/rigs/ps-live-multimodel-lifecycle.ts
  */
 import { RigStorage } from './lib/rig-storage';
-import type { FileStorageActivation } from '@memberjunction/predictive-studio-truth-suite';
+import { RunRecords, type FileStorageActivation } from '@memberjunction/predictive-studio-truth-suite';
 import { LoadEnv, LoadClientConfig } from './lib/harness';
-import { Metadata, RunView, UserInfo, BaseEntity, IMetadataProvider, CompositeKey } from '@memberjunction/core';
+import { RequireCheck, ShippedModelID } from './lib/ps-train-output';
+import { BindUnitAndProtocol, DeleteCreatedAlgorithm, DeleteRecordedRows, EnsureDriverAlgorithm, ReportCleanup, type RigAlgorithm } from './lib/ps-rig-lifecycle';
+import { Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { GraphQLProviderConfigData, setupGraphQLClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import '@memberjunction/core-entities';
 import {
-  MJMLAlgorithmEntity,
   MJMLTrainingPipelineEntity,
-  MJMLTrainingRunEntity,
   PredictiveStudioTrainModelOperation,
   PredictiveStudioScoreRecordSetOperation,
   PredictiveStudioPromoteModelOperation,
@@ -120,6 +123,8 @@ interface ModelResult {
   seconds: number;
   /** Captured failure message, when the run errored. */
   error?: string;
+  /** Rows (or stored objects) this model's cleanup could not delete; each fails the rig. */
+  cleanupFailures: number;
 }
 
 /** The three model configs. */
@@ -216,35 +221,6 @@ async function connect(): Promise<{ md: Metadata; route: IMetadataProvider; user
   return { md, route, user };
 }
 
-/**
- * Resolve (or create) an ML Algorithm row whose DISPLAY NAME equals the sidecar driver
- * key. The TrainingEngine sends `pipeline.Algorithm` (the view's denormalized algorithm
- * NAME — NOT the DriverClass) to the sidecar, so we ensure a row whose Name IS the driver
- * key exists. Returns the row id + whether we created it (for cleanup). Shared across all models.
- */
-async function ensureDriverNamedAlgorithm(md: Metadata, user: UserInfo): Promise<{ id: string; created: boolean }> {
-  const rv = new RunView();
-  const existing = await rv.RunView<{ ID: string }>(
-    { EntityName: 'MJ: ML Algorithms', ExtraFilter: `Name='${DRIVER_KEY}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 },
-    user,
-  );
-  if (existing.Success && existing.Results.length > 0) {
-    return { id: existing.Results[0].ID, created: false };
-  }
-  const algo = await md.GetEntityObject<MJMLAlgorithmEntity>('MJ: ML Algorithms', user);
-  algo.NewRecord();
-  algo.Name = DRIVER_KEY; // denormalized into vwMLTrainingPipelines.Algorithm → sent to sidecar
-  algo.Description = TAG;
-  algo.ProblemTypes = 'classification';
-  algo.DriverClass = DRIVER_KEY;
-  algo.SupportsFeatureImportance = true;
-  algo.Status = 'Active';
-  if (!(await algo.Save())) {
-    throw new Error(`Failed to create ML Algorithm: ${algo.LatestResult?.CompleteMessage}`);
-  }
-  return { id: algo.ID, created: true };
-}
-
 /** Resolve an entity's ID by name (throws if not found). */
 function entityId(md: Metadata, name: string): string {
   const e = md.EntityByName(name);
@@ -286,52 +262,6 @@ async function createPipeline(
   return p;
 }
 
-/** Best-effort cleanup: delete the model, its training run(s), and the pipeline for ONE model. */
-async function cleanupModel(md: Metadata, user: UserInfo, ids: { pipelineId?: string; modelId?: string }): Promise<void> {
-  const rv = new RunView();
-  const del = async (entity: string, id: string): Promise<void> => {
-    try {
-      const obj = await md.GetEntityObject<BaseEntity>(entity, user);
-      if (await obj.InnerLoad(CompositeKey.FromID(id))) {
-        const ok = await obj.Delete();
-        console.log(`    ${ok ? 'deleted' : 'FAILED to delete'} ${entity} ${id}${ok ? '' : ` — ${obj.LatestResult?.CompleteMessage}`}`);
-      }
-    } catch (e) {
-      console.log(`    skip ${entity} ${id}: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  };
-
-  // Training runs reference the pipeline (and the model); delete them first.
-  if (ids.pipelineId) {
-    const runs = await rv.RunView<MJMLTrainingRunEntity>(
-      { EntityName: 'MJ: ML Training Runs', ExtraFilter: `PipelineID='${ids.pipelineId}'`, ResultType: 'entity_object', BypassCache: true }, user,
-    );
-    for (const r of runs.Results ?? []) {
-      const ok = await r.Delete();
-      console.log(`    ${ok ? 'deleted' : 'FAILED to delete'} ML Training Run ${r.ID}`);
-    }
-  }
-  if (ids.modelId) await del('MJ: ML Models', ids.modelId);
-  if (ids.pipelineId) await del('MJ: ML Training Pipelines', ids.pipelineId);
-}
-
-/** Delete the shared algorithm row (only when we created it), at the very end. */
-async function cleanupAlgorithm(md: Metadata, user: UserInfo, algorithm: { id: string; created: boolean }): Promise<void> {
-  if (!algorithm.created) {
-    console.log(`  reused algorithm ${algorithm.id} — left in place`);
-    return;
-  }
-  try {
-    const obj = await md.GetEntityObject<BaseEntity>('MJ: ML Algorithms', user);
-    if (await obj.InnerLoad(CompositeKey.FromID(algorithm.id))) {
-      const ok = await obj.Delete();
-      console.log(`  ${ok ? 'deleted' : 'FAILED to delete'} MJ: ML Algorithms ${algorithm.id}${ok ? '' : ` — ${obj.LatestResult?.CompleteMessage}`}`);
-    }
-  } catch (e) {
-    console.log(`  skip algorithm ${algorithm.id}: ${e instanceof Error ? e.message : String(e)}`);
-  }
-}
-
 /**
  * Run the FULL lifecycle (pipeline → train → score → promote → cleanup) for ONE model config.
  * NEVER throws — every failure is captured in the returned ModelResult so the harness always
@@ -340,7 +270,7 @@ async function cleanupAlgorithm(md: Metadata, user: UserInfo, algorithm: { id: s
 async function runModel(md: Metadata, route: IMetadataProvider, user: UserInfo, algorithmId: string, cfg: ModelConfig): Promise<ModelResult> {
   const t0 = Date.now();
   const result: ModelResult = {
-    name: cfg.name, skipped: false, trained: false, holdoutMetric: '—', scored: 0, promoted: false, seconds: 0,
+    name: cfg.name, skipped: false, trained: false, holdoutMetric: '—', scored: 0, promoted: false, seconds: 0, cleanupFailures: 0,
   };
 
   banner(`MODEL: ${cfg.name}  (${cfg.targetEntity}.${cfg.targetVariable}, ${cfg.problemType})`);
@@ -353,13 +283,12 @@ async function runModel(md: Metadata, route: IMetadataProvider, user: UserInfo, 
     return result;
   }
 
-  let pipelineId: string | undefined;
-  let modelId: string | undefined;
+  const records = new RunRecords();
 
   try {
-    // ── Create pipeline ──────────────────────────────────────────────────────
+    // ── Create pipeline + bind its unit and protocol ─────────────────────────
     const pipeline = await createPipeline(md, user, algorithmId, cfg);
-    pipelineId = pipeline.ID;
+    records.RecordPipeline(pipeline.ID);
     const selectCols = cfg.featureSteps
       .filter((s): s is Extract<FeatureStep, { Kind: 'select' }> => s.Kind === 'select')
       .flatMap((s) => s.Columns);
@@ -371,6 +300,9 @@ async function runModel(md: Metadata, route: IMetadataProvider, user: UserInfo, 
     console.log(`  Features: select[${selectCols.join(', ')}]${onehotCols.length ? ` + onehot[${onehotCols.join(', ')}]` : ''}`);
     console.log(`  Leakage deny: ${cfg.leakageDeny.join(', ')}`);
     console.log(`  Validation: holdout, LockedHoldoutFraction=${cfg.validation.LockedHoldoutFraction}`);
+    // Training refuses a pipeline without a Prediction Unit (UNIT_REQUIRED): bind version 1 of each, saved over GraphQL.
+    await BindUnitAndProtocol(route, user, pipeline, records);
+    console.log(`  Bound Prediction Unit ${pipeline.PredictionUnitID} and Evaluation Protocol ${pipeline.EvaluationProtocolID}`);
 
     // ── Train ────────────────────────────────────────────────────────────────
     // NOTE: attached over-the-wire onProgress would require a live GraphQL-WS endpoint (the
@@ -387,10 +319,12 @@ async function runModel(md: Metadata, route: IMetadataProvider, user: UserInfo, 
       throw new Error(`Training failed: ${trainResult.ErrorMessage}`);
     }
     const out = trainResult.Output;
-    modelId = out.modelId;
+    const shippedModelId = ShippedModelID(out, 'score and promote', RequireCheck);
+    if (shippedModelId === null) throw new Error(`Training shipped no model to score and promote: ${out.gateOutcome ?? 'no gate decision'}.`);
+    records.RecordModel(shippedModelId);
     result.trained = true;
     result.holdoutMetric = out.holdoutMetrics ?? '(none)';
-    console.log(`    modelId       = ${out.modelId}`);
+    console.log(`    modelId       = ${shippedModelId}`);
     console.log(`    trainingRunId = ${out.trainingRunId}`);
     console.log(`    version       = ${out.version}`);
     console.log(`    status        = ${out.status}`);
@@ -401,7 +335,7 @@ async function runModel(md: Metadata, route: IMetadataProvider, user: UserInfo, 
     const scoreStart = Date.now();
     const scoreResult = await new PredictiveStudioScoreRecordSetOperation().Execute(
       {
-        modelId: out.modelId,
+        modelId: shippedModelId,
         scope: { filter: { entityName: cfg.targetEntity, extraFilter: '', maxRows: 25 } },
         dryRun: true,
       },
@@ -421,7 +355,7 @@ async function runModel(md: Metadata, route: IMetadataProvider, user: UserInfo, 
 
     // ── Promote (Draft → Validated) ──────────────────────────────────────────
     const promoteResult = await new PredictiveStudioPromoteModelOperation().Execute(
-      { modelId: out.modelId, targetStatus: 'Validated', signOff: out.leakageFlagged, reason: 'ps-live-multimodel-lifecycle smoke test' },
+      { modelId: shippedModelId, targetStatus: 'Validated', signOff: out.leakageFlagged, reason: 'ps-live-multimodel-lifecycle smoke test' },
       { provider: route, user },
     );
     console.log(`  PROMOTE Success=${promoteResult.Success}${promoteResult.ErrorMessage ? ` Error=${promoteResult.ErrorMessage}` : ''}`);
@@ -435,7 +369,7 @@ async function runModel(md: Metadata, route: IMetadataProvider, user: UserInfo, 
     console.log(`  ERROR in ${cfg.name}: ${result.error}`);
   } finally {
     console.log(`  cleanup ${cfg.name}:`);
-    await cleanupModel(md, user, { pipelineId, modelId });
+    result.cleanupFailures = ReportCleanup(await DeleteRecordedRows(route, user, records, undefined));
   }
 
   result.seconds = (Date.now() - t0) / 1000;
@@ -466,31 +400,32 @@ async function main(): Promise<void> {
   const t0 = Date.now();
   const { md, route, user } = await connect();
 
-  let algorithm: { id: string; created: boolean } | undefined;
+  let algorithm: RigAlgorithm | undefined;
   const results: ModelResult[] = [];
   let storage: FileStorageActivation | null = null;
+  let algorithmCleanupFailures = 0;
 
   try {
     // Training stores its artifacts through an active File Storage Provider, made available as the gate harness does.
     storage = await RigStorage.Activate(route, user);
     banner('RESOLVE SHARED ALGORITHM');
-    algorithm = await ensureDriverNamedAlgorithm(md, user);
-    console.log(`  Algorithm row: ${algorithm.id} (Name='${DRIVER_KEY}', ${algorithm.created ? 'created' : 'reused'})`);
+    algorithm = await EnsureDriverAlgorithm(route, user, DRIVER_KEY, TAG);
+    console.log(`  Algorithm row: ${algorithm.ID} (driver '${DRIVER_KEY}', ${algorithm.Created ? 'created' : 'reused'})`);
 
     // Each model is fully isolated inside runModel (its own try/finally) — a failure in one
     // is captured in its ModelResult and never blocks the next.
     for (const cfg of MODELS) {
-      results.push(await runModel(md, route, user, algorithm.id, cfg));
+      results.push(await runModel(md, route, user, algorithm.ID, cfg));
     }
   } finally {
     banner('CLEANUP (shared algorithm)');
-    if (algorithm) {
-      await cleanupAlgorithm(md, user, algorithm);
-    }
+    if (algorithm && !algorithm.Created) console.log(`  reused algorithm ${algorithm.ID} — left in place`);
+    algorithmCleanupFailures = ReportCleanup(await DeleteCreatedAlgorithm(route, user, algorithm));
     printSummary(results, (Date.now() - t0) / 1000);
     await RigStorage.Restore(route, user, storage);
   }
-  process.exit(0);
+  const cleanupFailures = algorithmCleanupFailures + results.reduce((n, r) => n + r.cleanupFailures, 0);
+  process.exit(cleanupFailures === 0 ? 0 : 1);
 }
 
 main().catch((err) => {
