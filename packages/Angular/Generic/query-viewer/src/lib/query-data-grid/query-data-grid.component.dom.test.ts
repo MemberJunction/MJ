@@ -112,6 +112,33 @@ describe('QueryDataGridComponent (DOM)', () => {
     });
   });
 
+  describe('an entity link that shows a name', () => {
+    type LinkInternals = { renderEntityLinkCell(params: { value: unknown; data: Record<string, unknown> }, col: QueryGridColumnConfig): HTMLElement };
+    const nameCol: QueryGridColumnConfig = {
+      field: 'ContactName', title: 'Contact', sqlBaseType: 'nvarchar', sqlFullType: 'nvarchar', visible: true, sortable: true,
+      resizable: true, reorderable: true, order: 0, isEntityLink: true, targetEntityName: 'Contacts', linkKeyField: 'ContactID',
+    };
+
+    it('shows the name and opens the record by the key field', () => {
+      const fx = render();
+      const out = capture(fx.componentInstance.EntityLinkClick);
+      const cell = (fx.componentInstance as unknown as LinkInternals).renderEntityLinkCell(
+        { value: 'Sample Person', data: { ContactID: 'c-1', ContactName: 'Sample Person' } }, nameCol);
+      const link = cell.querySelector('a.entity-link') as HTMLAnchorElement;
+      expect(link.textContent).toBe('Sample Person');
+      link.click();
+      expect(out.map(e => [e.entityName, e.recordId])).toEqual([['Contacts', 'c-1']]);
+    });
+
+    it('shows plain text when the row has no key', () => {
+      const fx = render();
+      const cell = (fx.componentInstance as unknown as LinkInternals).renderEntityLinkCell(
+        { value: 'Sample Person', data: { ContactID: null, ContactName: 'Sample Person' } }, nameCol);
+      expect(cell.querySelector('a')).toBeNull();
+      expect(cell.textContent).toBe('Sample Person');
+    });
+  });
+
   describe('columns come from the result, not from the query fields', () => {
     type FieldShape = Pick<MJQueryFieldEntity, 'Name' | 'Sequence' | 'SQLBaseType' | 'SQLFullType' | 'Description' | 'SourceEntity' | 'SourceEntityID' | 'SourceFieldName'>;
     const field = (name: string, sequence: number, baseType: string, description: string | null = null): MJQueryFieldEntity => {
