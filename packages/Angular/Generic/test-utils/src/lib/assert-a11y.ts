@@ -1,5 +1,6 @@
 import { ComponentFixture } from '@angular/core/testing';
 import axe from 'axe-core';
+import { GetOverlayContainerElement } from './overlay-helpers.js';
 
 /**
  * Axe rules that CANNOT produce meaningful results under jsdom and are therefore
@@ -32,6 +33,16 @@ export interface ExpectNoAxeViolationsOptions {
    * why it's waived, so the debt is grep-able and the rest of the rule set keeps gating.
    */
   disableRules?: readonly string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+
+  /**
+   * Also scan the CDK overlay container (`.cdk-overlay-container` on `document.body`). Open
+   * dropdowns, menus and popovers render there, outside the fixture's element, so a scan of the
+   * fixture alone never sees them. No effect when no overlay container exists.
+   */
+  IncludeOverlayContainer?: boolean;
+
+  /** More elements to scan alongside the fixture, for content a component renders outside it. */
+  ExtraScanRoots?: readonly Element[];
 }
 
 /** One line per violation: id, impact, help text, and the CSS targets of every impacted node. */
@@ -42,6 +53,15 @@ function formatViolations(violations: axe.Result[]): string {
       return `  - ${violation.id} [${violation.impact ?? 'unknown impact'}]: ${violation.help}\n      nodes: ${nodes}`;
     })
     .join('\n');
+}
+
+/** The fixture's element, plus the overlay container and any extra roots the options ask for. */
+function scanRoots<T>(fixture: ComponentFixture<T>, options: ExpectNoAxeViolationsOptions): Element[] {
+  const roots: Element[] = [fixture.nativeElement as Element];
+  const overlay = options.IncludeOverlayContainer ? GetOverlayContainerElement() : null;
+  if (overlay) roots.push(overlay);
+  roots.push(...(options.ExtraScanRoots ?? []));
+  return roots;
 }
 
 /**
@@ -75,8 +95,7 @@ export async function ExpectNoAxeViolations<T>(
   for (const ruleId of disabled) {
     rules[ruleId] = { enabled: false };
   }
-  const element = fixture.nativeElement as Element;
-  const results = await axe.run(element, { rules });
+  const results = await axe.run({ include: scanRoots(fixture, options) }, { rules });
   if (results.violations.length > 0) {
     throw new Error(
       `Expected no axe accessibility violations, but found ${results.violations.length}:\n` +
