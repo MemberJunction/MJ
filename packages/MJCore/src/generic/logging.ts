@@ -117,36 +117,41 @@ export function IsDiagnosticCaptureSuppressed(): boolean {
  * Executes `fn` with diagnostic capture suppressed for both synchronous and async work
  * inside the current context. Prevents infinite recursion when diagnostic writers
  * perform database or logging operations.
+ *
+ * With a context provider registered, suppression lives only in the async-local context, so
+ * other requests keep capturing. Without one, a process-wide counter suppresses capture until `fn` settles.
  */
 export function WithoutDiagnosticCapture<T>(fn: () => T): T {
-    _suppressCaptureDepth++;
-    const release = (): void => {
-        _suppressCaptureDepth = Math.max(0, _suppressCaptureDepth - 1);
-    };
-    const execute = (): T => {
-        try {
-            const result = fn();
-            if (result != null && typeof (result as unknown as Promise<unknown>).then === 'function') {
-                return (result as unknown as Promise<unknown>).finally(release) as unknown as T;
-            }
-            release();
-            return result;
-        } catch (err) {
-            release();
-            throw err;
-        }
-    };
     if (_diagnosticContextProvider?.WithoutDiagnosticCapture) {
-        return _diagnosticContextProvider.WithoutDiagnosticCapture(execute);
+        return _diagnosticContextProvider.WithoutDiagnosticCapture(fn);
     }
     if (_diagnosticContextProvider?.RunWithContext) {
         const current = GetDiagnosticContext();
         return _diagnosticContextProvider.RunWithContext(
             { ...(current ?? {}), suppressCapture: true, SuppressCapture: true, IsCaptured: false },
-            execute
+            fn
         );
     }
-    return execute();
+    return runWithSuppressionCounter(fn);
+}
+
+/** Runs `fn` with the process-wide suppression counter raised until it returns or its promise settles. */
+function runWithSuppressionCounter<T>(fn: () => T): T {
+    _suppressCaptureDepth++;
+    const release = (): void => {
+        _suppressCaptureDepth = Math.max(0, _suppressCaptureDepth - 1);
+    };
+    try {
+        const result = fn();
+        if (result != null && typeof (result as unknown as Promise<unknown>).then === 'function') {
+            return (result as unknown as Promise<unknown>).finally(release) as unknown as T;
+        }
+        release();
+        return result;
+    } catch (err) {
+        release();
+        throw err;
+    }
 }
 
 /**
