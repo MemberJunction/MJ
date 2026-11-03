@@ -582,6 +582,30 @@ function resolveMainPath(
     return undefined;
 }
 
+function resolveCardNodes(
+    c: Record<string, unknown>,
+    path: string,
+    cTitle: string,
+    body: string,
+    nodes: MJDiagramNode[],
+    nodeIds: Set<string>,
+    mainPath: string[] | undefined,
+    diagnostics: MJDiagramDiagnostic[]
+): string[] {
+    if (Array.isArray(c.nodes) && c.nodes.length > 0) {
+        const cardNodes: string[] = [];
+        c.nodes.forEach((nidRaw, nIdx) => {
+            const nid = asString(nidRaw);
+            if (!nodeIds.has(nid)) pushError(diagnostics, 'UNKNOWN_CARD_NODE', `${path}.nodes[${nIdx}]`, `${path}.nodes[${nIdx}] references unknown node "${nid}".`, `Use a defined node id in card.nodes.${suggestId(nid, [...nodeIds], diagnostics)}`);
+            else cardNodes.push(nid);
+        });
+        return cardNodes;
+    }
+    const text = `${cTitle} ${body}`.toLowerCase();
+    const matched = nodes.filter((n) => `${n.label} ${n.sublabel ?? ''}`.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4).some((w) => text.includes(w))).map((n) => n.id);
+    return matched.length > 0 ? matched : mainPath ?? nodes.map((n) => n.id);
+}
+
 function validateSingleCard(
     c: unknown,
     idx: number,
@@ -614,20 +638,46 @@ function validateSingleCard(
     cardIds.add(cId);
     const items = Array.isArray(c.items) ? c.items.map((x) => asString(x)).filter(Boolean) : undefined;
     const body = asString(c.body) || (items ? items.join(' · ') : '');
-
-    let cardNodes: string[] = [];
-    if (Array.isArray(c.nodes) && c.nodes.length > 0) {
-        c.nodes.forEach((nidRaw, nIdx) => {
-            const nid = asString(nidRaw);
-            if (!nodeIds.has(nid)) pushError(diagnostics, 'UNKNOWN_CARD_NODE', `${path}.nodes[${nIdx}]`, `${path}.nodes[${nIdx}] references unknown node "${nid}".`, `Use a defined node id in card.nodes.${suggestId(nid, [...nodeIds], diagnostics)}`);
-            else cardNodes.push(nid);
-        });
-    } else {
-        const text = `${cTitle} ${body}`.toLowerCase();
-        const matched = nodes.filter((n) => `${n.label} ${n.sublabel ?? ''}`.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4).some((w) => text.includes(w))).map((n) => n.id);
-        cardNodes = matched.length > 0 ? matched : mainPath ?? nodes.map((n) => n.id);
-    }
+    const cardNodes = resolveCardNodes(c, path, cTitle, body, nodes, nodeIds, mainPath, diagnostics);
     cards.push({ id: cId, title: cTitle, body, items, nodes: cardNodes, tone: mapCardTone(c.tone, c.dot) });
+}
+
+function resolveDiagramKind(
+    raw: Record<string, unknown>,
+    fallbackKind: string | undefined,
+    diagnostics: MJDiagramDiagnostic[]
+): MJDiagramKind | null {
+    // The spec's own kind wins; a requested kind (the action's DiagramType) only fills in a missing one.
+    const specKind = (asString(raw.kind) || asString(raw.diagram_type)).toLowerCase();
+    const requestedKind = asString(fallbackKind).toLowerCase();
+    if (specKind && requestedKind && specKind !== requestedKind) {
+        pushError(diagnostics, 'KIND_CONFLICT', 'kind', `The spec's kind is "${specKind}" but "${requestedKind}" was requested.`, 'Make them match, or leave one of them out.');
+        return null;
+    }
+    const rawKind = specKind || requestedKind;
+    if (!MJ_DIAGRAM_KINDS.includes(rawKind as MJDiagramKind)) {
+        pushError(diagnostics, 'INVALID_KIND', 'kind', rawKind ? `Unknown diagram kind "${rawKind}".` : 'Missing required "kind" field.', `Set "kind" to one of: ${MJ_DIAGRAM_KINDS.map((k) => `"${k}"`).join(', ')}.`);
+        return null;
+    }
+    return rawKind as MJDiagramKind;
+}
+
+function validateDiagramCards(
+    raw: Record<string, unknown>,
+    nodes: MJDiagramNode[],
+    nodeIds: Set<string>,
+    mainPath: string[] | undefined,
+    diagnostics: MJDiagramDiagnostic[]
+): MJDiagramCard[] | undefined {
+    if (!Array.isArray(raw.cards) || raw.cards.length === 0) return undefined;
+    if (raw.cards.length > MAX_CARDS) {
+        pushError(diagnostics, 'TOO_MANY_CARDS', 'cards', `Diagram has ${raw.cards.length} summary cards; maximum allowed is ${MAX_CARDS}.`, `Keep the ${MAX_CARDS} most important rules as cards.`);
+        return undefined;
+    }
+    const cards: MJDiagramCard[] = [];
+    const cardIds = new Set<string>();
+    raw.cards.forEach((c, idx) => validateSingleCard(c, idx, nodes, nodeIds, mainPath, cardIds, cards, diagnostics));
+    return cards;
 }
 
 /**
@@ -644,19 +694,8 @@ export function ValidateDiagramSpec(rawInput: unknown, fallbackKind?: string): M
     checkStrings(raw, diagnostics);
     if (diagnostics.length > 0) return { Valid: false, Diagnostics: diagnostics };
 
-    // The spec's own kind wins; a requested kind (the action's DiagramType) only fills in a missing one.
-    const specKind = (asString(raw.kind) || asString(raw.diagram_type)).toLowerCase();
-    const requestedKind = asString(fallbackKind).toLowerCase();
-    if (specKind && requestedKind && specKind !== requestedKind) {
-        pushError(diagnostics, 'KIND_CONFLICT', 'kind', `The spec's kind is "${specKind}" but "${requestedKind}" was requested.`, 'Make them match, or leave one of them out.');
-        return { Valid: false, Diagnostics: diagnostics };
-    }
-    const rawKind = specKind || requestedKind;
-    if (!MJ_DIAGRAM_KINDS.includes(rawKind as MJDiagramKind)) {
-        pushError(diagnostics, 'INVALID_KIND', 'kind', rawKind ? `Unknown diagram kind "${rawKind}".` : 'Missing required "kind" field.', `Set "kind" to one of: ${MJ_DIAGRAM_KINDS.map((k) => `"${k}"`).join(', ')}.`);
-        return { Valid: false, Diagnostics: diagnostics };
-    }
-    const kind = rawKind as MJDiagramKind;
+    const kind = resolveDiagramKind(raw, fallbackKind, diagnostics);
+    if (!kind) return { Valid: false, Diagnostics: diagnostics };
 
     const meta = isRecord(raw.meta) ? raw.meta : {};
     const title = asString(raw.title ?? meta.title);
@@ -678,15 +717,7 @@ export function ValidateDiagramSpec(rawInput: unknown, fallbackKind?: string): M
 
     const phases = validateSequencePhases(raw, edges, rawMessageYs, diagnostics);
     const mainPath = resolveMainPath(raw, kind, lanes, nodes, nodeIds, edges, edgeKey, diagnostics, warnings);
-
-    let cards: MJDiagramCard[] | undefined;
-    if (Array.isArray(raw.cards) && raw.cards.length > MAX_CARDS) {
-        pushError(diagnostics, 'TOO_MANY_CARDS', 'cards', `Diagram has ${raw.cards.length} summary cards; maximum allowed is ${MAX_CARDS}.`, `Keep the ${MAX_CARDS} most important rules as cards.`);
-    } else if (Array.isArray(raw.cards) && raw.cards.length > 0) {
-        cards = [];
-        const cardIds = new Set<string>();
-        raw.cards.forEach((c, idx) => validateSingleCard(c, idx, nodes, nodeIds, mainPath, cardIds, cards!, diagnostics));
-    }
+    const cards = validateDiagramCards(raw, nodes, nodeIds, mainPath, diagnostics);
 
     if (diagnostics.length > 0) return { Valid: false, Diagnostics: diagnostics };
     return { Valid: true, Spec: { kind, title, subtitle, lanes, nodes, edges, phases, mainPath, cards }, Warnings: warnings };

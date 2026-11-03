@@ -2903,22 +2903,24 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             queryDefinition = queryAuth.definition;
             // TTL-enforced, and a miss when the slot was written under another query definition.
             const cached = queryFingerprint ? await LocalCacheManager.Instance.GetRunQueryResult(queryFingerprint, queryDefinition) : null;
-            if (cached && queryFingerprint) {
-                const serveFromSlot = (): RunQueryResult => ({
-                    QueryID: cached.queryId ?? params.QueryID ?? '',
-                    QueryName: params.QueryName ?? '',
-                    Success: true,
-                    // Transport boundary: `cached.results` is readonly (shared, deep-frozen cache
-                    // rows) while the outbound Results is mutable — the runtime freeze is the
-                    // enforcement. Same cast as the RunView hit paths above.
-                    Results: cached.results as RunQueryResult['Results'],
-                    RowCount: cached.results.length,
-                    TotalRowCount: cached.rowCount ?? cached.results.length,
-                    ExecutionTime: 0,
-                    ErrorMessage: '',
-                    CacheHit: true,
-                    CacheKey: queryFingerprint
-                });
+            if (queryFingerprint) {
+                const serveFromSlot = cached
+                    ? (): RunQueryResult => ({
+                        QueryID: cached.queryId ?? params.QueryID ?? '',
+                        QueryName: params.QueryName ?? '',
+                        Success: true,
+                        // Transport boundary: `cached.results` is readonly (shared, deep-frozen cache
+                        // rows) while the outbound Results is mutable — the runtime freeze is the
+                        // enforcement. Same cast as the RunView hit paths above.
+                        Results: cached.results as RunQueryResult['Results'],
+                        RowCount: cached.results.length,
+                        TotalRowCount: cached.rowCount ?? cached.results.length,
+                        ExecutionTime: 0,
+                        ErrorMessage: '',
+                        CacheHit: true,
+                        CacheKey: queryFingerprint
+                    })
+                    : undefined;
                 const checker = (this as IRunQueryProvider).RunQueriesWithCacheCheck?.bind(this);
                 if (!checker || this.TrustLocalCacheCompletely) {
                     // TTL mode (server providers / no validation transport).
@@ -2935,85 +2937,100 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     // authorizes with the proper error message. Query metadata missing from the
                     // provider cache ⇒ ALSO fall through (never serve rows we cannot authorize);
                     // that costs one query run, not correctness.
-                    if (contextUser) {
-                        if (queryAuth.resolvable) {
-                            // Metadata can answer — enforce it. `authorized` comes from the
-                            // provider's STRONGEST available check (B45): the base enforces
-                            // roles-only QueryInfo.UserCanRun; GenericDatabaseProvider's
-                            // override enforces the full MJQueryEntityExtended.UserCanRun
-                            // (roles + entity CanRead + recursive composition) — the identical
-                            // check ValidateQueryForExecution applies on the miss path, so a
-                            // hit is never easier to read than a miss.
-                            if (queryAuth.authorized) {
+                    if (cached && serveFromSlot) {
+                        if (contextUser) {
+                            if (queryAuth.resolvable) {
+                                // Metadata can answer — enforce it. `authorized` comes from the
+                                // provider's STRONGEST available check (B45): the base enforces
+                                // roles-only QueryInfo.UserCanRun; GenericDatabaseProvider's
+                                // override enforces the full MJQueryEntityExtended.UserCanRun
+                                // (roles + entity CanRead + recursive composition) — the identical
+                                // check ValidateQueryForExecution applies on the miss path, so a
+                                // hit is never easier to read than a miss.
+                                if (queryAuth.authorized) {
+                                    return serveFromSlot();
+                                }
+                                LogStatusEx({ message: `RunQuery cache: user '${contextUser.Email}' lacks run permission on '${queryAuth.queryName ?? params.QueryName ?? params.QueryID}' — falling through to authorized execution.`, verboseOnly: true });
+                            } else if (cached.warmedForUserID && UUIDsEqual(cached.warmedForUserID, contextUser.ID)) {
+                                // Metadata CANNOT answer — runtime-created queries never appear in the
+                                // provider's Queries cache (it does not refresh in-process; verified:
+                                // a saved Query stays invisible, 21 -> 21). But a slot only exists
+                                // because its WARMER executed the fully-authorized miss path — so the
+                                // warmer's own permission is already proven. Serve the warmer;
+                                // anyone ELSE falls through and pays one authorized execution.
+                                //
+                                // The first version of this gate failed closed on unresolvable
+                                // metadata, which silently disabled TTL caching for every
+                                // runtime-created query — caught by Q2/Q5/Q10 going red.
                                 return serveFromSlot();
+                            } else {
+                                LogStatusEx({ message: `RunQuery cache: '${params.QueryID ?? params.QueryName}' not in cached metadata and requester is not the slot's warmer — falling through to authorized execution.`, verboseOnly: true });
                             }
-                            LogStatusEx({ message: `RunQuery cache: user '${contextUser.Email}' lacks run permission on '${queryAuth.queryName ?? params.QueryName ?? params.QueryID}' — falling through to authorized execution.`, verboseOnly: true });
-                        } else if (cached.warmedForUserID && UUIDsEqual(cached.warmedForUserID, contextUser.ID)) {
-                            // Metadata CANNOT answer — runtime-created queries never appear in the
-                            // provider's Queries cache (it does not refresh in-process; verified:
-                            // a saved Query stays invisible, 21 -> 21). But a slot only exists
-                            // because its WARMER executed the fully-authorized miss path — so the
-                            // warmer's own permission is already proven. Serve the warmer;
-                            // anyone ELSE falls through and pays one authorized execution.
-                            //
-                            // The first version of this gate failed closed on unresolvable
-                            // metadata, which silently disabled TTL caching for every
-                            // runtime-created query — caught by Q2/Q5/Q10 going red.
-                            return serveFromSlot();
                         } else {
-                            LogStatusEx({ message: `RunQuery cache: '${params.QueryID ?? params.QueryName}' not in cached metadata and requester is not the slot's warmer — falling through to authorized execution.`, verboseOnly: true });
+                            return serveFromSlot();
                         }
-                    } else {
-                        return serveFromSlot();
                     }
-                }
-                // Client smart validation round trip.
-                //
-                // Guarded on `checker` (R4-2): the block above is entered when `!checker ||
-                // TrustLocalCacheCompletely`. If we got here via `!checker` AND the B43 permission
-                // gate DECLINED to serve (denied user / non-warmer), execution used to fall
-                // straight into `await checker(...)` = `await undefined(...)` — a TypeError instead
-                // of the promised "fall through to authorized execution". Every in-tree provider
-                // implements the optional `RunQueriesWithCacheCheck`, so this was latent, but the
-                // pre-B43 code handled `!checker` and this must too: skip the round trip and let
-                // the normal PreRunQuery/InternalRunQuery path below authorize and execute.
-                if (!checker) {
-                    // fall through to normal execution below
                 } else {
-                const response = await checker([{
-                    params,
-                    // '' for a slot written without a hash: the server answers `stale` and returns
-                    // its hash, so the rewrite below stamps the slot.
-                    cacheStatus: { maxUpdatedAt: cached.maxUpdatedAt, rowCount: cached.rowCount, definitionHash: cached.definitionHash ?? '' }
-                }], contextUser);
-                const check = response.results?.[0];
-                if (response.success && check) {
-                    if (check.status === 'current') {
-                        return serveFromSlot();
+                    // Client smart validation round trip (both cold first-fetch and warm revalidation).
+                    // Routing cold CacheLocal requests through RunQueriesWithCacheCheck with no cacheStatus
+                    // engages the server's firstFetchWithValidation path so the initial client slot is
+                    // stamped with maxUpdatedAt, rowCount, and definitionHash — allowing the very first
+                    // subsequent refresh (F5) to validate as 'current' instead of missing.
+                    const response = await checker([{
+                        params,
+                        ...(cached
+                            ? {
+                                // '' for a slot written without a hash: the server answers `stale` and returns
+                                // its hash, so the rewrite below stamps the slot.
+                                cacheStatus: {
+                                    maxUpdatedAt: cached.maxUpdatedAt,
+                                    rowCount: cached.rowCount,
+                                    definitionHash: cached.definitionHash ?? ''
+                                }
+                            }
+                            : {})
+                    }], contextUser);
+                    const check = response.results?.[0];
+                    if (response.success && check) {
+                        if (check.status === 'current' && serveFromSlot) {
+                            return serveFromSlot();
+                        }
+                        if ((check.status === 'stale' || check.status === 'no_validation') && check.results) {
+                            const freshRows = check.results as RunQueryResult['Results'];
+                            // Fire-and-forget slot write/rewrite — same pattern as the RunView client path
+                            LocalCacheManager.Instance.SetRunQueryResult(
+                                queryFingerprint, params.QueryName ?? '', freshRows,
+                                check.maxUpdatedAt ?? '', check.rowCount, check.queryId, params.CacheLocalTTL,
+                                contextUser?.ID,
+                                check.definitionHash ? { QueryID: check.queryId, Hash: check.definitionHash } : undefined
+                            ).catch(e => LogError(`RunQuery cache rewrite failed: ${e}`));
+                            return {
+                                QueryID: check.queryId ?? params.QueryID ?? '',
+                                QueryName: params.QueryName ?? '',
+                                Success: true,
+                                Results: freshRows,
+                                RowCount: freshRows.length,
+                                TotalRowCount: check.rowCount ?? freshRows.length,
+                                ExecutionTime: 0,
+                                ErrorMessage: '',
+                                CacheKey: queryFingerprint
+                            };
+                        }
+                        if (check.status === 'error') {
+                            return {
+                                QueryID: check.queryId ?? params.QueryID ?? '',
+                                QueryName: params.QueryName ?? '',
+                                Success: false,
+                                Results: [],
+                                RowCount: 0,
+                                TotalRowCount: 0,
+                                ExecutionTime: 0,
+                                ErrorMessage: check.errorMessage ?? response.errorMessage ?? 'Query execution failed'
+                            };
+                        }
                     }
-                    if ((check.status === 'stale' || check.status === 'no_validation') && check.results) {
-                        const freshRows = check.results as RunQueryResult['Results'];
-                        // Fire-and-forget slot rewrite — same pattern as the RunView client path
-                        LocalCacheManager.Instance.SetRunQueryResult(
-                            queryFingerprint, params.QueryName ?? '', freshRows,
-                            check.maxUpdatedAt ?? '', check.rowCount, check.queryId, params.CacheLocalTTL,
-                            contextUser?.ID,
-                            check.definitionHash ? { QueryID: check.queryId, Hash: check.definitionHash } : undefined
-                        ).catch(e => LogError(`RunQuery cache rewrite failed: ${e}`));
-                        return {
-                            QueryID: check.queryId ?? params.QueryID ?? '',
-                            QueryName: params.QueryName ?? '',
-                            Success: true,
-                            Results: freshRows,
-                            RowCount: freshRows.length,
-                            TotalRowCount: check.rowCount ?? freshRows.length,
-                            ExecutionTime: 0,
-                            ErrorMessage: ''
-                        };
-                    }
+                    // validation transport failed — fall through to a normal execution
                 }
-                }
-                // validation transport failed — fall through to a normal execution
             }
         }
 
@@ -4536,13 +4553,32 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             //     `r.result` straight to the caller, so null became the caller's RESULT.
             //
             // The only correct remedy is what a cache miss does anyway: fetch in full. The
-            // declined slot was already invalidated by ApplyDifferentialUpdate, so the refetch
-            // repopulates it. CacheLocal is stripped and BypassCache set so this single call
-            // takes the plain path — it cannot re-enter the smart-cache transport, which is what
-            // makes the recursion impossible rather than merely unlikely.
+            // declined slot was already invalidated by ApplyDifferentialUpdate, and because
+            // fallbackParam sets CacheLocal:false + BypassCache:true (so the refetch takes the
+            // plain path and cannot re-enter the smart-cache transport), PostRunViews does not
+            // write to LocalCacheManager — so we repopulate the slot explicitly here.
             LogStatusEx({ message: `Differential merge declined for '${param.EntityName}' — refetching in full.`, verboseOnly: true });
             const fallbackParam: RunViewParams = { ...param, CacheLocal: false, BypassCache: true };
             const freshFetch = await (this as unknown as IRunViewProvider).RunView<T>(fallbackParam, contextUser);
+            if (this.runViewCacheEligibleForWrite(param) && freshFetch.Success && LocalCacheManager.Instance.IsInitialized) {
+                const plainRows = (freshFetch.Results || []).map(row =>
+                    row && typeof (row as { GetAll?: unknown }).GetAll === 'function'
+                        ? (row as unknown as { GetAll(): Record<string, unknown> }).GetAll()
+                        : row
+                );
+                const maxUpdatedAt = checkResult.maxUpdatedAt || this.extractMaxUpdatedAt(plainRows) || '';
+                if (maxUpdatedAt) {
+                    LocalCacheManager.Instance.SetRunViewResult(
+                        fingerprint,
+                        param,
+                        plainRows,
+                        maxUpdatedAt,
+                        freshFetch.AggregateResults ?? checkResult.aggregateResults,
+                        freshFetch.TotalRowCount ?? checkResult.rowCount,
+                        this
+                    ).catch(e => LogError(`Failed to update cache after differential fallback: ${e}`));
+                }
+            }
             return { result: freshFetch, cacheHit: false, cacheMiss: true, alreadyTransformed: true };
         } else if (checkResult.status === 'stale') {
             // Cache is stale - use fresh data and update cache (entity doesn't support differential)
