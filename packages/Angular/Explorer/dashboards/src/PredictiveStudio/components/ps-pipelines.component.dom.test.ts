@@ -429,7 +429,7 @@ describe('PSPipelinesComponent (DOM) — what a Prediction Unit decides', () => 
   const RULE = 'Renewed within 30 days of the decision';
   const unitPipeline = () => makePipeline({ PredictionUnitID: 'u1', PredictionUnit: 'Renewal unit', TargetVariable: RULE, Save: vi.fn().mockResolvedValue(true) });
   const freePipeline = () => makePipeline({ PredictionUnitID: null, PredictionUnit: null, Save: vi.fn().mockResolvedValue(true) });
-  const inspect = (fixture: ReturnType<typeof render>, id: string): HTMLElement | null => {
+  const inspect = (fixture: ReturnType<typeof render>, id: string): Element | null => {
     const node = query(fixture, `[data-node-id="${id}"]`);
     if (!(node instanceof HTMLElement)) throw new Error(`no node ${id}`);
     node.click();

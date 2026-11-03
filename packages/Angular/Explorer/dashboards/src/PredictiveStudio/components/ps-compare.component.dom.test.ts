@@ -23,7 +23,7 @@ try {
 type Row = ReturnType<PredictiveStudioEngine['IterationRowsForSession']>[number];
 
 const scoredRow = (id: string, score: number, algo: string): Row =>
-  ({
+  Object.assign(Object.create(null), {
     ID: id,
     ExperimentSessionID: 's1',
     Sequence: 1,
@@ -34,16 +34,17 @@ const scoredRow = (id: string, score: number, algo: string): Row =>
     TokensUsed: null,
     Rationale: null,
     AlgorithmName: algo,
-  } as unknown as Row);
+  });
 
 /** A session's stored ranking and plan; every session takes the defaults unless named in `perSession`. */
 type SessionStore = { Leaderboard: string | null; PlanSpec: string | null };
 
-const makeEngine = (rowsBySession: Record<string, Row[]>, leaderboard: string | null = null, planSpec: string | null = null, perSession: Record<string, SessionStore> = {}) =>
-  ({
+/** An engine double (Object.create(null) + assign, no cast) with the two members the panel reads. */
+const makeEngine = (rowsBySession: Record<string, Row[]>, leaderboard: string | null = null, planSpec: string | null = null, perSession: Record<string, SessionStore> = {}): PredictiveStudioEngine =>
+  Object.assign(Object.create(null), {
     Sessions: Object.keys(rowsBySession).map((id) => ({ ID: id, Name: `Session ${id}`, ...(perSession[id] ?? { Leaderboard: leaderboard, PlanSpec: planSpec }) })),
     IterationRowsForSession: (id: string) => rowsBySession[id] ?? [],
-  } as unknown as PredictiveStudioEngine);
+  });
 
 const rankingOf = (...ids: string[]) =>
   JSON.stringify(ids.map((id, i) => ({ IterationID: id, Metric: -(2.5 + i), ScoreMetric: 'rmse', OnSuccessMetric: true })));

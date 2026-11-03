@@ -24,11 +24,12 @@ try {
 
 type Row = ReturnType<PredictiveStudioEngine['IterationRowsForSession']>[number];
 
-const makeEngine = (sessions: Array<{ ID: string; Name: string; Status: string; Budget?: string | null; Leaderboard?: string | null; PlanSpec?: string | null }>, rows: Row[] = []) =>
-  ({
+/** An engine double (Object.create(null) + assign, no cast) with the two members the panel reads. */
+const makeEngine = (sessions: Array<{ ID: string; Name: string; Status: string; Budget?: string | null; Leaderboard?: string | null; PlanSpec?: string | null }>, rows: Row[] = []): PredictiveStudioEngine =>
+  Object.assign(Object.create(null), {
     Sessions: sessions,
     IterationRowsForSession: () => rows,
-  } as unknown as PredictiveStudioEngine);
+  });
 
 const render = (engine: PredictiveStudioEngine) => renderComponentFixture(PSExperimentsComponent, { inputs: { engine } });
 
@@ -117,12 +118,12 @@ describe('PSExperimentsComponent (DOM) — ViewResultsArtifact payload', () => {
   async function payloadFor(validationResults: string | null): Promise<ArtifactPayload> {
     const row: Row = { ID: 'it-a', ExperimentSessionID: 's1', Sequence: 1, Label: null, Status: 'Completed', Score: 0.3, ComputeCost: null, TokensUsed: null, Rationale: null, AlgorithmName: 'XGBoost' };
     const Leaderboard = JSON.stringify([{ IterationID: 'it-a', Metric: -0.3, ScoreMetric: 'log-loss', OnSuccessMetric: true }]);
-    const engine = {
+    const engine: PredictiveStudioEngine = Object.assign(Object.create(null), {
       Sessions: [{ ID: 's1', Name: 'Run', Status: 'Completed', Budget: null, Leaderboard, PlanSpec: null }],
       IterationRowsForSession: () => [row],
       IterationsForSession: () => [{ ID: 'it-a' }],
       TrainingRuns: [{ ExperimentSessionIterationID: 'it-a', ResultingModelID: 'model-1', ValidationResults: validationResults }],
-    } as unknown as PredictiveStudioEngine;
+    });
     let saved = '';
     let described = '';
     const entity = (): { Save: () => Promise<boolean>; Content?: string; Description?: string } => ({
@@ -130,10 +131,10 @@ describe('PSExperimentsComponent (DOM) — ViewResultsArtifact payload', () => {
       set Content(value: string) { saved = value; },
       set Description(value: string) { described = value; },
     });
-    const provider = {
+    const provider: IMetadataProvider = Object.assign(Object.create(null), {
       RunView: async () => ({ Success: true, Results: [] }),
       GetEntityObject: async () => entity(),
-    } as unknown as IMetadataProvider;
+    });
     const fixture = renderComponentFixture(PSExperimentsComponent, { inputs: { engine, provider } });
     await fixture.componentInstance.ViewResultsArtifact();
     return { ...(JSON.parse(saved) as Omit<ArtifactPayload, 'ArtifactDescription'>), ArtifactDescription: described };
