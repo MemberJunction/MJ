@@ -251,6 +251,16 @@ describe('SimpleVectorServiceProvider', () => {
             expect(runViewCall(0).Params.IgnoreMaxRows).toBe(true);
         });
 
+        it('loads the index past the RunView cache, which would widen Fields and hold a second copy', async () => {
+            runViewMock.mockResolvedValueOnce({ Success: true, Results: [] });
+
+            await new SimpleVectorServiceProvider().QueryIndex(
+                { id: 'doc-1', vector: [0.1, 0.2, 0.3], topK: 5 } as never
+            );
+
+            expect(runViewCall(0).Params.BypassCache).toBe(true);
+        });
+
         it('rejects calls without an EntityDocumentID', async () => {
             const provider = new SimpleVectorServiceProvider();
             const result = await provider.QueryIndex({ id: '', vector: [1, 0, 0], topK: 5 } as never, TEST_USER);
