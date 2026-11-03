@@ -535,11 +535,33 @@ async function captureProcDefinitions(pool, names) {
 }
 
 /**
+ * The text after any leading whitespace, `-- …` line comments and `/* … *\/` block comments. Scanned
+ * by index rather than with one regular expression, which could backtrack over runs of comments.
+ */
+function skipLeadingComments(text) {
+  let i = 0;
+  for (;;) {
+    while (i < text.length && /\s/.test(text[i])) i++;
+    if (text.startsWith('--', i)) {
+      const end = text.indexOf('\n', i);
+      if (end === -1) return '';
+      i = end + 1;
+    } else if (text.startsWith('/*', i)) {
+      const end = text.indexOf('*/', i + 2);
+      if (end === -1) return '';
+      i = end + 2;
+    } else {
+      return text.slice(i);
+    }
+  }
+}
+
+/**
  * Turn a captured `CREATE PROCEDURE` into `CREATE OR ALTER PROCEDURE`, so it can be re-applied over
  * the version CodeGen compiled during the stage. Only the first CREATE (the statement's own) changes.
  */
 export function toCreateOrAlter(definition) {
-  if (/^\s*(?:(?:--[^\n]*\n|\/\*[\s\S]*?\*\/)\s*)*CREATE\s+OR\s+ALTER\b/i.test(definition)) {
+  if (/^CREATE\s+OR\s+ALTER\b/i.test(skipLeadingComments(definition))) {
     return definition;
   }
   return definition.replace(/\bCREATE(\s+)(PROC(?:EDURE)?)\b/i, 'CREATE OR ALTER$1$2');
