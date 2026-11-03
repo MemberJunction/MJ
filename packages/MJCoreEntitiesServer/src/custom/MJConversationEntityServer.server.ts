@@ -3,25 +3,36 @@ import {
     BaseEntityResult,
     EntitySaveOptions,
     IMetadataProvider,
+    ValidationErrorInfo,
+    ValidationErrorType,
     ValidationResult,
     WellKnownUserSource
 } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
+    CanonicalizeConversationAdditionalData,
     IsConversationHiddenByFieldSecurity,
+    IsInheritingFolderAccess,
+    IsInheritingFolderAccessInSQL,
     MJConversationEntity,
     MergeRestrictedFieldsIntoAnchorMetadata,
     ParseConversationAnchorMetadata,
     UserCanReadLinkedRecord
 } from '@memberjunction/core-entities';
-import { CheckAnonymousOwnershipKeyChange } from './anonymousOwnershipKeyGuard';
+import { CheckAnonymousOwnershipKeyChange, IsSetByTransactionVariable } from './anonymousOwnershipKeyGuard';
 
 /**
  * Server-side `MJ: Conversations` entity.
  *
  * 1. Keeps `ExternalID` — the scope identity an anonymous visitor's realtime session is owned through — out
  *    of an anonymous visitor's reach once the conversation exists. See {@link CheckAnonymousOwnershipKeyChange}.
- * 2. Enforces Row-Level Security (RLS) and Field-Level Security (FLS) on anchored conversations
+ * 2. Keeps who a conversation belongs to and who it is shared with in its owner's hands: see
+ *    {@link checkOwnerOnlyChange}. Uses the synchronous `Validate()` so the rules run on every save, like
+ *    `MJAIAgentSessionEntityServer`.
+ * 3. Saves `AdditionalData` as compact JSON when it holds an object, so the stored text always uses the spelling
+ *    the conversation list's SQL filter matches (`INHERIT_FOLDER_ACCESS_SQL_CLAUSE`), and refuses a value the filter
+ *    and the parser would still read differently: see {@link checkInheritanceReadingsAgree}.
+ * 4. Enforces Row-Level Security (RLS) and Field-Level Security (FLS) on anchored conversations
  *    (`LinkedEntityID` + `LinkedRecordID` / `AnchorType`):
  *    - Verifies the saving user can read the linked record (`UserCanReadLinkedRecord`).
  *    - Verifies the saving user is not denied Read access on the anchored field or `restrictedFields`
@@ -33,15 +44,27 @@ import { CheckAnonymousOwnershipKeyChange } from './anonymousOwnershipKeyGuard';
 export class MJConversationEntityServer extends MJConversationEntity {
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        const violation = CheckAnonymousOwnershipKeyChange(this, 'ExternalID');
-        if (violation) {
-            result.Errors.push(violation);
-            result.Success = false;
+        for (const violation of [
+            CheckAnonymousOwnershipKeyChange(this, 'ExternalID'),
+            checkOwnerOnlyChange(this),
+            checkInheritanceReadingsAgree(this),
+        ]) {
+            if (violation) {
+                result.Errors.push(violation);
+                result.Success = false;
+            }
         }
         return result;
     }
 
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        const additionalData = this.GetFieldByName('AdditionalData');
+        if (additionalData?.Dirty) {
+            const canonical = CanonicalizeConversationAdditionalData(additionalData.Value as string | null);
+            if (canonical !== additionalData.Value) {
+                additionalData.Value = canonical;
+            }
+        }
         const refusal = await this.checkAnchoredConversationAccessAndStampMetadata();
         if (refusal) {
             this.recordSaveDenied(refusal);
@@ -158,4 +181,70 @@ export class MJConversationEntityServer extends MJConversationEntity {
         result.EndedAt = new Date();
         this.RegisterResultHistoryEntry(result);
     }
+}
+
+/**
+ * Refuses `AdditionalData` that the conversation list's SQL filter and the parser would read differently, from
+ * anyone, the owner and the server included. The `LIKE` filter also matches the key nested in another object,
+ * or in another letter case, where the parser sees no opt-in: search, which filters with the SQL alone, would
+ * then show the conversation to its folder's audience while the list and the owner's menu say it is not shared.
+ * Checks the compact form the save stores.
+ */
+function checkInheritanceReadingsAgree(entity: MJConversationEntity): ValidationErrorInfo | null {
+    const additionalData = entity.GetFieldByName('AdditionalData');
+    if (!additionalData?.Dirty) {
+        return null;
+    }
+    const stored = CanonicalizeConversationAdditionalData(additionalData.Value as string | null);
+    if (IsInheritingFolderAccess({ AdditionalData: stored }) === IsInheritingFolderAccessInSQL(stored)) {
+        return null;
+    }
+    return new ValidationErrorInfo(
+        'AdditionalData',
+        'Set folder inheritance only as a top-level "inheritFolderAccess": true, so every reader agrees on whether this conversation is shared.',
+        null,
+        ValidationErrorType.Failure,
+    );
+}
+
+/**
+ * Refuses a change to an existing conversation's folder (`ProjectID`), owner (`UserID`) or folder
+ * inheritance (`AdditionalData.inheritFolderAccess`) by anyone but its owner.
+ *
+ * Those three decide who else can see the conversation: turning inheritance on shows it to everyone its folder
+ * is shared with, and moving an inheriting conversation into a Shared or Public folder shows it to that folder's
+ * audience. An Edit grant lets someone work in a conversation, not publish it. The server itself (no context user, or the system user) is exempt, as is a conversation with
+ * no owner on record. A transaction variable that sets one of these fields, or `ID`, counts as a change:
+ * it is applied at submit, after this check has run.
+ */
+function checkOwnerOnlyChange(entity: MJConversationEntity): ValidationErrorInfo | null {
+    const user = entity.ContextCurrentUser;
+    if (!entity.IsSaved || !user || WellKnownUserSource.Instance.IsSystemUser(user)) {
+        return null;
+    }
+    const owner = entity.GetFieldByName('UserID')?.OldValue as string | null | undefined;
+    if (!owner || UUIDsEqual(owner, user.ID)) {
+        return null;
+    }
+    const additionalData = entity.GetFieldByName('AdditionalData');
+    const before = additionalData?.OldValue as string | null;
+    const after = additionalData?.Value as string | null;
+    // Both readings: the parser's, and the SQL filter's. A rewrite one of them reads differently (an odd
+    // spelling the LIKE misses) would otherwise re-share the conversation past a parser-only check.
+    const inheritanceChanged =
+        !!additionalData?.Dirty &&
+        (IsInheritingFolderAccess({ AdditionalData: before }) !== IsInheritingFolderAccess({ AdditionalData: after }) ||
+            IsInheritingFolderAccessInSQL(before) !== IsInheritingFolderAccessInSQL(after));
+    const changed = ['ProjectID', 'UserID'].find((name) => entity.GetFieldByName(name)?.Dirty)
+        ?? (inheritanceChanged ? 'AdditionalData' : undefined)
+        ?? (IsSetByTransactionVariable(entity, ['ProjectID', 'UserID', 'AdditionalData', 'ID']) ? 'ProjectID' : undefined);
+    if (!changed) {
+        return null;
+    }
+    return new ValidationErrorInfo(
+        changed,
+        "Only the conversation's owner can move it to another folder, change its owner, or change whether it inherits its folder's access.",
+        null,
+        ValidationErrorType.Failure,
+    );
 }

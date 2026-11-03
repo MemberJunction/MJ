@@ -12,6 +12,7 @@ import {
 } from '../toolbar/base-form-toolbar-action';
 import { MjRecordLinksComponent } from '../links/record-links.component';
 import { FormRecordRefreshCoordinator, type FormRemoteUpdateEvent } from '../form-record-refresh.coordinator';
+import { type FormModeSwitch } from '../types/form-types';
 
 @Component({ standalone: true, selector: 'mj-form-toolbar', template: '' })
 class ToolbarStub {
@@ -47,6 +48,7 @@ class ToolbarStub {
     @Input() HasCustomSectionOrder = false;
     @Input() Variants: unknown;
     @Input() CurrentVariantID: unknown;
+    @Input() FormModeSwitch: FormModeSwitch | null = null;
     @Input() RegisteredItems: unknown;
     @Input() ItemOverrides: unknown;
     @Input() FormComponent: unknown;

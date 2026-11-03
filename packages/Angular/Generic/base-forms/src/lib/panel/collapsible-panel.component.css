@@ -295,6 +295,66 @@ mj-collapsible-panel.mj-panel-has-warnings:not(.mj-chrome-show) > .mj-forms-pane
   overflow: visible;
 }
 
+/* When a related grid shows <mj-empty-state> (0 rows or error), never let the
+   fixed inline pixel height clip wrapped empty-state titles or messages. */
+.mj-forms-panel--related mj-explorer-entity-data-grid:has(.mj-grid-content > mj-empty-state),
+.mj-forms-panel--related .mj-grid-container:has(> .mj-grid-content > mj-empty-state) {
+  height: auto !important;
+  min-height: 126px;
+}
+
+.mj-forms-panel--related .mj-grid-content:has(> mj-empty-state) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 76px;
+  overflow: visible;
+}
+
+@media (max-width: 768px) {
+  .mj-forms-panel--related .mj-forms-panel-content {
+    resize: none;
+  }
+
+  .mj-forms-panel--related .mj-grid-toolbar {
+    flex-wrap: nowrap;
+    padding: 0 8px;
+    gap: 8px;
+  }
+
+  .mj-forms-panel--related .mj-grid-toolbar .toolbar-left {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .mj-forms-panel--related .mj-grid-toolbar .toolbar-search {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+    margin-top: 0;
+  }
+
+  .mj-forms-panel--related .mj-grid-toolbar .search-input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .mj-forms-panel--related .mj-grid-toolbar .toolbar-center {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+
+  .mj-forms-panel--related .mj-grid-toolbar .toolbar-right {
+    flex: 0 0 auto;
+    gap: 4px;
+  }
+
+  .mj-forms-panel--related .mj-grid-toolbar .toolbar-button {
+    padding: 6px 8px;
+  }
+}
+
 /* ============================================
    BODY (collapsible)
    ============================================ */

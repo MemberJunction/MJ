@@ -25,7 +25,7 @@ import { MJReactModule } from '@memberjunction/ng-react';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { MJSafeRichHtmlPipe, SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { MJEmptyStateComponent, MJAlertComponent, MJButtonDirective, MjIconPickerComponent } from '@memberjunction/ng-ui-components';
+import { MJEmptyStateComponent, MJAlertComponent, MJButtonDirective, MjIconPickerComponent, MJBottomSheetComponent } from '@memberjunction/ng-ui-components';
 import { InteractiveFormComponent } from './lib/interactive-form/interactive-form.component';
 import { InteractiveFormPanelComponent } from './lib/interactive-form/interactive-form-panel.component';
 import { MjEntityFormHostComponent } from './lib/host/entity-form-host.component';
@@ -106,6 +106,7 @@ import { MjRecordCommentsComponent } from './lib/comments/record-comments.compon
     SharedGenericModule,
     MJButtonDirective,
     MjIconPickerComponent,
+    MJBottomSheetComponent,
     RecordCloneSlideInComponent
   ],
   exports: [
