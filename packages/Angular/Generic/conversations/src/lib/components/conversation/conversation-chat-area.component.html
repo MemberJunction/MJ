@@ -401,6 +401,7 @@
               [ReadOnly]="EffectiveReadOnly"
               [AllowStopRun]="AllowStopRun"
               [InFlightCount]="InFlightCount"
+              [OpenLinksInNewTab]="OpenLinksInNewTab"
               [assistantDisplayName]="assistantDisplayName"
               [assistantAvatarUrl]="assistantAvatarUrl"
               [messages]="DisplayMessages"
@@ -765,6 +766,7 @@
       [Compact]="overlayMode"
       [ShowDevLinks]="!overlayMode"
       [ShowDensityPicker]="!overlayMode"
+      [OpenLinksInNewTab]="OpenLinksInNewTab"
       (NavigateRequest)="onRealtimeNavigateRequest($event)"
       (StartLiveRequested)="onReviewStartLive($event)"
       (ReviewClosed)="onReviewClosed()">

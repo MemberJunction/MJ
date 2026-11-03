@@ -499,6 +499,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return this.ReadReplyFromTop;
   }
 
+  /**
+   * Whether inline markdown links in conversation messages open in a new browser tab
+   * (`target="_blank"` with `rel="noopener noreferrer"`). In-page fragment links (`#heading`)
+   * and `mailto:` / `tel:` / `sms:` links stay in the current tab. Default `true` so clicking
+   * an external link in a reply does not navigate away from the active conversation; set `false`
+   * to open links in the current tab.
+   */
+  @Input() OpenLinksInNewTab = true;
+
   // --- Additional host-level feature gates (all default true; false removes the
   //     affordance entirely). Forwarded to the message list / message items / empty
   //     state so white-labeled end-user surfaces can pare the chat down through the

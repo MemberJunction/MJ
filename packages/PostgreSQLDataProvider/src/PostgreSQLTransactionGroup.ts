@@ -245,8 +245,20 @@ export class PostgreSQLTransactionGroup extends TransactionGroupBase {
         const rawParams = item.ExtraData?.parameters ?? item.Vars;
         const params = PGQueryParameterProcessor.ProcessParameters(rawParams);
 
-        const queryResult = await client.query(item.Instruction, params);
-        return this.postProcessRows(queryResult.rows as Record<string, unknown>[], item, pgProvider);
+        const rows =
+            typeof pgProvider.ExecuteObservedQuery === 'function'
+                ? await pgProvider.ExecuteObservedQuery<Record<string, unknown>>(
+                      client,
+                      item.Instruction,
+                      params,
+                      {
+                          description: `TransactionGroup:${item.OperationType}:${item.BaseEntity?.EntityInfo?.Name ?? ''}`,
+                          isMutation: true,
+                      },
+                      item.BaseEntity?.ContextCurrentUser,
+                  )
+                : (await client.query<Record<string, unknown>>(item.Instruction, params)).rows;
+        return this.postProcessRows(rows, item, pgProvider);
     }
 
     /**
