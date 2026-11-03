@@ -1,5 +1,6 @@
 import * as crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import * as zlib from 'node:zlib';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
     GetDiagnosticContext,
@@ -8,6 +9,7 @@ import {
     DiagnosticContext,
     IMetadataProvider,
     RunView,
+    RunViewParams,
     UserInfo,
 } from '@memberjunction/core';
 import { InstanceConfigEngine } from '@memberjunction/core-entities';
@@ -177,6 +179,44 @@ function createFakeDiagnosticsProvider(): FakeDiagnosticsProvider {
 function mockRunViewRows(rows: FakeRow[] = []): void {
     const fakeRunView = { RunView: async () => ({ Success: true, Results: rows, ErrorMessage: '' }) };
     vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(fakeRunView as unknown as RunView);
+}
+
+const CHUNK_ENTITY = 'MJ: Diagnostic Session Chunks';
+
+/**
+ * Makes RunView read chunk rows the way the database does: a binary column (`Data`) comes back
+ * only when the query names it or sets `IncludeBinaryFields`. Other entities return no rows.
+ */
+function mockChunkRunView(rows: () => FieldSnapshot[], failure?: string): void {
+    const fakeRunView = {
+        RunView: async (params: RunViewParams) => {
+            if (params.EntityName !== CHUNK_ENTITY) return { Success: true, Results: [], ErrorMessage: '' };
+            if (failure) return { Success: false, Results: [], ErrorMessage: failure };
+            const named = (params.Fields ?? []).map((f) => f.toLowerCase());
+            const includeData = params.IncludeBinaryFields === true || named.includes('data');
+            const results = rows().map((row) => {
+                const out: FieldSnapshot =
+                    named.length > 0 ? Object.fromEntries(Object.entries(row).filter(([k]) => named.includes(k.toLowerCase()))) : { ...row };
+                if (!includeData) delete out['Data'];
+                return out;
+            });
+            return { Success: true, Results: results, ErrorMessage: '' };
+        },
+    };
+    vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue(fakeRunView as unknown as RunView);
+}
+
+/** A saved chunk row as the database stores it: gzip NDJSON, base64 in `Data`. */
+function chunkRow(fields: { ContentKind: string; Source?: string; Sequence?: number; EntryCount: number; ndjson: string }): FieldSnapshot {
+    return {
+        ID: crypto.randomUUID(),
+        DiagnosticSessionID: 'session-saved',
+        Source: fields.Source ?? 'Server',
+        ContentKind: fields.ContentKind,
+        Sequence: fields.Sequence ?? 1,
+        EntryCount: fields.EntryCount,
+        Data: zlib.gzipSync(Buffer.from(fields.ndjson, 'utf8')).toString('base64'),
+    };
 }
 
 /** Makes `InstanceConfigEngine` return the given values; unlisted keys fall back to their defaults. */
@@ -512,6 +552,60 @@ describe('@memberjunction/diagnostics-server', () => {
             const summary = assembled.manifest['redactionSummary'] as { credentialsScrubbedCount: number };
             expect(summary.credentialsScrubbedCount).toBe(3);
             expect(assembled.scrubReport.credentialsScrubbedCount).toBe(3);
+        });
+    });
+
+    describe('Bundle assembly from saved chunks', () => {
+        const sqlEntry = { timestamp: '2026-11-02T12:00:00.000Z', sql: 'SELECT 1', durationMs: 5, rowCount: 1, parameterTypes: [] };
+        const logEntry = { timestamp: '2026-11-02T12:00:00.000Z', severity: 'info', source: 'server', message: 'hello' };
+
+        it('builds the bundle from the chunks a stopped session saved to the database', async () => {
+            mockChunkRunView(() => fake.SaveHistory(CHUNK_ENTITY));
+            manager.AppendToChunkBuffer('session-saved', 'Server', 'SQL', sqlEntry);
+            manager.AppendToChunkBuffer('session-saved', 'Client', 'Logs', logEntry);
+            const saved = await manager.FlushSessionChunksToDatabase('session-saved', ownerUser, fake.Provider);
+            expect(saved).toBe(2);
+
+            const assembled = await manager.AssembleBundleDataFromChunks('session-saved', false, undefined, ownerUser, fake.Provider);
+
+            expect(assembled.bundleData.serverSql).toHaveLength(1);
+            expect(assembled.bundleData.clientLogs).toHaveLength(1);
+        });
+
+        it('fails when the saved chunks cannot be read', async () => {
+            mockChunkRunView(() => [], 'database is unavailable');
+
+            await expect(
+                manager.AssembleBundleDataFromChunks('session-saved', false, undefined, ownerUser, fake.Provider)
+            ).rejects.toThrow(/database is unavailable/);
+        });
+
+        it.each([
+            ['has no data', { ...chunkRow({ ContentKind: 'SQL', EntryCount: 1, ndjson: JSON.stringify(sqlEntry) }), Data: null }],
+            ['is not compressed', { ...chunkRow({ ContentKind: 'SQL', EntryCount: 1, ndjson: '' }), Data: Buffer.from('plain').toString('base64') }],
+            ['holds an unreadable entry', chunkRow({ ContentKind: 'SQL', EntryCount: 1, ndjson: '{not json' })],
+            ['holds fewer entries than it recorded', chunkRow({ ContentKind: 'SQL', EntryCount: 2, ndjson: JSON.stringify(sqlEntry) })],
+            ['has a content kind the bundle does not hold', chunkRow({ ContentKind: 'Timeline', EntryCount: 1, ndjson: JSON.stringify(logEntry) })],
+        ])('fails instead of building a partial bundle when a saved chunk %s', async (_label, row) => {
+            mockChunkRunView(() => [chunkRow({ ContentKind: 'Logs', EntryCount: 1, ndjson: JSON.stringify(logEntry) }), row]);
+
+            await expect(
+                manager.AssembleBundleDataFromChunks('session-saved', false, undefined, ownerUser, fake.Provider)
+            ).rejects.toThrow(/session-saved/);
+        });
+
+        it('marks the bundle Failed and returns no bundle when a saved chunk cannot be read', async () => {
+            const ctx = { provider: fake.Provider, user: ownerUser };
+            const started = await new DiagnosticsStartSessionServerOperation().ExecuteServer({ Name: 'S', ScopeType: 'Users' }, ctx);
+            const sessionId = started.Output!.SessionID;
+            mockChunkRunView(() => [{ ...chunkRow({ ContentKind: 'SQL', EntryCount: 2, ndjson: JSON.stringify(sqlEntry) }), DiagnosticSessionID: sessionId }]);
+
+            const built = await new DiagnosticsBuildBundleServerOperation().ExecuteServer({ SessionID: sessionId }, ctx);
+
+            expect(built.Success).toBe(false);
+            expect(built.ErrorMessage).toMatch(/recorded 2/);
+            const bundleRows = fake.SaveHistory('MJ: Diagnostic Bundles');
+            expect(bundleRows.at(-1)?.['Status']).toBe('Failed');
         });
     });
 

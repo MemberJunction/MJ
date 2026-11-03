@@ -2,13 +2,14 @@
  * diagnostics.checks.ts — the 'diagnostics' bundle (DIAG1–DIAG4):
  * Integration checks exercising the Diagnostic Bundles subsystem:
  *   DIAG1: Session registration, AsyncLocalStorage SQL/Log capture, and WithoutDiagnosticCapture suppression
- *   DIAG2: AssembleBundleDataFromChunks, structural verification (VerifyBundleArchive), and single-use HMAC download token
+ *   DIAG2: AssembleBundleDataFromChunks from chunks saved to the database, structural verification (VerifyBundleArchive), and single-use HMAC download token
  *   DIAG3: Collector encryption (MJDB v1 X25519 + AES-256-GCM AAD) & standard MJAPI Intake quarantine-then-promote verification
  *   DIAG4: Junk / tampered upload rejection before quarantine storage write
  */
 import * as crypto from 'node:crypto';
 import {
     GetDiagnosticContext,
+    RemoteOpServerContext,
     WithoutDiagnosticCapture,
 } from '@memberjunction/core';
 import {
@@ -22,6 +23,8 @@ import {
     DiagnosticIntakeService,
     StructuralOnlyMalwareScanner,
     RunWithServerDiagnosticContext,
+    DiagnosticsStartSessionServerOperation,
+    DiagnosticsStopSessionServerOperation,
 } from '@memberjunction/diagnostics-server';
 import {
     Assert,
@@ -88,37 +91,34 @@ export const DiagnosticsChecks: NamedCheck[] = [
         Name: 'DIAG2: Assemble .mjdiag bundle archive, verify structure, and enforce single-use HMAC download token',
         Fn: async (ctx: IntegrationCheckContext) => {
             const manager = DiagnosticSessionManager.Instance;
-            const sessionId = crypto.randomUUID();
             const userId = ctx.User.ID;
+            const opContext: RemoteOpServerContext = { provider: ctx.Provider, user: ctx.User, emitProgress: () => undefined };
+            const started = await new DiagnosticsStartSessionServerOperation().ExecuteServer(
+                { Name: 'IT Assemble Session', ScopeType: 'Users', Scope: { userIds: [userId] }, Categories: ['Logs', 'SQL'], ScrubLiterals: true },
+                opContext,
+            );
+            Assert(started.Success && !!started.Output, `StartSession must succeed: ${started.ErrorMessage}`);
+            const sessionId = started.Output!.SessionID;
 
-            manager.RegisterActiveSession({
-                id: sessionId,
-                name: 'IT Assemble Session',
-                status: 'Active',
-                scopeType: 'Users',
-                scope: { userIds: [userId] },
-                level: 'Standard',
-                categories: ['Logs', 'SQL'],
-                scrubLiterals: true,
-                startedAtMs: Date.now(),
-                endsAtMs: Date.now() + 60_000,
-                maxBytes: 10_000_000,
-                createdByUserId: userId,
-                bytesWritten: 0,
-            });
-
-            manager.AppendToChunkBuffer(sessionId, 'Server', 'SQL', {
-                timestamp: new Date().toISOString(),
-                durationMs: 2600,
-                rowCount: 5,
-                sql: "SELECT * FROM AuditLogs WHERE Email = 'alice@example.com'",
-                parameterTypes: [],
-            });
+            try {
+                manager.AppendToChunkBuffer(sessionId, 'Server', 'SQL', {
+                    timestamp: new Date().toISOString(),
+                    durationMs: 2600,
+                    rowCount: 5,
+                    sql: "SELECT * FROM AuditLogs WHERE Email = 'alice@example.com'",
+                    parameterTypes: [],
+                });
+                const saved = await manager.FlushSessionChunksToDatabase(sessionId, ctx.User, ctx.Provider);
+                AssertEqual(saved, 1, 'The SQL chunk is saved to the database before the bundle is built');
+            } finally {
+                await new DiagnosticsStopSessionServerOperation().ExecuteServer({ SessionID: sessionId }, opContext);
+            }
 
             const assembled = await manager.AssembleBundleDataFromChunks(sessionId, true, undefined, ctx.User, ctx.Provider);
             const verification = await VerifyBundleArchive(assembled.archiveBytes);
             Assert(verification.valid, `Bundle archive must verify cleanly: ${verification.reason}`);
             const data = ParseBundleDataFromArchive(verification);
+            AssertEqual(data.serverSql.length, 1, 'The bundle holds the SQL entry read back from the database');
             Assert(
                 data.findings.some((f) => f.category === 'slow_sql'),
                 'Slow SQL finding generated for 2600ms query',

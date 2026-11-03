@@ -3,7 +3,7 @@ import * as crypto from 'node:crypto';
 import * as os from 'node:os';
 import * as zlib from 'node:zlib';
 import { monitorEventLoopDelay, IntervalHistogram } from 'node:perf_hooks';
-import { BaseSingleton, EscapeSQLString, MJGlobal } from '@memberjunction/global';
+import { Base64ToBytes, BaseSingleton, EscapeSQLString, MJGlobal } from '@memberjunction/global';
 import {
   DiagnosticContext,
   IDiagnosticContextProvider,
@@ -89,6 +89,31 @@ interface DownloadTokenClaims {
 
 /** A chunk buffer taken out of memory, compressed and numbered, ready to save. */
 type DrainedChunk = ReturnType<DiagnosticSessionManager['DrainPendingBuffersForSession']>[number];
+
+/** The chunk columns the bundle build reads. Naming `Data` makes RunView return that binary column. */
+const CHUNK_READ_FIELDS = ['Source', 'ContentKind', 'Sequence', 'EntryCount', 'Data'] as const;
+
+/** A saved chunk row as the bundle build reads it. */
+type SavedChunkRow = Pick<MJDiagnosticSessionChunkEntity, (typeof CHUNK_READ_FIELDS)[number]>;
+
+/** One chunk to unpack into a bundle, from memory or from the database. */
+interface ChunkToUnpack {
+  source: MJDiagnosticSessionChunkEntity['Source'];
+  contentKind: ChunkContentKind;
+  sequence: number;
+  entryCount: number;
+  compressedData: Uint8Array | null;
+}
+
+/** The session entries a bundle holds, by file. */
+interface AssembledEntries {
+  serverLogs: DiagnosticLogEntry[];
+  serverTraces: DiagnosticServerSpanEntry[];
+  serverSql: DiagnosticSqlEntry[];
+  clientLogs: DiagnosticLogEntry[];
+  clientWaterfall: DiagnosticNetworkEntry[];
+  clientTelemetry: DiagnosticTelemetryEntry[];
+}
 
 const diagnosticAls = new AsyncLocalStorage<DiagnosticContext>();
 
@@ -782,67 +807,18 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     };
   }> {
     return WithoutDiagnosticCapture(async () => {
-      const serverLogs: DiagnosticLogEntry[] = [];
-      const serverTraces: DiagnosticServerSpanEntry[] = [];
-      const serverSql: DiagnosticSqlEntry[] = [];
-      const clientLogs: DiagnosticLogEntry[] = [...(clientSeed?.clientLogs ?? [])];
-      const clientWaterfall: DiagnosticNetworkEntry[] = [...(clientSeed?.clientWaterfall ?? [])];
-      const clientTelemetry: DiagnosticTelemetryEntry[] = [...(clientSeed?.clientTelemetry ?? [])];
-
+      const entries: AssembledEntries = {
+        serverLogs: [],
+        serverTraces: [],
+        serverSql: [],
+        clientLogs: [...(clientSeed?.clientLogs ?? [])],
+        clientWaterfall: [...(clientSeed?.clientWaterfall ?? [])],
+        clientTelemetry: [...(clientSeed?.clientTelemetry ?? [])]
+      };
       if (sessionId) {
-        // First drain any in-memory buffers for this session
-        const inMem = this.DrainPendingBuffersForSession(sessionId);
-        for (const chunk of inMem) {
-          this.unpackCompressedChunk(
-            chunk.contentKind,
-            chunk.source,
-            chunk.compressedData,
-            serverLogs,
-            serverTraces,
-            serverSql,
-            clientLogs,
-            clientWaterfall,
-            clientTelemetry
-          );
-        }
-
-        // Also query persisted chunks if database provider is available and entity exists
-        try {
-          const md = provider ?? Metadata.Provider;
-          if (md.EntityByName('MJ: Diagnostic Session Chunks')) {
-            const rv = RunView.FromMetadataProvider(md);
-            const res = await rv.RunView<MJDiagnosticSessionChunkEntity>(
-              {
-                EntityName: 'MJ: Diagnostic Session Chunks',
-                ExtraFilter: `DiagnosticSessionID = '${EscapeSQLString(sessionId)}'`,
-                OrderBy: 'Sequence ASC',
-                ResultType: 'simple'
-              },
-              contextUser
-            );
-            if (res.Success && Array.isArray(res.Results)) {
-              for (const row of res.Results) {
-                if (row.Data) {
-                  const buf = Buffer.from(row.Data, 'base64');
-                  this.unpackCompressedChunk(
-                    row.ContentKind,
-                    row.Source,
-                    buf,
-                    serverLogs,
-                    serverTraces,
-                    serverSql,
-                    clientLogs,
-                    clientWaterfall,
-                    clientTelemetry
-                  );
-                }
-              }
-            }
-          }
-        } catch {
-          // Database may not be initialized in unit test environments
-        }
+        await this.unpackSessionChunks(sessionId, entries, contextUser, provider);
       }
+      const { serverLogs, serverTraces, serverSql, clientLogs, clientWaterfall, clientTelemetry } = entries;
 
       const scrubberProfile = scrubLiterals ? 'Standard' : 'FullRaw';
       const contrib = await DiagnosticContributorRegistry.Instance.CollectAll({
@@ -908,40 +884,118 @@ export class DiagnosticSessionManager extends BaseSingleton<DiagnosticSessionMan
     });
   }
 
-  private unpackCompressedChunk(
+  /**
+   * Adds every chunk of a session to `entries`: the buffers still in memory, then the chunks saved
+   * to the database. Throws when any chunk cannot be read in full, so a bundle never holds part of
+   * a session.
+   */
+  private async unpackSessionChunks(
+    sessionId: string,
+    entries: AssembledEntries,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider
+  ): Promise<void> {
+    for (const chunk of this.DrainPendingBuffersForSession(sessionId)) {
+      this.unpackChunk(sessionId, chunk, entries);
+    }
+    for (const row of await this.readSavedChunks(sessionId, contextUser, provider)) {
+      this.unpackChunk(
+        sessionId,
+        {
+          source: row.Source,
+          contentKind: row.ContentKind,
+          sequence: row.Sequence,
+          entryCount: row.EntryCount,
+          compressedData: row.Data ? Base64ToBytes(row.Data) : null
+        },
+        entries
+      );
+    }
+  }
+
+  /** Reads the saved chunks of a session. Throws when the read fails. */
+  private async readSavedChunks(
+    sessionId: string,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider
+  ): Promise<SavedChunkRow[]> {
+    const md = provider ?? Metadata.Provider;
+    if (!md?.EntityByName('MJ: Diagnostic Session Chunks')) {
+      return [];
+    }
+    const res = await RunView.FromMetadataProvider(md).RunView<SavedChunkRow>(
+      {
+        EntityName: 'MJ: Diagnostic Session Chunks',
+        ExtraFilter: `DiagnosticSessionID = '${EscapeSQLString(sessionId)}'`,
+        OrderBy: 'Sequence ASC',
+        Fields: [...CHUNK_READ_FIELDS],
+        ResultType: 'simple'
+      },
+      contextUser
+    );
+    if (!res.Success) {
+      throw new Error(`Could not read the saved chunks of diagnostic session ${sessionId}: ${res.ErrorMessage}`);
+    }
+    return res.Results ?? [];
+  }
+
+  /** Adds one chunk's entries to `entries`. Throws when the chunk cannot be read in full. */
+  private unpackChunk(sessionId: string, chunk: ChunkToUnpack, entries: AssembledEntries): void {
+    const label = `Diagnostic session ${sessionId}: ${chunk.source} ${chunk.contentKind} chunk ${chunk.sequence}`;
+    const add = this.entrySinkFor(chunk.contentKind, chunk.source, entries);
+    if (!add) {
+      throw new Error(`${label} has a content kind the bundle does not hold`);
+    }
+    if (!chunk.compressedData || chunk.compressedData.byteLength === 0) {
+      throw new Error(`${label} has no data`);
+    }
+    const lines = this.decompressChunkLines(chunk.compressedData, label);
+    if (lines.length !== chunk.entryCount) {
+      throw new Error(`${label} holds ${lines.length} entries but recorded ${chunk.entryCount}`);
+    }
+    const parsed = lines.map((line, index) => {
+      try {
+        return JSON.parse(line) as Record<string, unknown>;
+      } catch {
+        throw new Error(`${label} has an unreadable entry at line ${index + 1}`);
+      }
+    });
+    parsed.forEach(add);
+  }
+
+  /** Decompresses a gzip NDJSON chunk into its non-empty lines. */
+  private decompressChunkLines(compressedData: Uint8Array, label: string): string[] {
+    let text: string;
+    try {
+      text = zlib.gunzipSync(compressedData).toString('utf8');
+    } catch (err) {
+      throw new Error(`${label} could not be decompressed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return text.split('\n').filter((l) => l.trim().length > 0);
+  }
+
+  /** Returns the function that adds one entry of a chunk kind to its bundle file, or undefined for a kind the bundle does not hold. */
+  private entrySinkFor(
     contentKind: ChunkContentKind,
     source: MJDiagnosticSessionChunkEntity['Source'],
-    compressedData: Buffer,
-    serverLogs: DiagnosticLogEntry[],
-    serverTraces: DiagnosticServerSpanEntry[],
-    serverSql: DiagnosticSqlEntry[],
-    clientLogs: DiagnosticLogEntry[],
-    clientWaterfall: DiagnosticNetworkEntry[],
-    clientTelemetry: DiagnosticTelemetryEntry[]
-  ): void {
-    try {
-      const text = zlib.gunzipSync(compressedData).toString('utf8');
-      const lines = text.split('\n').filter((l) => l.trim().length > 0);
-      for (const line of lines) {
-        const parsed = JSON.parse(line) as Record<string, unknown>;
-        if (contentKind === 'Logs' || contentKind === 'Errors') {
-          if (source === 'Client') {
-            clientLogs.push(parsed as unknown as DiagnosticLogEntry);
-          } else {
-            serverLogs.push(parsed as unknown as DiagnosticLogEntry);
-          }
-        } else if (contentKind === 'Spans') {
-          serverTraces.push(parsed as unknown as DiagnosticServerSpanEntry);
-        } else if (contentKind === 'SQL') {
-          serverSql.push(parsed as unknown as DiagnosticSqlEntry);
-        } else if (contentKind === 'Network') {
-          clientWaterfall.push(parsed as unknown as DiagnosticNetworkEntry);
-        } else if (contentKind === 'Telemetry') {
-          clientTelemetry.push(parsed as unknown as DiagnosticTelemetryEntry);
-        }
-      }
-    } catch {
-      // Ignore corrupt chunk line
+    entries: AssembledEntries
+  ): ((entry: Record<string, unknown>) => void) | undefined {
+    switch (contentKind) {
+      case 'Logs':
+      case 'Errors':
+        return source === 'Client'
+          ? (e) => entries.clientLogs.push(e as unknown as DiagnosticLogEntry)
+          : (e) => entries.serverLogs.push(e as unknown as DiagnosticLogEntry);
+      case 'Spans':
+        return (e) => entries.serverTraces.push(e as unknown as DiagnosticServerSpanEntry);
+      case 'SQL':
+        return (e) => entries.serverSql.push(e as unknown as DiagnosticSqlEntry);
+      case 'Network':
+        return (e) => entries.clientWaterfall.push(e as unknown as DiagnosticNetworkEntry);
+      case 'Telemetry':
+        return (e) => entries.clientTelemetry.push(e as unknown as DiagnosticTelemetryEntry);
+      default:
+        return undefined;
     }
   }
 
