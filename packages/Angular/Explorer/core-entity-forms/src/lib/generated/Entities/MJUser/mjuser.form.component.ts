@@ -26,7 +26,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAuditLogs', sectionName: 'Audit Logs', isExpanded: false },
             { sectionKey: 'mJCommunicationRuns', sectionName: 'Communication Runs', isExpanded: false },
             { sectionKey: 'mJCompanyIntegrationRuns', sectionName: 'Company Integration Runs', isExpanded: false },
-            { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false },
+            { sectionKey: 'mJConversationsUserID', sectionName: 'Conversations', isExpanded: false },
             { sectionKey: 'mJDashboardCategories', sectionName: 'Dashboard Categories', isExpanded: false },
             { sectionKey: 'mJDashboardsUserID', sectionName: 'Dashboards', isExpanded: false },
             { sectionKey: 'mJDataContexts', sectionName: 'Data Contexts', isExpanded: false },
@@ -145,6 +145,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJQueries', sectionName: 'Queries', isExpanded: false },
             { sectionKey: 'mJComponents', sectionName: 'Components', isExpanded: false },
             { sectionKey: 'mJAIBridgeAgentIdentities', sectionName: 'AI Bridge Agent Identities', isExpanded: false },
+            { sectionKey: 'mJConversationsResolvedByUserID', sectionName: 'Conversations (Resolved By User)', isExpanded: false },
             { sectionKey: 'mJAIAgentUserPolicies', sectionName: 'AI Agent User Policies', isExpanded: false }
         ]);
     }

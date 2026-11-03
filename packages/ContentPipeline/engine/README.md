@@ -13,7 +13,7 @@ Record Set Processing     selects records with the Record Process's filter
       ↓ ProcessRecord / ProcessBatch
 PipelineProcessor         hydrate → run the configured stage(s) → commit unless a test
       ↓ Run(workingRecord, context)
-Stages                    Discover · Extract · Tag · Segment · Embed · Delete (and NoOp)
+Stages                    Discover · Extract · Tag · Segment · Embed · Graph · Delete (and NoOp)
 ```
 
 `ContentPipelineStartup` registers the `Pipeline Stage` work type and its paired
@@ -46,6 +46,7 @@ outside a server, call `RegisterPipelineWorkType()` and `LoadContentPipelineStag
 | Tag | Content Item | `BaseContentClassifier` registry (`ClassifierKey`), defaulting to `ManagedPromptClassifier` wrapping the shared Content Autotagging prompt (`ContentAutotagPrompt`); tags promoted through `TagEngine` |
 | Segment | Content Item | `@memberjunction/ai-segmentation` (`SegmenterKey`) |
 | Embed / Delete | Chunk or Item | `ContentVectorInfrastructure` (shared with the autotagger) for index, model, credential and namespace; `AIEmbeddingRunner`; the vector providers |
+| Graph | Content Item | `ResolveGraphOverlayConfig` (`ContentSource.GraphID` + `Configuration.GraphOverlay`), `ClusterContentIntoConceptSeeds` (authority-ranked concept clustering, MJ schema/query grounding, and cross-chunk conflict detection), and `BaseConceptSynthesizer` (`ManagedPromptConceptSynthesizer` by default) to project `MJ: Graph Concepts` and `MJ: Graph Edges`. See the **[Canon-First Methodology & Semantic Graphs Guide](../../../guides/CANON_AND_SEMANTIC_GRAPHS_GUIDE.md)** |
 
 Every stage resolves its settings in the same precedence order:
 **Item override → Run `Configuration` (`Options`) → Content Source → Content Source Type / Content Type → File Type / Default**.

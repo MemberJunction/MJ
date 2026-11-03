@@ -29,12 +29,17 @@
             [Embedded]="true"
             (OpenRecordRequested)="OnClusterOpenRecord($event)">
           </app-cluster-visualization-resource>
-        } @else {
+        } @else if (IsActiveMode('tagcloud')) {
           <app-kh-tag-cloud
             #tagCloud
             [Provider]="Provider"
             (TagSelected)="OnTagSelected($event)">
           </app-kh-tag-cloud>
+        } @else {
+          <app-kh-semantic-graph
+            [Provider]="Provider"
+            (OpenRecordRequested)="OnClusterOpenRecord($event)">
+          </app-kh-semantic-graph>
         }
       </div>
 
