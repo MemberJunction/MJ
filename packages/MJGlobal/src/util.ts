@@ -1501,6 +1501,24 @@ export function TrimTrailingSlashes(s: string): string {
     return end === s.length ? s : s.substring(0, end);
 }
 
+/**
+ * Prepares a caller-supplied string for a log line: caps its length, then strips every CR and LF
+ * so the value cannot start a forged log entry.
+ *
+ * @param value - The string to log.
+ * @param maxLength - Characters kept before the value is cut off. Default 10,000.
+ * @returns The value on one line, with `…[truncated]` appended when it was cut off.
+ *
+ * @example
+ * ```typescript
+ * SanitizeForLog('bob\n[ERROR] forged'); // 'bob[ERROR] forged'
+ * ```
+ */
+export function SanitizeForLog(value: string, maxLength: number = 10_000): string {
+    const capped = value.length > maxLength ? `${value.substring(0, maxLength)}…[truncated]` : value;
+    return capped.replace(/[\r\n]/g, '');
+}
+
 
 /**
  * Recursively removes all spaces from a given string.
