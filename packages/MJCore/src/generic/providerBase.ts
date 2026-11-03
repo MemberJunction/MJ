@@ -26,6 +26,7 @@ import { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
 import { Observable, Subscription } from "rxjs";
 import { GetDataHooks, PreRunViewHook, PostRunViewHook } from "./dataHooks";
 import { TransformSimpleObjectToEntityObject } from "./util";
+import { FreezeSharedMetadata, IsMetadataFreezeEnabled } from "./metadataFreeze";
 import { LoadRelatedRecordsBatched } from "./relatedRecordBatchLoader";
 import { ContextToken, GetLocalTimeZone } from "./contextTokens";
 import { FindQueryContextTokens, QueryContextCacheValues } from "./queryTemplateContext";
@@ -171,6 +172,9 @@ export const AllMetadataArrays = [
     { key: 'AllLibraries', class: LibraryInfo },
     { key: 'AllExplorerNavigationItems', class: ExplorerNavigationItem }
 ];
+
+/** The collection property names of {@link AllMetadataArrays}, for {@link FreezeSharedMetadata}. */
+const AllMetadataArrayKeys: readonly string[] = AllMetadataArrays.map(m => m.key);
 
 
 /**
@@ -6339,7 +6343,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * in-place mutation of those is process-wide. Property writes on the shared
      * Info objects themselves are likewise visible process-wide (as they always
      * were on the client's global provider): treat Info objects and everything
-     * they own as read-only; copy before sorting.
+     * they own as read-only; copy before sorting. Outside production (or with
+     * `MJ_FREEZE_METADATA` set) the shared graph is frozen the first time it is
+     * shared, so such a write throws (see {@link FreezeSharedMetadata}, #3095).
      *
      * Owning provider: the shared Info objects deliberately keep the
      * {@link BaseInfo.OwningProvider} of the provider that built them (the source
@@ -6397,6 +6403,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 const adopted = subclassOverridesClone
                     ? this.CloneAllMetadata(globalMetadata)
                     : this.CreateSharedMetadataShell(globalMetadata);
+                // From here on the global provider's Info objects are shared with this provider
+                // (unless the adoption copied them). Freeze them in development so a write from
+                // request-scoped code throws instead of changing metadata for every request (#3095).
+                if (adopted.AllEntities?.[0] === globalMetadata.AllEntities[0] && IsMetadataFreezeEnabled()) {
+                    FreezeSharedMetadata(globalMetadata, AllMetadataArrayKeys);
+                }
                 if (
                     !subclassOverridesClone &&
                     globalProvider instanceof ProviderBase &&

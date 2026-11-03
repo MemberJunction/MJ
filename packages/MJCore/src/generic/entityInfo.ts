@@ -1,4 +1,4 @@
-import { BaseInfo } from "./baseInfo"
+import { BaseInfo, RegisterInfoMemoFields } from "./baseInfo"
 import { Metadata } from "./metadata"
 import { IMetadataProvider } from "./interfaces"
 import { MetadataProviderFor } from "./infoProviderResolution"
@@ -5903,3 +5903,21 @@ export class RecordMergeResult {
      */
     Request: RecordMergeRequest
 }
+
+// Memo fields: `_` fields written after construction to cache a derived value. When a shared
+// metadata graph is frozen (development, #3095) they move to a side map so these getters keep
+// working; see RegisterInfoMemoFields. A new lazily-cached `_` field must be listed here.
+RegisterInfoMemoFields(EntityRelationshipInfo, ['_configurationObject']);
+RegisterInfoMemoFields(EntityFieldInfo, [
+    '_configurationObject', '_rawEntityFieldValues', '_entityFieldValuesConstructed', '_EntityFieldValues',
+    '_normalizedValueListValues', '_valueListDisplayCache', '_loggedEmptyValueList', '_loggedUnsupportedValueListType',
+    '_valueListDateKeys', '_valueListNumericKeys', '_relatedEntityJoinFieldsParsed', '_relatedEntityJoinFieldsFailedParsing',
+    '_valueListTypeEnumCache', '_tsType', '_codeName', '_isCreatedAtFieldCache', '_isUpdatedAtFieldCache',
+    '_isDeletedAtFieldCache', '_isUniqueIdentifierCache', '_fixedWidthColumnCache', '_parsedDefaultValueCache',
+]);
+RegisterInfoMemoFields(EntityInfo, [
+    '_configurationObject', '_subtypeSelectorConfig', '_fieldByNameMap', '_firstPrimaryKeyCache', '_primaryKeysCache',
+    '_uniqueKeysCache', '_foreignKeysCache', '_encryptedFieldsCache', '_datetimeFieldsCache', '_binaryFieldsCache',
+    '_nameFieldCache', '_displayNamePluralCache', '_liveAncestorsMemo', '_hasInactiveFields', '_hasSearchFields',
+    '_parentChainCache', '_parentEntityFieldNamesCache',
+]);

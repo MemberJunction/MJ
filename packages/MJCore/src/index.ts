@@ -27,6 +27,7 @@ export * from "./generic/BaseEntitySaveQueue";
 export * from "./generic/EntityFieldRules";
 export * from "./generic/applicationInfo";
 export * from "./generic/providerBase";
+export * from "./generic/metadataFreeze";
 export * from "./generic/entityRecordNameCache";
 export * from "./generic/recordChangeFieldSecurity";
 export * from "./generic/entityValueFieldSecurity";

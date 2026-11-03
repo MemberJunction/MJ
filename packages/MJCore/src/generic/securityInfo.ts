@@ -1,4 +1,4 @@
-import { BaseInfo } from "./baseInfo";
+import { BaseInfo, RegisterInfoMemoFields } from "./baseInfo";
 import { IMetadataProvider } from "./interfaces";
 import { LogError } from "./logging";
 // NOTE: Circular import with metadata.ts is intentional and safe.
@@ -923,3 +923,8 @@ export class AuditLogTypeInfo extends BaseInfo {
         this.copyInitData(initData);
     }
 }
+
+// Memo fields: `_` fields written after construction to cache a derived value. When a shared
+// metadata graph is frozen (development, #3095) they move to a side map so these getters keep
+// working; see RegisterInfoMemoFields. A new lazily-cached `_` field must be listed here.
+RegisterInfoMemoFields(RowLevelSecurityFilterInfo, ['_parsedVariants']);

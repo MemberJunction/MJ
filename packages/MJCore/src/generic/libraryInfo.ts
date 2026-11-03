@@ -1,4 +1,4 @@
-import { BaseInfo } from "./baseInfo"
+import { BaseInfo, RegisterInfoMemoFields } from "./baseInfo"
 
 /**
  * Metadata about a single library that's available for code generation or other purposes.
@@ -53,3 +53,8 @@ export class LibraryInfo extends BaseInfo {
         }
     }
 }
+
+// Memo fields: `_` fields written after construction to cache a derived value. When a shared
+// metadata graph is frozen (development, #3095) they move to a side map so these getters keep
+// working; see RegisterInfoMemoFields. A new lazily-cached `_` field must be listed here.
+RegisterInfoMemoFields(LibraryInfo, ['_exportItemsArray']);
