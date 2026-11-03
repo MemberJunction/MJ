@@ -101,7 +101,9 @@ export function parseArgs(argv) {
     if (mode !== 'red' && mode !== 'green') throw new Error('first argument must be red or green');
     let workflow;
     for (let i = 0; i < rest.length; i++) {
-        if (rest[i] === '--workflow' && i + 1 < rest.length) {
+        if (rest[i] === '--workflow' && i + 1 >= rest.length) {
+            throw new Error('--workflow requires a name');
+        } else if (rest[i] === '--workflow') {
             workflow = rest[++i];
         } else if (rest[i].startsWith('--workflow=')) {
             workflow = rest[i].slice('--workflow='.length);

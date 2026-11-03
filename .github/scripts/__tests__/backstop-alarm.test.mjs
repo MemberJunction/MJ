@@ -282,7 +282,7 @@ describe('parseArgs', () => {
     it('rejects a bad mode, a dangling flag and stray arguments', () => {
         expect(() => parseArgs([])).toThrow(/red or green/);
         expect(() => parseArgs(['amber'])).toThrow(/red or green/);
-        expect(() => parseArgs(['red', '--workflow'])).toThrow(/unexpected argument/);
+        expect(() => parseArgs(['red', '--workflow'])).toThrow(/--workflow requires a name/);
         expect(() => parseArgs(['red', 'extra'])).toThrow(/unexpected argument/);
     });
 });
