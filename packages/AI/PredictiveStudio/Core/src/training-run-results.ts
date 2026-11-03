@@ -55,6 +55,11 @@ export interface UnitResolutionCounts {
   readonly rowsRead: number;  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
   readonly censoredRowsExcluded: number;  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
   readonly labelKnownRowsExcluded: number;  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
+  /**
+   * Rows whose outcome happened inside the gap — after the decision date and on or before the window start — so the
+   * outcome was already settled before the window opened. Absent on runs stored before these rows were counted.
+   */
+  readonly gapOutcomeRowsExcluded?: number;  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
   readonly emptyLabelRowsExcluded: number;  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
   readonly duplicateRowsRemoved: number;  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
   readonly resolvedRows: number;  // case-violation-ok-legacy-back-compat: stored ValidationResults JSON field name
@@ -102,7 +107,8 @@ const unitRefusalSchema: z.ZodType<UnitRefusal> = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('unresolved-reference'), entity: z.string(), field: z.string().nullable() }),
   z.object({ kind: z.literal('missing-decision-date'), entity: z.string(), rows: z.number() }),
   z.object({ kind: z.literal('missing-period'), entity: z.string(), field: z.string(), rows: z.number() }),
-  z.object({ kind: z.literal('no-resolved-rows'), censored: z.number(), labelKnown: z.number(), emptyLabel: z.number() }),
+  z.object({ kind: z.literal('duplicate-period-index'), entity: z.string(), field: z.string(), entityKey: z.string(), periodIndex: z.number() }),
+  z.object({ kind: z.literal('no-resolved-rows'), censored: z.number(), labelKnown: z.number(), gapOutcome: z.number().optional(), emptyLabel: z.number() }),
 ]);
 const assemblyRefusalSchema: z.ZodType<AssemblyRefusal> = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('select-changes-after-decision-date'), entity: z.string(), field: z.string(), changesAfter: z.number() }),
@@ -213,7 +219,7 @@ const trainingRefusalSchema: z.ZodType<TrainingRefusal> = z.discriminatedUnion('
   z.object({ stage: z.literal('gate'), reason: gateStageRefusalSchema }),
 ]);
 const unitResolutionCountsSchema: z.ZodType<UnitResolutionCounts> = z.object({
-  rowsRead: z.number(), censoredRowsExcluded: z.number(), labelKnownRowsExcluded: z.number(),
+  rowsRead: z.number(), censoredRowsExcluded: z.number(), labelKnownRowsExcluded: z.number(), gapOutcomeRowsExcluded: z.number().optional(),
   emptyLabelRowsExcluded: z.number(), duplicateRowsRemoved: z.number(), resolvedRows: z.number(), dataCutoff: z.string(),
 });
 const trainingRunResultsSchema: z.ZodType<TrainingRunResults> = z.discriminatedUnion('status', [

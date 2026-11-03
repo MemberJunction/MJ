@@ -25,6 +25,6 @@ describe('ValidateUnitTargets', () => {
     expect(UnitTargetValidator.ValidateUnitTargets(rowsWith([1.5, -0.1, 2]), { kind: 'non-negative', tweediePower: 1.5 }, counts).status).toBe('refused');
   });
   it('refuses an empty population naming every exclusion', () => {
-    expect(UnitTargetValidator.ValidateUnitTargets([], { kind: 'count' }, counts)).toEqual({ status: 'refused', reason: { kind: 'no-resolved-rows', censored: 2, labelKnown: 0, emptyLabel: 0 } });
+    expect(UnitTargetValidator.ValidateUnitTargets([], { kind: 'count' }, counts)).toEqual({ status: 'refused', reason: { kind: 'no-resolved-rows', censored: 2, labelKnown: 0, gapOutcome: 0, emptyLabel: 0 } });
   });
 });

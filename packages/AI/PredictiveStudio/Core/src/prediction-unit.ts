@@ -154,7 +154,10 @@ export type UnitRefusal =
   | { readonly kind: 'missing-decision-date'; readonly entity: string; readonly rows: number }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
   /** Rows of a unit with a Temporal Spec whose time column is empty: they have no period in the series. */
   | { readonly kind: 'missing-period'; readonly entity: string; readonly field: string; readonly rows: number }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
-  | { readonly kind: 'no-resolved-rows'; readonly censored: number; readonly labelKnown: number; readonly emptyLabel: number };  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  /** Two rows the unit keeps share one (grain key, period index), so the next-period label would depend on read order. */
+  | { readonly kind: 'duplicate-period-index'; readonly entity: string; readonly field: string; readonly entityKey: string; readonly periodIndex: number }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
+  /** `gapOutcome` is absent on refusals stored before outcomes inside the gap were counted. */
+  | { readonly kind: 'no-resolved-rows'; readonly censored: number; readonly labelKnown: number; readonly gapOutcome?: number; readonly emptyLabel: number };  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
 
 /** The outcome of validating a unit's target before training. */
 export type UnitValidation =

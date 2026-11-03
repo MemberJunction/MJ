@@ -21,7 +21,7 @@ export class UnitTargetValidator {
 
   public static ValidateUnitTargets(rows: readonly UnitRow[], task: TaskType, counts: UnitResolutionCounts): UnitValidation {
     if (rows.length === 0) {
-      return UnitTargetValidator.refused({ kind: 'no-resolved-rows', censored: counts.censoredRowsExcluded, labelKnown: counts.labelKnownRowsExcluded, emptyLabel: counts.emptyLabelRowsExcluded });
+      return UnitTargetValidator.refused({ kind: 'no-resolved-rows', censored: counts.censoredRowsExcluded, labelKnown: counts.labelKnownRowsExcluded, gapOutcome: counts.gapOutcomeRowsExcluded || 0, emptyLabel: counts.emptyLabelRowsExcluded });
     }
     return task.kind === 'binary' || task.kind === 'multiclass' ? UnitTargetValidator.validateClasses(rows, task, counts) : UnitTargetValidator.validateNumeric(rows, task, counts);
   }

@@ -51,7 +51,7 @@ describe('PredictionUnitRowReader', () => {
     expect(out.Rows.map((r) => [r.RowID, r.Label])).toEqual([
       ['a1', '1'], ['b1', '0'], ['c2', '0'], ['a2', '0'], ['b2', '0'],
     ]);
-    expect(out.Counts).toEqual({ rowsRead: 7, censoredRowsExcluded: 1, labelKnownRowsExcluded: 1, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 5, dataCutoff: '2026-07-30' });
+    expect(out.Counts).toEqual({ rowsRead: 7, censoredRowsExcluded: 1, labelKnownRowsExcluded: 1, gapOutcomeRowsExcluded: 0, emptyLabelRowsExcluded: 0, duplicateRowsRemoved: 0, resolvedRows: 5, dataCutoff: '2026-07-30' });
     expect(out.Rows[0].EntityKey).toBe('A');
     expect(out.Rows[0].DecisionDate.toISOString()).toBe('2022-01-10T00:00:00.000Z');
   });
@@ -145,5 +145,81 @@ describe('PredictionUnitRowReader.UnitRowRef — the one row rule training and s
     const source = dated.Periods.find((r) => r.ID === 'a1')!;
     const ref = PredictionUnitRowReader.UnitRowRef(unit, entities.Periods, source, a1!.DecisionDate);
     expect(ref).toEqual({ RowID: a1!.RowID, EntityKey: a1!.EntityKey, DecisionDate: a1!.DecisionDate, Period: a1!.Period });
+  });
+});
+
+describe('PredictionUnitRowReader — outcomes in the gap, the row filter and duplicate period indices', () => {
+  const periodEntities: Record<string, AssemblyEntityInfo> = {
+    Periods: { ID: 'E-P', Name: 'Periods', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), field('PersonID'), field('PeriodIndex', 'number'), field('OrderDate', 'Date'), field('Status')] },
+    People: { ID: 'E-PE', Name: 'People', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID')] },
+    Grain: { ID: 'E-G', Name: 'Grain', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), field('D', 'Date')] },
+    Gifts: { ID: 'E-GF', Name: 'Gifts', PrimaryKey: 'ID', TrackRecordChanges: true, Fields: [field('ID'), field('OwnerID'), field('At', 'Date')] },
+  };
+  const periodMetadata: IAssemblyMetadata = { Entity: (n) => periodEntities[n] || null };
+  const gapUnit: PredictionUnitSpec = {
+    ...unit,
+    label: { ...unit.label, windowDays: 90, gapDays: 14 },
+    censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2026-01-01' } },
+  };
+  const readWith = (u: PredictionUnitSpec, data: Record<string, SourceRow[]>) =>
+    new PredictionUnitRowReader().Read(u, { DataAccess: new TableDataAccess(data), Metadata: periodMetadata, Read: { mode: 'complete' }, Now: new Date('2026-06-01T00:00:00Z') });
+
+  it('excludes and counts a row whose next period falls inside the gap, after the decision and on or before the window start', async () => {
+    const out = await readWith(gapUnit, {
+      Periods: [
+        { ID: 'm1', PersonID: 'M1', PeriodIndex: 1, OrderDate: '2025-01-01', Status: 'Paid' },
+        { ID: 'm2', PersonID: 'M1', PeriodIndex: 2, OrderDate: '2025-01-10', Status: 'Paid' },
+        // n1's next period is exactly on the window start (decision + 14 days): still inside the gap
+        { ID: 'n1', PersonID: 'N1', PeriodIndex: 1, OrderDate: '2025-01-01', Status: 'Paid' },
+        { ID: 'n2', PersonID: 'N1', PeriodIndex: 2, OrderDate: '2025-01-15', Status: 'Paid' },
+      ],
+      People: [{ ID: 'M1' }, { ID: 'N1' }],
+    });
+    expect(out.Status).toBe('read');
+    if (out.Status !== 'read') return;
+    expect(out.Rows.map((r) => [r.RowID, r.Label])).toEqual([['m2', '0'], ['n2', '0']]);
+    expect(out.Counts.gapOutcomeRowsExcluded).toBe(2);
+    expect(out.Counts.labelKnownRowsExcluded).toBe(0);
+  });
+
+  it('excludes and counts a row whose child event falls inside the gap', async () => {
+    const childUnit: PredictionUnitSpec = {
+      ...gapUnit,
+      rows: { kind: 'grain', grainEntity: 'Grain', decisionDate: { kind: 'column', column: 'D' }, filter: [] },
+      label: { ...gapUnit.label, rule: { kind: 'child-event', childEntity: 'Gifts', foreignKey: 'OwnerID', dateField: 'At', aggregate: 'exists', valueField: null, ownerKeyField: null, filter: [] }, windowDays: 30 },
+    };
+    const out = await readWith(childUnit, {
+      Grain: [{ ID: 'g1', D: '2025-01-01' }, { ID: 'g2', D: '2025-01-01' }, { ID: 'g3', D: '2025-01-01' }],
+      // g1: event in the gap (decision + 5) → excluded; g2: event in the window → 1; g3: event on the decision day → 0
+      Gifts: [{ ID: 'e1', OwnerID: 'g1', At: '2025-01-06' }, { ID: 'e2', OwnerID: 'g2', At: '2025-01-20' }, { ID: 'e3', OwnerID: 'g3', At: '2025-01-01' }],
+    });
+    expect(out.Status).toBe('read');
+    if (out.Status !== 'read') return;
+    expect(out.Rows.map((r) => [r.RowID, r.Label])).toEqual([['g2', '1'], ['g3', '0']]);
+    expect(out.Counts.gapOutcomeRowsExcluded).toBe(1);
+  });
+
+  it('labels from the rows the unit\'s filter keeps: a filtered-out next period is not a renewal', async () => {
+    const filtered: PredictionUnitSpec = { ...unit, label: { ...unit.label, windowDays: 90 }, censoring: gapUnit.censoring, rows: { ...unit.rows, filter: [{ field: 'Status', op: 'eq', values: ['Paid'] }] } as PredictionUnitSpec['rows'] };
+    const out = await readWith(filtered, {
+      Periods: [
+        { ID: 'k1', PersonID: 'M2', PeriodIndex: 1, OrderDate: '2025-01-01', Status: 'Paid' },
+        { ID: 'k2', PersonID: 'M2', PeriodIndex: 2, OrderDate: '2025-02-01', Status: 'Cancelled' },
+      ],
+      People: [{ ID: 'M2' }],
+    });
+    expect(out.Status === 'read' && out.Rows.map((r) => [r.RowID, r.Label])).toEqual([['k1', '0']]);
+  });
+
+  it('refuses a unit with two kept rows at one (grain key, period index) instead of letting the later one decide the label', async () => {
+    const out = await readWith({ ...unit, label: { ...unit.label, windowDays: 60 }, censoring: gapUnit.censoring }, {
+      Periods: [
+        { ID: 'j1', PersonID: 'M3', PeriodIndex: 1, OrderDate: '2025-01-01', Status: 'Paid' },
+        { ID: 'j2', PersonID: 'M3', PeriodIndex: 2, OrderDate: '2025-02-01', Status: 'Paid' },
+        { ID: 'j3', PersonID: 'M3', PeriodIndex: 2, OrderDate: '2025-06-01', Status: 'Cancelled' },
+      ],
+      People: [{ ID: 'M3' }],
+    });
+    expect(out).toEqual({ Status: 'refused', Refusal: { stage: 'unit', reason: { kind: 'duplicate-period-index', entity: 'Periods', field: 'PeriodIndex', entityKey: 'M3', periodIndex: 2 } } });
   });
 });

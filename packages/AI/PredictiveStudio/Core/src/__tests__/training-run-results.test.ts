@@ -30,6 +30,20 @@ describe('TrainingRunResultsParser', () => {
     const badHoldout = TrainingRunResultsParser.ParseTrainingRunResults(envelope({ kind: 'time-index-needs-time-holdout', pipelineId: 'p1', protocolId: 'P1', timeIndexColumn: 'T', holdout: 'trailing' }));
     expect(badHoldout.Ok ? null : badHoldout.Errors.join('\n')).toMatch(/refusal\.reason\.holdout/);
   });
+  it('keeps the count of rows whose outcome fell inside the gap, reads a run stored without it, and reads the duplicate-period-index and no-resolved-rows refusals', () => {
+    const withGap = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: { ...counts, gapOutcomeRowsExcluded: 3 }, ...noTraining }));
+    expect(withGap.Ok && withGap.Value.status === 'completed' ? withGap.Value.unitResolution.gapOutcomeRowsExcluded : null).toBe(3);
+    const older = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: counts, ...noTraining }));
+    expect(older.Ok && older.Value.status === 'completed' ? older.Value.unitResolution.gapOutcomeRowsExcluded : 'not ok').toBeUndefined();
+    const unitEnvelope = (reason: object) => JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'refused', refusal: { stage: 'unit', reason } });
+    for (const reason of [
+      { kind: 'duplicate-period-index', entity: 'Periods', field: 'PeriodIndex', entityKey: 'M3', periodIndex: 2 },
+      { kind: 'no-resolved-rows', censored: 1, labelKnown: 0, gapOutcome: 4, emptyLabel: 0 },
+    ]) {
+      const r = TrainingRunResultsParser.ParseTrainingRunResults(unitEnvelope(reason));
+      expect(r.Ok && r.Value.status === 'refused' ? r.Value.refusal.reason : null).toEqual(reason);
+    }
+  });
   it('refuses an envelope whose members have the wrong shape, naming the path', () => {
     const r = TrainingRunResultsParser.ParseTrainingRunResults(JSON.stringify({ schema: TRAINING_RUN_RESULTS_SCHEMA, status: 'completed', unitResolution: { ...counts, resolvedRows: 'nine' }, ...noTraining }));
     expect(r.Ok ? null : r.Errors.join('\n')).toMatch(/unitResolution\.resolvedRows/);

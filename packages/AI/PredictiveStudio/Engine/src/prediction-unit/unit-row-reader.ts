@@ -4,8 +4,11 @@
  * Reads a Prediction Unit's rows: one per grain record, or one per grain record × period. Each row gets its
  * decision date, outcome window end, group key, period and label. Rows are excluded — and counted — in this order:
  * censored (window ends after the cutoff), label known at the decision (next-period rule: the outcome was recorded
- * on or before the decision date), empty label. Exact duplicates of (entity key, decision date, period) are removed
- * and counted. The source is read completely or the read is refused.
+ * on or before the decision date), outcome inside the gap (the next period or a child event falls after the decision
+ * date and on or before the window start, so it was settled before the window opened), empty label. Exact duplicates
+ * of (entity key, decision date, period) are removed and counted. A next-period label reads only the rows the unit's
+ * filter keeps, and two kept rows at one (grain key, period index) refuse the read. The source is read completely or
+ * the read is refused.
  */
 import { OrdinalCompare } from '@memberjunction/global';
 import { UtcDay, type CellValue, TaskTypeRules, PredictionUnit, type LabelRule, type PredictionUnitSpec, type ReadPolicy, type RowFilter, type TaskType, type TrainingRefusal, type UnitRefusal, type UnitResolutionCounts, type UnitRows } from '@memberjunction/predictive-studio-core';
@@ -40,9 +43,13 @@ export type UnitRowReadResult =
   | { readonly Status: 'read'; readonly Rows: readonly UnitRow[]; readonly Counts: UnitResolutionCounts; readonly DataCutoff: Date; readonly RowEntity: AssemblyEntityInfo }
   | { readonly Status: 'refused'; readonly Refusal: TrainingRefusal };
 
-interface ResolvedLabel { readonly Label: CanonicalLabelValue | null; readonly Known: boolean }
+/** A row's label, or why it has none: known at the decision, or the outcome fell inside the gap before the window. */
+type ResolvedLabel =
+  | { readonly Kind: 'label'; readonly Label: CanonicalLabelValue | null }
+  | { readonly Kind: 'known-at-decision' }
+  | { readonly Kind: 'outcome-in-gap' };
 type Labeler = (row: SourceRow, entityKey: string, decision: Date, windowStart: Date, windowEnd: Date) => ResolvedLabel;
-interface ResolvedRows { readonly Rows: UnitRow[]; readonly Censored: number; readonly LabelKnown: number; readonly EmptyLabel: number }
+interface ResolvedRows { readonly Rows: UnitRow[]; readonly Censored: number; readonly LabelKnown: number; readonly GapOutcome: number; readonly EmptyLabel: number }
 
 export class PredictionUnitRowReader {
   /** Labels in one canonical form: classes are trimmed strings (booleans → '1'/'0'); numeric tasks are numbers. Empty → null. */
@@ -132,10 +139,10 @@ export class PredictionUnitRowReader {
 
     const cutoff = await this.resolveCutoff(unit, deps);
     if ('Status' in cutoff) return cutoff;
-    const labeler = await this.buildLabeler(unit, rowEntity, read.Rows, deps);
+    const candidates = read.Rows.filter((r) => PredictionUnitRowReader.MatchesRowFilters(r, unit.rows.filter));
+    const labeler = await this.buildLabeler(unit, rowEntity, candidates, deps);
     if ('Status' in labeler) return labeler;
 
-    const candidates = read.Rows.filter((r) => PredictionUnitRowReader.MatchesRowFilters(r, unit.rows.filter));
     const undated = candidates.filter((r) => this.decisionDate(unit, r) === null).length;
     if (undated > 0) return PredictionUnitRowReader.unitRefusal({ kind: 'missing-decision-date', entity: rowEntity.Name, rows: undated });
     // A grain row's series period is its time column (a grain × periods row's is its period date, checked above).
@@ -154,6 +161,7 @@ export class PredictionUnitRowReader {
         rowsRead: read.Rows.length,
         censoredRowsExcluded: resolved.Censored,
         labelKnownRowsExcluded: resolved.LabelKnown,
+        gapOutcomeRowsExcluded: resolved.GapOutcome,
         emptyLabelRowsExcluded: resolved.EmptyLabel,
         duplicateRowsRemoved: resolved.Rows.length - rows.length,
         resolvedRows: rows.length,
@@ -163,12 +171,14 @@ export class PredictionUnitRowReader {
   }
 
   /**
-   * Applies the exclusions in their documented order — censored, label known at the decision, empty label — and
+   * Applies the exclusions in their documented order — censored, label known at the decision, outcome inside the gap,
+   * empty label — and
    * builds the unit rows, sorted by decision date then row id (ordinal).
    */
   private resolveRows(unit: PredictionUnitSpec, rowEntity: AssemblyEntityInfo, candidates: readonly SourceRow[], cutoff: Date, labeler: Labeler): ResolvedRows {
     let censored = 0;
     let labelKnown = 0;
+    let gapOutcome = 0;
     let emptyLabel = 0;
     const resolved: UnitRow[] = [];
     for (const row of candidates) {
@@ -179,7 +189,8 @@ export class PredictionUnitRowReader {
       if (windowEnd.getTime() > cutoff.getTime()) { censored++; continue; }
       const ref = PredictionUnitRowReader.UnitRowRef(unit, rowEntity, row, decision);
       const label = labeler(row, ref.EntityKey, decision, windowStart, windowEnd);
-      if (label.Known) { labelKnown++; continue; }
+      if (label.Kind === 'known-at-decision') { labelKnown++; continue; }
+      if (label.Kind === 'outcome-in-gap') { gapOutcome++; continue; }
       if (label.Label === null) { emptyLabel++; continue; }
       resolved.push({
         ...ref,
@@ -190,7 +201,7 @@ export class PredictionUnitRowReader {
       });
     }
     resolved.sort((a, b) => a.DecisionDate.getTime() - b.DecisionDate.getTime() || OrdinalCompare(a.RowID, b.RowID));
-    return { Rows: resolved, Censored: censored, LabelKnown: labelKnown, EmptyLabel: emptyLabel };
+    return { Rows: resolved, Censored: censored, LabelKnown: labelKnown, GapOutcome: gapOutcome, EmptyLabel: emptyLabel };
   }
 
   /** Keeps the first row of each (entity key, decision date, period); the caller counts the rest as duplicates. */
@@ -255,24 +266,30 @@ export class PredictionUnitRowReader {
     return end;
   }
 
-  private async buildLabeler(unit: PredictionUnitSpec, rowEntity: AssemblyEntityInfo, rows: readonly SourceRow[], deps: UnitReadDeps): Promise<Labeler | UnitRowReadResult> {
+  /** `keptRows` are the rows the unit's filter keeps; a next-period label reads only them. */
+  private async buildLabeler(unit: PredictionUnitSpec, rowEntity: AssemblyEntityInfo, keptRows: readonly SourceRow[], deps: UnitReadDeps): Promise<Labeler | UnitRowReadResult> {
     const rule: LabelRule = unit.label.rule;
     switch (rule.kind) {
       case 'column':
         if (!rowEntity.Fields.some((f) => f.Name === rule.column)) return PredictionUnitRowReader.unitRefusal({ kind: 'unresolved-reference', entity: rowEntity.Name, field: rule.column });
-        return (row) => ({ Label: PredictionUnitRowReader.CanonicalLabel(row[rule.column], unit.label.outcome), Known: false });
+        return (row) => ({ Kind: 'label', Label: PredictionUnitRowReader.CanonicalLabel(row[rule.column], unit.label.outcome) });
       case 'next-period':
         if (unit.rows.kind !== 'grain-x-periods') return PredictionUnitRowReader.unitRefusal({ kind: 'unresolved-reference', entity: rowEntity.Name, field: rule.periodIndexField });
-        return this.nextPeriodLabeler(rule, unit.rows, rowEntity, rows);
+        return this.nextPeriodLabeler(rule, unit.rows, rowEntity, keptRows);
       case 'child-event':
         return this.childEventLabeler(rule, unit.label.outcome, deps);
     }
   }
 
-  /** next-period: 1 when the period `offset` later falls in the window; label known when it is on or before the decision. */
-  private nextPeriodLabeler(rule: Extract<LabelRule, { kind: 'next-period' }>, unitRows: Extract<UnitRows, { kind: 'grain-x-periods' }>, rowEntity: AssemblyEntityInfo, rows: readonly SourceRow[]): Labeler {
+  /**
+   * next-period: 1 when the period `offset` later falls in the window; label known when it is on or before the decision;
+   * the row is excluded when it falls inside the gap (after the decision, on or before the window start). Only the
+   * kept rows are indexed, and two of them at one (grain key, period index) refuse the read: the label would otherwise
+   * depend on which of them was read last.
+   */
+  private nextPeriodLabeler(rule: Extract<LabelRule, { kind: 'next-period' }>, unitRows: Extract<UnitRows, { kind: 'grain-x-periods' }>, rowEntity: AssemblyEntityInfo, keptRows: readonly SourceRow[]): Labeler | UnitRowReadResult {
     const byKey = new Map<string, Map<number, Date>>();
-    for (const r of rows) {
+    for (const r of keptRows) {
       // A row without an index is never a "next period"; it is not indexed (a candidate without one fails when labelled).
       if (PredictionUnitRowReader.isEmptyCell(r[rule.periodIndexField])) continue;
       const idx = Number(r[rule.periodIndexField]);
@@ -280,6 +297,10 @@ export class PredictionUnitRowReader {
       if (!Number.isInteger(idx) || d === null) continue;
       const k = PredictionUnitRowReader.keyOf(r[unitRows.foreignKey]);
       const m = byKey.get(k) || new Map<number, Date>();
+      if (m.has(idx)) {
+        const entityKey = PredictionUnitRowReader.requireKey(r[unitRows.foreignKey], `${rowEntity.Name}.${unitRows.foreignKey}`);
+        return PredictionUnitRowReader.unitRefusal({ kind: 'duplicate-period-index', entity: rowEntity.Name, field: rule.periodIndexField, entityKey, periodIndex: idx });
+      }
       m.set(idx, d);
       byKey.set(k, m);
     }
@@ -287,13 +308,17 @@ export class PredictionUnitRowReader {
       const rowId = PredictionUnitRowReader.requireKey(row[rowEntity.PrimaryKey], `${rowEntity.Name}.${rowEntity.PrimaryKey}`);
       const idx = PredictionUnitRowReader.requirePeriodIndex(row[rule.periodIndexField], `${rowEntity.Name}.${rule.periodIndexField} of ${rowId}`);
       const next = byKey.get(entityKey.toLowerCase())?.get(idx + rule.offset);
-      if (next !== undefined && next.getTime() <= decision.getTime()) return { Label: null, Known: true };
-      const inWindow = next !== undefined && next.getTime() > windowStart.getTime() && next.getTime() <= windowEnd.getTime();
-      return { Label: inWindow ? '1' : '0', Known: false };
+      if (next === undefined) return { Kind: 'label', Label: '0' };
+      if (next.getTime() <= decision.getTime()) return { Kind: 'known-at-decision' };
+      if (next.getTime() <= windowStart.getTime()) return { Kind: 'outcome-in-gap' };
+      return { Kind: 'label', Label: next.getTime() <= windowEnd.getTime() ? '1' : '0' };
     };
   }
 
-  /** child-event: exists / count / sum of the owner's child events inside the window. */
+  /**
+   * child-event: exists / count / sum of the owner's child events inside the window. A row with an event inside the
+   * gap (after the decision, on or before the window start) is excluded: its outcome happened before the window opened.
+   */
   private async childEventLabeler(rule: Extract<LabelRule, { kind: 'child-event' }>, task: TaskType, deps: UnitReadDeps): Promise<Labeler | UnitRowReadResult> {
     const child = deps.Metadata.Entity(rule.childEntity);
     if (!child) return PredictionUnitRowReader.unitRefusal({ kind: 'unresolved-reference', entity: rule.childEntity, field: null });
@@ -312,12 +337,14 @@ export class PredictionUnitRowReader {
       list.push({ Day: d, Value: value });
       events.set(k, list);
     }
-    return (row, entityKey, _decision, windowStart, windowEnd) => {
+    return (row, entityKey, decision, windowStart, windowEnd) => {
       const owner = rule.ownerKeyField ? PredictionUnitRowReader.keyOf(row[rule.ownerKeyField]) : entityKey.toLowerCase();
-      const hits = (events.get(owner) || []).filter((e) => e.Day.getTime() > windowStart.getTime() && e.Day.getTime() <= windowEnd.getTime());
-      if (rule.aggregate === 'exists') return { Label: PredictionUnitRowReader.CanonicalLabel(hits.length > 0 ? '1' : '0', task), Known: false };
-      if (rule.aggregate === 'count') return { Label: hits.length, Known: false };
-      return { Label: hits.reduce((s, e) => s + e.Value, 0), Known: false };
+      const ownerEvents = events.get(owner) || [];
+      if (ownerEvents.some((e) => e.Day.getTime() > decision.getTime() && e.Day.getTime() <= windowStart.getTime())) return { Kind: 'outcome-in-gap' };
+      const hits = ownerEvents.filter((e) => e.Day.getTime() > windowStart.getTime() && e.Day.getTime() <= windowEnd.getTime());
+      if (rule.aggregate === 'exists') return { Kind: 'label', Label: PredictionUnitRowReader.CanonicalLabel(hits.length > 0 ? '1' : '0', task) };
+      if (rule.aggregate === 'count') return { Kind: 'label', Label: hits.length };
+      return { Kind: 'label', Label: hits.reduce((s, e) => s + e.Value, 0) };
     };
   }
 }
