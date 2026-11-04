@@ -1,11 +1,11 @@
 import { BaseEntity, LogStatus, type EntitySaveOptions, type IMetadataProvider, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { MJEvaluationProtocolEntity } from '@memberjunction/core-entities';
+import { MJMLEvaluationProtocolEntity } from '@memberjunction/core-entities';
 import { EvaluationProtocol, EvaluationProtocolRules, type Actor, type EvaluationProtocolColumns, type EvaluationProtocolSpec, type ProtocolRefusal } from '@memberjunction/predictive-studio-core';
-import { VersionedRowGuard, type RowRead } from './MJPredictionUnitEntityServer.server';
+import { VersionedRowGuard, type RowRead } from './MJMLPredictionUnitEntityServer.server';
 
 /**
- * `MJ: Evaluation Protocols`: immutable versions plus the protocol's own shape checks. On insert, the protocol rules
+ * `MJ: ML Evaluation Protocols`: immutable versions plus the protocol's own shape checks. On insert, the protocol rules
  * that do not need a Prediction Unit are checked against the previous version of the lineage: a dummy baseline is
  * declared, and the guard fields change only when the author may change them under the previous version's
  * `GuardFieldsEditableBy` (never an agent tool call; under `human-only`, only a user). A version authored by a user
@@ -14,8 +14,8 @@ import { VersionedRowGuard, type RowRead } from './MJPredictionUnitEntityServer.
  * {@link VersionedRowGuard}), which also reads the previous version. The rules that need a unit run where a pipeline
  * binds a unit and a protocol.
  */
-@RegisterClass(BaseEntity, 'MJ: Evaluation Protocols')
-export class MJEvaluationProtocolEntityServer extends MJEvaluationProtocolEntity {
+@RegisterClass(BaseEntity, 'MJ: ML Evaluation Protocols')
+export class MJMLEvaluationProtocolEntityServer extends MJMLEvaluationProtocolEntity {
   /** A version-1 row is its own lineage root; the server assigns it on create. A `ReplayOnly` save of a saved row is refused. */
   public override async Save(options?: EntitySaveOptions): Promise<boolean> {
     VersionedRowGuard.AdoptOwnLineageRoot(this);
@@ -40,7 +40,7 @@ export class MJEvaluationProtocolEntityServer extends MJEvaluationProtocolEntity
     if (!result.Success || this.IsSaved) return result;
     const provider = this.ProviderToUse;
     if (!VersionedRowGuard.IsMetadataProvider(provider)) {
-      LogStatus(`MJEvaluationProtocolEntityServer: the provider is not a metadata provider, so the protocol rules were skipped for "${this.Name}" v${this.Version}`);
+      LogStatus(`MJMLEvaluationProtocolEntityServer: the provider is not a metadata provider, so the protocol rules were skipped for "${this.Name}" v${this.Version}`);
       return result;
     }
     const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(this);
@@ -48,7 +48,7 @@ export class MJEvaluationProtocolEntityServer extends MJEvaluationProtocolEntity
       VersionedRowGuard.Fail(result, 'Version', `Evaluation Protocol does not parse: ${parsed.Errors.join('; ')}`);
       return result;
     }
-    const impersonation = MJEvaluationProtocolEntityServer.GetHumanAuthorProblem(parsed.Value.authoredBy, this.ActiveUser?.ID || null);
+    const impersonation = MJMLEvaluationProtocolEntityServer.GetHumanAuthorProblem(parsed.Value.authoredBy, this.ActiveUser?.ID || null);
     if (impersonation !== null) {
       VersionedRowGuard.Fail(result, 'AuthoredBy', impersonation);
       return result;
@@ -60,7 +60,7 @@ export class MJEvaluationProtocolEntityServer extends MJEvaluationProtocolEntity
     });
     if (previous === undefined) return result;
     for (const r of EvaluationProtocolRules.ValidateEvaluationProtocol({ Protocol: parsed.Value, Previous: previous === null ? null : previous.Spec, AuthoredBy: parsed.Value.authoredBy })) {
-      VersionedRowGuard.Fail(result, MJEvaluationProtocolEntityServer.refusalField(r), EvaluationProtocolRules.DescribeProtocolRefusal(r));
+      VersionedRowGuard.Fail(result, MJMLEvaluationProtocolEntityServer.refusalField(r), EvaluationProtocolRules.DescribeProtocolRefusal(r));
     }
     return result;
   }
@@ -110,6 +110,6 @@ export class MJEvaluationProtocolEntityServer extends MJEvaluationProtocolEntity
 
   /** One version of this row's lineage as a plain row (nothing is mutated), read as the saving user, or the read error. */
   protected async LoadVersion(provider: IMetadataProvider, version: number): Promise<RowRead<EvaluationProtocolColumns>> {
-    return VersionedRowGuard.LoadVersion<EvaluationProtocolColumns>(provider, 'MJ: Evaluation Protocols', this.LineageRootID, version, this.ActiveUser);
+    return VersionedRowGuard.LoadVersion<EvaluationProtocolColumns>(provider, 'MJ: ML Evaluation Protocols', this.LineageRootID, version, this.ActiveUser);
   }
 }

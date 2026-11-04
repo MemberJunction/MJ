@@ -1,7 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RunView } from '@memberjunction/core';
-import type { MJEvaluationProtocolEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
+import type { MJMLEvaluationProtocolEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import {
@@ -63,9 +63,9 @@ export interface VersionedProtocolRow {
   `,
 })
 export class PSProtocolVersionsComponent extends PSVersionedLineageBase<
-  VersionedProtocolRow, EvaluationProtocolDraft, ProtocolVersionWrite, MJEvaluationProtocolEntity, ValueRead<PredictionUnitSpec | null>
+  VersionedProtocolRow, EvaluationProtocolDraft, ProtocolVersionWrite, MJMLEvaluationProtocolEntity, ValueRead<PredictionUnitSpec | null>
 > {
-  protected readonly EntityName = 'MJ: Evaluation Protocols';
+  protected readonly EntityName = 'MJ: ML Evaluation Protocols';
 
   /** Any version row of the lineage. */
   @Input()
@@ -93,7 +93,7 @@ export class PSProtocolVersionsComponent extends PSVersionedLineageBase<
     );
   }
 
-  protected ApplyDraftToRow(row: MJEvaluationProtocolEntity, version: ProtocolVersionWrite): void {
+  protected ApplyDraftToRow(row: MJMLEvaluationProtocolEntity, version: ProtocolVersionWrite): void {
     ProtocolRows.ApplyProtocolDraftToRow(row, version.Draft, version.Meta);
   }
 
@@ -127,7 +127,7 @@ export class PSProtocolVersionsComponent extends PSVersionedLineageBase<
 
   private async readUnit(unitId: string): Promise<ValueRead<PredictionUnitSpec | null>> {
     const units = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<UnitVersionRow>({
-      EntityName: 'MJ: Prediction Units', ExtraFilter: `ID='${EscapeSQLString(unitId)}'`, Fields: [...UNIT_VERSION_FIELDS], ResultType: 'simple',
+      EntityName: 'MJ: ML Prediction Units', ExtraFilter: `ID='${EscapeSQLString(unitId)}'`, Fields: [...UNIT_VERSION_FIELDS], ResultType: 'simple',
     });
     if (!units.Success) return { Ok: false, Error: units.ErrorMessage };
     const unitRow = units.Results[0];

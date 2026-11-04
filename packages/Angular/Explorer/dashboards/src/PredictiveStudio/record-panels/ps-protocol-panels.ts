@@ -6,7 +6,7 @@
 import { Component, inject } from '@angular/core';
 import { CompositeKey } from '@memberjunction/core';
 import { RegisterClassEx } from '@memberjunction/global';
-import type { MJEvaluationProtocolEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
+import type { MJMLEvaluationProtocolEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import { BaseFormPanel, BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { PSPipelineBindingsComponent } from '../components/pipeline-bindings/pipeline-bindings.component';
@@ -21,8 +21,8 @@ function savedId(record: { IsSaved: boolean; ID: string }): string | null {
 }
 
 @RegisterClassEx(BaseFormPanel, {
-  key: 'form-panel:MJEvaluationProtocols:versions',
-  metadata: { entity: 'MJ: Evaluation Protocols', slot: 'before-fields', sortKey: 100, contributionKey: 'ps-protocol-versions', inclusion: 'Primary' },
+  key: 'form-panel:MJMLEvaluationProtocols:versions',
+  metadata: { entity: 'MJ: ML Evaluation Protocols', slot: 'before-fields', sortKey: 100, contributionKey: 'ps-protocol-versions', inclusion: 'Primary' },
 })
 @Component({
   selector: 'mj-ps-protocol-versions-panel',
@@ -34,7 +34,7 @@ function savedId(record: { IsSaved: boolean; ID: string }): string | null {
     </mj-collapsible-panel>
   `,
 })
-export class PSProtocolVersionsPanel extends BaseFormPanel<MJEvaluationProtocolEntity> {
+export class PSProtocolVersionsPanel extends BaseFormPanel<MJMLEvaluationProtocolEntity> {
   private readonly navigation = inject(NavigationService);
 
   public get RecordID(): string | null {
@@ -43,13 +43,13 @@ export class PSProtocolVersionsPanel extends BaseFormPanel<MJEvaluationProtocolE
 
   /** A saved version opens on its own record form, so the fields below show the version the list selected. */
   public OnVersionSaved(e: AfterVersionSavedEventArgs): void {
-    if (e.Success && e.ID !== null) this.navigation.OpenEntityRecord('MJ: Evaluation Protocols', CompositeKey.FromID(e.ID));
+    if (e.Success && e.ID !== null) this.navigation.OpenEntityRecord('MJ: ML Evaluation Protocols', CompositeKey.FromID(e.ID));
   }
 }
 
 @RegisterClassEx(BaseFormPanel, {
-  key: 'form-panel:MJPredictionUnits:versions',
-  metadata: { entity: 'MJ: Prediction Units', slot: 'before-fields', sortKey: 100, contributionKey: 'ps-unit-versions', inclusion: 'Primary' },
+  key: 'form-panel:MJMLPredictionUnits:versions',
+  metadata: { entity: 'MJ: ML Prediction Units', slot: 'before-fields', sortKey: 100, contributionKey: 'ps-unit-versions', inclusion: 'Primary' },
 })
 @Component({
   selector: 'mj-ps-unit-versions-panel',
@@ -61,7 +61,7 @@ export class PSProtocolVersionsPanel extends BaseFormPanel<MJEvaluationProtocolE
     </mj-collapsible-panel>
   `,
 })
-export class PSUnitVersionsPanel extends BaseFormPanel<MJPredictionUnitEntity> {
+export class PSUnitVersionsPanel extends BaseFormPanel<MJMLPredictionUnitEntity> {
   private readonly navigation = inject(NavigationService);
 
   public get RecordID(): string | null {
@@ -70,7 +70,7 @@ export class PSUnitVersionsPanel extends BaseFormPanel<MJPredictionUnitEntity> {
 
   /** A saved version opens on its own record form (for version 1 of a new unit, the row the server created). */
   public OnVersionSaved(e: AfterVersionSavedEventArgs): void {
-    if (e.Success && e.ID !== null) this.navigation.OpenEntityRecord('MJ: Prediction Units', CompositeKey.FromID(e.ID));
+    if (e.Success && e.ID !== null) this.navigation.OpenEntityRecord('MJ: ML Prediction Units', CompositeKey.FromID(e.ID));
   }
 }
 

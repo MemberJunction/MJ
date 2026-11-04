@@ -102,8 +102,8 @@ const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
                     <section class="ps-content" [class.fill]="ActiveSection === 'pipelines'" [attr.data-testid]="'ps-panel-' + ActiveSection">
                       @switch (ActiveSection) {
                         @case ('home') { <ps-home [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser" (navigate)="MapNavigate($event)" (askAgent)="OnAskAgent($event)"></ps-home> }
-                        @case ('units') { <mj-ps-versioned-list [Provider]="ProviderToUse" EntityName="MJ: Prediction Units" (OpenRecord)="OpenVersionedRecord('MJ: Prediction Units', $event)"></mj-ps-versioned-list> }
-                        @case ('protocols') { <mj-ps-versioned-list [Provider]="ProviderToUse" EntityName="MJ: Evaluation Protocols" (OpenRecord)="OpenVersionedRecord('MJ: Evaluation Protocols', $event)"></mj-ps-versioned-list> }
+                        @case ('units') { <mj-ps-versioned-list [Provider]="ProviderToUse" EntityName="MJ: ML Prediction Units" (OpenRecord)="OpenVersionedRecord('MJ: ML Prediction Units', $event)"></mj-ps-versioned-list> }
+                        @case ('protocols') { <mj-ps-versioned-list [Provider]="ProviderToUse" EntityName="MJ: ML Evaluation Protocols" (OpenRecord)="OpenVersionedRecord('MJ: ML Evaluation Protocols', $event)"></mj-ps-versioned-list> }
                         @case ('pipelines') { <ps-pipelines #pipelinesComp [engine]="engine" [provider]="ProviderToUse" [CurrentUser]="ProviderToUse.CurrentUser" (AskAgent)="OnAskAgent($event)" (Navigate)="MapNavigate($event)"></ps-pipelines> }
                         @case ('catalog') { <ps-catalog [engine]="engine" (askAgent)="OnAskAgent($event)" (createPipeline)="OnCreatePipelineFromCatalog($event)"></ps-catalog> }
                         @case ('experiments') { <ps-experiments [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser"></ps-experiments> }
@@ -402,7 +402,7 @@ export class PSStudioResourceComponent extends PSResourceBase {
 
   /** Open the latest version row of a unit or protocol lineage on its record form. */
   public OpenVersionedRecord(entityName: VersionedEntityName, id: string): void {
-    this.navigationService.OpenEntityRecord(entityName, CompositeKey.FromID(id)); // first-pk-ok: VersionedEntityName is two MJ core entities ('MJ: Prediction Units', 'MJ: Evaluation Protocols'), both keyed by ID
+    this.navigationService.OpenEntityRecord(entityName, CompositeKey.FromID(id)); // first-pk-ok: VersionedEntityName is two MJ core entities ('MJ: ML Prediction Units', 'MJ: ML Evaluation Protocols'), both keyed by ID
   }
 
   /** The Overview panel's in-app navigation: switch section in-place, or cross to the Models door. */

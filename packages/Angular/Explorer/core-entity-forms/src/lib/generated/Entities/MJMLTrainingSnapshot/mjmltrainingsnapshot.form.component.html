@@ -28,6 +28,24 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="AssemblyCodeVersion"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Configuration References Section -->
+    <mj-collapsible-panel
+        SectionKey="configurationReferences"
+        SectionName="Configuration References"
+        Icon="fa fa-cogs"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="PipelineID"
             Type="textbox"
             [EditMode]="EditMode"
@@ -68,13 +86,21 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="DataCutoff"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- File Storage Section -->
+    <!-- File Storage Metadata Section -->
     <mj-collapsible-panel
-        SectionKey="fileStorage"
-        SectionName="File Storage"
+        SectionKey="fileStorageMetadata"
+        SectionName="File Storage Metadata"
         Icon="fa fa-file-archive"
         [Form]="this"
         [FormContext]="formContext">
@@ -165,10 +191,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Row Statistics Section -->
+    <!-- Row Metrics and Statistics Section -->
     <mj-collapsible-panel
-        SectionKey="rowStatistics"
-        SectionName="Row Statistics"
+        SectionKey="rowMetricsAndStatistics"
+        SectionName="Row Metrics and Statistics"
         Icon="fa fa-list-ol"
         [Form]="this"
         [FormContext]="formContext">
@@ -188,14 +214,30 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="RowsRead"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ReadComplete"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Feature Specifications Section -->
+    <!-- Schema and Features Section -->
     <mj-collapsible-panel
-        SectionKey="featureSpecifications"
-        SectionName="Feature Specifications"
-        Icon="fa fa-code"
+        SectionKey="schemaAndFeatures"
+        SectionName="Schema and Features"
+        Icon="fa fa-table"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -241,29 +283,13 @@
 
     </mj-collapsible-panel>
 
-    <!-- Row Processing Exclusions Section -->
+    <!-- Exclusions and Metrics Section -->
     <mj-collapsible-panel
-        SectionKey="rowProcessingExclusions"
-        SectionName="Row Processing Exclusions"
+        SectionKey="exclusionsAndMetrics"
+        SectionName="Exclusions and Metrics"
         Icon="fa fa-filter"
         [Form]="this"
         [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RowsRead"
-            Type="number"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ReadComplete"
-            Type="checkbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -304,37 +330,11 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Assembly Metadata Section -->
-    <mj-collapsible-panel
-        SectionKey="assemblyMetadata"
-        SectionName="Assembly Metadata"
-        Icon="fa fa-cogs"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="ClassBalance"
             Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="DataCutoff"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="AssemblyCodeVersion"
-            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>

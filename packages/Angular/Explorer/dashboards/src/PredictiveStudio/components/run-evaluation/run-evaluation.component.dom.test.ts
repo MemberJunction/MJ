@@ -53,7 +53,7 @@ describe('PSRunEvaluationComponent snapshot counts (DOM)', () => {
     const provider: IMetadataProvider = Object.create(null);
     const runView = async (params: RunViewParams): Promise<RunViewResult<typeof run | typeof snapshot>> => {
       reads.push(params);
-      const rows = params.EntityName === 'MJ: ML Training Runs' ? [run] : params.EntityName === 'MJ: Training Snapshots' ? [snapshot] : [];
+      const rows = params.EntityName === 'MJ: ML Training Runs' ? [run] : params.EntityName === 'MJ: ML Training Snapshots' ? [snapshot] : [];
       return VersionRowDoubles.ViewResult<typeof run | typeof snapshot>(rows);
     };
     Object.assign(provider, { CurrentUser: { ID: 'u1' }, RunView: runView, RunViews: async (all: RunViewParams[]) => Promise.all(all.map(runView)) });
@@ -68,7 +68,7 @@ describe('PSRunEvaluationComponent snapshot counts (DOM)', () => {
     fixture.detectChanges();
     await fixture.componentInstance.Load();
     const host: HTMLElement = fixture.nativeElement;
-    expect(reads.some((r) => r.EntityName === 'MJ: Training Snapshots' && r.ExtraFilter === `ID='${SNAPSHOT_ID}'`)).toBe(true);
+    expect(reads.some((r) => r.EntityName === 'MJ: ML Training Snapshots' && r.ExtraFilter === `ID='${SNAPSHOT_ID}'`)).toBe(true);
     expect(host.querySelector('[data-testid="ps-eval-rows"]')?.textContent).toContain('1756');
     expect(host.querySelector('[data-testid="ps-eval-uncovered"]')?.textContent).toContain('Members.Tier: 12');
   });

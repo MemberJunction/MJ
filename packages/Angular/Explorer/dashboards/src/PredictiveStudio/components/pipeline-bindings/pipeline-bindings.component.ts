@@ -175,15 +175,15 @@ export class PSPipelineBindingsComponent extends BaseAngularComponent implements
 
   private async readBound(pipeline: PipelineBindingFields): Promise<ValueRead<Bindings>> {
     const requests: BoundVersionRequest[] = [];
-    if (pipeline.PredictionUnitID) requests.push({ EntityName: 'MJ: Prediction Units', ID: pipeline.PredictionUnitID });
-    if (pipeline.EvaluationProtocolID) requests.push({ EntityName: 'MJ: Evaluation Protocols', ID: pipeline.EvaluationProtocolID });
+    if (pipeline.PredictionUnitID) requests.push({ EntityName: 'MJ: ML Prediction Units', ID: pipeline.PredictionUnitID });
+    if (pipeline.EvaluationProtocolID) requests.push({ EntityName: 'MJ: ML Evaluation Protocols', ID: pipeline.EvaluationProtocolID });
     const read = await LineageReads.ReadBoundVersions(this.ProviderToUse, requests);
     if (!read.Ok) return read;
     const of = (entity: BoundVersionRequest['EntityName']): BoundVersion | null => {
       const i = requests.findIndex((r) => r.EntityName === entity);
       return i < 0 ? null : PSPipelineBindingsComponent.boundVersion(read.Rows[i] || null);
     };
-    return { Ok: true, Value: { Unit: of('MJ: Prediction Units'), Protocol: of('MJ: Evaluation Protocols') } };
+    return { Ok: true, Value: { Unit: of('MJ: ML Prediction Units'), Protocol: of('MJ: ML Evaluation Protocols') } };
   }
 
   private static first<T>(r: RunViewResult<T>, pipelineId: string): ValueRead<T> {

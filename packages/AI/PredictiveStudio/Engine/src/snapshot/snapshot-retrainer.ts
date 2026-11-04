@@ -8,7 +8,7 @@
  * run that logged no trainer request is refused.
  */
 import { UUIDsEqual } from '@memberjunction/global';
-import type { MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
+import type { MJMLTrainingRunEntity, MJMLTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import {
   PredictionUnit,
   TrainerContract,
@@ -33,7 +33,7 @@ import { RunViewTrainingSnapshotStore, type ITrainingSnapshotStore } from './tra
 /** The outcome of retraining a completed run from its Training Snapshot. */
 export interface RetrainResult {
   readonly TrainingRunID: MJMLTrainingRunEntity['ID'];
-  readonly TrainingSnapshotID: MJTrainingSnapshotEntity['ID'];
+  readonly TrainingSnapshotID: MJMLTrainingSnapshotEntity['ID'];
   /**
    * Records that the three stored files were verified against the row's SHA-256 columns. Always `true` on a returned
    * result: a mismatch throws `SnapshotIntegrityError` before the trainer is called.
@@ -110,7 +110,7 @@ export class SnapshotRetrainer {
    * retraining does not complete
    */
   protected async RetrainThroughTrainer(
-    run: MJMLTrainingRunEntity, snapshot: MJTrainingSnapshotEntity, files: ISnapshotFileStore, logged: LoggedTrainerRun, deps: TrainingDeps,
+    run: MJMLTrainingRunEntity, snapshot: MJMLTrainingSnapshotEntity, files: ISnapshotFileStore, logged: LoggedTrainerRun, deps: TrainingDeps,
   ): Promise<Record<string, number>> {
     if (!deps.trainer) throw new Error(`Training run ${run.ID} was trained under an Evaluation Protocol; retraining it needs the trainer (deps.trainer)`);
     const [protocol, unit] = await Promise.all([this.LoadProtocolSpec(logged.Request.evaluationProtocolId, deps), this.LoadUnitSpec(snapshot.PredictionUnitID, deps)]);
@@ -132,7 +132,7 @@ export class SnapshotRetrainer {
    *
    * @throws Error naming both protocols when they differ
    */
-  private static assertLoggedProtocolIsSnapshots(run: MJMLTrainingRunEntity, snapshot: MJTrainingSnapshotEntity, logged: LoggedTrainerRun): void {
+  private static assertLoggedProtocolIsSnapshots(run: MJMLTrainingRunEntity, snapshot: MJMLTrainingSnapshotEntity, logged: LoggedTrainerRun): void {
     if (UUIDsEqual(logged.Request.evaluationProtocolId, snapshot.EvaluationProtocolID)) return;
     throw new Error(`Training run ${run.ID} logged Evaluation Protocol ${logged.Request.evaluationProtocolId}, but its Training Snapshot ${snapshot.ID} was frozen under ${snapshot.EvaluationProtocolID}; it is not retrained`);
   }
@@ -155,7 +155,7 @@ export class SnapshotRetrainer {
 
   /** Both metric sets of a retraining, their largest difference and whether the run reproduced. */
   private static compared(
-    run: MJMLTrainingRunEntity, snapshot: MJTrainingSnapshotEntity, original: Readonly<Record<string, number>>, retrained: Readonly<Record<string, number>>, tolerance: number,
+    run: MJMLTrainingRunEntity, snapshot: MJMLTrainingSnapshotEntity, original: Readonly<Record<string, number>>, retrained: Readonly<Record<string, number>>, tolerance: number,
   ): RetrainResult {
     const diff = SnapshotRetrainer.MaxAbsDiff(original, retrained);
     return {
@@ -204,7 +204,7 @@ export class SnapshotRetrainer {
    *
    * @throws SnapshotIntegrityError naming the file, or `'content'`
    */
-  protected async ReadVerifiedContent(snapshot: MJTrainingSnapshotEntity, files: ISnapshotFileStore): Promise<SnapshotContent> {
+  protected async ReadVerifiedContent(snapshot: MJMLTrainingSnapshotEntity, files: ISnapshotFileStore): Promise<SnapshotContent> {
     const [matrix, manifest, provenance] = await Promise.all([
       files.Get(snapshot.MatrixFileID),
       files.Get(snapshot.RowManifestFileID),

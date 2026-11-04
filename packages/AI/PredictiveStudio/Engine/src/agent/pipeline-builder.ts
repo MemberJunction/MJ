@@ -24,7 +24,7 @@
 
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { RunView, type IMetadataProvider, type UserInfo, type EntityInfo, LogError, LogStatus } from '@memberjunction/core';
-import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLModelEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
+import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import {
   EvaluationProtocolRules,
   InnerScoreSelection,
@@ -438,7 +438,7 @@ export class PredictiveStudioPipelineBuilder {
    */
   private async ensureProtocol(pipeline: MJMLTrainingPipelineEntity, candidates: number, provider: IMetadataProvider, user: UserInfo): Promise<void> {
     if (pipeline.EvaluationProtocolID) return;
-    const unitRow = await provider.GetEntityObject<MJPredictionUnitEntity>('MJ: Prediction Units', user);
+    const unitRow = await provider.GetEntityObject<MJMLPredictionUnitEntity>('MJ: ML Prediction Units', user);
     if (!pipeline.PredictionUnitID || !(await unitRow.Load(pipeline.PredictionUnitID))) throw new Error(`Prediction Unit ${pipeline.PredictionUnitID || '(none)'} not found.`);
     const parsed = PredictionUnit.ParsePredictionUnitRow(unitRow);
     if (parsed.Ok === false) throw new Error(`Prediction Unit cannot be read: ${parsed.Errors.join('; ')}`);

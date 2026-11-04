@@ -7,17 +7,17 @@
  * there is no "latest version of the lineage" lookup.
  */
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type { MJEvaluationProtocolEntity } from '@memberjunction/core-entities';
+import type { MJMLEvaluationProtocolEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
 import { EvaluationProtocol, type EvaluationProtocolColumns, type EvaluationProtocolSpec } from '@memberjunction/predictive-studio-core';
 import { TrainingRefusedError } from './training-refusal';
 
 /** A stored protocol row: its columns and the instant the database created it. */
-export type StoredEvaluationProtocol = EvaluationProtocolColumns & Pick<MJEvaluationProtocolEntity, '__mj_CreatedAt'>;
+export type StoredEvaluationProtocol = EvaluationProtocolColumns & Pick<MJMLEvaluationProtocolEntity, '__mj_CreatedAt'>;
 
 /** One protocol version, parsed, with the row facts a run is checked against. */
 export interface LoadedProtocol {
-  /** `MJ: Evaluation Protocols`.ID of this version's row. */
+  /** `MJ: ML Evaluation Protocols`.ID of this version's row. */
   readonly RowID: string;
   /** The version number within the protocol's lineage. */
   readonly Version: number;
@@ -43,7 +43,7 @@ export class RunViewEvaluationProtocolStore implements IEvaluationProtocolStore 
   /** Read-only, so the row is read as plain values (`'simple'`). */
   public async Load(protocolId: string): Promise<StoredEvaluationProtocol | null> {
     const r = await this.runView.RunView<StoredEvaluationProtocol>(
-      { EntityName: 'MJ: Evaluation Protocols', ExtraFilter: `ID='${EscapeSQLString(protocolId)}'`, MaxRows: 1, ResultType: 'simple' },
+      { EntityName: 'MJ: ML Evaluation Protocols', ExtraFilter: `ID='${EscapeSQLString(protocolId)}'`, MaxRows: 1, ResultType: 'simple' },
       this.contextUser,
     );
     if (!r.Success) throw new Error(`Reading Evaluation Protocol ${protocolId} failed: ${r.ErrorMessage}`);

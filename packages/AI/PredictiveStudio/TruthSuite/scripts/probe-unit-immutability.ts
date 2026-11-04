@@ -15,18 +15,18 @@
  */
 import { RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { MJPredictionUnitEntity } from '@memberjunction/core-entities';
+import { MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MetadataEntityFactory, PredictionUnitVersioning } from '@memberjunction/predictive-studio';
 import { ScriptRunner } from './script-runner';
 
 const PROBE_UNIT_NAME = 'Member renewal (immutability probe)';
-const ENTITY_NAME = 'MJ: Prediction Units';
+const ENTITY_NAME = 'MJ: ML Prediction Units';
 /** Placeholder author user id: the unit's AuthoredBy JSON needs a UUID-shaped value; it is not resolved to a user. */
 const PROBE_AUTHOR_USER_ID = '3B0F6C59-0000-4000-8000-000000000001';
 
 /** The version-1 renewal unit the truth suite stores. The server gives it its ID and makes it its own lineage root. */
-function fillProbeUnit(unit: MJPredictionUnitEntity): void {
+function fillProbeUnit(unit: MJMLPredictionUnitEntity): void {
   unit.NewRecord();
   unit.Version = 1;
   unit.Name = PROBE_UNIT_NAME;
@@ -45,13 +45,13 @@ function fillProbeUnit(unit: MJPredictionUnitEntity): void {
 
 /** Reloads the saved unit and compares its LineageRootID to its ID. */
 async function lineageRootEqualsID(provider: GraphQLDataProvider, id: string): Promise<boolean> {
-  const reloaded = await provider.GetEntityObject<MJPredictionUnitEntity>(ENTITY_NAME, provider.CurrentUser);
+  const reloaded = await provider.GetEntityObject<MJMLPredictionUnitEntity>(ENTITY_NAME, provider.CurrentUser);
   if (!(await reloaded.Load(id))) throw new Error(`probe unit ${id} could not be reloaded`);
   return UUIDsEqual(reloaded.LineageRootID, reloaded.ID);
 }
 
 async function probeEdit(provider: GraphQLDataProvider): Promise<void> {
-  const unit = await provider.GetEntityObject<MJPredictionUnitEntity>(ENTITY_NAME, provider.CurrentUser);
+  const unit = await provider.GetEntityObject<MJMLPredictionUnitEntity>(ENTITY_NAME, provider.CurrentUser);
   fillProbeUnit(unit);
   const firstSave = await unit.Save();
   console.log(`first save: ${firstSave}`);
@@ -66,8 +66,8 @@ async function probeEdit(provider: GraphQLDataProvider): Promise<void> {
 }
 
 /** A later version of the probe lineage, written by hand so the probe controls Version and LabelVersion. */
-async function saveHandWrittenVersion(provider: GraphQLDataProvider, lineageRootID: string, version: number, labelVersion: number): Promise<MJPredictionUnitEntity> {
-  const unit = await provider.GetEntityObject<MJPredictionUnitEntity>(ENTITY_NAME, provider.CurrentUser);
+async function saveHandWrittenVersion(provider: GraphQLDataProvider, lineageRootID: string, version: number, labelVersion: number): Promise<MJMLPredictionUnitEntity> {
+  const unit = await provider.GetEntityObject<MJMLPredictionUnitEntity>(ENTITY_NAME, provider.CurrentUser);
   fillProbeUnit(unit);
   unit.LineageRootID = lineageRootID;
   unit.Version = version;
@@ -81,7 +81,7 @@ async function saveHandWrittenVersion(provider: GraphQLDataProvider, lineageRoot
 
 async function probeLabelVersion(provider: GraphQLDataProvider): Promise<void> {
   console.log(`probe rows before: ${await countProbeRows(provider)}`);
-  const v1 = await provider.GetEntityObject<MJPredictionUnitEntity>(ENTITY_NAME, provider.CurrentUser);
+  const v1 = await provider.GetEntityObject<MJMLPredictionUnitEntity>(ENTITY_NAME, provider.CurrentUser);
   fillProbeUnit(v1);
   const firstSave = await v1.Save();
   console.log(`v1: save ${firstSave}`);
@@ -104,8 +104,8 @@ async function probeLabelVersion(provider: GraphQLDataProvider): Promise<void> {
 }
 
 /** Every probe unit row, newest version first (so a later version is deleted before the row it follows). */
-async function findProbeRows(provider: GraphQLDataProvider): Promise<MJPredictionUnitEntity[]> {
-  const found = await RunView.FromMetadataProvider(provider).RunView<MJPredictionUnitEntity>(
+async function findProbeRows(provider: GraphQLDataProvider): Promise<MJMLPredictionUnitEntity[]> {
+  const found = await RunView.FromMetadataProvider(provider).RunView<MJMLPredictionUnitEntity>(
     { EntityName: ENTITY_NAME, ExtraFilter: `Name='${PROBE_UNIT_NAME}'`, OrderBy: 'Version DESC', ResultType: 'entity_object' },
     provider.CurrentUser,
   );
@@ -115,7 +115,7 @@ async function findProbeRows(provider: GraphQLDataProvider): Promise<MJPredictio
 
 /** How many probe unit rows exist (count only). */
 async function countProbeRows(provider: GraphQLDataProvider): Promise<number> {
-  const found = await RunView.FromMetadataProvider(provider).RunView<MJPredictionUnitEntity>(
+  const found = await RunView.FromMetadataProvider(provider).RunView<MJMLPredictionUnitEntity>(
     { EntityName: ENTITY_NAME, ExtraFilter: `Name='${PROBE_UNIT_NAME}'`, ResultType: 'count_only' },
     provider.CurrentUser,
   );

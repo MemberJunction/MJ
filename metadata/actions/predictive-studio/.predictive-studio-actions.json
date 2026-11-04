@@ -146,7 +146,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "The MJ: Training Snapshots row the run trained on."
+            "Description": "The MJ: ML Training Snapshots row the run trained on."
           },
           "primaryKey": {
             "ID": "8B5E2C10-6A7D-4F93-B1E4-0C9D2A7F5E36"
@@ -160,7 +160,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "The MJ: Evaluation Protocols row (exact version) the run was evaluated under."
+            "Description": "The MJ: ML Evaluation Protocols row (exact version) the run was evaluated under."
           },
           "primaryKey": {
             "ID": "D99B752A-10C9-424D-919B-E421A16BCDFA"

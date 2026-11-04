@@ -157,7 +157,7 @@ test.describe.serial('Predictive Studio — unit and protocol surfaces', () => {
     // The record-form container heard the widget's save and re-read the pipeline: its protocol field links to the newest
     // version (a stale copy would still hold v1, and a later form save would write it back). Both versions share a name,
     // so the link is followed and the protocol record's versions panel shows which version the form pointed at.
-    await page.locator('mj-form-field[fieldname="EvaluationProtocolID"] a[aria-label^="Open MJ: Evaluation Protocols record"]').click();
+    await page.locator('mj-form-field[fieldname="EvaluationProtocolID"] a[aria-label^="Open MJ: ML Evaluation Protocols record"]').click();
     await expect(page.locator('[data-testid="ps-protocol-version-list"] button[aria-pressed="true"]')).toContainText('v2');
   });
 

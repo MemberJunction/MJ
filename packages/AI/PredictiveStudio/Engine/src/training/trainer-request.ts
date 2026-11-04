@@ -17,14 +17,14 @@ import {
   type TrainerRequest,
   type TrainerRequestConfig,
 } from '@memberjunction/predictive-studio-core';
-import type { MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
+import type { MJMLTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import type { ISnapshotFileStore } from '../snapshot/snapshot-file-store';
 
 /** Everything one trainer request is built from. */
 export interface TrainerRequestInput {
   readonly TrainingRunID: string;
   readonly Snapshot: Pick<
-    MJTrainingSnapshotEntity,
+    MJMLTrainingSnapshotEntity,
     'ID' | 'ContentHash' | 'FeatureSchemaHash' | 'MatrixFileID' | 'MatrixSha256' | 'RowManifestFileID' | 'RowManifestSha256'
   >;
   readonly Files: ISnapshotFileStore;

@@ -99,7 +99,7 @@ describe('PSProtocolVersionsComponent saves (DOM)', () => {
     const seen: BeforeVersionSavedEventArgs<EvaluationProtocolDraft>[] = [];
     Fixture.componentInstance.BeforeVersionSaved.subscribe((e) => { seen.push(e); e.Cancel = true; e.CancelReason = 'Held for review.'; });
     await Fixture.componentInstance.Save(draft);
-    expect([seen[0]?.EntityName, seen[0]?.Version]).toEqual(['MJ: Evaluation Protocols', 2]);
+    expect([seen[0]?.EntityName, seen[0]?.Version]).toEqual(['MJ: ML Evaluation Protocols', 2]);
     expect([row.Version, After.length, Store.Rows.length]).toEqual([0, 0, 1]);
     expect(Fixture.componentInstance.Error).toBe('Held for review.');
   });

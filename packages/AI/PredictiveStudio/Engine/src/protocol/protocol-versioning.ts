@@ -8,7 +8,7 @@
  * `GuardFieldsEditableBy`) is enforced by the server entity from the `AuthoredBy` written here.
  */
 import type { UserInfo } from '@memberjunction/core';
-import type { MJEvaluationProtocolEntity } from '@memberjunction/core-entities';
+import type { MJMLEvaluationProtocolEntity } from '@memberjunction/core-entities';
 import {
   EvaluationProtocol, EvaluationProtocolRules, ProtocolRows,
   type Actor, type EvaluationProtocolDraft, type EvaluationProtocolRowTarget, type ProtocolVersionWrite,
@@ -57,22 +57,22 @@ export class EvaluationProtocolVersioning {
   }
 
   /** Version 1 of a new protocol lineage: its own lineage root, with a client-minted upper-case ID. */
-  public static async CreateEvaluationProtocolV1(draft: EvaluationProtocolDraft, actor: Actor, entityFactory: IEntityFactory, contextUser?: UserInfo): Promise<MJEvaluationProtocolEntity> {
-    const row = await entityFactory.getEntityObject<MJEvaluationProtocolEntity>('MJ: Evaluation Protocols', contextUser);
+  public static async CreateEvaluationProtocolV1(draft: EvaluationProtocolDraft, actor: Actor, entityFactory: IEntityFactory, contextUser?: UserInfo): Promise<MJMLEvaluationProtocolEntity> {
+    const row = await entityFactory.getEntityObject<MJMLEvaluationProtocolEntity>('MJ: ML Evaluation Protocols', contextUser);
     await EvaluationProtocolVersioning.WriteVersionRow(row, EvaluationProtocolVersioning.BuildV1(draft, actor, ProtocolRows.NewVersionRowID()), `Evaluation Protocol "${draft.name}" v1`);
     return row;
   }
 
   /** The next version under `latest`'s lineage, with `changes` applied over the latest version's content. */
   public static async CreateNextEvaluationProtocolVersion(
-    latest: MJEvaluationProtocolEntity,
+    latest: MJMLEvaluationProtocolEntity,
     changes: Partial<EvaluationProtocolDraft>,
     actor: Actor,
     entityFactory: IEntityFactory,
     contextUser?: UserInfo,
-  ): Promise<MJEvaluationProtocolEntity> {
+  ): Promise<MJMLEvaluationProtocolEntity> {
     const next = EvaluationProtocolVersioning.BuildNextVersion(latest, changes, actor);
-    const row = await entityFactory.getEntityObject<MJEvaluationProtocolEntity>('MJ: Evaluation Protocols', contextUser);
+    const row = await entityFactory.getEntityObject<MJMLEvaluationProtocolEntity>('MJ: ML Evaluation Protocols', contextUser);
     await EvaluationProtocolVersioning.WriteVersionRow(row, next, `Evaluation Protocol "${next.Draft.name}" v${next.Meta.Version}`);
     return row;
   }

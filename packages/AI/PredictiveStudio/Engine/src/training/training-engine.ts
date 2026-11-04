@@ -88,7 +88,7 @@ import {
   type TrainerRequest,
   type ProtocolExclusions,
 } from '@memberjunction/predictive-studio-core';
-import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
+import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJMLTrainingSnapshotEntity } from '@memberjunction/core-entities';
 
 import { detectSingleFeatureDominance, type DominanceResult } from '../feature-assembly';
 import { RunViewDataAccess, type ICountingDataAccess } from '../feature-assembly/data-access';
@@ -1002,7 +1002,7 @@ export class TrainingEngine {
   /** The unit's identity, the typed feature columns, the kept categorical levels and the snapshot, stored in the model Lineage. */
   private unitLineage(
     unit: PredictionUnitSpec, resolved: ResolvedPipeline, unitRead: UnitRowsRead, features: readonly FeatureColumnSpec[], levels: ReadonlyMap<string, readonly string[]>,
-    snapshot: MJTrainingSnapshotEntity,
+    snapshot: MJMLTrainingSnapshotEntity,
   ): UnitModelLineage {
     return {
       predictionUnitId: unit.id,

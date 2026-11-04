@@ -5,7 +5,7 @@
  * no longer hash to its column on the snapshot row is refused) and the one manifest reader, which verifies the
  * manifest file and parses every line through the snapshot row-key schema.
  */
-import type { MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
+import type { MJMLTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import type { SnapshotRowKey } from '@memberjunction/predictive-studio-core';
 import { SnapshotHash } from './snapshot-hash';
 import type { ISnapshotFileStore } from './snapshot-file-store';
@@ -27,7 +27,7 @@ export class SnapshotIntegrityError extends Error {
 }
 
 /** The snapshot row columns the manifest reader reads. */
-export type SnapshotManifestRef = Pick<MJTrainingSnapshotEntity, 'RowManifestFileID' | 'RowManifestSha256'>;
+export type SnapshotManifestRef = Pick<MJMLTrainingSnapshotEntity, 'RowManifestFileID' | 'RowManifestSha256'>;
 
 /** Verified reads of a snapshot's stored files. */
 export class SnapshotManifest {

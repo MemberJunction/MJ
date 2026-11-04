@@ -380,31 +380,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Training Snapshots (Matrix File) Section -->
-    <mj-collapsible-panel
-        SectionKey="mJTrainingSnapshotsMatrixFileID"
-        SectionName="Training Snapshots (Matrix File)"
-        Icon="fa fa-database"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTrainingSnapshotsMatrixFileID')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Training Snapshots','MatrixFileID')"
-                [NewRecordValues]="NewRecordValues('MJ: Training Snapshots','MatrixFileID')"
-                [AllowLoad]="IsSectionExpanded('mJTrainingSnapshotsMatrixFileID')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTrainingSnapshotsMatrixFileID', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Diagnostic Bundles Section -->
     <mj-collapsible-panel
         SectionKey="mJDiagnosticBundles"
@@ -430,50 +405,75 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Training Snapshots (Row Manifest File) Section -->
+    <!-- ML Training Snapshots (Matrix File) Section -->
     <mj-collapsible-panel
-        SectionKey="mJTrainingSnapshotsRowManifestFileID"
-        SectionName="Training Snapshots (Row Manifest File)"
+        SectionKey="mJMLTrainingSnapshotsMatrixFileID"
+        SectionName="ML Training Snapshots (Matrix File)"
         Icon="fa fa-database"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTrainingSnapshotsRowManifestFileID')"
+        [BadgeCount]="GetSectionRowCount('mJMLTrainingSnapshotsMatrixFileID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Training Snapshots','RowManifestFileID')"
-                [NewRecordValues]="NewRecordValues('MJ: Training Snapshots','RowManifestFileID')"
-                [AllowLoad]="IsSectionExpanded('mJTrainingSnapshotsRowManifestFileID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Training Snapshots','MatrixFileID')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Training Snapshots','MatrixFileID')"
+                [AllowLoad]="IsSectionExpanded('mJMLTrainingSnapshotsMatrixFileID')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTrainingSnapshotsRowManifestFileID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJMLTrainingSnapshotsMatrixFileID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- Training Snapshots (Provenance File) Section -->
+    <!-- ML Training Snapshots (Row Manifest File) Section -->
     <mj-collapsible-panel
-        SectionKey="mJTrainingSnapshotsProvenanceFileID"
-        SectionName="Training Snapshots (Provenance File)"
+        SectionKey="mJMLTrainingSnapshotsRowManifestFileID"
+        SectionName="ML Training Snapshots (Row Manifest File)"
         Icon="fa fa-database"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTrainingSnapshotsProvenanceFileID')"
+        [BadgeCount]="GetSectionRowCount('mJMLTrainingSnapshotsRowManifestFileID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Training Snapshots','ProvenanceFileID')"
-                [NewRecordValues]="NewRecordValues('MJ: Training Snapshots','ProvenanceFileID')"
-                [AllowLoad]="IsSectionExpanded('mJTrainingSnapshotsProvenanceFileID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Training Snapshots','RowManifestFileID')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Training Snapshots','RowManifestFileID')"
+                [AllowLoad]="IsSectionExpanded('mJMLTrainingSnapshotsRowManifestFileID')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTrainingSnapshotsProvenanceFileID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJMLTrainingSnapshotsRowManifestFileID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- ML Training Snapshots (Provenance File) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMLTrainingSnapshotsProvenanceFileID"
+        SectionName="ML Training Snapshots (Provenance File)"
+        Icon="fa fa-database"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMLTrainingSnapshotsProvenanceFileID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Training Snapshots','ProvenanceFileID')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Training Snapshots','ProvenanceFileID')"
+                [AllowLoad]="IsSectionExpanded('mJMLTrainingSnapshotsProvenanceFileID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMLTrainingSnapshotsProvenanceFileID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

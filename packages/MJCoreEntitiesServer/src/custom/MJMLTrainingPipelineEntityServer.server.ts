@@ -1,7 +1,7 @@
 import { BaseEntity, EntityInfo, IEntityDataProvider, IMetadataProvider, LogStatus, UserInfo, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import { EscapeSQLString, IsValidUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
-import { VersionedRowGuard, type RowRead } from './MJPredictionUnitEntityServer.server';
+import { VersionedRowGuard, type RowRead } from './MJMLPredictionUnitEntityServer.server';
 import {
     EvaluationProtocol,
     EvaluationProtocolRules,
@@ -329,10 +329,10 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
         const user = this.ActiveUser;
         const [unit, protocol] = await Promise.all([
             unitID
-                ? VersionedRowGuard.ReadOneRow<PredictionUnitColumns>(provider, 'MJ: Prediction Units', `ID='${EscapeSQLString(unitID)}'`, user)
+                ? VersionedRowGuard.ReadOneRow<PredictionUnitColumns>(provider, 'MJ: ML Prediction Units', `ID='${EscapeSQLString(unitID)}'`, user)
                 : null,
             protocolID
-                ? VersionedRowGuard.ReadOneRow<EvaluationProtocolColumns>(provider, 'MJ: Evaluation Protocols', `ID='${EscapeSQLString(protocolID)}'`, user)
+                ? VersionedRowGuard.ReadOneRow<EvaluationProtocolColumns>(provider, 'MJ: ML Evaluation Protocols', `ID='${EscapeSQLString(protocolID)}'`, user)
                 : null,
         ]);
         return { Unit: unit, Protocol: protocol };
@@ -353,7 +353,7 @@ export class MJMLTrainingPipelineEntityServer extends MJMLTrainingPipelineEntity
         const fromID: string | null = field?.Dirty === true ? field.OldValue : null;
         if (!fromID || UUIDsEqual(fromID, this.EvaluationProtocolID)) return;
         const user = this.ActiveUser;
-        const fromRead = await VersionedRowGuard.ReadOneRow<EvaluationProtocolColumns>(provider, 'MJ: Evaluation Protocols', `ID='${EscapeSQLString(fromID)}'`, user);
+        const fromRead = await VersionedRowGuard.ReadOneRow<EvaluationProtocolColumns>(provider, 'MJ: ML Evaluation Protocols', `ID='${EscapeSQLString(fromID)}'`, user);
         const from = this.readRowOrFail(result, 'EvaluationProtocolID', `Evaluation Protocol ${fromID}`, fromRead);
         if (!from) return;
         const problem = MJMLTrainingPipelineEntityServer.GetProtocolRebindProblem(from, to, MJMLTrainingPipelineEntityServer.RebindingActor(user));

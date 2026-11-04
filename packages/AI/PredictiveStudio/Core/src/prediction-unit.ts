@@ -3,7 +3,7 @@
  *
  * The Prediction Unit: what one training row is, its decision date, the outcome rule and window, censoring,
  * task type, Temporal Spec, decision and incumbent heuristic. These are the persisted JSON shapes of the
- * `MJ: Prediction Units` columns and their browser-safe parser. A unit version is immutable; the Temporal
+ * `MJ: ML Prediction Units` columns and their browser-safe parser. A unit version is immutable; the Temporal
  * Spec is part of the row and versioned with it.
  */
 import { UUIDsEqual } from '@memberjunction/global';
@@ -108,7 +108,7 @@ export type Actor =
   | { readonly kind: 'scheduled-job'; readonly scheduledJobRunId: string }  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
   | { readonly kind: 'system'; readonly component: string };  // case-violation-ok-legacy-back-compat: stored Prediction Unit JSON field name
 
-/** The `MJ: Prediction Units` columns the parser reads (the generated entity satisfies this structurally). */
+/** The `MJ: ML Prediction Units` columns the parser reads (the generated entity satisfies this structurally). */
 export interface PredictionUnitColumns {
   ID: string;
   LineageRootID: string;

@@ -6,14 +6,14 @@
  */
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
-import type { MJMLTrainingPipelineEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
+import type { MJMLTrainingPipelineEntity, MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import { PredictionUnit, TaskTypeRules, type PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
 import type { IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
 
 /** Reads unit versions by ID and by lineage. */
 export interface IPredictionUnitStore {
-  Load(unitId: string): Promise<MJPredictionUnitEntity | null>;
-  LatestVersion(lineageRootId: string): Promise<MJPredictionUnitEntity | null>;
+  Load(unitId: string): Promise<MJMLPredictionUnitEntity | null>;
+  LatestVersion(lineageRootId: string): Promise<MJMLPredictionUnitEntity | null>;
 }
 
 /** Reads unit versions through the request's provider (never the global one, so each request reads its own connection). */
@@ -24,15 +24,15 @@ export class RunViewPredictionUnitStore implements IPredictionUnitStore {
   }
 
   /** The unit version with this ID, or null. */
-  public async Load(unitId: string): Promise<MJPredictionUnitEntity | null> {
-    const r = await this.runView.RunView<MJPredictionUnitEntity>({ EntityName: 'MJ: Prediction Units', ExtraFilter: `ID='${EscapeSQLString(unitId)}'`, ResultType: 'entity_object' }, this.contextUser);
+  public async Load(unitId: string): Promise<MJMLPredictionUnitEntity | null> {
+    const r = await this.runView.RunView<MJMLPredictionUnitEntity>({ EntityName: 'MJ: ML Prediction Units', ExtraFilter: `ID='${EscapeSQLString(unitId)}'`, ResultType: 'entity_object' }, this.contextUser);
     if (!r.Success) throw new Error(`Loading Prediction Unit ${unitId} failed: ${r.ErrorMessage}`);
     return r.Results[0] || null;
   }
 
   /** The highest Version of a lineage, or null. */
-  public async LatestVersion(lineageRootId: string): Promise<MJPredictionUnitEntity | null> {
-    const r = await this.runView.RunView<MJPredictionUnitEntity>({ EntityName: 'MJ: Prediction Units', ExtraFilter: `LineageRootID='${EscapeSQLString(lineageRootId)}'`, OrderBy: 'Version DESC', MaxRows: 1, ResultType: 'entity_object' }, this.contextUser);
+  public async LatestVersion(lineageRootId: string): Promise<MJMLPredictionUnitEntity | null> {
+    const r = await this.runView.RunView<MJMLPredictionUnitEntity>({ EntityName: 'MJ: ML Prediction Units', ExtraFilter: `LineageRootID='${EscapeSQLString(lineageRootId)}'`, OrderBy: 'Version DESC', MaxRows: 1, ResultType: 'entity_object' }, this.contextUser);
     if (!r.Success) throw new Error(`Loading the latest version of ${lineageRootId} failed: ${r.ErrorMessage}`);
     return r.Results[0] || null;
   }

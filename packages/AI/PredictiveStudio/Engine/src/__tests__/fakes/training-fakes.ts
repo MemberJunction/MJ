@@ -10,7 +10,7 @@ import type {
   MJMLModelEntity,
   MJMLTrainingPipelineEntity,
   MJMLTrainingRunEntity,
-  MJTrainingSnapshotEntity,
+  MJMLTrainingSnapshotEntity,
 } from '@memberjunction/core-entities';
 import type {
   FeatureStepGraph,
@@ -206,7 +206,7 @@ export class FakeEntityFactory implements IEntityFactory {
       this.Runs.push(r);
       return r as unknown as T;
     }
-    if (entityName === 'MJ: Training Snapshots') {
+    if (entityName === 'MJ: ML Training Snapshots') {
       const snapshot = new FakeTrainingSnapshot('');
       this.Snapshots.push(snapshot);
       return snapshot as unknown as T;
@@ -400,14 +400,14 @@ export class FakeTrainingSnapshotStore implements ITrainingSnapshotStore {
   /** Content-hash lookups that found a saved snapshot: each one is a build that reused it instead of writing. */
   public ReusedLookups = 0;
   constructor(private readonly factory: FakeEntityFactory) {}
-  public async FindByContentHash(contentHash: string): Promise<MJTrainingSnapshotEntity | null> {
+  public async FindByContentHash(contentHash: string): Promise<MJMLTrainingSnapshotEntity | null> {
     const found = this.factory.Snapshots.find((s) => s.ID !== '' && s.ContentHash === contentHash);
     if (found) this.ReusedLookups++;
-    return found ? (found as unknown as MJTrainingSnapshotEntity) : null;
+    return found ? (found as unknown as MJMLTrainingSnapshotEntity) : null;
   }
-  public async LoadSnapshot(id: string): Promise<MJTrainingSnapshotEntity | null> {
+  public async LoadSnapshot(id: string): Promise<MJMLTrainingSnapshotEntity | null> {
     const found = this.factory.Snapshots.find((s) => s.ID === id);
-    return found ? (found as unknown as MJTrainingSnapshotEntity) : null;
+    return found ? (found as unknown as MJMLTrainingSnapshotEntity) : null;
   }
   public async LoadRun(id: string): Promise<MJMLTrainingRunEntity | null> {
     const found = this.factory.Runs.find((r) => r.ID === id);

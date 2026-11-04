@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import type { MJPredictionUnitEntity } from '@memberjunction/core-entities';
+import type { MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ProtocolRows, PredictionUnit, type PredictionUnitSpec, type UnitDraft, type UnitVersionWrite } from '@memberjunction/predictive-studio-core';
 import { PSUnitSummaryComponent } from '../unit-summary/unit-summary.component';
@@ -55,8 +55,8 @@ export interface VersionedUnitRow {
     }
   `,
 })
-export class PSUnitVersionsComponent extends PSVersionedLineageBase<VersionedUnitRow, UnitDraft, UnitVersionWrite, MJPredictionUnitEntity> {
-  protected readonly EntityName = 'MJ: Prediction Units';
+export class PSUnitVersionsComponent extends PSVersionedLineageBase<VersionedUnitRow, UnitDraft, UnitVersionWrite, MJMLPredictionUnitEntity> {
+  protected readonly EntityName = 'MJ: ML Prediction Units';
 
   /** Any version row of the lineage; null = author version 1 of a new unit. */
   @Input()
@@ -86,7 +86,7 @@ export class PSUnitVersionsComponent extends PSVersionedLineageBase<VersionedUni
     );
   }
 
-  protected ApplyDraftToRow(row: MJPredictionUnitEntity, version: UnitVersionWrite): void {
+  protected ApplyDraftToRow(row: MJMLPredictionUnitEntity, version: UnitVersionWrite): void {
     ProtocolRows.ApplyPredictionUnitDraftToRow(row, version.Draft, version.Meta);
   }
 

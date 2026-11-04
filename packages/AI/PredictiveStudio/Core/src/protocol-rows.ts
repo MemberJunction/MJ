@@ -4,7 +4,7 @@
  * Writes a protocol draft or a unit draft into the columns of a new version row. Every version is its own row:
  * version 1 is its own lineage root, a later version carries version 1's ID in `LineageRootID` and leaves its own ID
  * to the database. The row targets are the Core column shapes plus `Description`, so the generated
- * `MJEvaluationProtocolEntity` / `MJPredictionUnitEntity` satisfy them without a cast. Browser-safe: the Explorer
+ * `MJMLEvaluationProtocolEntity` / `MJMLPredictionUnitEntity` satisfy them without a cast. Browser-safe: the Explorer
  * widgets, the server-side writers and the migration share it.
  */
 import type { EvaluationProtocolColumns } from './evaluation-protocol';
@@ -66,7 +66,7 @@ export interface UnitVersionWrite {
   readonly Meta: UnitRowMeta;
 }
 
-/** The `MJ: Prediction Units` columns a unit draft determines, JSON columns serialized. */
+/** The `MJ: ML Prediction Units` columns a unit draft determines, JSON columns serialized. */
 export type UnitDraftColumns = Omit<PredictionUnitColumns, 'ID' | 'LineageRootID' | 'Version' | 'LabelVersion' | 'AuthoredBy'> & {
   readonly Description: string | null;
 };

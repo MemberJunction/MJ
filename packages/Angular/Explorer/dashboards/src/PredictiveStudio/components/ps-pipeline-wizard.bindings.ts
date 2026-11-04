@@ -7,7 +7,7 @@
  */
 import { CompositeKey, RunView, type BaseEntity, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
-import type { MJEvaluationProtocolEntity, MJMLTrainingPipelineEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
+import type { MJMLEvaluationProtocolEntity, MJMLTrainingPipelineEntity, MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import {
   ADVERSE_CLASS_HOLD_REASON, JsonParse, LegacyPipelines, PredictionUnit, ProtocolRows, TaskTypeRules, UtcDay,
   type Actor, type LegacyProtocolOutcome, type LegacyStop, type OutcomeConfig, type PredictionUnitSpec, type UnitDraft,
@@ -111,7 +111,7 @@ export class PipelineWizardBindings {
    */
   public static async ReadBoundTargetColumn(unitId: string, provider: IMetadataProvider, user: UserInfo | undefined): Promise<BoundTargetRead> {
     const r = await RunView.FromMetadataProvider(provider).RunView<UnitVersionRow>({
-      EntityName: 'MJ: Prediction Units', ExtraFilter: `ID='${EscapeSQLString(unitId)}'`, Fields: [...UNIT_VERSION_FIELDS], ResultType: 'simple',  // pk-filter-ok: MJ core entity keyed by ID
+      EntityName: 'MJ: ML Prediction Units', ExtraFilter: `ID='${EscapeSQLString(unitId)}'`, Fields: [...UNIT_VERSION_FIELDS], ResultType: 'simple',  // pk-filter-ok: MJ core entity keyed by ID
     }, user);
     if (!r.Success) return { Ok: false, Reason: `reading its Prediction Unit failed: ${r.ErrorMessage}` };
     const row = r.Results[0];
@@ -207,8 +207,8 @@ export class PipelineWizardBindings {
 
   private static async saveUnit(
     draft: UnitDraft, author: Actor, provider: IMetadataProvider, user: UserInfo | undefined,
-  ): Promise<{ readonly Ok: true; readonly Row: MJPredictionUnitEntity; readonly Spec: PredictionUnitSpec } | { readonly Ok: false; readonly Reason: string }> {
-    const row = await provider.GetEntityObject<MJPredictionUnitEntity>('MJ: Prediction Units', user);
+  ): Promise<{ readonly Ok: true; readonly Row: MJMLPredictionUnitEntity; readonly Spec: PredictionUnitSpec } | { readonly Ok: false; readonly Reason: string }> {
+    const row = await provider.GetEntityObject<MJMLPredictionUnitEntity>('MJ: ML Prediction Units', user);
     row.NewRecord();
     const id = ProtocolRows.NewVersionRowID();
     ProtocolRows.ApplyPredictionUnitDraftToRow(row, draft, { ID: id, LineageRootID: id, Version: 1, LabelVersion: 1, AuthoredBy: author });
@@ -220,8 +220,8 @@ export class PipelineWizardBindings {
 
   private static async saveProtocol(
     unit: PredictionUnitSpec, inputs: WizardBindingPlan['Protocol'], name: string, author: Actor, provider: IMetadataProvider, user: UserInfo | undefined,
-  ): Promise<{ readonly Ok: true; readonly Row: MJEvaluationProtocolEntity } | { readonly Ok: false; readonly Reason: string }> {
-    const row = await provider.GetEntityObject<MJEvaluationProtocolEntity>('MJ: Evaluation Protocols', user);
+  ): Promise<{ readonly Ok: true; readonly Row: MJMLEvaluationProtocolEntity } | { readonly Ok: false; readonly Reason: string }> {
+    const row = await provider.GetEntityObject<MJMLEvaluationProtocolEntity>('MJ: ML Evaluation Protocols', user);
     row.NewRecord();
     const id = ProtocolRows.NewVersionRowID();
     ProtocolRows.ApplyProtocolDraftToRow(row, LegacyPipelines.LegacyProtocolDraft(unit, inputs, name), { ID: id, LineageRootID: id, Version: 1, AuthoredBy: author, Description: null });

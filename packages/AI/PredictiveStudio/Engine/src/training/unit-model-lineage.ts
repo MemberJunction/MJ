@@ -36,7 +36,7 @@ export interface UnitModelLineage {
   featureSpec: FeatureColumnSpec[];  // case-violation-ok-legacy-back-compat: stored Lineage JSON field name
   /** The kept levels of each categorical column, by column name; scoring folds every other value into the fold level. */
   categoryLevels: Record<string, string[]>;  // case-violation-ok-legacy-back-compat: stored Lineage JSON field name
-  /** The `MJ: Training Snapshots` row the model was trained from. */
+  /** The `MJ: ML Training Snapshots` row the model was trained from. */
   trainingSnapshotId: string;  // case-violation-ok-legacy-back-compat: stored Lineage JSON field name
   /** That snapshot's content hash, so the lineage names the exact rows even if the row were ever re-pointed. */
   snapshotContentHash: string;  // case-violation-ok-legacy-back-compat: stored Lineage JSON field name

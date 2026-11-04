@@ -18,9 +18,9 @@ export interface PredictiveStudioTrainModelOutput {
     leakageFlagged: boolean;
     /** Lifecycle status of the produced model (`Draft`), `NoSignal` when the gate stored no-signal, or `KeptExistingRule` when it kept the existing rule. */
     status: string;
-    /** The `MJ: Training Snapshots` row the run trained on. */
+    /** The `MJ: ML Training Snapshots` row the run trained on. */
     trainingSnapshotId?: string;
-    /** The `MJ: Evaluation Protocols` row (exact version) the run was evaluated under. */
+    /** The `MJ: ML Evaluation Protocols` row (exact version) the run was evaluated under. */
     evaluationProtocolId?: string;
     /** That protocol row's Version. */
     evaluationProtocolVersion?: number;

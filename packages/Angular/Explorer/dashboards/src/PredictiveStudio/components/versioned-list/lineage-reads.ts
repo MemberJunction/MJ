@@ -1,5 +1,5 @@
 /**
- * Reads of versioned Predictive Studio rows (`MJ: Evaluation Protocols`, `MJ: Prediction Units`) through a given
+ * Reads of versioned Predictive Studio rows (`MJ: ML Evaluation Protocols`, `MJ: ML Prediction Units`) through a given
  * provider (no Angular): the versions of one lineage, and a bound version with the latest version of its lineage.
  * Version 1 is its own lineage root, so `LineageRootID = <root>` returns every version of a lineage. Reads are
  * `simple` and limited to the fields asked for; independent reads go in one `RunViews` batch.
@@ -9,7 +9,7 @@ import { EscapeSQLString } from '@memberjunction/global';
 import type { EvaluationProtocolRowTarget, ParseResult, PredictionUnitRowTarget } from '@memberjunction/predictive-studio-core';
 
 /** The two versioned entities. */
-export type VersionedEntityName = 'MJ: Evaluation Protocols' | 'MJ: Prediction Units';
+export type VersionedEntityName = 'MJ: ML Evaluation Protocols' | 'MJ: ML Prediction Units';
 
 /** The identity columns every versioned row has. */
 export interface VersionIdentity {

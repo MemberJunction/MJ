@@ -24,7 +24,7 @@
 import { BootstrapAI } from './lib/ai-bootstrap';
 import '@memberjunction/core-entities';
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type { MJMLTrainingPipelineEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
+import type { MJMLTrainingPipelineEntity, MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { ADVERSE_CLASS_HOLD_REASON, PredictionUnit, UtcDay } from '@memberjunction/predictive-studio-core';
 import { MetadataEntityFactory, PipelineMigration, TrainingDelegation, type MigrationDeps, type MigrationReportRow } from '@memberjunction/predictive-studio';
@@ -72,9 +72,9 @@ async function copyPipeline(
   return loadPipeline(provider, user, p.ID);   // re-read so the view fields (TargetEntity) are populated
 }
 
-async function unitsNamed(provider: IMetadataProvider, user: UserInfo, like: string): Promise<MJPredictionUnitEntity[]> {
-  const r = await RunView.FromMetadataProvider(provider).RunView<MJPredictionUnitEntity>(
-    { EntityName: 'MJ: Prediction Units', ExtraFilter: `Name LIKE '${EscapeSQLString(like)}'`, ResultType: 'entity_object', BypassCache: true }, user);
+async function unitsNamed(provider: IMetadataProvider, user: UserInfo, like: string): Promise<MJMLPredictionUnitEntity[]> {
+  const r = await RunView.FromMetadataProvider(provider).RunView<MJMLPredictionUnitEntity>(
+    { EntityName: 'MJ: ML Prediction Units', ExtraFilter: `Name LIKE '${EscapeSQLString(like)}'`, ResultType: 'entity_object', BypassCache: true }, user);
   if (!r.Success) throw new Error(r.ErrorMessage);
   return r.Results;
 }
@@ -166,8 +166,8 @@ async function cleanup(provider: IMetadataProvider, user: UserInfo): Promise<voi
   const named = `Name LIKE '${EscapeSQLString(PREFIX)}%'`;
   const [pipelines, units, protocols] = await rv.RunViews<{ ID: string }>([
     { EntityName: 'MJ: ML Training Pipelines', ExtraFilter: named, Fields: ['ID'], ResultType: 'simple', BypassCache: true },
-    { EntityName: 'MJ: Prediction Units', ExtraFilter: named, Fields: ['ID'], ResultType: 'simple', BypassCache: true },
-    { EntityName: 'MJ: Evaluation Protocols', ExtraFilter: named, Fields: ['ID'], ResultType: 'simple', BypassCache: true },
+    { EntityName: 'MJ: ML Prediction Units', ExtraFilter: named, Fields: ['ID'], ResultType: 'simple', BypassCache: true },
+    { EntityName: 'MJ: ML Evaluation Protocols', ExtraFilter: named, Fields: ['ID'], ResultType: 'simple', BypassCache: true },
   ], user);
   for (const r of [pipelines, units, protocols]) if (!r.Success) throw new Error(r.ErrorMessage);
   for (const p of pipelines.Results) records.RecordPipeline(p.ID);

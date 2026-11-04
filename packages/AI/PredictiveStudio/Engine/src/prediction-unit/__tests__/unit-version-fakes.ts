@@ -5,7 +5,7 @@
  * each, as the other Engine fakes do.
  */
 import type { BaseEntity, UserInfo } from '@memberjunction/core';
-import type { MJPredictionUnitEntity } from '@memberjunction/core-entities';
+import type { MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import type { PredictionUnitColumns } from '@memberjunction/predictive-studio-core';
 import type { IPredictionUnitStore } from '../unit-store';
 import type { IEntityFactory } from '../../training/types';
@@ -64,14 +64,14 @@ export class InMemoryUnitVersions implements IPredictionUnitStore {
     return row;
   }
 
-  public async Load(unitId: string): Promise<MJPredictionUnitEntity | null> {
+  public async Load(unitId: string): Promise<MJMLPredictionUnitEntity | null> {
     const row = this.Rows.find((r) => r.ID === unitId);
-    return row === undefined ? null : (row as unknown as MJPredictionUnitEntity);
+    return row === undefined ? null : (row as unknown as MJMLPredictionUnitEntity);
   }
 
-  public async LatestVersion(lineageRootId: string): Promise<MJPredictionUnitEntity | null> {
+  public async LatestVersion(lineageRootId: string): Promise<MJMLPredictionUnitEntity | null> {
     const lineage = this.Rows.filter((r) => r.LineageRootID === lineageRootId).sort((a, b) => b.Version - a.Version);
-    return lineage.length === 0 ? null : (lineage[0] as unknown as MJPredictionUnitEntity);
+    return lineage.length === 0 ? null : (lineage[0] as unknown as MJMLPredictionUnitEntity);
   }
 }
 
@@ -81,7 +81,7 @@ export class UnitVersionFactory implements IEntityFactory {
   constructor(private readonly units: InMemoryUnitVersions, private readonly inner: IEntityFactory | null = null, private readonly afterSave: ((row: FakeUnitRow) => void) | null = null) {}
 
   public async getEntityObject<T extends BaseEntity>(entityName: string, contextUser?: UserInfo): Promise<T> {
-    if (entityName === 'MJ: Prediction Units') return new FakeUnitRow(this.units, true, this.afterSave) as unknown as T;
+    if (entityName === 'MJ: ML Prediction Units') return new FakeUnitRow(this.units, true, this.afterSave) as unknown as T;
     if (this.inner === null) throw new Error(`UnitVersionFactory: unexpected entity ${entityName}`);
     return this.inner.getEntityObject<T>(entityName, contextUser);
   }

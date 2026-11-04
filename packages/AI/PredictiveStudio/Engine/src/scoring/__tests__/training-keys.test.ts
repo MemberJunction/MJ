@@ -23,9 +23,9 @@ describe('TrainingKeys.LoadTrainingRowIDs', () => {
   it('throws a failed read naming the model, and a snapshot row that is missing', async () => {
     const failedRun = provider({ 'MJ: ML Training Runs': { Success: false, Results: [], ErrorMessage: 'permission denied' } });
     await expect(TrainingKeys.LoadTrainingRowIDs('m-1', failedRun, user)).rejects.toThrow('Loading the training run of model m-1 failed: permission denied');
-    const failedSnapshot = provider({ 'MJ: ML Training Runs': ok([{ TrainingSnapshotID: 'S-1' }]), 'MJ: Training Snapshots': { Success: false, Results: [], ErrorMessage: 'timeout' } });
+    const failedSnapshot = provider({ 'MJ: ML Training Runs': ok([{ TrainingSnapshotID: 'S-1' }]), 'MJ: ML Training Snapshots': { Success: false, Results: [], ErrorMessage: 'timeout' } });
     await expect(TrainingKeys.LoadTrainingRowIDs('m-1', failedSnapshot, user)).rejects.toThrow('Loading Training Snapshot S-1 of model m-1 failed: timeout');
-    const missing = provider({ 'MJ: ML Training Runs': ok([{ TrainingSnapshotID: 'S-1' }]), 'MJ: Training Snapshots': ok([]) });
+    const missing = provider({ 'MJ: ML Training Runs': ok([{ TrainingSnapshotID: 'S-1' }]), 'MJ: ML Training Snapshots': ok([]) });
     await expect(TrainingKeys.LoadTrainingRowIDs('m-1', missing, user)).rejects.toThrow('Training Snapshot S-1 of model m-1 was not found');
   });
 
@@ -36,7 +36,7 @@ describe('TrainingKeys.LoadTrainingRowIDs', () => {
     const f = await files.Put('k/manifest.jsonl', 'manifest', bytes);
     const withSha = (sha256: string): IMetadataProvider => provider({
       'MJ: ML Training Runs': ok([{ TrainingSnapshotID: 'S-1' }]),
-      'MJ: Training Snapshots': ok([{ RowManifestFileID: f.FileID, RowManifestSha256: sha256 }]),
+      'MJ: ML Training Snapshots': ok([{ RowManifestFileID: f.FileID, RowManifestSha256: sha256 }]),
     });
     expect([...(await TrainingKeys.LoadTrainingRowIDs('m-1', withSha(f.Sha256), user, files))]).toEqual(['DEV-1']);
     await expect(TrainingKeys.LoadTrainingRowIDs('m-1', withSha('0'.repeat(64)), user, files)).rejects.toBeInstanceOf(SnapshotIntegrityError);

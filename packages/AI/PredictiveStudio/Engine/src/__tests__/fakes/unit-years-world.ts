@@ -4,7 +4,7 @@
  * Record Changes history). One person's status changes to `Lapsed` on 2025-06-01, so an as-of read gives `Active` for
  * that person's 2024 row and `Lapsed` for the 2025 row, while the stored value is `Lapsed` for both.
  */
-import type { MJPredictionUnitEntity } from '@memberjunction/core-entities';
+import type { MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import type { PredictionUnitColumns } from '@memberjunction/predictive-studio-core';
 import type { SourceRow } from '../../feature-assembly/data-access';
 import type { AssemblyEntityInfo, AssemblyFieldInfo, IAssemblyMetadata } from '../../feature-assembly/assembly-metadata';
@@ -21,11 +21,11 @@ const REGIONS = ['EU', 'US', 'EU', 'APAC'];
 /** Unit-store fake: returns the configured unit row for its ID (one deliberate test-double cast at the seam). */
 export class FakePredictionUnitStore implements IPredictionUnitStore {
   constructor(private readonly unit: PredictionUnitColumns) {}
-  public async Load(unitId: string): Promise<MJPredictionUnitEntity | null> {
-    return unitId === this.unit.ID ? (this.unit as unknown as MJPredictionUnitEntity) : null;
+  public async Load(unitId: string): Promise<MJMLPredictionUnitEntity | null> {
+    return unitId === this.unit.ID ? (this.unit as unknown as MJMLPredictionUnitEntity) : null;
   }
-  public async LatestVersion(_lineageRootId: string): Promise<MJPredictionUnitEntity | null> {
-    return this.unit as unknown as MJPredictionUnitEntity;
+  public async LatestVersion(_lineageRootId: string): Promise<MJMLPredictionUnitEntity | null> {
+    return this.unit as unknown as MJMLPredictionUnitEntity;
   }
 }
 

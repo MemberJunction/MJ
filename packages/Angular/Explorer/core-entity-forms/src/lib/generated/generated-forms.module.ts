@@ -245,7 +245,6 @@ import { MJEntityRelationshipFormComponent } from "./Entities/MJEntityRelationsh
 import { MJEntitySettingFormComponent } from "./Entities/MJEntitySetting/mjentitysetting.form.component";
 import { MJEnvironmentFormComponent } from "./Entities/MJEnvironment/mjenvironment.form.component";
 import { MJErrorLogFormComponent } from "./Entities/MJErrorLog/mjerrorlog.form.component";
-import { MJEvaluationProtocolFormComponent } from "./Entities/MJEvaluationProtocol/mjevaluationprotocol.form.component";
 import { MJExperimentFormComponent } from "./Entities/MJExperiment/mjexperiment.form.component";
 import { MJExperimentSessionFormComponent } from "./Entities/MJExperimentSession/mjexperimentsession.form.component";
 import { MJExperimentSessionIterationFormComponent } from "./Entities/MJExperimentSessionIteration/mjexperimentsessioniteration.form.component";
@@ -304,10 +303,13 @@ import { MJMCPToolFavoriteFormComponent } from "./Entities/MJMCPToolFavorite/mjm
 import { MJMLAlgorithmFormComponent } from "./Entities/MJMLAlgorithm/mjmlalgorithm.form.component";
 import { MJMLAlgorithmUseCaseFormComponent } from "./Entities/MJMLAlgorithmUseCase/mjmlalgorithmusecase.form.component";
 import { MJMLAlgorithmUseCaseRankingFormComponent } from "./Entities/MJMLAlgorithmUseCaseRanking/mjmlalgorithmusecaseranking.form.component";
+import { MJMLEvaluationProtocolFormComponent } from "./Entities/MJMLEvaluationProtocol/mjmlevaluationprotocol.form.component";
 import { MJMLModelFormComponent } from "./Entities/MJMLModel/mjmlmodel.form.component";
 import { MJMLModelScoringBindingFormComponent } from "./Entities/MJMLModelScoringBinding/mjmlmodelscoringbinding.form.component";
+import { MJMLPredictionUnitFormComponent } from "./Entities/MJMLPredictionUnit/mjmlpredictionunit.form.component";
 import { MJMLTrainingPipelineFormComponent } from "./Entities/MJMLTrainingPipeline/mjmltrainingpipeline.form.component";
 import { MJMLTrainingRunFormComponent } from "./Entities/MJMLTrainingRun/mjmltrainingrun.form.component";
+import { MJMLTrainingSnapshotFormComponent } from "./Entities/MJMLTrainingSnapshot/mjmltrainingsnapshot.form.component";
 import { MJMagicLinkInviteAllowedDomainFormComponent } from "./Entities/MJMagicLinkInviteAllowedDomain/mjmagiclinkinvitealloweddomain.form.component";
 import { MJMagicLinkInviteAllowedPathFormComponent } from "./Entities/MJMagicLinkInviteAllowedPath/mjmagiclinkinviteallowedpath.form.component";
 import { MJMagicLinkInviteApplicationFormComponent } from "./Entities/MJMagicLinkInviteApplication/mjmagiclinkinviteapplication.form.component";
@@ -330,7 +332,6 @@ import { MJOutputDeliveryTypeFormComponent } from "./Entities/MJOutputDeliveryTy
 import { MJOutputFormatTypeFormComponent } from "./Entities/MJOutputFormatType/mjoutputformattype.form.component";
 import { MJPermissionDomainFormComponent } from "./Entities/MJPermissionDomain/mjpermissiondomain.form.component";
 import { MJPhoneNumberFormComponent } from "./Entities/MJPhoneNumber/mjphonenumber.form.component";
-import { MJPredictionUnitFormComponent } from "./Entities/MJPredictionUnit/mjpredictionunit.form.component";
 import { MJProcessRunDetailFormComponent } from "./Entities/MJProcessRunDetail/mjprocessrundetail.form.component";
 import { MJProcessRunFormComponent } from "./Entities/MJProcessRun/mjprocessrun.form.component";
 import { MJProjectFormComponent } from "./Entities/MJProject/mjproject.form.component";
@@ -430,7 +431,6 @@ import { MJTestSuiteRunFormComponent } from "./Entities/MJTestSuiteRun/mjtestsui
 import { MJTestSuiteTestFormComponent } from "./Entities/MJTestSuiteTest/mjtestsuitetest.form.component";
 import { MJTestTypeFormComponent } from "./Entities/MJTestType/mjtesttype.form.component";
 import { MJThemeFormComponent } from "./Entities/MJTheme/mjtheme.form.component";
-import { MJTrainingSnapshotFormComponent } from "./Entities/MJTrainingSnapshot/mjtrainingsnapshot.form.component";
 import { MJUserApplicationEntityFormComponent } from "./Entities/MJUserApplicationEntity/mjuserapplicationentity.form.component";
 import { MJUserApplicationFormComponent } from "./Entities/MJUserApplication/mjuserapplication.form.component";
 import { MJUserFavoriteFormComponent } from "./Entities/MJUserFavorite/mjuserfavorite.form.component";
@@ -537,6 +537,7 @@ declarations: [
     MJEntityAIActionFormComponent,
     MJEntityFormComponent,
     MJIntegrationSourceTypeFormComponent,
+    MJMLEvaluationProtocolFormComponent,
     MJScopedPromptPartFormComponent,
     MJSearchScopePermissionFormComponent,
     MJSignatureRequestFormComponent,
@@ -666,7 +667,6 @@ declarations: [
     MJDataContextFormComponent,
     MJEntityAlternateBaseViewFormComponent,
     MJOAuthAuthServerMetadataCacheFormComponent,
-    MJPredictionUnitFormComponent,
     MJResourcePermissionFormComponent,
     MJRubricVersionFormComponent
 ],
@@ -1118,6 +1118,7 @@ declarations: [
     MJComponentLibraryLinkFormComponent,
     MJExternalDataSourceTypeFormComponent,
     MJMCPToolFavoriteFormComponent,
+    MJMLPredictionUnitFormComponent,
     MJMaterializedResultQueryFormComponent,
     MJOutputFormatTypeFormComponent,
     MJQueueTaskFormComponent,
@@ -1383,13 +1384,11 @@ declarations: [
     MJAIClientToolDefinitionFormComponent,
     MJContentProcessRunPromptRunFormComponent,
     MJDiagnosticSessionChunkFormComponent,
-    MJEvaluationProtocolFormComponent,
     MJExplorerNavigationItemFormComponent,
     MJExternalDataSourceFormComponent,
     MJFileCategoryFormComponent,
     MJRecordProcessFormComponent,
-    MJTemplateFormComponent,
-    MJTrainingSnapshotFormComponent
+    MJTemplateFormComponent
 ],
 imports: [
     CommonModule,
@@ -1413,6 +1412,7 @@ declarations: [
     MJExperimentFormComponent,
     MJFeatureValueFormComponent,
     MJListShareFormComponent,
+    MJMLTrainingSnapshotFormComponent,
     MJQueueTypeFormComponent,
     MJRecommendationFormComponent,
     MJRecordGeoCodeFormComponent,

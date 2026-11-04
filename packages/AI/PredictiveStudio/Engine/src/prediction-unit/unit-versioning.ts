@@ -6,7 +6,7 @@
  * changed. A saved version is never updated (the server subclass refuses it).
  */
 import type { UserInfo } from '@memberjunction/core';
-import type { MJPredictionUnitEntity } from '@memberjunction/core-entities';
+import type { MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import { PredictionUnit, ProtocolRows, type Actor, type PredictionUnitSpec, type UnitDraft, type UnitVersionWrite } from '@memberjunction/predictive-studio-core';
 import type { IEntityFactory } from '../training/types';
 
@@ -53,26 +53,26 @@ export class PredictionUnitVersioning {
   }
 
   /** Writes a version into a new row through Core's one row writer and saves it. */
-  private static async writeVersion(entity: MJPredictionUnitEntity, version: UnitVersionWrite, what: string): Promise<MJPredictionUnitEntity> {
+  private static async writeVersion(entity: MJMLPredictionUnitEntity, version: UnitVersionWrite, what: string): Promise<MJMLPredictionUnitEntity> {
     ProtocolRows.ApplyPredictionUnitDraftToRow(entity, version.Draft, version.Meta);
     return PredictionUnitVersioning.saveOrThrow(entity, what);
   }
 
-  private static async saveOrThrow(entity: MJPredictionUnitEntity, what: string): Promise<MJPredictionUnitEntity> {
+  private static async saveOrThrow(entity: MJMLPredictionUnitEntity, what: string): Promise<MJMLPredictionUnitEntity> {
     if (!(await entity.Save())) throw new Error(`Saving ${what} failed: ${entity.LatestResult?.CompleteMessage || 'unknown error'}`);
     return entity;
   }
 
   /** Save version 1 of a new lineage: the row is its own lineage root. */
-  public static async CreatePredictionUnitV1(draft: UnitDraft, actor: Actor, entityFactory: IEntityFactory, contextUser?: UserInfo): Promise<MJPredictionUnitEntity> {
+  public static async CreatePredictionUnitV1(draft: UnitDraft, actor: Actor, entityFactory: IEntityFactory, contextUser?: UserInfo): Promise<MJMLPredictionUnitEntity> {
     const id = ProtocolRows.NewVersionRowID();
-    const entity = await entityFactory.getEntityObject<MJPredictionUnitEntity>('MJ: Prediction Units', contextUser);
+    const entity = await entityFactory.getEntityObject<MJMLPredictionUnitEntity>('MJ: ML Prediction Units', contextUser);
     const v1: UnitVersionWrite = { Draft: draft, Meta: { ID: id, LineageRootID: id, Version: 1, LabelVersion: 1, AuthoredBy: actor } };
     return PredictionUnitVersioning.writeVersion(entity, v1, `Prediction Unit "${draft.Name}" v1`);
   }
 
   /** Read a saved version back into a draft in canonical form (the parser's output), through the same parser that validated it. */
-  public static DraftFromUnitRow(row: MJPredictionUnitEntity): UnitDraft {
+  public static DraftFromUnitRow(row: MJMLPredictionUnitEntity): UnitDraft {
     const parsed = PredictionUnit.ParsePredictionUnitRow(row);
     if (parsed.Ok === false) throw new Error(`Prediction Unit ${row.ID} does not parse: ${parsed.Errors.join('; ')}`);
     const s = parsed.Value;
@@ -85,18 +85,18 @@ export class PredictionUnitVersioning {
 
   /** Save the version after `latest` in its lineage, with `changes` applied over the latest version's content. */
   public static async CreateNextPredictionUnitVersion(
-    latest: MJPredictionUnitEntity,
+    latest: MJMLPredictionUnitEntity,
     changes: Partial<UnitDraft>,
     actor: Actor,
     entityFactory: IEntityFactory,
     contextUser?: UserInfo,
-  ): Promise<MJPredictionUnitEntity> {
+  ): Promise<MJMLPredictionUnitEntity> {
     const next = PredictionUnitVersioning.BuildNextVersion(
       { lineageRootId: latest.LineageRootID, latestVersion: latest.Version, previousLabelVersion: latest.LabelVersion, previous: PredictionUnitVersioning.DraftFromUnitRow(latest) },
       changes,
       actor,
     );
-    const entity = await entityFactory.getEntityObject<MJPredictionUnitEntity>('MJ: Prediction Units', contextUser);
+    const entity = await entityFactory.getEntityObject<MJMLPredictionUnitEntity>('MJ: ML Prediction Units', contextUser);
     return PredictionUnitVersioning.writeVersion(entity, next, `Prediction Unit "${next.Draft.Name}" v${next.Meta.Version}`);
   }
 }

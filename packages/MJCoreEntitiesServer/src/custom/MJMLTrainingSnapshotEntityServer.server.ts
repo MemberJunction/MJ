@@ -1,14 +1,14 @@
 import { BaseEntity, type EntitySaveOptions, type ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
-import { MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
-import { VersionedRowGuard } from './MJPredictionUnitEntityServer.server';
+import { MJMLTrainingSnapshotEntity } from '@memberjunction/core-entities';
+import { VersionedRowGuard } from './MJMLPredictionUnitEntityServer.server';
 
 /** The snapshot columns the row check reads: the read-complete flag and the five content hashes. */
-export type SnapshotHashFields = Pick<MJTrainingSnapshotEntity, 'ReadComplete' | 'ContentHash' | 'MatrixSha256' | 'RowManifestSha256' | 'ProvenanceSha256' | 'FeatureSchemaHash'>;
+export type SnapshotHashFields = Pick<MJMLTrainingSnapshotEntity, 'ReadComplete' | 'ContentHash' | 'MatrixSha256' | 'RowManifestSha256' | 'ProvenanceSha256' | 'FeatureSchemaHash'>;
 
-/** `MJ: Training Snapshots`: written once by the snapshot builder, never updated, by an ordinary save or by a `ReplayOnly` one. */
-@RegisterClass(BaseEntity, 'MJ: Training Snapshots')
-export class MJTrainingSnapshotEntityServer extends MJTrainingSnapshotEntity {
+/** `MJ: ML Training Snapshots`: written once by the snapshot builder, never updated, by an ordinary save or by a `ReplayOnly` one. */
+@RegisterClass(BaseEntity, 'MJ: ML Training Snapshots')
+export class MJMLTrainingSnapshotEntityServer extends MJMLTrainingSnapshotEntity {
   private static readonly SHA256_HEX = /^[0-9a-f]{64}$/;
 
   /** A snapshot exists only for a complete read and carries five well-formed hashes. Pure. */
@@ -19,13 +19,13 @@ export class MJTrainingSnapshotEntityServer extends MJTrainingSnapshotEntity {
       ['ContentHash', row.ContentHash], ['MatrixSha256', row.MatrixSha256], ['RowManifestSha256', row.RowManifestSha256],
       ['ProvenanceSha256', row.ProvenanceSha256], ['FeatureSchemaHash', row.FeatureSchemaHash],
     ] as const) {
-      if (!MJTrainingSnapshotEntityServer.SHA256_HEX.test(value)) problems.push(`${name} must be 64 lower-case hex characters`);
+      if (!MJMLTrainingSnapshotEntityServer.SHA256_HEX.test(value)) problems.push(`${name} must be 64 lower-case hex characters`);
     }
     return problems;
   }
 
   public override Validate(): ValidationResult {
-    return VersionedRowGuard.AddProblems(this, super.Validate(), 'ContentHash', 'ContentHash', () => MJTrainingSnapshotEntityServer.GetTrainingSnapshotRowProblems(this));
+    return VersionedRowGuard.AddProblems(this, super.Validate(), 'ContentHash', 'ContentHash', () => MJMLTrainingSnapshotEntityServer.GetTrainingSnapshotRowProblems(this));
   }
 
   /** A `ReplayOnly` save of a saved snapshot is refused: it skips {@link Validate}, which refuses the update, but still writes. */

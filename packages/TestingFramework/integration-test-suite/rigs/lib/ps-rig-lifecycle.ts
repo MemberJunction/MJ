@@ -188,7 +188,7 @@ export async function DeleteRecordedRows(provider: IMetadataProvider, user: User
   const failures = [...actionFailures, ...(await HarnessCleanup.DeleteRecorded(HarnessCleanup.EntityStore(provider, user), records))];
   const leftovers: Array<[string, number]> = [
     ['MJ: ML Training Pipelines', records.PipelineIDs.Size], ['MJ: ML Models', records.ModelIDs.Size],
-    ['MJ: Evaluation Protocols', records.EvaluationProtocolIDs.Size], ['MJ: Prediction Units', records.PredictionUnitIDs.Size],
+    ['MJ: ML Evaluation Protocols', records.EvaluationProtocolIDs.Size], ['MJ: ML Prediction Units', records.PredictionUnitIDs.Size],
   ];
   for (const [entityName, left] of leftovers) {
     if (left > 0) failures.push(`${left} recorded ${entityName} row(s) were not deleted`);

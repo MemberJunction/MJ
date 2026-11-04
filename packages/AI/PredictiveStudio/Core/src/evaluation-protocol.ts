@@ -176,7 +176,7 @@ const SECONDARY_METRICS = ['auc', 'accuracy', 'f1', 'precision', 'recall', 'r2',
 const secondaryMetricsComplete: [Exclude<SecondaryMetric, (typeof SECONDARY_METRICS)[number]>] extends [never] ? true : never = true;
 void secondaryMetricsComplete;
 
-/** The `MJ: Evaluation Protocols` columns the checks read (the generated entity satisfies this structurally). */
+/** The `MJ: ML Evaluation Protocols` columns the checks read (the generated entity satisfies this structurally). */
 export interface EvaluationProtocolColumns {
   ID: string; LineageRootID: string; Version: number; Name: string;
   Holdout: string; InnerValidation: string; Seed: number; HoldoutAccessBudget: number;
@@ -244,7 +244,7 @@ export class EvaluationProtocol {
   }
 
   /**
-   * The shape checks run by `MJEvaluationProtocolEntityServer.Validate()`: every JSON column parses, the fixed
+   * The shape checks run by `MJMLEvaluationProtocolEntityServer.Validate()`: every JSON column parses, the fixed
    * fields hold their only admissible values, the primary score is proper for its family, the margin is >= 0,
    * rolling-origin has at least {@link MIN_ROLLING_ORIGINS} origins, a seeded-random fraction lies strictly between 0
    * and 1, and no-signal cannot be omitted. Seed (an integer >= 0) and Version (an integer
@@ -357,7 +357,7 @@ export class EvaluationProtocol {
   }
 
   /**
-   * Parse every column of an `MJ: Evaluation Protocols` row into {@link EvaluationProtocolSpec}. All problems are
+   * Parse every column of an `MJ: ML Evaluation Protocols` row into {@link EvaluationProtocolSpec}. All problems are
    * reported (each names its column); the shape checks ({@link GetEvaluationProtocolShapeProblems}) run first so
    * their messages are the ones a user sees for the fixed fields.
    */

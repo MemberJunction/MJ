@@ -5,7 +5,7 @@
  * Snapshot, read from its verified row manifest.
  */
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type { MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
+import type { MJMLTrainingRunEntity, MJMLTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
 import { HoldoutCarve } from '@memberjunction/predictive-studio-core';
 import { SnapshotManifest, type SnapshotManifestRef } from '../snapshot/snapshot-manifest';
@@ -47,8 +47,8 @@ export class TrainingKeys {
 
   /** The snapshot row's manifest file and hash. */
   private static async manifestRefOf(snapshotId: string, modelId: string, provider: IMetadataProvider, user: UserInfo | undefined): Promise<SnapshotManifestRef> {
-    const snaps = await RunView.FromMetadataProvider(provider).RunView<Pick<MJTrainingSnapshotEntity, 'RowManifestFileID' | 'RowManifestSha256'>>({
-      EntityName: 'MJ: Training Snapshots', ExtraFilter: `ID='${EscapeSQLString(snapshotId)}'`, Fields: ['RowManifestFileID', 'RowManifestSha256'], MaxRows: 1, ResultType: 'simple',
+    const snaps = await RunView.FromMetadataProvider(provider).RunView<Pick<MJMLTrainingSnapshotEntity, 'RowManifestFileID' | 'RowManifestSha256'>>({
+      EntityName: 'MJ: ML Training Snapshots', ExtraFilter: `ID='${EscapeSQLString(snapshotId)}'`, Fields: ['RowManifestFileID', 'RowManifestSha256'], MaxRows: 1, ResultType: 'simple',
     }, user);
     if (!snaps.Success) throw new Error(`Loading Training Snapshot ${snapshotId} of model ${modelId} failed: ${snaps.ErrorMessage || 'unknown error'}`);
     const snapshot = snaps.Results[0];

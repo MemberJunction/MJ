@@ -84,14 +84,14 @@ class FakeStore implements CleanupStore {
     return [this.row('MJ: ML Models', M1, AGENT_P, F1), this.row('MJ: ML Models', M2, P1)];
   }
   public async PredictionUnits(filter: string): Promise<CleanupPredictionUnitRow[]> {
-    this.Filters.push(`MJ: Prediction Units | ${filter}`);
-    return [{ ...this.row('MJ: Prediction Units', U1), Version: 1 }, { ...this.row('MJ: Prediction Units', U3), Version: 3 }, { ...this.row('MJ: Prediction Units', U2), Version: 2 }];
+    this.Filters.push(`MJ: ML Prediction Units | ${filter}`);
+    return [{ ...this.row('MJ: ML Prediction Units', U1), Version: 1 }, { ...this.row('MJ: ML Prediction Units', U3), Version: 3 }, { ...this.row('MJ: ML Prediction Units', U2), Version: 2 }];
   }
   public async EvaluationProtocols(filter: string): Promise<CleanupEvaluationProtocolRow[]> {
-    this.Filters.push(`MJ: Evaluation Protocols | ${filter}`);
+    this.Filters.push(`MJ: ML Evaluation Protocols | ${filter}`);
     const ids = [...filter.matchAll(/'([^']+)'/g)].map((m) => m[1]);
     const versionOf: Record<string, number> = { [EP1]: 1, [EP2]: 2 };
-    return ids.map((id) => ({ ...this.row('MJ: Evaluation Protocols', id), Version: versionOf[id] || 1 }));
+    return ids.map((id) => ({ ...this.row('MJ: ML Evaluation Protocols', id), Version: versionOf[id] || 1 }));
   }
   public async RecordProcesses(filter: string): Promise<CleanupRecordProcessRow[]> {
     this.Filters.push(`MJ: Record Processes | ${filter}`);
@@ -103,8 +103,8 @@ class FakeStore implements CleanupStore {
     return [{ ...this.row('MJ: ML Training Runs', 'RUN-1'), TrainingSnapshotID: this.options.RunSnapshotID || null, ValidationResults: this.options.RunValidationResults || null }];
   }
   public async TrainingSnapshots(filter: string): Promise<CleanupSnapshotRow[]> {
-    this.Filters.push(`MJ: Training Snapshots | ${filter}`);
-    return (this.options.Snapshots || []).map((id) => ({ ...this.row('MJ: Training Snapshots', id), MatrixFileID: fileOf(id, 1), RowManifestFileID: fileOf(id, 2), ProvenanceFileID: fileOf(id, 3) }));
+    this.Filters.push(`MJ: ML Training Snapshots | ${filter}`);
+    return (this.options.Snapshots || []).map((id) => ({ ...this.row('MJ: ML Training Snapshots', id), MatrixFileID: fileOf(id, 1), RowManifestFileID: fileOf(id, 2), ProvenanceFileID: fileOf(id, 3) }));
   }
   public async Files(filter: string): Promise<CleanupFileRow[]> {
     this.Filters.push(`MJ: Files | ${filter}`);
@@ -163,7 +163,7 @@ describe('HarnessCleanup.DeleteRecorded', () => {
       `MJ: Process Run Details | ProcessRunID IN ('${PR1}')`,
       `MJ: Record Process Watermarks | RecordProcessID IN ('${RP1}')`,
       `MJ: ML Training Runs | PipelineID IN ('${P1}','${AGENT_P}') OR ResultingModelID IN ('${M1}','${M2}')`,
-      `MJ: Training Snapshots | PipelineID IN ('${P1}','${AGENT_P}')`,
+      `MJ: ML Training Snapshots | PipelineID IN ('${P1}','${AGENT_P}')`,
       `MJ: Files | ID IN ('${F1}')`,
       `MJ: ML Training Pipelines | ID IN ('${P1}','${AGENT_P}')`,
     ]);
@@ -183,17 +183,17 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     records.RecordPredictionUnit(U1);
     const store = new FakeStore(new Set(), { RunSnapshotID: TS1, Snapshots: [TS1, TS2] });
     expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
-    expect(store.Filters).toContain(`MJ: Training Snapshots | ID IN ('${TS1}') OR PipelineID IN ('${P1}','${AGENT_P}')`);
+    expect(store.Filters).toContain(`MJ: ML Training Snapshots | ID IN ('${TS1}') OR PipelineID IN ('${P1}','${AGENT_P}')`);
     const files = [TS1, TS2].flatMap((s) => [1, 2, 3].map((n) => fileOf(s, n)));
     expect(store.Filters).toContain(`MJ: Files | ID IN (${files.map((f) => `'${f}'`).join(',')})`);
     const at = (entry: string): number => store.Deleted.indexOf(entry);
-    expect(at('MJ: ML Training Runs:RUN-1')).toBeLessThan(at(`MJ: Training Snapshots:${TS1}`));
+    expect(at('MJ: ML Training Runs:RUN-1')).toBeLessThan(at(`MJ: ML Training Snapshots:${TS1}`));
     for (const f of files) {
-      expect(at(`MJ: Training Snapshots:${TS2}`)).toBeLessThan(at(`object:key/${f}`));
+      expect(at(`MJ: ML Training Snapshots:${TS2}`)).toBeLessThan(at(`object:key/${f}`));
       expect(at(`object:key/${f}`)).toBeLessThan(at(`MJ: Files:${f}`));
       expect(at(`MJ: Files:${f}`)).toBeLessThan(at(`MJ: ML Training Pipelines:${P1}`));
     }
-    expect(at(`MJ: ML Training Pipelines:${AGENT_P}`)).toBeLessThan(at(`MJ: Prediction Units:${U1}`));
+    expect(at(`MJ: ML Training Pipelines:${AGENT_P}`)).toBeLessThan(at(`MJ: ML Prediction Units:${U1}`));
   });
 
   it("keeps a snapshot's files when its row survives, and a file's row when its stored object survives, reporting both", async () => {
@@ -202,7 +202,7 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     const store = new FakeStore(new Set([TS1]), { Snapshots: [TS1, TS2], FailObjects: new Set([fileOf(TS2, 1)]), ThrowObjects: new Set([fileOf(TS2, 3)]) });
     const failures = await HarnessCleanup.DeleteRecorded(store, records);
     expect(failures).toEqual([
-      `MJ: Training Snapshots ${TS1}: ${TS1} is still referenced`,
+      `MJ: ML Training Snapshots ${TS1}: ${TS1} is still referenced`,
       `stored object of MJ: Files ${fileOf(TS2, 1)} (key/${fileOf(TS2, 1)}): the storage root is not writable`,
       `stored object of MJ: Files ${fileOf(TS2, 3)} (key/${fileOf(TS2, 3)}): no driver registered for "Local File System Storage"`,
     ]);
@@ -224,8 +224,8 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     for (const id of [U1, U2, U3]) records.RecordPredictionUnit(id);
     const store = new FakeStore();
     expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
-    expect(store.Filters[store.Filters.length - 1]).toBe(`MJ: Prediction Units | ID IN ('${U1}','${U2}','${U3}') OR LineageRootID IN ('${U1}','${U2}','${U3}')`);
-    expect(store.Deleted.slice(-4)).toEqual([`MJ: ML Training Pipelines:${AGENT_P}`, `MJ: Prediction Units:${U3}`, `MJ: Prediction Units:${U2}`, `MJ: Prediction Units:${U1}`]);
+    expect(store.Filters[store.Filters.length - 1]).toBe(`MJ: ML Prediction Units | ID IN ('${U1}','${U2}','${U3}') OR LineageRootID IN ('${U1}','${U2}','${U3}')`);
+    expect(store.Deleted.slice(-4)).toEqual([`MJ: ML Training Pipelines:${AGENT_P}`, `MJ: ML Prediction Units:${U3}`, `MJ: ML Prediction Units:${U2}`, `MJ: ML Prediction Units:${U1}`]);
     expect(records.PredictionUnitIDs.Size).toBe(0);
   });
 
@@ -265,10 +265,10 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     records.RecordEvaluationProtocol(EP1);
     const store = new FakeStore();
     expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
-    expect(store.Filters).toContain(`MJ: Evaluation Protocols | ID IN ('${EP1}')`);
+    expect(store.Filters).toContain(`MJ: ML Evaluation Protocols | ID IN ('${EP1}')`);
     const at = (entry: string): number => store.Deleted.indexOf(entry);
-    expect(at(`MJ: ML Training Pipelines:${P1}`)).toBeLessThan(at(`MJ: Evaluation Protocols:${EP1}`));
-    expect(at(`MJ: Evaluation Protocols:${EP1}`)).toBeLessThan(at(`MJ: Prediction Units:${U1}`));
+    expect(at(`MJ: ML Training Pipelines:${P1}`)).toBeLessThan(at(`MJ: ML Evaluation Protocols:${EP1}`));
+    expect(at(`MJ: ML Evaluation Protocols:${EP1}`)).toBeLessThan(at(`MJ: ML Prediction Units:${U1}`));
     expect(records.EvaluationProtocolIDs.Size).toBe(0);
   });
 
@@ -278,7 +278,7 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     records.RecordEvaluationProtocol(EP2);
     const store = new FakeStore();
     expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
-    expect(store.Deleted.filter((d) => d.startsWith('MJ: Evaluation Protocols'))).toEqual([`MJ: Evaluation Protocols:${EP2}`, `MJ: Evaluation Protocols:${EP1}`]);
+    expect(store.Deleted.filter((d) => d.startsWith('MJ: ML Evaluation Protocols'))).toEqual([`MJ: ML Evaluation Protocols:${EP2}`, `MJ: ML Evaluation Protocols:${EP1}`]);
     expect(records.EvaluationProtocolIDs.Size).toBe(0);
   });
 

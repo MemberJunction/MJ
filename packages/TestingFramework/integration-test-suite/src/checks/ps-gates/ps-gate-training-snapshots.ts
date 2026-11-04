@@ -6,7 +6,7 @@
  */
 import { RunView } from '@memberjunction/core';
 import { EscapeSQLString, UUIDMap, UUIDSet } from '@memberjunction/global';
-import type { MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
+import type { MJMLTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import { UtcDay, type FeatureColumnSpec, type PredictionUnitSpec, type ValueProvenance } from '@memberjunction/predictive-studio-core';
 import {
   BuildProductionMLInferenceDeps, MLModelInferenceProcessor, PredictionUnitRowReader, RunViewTrainingSnapshotStore, SnapshotFiles, SnapshotHash, SnapshotIntegrityError,
@@ -32,7 +32,7 @@ interface RowResolution { readonly Seen: number; readonly Resolved: number; read
 /** The Training Snapshot and provenance gate bodies (G1.10, G1.11). */
 export class TrainingSnapshotGates {
   /** The run's Training Snapshot row, read through the product's snapshot store. */
-  private static async snapshotOf(h: TruthHarness, run: LatestTrainingRun): Promise<MJTrainingSnapshotEntity | null> {
+  private static async snapshotOf(h: TruthHarness, run: LatestTrainingRun): Promise<MJMLTrainingSnapshotEntity | null> {
     if (!run.TrainingSnapshotID) return null;
     return new RunViewTrainingSnapshotStore(h.Provider, h.User).LoadSnapshot(run.TrainingSnapshotID);
   }
@@ -41,7 +41,7 @@ export class TrainingSnapshotGates {
    * Reads the matrix and manifest back from storage, counts the manifest's rows and recomputes the content hash from
    * the two files' bytes and the row's identity columns, independently of the retrainer.
    */
-  private static async checkStoredFiles(h: TruthHarness, s: MJTrainingSnapshotEntity): Promise<StoredSnapshotCheck> {
+  private static async checkStoredFiles(h: TruthHarness, s: MJMLTrainingSnapshotEntity): Promise<StoredSnapshotCheck> {
     const files = new StorageProviderSnapshotFileStore(UnitFixtures.EntityFactory(h), h.Provider, h.User);
     const [matrix, manifest] = await Promise.all([files.Get(s.MatrixFileID), files.Get(s.RowManifestFileID)]);
     const dataCutoffDay = UtcDay.UtcDayIso(s.DataCutoff);
@@ -161,7 +161,7 @@ export class TrainingSnapshotGates {
   }
 
   /** Trains the provenance pipeline, promotes its model for scoring and returns what the gate reads, or why it cannot. */
-  private static async trainedForScoring(h: TruthHarness): Promise<{ readonly PipelineID: string; readonly ModelID: string; readonly Snapshot: MJTrainingSnapshotEntity } | GateMeasurement> {
+  private static async trainedForScoring(h: TruthHarness): Promise<{ readonly PipelineID: string; readonly ModelID: string; readonly Snapshot: MJMLTrainingSnapshotEntity } | GateMeasurement> {
     const { Pipeline: pipeline } = await UnitFixtures.ProvisionW1ProvenancePipeline(h);
     await h.Train(pipeline);
     const run = await UnitFixtures.LatestRun(h, pipeline.ID);

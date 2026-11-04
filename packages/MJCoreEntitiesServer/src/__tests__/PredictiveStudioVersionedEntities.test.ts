@@ -7,10 +7,10 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
   return { ...actual, RegisterClass: () => (target: object) => target };
 });
 
-import { MJPredictionUnitEntityServer, VersionedRowGuard, type RowRead } from '../custom/MJPredictionUnitEntityServer.server';
-import { MJEvaluationProtocolEntityServer } from '../custom/MJEvaluationProtocolEntityServer.server';
+import { MJMLPredictionUnitEntityServer, VersionedRowGuard, type RowRead } from '../custom/MJMLPredictionUnitEntityServer.server';
+import { MJMLEvaluationProtocolEntityServer } from '../custom/MJMLEvaluationProtocolEntityServer.server';
 import { EvaluationProtocol, EvaluationProtocolRules, ProtocolRows, type Actor, type EvaluationProtocolColumns, type HoldoutSplit, type PredictionUnitColumns, type PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
-import { MJTrainingSnapshotEntityServer } from '../custom/MJTrainingSnapshotEntityServer.server';
+import { MJMLTrainingSnapshotEntityServer } from '../custom/MJMLTrainingSnapshotEntityServer.server';
 import { MJMLTrainingPipelineEntityServer } from '../custom/MJMLTrainingPipelineEntityServer.server';
 
 const human: Actor = { kind: 'human', userId: 'U-1' };
@@ -28,17 +28,17 @@ const countUnit: PredictionUnitSpec = {
 
 describe('GetVersionedRowUpdateProblem', () => {
   it('allows a new row and a saved row with no change', () => {
-    expect(VersionedRowGuard.GetVersionedRowUpdateProblem('MJ: Prediction Units', false, ['Name'], true)).toBeNull();
-    expect(VersionedRowGuard.GetVersionedRowUpdateProblem('MJ: Prediction Units', true, [], true)).toBeNull();
+    expect(VersionedRowGuard.GetVersionedRowUpdateProblem('MJ: ML Prediction Units', false, ['Name'], true)).toBeNull();
+    expect(VersionedRowGuard.GetVersionedRowUpdateProblem('MJ: ML Prediction Units', true, [], true)).toBeNull();
   });
   it('refuses any change to a saved version, naming the fields', () => {
-    expect(VersionedRowGuard.GetVersionedRowUpdateProblem('MJ: Prediction Units', true, ['LabelRule', 'LabelWindowDays'], true)).toBe(
-      'MJ: Prediction Units rows are immutable versions; LabelRule, LabelWindowDays cannot be changed on a saved version. Save a new version instead (Version + 1, same LineageRootID).',
+    expect(VersionedRowGuard.GetVersionedRowUpdateProblem('MJ: ML Prediction Units', true, ['LabelRule', 'LabelWindowDays'], true)).toBe(
+      'MJ: ML Prediction Units rows are immutable versions; LabelRule, LabelWindowDays cannot be changed on a saved version. Save a new version instead (Version + 1, same LineageRootID).',
     );
   });
   it('tells a row with no lineage (a Training Snapshot) to write a new row, not a new version', () => {
-    expect(VersionedRowGuard.GetVersionedRowUpdateProblem('MJ: Training Snapshots', true, ['ContentHash'], false)).toBe(
-      'MJ: Training Snapshots rows are immutable once saved; ContentHash cannot be changed on a saved row. Write a new row instead.',
+    expect(VersionedRowGuard.GetVersionedRowUpdateProblem('MJ: ML Training Snapshots', true, ['ContentHash'], false)).toBe(
+      'MJ: ML Training Snapshots rows are immutable once saved; ContentHash cannot be changed on a saved row. Write a new row instead.',
     );
   });
 });
@@ -77,7 +77,7 @@ describe('VersionedRowGuard.PreviousVersion', () => {
 
 describe('GetTrainingSnapshotRowProblems', () => {
   it('refuses an incomplete read and a malformed hash', () => {
-    const problems = MJTrainingSnapshotEntityServer.GetTrainingSnapshotRowProblems({ ReadComplete: false, ContentHash: 'abc', MatrixSha256: 'a'.repeat(64), RowManifestSha256: 'b'.repeat(64), ProvenanceSha256: 'c'.repeat(64), FeatureSchemaHash: 'd'.repeat(64) });
+    const problems = MJMLTrainingSnapshotEntityServer.GetTrainingSnapshotRowProblems({ ReadComplete: false, ContentHash: 'abc', MatrixSha256: 'a'.repeat(64), RowManifestSha256: 'b'.repeat(64), ProvenanceSha256: 'c'.repeat(64), FeatureSchemaHash: 'd'.repeat(64) });
     expect(problems).toContain('ReadComplete must be true: a snapshot exists only for a complete read');
     expect(problems).toContain('ContentHash must be 64 lower-case hex characters');
   });
@@ -111,7 +111,7 @@ describe('GetPipelineUnitProblems and GetProtocolUnitProblems', () => {
 });
 
 /** An Evaluation Protocol server row whose previous version is served from memory (no database). */
-class InMemoryLineageProtocol extends MJEvaluationProtocolEntityServer {
+class InMemoryLineageProtocol extends MJMLEvaluationProtocolEntityServer {
   public Previous: EvaluationProtocolColumns | null = null;
   protected override async LoadVersion(): Promise<RowRead<EvaluationProtocolColumns>> {
     return { Row: this.Previous, Error: null };
@@ -154,7 +154,7 @@ function serveRunViews(answer: (entityName: string, userID: string | undefined) 
   vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({ RunView: runView } as unknown as RunView);
 }
 
-describe('MJEvaluationProtocolEntityServer.ValidateAsync (who may change the guard fields of a protocol lineage)', () => {
+describe('MJMLEvaluationProtocolEntityServer.ValidateAsync (who may change the guard fields of a protocol lineage)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -207,7 +207,7 @@ describe('MJEvaluationProtocolEntityServer.ValidateAsync (who may change the gua
       readAs.push(userID);
       return { Success: true, Results: [v1] };
     });
-    const row = Object.create(MJEvaluationProtocolEntityServer.prototype) as MJEvaluationProtocolEntityServer;
+    const row = Object.create(MJMLEvaluationProtocolEntityServer.prototype) as MJMLEvaluationProtocolEntityServer;
     defineMembers(row, { ...v2Of(v1, margin, human), IsSaved: false }, 'U-1', 'provider');
     const result = await row.ValidateAsync();
     expect([result.Success, result.Errors, readAs]).toEqual([true, [], ['U-1']]);
@@ -222,7 +222,7 @@ describe('MJEvaluationProtocolEntityServer.ValidateAsync (who may change the gua
   });
 });
 
-/** The `MJ: Prediction Units` columns of `spec` as version `version` of lineage `lineageRootID` (label version 1). */
+/** The `MJ: ML Prediction Units` columns of `spec` as version `version` of lineage `lineageRootID` (label version 1). */
 function unitColumnsOf(spec: PredictionUnitSpec, id: string, lineageRootID: string, version: number): PredictionUnitColumns {
   const columns = ProtocolRows.UnitDraftColumns({
     Name: spec.name, Description: null, UnitRows: spec.rows, LabelRule: spec.label.rule, LabelWindowDays: spec.label.windowDays,
@@ -232,7 +232,7 @@ function unitColumnsOf(spec: PredictionUnitSpec, id: string, lineageRootID: stri
   return { ...columns, ID: id, LineageRootID: lineageRootID, Version: version, LabelVersion: 1, AuthoredBy: JSON.stringify(spec.authoredBy) };
 }
 
-describe('MJPredictionUnitEntityServer.ValidateAsync (which user reads the previous version)', () => {
+describe('MJMLPredictionUnitEntityServer.ValidateAsync (which user reads the previous version)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -242,7 +242,7 @@ describe('MJPredictionUnitEntityServer.ValidateAsync (which user reads the previ
       readAs.push(userID);
       return { Success: true, Results: [unitColumnsOf(countUnit, 'U-1', 'U-1', 1)] };
     });
-    const row = Object.create(MJPredictionUnitEntityServer.prototype) as MJPredictionUnitEntityServer;
+    const row = Object.create(MJMLPredictionUnitEntityServer.prototype) as MJMLPredictionUnitEntityServer;
     defineMembers(row, { ...unitColumnsOf(countUnit, 'U-2', 'U-1', 2), IsSaved: false }, 'U-1', 'provider');
     // Every entity and field the unit names resolves, so the only read is the previous version.
     Object.defineProperty(row.ProviderToUse, 'EntityByName', { value: () => ({ FieldByName: () => ({}) }) });
@@ -279,7 +279,7 @@ describe('MJMLTrainingPipelineEntityServer.ValidateAsync (a failed read of the b
   });
   it('reports a failed Evaluation Protocol read as a failed read, never as "not found"', async () => {
     const unit = unitRowFixture();
-    serveRunViews((entity) => (entity === 'MJ: Prediction Units' ? { Success: true, Results: [unit] } : { Success: false, Results: [], ErrorMessage: 'timeout' }));
+    serveRunViews((entity) => (entity === 'MJ: ML Prediction Units' ? { Success: true, Results: [unit] } : { Success: false, Results: [], ErrorMessage: 'timeout' }));
     const result = await newPipelineRow(UNIT_ID, PROTOCOL_ID).ValidateAsync();
     expect(result.Success).toBe(false);
     expect(result.Errors.map((e) => [e.Source, e.Message])).toEqual([['EvaluationProtocolID', `Reading Evaluation Protocol ${PROTOCOL_ID} failed: timeout`]]);
@@ -444,8 +444,8 @@ function newRowOf<T extends object>(ctor: { prototype: T }, members: SaveDoubleM
 /** A versioned server row class: the members the Save override reads. */
 type VersionedRowClass = { prototype: { IsSaved: boolean; Version: number; ID: string; LineageRootID: string; Save(): Promise<boolean> } };
 const versionedRowClasses: readonly (readonly [string, VersionedRowClass])[] = [
-  ['MJ: Prediction Units', MJPredictionUnitEntityServer],
-  ['MJ: Evaluation Protocols', MJEvaluationProtocolEntityServer],
+  ['MJ: ML Prediction Units', MJMLPredictionUnitEntityServer],
+  ['MJ: ML Evaluation Protocols', MJMLEvaluationProtocolEntityServer],
 ];
 
 describe.each(versionedRowClasses)('%s Save adopts the lineage root', (_name, ctor) => {
@@ -479,9 +479,9 @@ describe.each(versionedRowClasses)('%s Save adopts the lineage root', (_name, ct
 /** An immutable-version server row class: the members its Save override reads and records. */
 type ImmutableRowClass = { prototype: { IsSaved: boolean; Save(options?: EntitySaveOptions): Promise<boolean>; readonly LatestResult: BaseEntityResult | null } };
 const immutableRowClasses: readonly (readonly [string, ImmutableRowClass])[] = [
-  ['MJ: Prediction Units', MJPredictionUnitEntityServer],
-  ['MJ: Evaluation Protocols', MJEvaluationProtocolEntityServer],
-  ['MJ: Training Snapshots', MJTrainingSnapshotEntityServer],
+  ['MJ: ML Prediction Units', MJMLPredictionUnitEntityServer],
+  ['MJ: ML Evaluation Protocols', MJMLEvaluationProtocolEntityServer],
+  ['MJ: ML Training Snapshots', MJMLTrainingSnapshotEntityServer],
 ];
 
 describe.each(immutableRowClasses)('%s Save with ReplayOnly (which skips Validate but still writes)', (entityName, ctor) => {
@@ -511,7 +511,7 @@ describe.each(immutableRowClasses)('%s Save with ReplayOnly (which skips Validat
 
 describe('ExpectedLabelVersion', () => {
   it('is the previous LabelVersion, plus one when the outcome definition changed', () => {
-    expect(MJPredictionUnitEntityServer.ExpectedLabelVersion(3, false)).toBe(3);
-    expect(MJPredictionUnitEntityServer.ExpectedLabelVersion(3, true)).toBe(4);
+    expect(MJMLPredictionUnitEntityServer.ExpectedLabelVersion(3, false)).toBe(3);
+    expect(MJMLPredictionUnitEntityServer.ExpectedLabelVersion(3, true)).toBe(4);
   });
 });

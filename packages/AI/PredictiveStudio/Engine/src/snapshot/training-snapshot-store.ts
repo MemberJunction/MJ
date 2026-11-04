@@ -7,14 +7,14 @@
  */
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
-import type { MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
+import type { MJMLTrainingRunEntity, MJMLTrainingSnapshotEntity } from '@memberjunction/core-entities';
 
 /** Reads Training Snapshots and training runs. */
 export interface ITrainingSnapshotStore {
   /** The snapshot with this content hash, or null. */
-  FindByContentHash(contentHash: string): Promise<MJTrainingSnapshotEntity | null>;
+  FindByContentHash(contentHash: string): Promise<MJMLTrainingSnapshotEntity | null>;
   /** The snapshot with this ID, or null. */
-  LoadSnapshot(id: string): Promise<MJTrainingSnapshotEntity | null>;
+  LoadSnapshot(id: string): Promise<MJMLTrainingSnapshotEntity | null>;
   /** The training run with this ID, or null. */
   LoadRun(id: string): Promise<MJMLTrainingRunEntity | null>;
   /** The training run hung off this Experiment Session Iteration, or null when none was written. */
@@ -33,12 +33,12 @@ export class RunViewTrainingSnapshotStore implements ITrainingSnapshotStore {
    * builder also calls this after its own save lost the content-hash race, and only the database can say which
    * snapshot won.
    */
-  public async FindByContentHash(contentHash: string): Promise<MJTrainingSnapshotEntity | null> {
-    return this.first<MJTrainingSnapshotEntity>('MJ: Training Snapshots', `ContentHash='${EscapeSQLString(contentHash)}'`, true);
+  public async FindByContentHash(contentHash: string): Promise<MJMLTrainingSnapshotEntity | null> {
+    return this.first<MJMLTrainingSnapshotEntity>('MJ: ML Training Snapshots', `ContentHash='${EscapeSQLString(contentHash)}'`, true);
   }
 
-  public async LoadSnapshot(id: string): Promise<MJTrainingSnapshotEntity | null> {
-    return this.first<MJTrainingSnapshotEntity>('MJ: Training Snapshots', `ID='${EscapeSQLString(id)}'`, false);
+  public async LoadSnapshot(id: string): Promise<MJMLTrainingSnapshotEntity | null> {
+    return this.first<MJMLTrainingSnapshotEntity>('MJ: ML Training Snapshots', `ID='${EscapeSQLString(id)}'`, false);
   }
 
   public async LoadRun(id: string): Promise<MJMLTrainingRunEntity | null> {
@@ -50,7 +50,7 @@ export class RunViewTrainingSnapshotStore implements ITrainingSnapshotStore {
     return this.first<MJMLTrainingRunEntity>('MJ: ML Training Runs', `ExperimentSessionIterationID='${EscapeSQLString(iterationId)}'`, true);
   }
 
-  private async first<T extends MJTrainingSnapshotEntity | MJMLTrainingRunEntity>(entityName: string, filter: string, bypassCache: boolean): Promise<T | null> {
+  private async first<T extends MJMLTrainingSnapshotEntity | MJMLTrainingRunEntity>(entityName: string, filter: string, bypassCache: boolean): Promise<T | null> {
     const r = await this.runView.RunView<T>({ EntityName: entityName, ExtraFilter: filter, MaxRows: 1, ResultType: 'entity_object', BypassCache: bypassCache }, this.contextUser);
     if (!r.Success) throw new Error(`Reading ${entityName} (${filter}) failed: ${r.ErrorMessage}`);
     return r.Results[0] || null;

@@ -1,26 +1,26 @@
 /**************************************************************************************************
  * Migration: Predictive Studio — honest training (Prediction Units, Evaluation Protocols, Training Snapshots)
  *
- *   1. PredictionUnit      (MJ: Prediction Units)       — what one training row is, its decision date,
- *                                                         outcome rule, window, censoring, task type.
- *                                                         Immutable versions; Temporal Spec inside.
- *   2. EvaluationProtocol  (MJ: Evaluation Protocols)   — the grading rules, saved before any search.
- *                                                         Immutable versions.
- *   3. TrainingSnapshot    (MJ: Training Snapshots)     — the frozen, fingerprinted training data of a run.
- *   4. MLTrainingPipeline  + PredictionUnitID, EvaluationProtocolID
- *   5. MLTrainingRun       + TrainingSnapshotID, EvaluationProtocolID, CodeVersion, ComputeSeconds
- *   6. FeatureValue        + EffectiveAsOf, InputAsOf (the as-of column shared by pipeline rows and
- *                             Source = 'Model' rows)
+ *   1. MLPredictionUnit      (MJ: ML Prediction Units)       — what one training row is, its decision date,
+ *                                                              outcome rule, window, censoring, task type.
+ *                                                              Immutable versions; Temporal Spec inside.
+ *   2. MLEvaluationProtocol  (MJ: ML Evaluation Protocols)   — the grading rules, saved before any search.
+ *                                                              Immutable versions.
+ *   3. MLTrainingSnapshot    (MJ: ML Training Snapshots)     — the frozen, fingerprinted training data of a run.
+ *   4. MLTrainingPipeline    + PredictionUnitID, EvaluationProtocolID
+ *   5. MLTrainingRun         + TrainingSnapshotID, EvaluationProtocolID, CodeVersion, ComputeSeconds
+ *   6. FeatureValue          + EffectiveAsOf, InputAsOf (the as-of column shared by pipeline rows and
+ *                              Source = 'Model' rows)
  *
  * A version row is never updated: "editing" inserts the next version (Version + 1, same LineageRootID).
  * Version 1's LineageRootID is its own ID (the client supplies the ID on insert).
  **************************************************************************************************/
 
 -- ============================================================================
--- 1. PredictionUnit
+-- 1. MLPredictionUnit
 -- ============================================================================
-CREATE TABLE [${flyway:defaultSchema}].[PredictionUnit] (
-    [ID]                  UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_PredictionUnit_ID] DEFAULT (newsequentialid()),
+CREATE TABLE [${flyway:defaultSchema}].[MLPredictionUnit] (
+    [ID]                  UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_MLPredictionUnit_ID] DEFAULT (newsequentialid()),
     [LineageRootID]       UNIQUEIDENTIFIER NOT NULL,
     [Version]             INT              NOT NULL,
     [Name]                NVARCHAR(255)    NOT NULL,
@@ -28,7 +28,7 @@ CREATE TABLE [${flyway:defaultSchema}].[PredictionUnit] (
     [UnitRows]            NVARCHAR(MAX)    NOT NULL,
     [LabelRule]           NVARCHAR(MAX)    NOT NULL,
     [LabelWindowDays]     INT              NOT NULL,
-    [LabelGapDays]        INT              NOT NULL CONSTRAINT [DF_PredictionUnit_LabelGapDays] DEFAULT (0),
+    [LabelGapDays]        INT              NOT NULL CONSTRAINT [DF_MLPredictionUnit_LabelGapDays] DEFAULT (0),
     [TaskType]            NVARCHAR(MAX)    NOT NULL,
     [LabelVersion]        INT              NOT NULL,
     [Censoring]           NVARCHAR(MAX)    NOT NULL,
@@ -38,43 +38,43 @@ CREATE TABLE [${flyway:defaultSchema}].[PredictionUnit] (
     [DecisionSpec]        NVARCHAR(MAX)    NOT NULL,
     [IncumbentHeuristic]  NVARCHAR(MAX)    NOT NULL,
     [AuthoredBy]          NVARCHAR(MAX)    NOT NULL,
-    CONSTRAINT [PK_PredictionUnit] PRIMARY KEY CLUSTERED ([ID]),
-    CONSTRAINT [UQ_PredictionUnit_Lineage_Version] UNIQUE ([LineageRootID], [Version]),
-    CONSTRAINT [FK_PredictionUnit_LineageRoot] FOREIGN KEY ([LineageRootID])
-        REFERENCES [${flyway:defaultSchema}].[PredictionUnit] ([ID]),
-    CONSTRAINT [CK_PredictionUnit_Version] CHECK ([Version] >= 1),
-    CONSTRAINT [CK_PredictionUnit_LineageRoot] CHECK (([Version] = 1 AND [LineageRootID] = [ID]) OR ([Version] > 1 AND [LineageRootID] <> [ID])),
-    CONSTRAINT [CK_PredictionUnit_LabelVersion] CHECK ([LabelVersion] >= 1 AND [LabelVersion] <= [Version]),
-    CONSTRAINT [CK_PredictionUnit_LabelWindowDays] CHECK ([LabelWindowDays] > 0),
-    CONSTRAINT [CK_PredictionUnit_LabelGapDays] CHECK ([LabelGapDays] >= 0)
+    CONSTRAINT [PK_MLPredictionUnit] PRIMARY KEY CLUSTERED ([ID]),
+    CONSTRAINT [UQ_MLPredictionUnit_Lineage_Version] UNIQUE ([LineageRootID], [Version]),
+    CONSTRAINT [FK_MLPredictionUnit_LineageRoot] FOREIGN KEY ([LineageRootID])
+        REFERENCES [${flyway:defaultSchema}].[MLPredictionUnit] ([ID]),
+    CONSTRAINT [CK_MLPredictionUnit_Version] CHECK ([Version] >= 1),
+    CONSTRAINT [CK_MLPredictionUnit_LineageRoot] CHECK (([Version] = 1 AND [LineageRootID] = [ID]) OR ([Version] > 1 AND [LineageRootID] <> [ID])),
+    CONSTRAINT [CK_MLPredictionUnit_LabelVersion] CHECK ([LabelVersion] >= 1 AND [LabelVersion] <= [Version]),
+    CONSTRAINT [CK_MLPredictionUnit_LabelWindowDays] CHECK ([LabelWindowDays] > 0),
+    CONSTRAINT [CK_MLPredictionUnit_LabelGapDays] CHECK ([LabelGapDays] >= 0)
 );
 GO
 
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'A Prediction Unit: what one training row is (one grain record, or one grain record per period of a dated child entity), its decision date, the outcome rule and the window over which the outcome is observed, how unresolved rows are censored, and the declared task type. Every ML Training Pipeline references exactly one version. Versions are immutable rows: editing a unit inserts the next version with the same LineageRootID, so a trained model keeps pointing at the version it used.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'PredictionUnit';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'ID of version 1 of this unit. Version 1 points at itself; every later version points at version 1.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'PredictionUnit', @level2type = N'COLUMN', @level2name = N'LineageRootID';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Version number within the lineage, starting at 1. A saved version is never updated.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'PredictionUnit', @level2type = N'COLUMN', @level2name = N'Version';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Display name of the unit, e.g. "Member renewal (person x membership period)".', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'PredictionUnit', @level2type = N'COLUMN', @level2name = N'Name';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'What the unit predicts and for whom, in plain words.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'PredictionUnit', @level2type = N'COLUMN', @level2name = N'Description';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON UnitRows: {kind:"grain", grainEntity, decisionDate, filter} or {kind:"grain-x-periods", grainEntity, childEntity, foreignKey, periodDate, filter}. Defines what one row is and its decision date.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'PredictionUnit', @level2type = N'COLUMN', @level2name = N'UnitRows';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON LabelRule: how the outcome of a row is read — a column on the row, the next period of the same grain record, or an event in a dated child entity — always within the window that starts LabelGapDays after the decision date and lasts LabelWindowDays.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'PredictionUnit', @level2type = N'COLUMN', @level2name = N'LabelRule';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Length in days of the outcome window. A row whose window ends after the data cutoff is censored (excluded and counted).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'PredictionUnit', @level2type = N'COLUMN', @level2name = N'LabelWindowDays';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Days between the decision date and the start of the outcome window.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'PredictionUnit', @level2type = N'COLUMN', @level2name = N'LabelGapDays';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON TaskType: binary {classOrder, adverseIndex}, multiclass {classOrder, adverseIndices}, continuous, count, non-negative {tweediePower}, or forecast {valueKind}. Which class a score refers to and the adverse direction are derived from it, never stored separately.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'PredictionUnit', @level2type = N'COLUMN', @level2name = N'TaskType';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Outcome-definition version: equals the previous version''s LabelVersion when LabelRule, LabelWindowDays, LabelGapDays and TaskType are unchanged, and that plus one otherwise.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'PredictionUnit', @level2type = N'COLUMN', @level2name = N'LabelVersion';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON CensoringRule: {rule:"exclude-unresolved", cutoff} where cutoff is {kind:"corpus-end", entity, field}, {kind:"now"} or {kind:"fixed", at}. Rows whose outcome window has not closed at the cutoff are excluded and counted.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'PredictionUnit', @level2type = N'COLUMN', @level2name = N'Censoring';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON ChangeHistoryPolicy: {onUncoveredRow:"refuse"|"exclude-and-count", externalSourceRows:"as-of-detection-time"|"ineligible"} — what as-of assembly does when a decision date precedes the change history of a field updated in place.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'PredictionUnit', @level2type = N'COLUMN', @level2name = N'ChangeHistoryPolicy';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Field on the row whose value keeps one entity''s rows together in grouped folds and the new-entity report; NULL means the grain record key.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'PredictionUnit', @level2type = N'COLUMN', @level2name = N'GroupKey';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON TemporalSpec for series and panels: timeColumn, horizonPeriods, lags, rollingWindows, period, seasonality. Every lag and rolling-window endLag is at least horizonPeriods. Required when TaskType is forecast. Versioned with the unit.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'PredictionUnit', @level2type = N'COLUMN', @level2name = N'TemporalSpec';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON DecisionSpec: the action the prediction serves, the actor role, the capacity per period (for precision at capacity) and the period.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'PredictionUnit', @level2type = N'COLUMN', @level2name = N'DecisionSpec';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON IncumbentHeuristic: {kind:"none"} or {kind:"rule", name, scoreExpression} — today''s rule of thumb, scored as a named comparator on the same holdout.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'PredictionUnit', @level2type = N'COLUMN', @level2name = N'IncumbentHeuristic';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON Actor who authored this version: {kind:"human", userId} (a user), or an automated author {kind:"agent", agentRunId}, {kind:"scheduled-job", scheduledJobRunId} or {kind:"system", component}.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'PredictionUnit', @level2type = N'COLUMN', @level2name = N'AuthoredBy';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'A Prediction Unit: what one training row is (one grain record, or one grain record per period of a dated child entity), its decision date, the outcome rule and the window over which the outcome is observed, how unresolved rows are censored, and the declared task type. Every ML Training Pipeline references exactly one version. Versions are immutable rows: editing a unit inserts the next version with the same LineageRootID, so a trained model keeps pointing at the version it used.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLPredictionUnit';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'ID of version 1 of this unit. Version 1 points at itself; every later version points at version 1.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLPredictionUnit', @level2type = N'COLUMN', @level2name = N'LineageRootID';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Version number within the lineage, starting at 1. A saved version is never updated.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLPredictionUnit', @level2type = N'COLUMN', @level2name = N'Version';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Display name of the unit, e.g. "Member renewal (person x membership period)".', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLPredictionUnit', @level2type = N'COLUMN', @level2name = N'Name';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'What the unit predicts and for whom, in plain words.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLPredictionUnit', @level2type = N'COLUMN', @level2name = N'Description';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON UnitRows: {kind:"grain", grainEntity, decisionDate, filter} or {kind:"grain-x-periods", grainEntity, childEntity, foreignKey, periodDate, filter}. Defines what one row is and its decision date.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLPredictionUnit', @level2type = N'COLUMN', @level2name = N'UnitRows';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON LabelRule: how the outcome of a row is read — a column on the row, the next period of the same grain record, or an event in a dated child entity — always within the window that starts LabelGapDays after the decision date and lasts LabelWindowDays.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLPredictionUnit', @level2type = N'COLUMN', @level2name = N'LabelRule';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Length in days of the outcome window. A row whose window ends after the data cutoff is censored (excluded and counted).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLPredictionUnit', @level2type = N'COLUMN', @level2name = N'LabelWindowDays';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Days between the decision date and the start of the outcome window.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLPredictionUnit', @level2type = N'COLUMN', @level2name = N'LabelGapDays';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON TaskType: binary {classOrder, adverseIndex}, multiclass {classOrder, adverseIndices}, continuous, count, non-negative {tweediePower}, or forecast {valueKind}. Which class a score refers to and the adverse direction are derived from it, never stored separately.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLPredictionUnit', @level2type = N'COLUMN', @level2name = N'TaskType';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Outcome-definition version: equals the previous version''s LabelVersion when LabelRule, LabelWindowDays, LabelGapDays and TaskType are unchanged, and that plus one otherwise.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLPredictionUnit', @level2type = N'COLUMN', @level2name = N'LabelVersion';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON CensoringRule: {rule:"exclude-unresolved", cutoff} where cutoff is {kind:"corpus-end", entity, field}, {kind:"now"} or {kind:"fixed", at}. Rows whose outcome window has not closed at the cutoff are excluded and counted.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLPredictionUnit', @level2type = N'COLUMN', @level2name = N'Censoring';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON ChangeHistoryPolicy: {onUncoveredRow:"refuse"|"exclude-and-count", externalSourceRows:"as-of-detection-time"|"ineligible"} — what as-of assembly does when a decision date precedes the change history of a field updated in place.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLPredictionUnit', @level2type = N'COLUMN', @level2name = N'ChangeHistoryPolicy';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Field on the row whose value keeps one entity''s rows together in grouped folds and the new-entity report; NULL means the grain record key.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLPredictionUnit', @level2type = N'COLUMN', @level2name = N'GroupKey';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON TemporalSpec for series and panels: timeColumn, horizonPeriods, lags, rollingWindows, period, seasonality. Every lag and rolling-window endLag is at least horizonPeriods. Required when TaskType is forecast. Versioned with the unit.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLPredictionUnit', @level2type = N'COLUMN', @level2name = N'TemporalSpec';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON DecisionSpec: the action the prediction serves, the actor role, the capacity per period (for precision at capacity) and the period.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLPredictionUnit', @level2type = N'COLUMN', @level2name = N'DecisionSpec';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON IncumbentHeuristic: {kind:"none"} or {kind:"rule", name, scoreExpression} — today''s rule of thumb, scored as a named comparator on the same holdout.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLPredictionUnit', @level2type = N'COLUMN', @level2name = N'IncumbentHeuristic';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON Actor who authored this version: {kind:"human", userId} (a user), or an automated author {kind:"agent", agentRunId}, {kind:"scheduled-job", scheduledJobRunId} or {kind:"system", component}.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLPredictionUnit', @level2type = N'COLUMN', @level2name = N'AuthoredBy';
 GO
 
 -- ============================================================================
--- 2. EvaluationProtocol
+-- 2. MLEvaluationProtocol
 -- ============================================================================
-CREATE TABLE [${flyway:defaultSchema}].[EvaluationProtocol] (
-    [ID]                    UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_EvaluationProtocol_ID] DEFAULT (newsequentialid()),
+CREATE TABLE [${flyway:defaultSchema}].[MLEvaluationProtocol] (
+    [ID]                    UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_MLEvaluationProtocol_ID] DEFAULT (newsequentialid()),
     [LineageRootID]         UNIQUEIDENTIFIER NOT NULL,
     [Version]               INT              NOT NULL,
     [Name]                  NVARCHAR(255)    NOT NULL,
@@ -82,7 +82,7 @@ CREATE TABLE [${flyway:defaultSchema}].[EvaluationProtocol] (
     [Holdout]               NVARCHAR(MAX)    NOT NULL,
     [InnerValidation]       NVARCHAR(MAX)    NOT NULL,
     [Seed]                  INT              NOT NULL,
-    [HoldoutAccessBudget]   INT              NOT NULL CONSTRAINT [DF_EvaluationProtocol_HoldoutAccessBudget] DEFAULT (1),
+    [HoldoutAccessBudget]   INT              NOT NULL CONSTRAINT [DF_MLEvaluationProtocol_HoldoutAccessBudget] DEFAULT (1),
     [PrimaryScore]          NVARCHAR(MAX)    NOT NULL,
     [SecondaryMetrics]      NVARCHAR(MAX)    NOT NULL,
     [Baselines]             NVARCHAR(MAX)    NOT NULL,
@@ -99,73 +99,73 @@ CREATE TABLE [${flyway:defaultSchema}].[EvaluationProtocol] (
     [RetrainTriggers]       NVARCHAR(MAX)    NOT NULL,
     [SearchStrategy]        NVARCHAR(MAX)    NOT NULL,
     [Budgets]               NVARCHAR(MAX)    NOT NULL,
-    [MinMinorityClassRows]  INT              NOT NULL CONSTRAINT [DF_EvaluationProtocol_MinMinorityClassRows] DEFAULT (20),
-    [GuardFieldsEditableBy] NVARCHAR(20)     NOT NULL CONSTRAINT [DF_EvaluationProtocol_GuardFieldsEditableBy] DEFAULT (N'non-agent'),
+    [MinMinorityClassRows]  INT              NOT NULL CONSTRAINT [DF_MLEvaluationProtocol_MinMinorityClassRows] DEFAULT (20),
+    [GuardFieldsEditableBy] NVARCHAR(20)     NOT NULL CONSTRAINT [DF_MLEvaluationProtocol_GuardFieldsEditableBy] DEFAULT (N'non-agent'),
     [AuthoredBy]            NVARCHAR(MAX)    NOT NULL,
-    CONSTRAINT [PK_EvaluationProtocol] PRIMARY KEY CLUSTERED ([ID]),
-    CONSTRAINT [UQ_EvaluationProtocol_Lineage_Version] UNIQUE ([LineageRootID], [Version]),
-    CONSTRAINT [FK_EvaluationProtocol_LineageRoot] FOREIGN KEY ([LineageRootID])
-        REFERENCES [${flyway:defaultSchema}].[EvaluationProtocol] ([ID]),
-    CONSTRAINT [CK_EvaluationProtocol_Version] CHECK ([Version] >= 1),
-    CONSTRAINT [CK_EvaluationProtocol_LineageRoot] CHECK (([Version] = 1 AND [LineageRootID] = [ID]) OR ([Version] > 1 AND [LineageRootID] <> [ID])),
-    CONSTRAINT [CK_EvaluationProtocol_HoldoutAccessBudget] CHECK ([HoldoutAccessBudget] = 1),
-    CONSTRAINT [CK_EvaluationProtocol_MinMinorityClassRows] CHECK ([MinMinorityClassRows] >= 1),
-    CONSTRAINT [CK_EvaluationProtocol_GuardFieldsEditableBy] CHECK ([GuardFieldsEditableBy] IN (N'non-agent', N'human-only'))
+    CONSTRAINT [PK_MLEvaluationProtocol] PRIMARY KEY CLUSTERED ([ID]),
+    CONSTRAINT [UQ_MLEvaluationProtocol_Lineage_Version] UNIQUE ([LineageRootID], [Version]),
+    CONSTRAINT [FK_MLEvaluationProtocol_LineageRoot] FOREIGN KEY ([LineageRootID])
+        REFERENCES [${flyway:defaultSchema}].[MLEvaluationProtocol] ([ID]),
+    CONSTRAINT [CK_MLEvaluationProtocol_Version] CHECK ([Version] >= 1),
+    CONSTRAINT [CK_MLEvaluationProtocol_LineageRoot] CHECK (([Version] = 1 AND [LineageRootID] = [ID]) OR ([Version] > 1 AND [LineageRootID] <> [ID])),
+    CONSTRAINT [CK_MLEvaluationProtocol_HoldoutAccessBudget] CHECK ([HoldoutAccessBudget] = 1),
+    CONSTRAINT [CK_MLEvaluationProtocol_MinMinorityClassRows] CHECK ([MinMinorityClassRows] >= 1),
+    CONSTRAINT [CK_MLEvaluationProtocol_GuardFieldsEditableBy] CHECK ([GuardFieldsEditableBy] IN (N'non-agent', N'human-only'))
 );
 GO
 
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'An Evaluation Protocol: the grading rules of a pipeline, saved before any candidate trains — the locked holdout, inner validation, primary proper score, fixed baselines, calibration, intervals, promotion rule and the three allowed outcomes (model, keep-simple-baseline, no-signal), the leakage audit, slices and budgets. Every training run references the exact version it was graded under. Versions are immutable rows; editing inserts the next version. Replaces the ValidationStrategy and LeakageGuard JSON of ML Training Pipelines.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'ID of version 1 of this protocol. Version 1 points at itself.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'LineageRootID';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Version number within the lineage, starting at 1. A saved version is never updated.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Version';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Display name of the protocol.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Name';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'What the protocol is for, in plain words.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Description';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON HoldoutSplit (guard field): {kind:"date-carved", dateColumn, cutoff, holdoutEnd, newEntityReport} or {kind:"rolling-origin", origins (>= 5), horizonPeriods, gapPeriods, minTrainPeriods, window}.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Holdout';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON InnerValidation over development rows only: repeated-stratified-kfold, grouped-kfold or blocked-time.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'InnerValidation';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Random seed for every split, fold, bootstrap and estimator of a run under this protocol.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Seed';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'How many times the locked holdout may be scored per run: always 1, for one declared finalist.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'HoldoutAccessBudget';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON ProperScore {family, metric}: the only metric that ranks candidates and gates outcomes. Its family must equal the pipeline unit''s task kind.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'PrimaryScore';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array of secondary metric keys (auc, accuracy, f1, precision, recall, r2, calibration-slope); reported with intervals, never used to rank.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'SecondaryMetrics';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array of BaselineSpec fitted on every run: dummy, one-feature, glm, naive, seasonal-naive, incumbent-heuristic.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Baselines';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON CalibrationMethod: platt, isotonic or auto, always fit on a disjoint calibration fold; not-applicable for regression.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Calibration';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON ResamplingSpec: {kind:"none"} or {kind:"in-fold", method}; resampling never touches holdout rows.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Resampling';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON IntervalSpec: level 0.95, method, resamples and the paired test for model-versus-comparator differences.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Intervals';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON PromotionRule (guard field): comparators, incumbent, margin (>= 0), lowerBoundLevel 0.95, pairedOn same-holdout-rows, decisionTable Q13+Q14+Q15.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Promotion';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array, exactly ["model","keep-simple-baseline","no-signal"]: a protocol cannot omit no-signal.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'AllowedOutcomes';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON LeakageAuditSpec (guard field): held-out single-feature AUC ceiling, time-shifted-label test, drop-column test, per-source-column importance aggregation, high-cardinality ID check.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'LeakageAudit';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON ProtocolExclusions (guard field): {denyFields, denySources} — columns and sources that never enter the feature matrix (the former LeakageGuard deny lists).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Exclusions';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON SliceSpec: {outOfTime, subgroups} — each slice is reported with the primary score and its interval.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Slices';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON PredictionIntervalSpec {method, nominalCoverage} for continuous, count and non-negative tasks; NULL when not requested.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'PredictionIntervals';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON ResidualDiagnosticsSpec {acfLags, ljungBoxAlpha} for series and panels; NULL otherwise.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'ResidualDiagnostics';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array of RetrainTrigger declared for monitoring (outcome-degradation, calibration-drift).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'RetrainTriggers';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON SearchStrategy: {kind:"random", candidates} or {kind:"guided", method, equalCostComparisonId}.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'SearchStrategy';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON Budgets (guard field): maxComputeSeconds, maxTokens, maxCandidates, hardStop true.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Budgets';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Smallest minority-class row count in the locked holdout for which a classification gate may return model; below it the gate cannot ship a model.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'MinMinorityClassRows';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Who may change the guard fields (Holdout, Promotion, LeakageAudit, Exclusions, Budgets and this setting) in the next version: non-agent (default: any author except an agent tool call — a user, a non-agent API caller, a scheduled job or the system) or human-only (optional: only a version authored by a user). Every author''s version passes the same guard-field validation.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'GuardFieldsEditableBy';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON Actor who authored this version.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'EvaluationProtocol', @level2type = N'COLUMN', @level2name = N'AuthoredBy';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'An Evaluation Protocol: the grading rules of a pipeline, saved before any candidate trains — the locked holdout, inner validation, primary proper score, fixed baselines, calibration, intervals, promotion rule and the three allowed outcomes (model, keep-simple-baseline, no-signal), the leakage audit, slices and budgets. Every training run references the exact version it was graded under. Versions are immutable rows; editing inserts the next version. Replaces the ValidationStrategy and LeakageGuard JSON of ML Training Pipelines.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'ID of version 1 of this protocol. Version 1 points at itself.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'LineageRootID';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Version number within the lineage, starting at 1. A saved version is never updated.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Version';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Display name of the protocol.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Name';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'What the protocol is for, in plain words.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Description';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON HoldoutSplit (guard field): {kind:"date-carved", dateColumn, cutoff, holdoutEnd, newEntityReport} or {kind:"rolling-origin", origins (>= 5), horizonPeriods, gapPeriods, minTrainPeriods, window}.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Holdout';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON InnerValidation over development rows only: repeated-stratified-kfold, grouped-kfold or blocked-time.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'InnerValidation';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Random seed for every split, fold, bootstrap and estimator of a run under this protocol.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Seed';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'How many times the locked holdout may be scored per run: always 1, for one declared finalist.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'HoldoutAccessBudget';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON ProperScore {family, metric}: the only metric that ranks candidates and gates outcomes. Its family must equal the pipeline unit''s task kind.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'PrimaryScore';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array of secondary metric keys (auc, accuracy, f1, precision, recall, r2, calibration-slope); reported with intervals, never used to rank.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'SecondaryMetrics';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array of BaselineSpec fitted on every run: dummy, one-feature, glm, naive, seasonal-naive, incumbent-heuristic.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Baselines';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON CalibrationMethod: platt, isotonic or auto, always fit on a disjoint calibration fold; not-applicable for regression.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Calibration';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON ResamplingSpec: {kind:"none"} or {kind:"in-fold", method}; resampling never touches holdout rows.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Resampling';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON IntervalSpec: level 0.95, method, resamples and the paired test for model-versus-comparator differences.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Intervals';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON PromotionRule (guard field): comparators, incumbent, margin (>= 0), lowerBoundLevel 0.95, pairedOn same-holdout-rows, decisionTable Q13+Q14+Q15.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Promotion';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array, exactly ["model","keep-simple-baseline","no-signal"]: a protocol cannot omit no-signal.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'AllowedOutcomes';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON LeakageAuditSpec (guard field): held-out single-feature AUC ceiling, time-shifted-label test, drop-column test, per-source-column importance aggregation, high-cardinality ID check.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'LeakageAudit';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON ProtocolExclusions (guard field): {denyFields, denySources} — columns and sources that never enter the feature matrix (the former LeakageGuard deny lists).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Exclusions';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON SliceSpec: {outOfTime, subgroups} — each slice is reported with the primary score and its interval.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Slices';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON PredictionIntervalSpec {method, nominalCoverage} for continuous, count and non-negative tasks; NULL when not requested.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'PredictionIntervals';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON ResidualDiagnosticsSpec {acfLags, ljungBoxAlpha} for series and panels; NULL otherwise.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'ResidualDiagnostics';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array of RetrainTrigger declared for monitoring (outcome-degradation, calibration-drift).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'RetrainTriggers';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON SearchStrategy: {kind:"random", candidates} or {kind:"guided", method, equalCostComparisonId}.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'SearchStrategy';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON Budgets (guard field): maxComputeSeconds, maxTokens, maxCandidates, hardStop true.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'Budgets';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Smallest minority-class row count in the locked holdout for which a classification gate may return model; below it the gate cannot ship a model.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'MinMinorityClassRows';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Who may change the guard fields (Holdout, Promotion, LeakageAudit, Exclusions, Budgets and this setting) in the next version: non-agent (default: any author except an agent tool call — a user, a non-agent API caller, a scheduled job or the system) or human-only (optional: only a version authored by a user). Every author''s version passes the same guard-field validation.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'GuardFieldsEditableBy';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON Actor who authored this version.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLEvaluationProtocol', @level2type = N'COLUMN', @level2name = N'AuthoredBy';
 GO
 
 -- ============================================================================
--- 3. MLTrainingPipeline + unit and protocol references (before TrainingSnapshot, which references pipelines)
+-- 3. MLTrainingPipeline + unit and protocol references (before MLTrainingSnapshot, which references pipelines)
 -- ============================================================================
 ALTER TABLE [${flyway:defaultSchema}].[MLTrainingPipeline]
     ADD [PredictionUnitID]     UNIQUEIDENTIFIER NULL,
         [EvaluationProtocolID] UNIQUEIDENTIFIER NULL;
 GO
 ALTER TABLE [${flyway:defaultSchema}].[MLTrainingPipeline]
-    ADD CONSTRAINT [FK_MLTrainingPipeline_PredictionUnit] FOREIGN KEY ([PredictionUnitID])
-            REFERENCES [${flyway:defaultSchema}].[PredictionUnit] ([ID]),
-        CONSTRAINT [FK_MLTrainingPipeline_EvaluationProtocol] FOREIGN KEY ([EvaluationProtocolID])
-            REFERENCES [${flyway:defaultSchema}].[EvaluationProtocol] ([ID]);
+    ADD CONSTRAINT [FK_MLTrainingPipeline_MLPredictionUnit] FOREIGN KEY ([PredictionUnitID])
+            REFERENCES [${flyway:defaultSchema}].[MLPredictionUnit] ([ID]),
+        CONSTRAINT [FK_MLTrainingPipeline_MLEvaluationProtocol] FOREIGN KEY ([EvaluationProtocolID])
+            REFERENCES [${flyway:defaultSchema}].[MLEvaluationProtocol] ([ID]);
 GO
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The exact Prediction Unit version this pipeline trains on. NULL only on a pipeline created before Predictive Studio 6.3 that has not been migrated; such a pipeline cannot be trained.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingPipeline', @level2type = N'COLUMN', @level2name = N'PredictionUnitID';
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The exact Evaluation Protocol version every training run of this pipeline is graded under. Its primary score family must equal the unit''s task kind.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingPipeline', @level2type = N'COLUMN', @level2name = N'EvaluationProtocolID';
 GO
 
 -- ============================================================================
--- 4. TrainingSnapshot
+-- 4. MLTrainingSnapshot
 -- ============================================================================
-CREATE TABLE [${flyway:defaultSchema}].[TrainingSnapshot] (
-    [ID]                           UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_TrainingSnapshot_ID] DEFAULT (newsequentialid()),
+CREATE TABLE [${flyway:defaultSchema}].[MLTrainingSnapshot] (
+    [ID]                           UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_MLTrainingSnapshot_ID] DEFAULT (newsequentialid()),
     [ContentHash]                  NVARCHAR(64)     NOT NULL,
     [PipelineID]                   UNIQUEIDENTIFIER NOT NULL,
     [PredictionUnitID]             UNIQUEIDENTIFIER NOT NULL,
@@ -188,74 +188,74 @@ CREATE TABLE [${flyway:defaultSchema}].[TrainingSnapshot] (
     [FeatureSchema]                NVARCHAR(MAX)    NOT NULL,
     [FeatureSchemaHash]            NVARCHAR(64)     NOT NULL,
     [ColumnProvenance]             NVARCHAR(MAX)    NOT NULL,
-    [PinnedFeatureVersions]        NVARCHAR(MAX)    NOT NULL CONSTRAINT [DF_TrainingSnapshot_PinnedFeatureVersions] DEFAULT (N'[]'),
+    [PinnedFeatureVersions]        NVARCHAR(MAX)    NOT NULL CONSTRAINT [DF_MLTrainingSnapshot_PinnedFeatureVersions] DEFAULT (N'[]'),
     [RowsRead]                     INT              NOT NULL,
-    [ReadComplete]                 BIT              NOT NULL CONSTRAINT [DF_TrainingSnapshot_ReadComplete] DEFAULT (1),
+    [ReadComplete]                 BIT              NOT NULL CONSTRAINT [DF_MLTrainingSnapshot_ReadComplete] DEFAULT (1),
     [CensoredRowsExcluded]         INT              NOT NULL,
     [LabelKnownRowsExcluded]       INT              NOT NULL,
     [EmptyLabelRowsExcluded]       INT              NOT NULL,
-    [UncoveredHistoryRowsExcluded] NVARCHAR(MAX)    NOT NULL CONSTRAINT [DF_TrainingSnapshot_UncoveredHistoryRowsExcluded] DEFAULT (N'[]'),
-    [DuplicateRowsRemoved]         INT              NOT NULL CONSTRAINT [DF_TrainingSnapshot_DuplicateRowsRemoved] DEFAULT (0),
+    [UncoveredHistoryRowsExcluded] NVARCHAR(MAX)    NOT NULL CONSTRAINT [DF_MLTrainingSnapshot_UncoveredHistoryRowsExcluded] DEFAULT (N'[]'),
+    [DuplicateRowsRemoved]         INT              NOT NULL CONSTRAINT [DF_MLTrainingSnapshot_DuplicateRowsRemoved] DEFAULT (0),
     [ClassBalance]                 NVARCHAR(MAX)    NULL,
     [DataCutoff]                   DATETIMEOFFSET   NOT NULL,
     [AssemblyCodeVersion]          NVARCHAR(200)    NOT NULL,
-    CONSTRAINT [PK_TrainingSnapshot] PRIMARY KEY CLUSTERED ([ID]),
-    CONSTRAINT [UQ_TrainingSnapshot_ContentHash] UNIQUE ([ContentHash]),
-    CONSTRAINT [FK_TrainingSnapshot_Pipeline] FOREIGN KEY ([PipelineID])
+    CONSTRAINT [PK_MLTrainingSnapshot] PRIMARY KEY CLUSTERED ([ID]),
+    CONSTRAINT [UQ_MLTrainingSnapshot_ContentHash] UNIQUE ([ContentHash]),
+    CONSTRAINT [FK_MLTrainingSnapshot_Pipeline] FOREIGN KEY ([PipelineID])
         REFERENCES [${flyway:defaultSchema}].[MLTrainingPipeline] ([ID]),
-    CONSTRAINT [FK_TrainingSnapshot_PredictionUnit] FOREIGN KEY ([PredictionUnitID])
-        REFERENCES [${flyway:defaultSchema}].[PredictionUnit] ([ID]),
-    CONSTRAINT [FK_TrainingSnapshot_EvaluationProtocol] FOREIGN KEY ([EvaluationProtocolID])
-        REFERENCES [${flyway:defaultSchema}].[EvaluationProtocol] ([ID]),
-    CONSTRAINT [FK_TrainingSnapshot_StorageProvider] FOREIGN KEY ([StorageProviderID])
+    CONSTRAINT [FK_MLTrainingSnapshot_MLPredictionUnit] FOREIGN KEY ([PredictionUnitID])
+        REFERENCES [${flyway:defaultSchema}].[MLPredictionUnit] ([ID]),
+    CONSTRAINT [FK_MLTrainingSnapshot_MLEvaluationProtocol] FOREIGN KEY ([EvaluationProtocolID])
+        REFERENCES [${flyway:defaultSchema}].[MLEvaluationProtocol] ([ID]),
+    CONSTRAINT [FK_MLTrainingSnapshot_StorageProvider] FOREIGN KEY ([StorageProviderID])
         REFERENCES [${flyway:defaultSchema}].[FileStorageProvider] ([ID]),
-    CONSTRAINT [FK_TrainingSnapshot_MatrixFile] FOREIGN KEY ([MatrixFileID])
+    CONSTRAINT [FK_MLTrainingSnapshot_MatrixFile] FOREIGN KEY ([MatrixFileID])
         REFERENCES [${flyway:defaultSchema}].[File] ([ID]),
-    CONSTRAINT [FK_TrainingSnapshot_RowManifestFile] FOREIGN KEY ([RowManifestFileID])
+    CONSTRAINT [FK_MLTrainingSnapshot_RowManifestFile] FOREIGN KEY ([RowManifestFileID])
         REFERENCES [${flyway:defaultSchema}].[File] ([ID]),
-    CONSTRAINT [FK_TrainingSnapshot_ProvenanceFile] FOREIGN KEY ([ProvenanceFileID])
+    CONSTRAINT [FK_MLTrainingSnapshot_ProvenanceFile] FOREIGN KEY ([ProvenanceFileID])
         REFERENCES [${flyway:defaultSchema}].[File] ([ID]),
-    CONSTRAINT [CK_TrainingSnapshot_ReadComplete] CHECK ([ReadComplete] = 1),
-    CONSTRAINT [CK_TrainingSnapshot_HashLengths] CHECK (LEN([ContentHash]) = 64 AND LEN([MatrixSha256]) = 64 AND LEN([RowManifestSha256]) = 64 AND LEN([ProvenanceSha256]) = 64 AND LEN([FeatureSchemaHash]) = 64),
-    CONSTRAINT [CK_TrainingSnapshot_Counts] CHECK ([ManifestRowCount] >= 0 AND [HoldoutRowCount] >= 0 AND [HoldoutRowCount] <= [ManifestRowCount] AND [RowsRead] >= [ManifestRowCount] AND [CensoredRowsExcluded] >= 0 AND [LabelKnownRowsExcluded] >= 0 AND [EmptyLabelRowsExcluded] >= 0 AND [DuplicateRowsRemoved] >= 0),
-    CONSTRAINT [CK_TrainingSnapshot_Versions] CHECK ([LabelVersion] >= 1 AND [FeatureSpecVersion] >= 1)
+    CONSTRAINT [CK_MLTrainingSnapshot_ReadComplete] CHECK ([ReadComplete] = 1),
+    CONSTRAINT [CK_MLTrainingSnapshot_HashLengths] CHECK (LEN([ContentHash]) = 64 AND LEN([MatrixSha256]) = 64 AND LEN([RowManifestSha256]) = 64 AND LEN([ProvenanceSha256]) = 64 AND LEN([FeatureSchemaHash]) = 64),
+    CONSTRAINT [CK_MLTrainingSnapshot_Counts] CHECK ([ManifestRowCount] >= 0 AND [HoldoutRowCount] >= 0 AND [HoldoutRowCount] <= [ManifestRowCount] AND [RowsRead] >= [ManifestRowCount] AND [CensoredRowsExcluded] >= 0 AND [LabelKnownRowsExcluded] >= 0 AND [EmptyLabelRowsExcluded] >= 0 AND [DuplicateRowsRemoved] >= 0),
+    CONSTRAINT [CK_MLTrainingSnapshot_Versions] CHECK ([LabelVersion] >= 1 AND [FeatureSpecVersion] >= 1)
 );
 GO
 
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'A Training Snapshot: the frozen data one training run learned from — the feature matrix, the row manifest (row id, entity key, decision date, group key, period, role) and per-value provenance as three write-once files, plus the content hash that fingerprints them together with the unit, label, feature-spec and protocol versions. Immutable; identical assemblies share one snapshot (unique ContentHash). Retraining from a snapshot reproduces the run.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'SHA-256 (lower-case hex) of the canonical JSON of the three file hashes, the feature schema hash, PredictionUnitID, LabelVersion, FeatureSpecVersion, EvaluationProtocolID and DataCutoff.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'ContentHash';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The ML Training Pipeline whose feature spec was assembled.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'PipelineID';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The exact Prediction Unit version whose rows were read.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'PredictionUnitID';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The unit''s LabelVersion at assembly.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'LabelVersion';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The pipeline Version whose FeatureSteps produced the feature spec.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'FeatureSpecVersion';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The Evaluation Protocol version whose holdout rule assigned the manifest roles; NULL only for a legacy pipeline trained before its protocol was migrated.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'EvaluationProtocolID';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The File Storage Provider holding the three files.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'StorageProviderID';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'MJ: Files row of matrix.jsonl (header line with column names, then one JSON array per manifest row).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'MatrixFileID';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'SHA-256 of the matrix file bytes.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'MatrixSha256';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Size of the matrix file in bytes.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'MatrixSizeBytes';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'MJ: Files row of manifest.jsonl (one SnapshotRowKey per row; the locked-holdout rows are the stored holdout keys).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'RowManifestFileID';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'SHA-256 of the manifest file bytes.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'RowManifestSha256';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Size of the manifest file in bytes.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'RowManifestSizeBytes';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'MJ: Files row of provenance.jsonl (for every row and column: source kind, source reference, source version, computed-at).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'ProvenanceFileID';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'SHA-256 of the provenance file bytes.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'ProvenanceSha256';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Size of the provenance file in bytes.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'ProvenanceSizeBytes';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Rows in the manifest (development plus locked holdout).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'ManifestRowCount';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Manifest rows with role locked-holdout.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'HoldoutRowCount';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array of the resolved FeatureColumnSpec (name, dated source, encoding, missing-value policy) assembled.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'FeatureSpec';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array of matrix columns {name, encoding, sourceColumn} in matrix order.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'FeatureSchema';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'SHA-256 of the canonical JSON of FeatureSchema; compared before scoring.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'FeatureSchemaHash';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array of ColumnProvenance: per matrix column, the source kind, source reference and source version.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'ColumnProvenance';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array of FeatureVersionPin for every Feature Value source read.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'PinnedFeatureVersions';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Unit rows read from the source before exclusions; equals the source count (a truncated read is refused).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'RowsRead';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Always 1: a snapshot exists only for a complete read.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'ReadComplete';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Rows excluded because their outcome window had not closed at DataCutoff.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'CensoredRowsExcluded';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Rows excluded because their outcome was already recorded on or before the decision date (next-period rule).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'LabelKnownRowsExcluded';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Rows excluded because their label was empty (NULL or an empty string) — unlabelled, never a class.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'EmptyLabelRowsExcluded';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array {entity, field, rows}: rows excluded because a field''s change history did not cover their decision date (policy exclude-and-count).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'UncoveredHistoryRowsExcluded';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Rows removed as exact duplicates of (entity key, decision date, period).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'DuplicateRowsRemoved';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array {label, rows} over manifest rows for classification tasks; NULL otherwise.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'ClassBalance';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The censoring cutoff the unit resolved to for this assembly.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'DataCutoff';
-EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Package version and git commit of the assembly code that built the snapshot.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'TrainingSnapshot', @level2type = N'COLUMN', @level2name = N'AssemblyCodeVersion';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'A Training Snapshot: the frozen data one training run learned from — the feature matrix, the row manifest (row id, entity key, decision date, group key, period, role) and per-value provenance as three write-once files, plus the content hash that fingerprints them together with the unit, label, feature-spec and protocol versions. Immutable; identical assemblies share one snapshot (unique ContentHash). Retraining from a snapshot reproduces the run.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'SHA-256 (lower-case hex) of the canonical JSON of the three file hashes, the feature schema hash, PredictionUnitID, LabelVersion, FeatureSpecVersion, EvaluationProtocolID and DataCutoff.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'ContentHash';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The ML Training Pipeline whose feature spec was assembled.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'PipelineID';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The exact Prediction Unit version whose rows were read.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'PredictionUnitID';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The unit''s LabelVersion at assembly.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'LabelVersion';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The pipeline Version whose FeatureSteps produced the feature spec.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'FeatureSpecVersion';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The Evaluation Protocol version whose holdout rule assigned the manifest roles; NULL only for a legacy pipeline trained before its protocol was migrated.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'EvaluationProtocolID';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The File Storage Provider holding the three files.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'StorageProviderID';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'MJ: Files row of matrix.jsonl (header line with column names, then one JSON array per manifest row).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'MatrixFileID';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'SHA-256 of the matrix file bytes.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'MatrixSha256';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Size of the matrix file in bytes.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'MatrixSizeBytes';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'MJ: Files row of manifest.jsonl (one SnapshotRowKey per row; the locked-holdout rows are the stored holdout keys).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'RowManifestFileID';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'SHA-256 of the manifest file bytes.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'RowManifestSha256';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Size of the manifest file in bytes.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'RowManifestSizeBytes';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'MJ: Files row of provenance.jsonl (for every row and column: source kind, source reference, source version, computed-at).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'ProvenanceFileID';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'SHA-256 of the provenance file bytes.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'ProvenanceSha256';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Size of the provenance file in bytes.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'ProvenanceSizeBytes';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Rows in the manifest (development plus locked holdout).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'ManifestRowCount';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Manifest rows with role locked-holdout.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'HoldoutRowCount';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array of the resolved FeatureColumnSpec (name, dated source, encoding, missing-value policy) assembled.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'FeatureSpec';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array of matrix columns {name, encoding, sourceColumn} in matrix order.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'FeatureSchema';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'SHA-256 of the canonical JSON of FeatureSchema; compared before scoring.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'FeatureSchemaHash';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array of ColumnProvenance: per matrix column, the source kind, source reference and source version.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'ColumnProvenance';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array of FeatureVersionPin for every Feature Value source read.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'PinnedFeatureVersions';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Unit rows read from the source before exclusions; equals the source count (a truncated read is refused).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'RowsRead';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Always 1: a snapshot exists only for a complete read.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'ReadComplete';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Rows excluded because their outcome window had not closed at DataCutoff.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'CensoredRowsExcluded';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Rows excluded because their outcome was already recorded on or before the decision date (next-period rule).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'LabelKnownRowsExcluded';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Rows excluded because their label was empty (NULL or an empty string) — unlabelled, never a class.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'EmptyLabelRowsExcluded';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array {entity, field, rows}: rows excluded because a field''s change history did not cover their decision date (policy exclude-and-count).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'UncoveredHistoryRowsExcluded';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Rows removed as exact duplicates of (entity key, decision date, period).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'DuplicateRowsRemoved';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'JSON array {label, rows} over manifest rows for classification tasks; NULL otherwise.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'ClassBalance';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The censoring cutoff the unit resolved to for this assembly.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'DataCutoff';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Package version and git commit of the assembly code that built the snapshot.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingSnapshot', @level2type = N'COLUMN', @level2name = N'AssemblyCodeVersion';
 GO
 
 -- ============================================================================
@@ -268,10 +268,10 @@ ALTER TABLE [${flyway:defaultSchema}].[MLTrainingRun]
         [ComputeSeconds]       DECIMAL(18,3)    NULL;
 GO
 ALTER TABLE [${flyway:defaultSchema}].[MLTrainingRun]
-    ADD CONSTRAINT [FK_MLTrainingRun_TrainingSnapshot] FOREIGN KEY ([TrainingSnapshotID])
-            REFERENCES [${flyway:defaultSchema}].[TrainingSnapshot] ([ID]),
-        CONSTRAINT [FK_MLTrainingRun_EvaluationProtocol] FOREIGN KEY ([EvaluationProtocolID])
-            REFERENCES [${flyway:defaultSchema}].[EvaluationProtocol] ([ID]),
+    ADD CONSTRAINT [FK_MLTrainingRun_MLTrainingSnapshot] FOREIGN KEY ([TrainingSnapshotID])
+            REFERENCES [${flyway:defaultSchema}].[MLTrainingSnapshot] ([ID]),
+        CONSTRAINT [FK_MLTrainingRun_MLEvaluationProtocol] FOREIGN KEY ([EvaluationProtocolID])
+            REFERENCES [${flyway:defaultSchema}].[MLEvaluationProtocol] ([ID]),
         CONSTRAINT [CK_MLTrainingRun_ComputeSeconds] CHECK ([ComputeSeconds] >= 0);   -- NULL passes a CHECK on its own (UNKNOWN), so no IS NULL branch (migrations/CLAUDE.md)
 GO
 EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The Training Snapshot this run trained on; NULL for a run refused before assembly and for runs before Predictive Studio 6.3.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'MLTrainingRun', @level2type = N'COLUMN', @level2name = N'TrainingSnapshotID';
@@ -301,12 +301,12 @@ GO
 -- ============================================================================
 -- 7. spDeleteEntityWithCoreDependencies: training snapshots
 -- ============================================================================
--- TrainingSnapshot (section 3) has a NOT NULL PipelineID into MLTrainingPipeline, a table this
+-- MLTrainingSnapshot (section 4) has a NOT NULL PipelineID into MLTrainingPipeline, a table this
 -- proc deletes from when an entity is removed, so removing an entity whose pipeline has a
 -- snapshot would fail on that FK. The proc deletes those snapshots after the pipelines' runs
 -- and models and before the pipelines:
---    - TrainingSnapshot.PipelineID -> MLTrainingPipeline (delete)
---    - MLTrainingRun.TrainingSnapshotID -> TrainingSnapshot (null; the pipelines' own runs are
+--    - MLTrainingSnapshot.PipelineID -> MLTrainingPipeline (delete)
+--    - MLTrainingRun.TrainingSnapshotID -> MLTrainingSnapshot (null; the pipelines' own runs are
 --      already deleted, so only a run of another pipeline that names the snapshot is cleared)
 -- The policy in packages/CodeGenLib/src/__tests__/fixtures/entity-delete-fk-policy.json records
 -- both. The rest of the proc is V202611030816's definition, unchanged.
@@ -610,8 +610,8 @@ BEGIN TRY
     DELETE FROM [${flyway:defaultSchema}].[MLTrainingRun] WHERE [PipelineID] IN (SELECT ID FROM @PipelineIDs);
     DELETE FROM [${flyway:defaultSchema}].[MLModel] WHERE [PipelineID] IN (SELECT ID FROM @PipelineIDs);
     -- the pipelines' training snapshots; a run of another pipeline that names one loses only the link
-    UPDATE [${flyway:defaultSchema}].[MLTrainingRun] SET [TrainingSnapshotID] = NULL WHERE [TrainingSnapshotID] IN (SELECT ID FROM [${flyway:defaultSchema}].[TrainingSnapshot] WHERE [PipelineID] IN (SELECT ID FROM @PipelineIDs));
-    DELETE FROM [${flyway:defaultSchema}].[TrainingSnapshot] WHERE [PipelineID] IN (SELECT ID FROM @PipelineIDs);
+    UPDATE [${flyway:defaultSchema}].[MLTrainingRun] SET [TrainingSnapshotID] = NULL WHERE [TrainingSnapshotID] IN (SELECT ID FROM [${flyway:defaultSchema}].[MLTrainingSnapshot] WHERE [PipelineID] IN (SELECT ID FROM @PipelineIDs));
+    DELETE FROM [${flyway:defaultSchema}].[MLTrainingSnapshot] WHERE [PipelineID] IN (SELECT ID FROM @PipelineIDs);
     DELETE FROM [${flyway:defaultSchema}].[MLTrainingPipeline] WHERE [TargetEntityID] = @EntityID;
 
     -- Record processes and feature values
@@ -764,13 +764,16 @@ GO
 /* =====================================================================================
  * EVERYTHING BELOW THIS BLOCK WAS GENERATED BY THE MEMBERJUNCTION CODEGEN TOOL.
  *
- * Entity and EntityField metadata for MJ: Prediction Units, MJ: Evaluation Protocols and
- * MJ: Training Snapshots; new fields of MJ: ML Training Pipelines, MJ: ML Training Runs and
+ * Entity and EntityField metadata for MJ: ML Prediction Units, MJ: ML Evaluation Protocols and
+ * MJ: ML Training Snapshots; new fields of MJ: ML Training Pipelines, MJ: ML Training Runs and
  * MJ: Feature Values; base views, spCreate/spUpdate/spDelete, permissions, extended properties.
+ * Two CodeGen passes, in order: the first creates the entities and views; the second adds the
+ * MJ: ML Training Runs.TrainingSnapshot name column, which exists only once the first pass has
+ * chosen ContentHash as the ML Training Snapshots name field. A third pass produces nothing.
  * Do NOT edit by hand: if the DDL above changes, re-run CodeGen and replace this section.
  * ===================================================================================== */
 
-/* SQL generated to create new entity MJ: Prediction Units */
+/* SQL generated to create new entity MJ: ML Evaluation Protocols */
 
       INSERT INTO [${flyway:defaultSchema}].[Entity] (
          [ID],
@@ -796,94 +799,13 @@ GO
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '8f160ccc-8743-40fe-b2b1-0799829cdbda',
-         'MJ: Prediction Units',
-         'Prediction Units',
-         'A Prediction Unit: what one training row is (one grain record, or one grain record per period of a dated child entity), its decision date, the outcome rule and the window over which the outcome is observed, how unresolved rows are censored, and the declared task type. Every ML Training Pipeline references exactly one version. Versions are immutable rows: editing a unit inserts the next version with the same LineageRootID, so a trained model keeps pointing at the version it used.',
-         NULL,
-         'PredictionUnit',
-         'vwPredictionUnits',
-         '${flyway:defaultSchema}',
-         1,
-         1,
-         1,
-         1,
-         0,
-         0,
-         0,
-         1,
-         1,
-         1,
-         1000
-         , GETUTCDATE()
-         , GETUTCDATE()
-      );
-
-/* SQL generated to add new entity MJ: Prediction Units to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
-INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
-                                       ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '8f160ccc-8743-40fe-b2b1-0799829cdbda', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
-
-/* SQL generated to add new permission for entity MJ: Prediction Units for role UI */
-INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
-                ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('8f160ccc-8743-40fe-b2b1-0799829cdbda' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
-              WHERE NOT EXISTS (
-                SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('8f160ccc-8743-40fe-b2b1-0799829cdbda' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
-              );
-
-/* SQL generated to add new permission for entity MJ: Prediction Units for role Developer */
-INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
-                ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('8f160ccc-8743-40fe-b2b1-0799829cdbda' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
-              WHERE NOT EXISTS (
-                SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('8f160ccc-8743-40fe-b2b1-0799829cdbda' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
-              );
-
-/* SQL generated to add new permission for entity MJ: Prediction Units for role Integration */
-INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
-                ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('8f160ccc-8743-40fe-b2b1-0799829cdbda' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
-              WHERE NOT EXISTS (
-                SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('8f160ccc-8743-40fe-b2b1-0799829cdbda' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
-              );
-
-/* SQL generated to create new entity MJ: Evaluation Protocols */
-
-      INSERT INTO [${flyway:defaultSchema}].[Entity] (
-         [ID],
-         [Name],
-         [DisplayName],
-         [Description],
-         [NameSuffix],
-         [BaseTable],
-         [BaseView],
-         [SchemaName],
-         [IncludeInAPI],
-         [AllowUserSearchAPI],
-         [AllowCaching],
-         [TrackRecordChanges],
-         [AuditRecordAccess],
-         [AuditViewRuns],
-         [AllowAllRowsAPI],
-         [AllowCreateAPI],
-         [AllowUpdateAPI],
-         [AllowDeleteAPI],
-         [UserViewMaxRows]
-         , [__mj_CreatedAt]
-         , [__mj_UpdatedAt]
-      )
-      VALUES (
-         '0b0c469c-146c-4731-b064-ccb391d67889',
-         'MJ: Evaluation Protocols',
-         'Evaluation Protocols',
+         '7db88c96-c922-4724-ae93-7b91798ceafe',
+         'MJ: ML Evaluation Protocols',
+         'ML Evaluation Protocols',
          'An Evaluation Protocol: the grading rules of a pipeline, saved before any candidate trains — the locked holdout, inner validation, primary proper score, fixed baselines, calibration, intervals, promotion rule and the three allowed outcomes (model, keep-simple-baseline, no-signal), the leakage audit, slices and budgets. Every training run references the exact version it was graded under. Versions are immutable rows; editing inserts the next version. Replaces the ValidationStrategy and LeakageGuard JSON of ML Training Pipelines.',
          NULL,
-         'EvaluationProtocol',
-         'vwEvaluationProtocols',
+         'MLEvaluationProtocol',
+         'vwMLEvaluationProtocols',
          '${flyway:defaultSchema}',
          1,
          1,
@@ -900,39 +822,39 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , GETUTCDATE()
       );
 
-/* SQL generated to add new entity MJ: Evaluation Protocols to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
+/* SQL generated to add entity MJ: ML Evaluation Protocols to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
-                                       ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '0b0c469c-146c-4731-b064-ccb391d67889', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                    ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
+                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '7db88c96-c922-4724-ae93-7b91798ceafe', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
-/* SQL generated to add new permission for entity MJ: Evaluation Protocols for role UI */
+/* SQL generated to add new permission for entity MJ: ML Evaluation Protocols for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('0b0c469c-146c-4731-b064-ccb391d67889' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('7db88c96-c922-4724-ae93-7b91798ceafe' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('0b0c469c-146c-4731-b064-ccb391d67889' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('7db88c96-c922-4724-ae93-7b91798ceafe' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
-/* SQL generated to add new permission for entity MJ: Evaluation Protocols for role Developer */
+/* SQL generated to add new permission for entity MJ: ML Evaluation Protocols for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('0b0c469c-146c-4731-b064-ccb391d67889' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('7db88c96-c922-4724-ae93-7b91798ceafe' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('0b0c469c-146c-4731-b064-ccb391d67889' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('7db88c96-c922-4724-ae93-7b91798ceafe' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
-/* SQL generated to add new permission for entity MJ: Evaluation Protocols for role Integration */
+/* SQL generated to add new permission for entity MJ: ML Evaluation Protocols for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('0b0c469c-146c-4731-b064-ccb391d67889' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('7db88c96-c922-4724-ae93-7b91798ceafe' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('0b0c469c-146c-4731-b064-ccb391d67889' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('7db88c96-c922-4724-ae93-7b91798ceafe' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
-/* SQL generated to create new entity MJ: Training Snapshots */
+/* SQL generated to create new entity MJ: ML Training Snapshots */
 
       INSERT INTO [${flyway:defaultSchema}].[Entity] (
          [ID],
@@ -958,13 +880,13 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '947ff197-faaf-4557-ae52-6fdcf4313762',
-         'MJ: Training Snapshots',
-         'Training Snapshots',
+         'f36cde0e-dbcd-4527-9af6-66d8c710c8e6',
+         'MJ: ML Training Snapshots',
+         'ML Training Snapshots',
          'A Training Snapshot: the frozen data one training run learned from — the feature matrix, the row manifest (row id, entity key, decision date, group key, period, role) and per-value provenance as three write-once files, plus the content hash that fingerprints them together with the unit, label, feature-spec and protocol versions. Immutable; identical assemblies share one snapshot (unique ContentHash). Retraining from a snapshot reproduces the run.',
          NULL,
-         'TrainingSnapshot',
-         'vwTrainingSnapshots',
+         'MLTrainingSnapshot',
+         'vwMLTrainingSnapshots',
          '${flyway:defaultSchema}',
          1,
          1,
@@ -981,137 +903,218 @@ INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
          , GETUTCDATE()
       );
 
-/* SQL generated to add new entity MJ: Training Snapshots to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
+/* SQL generated to add entity MJ: ML Training Snapshots to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
-                                       ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '947ff197-faaf-4557-ae52-6fdcf4313762', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                    ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
+                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'f36cde0e-dbcd-4527-9af6-66d8c710c8e6', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
-/* SQL generated to add new permission for entity MJ: Training Snapshots for role UI */
+/* SQL generated to add new permission for entity MJ: ML Training Snapshots for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('947ff197-faaf-4557-ae52-6fdcf4313762' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('f36cde0e-dbcd-4527-9af6-66d8c710c8e6' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('947ff197-faaf-4557-ae52-6fdcf4313762' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('f36cde0e-dbcd-4527-9af6-66d8c710c8e6' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
-/* SQL generated to add new permission for entity MJ: Training Snapshots for role Developer */
+/* SQL generated to add new permission for entity MJ: ML Training Snapshots for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('947ff197-faaf-4557-ae52-6fdcf4313762' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('f36cde0e-dbcd-4527-9af6-66d8c710c8e6' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('947ff197-faaf-4557-ae52-6fdcf4313762' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('f36cde0e-dbcd-4527-9af6-66d8c710c8e6' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
-/* SQL generated to add new permission for entity MJ: Training Snapshots for role Integration */
+/* SQL generated to add new permission for entity MJ: ML Training Snapshots for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('947ff197-faaf-4557-ae52-6fdcf4313762' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('f36cde0e-dbcd-4527-9af6-66d8c710c8e6' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('947ff197-faaf-4557-ae52-6fdcf4313762' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('f36cde0e-dbcd-4527-9af6-66d8c710c8e6' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.PredictionUnit */
-ALTER TABLE [${flyway:defaultSchema}].[PredictionUnit] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
+/* SQL generated to create new entity MJ: ML Prediction Units */
+
+      INSERT INTO [${flyway:defaultSchema}].[Entity] (
+         [ID],
+         [Name],
+         [DisplayName],
+         [Description],
+         [NameSuffix],
+         [BaseTable],
+         [BaseView],
+         [SchemaName],
+         [IncludeInAPI],
+         [AllowUserSearchAPI],
+         [AllowCaching],
+         [TrackRecordChanges],
+         [AuditRecordAccess],
+         [AuditViewRuns],
+         [AllowAllRowsAPI],
+         [AllowCreateAPI],
+         [AllowUpdateAPI],
+         [AllowDeleteAPI],
+         [UserViewMaxRows]
+         , [__mj_CreatedAt]
+         , [__mj_UpdatedAt]
+      )
+      VALUES (
+         'd5052eb0-354c-4c4d-80d8-2832fcc720e6',
+         'MJ: ML Prediction Units',
+         'ML Prediction Units',
+         'A Prediction Unit: what one training row is (one grain record, or one grain record per period of a dated child entity), its decision date, the outcome rule and the window over which the outcome is observed, how unresolved rows are censored, and the declared task type. Every ML Training Pipeline references exactly one version. Versions are immutable rows: editing a unit inserts the next version with the same LineageRootID, so a trained model keeps pointing at the version it used.',
+         NULL,
+         'MLPredictionUnit',
+         'vwMLPredictionUnits',
+         '${flyway:defaultSchema}',
+         1,
+         1,
+         1,
+         1,
+         0,
+         0,
+         0,
+         1,
+         1,
+         1,
+         1000
+         , GETUTCDATE()
+         , GETUTCDATE()
+      );
+
+/* SQL generated to add entity MJ: ML Prediction Units to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
+INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
+                                    ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
+                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'd5052eb0-354c-4c4d-80d8-2832fcc720e6', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+
+/* SQL generated to add new permission for entity MJ: ML Prediction Units for role UI */
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
+                ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
+              SELECT CAST('d5052eb0-354c-4c4d-80d8-2832fcc720e6' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
+              WHERE NOT EXISTS (
+                SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
+                WHERE [EntityID] = CAST('d5052eb0-354c-4c4d-80d8-2832fcc720e6' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+              );
+
+/* SQL generated to add new permission for entity MJ: ML Prediction Units for role Developer */
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
+                ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
+              SELECT CAST('d5052eb0-354c-4c4d-80d8-2832fcc720e6' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              WHERE NOT EXISTS (
+                SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
+                WHERE [EntityID] = CAST('d5052eb0-354c-4c4d-80d8-2832fcc720e6' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+              );
+
+/* SQL generated to add new permission for entity MJ: ML Prediction Units for role Integration */
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
+                ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
+              SELECT CAST('d5052eb0-354c-4c4d-80d8-2832fcc720e6' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              WHERE NOT EXISTS (
+                SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
+                WHERE [EntityID] = CAST('d5052eb0-354c-4c4d-80d8-2832fcc720e6' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+              );
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.MLPredictionUnit */
+ALTER TABLE [${flyway:defaultSchema}].[MLPredictionUnit] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
 GO
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.PredictionUnit */
-UPDATE [${flyway:defaultSchema}].[PredictionUnit] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.MLPredictionUnit */
+UPDATE [${flyway:defaultSchema}].[MLPredictionUnit] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
 GO
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.PredictionUnit */
-ALTER TABLE [${flyway:defaultSchema}].[PredictionUnit] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.MLPredictionUnit */
+ALTER TABLE [${flyway:defaultSchema}].[MLPredictionUnit] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
 GO
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.PredictionUnit */
-ALTER TABLE [${flyway:defaultSchema}].[PredictionUnit] ADD CONSTRAINT [DF___mj_PredictionUnit___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.MLPredictionUnit */
+ALTER TABLE [${flyway:defaultSchema}].[MLPredictionUnit] ADD CONSTRAINT [DF___mj_MLPredictionUnit___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
 GO
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.PredictionUnit */
-ALTER TABLE [${flyway:defaultSchema}].[PredictionUnit] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.MLPredictionUnit */
+ALTER TABLE [${flyway:defaultSchema}].[MLPredictionUnit] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
 GO
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.PredictionUnit */
-UPDATE [${flyway:defaultSchema}].[PredictionUnit] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.MLPredictionUnit */
+UPDATE [${flyway:defaultSchema}].[MLPredictionUnit] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
 GO
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.PredictionUnit */
-ALTER TABLE [${flyway:defaultSchema}].[PredictionUnit] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.MLPredictionUnit */
+ALTER TABLE [${flyway:defaultSchema}].[MLPredictionUnit] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
 GO
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.PredictionUnit */
-ALTER TABLE [${flyway:defaultSchema}].[PredictionUnit] ADD CONSTRAINT [DF___mj_PredictionUnit___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.MLPredictionUnit */
+ALTER TABLE [${flyway:defaultSchema}].[MLPredictionUnit] ADD CONSTRAINT [DF___mj_MLPredictionUnit___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
 GO
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.TrainingSnapshot */
-ALTER TABLE [${flyway:defaultSchema}].[TrainingSnapshot] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.MLTrainingSnapshot */
+ALTER TABLE [${flyway:defaultSchema}].[MLTrainingSnapshot] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
 GO
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.TrainingSnapshot */
-UPDATE [${flyway:defaultSchema}].[TrainingSnapshot] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.MLTrainingSnapshot */
+UPDATE [${flyway:defaultSchema}].[MLTrainingSnapshot] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
 GO
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.TrainingSnapshot */
-ALTER TABLE [${flyway:defaultSchema}].[TrainingSnapshot] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.MLTrainingSnapshot */
+ALTER TABLE [${flyway:defaultSchema}].[MLTrainingSnapshot] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
 GO
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.TrainingSnapshot */
-ALTER TABLE [${flyway:defaultSchema}].[TrainingSnapshot] ADD CONSTRAINT [DF___mj_TrainingSnapshot___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.MLTrainingSnapshot */
+ALTER TABLE [${flyway:defaultSchema}].[MLTrainingSnapshot] ADD CONSTRAINT [DF___mj_MLTrainingSnapshot___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
 GO
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.TrainingSnapshot */
-ALTER TABLE [${flyway:defaultSchema}].[TrainingSnapshot] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.MLTrainingSnapshot */
+ALTER TABLE [${flyway:defaultSchema}].[MLTrainingSnapshot] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
 GO
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.TrainingSnapshot */
-UPDATE [${flyway:defaultSchema}].[TrainingSnapshot] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.MLTrainingSnapshot */
+UPDATE [${flyway:defaultSchema}].[MLTrainingSnapshot] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
 GO
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.TrainingSnapshot */
-ALTER TABLE [${flyway:defaultSchema}].[TrainingSnapshot] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.MLTrainingSnapshot */
+ALTER TABLE [${flyway:defaultSchema}].[MLTrainingSnapshot] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
 GO
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.TrainingSnapshot */
-ALTER TABLE [${flyway:defaultSchema}].[TrainingSnapshot] ADD CONSTRAINT [DF___mj_TrainingSnapshot___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.MLTrainingSnapshot */
+ALTER TABLE [${flyway:defaultSchema}].[MLTrainingSnapshot] ADD CONSTRAINT [DF___mj_MLTrainingSnapshot___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
 GO
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.EvaluationProtocol */
-ALTER TABLE [${flyway:defaultSchema}].[EvaluationProtocol] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.MLEvaluationProtocol */
+ALTER TABLE [${flyway:defaultSchema}].[MLEvaluationProtocol] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
 GO
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.EvaluationProtocol */
-UPDATE [${flyway:defaultSchema}].[EvaluationProtocol] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.MLEvaluationProtocol */
+UPDATE [${flyway:defaultSchema}].[MLEvaluationProtocol] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
 GO
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.EvaluationProtocol */
-ALTER TABLE [${flyway:defaultSchema}].[EvaluationProtocol] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.MLEvaluationProtocol */
+ALTER TABLE [${flyway:defaultSchema}].[MLEvaluationProtocol] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
 GO
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.EvaluationProtocol */
-ALTER TABLE [${flyway:defaultSchema}].[EvaluationProtocol] ADD CONSTRAINT [DF___mj_EvaluationProtocol___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.MLEvaluationProtocol */
+ALTER TABLE [${flyway:defaultSchema}].[MLEvaluationProtocol] ADD CONSTRAINT [DF___mj_MLEvaluationProtocol___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
 GO
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.EvaluationProtocol */
-ALTER TABLE [${flyway:defaultSchema}].[EvaluationProtocol] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.MLEvaluationProtocol */
+ALTER TABLE [${flyway:defaultSchema}].[MLEvaluationProtocol] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
 GO
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.EvaluationProtocol */
-UPDATE [${flyway:defaultSchema}].[EvaluationProtocol] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.MLEvaluationProtocol */
+UPDATE [${flyway:defaultSchema}].[MLEvaluationProtocol] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
 GO
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.EvaluationProtocol */
-ALTER TABLE [${flyway:defaultSchema}].[EvaluationProtocol] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.MLEvaluationProtocol */
+ALTER TABLE [${flyway:defaultSchema}].[MLEvaluationProtocol] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
 GO
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.EvaluationProtocol */
-ALTER TABLE [${flyway:defaultSchema}].[EvaluationProtocol] ADD CONSTRAINT [DF___mj_EvaluationProtocol___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.MLEvaluationProtocol */
+ALTER TABLE [${flyway:defaultSchema}].[MLEvaluationProtocol] ADD CONSTRAINT [DF___mj_MLEvaluationProtocol___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
 GO
 
 /* SQL text to insert 94 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ac8d46d3-b0a5-41cf-9a56-b9db7e2db126' OR (EntityID = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f4caaed2-29ad-4ae4-9d27-662406e3876f' OR (EntityID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1144,9 +1147,9 @@ GO
          )
          VALUES
          (
-            'ac8d46d3-b0a5-41cf-9a56-b9db7e2db126',
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA', -- Entity: MJ: Prediction Units
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA'),
+            'f4caaed2-29ad-4ae4-9d27-662406e3876f',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6', -- Entity: MJ: ML Prediction Units
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'),
             'ID',
             'ID',
             NULL,
@@ -1174,7 +1177,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '16564f1c-1781-4768-ac1b-a72c51d66b8b' OR (EntityID = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND Name = 'LineageRootID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd4c1ca8f-92f6-4d1f-91b8-7989c68a2ff3' OR (EntityID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND Name = 'LineageRootID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1207,9 +1210,9 @@ GO
          )
          VALUES
          (
-            '16564f1c-1781-4768-ac1b-a72c51d66b8b',
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA', -- Entity: MJ: Prediction Units
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA'),
+            'd4c1ca8f-92f6-4d1f-91b8-7989c68a2ff3',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6', -- Entity: MJ: ML Prediction Units
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'),
             'LineageRootID',
             'Lineage Root ID',
             'ID of version 1 of this unit. Version 1 points at itself; every later version points at version 1.',
@@ -1223,7 +1226,7 @@ GO
             1,
             0,
             0,
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6',
             'ID',
             0,
             0,
@@ -1237,7 +1240,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cae6fdce-1f4b-40d0-91b7-e781f0a9b500' OR (EntityID = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND Name = 'Version')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '75bd5e78-48bb-44d8-8b1f-cfb4edfef309' OR (EntityID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND Name = 'Version')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1270,9 +1273,9 @@ GO
          )
          VALUES
          (
-            'cae6fdce-1f4b-40d0-91b7-e781f0a9b500',
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA', -- Entity: MJ: Prediction Units
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA'),
+            '75bd5e78-48bb-44d8-8b1f-cfb4edfef309',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6', -- Entity: MJ: ML Prediction Units
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'),
             'Version',
             'Version',
             'Version number within the lineage, starting at 1. A saved version is never updated.',
@@ -1300,7 +1303,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b636042b-bc4b-4526-b70f-b7e40b43827c' OR (EntityID = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND Name = 'Name')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '367ef229-e773-4eff-9050-d5d864329c7b' OR (EntityID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND Name = 'Name')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1333,9 +1336,9 @@ GO
          )
          VALUES
          (
-            'b636042b-bc4b-4526-b70f-b7e40b43827c',
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA', -- Entity: MJ: Prediction Units
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA'),
+            '367ef229-e773-4eff-9050-d5d864329c7b',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6', -- Entity: MJ: ML Prediction Units
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'),
             'Name',
             'Name',
             'Display name of the unit, e.g. "Member renewal (person x membership period)".',
@@ -1363,7 +1366,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '054392d0-ecfa-4740-828a-02f6d873cbdf' OR (EntityID = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND Name = 'Description')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '40751f77-3489-4bb1-a007-c3bf4f909221' OR (EntityID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND Name = 'Description')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1396,9 +1399,9 @@ GO
          )
          VALUES
          (
-            '054392d0-ecfa-4740-828a-02f6d873cbdf',
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA', -- Entity: MJ: Prediction Units
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA'),
+            '40751f77-3489-4bb1-a007-c3bf4f909221',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6', -- Entity: MJ: ML Prediction Units
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'),
             'Description',
             'Description',
             'What the unit predicts and for whom, in plain words.',
@@ -1426,7 +1429,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0f9d59e5-ddb8-4735-9aa5-7a342c82297a' OR (EntityID = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND Name = 'UnitRows')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd3aaffd7-39e7-4318-9c7e-78d1b274cf2e' OR (EntityID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND Name = 'UnitRows')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1459,9 +1462,9 @@ GO
          )
          VALUES
          (
-            '0f9d59e5-ddb8-4735-9aa5-7a342c82297a',
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA', -- Entity: MJ: Prediction Units
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA'),
+            'd3aaffd7-39e7-4318-9c7e-78d1b274cf2e',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6', -- Entity: MJ: ML Prediction Units
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'),
             'UnitRows',
             'Unit Rows',
             'JSON UnitRows: {kind:"grain", grainEntity, decisionDate, filter} or {kind:"grain-x-periods", grainEntity, childEntity, foreignKey, periodDate, filter}. Defines what one row is and its decision date.',
@@ -1489,7 +1492,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8eb9c42b-50e4-4144-a886-4d0b1c98f937' OR (EntityID = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND Name = 'LabelRule')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b1701db5-91dc-477c-8e8a-8191f18f3945' OR (EntityID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND Name = 'LabelRule')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1522,9 +1525,9 @@ GO
          )
          VALUES
          (
-            '8eb9c42b-50e4-4144-a886-4d0b1c98f937',
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA', -- Entity: MJ: Prediction Units
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA'),
+            'b1701db5-91dc-477c-8e8a-8191f18f3945',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6', -- Entity: MJ: ML Prediction Units
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'),
             'LabelRule',
             'Label Rule',
             'JSON LabelRule: how the outcome of a row is read — a column on the row, the next period of the same grain record, or an event in a dated child entity — always within the window that starts LabelGapDays after the decision date and lasts LabelWindowDays.',
@@ -1552,7 +1555,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3a58ce37-8d6c-4161-871f-cb6397078a18' OR (EntityID = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND Name = 'LabelWindowDays')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '497d0450-7569-4ae2-ac34-2110c4cce6fc' OR (EntityID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND Name = 'LabelWindowDays')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1585,9 +1588,9 @@ GO
          )
          VALUES
          (
-            '3a58ce37-8d6c-4161-871f-cb6397078a18',
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA', -- Entity: MJ: Prediction Units
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA'),
+            '497d0450-7569-4ae2-ac34-2110c4cce6fc',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6', -- Entity: MJ: ML Prediction Units
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'),
             'LabelWindowDays',
             'Label Window Days',
             'Length in days of the outcome window. A row whose window ends after the data cutoff is censored (excluded and counted).',
@@ -1615,7 +1618,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6b029681-7b2a-4323-9b99-acc02501d4c4' OR (EntityID = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND Name = 'LabelGapDays')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e6d5425d-6e89-42db-a089-e6020b969496' OR (EntityID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND Name = 'LabelGapDays')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1648,9 +1651,9 @@ GO
          )
          VALUES
          (
-            '6b029681-7b2a-4323-9b99-acc02501d4c4',
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA', -- Entity: MJ: Prediction Units
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA'),
+            'e6d5425d-6e89-42db-a089-e6020b969496',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6', -- Entity: MJ: ML Prediction Units
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'),
             'LabelGapDays',
             'Label Gap Days',
             'Days between the decision date and the start of the outcome window.',
@@ -1678,7 +1681,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4456c4b2-ece1-4feb-9663-196541455543' OR (EntityID = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND Name = 'TaskType')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6da08af0-f2f5-4294-abe1-f2de92a4278c' OR (EntityID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND Name = 'TaskType')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1711,9 +1714,9 @@ GO
          )
          VALUES
          (
-            '4456c4b2-ece1-4feb-9663-196541455543',
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA', -- Entity: MJ: Prediction Units
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA'),
+            '6da08af0-f2f5-4294-abe1-f2de92a4278c',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6', -- Entity: MJ: ML Prediction Units
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'),
             'TaskType',
             'Task Type',
             'JSON TaskType: binary {classOrder, adverseIndex}, multiclass {classOrder, adverseIndices}, continuous, count, non-negative {tweediePower}, or forecast {valueKind}. Which class a score refers to and the adverse direction are derived from it, never stored separately.',
@@ -1741,7 +1744,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'df2df49b-2441-47b7-9cbf-c8173b62c7e7' OR (EntityID = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND Name = 'LabelVersion')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1a414a7a-b576-49c5-917c-5586fd9e645f' OR (EntityID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND Name = 'LabelVersion')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1774,9 +1777,9 @@ GO
          )
          VALUES
          (
-            'df2df49b-2441-47b7-9cbf-c8173b62c7e7',
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA', -- Entity: MJ: Prediction Units
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA'),
+            '1a414a7a-b576-49c5-917c-5586fd9e645f',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6', -- Entity: MJ: ML Prediction Units
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'),
             'LabelVersion',
             'Label Version',
             'Outcome-definition version: equals the previous version''s LabelVersion when LabelRule, LabelWindowDays, LabelGapDays and TaskType are unchanged, and that plus one otherwise.',
@@ -1804,7 +1807,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd03dc2f6-bc4a-46f3-8c6f-7fc6ab0b1959' OR (EntityID = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND Name = 'Censoring')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6e84bdae-c220-42f7-9716-ae7da85bb277' OR (EntityID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND Name = 'Censoring')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1837,9 +1840,9 @@ GO
          )
          VALUES
          (
-            'd03dc2f6-bc4a-46f3-8c6f-7fc6ab0b1959',
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA', -- Entity: MJ: Prediction Units
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA'),
+            '6e84bdae-c220-42f7-9716-ae7da85bb277',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6', -- Entity: MJ: ML Prediction Units
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'),
             'Censoring',
             'Censoring',
             'JSON CensoringRule: {rule:"exclude-unresolved", cutoff} where cutoff is {kind:"corpus-end", entity, field}, {kind:"now"} or {kind:"fixed", at}. Rows whose outcome window has not closed at the cutoff are excluded and counted.',
@@ -1867,7 +1870,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '56dfcd6b-21df-4001-89af-077904c55961' OR (EntityID = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND Name = 'ChangeHistoryPolicy')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '02f695d3-28bb-414a-876d-37b0ad1dcaeb' OR (EntityID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND Name = 'ChangeHistoryPolicy')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1900,9 +1903,9 @@ GO
          )
          VALUES
          (
-            '56dfcd6b-21df-4001-89af-077904c55961',
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA', -- Entity: MJ: Prediction Units
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA'),
+            '02f695d3-28bb-414a-876d-37b0ad1dcaeb',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6', -- Entity: MJ: ML Prediction Units
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'),
             'ChangeHistoryPolicy',
             'Change History Policy',
             'JSON ChangeHistoryPolicy: {onUncoveredRow:"refuse"|"exclude-and-count", externalSourceRows:"as-of-detection-time"|"ineligible"} — what as-of assembly does when a decision date precedes the change history of a field updated in place.',
@@ -1930,7 +1933,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b65ec6c7-30e1-4e85-a131-94ac3eb7656b' OR (EntityID = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND Name = 'GroupKey')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e6e6f6ee-8e03-44cd-91d3-f0a699d94a23' OR (EntityID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND Name = 'GroupKey')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1963,9 +1966,9 @@ GO
          )
          VALUES
          (
-            'b65ec6c7-30e1-4e85-a131-94ac3eb7656b',
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA', -- Entity: MJ: Prediction Units
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA'),
+            'e6e6f6ee-8e03-44cd-91d3-f0a699d94a23',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6', -- Entity: MJ: ML Prediction Units
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'),
             'GroupKey',
             'Group Key',
             'Field on the row whose value keeps one entity''s rows together in grouped folds and the new-entity report; NULL means the grain record key.',
@@ -1993,7 +1996,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8ab16416-1e1b-407d-b668-8337ca302dcb' OR (EntityID = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND Name = 'TemporalSpec')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '599b6550-9744-441d-8d28-25dc8505914f' OR (EntityID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND Name = 'TemporalSpec')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2026,9 +2029,9 @@ GO
          )
          VALUES
          (
-            '8ab16416-1e1b-407d-b668-8337ca302dcb',
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA', -- Entity: MJ: Prediction Units
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA'),
+            '599b6550-9744-441d-8d28-25dc8505914f',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6', -- Entity: MJ: ML Prediction Units
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'),
             'TemporalSpec',
             'Temporal Spec',
             'JSON TemporalSpec for series and panels: timeColumn, horizonPeriods, lags, rollingWindows, period, seasonality. Every lag and rolling-window endLag is at least horizonPeriods. Required when TaskType is forecast. Versioned with the unit.',
@@ -2056,7 +2059,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '06c64fc5-c28b-44ea-b302-e476e217e825' OR (EntityID = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND Name = 'DecisionSpec')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b01e7da7-5aa2-43e0-8414-47f2158f208d' OR (EntityID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND Name = 'DecisionSpec')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2089,9 +2092,9 @@ GO
          )
          VALUES
          (
-            '06c64fc5-c28b-44ea-b302-e476e217e825',
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA', -- Entity: MJ: Prediction Units
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA'),
+            'b01e7da7-5aa2-43e0-8414-47f2158f208d',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6', -- Entity: MJ: ML Prediction Units
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'),
             'DecisionSpec',
             'Decision Spec',
             'JSON DecisionSpec: the action the prediction serves, the actor role, the capacity per period (for precision at capacity) and the period.',
@@ -2119,7 +2122,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '09145c46-36e1-454f-a3f6-58e1569c5704' OR (EntityID = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND Name = 'IncumbentHeuristic')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '743899b5-546d-47b9-aa4b-28623bc2885e' OR (EntityID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND Name = 'IncumbentHeuristic')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2152,9 +2155,9 @@ GO
          )
          VALUES
          (
-            '09145c46-36e1-454f-a3f6-58e1569c5704',
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA', -- Entity: MJ: Prediction Units
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA'),
+            '743899b5-546d-47b9-aa4b-28623bc2885e',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6', -- Entity: MJ: ML Prediction Units
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'),
             'IncumbentHeuristic',
             'Incumbent Heuristic',
             'JSON IncumbentHeuristic: {kind:"none"} or {kind:"rule", name, scoreExpression} — today''s rule of thumb, scored as a named comparator on the same holdout.',
@@ -2182,7 +2185,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c530988d-862c-4803-b13c-38d78d871542' OR (EntityID = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND Name = 'AuthoredBy')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c44c7b71-e487-4c32-a7fc-12a714715bbd' OR (EntityID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND Name = 'AuthoredBy')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2215,9 +2218,9 @@ GO
          )
          VALUES
          (
-            'c530988d-862c-4803-b13c-38d78d871542',
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA', -- Entity: MJ: Prediction Units
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA'),
+            'c44c7b71-e487-4c32-a7fc-12a714715bbd',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6', -- Entity: MJ: ML Prediction Units
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'),
             'AuthoredBy',
             'Authored By',
             'JSON Actor who authored this version: {kind:"human", userId} (a user), or an automated author {kind:"agent", agentRunId}, {kind:"scheduled-job", scheduledJobRunId} or {kind:"system", component}.',
@@ -2245,7 +2248,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f35fe58d-4a7f-4748-a485-7abe68e2901f' OR (EntityID = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '247807bd-b812-4de5-9d17-49788c5e7b29' OR (EntityID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2278,9 +2281,9 @@ GO
          )
          VALUES
          (
-            'f35fe58d-4a7f-4748-a485-7abe68e2901f',
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA', -- Entity: MJ: Prediction Units
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA'),
+            '247807bd-b812-4de5-9d17-49788c5e7b29',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6', -- Entity: MJ: ML Prediction Units
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'),
             '__mj_CreatedAt',
             'Created At',
             NULL,
@@ -2308,7 +2311,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e38afcd3-e459-4408-b8fe-993b0491a920' OR (EntityID = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a565f607-69d9-4d1e-b326-5067cd19dd8b' OR (EntityID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2341,9 +2344,9 @@ GO
          )
          VALUES
          (
-            'e38afcd3-e459-4408-b8fe-993b0491a920',
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA', -- Entity: MJ: Prediction Units
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA'),
+            'a565f607-69d9-4d1e-b326-5067cd19dd8b',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6', -- Entity: MJ: ML Prediction Units
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'),
             '__mj_UpdatedAt',
             'Updated At',
             NULL,
@@ -2371,7 +2374,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1807678f-c46b-4845-ac96-8b34d2eede60' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '28d4be83-b39f-4e10-b368-0fe0c171a22b' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2404,9 +2407,9 @@ GO
          )
          VALUES
          (
-            '1807678f-c46b-4845-ac96-8b34d2eede60',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '28d4be83-b39f-4e10-b368-0fe0c171a22b',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'ID',
             'ID',
             NULL,
@@ -2434,7 +2437,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a0f6b242-8c4c-415f-904b-fc0ff1d82f27' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'ContentHash')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fa8d93a6-c4f0-4b15-9516-7815bbc9bbc0' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'ContentHash')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2467,9 +2470,9 @@ GO
          )
          VALUES
          (
-            'a0f6b242-8c4c-415f-904b-fc0ff1d82f27',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            'fa8d93a6-c4f0-4b15-9516-7815bbc9bbc0',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'ContentHash',
             'Content Hash',
             'SHA-256 (lower-case hex) of the canonical JSON of the three file hashes, the feature schema hash, PredictionUnitID, LabelVersion, FeatureSpecVersion, EvaluationProtocolID and DataCutoff.',
@@ -2497,7 +2500,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b378836d-e724-4f0b-8041-81facdec8644' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'PipelineID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8f8d2651-b8bd-4406-a051-567b13bdca78' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'PipelineID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2530,9 +2533,9 @@ GO
          )
          VALUES
          (
-            'b378836d-e724-4f0b-8041-81facdec8644',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '8f8d2651-b8bd-4406-a051-567b13bdca78',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'PipelineID',
             'Pipeline ID',
             'The ML Training Pipeline whose feature spec was assembled.',
@@ -2560,7 +2563,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7caf679b-4a83-45e4-be1f-5fea308ed03a' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'PredictionUnitID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '517ace76-ec37-449f-8ab2-737099d8c1d2' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'PredictionUnitID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2593,9 +2596,9 @@ GO
          )
          VALUES
          (
-            '7caf679b-4a83-45e4-be1f-5fea308ed03a',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '517ace76-ec37-449f-8ab2-737099d8c1d2',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'PredictionUnitID',
             'Prediction Unit ID',
             'The exact Prediction Unit version whose rows were read.',
@@ -2609,7 +2612,7 @@ GO
             1,
             0,
             0,
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6',
             'ID',
             0,
             0,
@@ -2623,7 +2626,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd2fe84cf-e581-4ba2-b5ab-61d43cfd7fd2' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'LabelVersion')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f2ec3773-fce0-461a-bddb-88489f0ab03d' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'LabelVersion')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2656,9 +2659,9 @@ GO
          )
          VALUES
          (
-            'd2fe84cf-e581-4ba2-b5ab-61d43cfd7fd2',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            'f2ec3773-fce0-461a-bddb-88489f0ab03d',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'LabelVersion',
             'Label Version',
             'The unit''s LabelVersion at assembly.',
@@ -2686,7 +2689,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9fb556d7-dc88-4e58-a113-9c394805138c' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'FeatureSpecVersion')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c4fa37ef-982b-456f-bbfc-4497138b31eb' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'FeatureSpecVersion')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2719,9 +2722,9 @@ GO
          )
          VALUES
          (
-            '9fb556d7-dc88-4e58-a113-9c394805138c',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            'c4fa37ef-982b-456f-bbfc-4497138b31eb',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'FeatureSpecVersion',
             'Feature Spec Version',
             'The pipeline Version whose FeatureSteps produced the feature spec.',
@@ -2749,7 +2752,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9587f907-23ee-4f46-a8bf-18da1cd112fb' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'EvaluationProtocolID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5f49f9e6-7306-4f1a-8179-0a04ee34415a' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'EvaluationProtocolID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2782,9 +2785,9 @@ GO
          )
          VALUES
          (
-            '9587f907-23ee-4f46-a8bf-18da1cd112fb',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '5f49f9e6-7306-4f1a-8179-0a04ee34415a',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'EvaluationProtocolID',
             'Evaluation Protocol ID',
             'The Evaluation Protocol version whose holdout rule assigned the manifest roles; NULL only for a legacy pipeline trained before its protocol was migrated.',
@@ -2798,7 +2801,7 @@ GO
             1,
             0,
             0,
-            '0B0C469C-146C-4731-B064-CCB391D67889',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE',
             'ID',
             0,
             0,
@@ -2812,7 +2815,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '78e9f5e7-af2a-46d5-9305-6ae12b29b283' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'StorageProviderID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '366bd221-dead-41dc-ad75-3642fc088fa9' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'StorageProviderID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2845,9 +2848,9 @@ GO
          )
          VALUES
          (
-            '78e9f5e7-af2a-46d5-9305-6ae12b29b283',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '366bd221-dead-41dc-ad75-3642fc088fa9',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'StorageProviderID',
             'Storage Provider ID',
             'The File Storage Provider holding the three files.',
@@ -2875,7 +2878,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '081c2c3d-f102-4fbf-af31-bd8c435427f8' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'MatrixFileID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8e286da2-8662-49fb-b490-94148bc6f2c9' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'MatrixFileID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2908,9 +2911,9 @@ GO
          )
          VALUES
          (
-            '081c2c3d-f102-4fbf-af31-bd8c435427f8',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '8e286da2-8662-49fb-b490-94148bc6f2c9',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'MatrixFileID',
             'Matrix File ID',
             'MJ: Files row of matrix.jsonl (header line with column names, then one JSON array per manifest row).',
@@ -2938,7 +2941,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '52f24c48-931c-4212-8bf3-dde543971714' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'MatrixSha256')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2c1d1e86-be68-4bb1-b4ec-6d0483a55c3a' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'MatrixSha256')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2971,9 +2974,9 @@ GO
          )
          VALUES
          (
-            '52f24c48-931c-4212-8bf3-dde543971714',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '2c1d1e86-be68-4bb1-b4ec-6d0483a55c3a',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'MatrixSha256',
             'Matrix Sha 256',
             'SHA-256 of the matrix file bytes.',
@@ -3001,7 +3004,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1ba05957-d3fb-4043-b0bf-d4c76c5fa993' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'MatrixSizeBytes')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'dc5fa05b-7fe5-46f1-9a98-6423fae0de42' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'MatrixSizeBytes')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3034,9 +3037,9 @@ GO
          )
          VALUES
          (
-            '1ba05957-d3fb-4043-b0bf-d4c76c5fa993',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            'dc5fa05b-7fe5-46f1-9a98-6423fae0de42',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'MatrixSizeBytes',
             'Matrix Size Bytes',
             'Size of the matrix file in bytes.',
@@ -3064,7 +3067,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '996b9364-8c11-4046-902d-aee414f3c7bd' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'RowManifestFileID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '19a80161-8c30-4528-b62f-f528dacf4f0b' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'RowManifestFileID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3097,9 +3100,9 @@ GO
          )
          VALUES
          (
-            '996b9364-8c11-4046-902d-aee414f3c7bd',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '19a80161-8c30-4528-b62f-f528dacf4f0b',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'RowManifestFileID',
             'Row Manifest File ID',
             'MJ: Files row of manifest.jsonl (one SnapshotRowKey per row; the locked-holdout rows are the stored holdout keys).',
@@ -3127,7 +3130,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6616e878-29b1-4f7a-a84c-df4c9d3f7710' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'RowManifestSha256')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b37e93be-197f-4b74-b48e-62234b9517c8' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'RowManifestSha256')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3160,9 +3163,9 @@ GO
          )
          VALUES
          (
-            '6616e878-29b1-4f7a-a84c-df4c9d3f7710',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            'b37e93be-197f-4b74-b48e-62234b9517c8',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'RowManifestSha256',
             'Row Manifest Sha 256',
             'SHA-256 of the manifest file bytes.',
@@ -3190,7 +3193,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f9690459-17d5-46a3-87da-33624beafdf1' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'RowManifestSizeBytes')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '516f7d0d-f38e-4395-ab5c-32c77e664c1d' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'RowManifestSizeBytes')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3223,9 +3226,9 @@ GO
          )
          VALUES
          (
-            'f9690459-17d5-46a3-87da-33624beafdf1',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '516f7d0d-f38e-4395-ab5c-32c77e664c1d',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'RowManifestSizeBytes',
             'Row Manifest Size Bytes',
             'Size of the manifest file in bytes.',
@@ -3253,7 +3256,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6f468fee-462c-4a24-8db2-afdb40718b8d' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'ProvenanceFileID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2e6da552-0e71-4fb7-8e9c-f435f11d1fc7' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'ProvenanceFileID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3286,9 +3289,9 @@ GO
          )
          VALUES
          (
-            '6f468fee-462c-4a24-8db2-afdb40718b8d',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '2e6da552-0e71-4fb7-8e9c-f435f11d1fc7',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'ProvenanceFileID',
             'Provenance File ID',
             'MJ: Files row of provenance.jsonl (for every row and column: source kind, source reference, source version, computed-at).',
@@ -3316,7 +3319,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f9bf5e7d-113a-45d5-bf30-3b0d5166bb5f' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'ProvenanceSha256')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2a05375b-b318-46b5-a58e-6028b17b7e17' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'ProvenanceSha256')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3349,9 +3352,9 @@ GO
          )
          VALUES
          (
-            'f9bf5e7d-113a-45d5-bf30-3b0d5166bb5f',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '2a05375b-b318-46b5-a58e-6028b17b7e17',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'ProvenanceSha256',
             'Provenance Sha 256',
             'SHA-256 of the provenance file bytes.',
@@ -3379,7 +3382,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2ef30714-7e7b-47df-a10f-cd6966c7f945' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'ProvenanceSizeBytes')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a79c79e3-9ba0-4c54-a5c3-96a5d874fb7f' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'ProvenanceSizeBytes')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3412,9 +3415,9 @@ GO
          )
          VALUES
          (
-            '2ef30714-7e7b-47df-a10f-cd6966c7f945',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            'a79c79e3-9ba0-4c54-a5c3-96a5d874fb7f',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'ProvenanceSizeBytes',
             'Provenance Size Bytes',
             'Size of the provenance file in bytes.',
@@ -3442,7 +3445,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1b7b804d-3522-4a64-9c45-ed33e2578277' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'ManifestRowCount')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ab85c20f-ff13-41c9-a11e-2cf9e8294260' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'ManifestRowCount')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3475,9 +3478,9 @@ GO
          )
          VALUES
          (
-            '1b7b804d-3522-4a64-9c45-ed33e2578277',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            'ab85c20f-ff13-41c9-a11e-2cf9e8294260',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'ManifestRowCount',
             'Manifest Row Count',
             'Rows in the manifest (development plus locked holdout).',
@@ -3505,7 +3508,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'eb2935ae-7b24-4b97-beab-74e031ea5a7d' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'HoldoutRowCount')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a69b3c8c-bde6-4674-b41d-a56c677de157' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'HoldoutRowCount')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3538,9 +3541,9 @@ GO
          )
          VALUES
          (
-            'eb2935ae-7b24-4b97-beab-74e031ea5a7d',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            'a69b3c8c-bde6-4674-b41d-a56c677de157',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'HoldoutRowCount',
             'Holdout Row Count',
             'Manifest rows with role locked-holdout.',
@@ -3568,7 +3571,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '47ee8ba7-1287-4e84-94c1-28e31aafeec7' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'FeatureSpec')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '62861dc3-7a4f-4111-b64e-a3b8afaa664d' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'FeatureSpec')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3601,9 +3604,9 @@ GO
          )
          VALUES
          (
-            '47ee8ba7-1287-4e84-94c1-28e31aafeec7',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '62861dc3-7a4f-4111-b64e-a3b8afaa664d',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'FeatureSpec',
             'Feature Spec',
             'JSON array of the resolved FeatureColumnSpec (name, dated source, encoding, missing-value policy) assembled.',
@@ -3631,7 +3634,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3ff74780-54eb-4a27-ae70-88f968372b1f' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'FeatureSchema')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '40def3c6-04b1-4246-99d7-6965d37961d5' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'FeatureSchema')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3664,9 +3667,9 @@ GO
          )
          VALUES
          (
-            '3ff74780-54eb-4a27-ae70-88f968372b1f',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '40def3c6-04b1-4246-99d7-6965d37961d5',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'FeatureSchema',
             'Feature Schema',
             'JSON array of matrix columns {name, encoding, sourceColumn} in matrix order.',
@@ -3694,7 +3697,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '825f178d-8871-49f5-a757-51b81e8dc0b2' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'FeatureSchemaHash')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '84377039-15bd-41ff-ac27-b86d47e655df' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'FeatureSchemaHash')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3727,9 +3730,9 @@ GO
          )
          VALUES
          (
-            '825f178d-8871-49f5-a757-51b81e8dc0b2',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '84377039-15bd-41ff-ac27-b86d47e655df',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'FeatureSchemaHash',
             'Feature Schema Hash',
             'SHA-256 of the canonical JSON of FeatureSchema; compared before scoring.',
@@ -3757,7 +3760,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd182b640-205c-400d-bac8-aa5b0a418af7' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'ColumnProvenance')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7eb7a214-d268-4ba4-97ba-e6d2330efe95' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'ColumnProvenance')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3790,9 +3793,9 @@ GO
          )
          VALUES
          (
-            'd182b640-205c-400d-bac8-aa5b0a418af7',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '7eb7a214-d268-4ba4-97ba-e6d2330efe95',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'ColumnProvenance',
             'Column Provenance',
             'JSON array of ColumnProvenance: per matrix column, the source kind, source reference and source version.',
@@ -3820,7 +3823,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2facffdf-87d1-40a6-9444-bfd3ada2cfae' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'PinnedFeatureVersions')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6a1c77e5-a702-4ed3-89b5-d9495f9b85a2' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'PinnedFeatureVersions')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3853,9 +3856,9 @@ GO
          )
          VALUES
          (
-            '2facffdf-87d1-40a6-9444-bfd3ada2cfae',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '6a1c77e5-a702-4ed3-89b5-d9495f9b85a2',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'PinnedFeatureVersions',
             'Pinned Feature Versions',
             'JSON array of FeatureVersionPin for every Feature Value source read.',
@@ -3883,7 +3886,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a0fb3bfc-91a9-4258-93c8-d22c5ea96978' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'RowsRead')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fcd672b4-13c6-4b49-a7a3-3ce86a1c135c' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'RowsRead')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3916,9 +3919,9 @@ GO
          )
          VALUES
          (
-            'a0fb3bfc-91a9-4258-93c8-d22c5ea96978',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            'fcd672b4-13c6-4b49-a7a3-3ce86a1c135c',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'RowsRead',
             'Rows Read',
             'Unit rows read from the source before exclusions; equals the source count (a truncated read is refused).',
@@ -3946,7 +3949,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e85ae20a-f1f0-40ca-9398-8b9d274c4894' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'ReadComplete')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8dbca900-1a90-4d1b-b7cb-a95353041a58' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'ReadComplete')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3979,9 +3982,9 @@ GO
          )
          VALUES
          (
-            'e85ae20a-f1f0-40ca-9398-8b9d274c4894',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '8dbca900-1a90-4d1b-b7cb-a95353041a58',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'ReadComplete',
             'Read Complete',
             'Always 1: a snapshot exists only for a complete read.',
@@ -4009,7 +4012,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '54ffb93e-2bad-43b5-be78-7c1344724c67' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'CensoredRowsExcluded')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c5447115-f0d9-4e3e-a5f7-99b604cae9d7' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'CensoredRowsExcluded')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4042,9 +4045,9 @@ GO
          )
          VALUES
          (
-            '54ffb93e-2bad-43b5-be78-7c1344724c67',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            'c5447115-f0d9-4e3e-a5f7-99b604cae9d7',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'CensoredRowsExcluded',
             'Censored Rows Excluded',
             'Rows excluded because their outcome window had not closed at DataCutoff.',
@@ -4072,7 +4075,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd45567a0-364f-4cbf-8cfc-f4b2366bd49d' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'LabelKnownRowsExcluded')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f8a7611f-6332-465b-b2bf-7ff6bbd329a9' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'LabelKnownRowsExcluded')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4105,9 +4108,9 @@ GO
          )
          VALUES
          (
-            'd45567a0-364f-4cbf-8cfc-f4b2366bd49d',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            'f8a7611f-6332-465b-b2bf-7ff6bbd329a9',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'LabelKnownRowsExcluded',
             'Label Known Rows Excluded',
             'Rows excluded because their outcome was already recorded on or before the decision date (next-period rule).',
@@ -4135,7 +4138,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8efd75ec-e558-46de-b701-73b6676792ce' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'EmptyLabelRowsExcluded')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c2c36e97-d80c-47a6-b1be-52e9d9253a13' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'EmptyLabelRowsExcluded')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4168,9 +4171,9 @@ GO
          )
          VALUES
          (
-            '8efd75ec-e558-46de-b701-73b6676792ce',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            'c2c36e97-d80c-47a6-b1be-52e9d9253a13',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'EmptyLabelRowsExcluded',
             'Empty Label Rows Excluded',
             'Rows excluded because their label was empty (NULL or an empty string) — unlabelled, never a class.',
@@ -4198,7 +4201,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '15764390-a402-46f5-9937-4b532d72c0d1' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'UncoveredHistoryRowsExcluded')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '19f7a467-c851-4c98-843b-1235819da36f' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'UncoveredHistoryRowsExcluded')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4231,9 +4234,9 @@ GO
          )
          VALUES
          (
-            '15764390-a402-46f5-9937-4b532d72c0d1',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '19f7a467-c851-4c98-843b-1235819da36f',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'UncoveredHistoryRowsExcluded',
             'Uncovered History Rows Excluded',
             'JSON array {entity, field, rows}: rows excluded because a field''s change history did not cover their decision date (policy exclude-and-count).',
@@ -4261,7 +4264,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'dd4bcbdc-40f8-48da-9805-743bb3d67fcb' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'DuplicateRowsRemoved')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8f0b40ef-42cf-4a22-b77b-320e5aab0542' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'DuplicateRowsRemoved')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4294,9 +4297,9 @@ GO
          )
          VALUES
          (
-            'dd4bcbdc-40f8-48da-9805-743bb3d67fcb',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '8f0b40ef-42cf-4a22-b77b-320e5aab0542',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'DuplicateRowsRemoved',
             'Duplicate Rows Removed',
             'Rows removed as exact duplicates of (entity key, decision date, period).',
@@ -4324,7 +4327,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '747d5d3c-9f5e-4d04-acb2-2ec279ec9a50' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'ClassBalance')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6a9fecd0-fb18-4f21-a6f8-f5f48ed17203' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'ClassBalance')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4357,9 +4360,9 @@ GO
          )
          VALUES
          (
-            '747d5d3c-9f5e-4d04-acb2-2ec279ec9a50',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '6a9fecd0-fb18-4f21-a6f8-f5f48ed17203',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'ClassBalance',
             'Class Balance',
             'JSON array {label, rows} over manifest rows for classification tasks; NULL otherwise.',
@@ -4387,7 +4390,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3b6f7084-15b3-456e-bca2-91ecd6442599' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'DataCutoff')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8faa92f0-8f7c-4739-a762-9489835d71b9' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'DataCutoff')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4420,9 +4423,9 @@ GO
          )
          VALUES
          (
-            '3b6f7084-15b3-456e-bca2-91ecd6442599',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '8faa92f0-8f7c-4739-a762-9489835d71b9',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'DataCutoff',
             'Data Cutoff',
             'The censoring cutoff the unit resolved to for this assembly.',
@@ -4450,7 +4453,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1aed42f4-e861-4158-8ee7-11f8d3ccc7bc' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'AssemblyCodeVersion')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'dbc13174-3a1d-4f40-a5d3-95d40fbb2819' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'AssemblyCodeVersion')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4483,9 +4486,9 @@ GO
          )
          VALUES
          (
-            '1aed42f4-e861-4158-8ee7-11f8d3ccc7bc',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            'dbc13174-3a1d-4f40-a5d3-95d40fbb2819',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'AssemblyCodeVersion',
             'Assembly Code Version',
             'Package version and git commit of the assembly code that built the snapshot.',
@@ -4513,7 +4516,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd0cb2ebe-9e53-40db-9007-cb287d8ac3b3' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '68f17137-6405-460d-9796-60785602a4d3' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4546,9 +4549,9 @@ GO
          )
          VALUES
          (
-            'd0cb2ebe-9e53-40db-9007-cb287d8ac3b3',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '68f17137-6405-460d-9796-60785602a4d3',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             '__mj_CreatedAt',
             'Created At',
             NULL,
@@ -4576,7 +4579,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '878b22ab-4f36-4fab-8ec8-cc3c359610a2' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'abfcfa3f-1315-4df2-ac8a-e710f99823c2' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4609,9 +4612,9 @@ GO
          )
          VALUES
          (
-            '878b22ab-4f36-4fab-8ec8-cc3c359610a2',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            'abfcfa3f-1315-4df2-ac8a-e710f99823c2',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             '__mj_UpdatedAt',
             'Updated At',
             NULL,
@@ -4639,7 +4642,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ce8b8910-7580-452f-8dba-b0b99d24379c' OR (EntityID = '1A4DF72F-68E0-410C-B42C-815687BFE2D2' AND Name = 'TrainingSnapshotID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1b8c4ad9-59e6-421e-b28d-c2c60d8c9aef' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4672,7 +4675,1897 @@ GO
          )
          VALUES
          (
-            'ce8b8910-7580-452f-8dba-b0b99d24379c',
+            '1b8c4ad9-59e6-421e-b28d-c2c60d8c9aef',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cc21f4d2-0d46-44b0-8fe4-c16dfdf4c522' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'LineageRootID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'cc21f4d2-0d46-44b0-8fe4-c16dfdf4c522',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'LineageRootID',
+            'Lineage Root ID',
+            'ID of version 1 of this protocol. Version 1 points at itself.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e16b9172-338c-4d7a-8dfe-f9fa06cf4db8' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'Version')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'e16b9172-338c-4d7a-8dfe-f9fa06cf4db8',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'Version',
+            'Version',
+            'Version number within the lineage, starting at 1. A saved version is never updated.',
+            'int',
+            4,
+            10,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd44848c6-9cab-4c17-a4e8-27eda46692d6' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'Name')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'd44848c6-9cab-4c17-a4e8-27eda46692d6',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'Name',
+            'Name',
+            'Display name of the protocol.',
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            1,
+            1,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b1985f44-5f4f-4831-bb96-3470ce296583' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'Description')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'b1985f44-5f4f-4831-bb96-3470ce296583',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'Description',
+            'Description',
+            'What the protocol is for, in plain words.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd3c7baef-df62-4355-a7ed-cde904b888d5' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'Holdout')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'd3c7baef-df62-4355-a7ed-cde904b888d5',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'Holdout',
+            'Holdout',
+            'JSON HoldoutSplit (guard field): {kind:"date-carved", dateColumn, cutoff, holdoutEnd, newEntityReport} or {kind:"rolling-origin", origins (>= 5), horizonPeriods, gapPeriods, minTrainPeriods, window}.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '968afd18-c8a9-41c6-a03c-4d284033bd6b' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'InnerValidation')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '968afd18-c8a9-41c6-a03c-4d284033bd6b',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'InnerValidation',
+            'Inner Validation',
+            'JSON InnerValidation over development rows only: repeated-stratified-kfold, grouped-kfold or blocked-time.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a0e507e5-acc9-4d6b-ab4a-49fe2be84b96' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'Seed')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'a0e507e5-acc9-4d6b-ab4a-49fe2be84b96',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'Seed',
+            'Seed',
+            'Random seed for every split, fold, bootstrap and estimator of a run under this protocol.',
+            'int',
+            4,
+            10,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2153c8c2-8dff-422c-9759-8ee80f53f0ae' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'HoldoutAccessBudget')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '2153c8c2-8dff-422c-9759-8ee80f53f0ae',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'HoldoutAccessBudget',
+            'Holdout Access Budget',
+            'How many times the locked holdout may be scored per run: always 1, for one declared finalist.',
+            'int',
+            4,
+            10,
+            0,
+            0,
+            '(1)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '18636bb2-a8be-4a84-9c8f-211a35ff4d00' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'PrimaryScore')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '18636bb2-a8be-4a84-9c8f-211a35ff4d00',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'PrimaryScore',
+            'Primary Score',
+            'JSON ProperScore {family, metric}: the only metric that ranks candidates and gates outcomes. Its family must equal the pipeline unit''s task kind.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '252225d0-f65a-453d-9390-2c2c7da687a2' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'SecondaryMetrics')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '252225d0-f65a-453d-9390-2c2c7da687a2',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'SecondaryMetrics',
+            'Secondary Metrics',
+            'JSON array of secondary metric keys (auc, accuracy, f1, precision, recall, r2, calibration-slope); reported with intervals, never used to rank.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '89230037-5a26-4441-911f-2b9fae0369b9' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'Baselines')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '89230037-5a26-4441-911f-2b9fae0369b9',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'Baselines',
+            'Baselines',
+            'JSON array of BaselineSpec fitted on every run: dummy, one-feature, glm, naive, seasonal-naive, incumbent-heuristic.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e170cd66-f89b-4403-8538-e80e3757df23' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'Calibration')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'e170cd66-f89b-4403-8538-e80e3757df23',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'Calibration',
+            'Calibration',
+            'JSON CalibrationMethod: platt, isotonic or auto, always fit on a disjoint calibration fold; not-applicable for regression.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7b16e14f-39a2-4405-b612-aedb8fb5a4e5' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'Resampling')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '7b16e14f-39a2-4405-b612-aedb8fb5a4e5',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'Resampling',
+            'Resampling',
+            'JSON ResamplingSpec: {kind:"none"} or {kind:"in-fold", method}; resampling never touches holdout rows.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e12ef381-23cb-44f0-9234-27ad4854a41e' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'Intervals')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'e12ef381-23cb-44f0-9234-27ad4854a41e',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'Intervals',
+            'Intervals',
+            'JSON IntervalSpec: level 0.95, method, resamples and the paired test for model-versus-comparator differences.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '53a6b363-0c31-4a02-8098-7997ffa6773b' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'Promotion')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '53a6b363-0c31-4a02-8098-7997ffa6773b',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'Promotion',
+            'Promotion',
+            'JSON PromotionRule (guard field): comparators, incumbent, margin (>= 0), lowerBoundLevel 0.95, pairedOn same-holdout-rows, decisionTable Q13+Q14+Q15.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f849c1e5-2a72-459c-9c5b-65bf039e73bc' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'AllowedOutcomes')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'f849c1e5-2a72-459c-9c5b-65bf039e73bc',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'AllowedOutcomes',
+            'Allowed Outcomes',
+            'JSON array, exactly ["model","keep-simple-baseline","no-signal"]: a protocol cannot omit no-signal.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '30b68cf1-3409-453a-98c2-e6c2255ac836' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'LeakageAudit')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '30b68cf1-3409-453a-98c2-e6c2255ac836',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'LeakageAudit',
+            'Leakage Audit',
+            'JSON LeakageAuditSpec (guard field): held-out single-feature AUC ceiling, time-shifted-label test, drop-column test, per-source-column importance aggregation, high-cardinality ID check.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f3f5a513-4467-46a9-865e-1bec926439f1' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'Exclusions')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'f3f5a513-4467-46a9-865e-1bec926439f1',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'Exclusions',
+            'Exclusions',
+            'JSON ProtocolExclusions (guard field): {denyFields, denySources} — columns and sources that never enter the feature matrix (the former LeakageGuard deny lists).',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fb620df0-fc76-4d02-b7c8-1bfa3c19770c' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'Slices')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'fb620df0-fc76-4d02-b7c8-1bfa3c19770c',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'Slices',
+            'Slices',
+            'JSON SliceSpec: {outOfTime, subgroups} — each slice is reported with the primary score and its interval.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '32743338-0281-4a24-ba0a-4ef8d5281866' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'PredictionIntervals')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '32743338-0281-4a24-ba0a-4ef8d5281866',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'PredictionIntervals',
+            'Prediction Intervals',
+            'JSON PredictionIntervalSpec {method, nominalCoverage} for continuous, count and non-negative tasks; NULL when not requested.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0ae6c0a7-5b72-4c3a-a080-154be17da485' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'ResidualDiagnostics')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '0ae6c0a7-5b72-4c3a-a080-154be17da485',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'ResidualDiagnostics',
+            'Residual Diagnostics',
+            'JSON ResidualDiagnosticsSpec {acfLags, ljungBoxAlpha} for series and panels; NULL otherwise.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'acbd66b0-1219-4441-a7c0-0f82808e40f7' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'RetrainTriggers')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'acbd66b0-1219-4441-a7c0-0f82808e40f7',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'RetrainTriggers',
+            'Retrain Triggers',
+            'JSON array of RetrainTrigger declared for monitoring (outcome-degradation, calibration-drift).',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2b05f9bd-d5a9-4852-b5b1-48c58796ae02' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'SearchStrategy')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '2b05f9bd-d5a9-4852-b5b1-48c58796ae02',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'SearchStrategy',
+            'Search Strategy',
+            'JSON SearchStrategy: {kind:"random", candidates} or {kind:"guided", method, equalCostComparisonId}.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2af1a4ee-1133-458c-ad90-ad95dd2f1043' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'Budgets')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '2af1a4ee-1133-458c-ad90-ad95dd2f1043',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'Budgets',
+            'Budgets',
+            'JSON Budgets (guard field): maxComputeSeconds, maxTokens, maxCandidates, hardStop true.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5a26ca06-0e44-4ce3-ab6d-c7541002eed3' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'MinMinorityClassRows')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '5a26ca06-0e44-4ce3-ab6d-c7541002eed3',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'MinMinorityClassRows',
+            'Min Minority Class Rows',
+            'Smallest minority-class row count in the locked holdout for which a classification gate may return model; below it the gate cannot ship a model.',
+            'int',
+            4,
+            10,
+            0,
+            0,
+            '(20)',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ecf141b1-f1f5-4db6-bf75-ccc11817c2d8' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'GuardFieldsEditableBy')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'ecf141b1-f1f5-4db6-bf75-ccc11817c2d8',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'GuardFieldsEditableBy',
+            'Guard Fields Editable By',
+            'Who may change the guard fields (Holdout, Promotion, LeakageAudit, Exclusions, Budgets and this setting) in the next version: non-agent (default: any author except an agent tool call — a user, a non-agent API caller, a scheduled job or the system) or human-only (optional: only a version authored by a user). Every author''s version passes the same guard-field validation.',
+            'nvarchar',
+            40,
+            0,
+            0,
+            0,
+            'non-agent',
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7937b713-ff95-424f-a2e6-553e2b545b21' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'AuthoredBy')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '7937b713-ff95-424f-a2e6-553e2b545b21',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'AuthoredBy',
+            'Authored By',
+            'JSON Actor who authored this version.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e1b8fc2b-3bd5-420a-a8d6-6af5becb306e' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'e1b8fc2b-3bd5-420a-a8d6-6af5becb306e',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '59f85ac9-0097-463c-b91b-6d74777c5a55' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '59f85ac9-0097-463c-b91b-6d74777c5a55',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4b08d0b2-50b0-492e-8639-98538371560e' OR (EntityID = '1A4DF72F-68E0-410C-B42C-815687BFE2D2' AND Name = 'TrainingSnapshotID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '4b08d0b2-50b0-492e-8639-98538371560e',
             '1A4DF72F-68E0-410C-B42C-815687BFE2D2', -- Entity: MJ: ML Training Runs
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1A4DF72F-68E0-410C-B42C-815687BFE2D2'),
             'TrainingSnapshotID',
@@ -4688,7 +6581,7 @@ GO
             1,
             0,
             0,
-            '947FF197-FAAF-4557-AE52-6FDCF4313762',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6',
             'ID',
             0,
             0,
@@ -4702,7 +6595,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4639bf78-3a72-4a69-9299-c5c6f5a24f68' OR (EntityID = '1A4DF72F-68E0-410C-B42C-815687BFE2D2' AND Name = 'EvaluationProtocolID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '40a9ac69-85a2-4f16-8910-7e96274deb16' OR (EntityID = '1A4DF72F-68E0-410C-B42C-815687BFE2D2' AND Name = 'EvaluationProtocolID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4735,7 +6628,7 @@ GO
          )
          VALUES
          (
-            '4639bf78-3a72-4a69-9299-c5c6f5a24f68',
+            '40a9ac69-85a2-4f16-8910-7e96274deb16',
             '1A4DF72F-68E0-410C-B42C-815687BFE2D2', -- Entity: MJ: ML Training Runs
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1A4DF72F-68E0-410C-B42C-815687BFE2D2'),
             'EvaluationProtocolID',
@@ -4751,7 +6644,7 @@ GO
             1,
             0,
             0,
-            '0B0C469C-146C-4731-B064-CCB391D67889',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE',
             'ID',
             0,
             0,
@@ -4765,7 +6658,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '980d96a7-29a4-4e06-986c-823eccbbedec' OR (EntityID = '1A4DF72F-68E0-410C-B42C-815687BFE2D2' AND Name = 'CodeVersion')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '82fa5ea5-51c7-46ed-8447-58fa5e3d023f' OR (EntityID = '1A4DF72F-68E0-410C-B42C-815687BFE2D2' AND Name = 'CodeVersion')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4798,7 +6691,7 @@ GO
          )
          VALUES
          (
-            '980d96a7-29a4-4e06-986c-823eccbbedec',
+            '82fa5ea5-51c7-46ed-8447-58fa5e3d023f',
             '1A4DF72F-68E0-410C-B42C-815687BFE2D2', -- Entity: MJ: ML Training Runs
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1A4DF72F-68E0-410C-B42C-815687BFE2D2'),
             'CodeVersion',
@@ -4828,7 +6721,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'aa666c1a-8280-4dbb-b5e2-1959185725d9' OR (EntityID = '1A4DF72F-68E0-410C-B42C-815687BFE2D2' AND Name = 'ComputeSeconds')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b27c085b-e8b8-4e9b-93ae-f9b018cb6ba6' OR (EntityID = '1A4DF72F-68E0-410C-B42C-815687BFE2D2' AND Name = 'ComputeSeconds')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4861,7 +6754,7 @@ GO
          )
          VALUES
          (
-            'aa666c1a-8280-4dbb-b5e2-1959185725d9',
+            'b27c085b-e8b8-4e9b-93ae-f9b018cb6ba6',
             '1A4DF72F-68E0-410C-B42C-815687BFE2D2', -- Entity: MJ: ML Training Runs
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1A4DF72F-68E0-410C-B42C-815687BFE2D2'),
             'ComputeSeconds',
@@ -4891,7 +6784,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7ceec4f5-82f2-465d-a196-263a555a9274' OR (EntityID = '3BED585D-B150-4899-AB06-8A19624EA9BE' AND Name = 'EffectiveAsOf')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a9142009-7413-48c2-afc9-23528c97083a' OR (EntityID = '3BED585D-B150-4899-AB06-8A19624EA9BE' AND Name = 'EffectiveAsOf')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4924,7 +6817,7 @@ GO
          )
          VALUES
          (
-            '7ceec4f5-82f2-465d-a196-263a555a9274',
+            'a9142009-7413-48c2-afc9-23528c97083a',
             '3BED585D-B150-4899-AB06-8A19624EA9BE', -- Entity: MJ: Feature Values
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '3BED585D-B150-4899-AB06-8A19624EA9BE'),
             'EffectiveAsOf',
@@ -4954,7 +6847,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f6312095-3040-470c-8e28-7096e2ae6766' OR (EntityID = '3BED585D-B150-4899-AB06-8A19624EA9BE' AND Name = 'InputAsOf')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7c731f43-07c1-4972-a06a-92209286f478' OR (EntityID = '3BED585D-B150-4899-AB06-8A19624EA9BE' AND Name = 'InputAsOf')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4987,7 +6880,7 @@ GO
          )
          VALUES
          (
-            'f6312095-3040-470c-8e28-7096e2ae6766',
+            '7c731f43-07c1-4972-a06a-92209286f478',
             '3BED585D-B150-4899-AB06-8A19624EA9BE', -- Entity: MJ: Feature Values
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '3BED585D-B150-4899-AB06-8A19624EA9BE'),
             'InputAsOf',
@@ -5017,7 +6910,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3a27b360-4935-48b6-a46a-62f39fff939c' OR (EntityID = '703FD109-331B-438D-902B-8E4A93C3F6AA' AND Name = 'PredictionUnitID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5f6d36e6-64eb-4972-8590-dff51bfeed77' OR (EntityID = '703FD109-331B-438D-902B-8E4A93C3F6AA' AND Name = 'PredictionUnitID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5050,7 +6943,7 @@ GO
          )
          VALUES
          (
-            '3a27b360-4935-48b6-a46a-62f39fff939c',
+            '5f6d36e6-64eb-4972-8590-dff51bfeed77',
             '703FD109-331B-438D-902B-8E4A93C3F6AA', -- Entity: MJ: ML Training Pipelines
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '703FD109-331B-438D-902B-8E4A93C3F6AA'),
             'PredictionUnitID',
@@ -5066,7 +6959,7 @@ GO
             1,
             0,
             0,
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6',
             'ID',
             0,
             0,
@@ -5080,7 +6973,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6b14e812-7b20-493a-ad29-53afe948e662' OR (EntityID = '703FD109-331B-438D-902B-8E4A93C3F6AA' AND Name = 'EvaluationProtocolID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '50d68b63-68b4-4a71-82c0-02fd0d7ccfc0' OR (EntityID = '703FD109-331B-438D-902B-8E4A93C3F6AA' AND Name = 'EvaluationProtocolID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -5113,7 +7006,7 @@ GO
          )
          VALUES
          (
-            '6b14e812-7b20-493a-ad29-53afe948e662',
+            '50d68b63-68b4-4a71-82c0-02fd0d7ccfc0',
             '703FD109-331B-438D-902B-8E4A93C3F6AA', -- Entity: MJ: ML Training Pipelines
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '703FD109-331B-438D-902B-8E4A93C3F6AA'),
             'EvaluationProtocolID',
@@ -5129,7 +7022,7 @@ GO
             1,
             0,
             0,
-            '0B0C469C-146C-4731-B064-CCB391D67889',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE',
             'ID',
             0,
             0,
@@ -5143,1919 +7036,29 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '820307ad-a880-43f9-bf4f-b372952280a2' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'ID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '820307ad-a880-43f9-bf4f-b372952280a2',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'ID',
-            'ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            1,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '681c028a-cc37-40cf-93a2-184dd7848fdc' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'LineageRootID')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '681c028a-cc37-40cf-93a2-184dd7848fdc',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'LineageRootID',
-            'Lineage Root ID',
-            'ID of version 1 of this protocol. Version 1 points at itself.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            '0B0C469C-146C-4731-B064-CCB391D67889',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bb775e4a-b311-47d4-ae71-e5373574fe88' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'Version')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'bb775e4a-b311-47d4-ae71-e5373574fe88',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'Version',
-            'Version',
-            'Version number within the lineage, starting at 1. A saved version is never updated.',
-            'int',
-            4,
-            10,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            1,
-            0,
-            1,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bbe9c397-250a-4f9f-be6f-3ae4a08068a7' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'Name')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'bbe9c397-250a-4f9f-be6f-3ae4a08068a7',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'Name',
-            'Name',
-            'Display name of the protocol.',
-            'nvarchar',
-            510,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            1,
-            1,
-            0,
-            1,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '56bade9a-c2d3-4864-aa87-83f5939f0636' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'Description')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '56bade9a-c2d3-4864-aa87-83f5939f0636',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'Description',
-            'Description',
-            'What the protocol is for, in plain words.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            1,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '836279d3-a61f-4743-8ead-48dfe3a7abf6' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'Holdout')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '836279d3-a61f-4743-8ead-48dfe3a7abf6',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'Holdout',
-            'Holdout',
-            'JSON HoldoutSplit (guard field): {kind:"date-carved", dateColumn, cutoff, holdoutEnd, newEntityReport} or {kind:"rolling-origin", origins (>= 5), horizonPeriods, gapPeriods, minTrainPeriods, window}.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5e6c119f-6339-4b5d-bdae-fe1182e077ae' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'InnerValidation')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '5e6c119f-6339-4b5d-bdae-fe1182e077ae',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'InnerValidation',
-            'Inner Validation',
-            'JSON InnerValidation over development rows only: repeated-stratified-kfold, grouped-kfold or blocked-time.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f6e2d51e-7143-45ba-8f9d-cc4b141cf0db' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'Seed')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'f6e2d51e-7143-45ba-8f9d-cc4b141cf0db',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'Seed',
-            'Seed',
-            'Random seed for every split, fold, bootstrap and estimator of a run under this protocol.',
-            'int',
-            4,
-            10,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5478ce75-7a40-437e-aac8-c15dbd5152bc' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'HoldoutAccessBudget')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '5478ce75-7a40-437e-aac8-c15dbd5152bc',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'HoldoutAccessBudget',
-            'Holdout Access Budget',
-            'How many times the locked holdout may be scored per run: always 1, for one declared finalist.',
-            'int',
-            4,
-            10,
-            0,
-            0,
-            '(1)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'df7406bd-4dea-4fcb-a946-b66575ed6ecf' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'PrimaryScore')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'df7406bd-4dea-4fcb-a946-b66575ed6ecf',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'PrimaryScore',
-            'Primary Score',
-            'JSON ProperScore {family, metric}: the only metric that ranks candidates and gates outcomes. Its family must equal the pipeline unit''s task kind.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e70a771f-996d-4ead-96ff-fcc8a007fc65' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'SecondaryMetrics')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'e70a771f-996d-4ead-96ff-fcc8a007fc65',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'SecondaryMetrics',
-            'Secondary Metrics',
-            'JSON array of secondary metric keys (auc, accuracy, f1, precision, recall, r2, calibration-slope); reported with intervals, never used to rank.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a09da5da-31b6-44bf-a4e8-49929b094a3c' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'Baselines')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'a09da5da-31b6-44bf-a4e8-49929b094a3c',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'Baselines',
-            'Baselines',
-            'JSON array of BaselineSpec fitted on every run: dummy, one-feature, glm, naive, seasonal-naive, incumbent-heuristic.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4f99d3e0-6b55-4ef4-9f35-c9c2ceb55117' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'Calibration')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '4f99d3e0-6b55-4ef4-9f35-c9c2ceb55117',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'Calibration',
-            'Calibration',
-            'JSON CalibrationMethod: platt, isotonic or auto, always fit on a disjoint calibration fold; not-applicable for regression.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f3f04860-eb0e-4a3a-9714-88485b0e814c' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'Resampling')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'f3f04860-eb0e-4a3a-9714-88485b0e814c',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'Resampling',
-            'Resampling',
-            'JSON ResamplingSpec: {kind:"none"} or {kind:"in-fold", method}; resampling never touches holdout rows.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6ec9e06b-1b67-445b-bd73-fda680082832' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'Intervals')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '6ec9e06b-1b67-445b-bd73-fda680082832',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'Intervals',
-            'Intervals',
-            'JSON IntervalSpec: level 0.95, method, resamples and the paired test for model-versus-comparator differences.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b44f0713-9f1e-4966-9863-7e72f5d0ec61' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'Promotion')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'b44f0713-9f1e-4966-9863-7e72f5d0ec61',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'Promotion',
-            'Promotion',
-            'JSON PromotionRule (guard field): comparators, incumbent, margin (>= 0), lowerBoundLevel 0.95, pairedOn same-holdout-rows, decisionTable Q13+Q14+Q15.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c44eb743-e9d9-4b5a-a2f9-7027d7838435' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'AllowedOutcomes')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'c44eb743-e9d9-4b5a-a2f9-7027d7838435',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'AllowedOutcomes',
-            'Allowed Outcomes',
-            'JSON array, exactly ["model","keep-simple-baseline","no-signal"]: a protocol cannot omit no-signal.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e327b941-d09f-44f7-8b92-6c04af6e4624' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'LeakageAudit')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'e327b941-d09f-44f7-8b92-6c04af6e4624',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'LeakageAudit',
-            'Leakage Audit',
-            'JSON LeakageAuditSpec (guard field): held-out single-feature AUC ceiling, time-shifted-label test, drop-column test, per-source-column importance aggregation, high-cardinality ID check.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8d4787c0-84e4-4841-9b5b-839c4c52ab9f' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'Exclusions')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '8d4787c0-84e4-4841-9b5b-839c4c52ab9f',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'Exclusions',
-            'Exclusions',
-            'JSON ProtocolExclusions (guard field): {denyFields, denySources} — columns and sources that never enter the feature matrix (the former LeakageGuard deny lists).',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '079ee702-e829-472e-8ec6-39db7e068a09' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'Slices')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '079ee702-e829-472e-8ec6-39db7e068a09',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'Slices',
-            'Slices',
-            'JSON SliceSpec: {outOfTime, subgroups} — each slice is reported with the primary score and its interval.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1a7819fd-80e0-454e-9df1-a7cec246417b' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'PredictionIntervals')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '1a7819fd-80e0-454e-9df1-a7cec246417b',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'PredictionIntervals',
-            'Prediction Intervals',
-            'JSON PredictionIntervalSpec {method, nominalCoverage} for continuous, count and non-negative tasks; NULL when not requested.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4d2a5640-5a7e-4d60-9ad0-b36266d2c683' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'ResidualDiagnostics')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '4d2a5640-5a7e-4d60-9ad0-b36266d2c683',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'ResidualDiagnostics',
-            'Residual Diagnostics',
-            'JSON ResidualDiagnosticsSpec {acfLags, ljungBoxAlpha} for series and panels; NULL otherwise.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e499134d-e42c-49e5-81cf-e071ba2167a7' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'RetrainTriggers')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'e499134d-e42c-49e5-81cf-e071ba2167a7',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'RetrainTriggers',
-            'Retrain Triggers',
-            'JSON array of RetrainTrigger declared for monitoring (outcome-degradation, calibration-drift).',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '55f5fc86-9ab7-49ee-86ca-c39fbf3fad01' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'SearchStrategy')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '55f5fc86-9ab7-49ee-86ca-c39fbf3fad01',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'SearchStrategy',
-            'Search Strategy',
-            'JSON SearchStrategy: {kind:"random", candidates} or {kind:"guided", method, equalCostComparisonId}.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a73475e3-3866-43c0-badc-2e64f59e1332' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'Budgets')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'a73475e3-3866-43c0-badc-2e64f59e1332',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'Budgets',
-            'Budgets',
-            'JSON Budgets (guard field): maxComputeSeconds, maxTokens, maxCandidates, hardStop true.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2d43d765-a3e4-4a3a-a14f-1a2c69dbb03d' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'MinMinorityClassRows')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '2d43d765-a3e4-4a3a-a14f-1a2c69dbb03d',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'MinMinorityClassRows',
-            'Min Minority Class Rows',
-            'Smallest minority-class row count in the locked holdout for which a classification gate may return model; below it the gate cannot ship a model.',
-            'int',
-            4,
-            10,
-            0,
-            0,
-            '(20)',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'edf32039-d2df-4f3b-b762-4a557587d08a' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'GuardFieldsEditableBy')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'edf32039-d2df-4f3b-b762-4a557587d08a',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'GuardFieldsEditableBy',
-            'Guard Fields Editable By',
-            'Who may change the guard fields (Holdout, Promotion, LeakageAudit, Exclusions, Budgets and this setting) in the next version: non-agent (default: any author except an agent tool call — a user, a non-agent API caller, a scheduled job or the system) or human-only (optional: only a version authored by a user). Every author''s version passes the same guard-field validation.',
-            'nvarchar',
-            40,
-            0,
-            0,
-            0,
-            'non-agent',
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0e34f94c-3832-48e8-ae65-a3a923015091' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'AuthoredBy')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '0e34f94c-3832-48e8-ae65-a3a923015091',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'AuthoredBy',
-            'Authored By',
-            'JSON Actor who authored this version.',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            1,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'eaa27903-181e-4cae-b5f1-dc9e09a95b99' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = '__mj_CreatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            'eaa27903-181e-4cae-b5f1-dc9e09a95b99',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0b2e5762-cbcc-4297-b56a-e260eb9bc88d' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = '__mj_UpdatedAt')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '0b2e5762-cbcc-4297-b56a-e260eb9bc88d',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
-/* SQL text to insert entity field value with ID f19d6270-4660-4cd1-9fca-8271db091ec2 */
+/* SQL text to insert entity field value with ID 9cc0abeb-8746-4d07-8802-fac33b262693 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('f19d6270-4660-4cd1-9fca-8271db091ec2', '5478CE75-7A40-437E-AAC8-C15DBD5152BC', 1, '1', '1', GETUTCDATE(), GETUTCDATE());
+                                       ('9cc0abeb-8746-4d07-8802-fac33b262693', '2153C8C2-8DFF-422C-9759-8EE80F53F0AE', 1, '1', '1', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 5478CE75-7A40-437E-AAC8-C15DBD5152BC */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='5478CE75-7A40-437E-AAC8-C15DBD5152BC';
+/* SQL text to update ValueListType for entity field ID 2153C8C2-8DFF-422C-9759-8EE80F53F0AE */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='2153C8C2-8DFF-422C-9759-8EE80F53F0AE';
 
-/* SQL text to insert entity field value with ID 26613025-f286-4759-aab5-75fa53d7b30a */
+/* SQL text to insert entity field value with ID 87a6fd51-4138-4c6c-9999-e19b6b867ad6 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('26613025-f286-4759-aab5-75fa53d7b30a', 'EDF32039-D2DF-4F3B-B762-4A557587D08A', 1, 'human-only', 'human-only', GETUTCDATE(), GETUTCDATE());
+                                       ('87a6fd51-4138-4c6c-9999-e19b6b867ad6', 'ECF141B1-F1F5-4DB6-BF75-CCC11817C2D8', 1, 'human-only', 'human-only', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 0b29fb9a-2aba-46d3-ba77-926f69c35f9a */
+/* SQL text to insert entity field value with ID 6b87db2b-b65c-4523-b4e2-f574eb9fafdf */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('0b29fb9a-2aba-46d3-ba77-926f69c35f9a', 'EDF32039-D2DF-4F3B-B762-4A557587D08A', 2, 'non-agent', 'non-agent', GETUTCDATE(), GETUTCDATE());
+                                       ('6b87db2b-b65c-4523-b4e2-f574eb9fafdf', 'ECF141B1-F1F5-4DB6-BF75-CCC11817C2D8', 2, 'non-agent', 'non-agent', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID EDF32039-D2DF-4F3B-B762-4A557587D08A */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='EDF32039-D2DF-4F3B-B762-4A557587D08A';
+/* SQL text to update ValueListType for entity field ID ECF141B1-F1F5-4DB6-BF75-CCC11817C2D8 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='ECF141B1-F1F5-4DB6-BF75-CCC11817C2D8';
 
 /* Deterministic search-flag hygiene — clear AllowUserSearchAPI */
 
@@ -7077,564 +7080,128 @@ UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID
          );
 
 
-/* Create Entity Relationship: MJ: Prediction Units -> MJ: Prediction Units (One To Many via LineageRootID) */
+/* Create Entity Relationship: MJ: ML Prediction Units -> MJ: ML Prediction Units (One To Many via LineageRootID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '84866504-0049-49b2-86c4-065090712992'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '6216a501-fcbb-4ac1-8a55-628b7182f952' OR ([EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND [RelatedEntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND [RelatedEntityJoinField] = 'LineageRootID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('84866504-0049-49b2-86c4-065090712992', '8F160CCC-8743-40FE-B2B1-0799829CDBDA', '8F160CCC-8743-40FE-B2B1-0799829CDBDA', 'LineageRootID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('6216a501-fcbb-4ac1-8a55-628b7182f952', 'D5052EB0-354C-4C4D-80D8-2832FCC720E6', 'D5052EB0-354C-4C4D-80D8-2832FCC720E6', 'LineageRootID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
    END;
                     
-/* Create Entity Relationship: MJ: Prediction Units -> MJ: Training Snapshots (One To Many via PredictionUnitID) */
+/* Create Entity Relationship: MJ: ML Prediction Units -> MJ: ML Training Snapshots (One To Many via PredictionUnitID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '570e4488-f5f9-48ec-9932-7d7f8909c6f5'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '8463ebe3-2d8e-4f8d-9d6b-21ef5ce17f20' OR ([EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND [RelatedEntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND [RelatedEntityJoinField] = 'PredictionUnitID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('570e4488-f5f9-48ec-9932-7d7f8909c6f5', '8F160CCC-8743-40FE-B2B1-0799829CDBDA', '947FF197-FAAF-4557-AE52-6FDCF4313762', 'PredictionUnitID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('8463ebe3-2d8e-4f8d-9d6b-21ef5ce17f20', 'D5052EB0-354C-4C4D-80D8-2832FCC720E6', 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', 'PredictionUnitID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
    END;
                     
-/* Create Entity Relationship: MJ: Prediction Units -> MJ: ML Training Pipelines (One To Many via PredictionUnitID) */
+/* Create Entity Relationship: MJ: ML Prediction Units -> MJ: ML Training Pipelines (One To Many via PredictionUnitID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'f319794c-50f4-489e-8d78-631578fb6bad'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'a647bcd2-b388-4a5a-9565-75963787ab4e' OR ([EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND [RelatedEntityID] = '703FD109-331B-438D-902B-8E4A93C3F6AA' AND [RelatedEntityJoinField] = 'PredictionUnitID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('f319794c-50f4-489e-8d78-631578fb6bad', '8F160CCC-8743-40FE-B2B1-0799829CDBDA', '703FD109-331B-438D-902B-8E4A93C3F6AA', 'PredictionUnitID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('a647bcd2-b388-4a5a-9565-75963787ab4e', 'D5052EB0-354C-4C4D-80D8-2832FCC720E6', '703FD109-331B-438D-902B-8E4A93C3F6AA', 'PredictionUnitID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
    END;
 
 
-/* Create Entity Relationship: MJ: File Storage Providers -> MJ: Training Snapshots (One To Many via StorageProviderID) */
+/* Create Entity Relationship: MJ: File Storage Providers -> MJ: ML Training Snapshots (One To Many via StorageProviderID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'aceceb45-6055-499b-b06c-798ab23a1405'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'bbb7a603-1307-4929-bb90-44c9a3113e06' OR ([EntityID] = '28248F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND [RelatedEntityJoinField] = 'StorageProviderID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('aceceb45-6055-499b-b06c-798ab23a1405', '28248F34-2837-EF11-86D4-6045BDEE16E6', '947FF197-FAAF-4557-AE52-6FDCF4313762', 'StorageProviderID', 'One To Many', 1, 1, 6, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('bbb7a603-1307-4929-bb90-44c9a3113e06', '28248F34-2837-EF11-86D4-6045BDEE16E6', 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', 'StorageProviderID', 'One To Many', 1, 1, 6, GETUTCDATE(), GETUTCDATE())
    END;
 
 
-/* Create Entity Relationship: MJ: Files -> MJ: Training Snapshots (One To Many via MatrixFileID) */
+/* Create Entity Relationship: MJ: Files -> MJ: ML Training Snapshots (One To Many via MatrixFileID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'c30ee404-9f54-40f1-8391-06a719bf742c'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '20d7c085-dce4-4a7c-9ec7-79a15c62896a' OR ([EntityID] = '29248F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND [RelatedEntityJoinField] = 'MatrixFileID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('c30ee404-9f54-40f1-8391-06a719bf742c', '29248F34-2837-EF11-86D4-6045BDEE16E6', '947FF197-FAAF-4557-AE52-6FDCF4313762', 'MatrixFileID', 'One To Many', 1, 1, 10, GETUTCDATE(), GETUTCDATE())
-   END;
-                    
-/* Create Entity Relationship: MJ: Files -> MJ: Training Snapshots (One To Many via RowManifestFileID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '07990eee-9c18-4fd8-914a-542bd53756e0'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('07990eee-9c18-4fd8-914a-542bd53756e0', '29248F34-2837-EF11-86D4-6045BDEE16E6', '947FF197-FAAF-4557-AE52-6FDCF4313762', 'RowManifestFileID', 'One To Many', 1, 1, 11, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('20d7c085-dce4-4a7c-9ec7-79a15c62896a', '29248F34-2837-EF11-86D4-6045BDEE16E6', 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', 'MatrixFileID', 'One To Many', 1, 1, 12, GETUTCDATE(), GETUTCDATE())
    END;
                     
-/* Create Entity Relationship: MJ: Files -> MJ: Training Snapshots (One To Many via ProvenanceFileID) */
+/* Create Entity Relationship: MJ: Files -> MJ: ML Training Snapshots (One To Many via RowManifestFileID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '8fc17b55-b69b-4968-ab73-469a47ea179e'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '5a28a7fb-c4f2-4aaa-9ba8-5fa271556841' OR ([EntityID] = '29248F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND [RelatedEntityJoinField] = 'RowManifestFileID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('8fc17b55-b69b-4968-ab73-469a47ea179e', '29248F34-2837-EF11-86D4-6045BDEE16E6', '947FF197-FAAF-4557-AE52-6FDCF4313762', 'ProvenanceFileID', 'One To Many', 1, 1, 12, GETUTCDATE(), GETUTCDATE())
-   END;
-
-
-/* Create Entity Relationship: MJ: Training Snapshots -> MJ: ML Training Runs (One To Many via TrainingSnapshotID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '17c429f6-4b47-4961-99d3-de2362b2eba6'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('17c429f6-4b47-4961-99d3-de2362b2eba6', '947FF197-FAAF-4557-AE52-6FDCF4313762', '1A4DF72F-68E0-410C-B42C-815687BFE2D2', 'TrainingSnapshotID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
-   END;
-
-
-/* Create Entity Relationship: MJ: ML Training Pipelines -> MJ: Training Snapshots (One To Many via PipelineID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '662a5ed6-8dfd-4cf0-ab6b-d89c7f0bbe42'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('662a5ed6-8dfd-4cf0-ab6b-d89c7f0bbe42', '703FD109-331B-438D-902B-8E4A93C3F6AA', '947FF197-FAAF-4557-AE52-6FDCF4313762', 'PipelineID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
-   END;
-
-
-/* Create Entity Relationship: MJ: Evaluation Protocols -> MJ: Training Snapshots (One To Many via EvaluationProtocolID) */
-   IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'df5595e1-63ee-4daf-a35d-417583c88869'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('df5595e1-63ee-4daf-a35d-417583c88869', '0B0C469C-146C-4731-B064-CCB391D67889', '947FF197-FAAF-4557-AE52-6FDCF4313762', 'EvaluationProtocolID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('5a28a7fb-c4f2-4aaa-9ba8-5fa271556841', '29248F34-2837-EF11-86D4-6045BDEE16E6', 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', 'RowManifestFileID', 'One To Many', 1, 1, 13, GETUTCDATE(), GETUTCDATE())
    END;
                     
-/* Create Entity Relationship: MJ: Evaluation Protocols -> MJ: ML Training Runs (One To Many via EvaluationProtocolID) */
+/* Create Entity Relationship: MJ: Files -> MJ: ML Training Snapshots (One To Many via ProvenanceFileID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '33ee0639-0900-4e03-b9ea-d8f5c2415ce2'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'b9a1f060-e95e-43ad-83e1-8f1b2d1569e0' OR ([EntityID] = '29248F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND [RelatedEntityJoinField] = 'ProvenanceFileID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('33ee0639-0900-4e03-b9ea-d8f5c2415ce2', '0B0C469C-146C-4731-B064-CCB391D67889', '1A4DF72F-68E0-410C-B42C-815687BFE2D2', 'EvaluationProtocolID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('b9a1f060-e95e-43ad-83e1-8f1b2d1569e0', '29248F34-2837-EF11-86D4-6045BDEE16E6', 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', 'ProvenanceFileID', 'One To Many', 1, 1, 14, GETUTCDATE(), GETUTCDATE())
+   END;
+
+
+/* Create Entity Relationship: MJ: ML Training Snapshots -> MJ: ML Training Runs (One To Many via TrainingSnapshotID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '24a3a8a7-1dbb-44ac-b1b2-ec9fd437c8af' OR ([EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND [RelatedEntityID] = '1A4DF72F-68E0-410C-B42C-815687BFE2D2' AND [RelatedEntityJoinField] = 'TrainingSnapshotID')
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('24a3a8a7-1dbb-44ac-b1b2-ec9fd437c8af', 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', '1A4DF72F-68E0-410C-B42C-815687BFE2D2', 'TrainingSnapshotID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+   END;
+
+
+/* Create Entity Relationship: MJ: ML Evaluation Protocols -> MJ: ML Training Snapshots (One To Many via EvaluationProtocolID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '6930ccde-4cee-458b-bec5-aa803c76e18a' OR ([EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND [RelatedEntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND [RelatedEntityJoinField] = 'EvaluationProtocolID')
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('6930ccde-4cee-458b-bec5-aa803c76e18a', '7DB88C96-C922-4724-AE93-7B91798CEAFE', 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', 'EvaluationProtocolID', 'One To Many', 1, 1, 1, GETUTCDATE(), GETUTCDATE())
+   END;
+
+
+/* Create Entity Relationship: MJ: ML Evaluation Protocols -> MJ: ML Evaluation Protocols (One To Many via LineageRootID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '5f43125b-bead-42b7-b2db-448378807db3' OR ([EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND [RelatedEntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND [RelatedEntityJoinField] = 'LineageRootID')
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('5f43125b-bead-42b7-b2db-448378807db3', '7DB88C96-C922-4724-AE93-7B91798CEAFE', '7DB88C96-C922-4724-AE93-7B91798CEAFE', 'LineageRootID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
    END;
                     
-/* Create Entity Relationship: MJ: Evaluation Protocols -> MJ: ML Training Pipelines (One To Many via EvaluationProtocolID) */
+/* Create Entity Relationship: MJ: ML Evaluation Protocols -> MJ: ML Training Runs (One To Many via EvaluationProtocolID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '8d8e97dc-dd35-4eb5-a367-f9104ab05eea'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '34415204-8d17-40ce-a99f-e6bf63041940' OR ([EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND [RelatedEntityID] = '1A4DF72F-68E0-410C-B42C-815687BFE2D2' AND [RelatedEntityJoinField] = 'EvaluationProtocolID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('8d8e97dc-dd35-4eb5-a367-f9104ab05eea', '0B0C469C-146C-4731-B064-CCB391D67889', '703FD109-331B-438D-902B-8E4A93C3F6AA', 'EvaluationProtocolID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('34415204-8d17-40ce-a99f-e6bf63041940', '7DB88C96-C922-4724-AE93-7B91798CEAFE', '1A4DF72F-68E0-410C-B42C-815687BFE2D2', 'EvaluationProtocolID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
    END;
                     
-/* Create Entity Relationship: MJ: Evaluation Protocols -> MJ: Evaluation Protocols (One To Many via LineageRootID) */
+/* Create Entity Relationship: MJ: ML Evaluation Protocols -> MJ: ML Training Pipelines (One To Many via EvaluationProtocolID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '88b324c3-1b56-4641-b38f-54de6d8e3d94'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '9a30061a-304a-40ef-a11e-c391148679c0' OR ([EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND [RelatedEntityID] = '703FD109-331B-438D-902B-8E4A93C3F6AA' AND [RelatedEntityJoinField] = 'EvaluationProtocolID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('88b324c3-1b56-4641-b38f-54de6d8e3d94', '0B0C469C-146C-4731-B064-CCB391D67889', '0B0C469C-146C-4731-B064-CCB391D67889', 'LineageRootID', 'One To Many', 1, 1, 4, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('9a30061a-304a-40ef-a11e-c391148679c0', '7DB88C96-C922-4724-AE93-7B91798CEAFE', '703FD109-331B-438D-902B-8E4A93C3F6AA', 'EvaluationProtocolID', 'One To Many', 1, 1, 4, GETUTCDATE(), GETUTCDATE())
    END;
 
-/* Index for Foreign Keys for EvaluationProtocol */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Evaluation Protocols
--- Item: Index for Foreign Keys
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
--- Index for foreign key LineageRootID in table EvaluationProtocol
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_EvaluationProtocol_LineageRootID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[EvaluationProtocol]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_EvaluationProtocol_LineageRootID ON [${flyway:defaultSchema}].[EvaluationProtocol] ([LineageRootID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 681C028A-CC37-40CF-93A2-184DD7848FDC */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='681C028A-CC37-40CF-93A2-184DD7848FDC', @RelatedEntityNameFieldMap='LineageRoot';
-
-/* Base View SQL for MJ: Evaluation Protocols */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Evaluation Protocols
--- Item: vwEvaluationProtocols
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ BASE VIEW FOR ENTITY:      MJ: Evaluation Protocols
------               SCHEMA:      ${flyway:defaultSchema}
------               BASE TABLE:  EvaluationProtocol
------               PRIMARY KEY: ID
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[vwEvaluationProtocols]', 'V') IS NOT NULL
-    DROP VIEW [${flyway:defaultSchema}].[vwEvaluationProtocols];
-GO
-
-CREATE VIEW [${flyway:defaultSchema}].[vwEvaluationProtocols]
-AS
-SELECT
-    e.*,
-    MJEvaluationProtocol_LineageRootID.[Name] AS [LineageRoot]
-FROM
-    [${flyway:defaultSchema}].[EvaluationProtocol] AS e
-INNER JOIN
-    [${flyway:defaultSchema}].[EvaluationProtocol] AS MJEvaluationProtocol_LineageRootID
-  ON
-    [e].[LineageRootID] = MJEvaluationProtocol_LineageRootID.[ID]
-GO
-GRANT SELECT ON [${flyway:defaultSchema}].[vwEvaluationProtocols] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* Base View Permissions SQL for MJ: Evaluation Protocols */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Evaluation Protocols
--- Item: Permissions for vwEvaluationProtocols
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-GRANT SELECT ON [${flyway:defaultSchema}].[vwEvaluationProtocols] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* spCreate SQL for MJ: Evaluation Protocols */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Evaluation Protocols
--- Item: spCreateEvaluationProtocol
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ CREATE PROCEDURE FOR EvaluationProtocol
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateEvaluationProtocol]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateEvaluationProtocol];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateEvaluationProtocol]
-    @ID uniqueidentifier = NULL,
-    @LineageRootID uniqueidentifier,
-    @Version int,
-    @Name nvarchar(255),
-    @Description_Clear bit = 0,
-    @Description nvarchar(MAX) = NULL,
-    @Holdout nvarchar(MAX),
-    @InnerValidation nvarchar(MAX),
-    @Seed int,
-    @HoldoutAccessBudget int = NULL,
-    @PrimaryScore nvarchar(MAX),
-    @SecondaryMetrics nvarchar(MAX),
-    @Baselines nvarchar(MAX),
-    @Calibration nvarchar(MAX),
-    @Resampling nvarchar(MAX),
-    @Intervals nvarchar(MAX),
-    @Promotion nvarchar(MAX),
-    @AllowedOutcomes nvarchar(MAX),
-    @LeakageAudit nvarchar(MAX),
-    @Exclusions nvarchar(MAX),
-    @Slices nvarchar(MAX),
-    @PredictionIntervals_Clear bit = 0,
-    @PredictionIntervals nvarchar(MAX) = NULL,
-    @ResidualDiagnostics_Clear bit = 0,
-    @ResidualDiagnostics nvarchar(MAX) = NULL,
-    @RetrainTriggers nvarchar(MAX),
-    @SearchStrategy nvarchar(MAX),
-    @Budgets nvarchar(MAX),
-    @MinMinorityClassRows int = NULL,
-    @GuardFieldsEditableBy nvarchar(20) = NULL,
-    @AuthoredBy nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-
-    IF @ID IS NOT NULL
-    BEGIN
-        -- User provided a value, use it
-        INSERT INTO [${flyway:defaultSchema}].[EvaluationProtocol]
-            (
-                [ID],
-                [LineageRootID],
-                [Version],
-                [Name],
-                [Description],
-                [Holdout],
-                [InnerValidation],
-                [Seed],
-                [HoldoutAccessBudget],
-                [PrimaryScore],
-                [SecondaryMetrics],
-                [Baselines],
-                [Calibration],
-                [Resampling],
-                [Intervals],
-                [Promotion],
-                [AllowedOutcomes],
-                [LeakageAudit],
-                [Exclusions],
-                [Slices],
-                [PredictionIntervals],
-                [ResidualDiagnostics],
-                [RetrainTriggers],
-                [SearchStrategy],
-                [Budgets],
-                [MinMinorityClassRows],
-                [GuardFieldsEditableBy],
-                [AuthoredBy]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @ID,
-                @LineageRootID,
-                @Version,
-                @Name,
-                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
-                @Holdout,
-                @InnerValidation,
-                @Seed,
-                ISNULL(@HoldoutAccessBudget, 1),
-                @PrimaryScore,
-                @SecondaryMetrics,
-                @Baselines,
-                @Calibration,
-                @Resampling,
-                @Intervals,
-                @Promotion,
-                @AllowedOutcomes,
-                @LeakageAudit,
-                @Exclusions,
-                @Slices,
-                CASE WHEN @PredictionIntervals_Clear = 1 THEN NULL ELSE ISNULL(@PredictionIntervals, NULL) END,
-                CASE WHEN @ResidualDiagnostics_Clear = 1 THEN NULL ELSE ISNULL(@ResidualDiagnostics, NULL) END,
-                @RetrainTriggers,
-                @SearchStrategy,
-                @Budgets,
-                ISNULL(@MinMinorityClassRows, 20),
-                ISNULL(@GuardFieldsEditableBy, 'non-agent'),
-                @AuthoredBy
-            )
-    END
-    ELSE
-    BEGIN
-        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
-        INSERT INTO [${flyway:defaultSchema}].[EvaluationProtocol]
-            (
-                [LineageRootID],
-                [Version],
-                [Name],
-                [Description],
-                [Holdout],
-                [InnerValidation],
-                [Seed],
-                [HoldoutAccessBudget],
-                [PrimaryScore],
-                [SecondaryMetrics],
-                [Baselines],
-                [Calibration],
-                [Resampling],
-                [Intervals],
-                [Promotion],
-                [AllowedOutcomes],
-                [LeakageAudit],
-                [Exclusions],
-                [Slices],
-                [PredictionIntervals],
-                [ResidualDiagnostics],
-                [RetrainTriggers],
-                [SearchStrategy],
-                [Budgets],
-                [MinMinorityClassRows],
-                [GuardFieldsEditableBy],
-                [AuthoredBy]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @LineageRootID,
-                @Version,
-                @Name,
-                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
-                @Holdout,
-                @InnerValidation,
-                @Seed,
-                ISNULL(@HoldoutAccessBudget, 1),
-                @PrimaryScore,
-                @SecondaryMetrics,
-                @Baselines,
-                @Calibration,
-                @Resampling,
-                @Intervals,
-                @Promotion,
-                @AllowedOutcomes,
-                @LeakageAudit,
-                @Exclusions,
-                @Slices,
-                CASE WHEN @PredictionIntervals_Clear = 1 THEN NULL ELSE ISNULL(@PredictionIntervals, NULL) END,
-                CASE WHEN @ResidualDiagnostics_Clear = 1 THEN NULL ELSE ISNULL(@ResidualDiagnostics, NULL) END,
-                @RetrainTriggers,
-                @SearchStrategy,
-                @Budgets,
-                ISNULL(@MinMinorityClassRows, 20),
-                ISNULL(@GuardFieldsEditableBy, 'non-agent'),
-                @AuthoredBy
-            )
-    END
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [${flyway:defaultSchema}].[vwEvaluationProtocols] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateEvaluationProtocol] TO [cdp_Developer], [cdp_Integration];
-
-/* spCreate Permissions for MJ: Evaluation Protocols */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateEvaluationProtocol] TO [cdp_Developer], [cdp_Integration];
-
-/* spUpdate SQL for MJ: Evaluation Protocols */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Evaluation Protocols
--- Item: spUpdateEvaluationProtocol
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ UPDATE PROCEDURE FOR EvaluationProtocol
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateEvaluationProtocol]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateEvaluationProtocol];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateEvaluationProtocol]
-    @ID uniqueidentifier,
-    @LineageRootID uniqueidentifier = NULL,
-    @Version int = NULL,
-    @Name nvarchar(255) = NULL,
-    @Description_Clear bit = 0,
-    @Description nvarchar(MAX) = NULL,
-    @Holdout nvarchar(MAX) = NULL,
-    @InnerValidation nvarchar(MAX) = NULL,
-    @Seed int = NULL,
-    @HoldoutAccessBudget int = NULL,
-    @PrimaryScore nvarchar(MAX) = NULL,
-    @SecondaryMetrics nvarchar(MAX) = NULL,
-    @Baselines nvarchar(MAX) = NULL,
-    @Calibration nvarchar(MAX) = NULL,
-    @Resampling nvarchar(MAX) = NULL,
-    @Intervals nvarchar(MAX) = NULL,
-    @Promotion nvarchar(MAX) = NULL,
-    @AllowedOutcomes nvarchar(MAX) = NULL,
-    @LeakageAudit nvarchar(MAX) = NULL,
-    @Exclusions nvarchar(MAX) = NULL,
-    @Slices nvarchar(MAX) = NULL,
-    @PredictionIntervals_Clear bit = 0,
-    @PredictionIntervals nvarchar(MAX) = NULL,
-    @ResidualDiagnostics_Clear bit = 0,
-    @ResidualDiagnostics nvarchar(MAX) = NULL,
-    @RetrainTriggers nvarchar(MAX) = NULL,
-    @SearchStrategy nvarchar(MAX) = NULL,
-    @Budgets nvarchar(MAX) = NULL,
-    @MinMinorityClassRows int = NULL,
-    @GuardFieldsEditableBy nvarchar(20) = NULL,
-    @AuthoredBy nvarchar(MAX) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[EvaluationProtocol]
-    SET
-        [LineageRootID] = ISNULL(@LineageRootID, [LineageRootID]),
-        [Version] = ISNULL(@Version, [Version]),
-        [Name] = ISNULL(@Name, [Name]),
-        [Description] = CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, [Description]) END,
-        [Holdout] = ISNULL(@Holdout, [Holdout]),
-        [InnerValidation] = ISNULL(@InnerValidation, [InnerValidation]),
-        [Seed] = ISNULL(@Seed, [Seed]),
-        [HoldoutAccessBudget] = ISNULL(@HoldoutAccessBudget, [HoldoutAccessBudget]),
-        [PrimaryScore] = ISNULL(@PrimaryScore, [PrimaryScore]),
-        [SecondaryMetrics] = ISNULL(@SecondaryMetrics, [SecondaryMetrics]),
-        [Baselines] = ISNULL(@Baselines, [Baselines]),
-        [Calibration] = ISNULL(@Calibration, [Calibration]),
-        [Resampling] = ISNULL(@Resampling, [Resampling]),
-        [Intervals] = ISNULL(@Intervals, [Intervals]),
-        [Promotion] = ISNULL(@Promotion, [Promotion]),
-        [AllowedOutcomes] = ISNULL(@AllowedOutcomes, [AllowedOutcomes]),
-        [LeakageAudit] = ISNULL(@LeakageAudit, [LeakageAudit]),
-        [Exclusions] = ISNULL(@Exclusions, [Exclusions]),
-        [Slices] = ISNULL(@Slices, [Slices]),
-        [PredictionIntervals] = CASE WHEN @PredictionIntervals_Clear = 1 THEN NULL ELSE ISNULL(@PredictionIntervals, [PredictionIntervals]) END,
-        [ResidualDiagnostics] = CASE WHEN @ResidualDiagnostics_Clear = 1 THEN NULL ELSE ISNULL(@ResidualDiagnostics, [ResidualDiagnostics]) END,
-        [RetrainTriggers] = ISNULL(@RetrainTriggers, [RetrainTriggers]),
-        [SearchStrategy] = ISNULL(@SearchStrategy, [SearchStrategy]),
-        [Budgets] = ISNULL(@Budgets, [Budgets]),
-        [MinMinorityClassRows] = ISNULL(@MinMinorityClassRows, [MinMinorityClassRows]),
-        [GuardFieldsEditableBy] = ISNULL(@GuardFieldsEditableBy, [GuardFieldsEditableBy]),
-        [AuthoredBy] = ISNULL(@AuthoredBy, [AuthoredBy])
-    WHERE
-        [ID] = @ID
-
-    -- Check if the update was successful
-    IF @@ROWCOUNT = 0
-        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwEvaluationProtocols] WHERE 1=0
-    ELSE
-        -- Return the updated record so the caller can see the updated values and any calculated fields
-        SELECT
-                                        *
-                                    FROM
-                                        [${flyway:defaultSchema}].[vwEvaluationProtocols]
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateEvaluationProtocol] TO [cdp_Developer], [cdp_Integration]
-GO
-
-------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the EvaluationProtocol table
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateEvaluationProtocol]', 'TR') IS NOT NULL
-    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateEvaluationProtocol];
-GO
-CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateEvaluationProtocol
-ON [${flyway:defaultSchema}].[EvaluationProtocol]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[EvaluationProtocol]
-    SET
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM
-        [${flyway:defaultSchema}].[EvaluationProtocol] AS _organicTable
-    INNER JOIN
-        INSERTED AS I ON
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-
-/* spUpdate Permissions for MJ: Evaluation Protocols */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateEvaluationProtocol] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete SQL for MJ: Evaluation Protocols */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Evaluation Protocols
--- Item: spDeleteEvaluationProtocol
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR EvaluationProtocol
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteEvaluationProtocol]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteEvaluationProtocol];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteEvaluationProtocol]
-    @ID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM
-        [${flyway:defaultSchema}].[EvaluationProtocol]
-    WHERE
-        [ID] = @ID
-
-
-    -- Check if the delete was successful
-    IF @@ROWCOUNT = 0
-        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
-    ELSE
-        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEvaluationProtocol] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete Permissions for MJ: Evaluation Protocols */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEvaluationProtocol] TO [cdp_Developer], [cdp_Integration];
+/* Create Entity Relationship: MJ: ML Training Pipelines -> MJ: ML Training Snapshots (One To Many via PipelineID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'e39332d1-4a97-4201-ac02-14e2b654a90f' OR ([EntityID] = '703FD109-331B-438D-902B-8E4A93C3F6AA' AND [RelatedEntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND [RelatedEntityJoinField] = 'PipelineID')
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('e39332d1-4a97-4201-ac02-14e2b654a90f', '703FD109-331B-438D-902B-8E4A93C3F6AA', 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', 'PipelineID', 'One To Many', 1, 1, 3, GETUTCDATE(), GETUTCDATE())
+   END;
 
 /* Index for Foreign Keys for FeatureValue */
 -----------------------------------------------------------------
@@ -8203,6 +7770,464 @@ REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteFeatureValue] FROM [cdp_Dev
 REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteFeatureValue] FROM [cdp_Integration]
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteFeatureValue] TO [cdp_Developer], [cdp_Integration];
 
+/* Index for Foreign Keys for MLEvaluationProtocol */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: ML Evaluation Protocols
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key LineageRootID in table MLEvaluationProtocol
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_MLEvaluationProtocol_LineageRootID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[MLEvaluationProtocol]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_MLEvaluationProtocol_LineageRootID ON [${flyway:defaultSchema}].[MLEvaluationProtocol] ([LineageRootID]);
+
+/* SQL text to update entity field related entity name field map for entity field ID CC21F4D2-0D46-44B0-8FE4-C16DFDF4C522 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='CC21F4D2-0D46-44B0-8FE4-C16DFDF4C522', @RelatedEntityNameFieldMap='LineageRoot';
+
+/* Base View SQL for MJ: ML Evaluation Protocols */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: ML Evaluation Protocols
+-- Item: vwMLEvaluationProtocols
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: ML Evaluation Protocols
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  MLEvaluationProtocol
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwMLEvaluationProtocols]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwMLEvaluationProtocols];
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwMLEvaluationProtocols]
+AS
+SELECT
+    m.*,
+    MJMLEvaluationProtocol_LineageRootID.[Name] AS [LineageRoot]
+FROM
+    [${flyway:defaultSchema}].[MLEvaluationProtocol] AS m
+INNER JOIN
+    [${flyway:defaultSchema}].[MLEvaluationProtocol] AS MJMLEvaluationProtocol_LineageRootID
+  ON
+    [m].[LineageRootID] = MJMLEvaluationProtocol_LineageRootID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwMLEvaluationProtocols] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* Base View Permissions SQL for MJ: ML Evaluation Protocols */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: ML Evaluation Protocols
+-- Item: Permissions for vwMLEvaluationProtocols
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwMLEvaluationProtocols] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* spCreate SQL for MJ: ML Evaluation Protocols */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: ML Evaluation Protocols
+-- Item: spCreateMLEvaluationProtocol
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR MLEvaluationProtocol
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateMLEvaluationProtocol]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateMLEvaluationProtocol];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateMLEvaluationProtocol]
+    @ID uniqueidentifier = NULL,
+    @LineageRootID uniqueidentifier,
+    @Version int,
+    @Name nvarchar(255),
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @Holdout nvarchar(MAX),
+    @InnerValidation nvarchar(MAX),
+    @Seed int,
+    @HoldoutAccessBudget int = NULL,
+    @PrimaryScore nvarchar(MAX),
+    @SecondaryMetrics nvarchar(MAX),
+    @Baselines nvarchar(MAX),
+    @Calibration nvarchar(MAX),
+    @Resampling nvarchar(MAX),
+    @Intervals nvarchar(MAX),
+    @Promotion nvarchar(MAX),
+    @AllowedOutcomes nvarchar(MAX),
+    @LeakageAudit nvarchar(MAX),
+    @Exclusions nvarchar(MAX),
+    @Slices nvarchar(MAX),
+    @PredictionIntervals_Clear bit = 0,
+    @PredictionIntervals nvarchar(MAX) = NULL,
+    @ResidualDiagnostics_Clear bit = 0,
+    @ResidualDiagnostics nvarchar(MAX) = NULL,
+    @RetrainTriggers nvarchar(MAX),
+    @SearchStrategy nvarchar(MAX),
+    @Budgets nvarchar(MAX),
+    @MinMinorityClassRows int = NULL,
+    @GuardFieldsEditableBy nvarchar(20) = NULL,
+    @AuthoredBy nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[MLEvaluationProtocol]
+            (
+                [ID],
+                [LineageRootID],
+                [Version],
+                [Name],
+                [Description],
+                [Holdout],
+                [InnerValidation],
+                [Seed],
+                [HoldoutAccessBudget],
+                [PrimaryScore],
+                [SecondaryMetrics],
+                [Baselines],
+                [Calibration],
+                [Resampling],
+                [Intervals],
+                [Promotion],
+                [AllowedOutcomes],
+                [LeakageAudit],
+                [Exclusions],
+                [Slices],
+                [PredictionIntervals],
+                [ResidualDiagnostics],
+                [RetrainTriggers],
+                [SearchStrategy],
+                [Budgets],
+                [MinMinorityClassRows],
+                [GuardFieldsEditableBy],
+                [AuthoredBy]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @LineageRootID,
+                @Version,
+                @Name,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                @Holdout,
+                @InnerValidation,
+                @Seed,
+                ISNULL(@HoldoutAccessBudget, 1),
+                @PrimaryScore,
+                @SecondaryMetrics,
+                @Baselines,
+                @Calibration,
+                @Resampling,
+                @Intervals,
+                @Promotion,
+                @AllowedOutcomes,
+                @LeakageAudit,
+                @Exclusions,
+                @Slices,
+                CASE WHEN @PredictionIntervals_Clear = 1 THEN NULL ELSE ISNULL(@PredictionIntervals, NULL) END,
+                CASE WHEN @ResidualDiagnostics_Clear = 1 THEN NULL ELSE ISNULL(@ResidualDiagnostics, NULL) END,
+                @RetrainTriggers,
+                @SearchStrategy,
+                @Budgets,
+                ISNULL(@MinMinorityClassRows, 20),
+                ISNULL(@GuardFieldsEditableBy, 'non-agent'),
+                @AuthoredBy
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[MLEvaluationProtocol]
+            (
+                [LineageRootID],
+                [Version],
+                [Name],
+                [Description],
+                [Holdout],
+                [InnerValidation],
+                [Seed],
+                [HoldoutAccessBudget],
+                [PrimaryScore],
+                [SecondaryMetrics],
+                [Baselines],
+                [Calibration],
+                [Resampling],
+                [Intervals],
+                [Promotion],
+                [AllowedOutcomes],
+                [LeakageAudit],
+                [Exclusions],
+                [Slices],
+                [PredictionIntervals],
+                [ResidualDiagnostics],
+                [RetrainTriggers],
+                [SearchStrategy],
+                [Budgets],
+                [MinMinorityClassRows],
+                [GuardFieldsEditableBy],
+                [AuthoredBy]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @LineageRootID,
+                @Version,
+                @Name,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                @Holdout,
+                @InnerValidation,
+                @Seed,
+                ISNULL(@HoldoutAccessBudget, 1),
+                @PrimaryScore,
+                @SecondaryMetrics,
+                @Baselines,
+                @Calibration,
+                @Resampling,
+                @Intervals,
+                @Promotion,
+                @AllowedOutcomes,
+                @LeakageAudit,
+                @Exclusions,
+                @Slices,
+                CASE WHEN @PredictionIntervals_Clear = 1 THEN NULL ELSE ISNULL(@PredictionIntervals, NULL) END,
+                CASE WHEN @ResidualDiagnostics_Clear = 1 THEN NULL ELSE ISNULL(@ResidualDiagnostics, NULL) END,
+                @RetrainTriggers,
+                @SearchStrategy,
+                @Budgets,
+                ISNULL(@MinMinorityClassRows, 20),
+                ISNULL(@GuardFieldsEditableBy, 'non-agent'),
+                @AuthoredBy
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwMLEvaluationProtocols] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateMLEvaluationProtocol] TO [cdp_Developer], [cdp_Integration];
+
+/* spCreate Permissions for MJ: ML Evaluation Protocols */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateMLEvaluationProtocol] TO [cdp_Developer], [cdp_Integration];
+
+/* spUpdate SQL for MJ: ML Evaluation Protocols */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: ML Evaluation Protocols
+-- Item: spUpdateMLEvaluationProtocol
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR MLEvaluationProtocol
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateMLEvaluationProtocol]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateMLEvaluationProtocol];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateMLEvaluationProtocol]
+    @ID uniqueidentifier,
+    @LineageRootID uniqueidentifier = NULL,
+    @Version int = NULL,
+    @Name nvarchar(255) = NULL,
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @Holdout nvarchar(MAX) = NULL,
+    @InnerValidation nvarchar(MAX) = NULL,
+    @Seed int = NULL,
+    @HoldoutAccessBudget int = NULL,
+    @PrimaryScore nvarchar(MAX) = NULL,
+    @SecondaryMetrics nvarchar(MAX) = NULL,
+    @Baselines nvarchar(MAX) = NULL,
+    @Calibration nvarchar(MAX) = NULL,
+    @Resampling nvarchar(MAX) = NULL,
+    @Intervals nvarchar(MAX) = NULL,
+    @Promotion nvarchar(MAX) = NULL,
+    @AllowedOutcomes nvarchar(MAX) = NULL,
+    @LeakageAudit nvarchar(MAX) = NULL,
+    @Exclusions nvarchar(MAX) = NULL,
+    @Slices nvarchar(MAX) = NULL,
+    @PredictionIntervals_Clear bit = 0,
+    @PredictionIntervals nvarchar(MAX) = NULL,
+    @ResidualDiagnostics_Clear bit = 0,
+    @ResidualDiagnostics nvarchar(MAX) = NULL,
+    @RetrainTriggers nvarchar(MAX) = NULL,
+    @SearchStrategy nvarchar(MAX) = NULL,
+    @Budgets nvarchar(MAX) = NULL,
+    @MinMinorityClassRows int = NULL,
+    @GuardFieldsEditableBy nvarchar(20) = NULL,
+    @AuthoredBy nvarchar(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[MLEvaluationProtocol]
+    SET
+        [LineageRootID] = ISNULL(@LineageRootID, [LineageRootID]),
+        [Version] = ISNULL(@Version, [Version]),
+        [Name] = ISNULL(@Name, [Name]),
+        [Description] = CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, [Description]) END,
+        [Holdout] = ISNULL(@Holdout, [Holdout]),
+        [InnerValidation] = ISNULL(@InnerValidation, [InnerValidation]),
+        [Seed] = ISNULL(@Seed, [Seed]),
+        [HoldoutAccessBudget] = ISNULL(@HoldoutAccessBudget, [HoldoutAccessBudget]),
+        [PrimaryScore] = ISNULL(@PrimaryScore, [PrimaryScore]),
+        [SecondaryMetrics] = ISNULL(@SecondaryMetrics, [SecondaryMetrics]),
+        [Baselines] = ISNULL(@Baselines, [Baselines]),
+        [Calibration] = ISNULL(@Calibration, [Calibration]),
+        [Resampling] = ISNULL(@Resampling, [Resampling]),
+        [Intervals] = ISNULL(@Intervals, [Intervals]),
+        [Promotion] = ISNULL(@Promotion, [Promotion]),
+        [AllowedOutcomes] = ISNULL(@AllowedOutcomes, [AllowedOutcomes]),
+        [LeakageAudit] = ISNULL(@LeakageAudit, [LeakageAudit]),
+        [Exclusions] = ISNULL(@Exclusions, [Exclusions]),
+        [Slices] = ISNULL(@Slices, [Slices]),
+        [PredictionIntervals] = CASE WHEN @PredictionIntervals_Clear = 1 THEN NULL ELSE ISNULL(@PredictionIntervals, [PredictionIntervals]) END,
+        [ResidualDiagnostics] = CASE WHEN @ResidualDiagnostics_Clear = 1 THEN NULL ELSE ISNULL(@ResidualDiagnostics, [ResidualDiagnostics]) END,
+        [RetrainTriggers] = ISNULL(@RetrainTriggers, [RetrainTriggers]),
+        [SearchStrategy] = ISNULL(@SearchStrategy, [SearchStrategy]),
+        [Budgets] = ISNULL(@Budgets, [Budgets]),
+        [MinMinorityClassRows] = ISNULL(@MinMinorityClassRows, [MinMinorityClassRows]),
+        [GuardFieldsEditableBy] = ISNULL(@GuardFieldsEditableBy, [GuardFieldsEditableBy]),
+        [AuthoredBy] = ISNULL(@AuthoredBy, [AuthoredBy])
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwMLEvaluationProtocols] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwMLEvaluationProtocols]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateMLEvaluationProtocol] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the MLEvaluationProtocol table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateMLEvaluationProtocol]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateMLEvaluationProtocol];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateMLEvaluationProtocol
+ON [${flyway:defaultSchema}].[MLEvaluationProtocol]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[MLEvaluationProtocol]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[MLEvaluationProtocol] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+
+/* spUpdate Permissions for MJ: ML Evaluation Protocols */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateMLEvaluationProtocol] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete SQL for MJ: ML Evaluation Protocols */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: ML Evaluation Protocols
+-- Item: spDeleteMLEvaluationProtocol
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR MLEvaluationProtocol
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteMLEvaluationProtocol]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteMLEvaluationProtocol];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteMLEvaluationProtocol]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[MLEvaluationProtocol]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteMLEvaluationProtocol] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete Permissions for MJ: ML Evaluation Protocols */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteMLEvaluationProtocol] TO [cdp_Developer], [cdp_Integration];
+
+/* Index for Foreign Keys for MLPredictionUnit */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: ML Prediction Units
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key LineageRootID in table MLPredictionUnit
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_MLPredictionUnit_LineageRootID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[MLPredictionUnit]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_MLPredictionUnit_LineageRootID ON [${flyway:defaultSchema}].[MLPredictionUnit] ([LineageRootID]);
+
+/* SQL text to update entity field related entity name field map for entity field ID D4C1CA8F-92F6-4D1F-91B8-7989C68A2FF3 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='D4C1CA8F-92F6-4D1F-91B8-7989C68A2FF3', @RelatedEntityNameFieldMap='LineageRoot';
+
 /* Index for Foreign Keys for MLTrainingPipeline */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -8248,8 +8273,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_MLTrainingPipeline_EvaluationProtocolID ON [${flyway:defaultSchema}].[MLTrainingPipeline] ([EvaluationProtocolID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 3A27B360-4935-48B6-A46A-62F39FFF939C */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='3A27B360-4935-48B6-A46A-62F39FFF939C', @RelatedEntityNameFieldMap='PredictionUnit';
+/* SQL text to update entity field related entity name field map for entity field ID 5F6D36E6-64EB-4972-8590-DFF51BFEED77 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='5F6D36E6-64EB-4972-8590-DFF51BFEED77', @RelatedEntityNameFieldMap='PredictionUnit';
 
 /* Index for Foreign Keys for MLTrainingRun */
 -----------------------------------------------------------------
@@ -8314,11 +8339,435 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_MLTrainingRun_EvaluationProtocolID ON [${flyway:defaultSchema}].[MLTrainingRun] ([EvaluationProtocolID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 4639BF78-3A72-4A69-9299-C5C6F5A24F68 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='4639BF78-3A72-4A69-9299-C5C6F5A24F68', @RelatedEntityNameFieldMap='EvaluationProtocol';
+/* SQL text to update entity field related entity name field map for entity field ID 40A9AC69-85A2-4F16-8910-7E96274DEB16 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='40A9AC69-85A2-4F16-8910-7E96274DEB16', @RelatedEntityNameFieldMap='EvaluationProtocol';
 
-/* SQL text to update entity field related entity name field map for entity field ID 6B14E812-7B20-493A-AD29-53AFE948E662 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='6B14E812-7B20-493A-AD29-53AFE948E662', @RelatedEntityNameFieldMap='EvaluationProtocol';
+/* Index for Foreign Keys for MLTrainingSnapshot */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: ML Training Snapshots
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key PipelineID in table MLTrainingSnapshot
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_MLTrainingSnapshot_PipelineID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[MLTrainingSnapshot]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_MLTrainingSnapshot_PipelineID ON [${flyway:defaultSchema}].[MLTrainingSnapshot] ([PipelineID]);
+
+-- Index for foreign key PredictionUnitID in table MLTrainingSnapshot
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_MLTrainingSnapshot_PredictionUnitID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[MLTrainingSnapshot]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_MLTrainingSnapshot_PredictionUnitID ON [${flyway:defaultSchema}].[MLTrainingSnapshot] ([PredictionUnitID]);
+
+-- Index for foreign key EvaluationProtocolID in table MLTrainingSnapshot
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_MLTrainingSnapshot_EvaluationProtocolID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[MLTrainingSnapshot]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_MLTrainingSnapshot_EvaluationProtocolID ON [${flyway:defaultSchema}].[MLTrainingSnapshot] ([EvaluationProtocolID]);
+
+-- Index for foreign key StorageProviderID in table MLTrainingSnapshot
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_MLTrainingSnapshot_StorageProviderID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[MLTrainingSnapshot]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_MLTrainingSnapshot_StorageProviderID ON [${flyway:defaultSchema}].[MLTrainingSnapshot] ([StorageProviderID]);
+
+-- Index for foreign key MatrixFileID in table MLTrainingSnapshot
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_MLTrainingSnapshot_MatrixFileID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[MLTrainingSnapshot]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_MLTrainingSnapshot_MatrixFileID ON [${flyway:defaultSchema}].[MLTrainingSnapshot] ([MatrixFileID]);
+
+-- Index for foreign key RowManifestFileID in table MLTrainingSnapshot
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_MLTrainingSnapshot_RowManifestFileID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[MLTrainingSnapshot]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_MLTrainingSnapshot_RowManifestFileID ON [${flyway:defaultSchema}].[MLTrainingSnapshot] ([RowManifestFileID]);
+
+-- Index for foreign key ProvenanceFileID in table MLTrainingSnapshot
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_MLTrainingSnapshot_ProvenanceFileID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[MLTrainingSnapshot]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_MLTrainingSnapshot_ProvenanceFileID ON [${flyway:defaultSchema}].[MLTrainingSnapshot] ([ProvenanceFileID]);
+
+/* SQL text to update entity field related entity name field map for entity field ID 8F8D2651-B8BD-4406-A051-567B13BDCA78 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='8F8D2651-B8BD-4406-A051-567B13BDCA78', @RelatedEntityNameFieldMap='Pipeline';
+
+/* Base View SQL for MJ: ML Prediction Units */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: ML Prediction Units
+-- Item: vwMLPredictionUnits
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: ML Prediction Units
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  MLPredictionUnit
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwMLPredictionUnits]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwMLPredictionUnits];
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwMLPredictionUnits]
+AS
+SELECT
+    m.*,
+    MJMLPredictionUnit_LineageRootID.[Name] AS [LineageRoot]
+FROM
+    [${flyway:defaultSchema}].[MLPredictionUnit] AS m
+INNER JOIN
+    [${flyway:defaultSchema}].[MLPredictionUnit] AS MJMLPredictionUnit_LineageRootID
+  ON
+    [m].[LineageRootID] = MJMLPredictionUnit_LineageRootID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwMLPredictionUnits] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* Base View Permissions SQL for MJ: ML Prediction Units */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: ML Prediction Units
+-- Item: Permissions for vwMLPredictionUnits
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwMLPredictionUnits] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* spCreate SQL for MJ: ML Prediction Units */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: ML Prediction Units
+-- Item: spCreateMLPredictionUnit
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR MLPredictionUnit
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateMLPredictionUnit]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateMLPredictionUnit];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateMLPredictionUnit]
+    @ID uniqueidentifier = NULL,
+    @LineageRootID uniqueidentifier,
+    @Version int,
+    @Name nvarchar(255),
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @UnitRows nvarchar(MAX),
+    @LabelRule nvarchar(MAX),
+    @LabelWindowDays int,
+    @LabelGapDays int = NULL,
+    @TaskType nvarchar(MAX),
+    @LabelVersion int,
+    @Censoring nvarchar(MAX),
+    @ChangeHistoryPolicy nvarchar(MAX),
+    @GroupKey_Clear bit = 0,
+    @GroupKey nvarchar(255) = NULL,
+    @TemporalSpec_Clear bit = 0,
+    @TemporalSpec nvarchar(MAX) = NULL,
+    @DecisionSpec nvarchar(MAX),
+    @IncumbentHeuristic nvarchar(MAX),
+    @AuthoredBy nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[MLPredictionUnit]
+            (
+                [ID],
+                [LineageRootID],
+                [Version],
+                [Name],
+                [Description],
+                [UnitRows],
+                [LabelRule],
+                [LabelWindowDays],
+                [LabelGapDays],
+                [TaskType],
+                [LabelVersion],
+                [Censoring],
+                [ChangeHistoryPolicy],
+                [GroupKey],
+                [TemporalSpec],
+                [DecisionSpec],
+                [IncumbentHeuristic],
+                [AuthoredBy]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @LineageRootID,
+                @Version,
+                @Name,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                @UnitRows,
+                @LabelRule,
+                @LabelWindowDays,
+                ISNULL(@LabelGapDays, 0),
+                @TaskType,
+                @LabelVersion,
+                @Censoring,
+                @ChangeHistoryPolicy,
+                CASE WHEN @GroupKey_Clear = 1 THEN NULL ELSE ISNULL(@GroupKey, NULL) END,
+                CASE WHEN @TemporalSpec_Clear = 1 THEN NULL ELSE ISNULL(@TemporalSpec, NULL) END,
+                @DecisionSpec,
+                @IncumbentHeuristic,
+                @AuthoredBy
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[MLPredictionUnit]
+            (
+                [LineageRootID],
+                [Version],
+                [Name],
+                [Description],
+                [UnitRows],
+                [LabelRule],
+                [LabelWindowDays],
+                [LabelGapDays],
+                [TaskType],
+                [LabelVersion],
+                [Censoring],
+                [ChangeHistoryPolicy],
+                [GroupKey],
+                [TemporalSpec],
+                [DecisionSpec],
+                [IncumbentHeuristic],
+                [AuthoredBy]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @LineageRootID,
+                @Version,
+                @Name,
+                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
+                @UnitRows,
+                @LabelRule,
+                @LabelWindowDays,
+                ISNULL(@LabelGapDays, 0),
+                @TaskType,
+                @LabelVersion,
+                @Censoring,
+                @ChangeHistoryPolicy,
+                CASE WHEN @GroupKey_Clear = 1 THEN NULL ELSE ISNULL(@GroupKey, NULL) END,
+                CASE WHEN @TemporalSpec_Clear = 1 THEN NULL ELSE ISNULL(@TemporalSpec, NULL) END,
+                @DecisionSpec,
+                @IncumbentHeuristic,
+                @AuthoredBy
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwMLPredictionUnits] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateMLPredictionUnit] TO [cdp_Developer], [cdp_Integration];
+
+/* spCreate Permissions for MJ: ML Prediction Units */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateMLPredictionUnit] TO [cdp_Developer], [cdp_Integration];
+
+/* spUpdate SQL for MJ: ML Prediction Units */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: ML Prediction Units
+-- Item: spUpdateMLPredictionUnit
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR MLPredictionUnit
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateMLPredictionUnit]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateMLPredictionUnit];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateMLPredictionUnit]
+    @ID uniqueidentifier,
+    @LineageRootID uniqueidentifier = NULL,
+    @Version int = NULL,
+    @Name nvarchar(255) = NULL,
+    @Description_Clear bit = 0,
+    @Description nvarchar(MAX) = NULL,
+    @UnitRows nvarchar(MAX) = NULL,
+    @LabelRule nvarchar(MAX) = NULL,
+    @LabelWindowDays int = NULL,
+    @LabelGapDays int = NULL,
+    @TaskType nvarchar(MAX) = NULL,
+    @LabelVersion int = NULL,
+    @Censoring nvarchar(MAX) = NULL,
+    @ChangeHistoryPolicy nvarchar(MAX) = NULL,
+    @GroupKey_Clear bit = 0,
+    @GroupKey nvarchar(255) = NULL,
+    @TemporalSpec_Clear bit = 0,
+    @TemporalSpec nvarchar(MAX) = NULL,
+    @DecisionSpec nvarchar(MAX) = NULL,
+    @IncumbentHeuristic nvarchar(MAX) = NULL,
+    @AuthoredBy nvarchar(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[MLPredictionUnit]
+    SET
+        [LineageRootID] = ISNULL(@LineageRootID, [LineageRootID]),
+        [Version] = ISNULL(@Version, [Version]),
+        [Name] = ISNULL(@Name, [Name]),
+        [Description] = CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, [Description]) END,
+        [UnitRows] = ISNULL(@UnitRows, [UnitRows]),
+        [LabelRule] = ISNULL(@LabelRule, [LabelRule]),
+        [LabelWindowDays] = ISNULL(@LabelWindowDays, [LabelWindowDays]),
+        [LabelGapDays] = ISNULL(@LabelGapDays, [LabelGapDays]),
+        [TaskType] = ISNULL(@TaskType, [TaskType]),
+        [LabelVersion] = ISNULL(@LabelVersion, [LabelVersion]),
+        [Censoring] = ISNULL(@Censoring, [Censoring]),
+        [ChangeHistoryPolicy] = ISNULL(@ChangeHistoryPolicy, [ChangeHistoryPolicy]),
+        [GroupKey] = CASE WHEN @GroupKey_Clear = 1 THEN NULL ELSE ISNULL(@GroupKey, [GroupKey]) END,
+        [TemporalSpec] = CASE WHEN @TemporalSpec_Clear = 1 THEN NULL ELSE ISNULL(@TemporalSpec, [TemporalSpec]) END,
+        [DecisionSpec] = ISNULL(@DecisionSpec, [DecisionSpec]),
+        [IncumbentHeuristic] = ISNULL(@IncumbentHeuristic, [IncumbentHeuristic]),
+        [AuthoredBy] = ISNULL(@AuthoredBy, [AuthoredBy])
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwMLPredictionUnits] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwMLPredictionUnits]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateMLPredictionUnit] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the MLPredictionUnit table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateMLPredictionUnit]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateMLPredictionUnit];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateMLPredictionUnit
+ON [${flyway:defaultSchema}].[MLPredictionUnit]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[MLPredictionUnit]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[MLPredictionUnit] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+
+/* spUpdate Permissions for MJ: ML Prediction Units */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateMLPredictionUnit] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete SQL for MJ: ML Prediction Units */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: ML Prediction Units
+-- Item: spDeleteMLPredictionUnit
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR MLPredictionUnit
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteMLPredictionUnit]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteMLPredictionUnit];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteMLPredictionUnit]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[MLPredictionUnit]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteMLPredictionUnit] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete Permissions for MJ: ML Prediction Units */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteMLPredictionUnit] TO [cdp_Developer], [cdp_Integration];
+
+/* SQL text to update entity field related entity name field map for entity field ID 517ACE76-EC37-449F-8AB2-737099D8C1D2 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='517ACE76-EC37-449F-8AB2-737099D8C1D2', @RelatedEntityNameFieldMap='PredictionUnit';
+
+/* SQL text to update entity field related entity name field map for entity field ID 50D68B63-68B4-4A71-82C0-02FD0D7CCFC0 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='50D68B63-68B4-4A71-82C0-02FD0D7CCFC0', @RelatedEntityNameFieldMap='EvaluationProtocol';
 
 /* Base View SQL for MJ: ML Training Runs */
 -----------------------------------------------------------------
@@ -8347,7 +8796,7 @@ SELECT
     MJMLTrainingPipeline_PipelineID.[Name] AS [Pipeline],
     MJExperimentSessionIteration_ExperimentSessionIterationID.[Label] AS [ExperimentSessionIteration],
     MJMLAlgorithm_AlgorithmID.[Name] AS [Algorithm],
-    MJEvaluationProtocol_EvaluationProtocolID.[Name] AS [EvaluationProtocol]
+    MJMLEvaluationProtocol_EvaluationProtocolID.[Name] AS [EvaluationProtocol]
 FROM
     [${flyway:defaultSchema}].[MLTrainingRun] AS m
 INNER JOIN
@@ -8363,9 +8812,9 @@ INNER JOIN
   ON
     [m].[AlgorithmID] = MJMLAlgorithm_AlgorithmID.[ID]
 LEFT OUTER JOIN
-    [${flyway:defaultSchema}].[EvaluationProtocol] AS MJEvaluationProtocol_EvaluationProtocolID
+    [${flyway:defaultSchema}].[MLEvaluationProtocol] AS MJMLEvaluationProtocol_EvaluationProtocolID
   ON
-    [m].[EvaluationProtocolID] = MJEvaluationProtocol_EvaluationProtocolID.[ID]
+    [m].[EvaluationProtocolID] = MJMLEvaluationProtocol_EvaluationProtocolID.[ID]
 GO
 REVOKE SELECT ON [${flyway:defaultSchema}].[vwMLTrainingRuns] FROM [cdp_Developer]
 REVOKE SELECT ON [${flyway:defaultSchema}].[vwMLTrainingRuns] FROM [cdp_Integration]
@@ -8721,6 +9170,9 @@ REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteMLTrainingRun] FROM [cdp_De
 REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteMLTrainingRun] FROM [cdp_Integration]
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteMLTrainingRun] TO [cdp_Developer], [cdp_Integration];
 
+/* SQL text to update entity field related entity name field map for entity field ID 5F49F9E6-7306-4F1A-8179-0A04EE34415A */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='5F49F9E6-7306-4F1A-8179-0A04EE34415A', @RelatedEntityNameFieldMap='EvaluationProtocol';
+
 /* Base View SQL for MJ: ML Training Pipelines */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -8747,8 +9199,8 @@ SELECT
     m.*,
     MJEntity_TargetEntityID.[Name] AS [TargetEntity],
     MJMLAlgorithm_AlgorithmID.[Name] AS [Algorithm],
-    MJPredictionUnit_PredictionUnitID.[Name] AS [PredictionUnit],
-    MJEvaluationProtocol_EvaluationProtocolID.[Name] AS [EvaluationProtocol]
+    MJMLPredictionUnit_PredictionUnitID.[Name] AS [PredictionUnit],
+    MJMLEvaluationProtocol_EvaluationProtocolID.[Name] AS [EvaluationProtocol]
 FROM
     [${flyway:defaultSchema}].[MLTrainingPipeline] AS m
 INNER JOIN
@@ -8760,13 +9212,13 @@ INNER JOIN
   ON
     [m].[AlgorithmID] = MJMLAlgorithm_AlgorithmID.[ID]
 LEFT OUTER JOIN
-    [${flyway:defaultSchema}].[PredictionUnit] AS MJPredictionUnit_PredictionUnitID
+    [${flyway:defaultSchema}].[MLPredictionUnit] AS MJMLPredictionUnit_PredictionUnitID
   ON
-    [m].[PredictionUnitID] = MJPredictionUnit_PredictionUnitID.[ID]
+    [m].[PredictionUnitID] = MJMLPredictionUnit_PredictionUnitID.[ID]
 LEFT OUTER JOIN
-    [${flyway:defaultSchema}].[EvaluationProtocol] AS MJEvaluationProtocol_EvaluationProtocolID
+    [${flyway:defaultSchema}].[MLEvaluationProtocol] AS MJMLEvaluationProtocol_EvaluationProtocolID
   ON
-    [m].[EvaluationProtocolID] = MJEvaluationProtocol_EvaluationProtocolID.[ID]
+    [m].[EvaluationProtocolID] = MJMLEvaluationProtocol_EvaluationProtocolID.[ID]
 GO
 REVOKE SELECT ON [${flyway:defaultSchema}].[vwMLTrainingPipelines] FROM [cdp_Developer]
 REVOKE SELECT ON [${flyway:defaultSchema}].[vwMLTrainingPipelines] FROM [cdp_Integration]
@@ -9105,560 +9557,112 @@ REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteMLTrainingPipeline] FROM [c
 REVOKE EXECUTE ON [${flyway:defaultSchema}].[spDeleteMLTrainingPipeline] FROM [cdp_Integration]
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteMLTrainingPipeline] TO [cdp_Developer], [cdp_Integration];
 
-/* Index for Foreign Keys for PredictionUnit */
+/* SQL text to update entity field related entity name field map for entity field ID 366BD221-DEAD-41DC-AD75-3642FC088FA9 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='366BD221-DEAD-41DC-AD75-3642FC088FA9', @RelatedEntityNameFieldMap='StorageProvider';
+
+/* SQL text to update entity field related entity name field map for entity field ID 8E286DA2-8662-49FB-B490-94148BC6F2C9 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='8E286DA2-8662-49FB-B490-94148BC6F2C9', @RelatedEntityNameFieldMap='MatrixFile';
+
+/* SQL text to update entity field related entity name field map for entity field ID 19A80161-8C30-4528-B62F-F528DACF4F0B */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='19A80161-8C30-4528-B62F-F528DACF4F0B', @RelatedEntityNameFieldMap='RowManifestFile';
+
+/* SQL text to update entity field related entity name field map for entity field ID 2E6DA552-0E71-4FB7-8E9C-F435F11D1FC7 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='2E6DA552-0E71-4FB7-8E9C-F435F11D1FC7', @RelatedEntityNameFieldMap='ProvenanceFile';
+
+/* Base View SQL for MJ: ML Training Snapshots */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: Prediction Units
--- Item: Index for Foreign Keys
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
--- Index for foreign key LineageRootID in table PredictionUnit
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_PredictionUnit_LineageRootID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[PredictionUnit]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_PredictionUnit_LineageRootID ON [${flyway:defaultSchema}].[PredictionUnit] ([LineageRootID]);
-
-/* SQL text to update entity field related entity name field map for entity field ID 16564F1C-1781-4768-AC1B-A72C51D66B8B */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='16564F1C-1781-4768-AC1B-A72C51D66B8B', @RelatedEntityNameFieldMap='LineageRoot';
-
-/* Base View SQL for MJ: Prediction Units */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Prediction Units
--- Item: vwPredictionUnits
+-- Entity: MJ: ML Training Snapshots
+-- Item: vwMLTrainingSnapshots
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
 ------------------------------------------------------------
------ BASE VIEW FOR ENTITY:      MJ: Prediction Units
+----- BASE VIEW FOR ENTITY:      MJ: ML Training Snapshots
 -----               SCHEMA:      ${flyway:defaultSchema}
------               BASE TABLE:  PredictionUnit
+-----               BASE TABLE:  MLTrainingSnapshot
 -----               PRIMARY KEY: ID
 ------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[vwPredictionUnits]', 'V') IS NOT NULL
-    DROP VIEW [${flyway:defaultSchema}].[vwPredictionUnits];
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwMLTrainingSnapshots]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwMLTrainingSnapshots];
 GO
 
-CREATE VIEW [${flyway:defaultSchema}].[vwPredictionUnits]
+CREATE VIEW [${flyway:defaultSchema}].[vwMLTrainingSnapshots]
 AS
 SELECT
-    p.*,
-    MJPredictionUnit_LineageRootID.[Name] AS [LineageRoot]
-FROM
-    [${flyway:defaultSchema}].[PredictionUnit] AS p
-INNER JOIN
-    [${flyway:defaultSchema}].[PredictionUnit] AS MJPredictionUnit_LineageRootID
-  ON
-    [p].[LineageRootID] = MJPredictionUnit_LineageRootID.[ID]
-GO
-GRANT SELECT ON [${flyway:defaultSchema}].[vwPredictionUnits] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* Base View Permissions SQL for MJ: Prediction Units */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Prediction Units
--- Item: Permissions for vwPredictionUnits
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-GRANT SELECT ON [${flyway:defaultSchema}].[vwPredictionUnits] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
-
-/* spCreate SQL for MJ: Prediction Units */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Prediction Units
--- Item: spCreatePredictionUnit
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ CREATE PROCEDURE FOR PredictionUnit
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spCreatePredictionUnit]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spCreatePredictionUnit];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spCreatePredictionUnit]
-    @ID uniqueidentifier = NULL,
-    @LineageRootID uniqueidentifier,
-    @Version int,
-    @Name nvarchar(255),
-    @Description_Clear bit = 0,
-    @Description nvarchar(MAX) = NULL,
-    @UnitRows nvarchar(MAX),
-    @LabelRule nvarchar(MAX),
-    @LabelWindowDays int,
-    @LabelGapDays int = NULL,
-    @TaskType nvarchar(MAX),
-    @LabelVersion int,
-    @Censoring nvarchar(MAX),
-    @ChangeHistoryPolicy nvarchar(MAX),
-    @GroupKey_Clear bit = 0,
-    @GroupKey nvarchar(255) = NULL,
-    @TemporalSpec_Clear bit = 0,
-    @TemporalSpec nvarchar(MAX) = NULL,
-    @DecisionSpec nvarchar(MAX),
-    @IncumbentHeuristic nvarchar(MAX),
-    @AuthoredBy nvarchar(MAX)
-AS
-BEGIN
-    SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-
-    IF @ID IS NOT NULL
-    BEGIN
-        -- User provided a value, use it
-        INSERT INTO [${flyway:defaultSchema}].[PredictionUnit]
-            (
-                [ID],
-                [LineageRootID],
-                [Version],
-                [Name],
-                [Description],
-                [UnitRows],
-                [LabelRule],
-                [LabelWindowDays],
-                [LabelGapDays],
-                [TaskType],
-                [LabelVersion],
-                [Censoring],
-                [ChangeHistoryPolicy],
-                [GroupKey],
-                [TemporalSpec],
-                [DecisionSpec],
-                [IncumbentHeuristic],
-                [AuthoredBy]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @ID,
-                @LineageRootID,
-                @Version,
-                @Name,
-                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
-                @UnitRows,
-                @LabelRule,
-                @LabelWindowDays,
-                ISNULL(@LabelGapDays, 0),
-                @TaskType,
-                @LabelVersion,
-                @Censoring,
-                @ChangeHistoryPolicy,
-                CASE WHEN @GroupKey_Clear = 1 THEN NULL ELSE ISNULL(@GroupKey, NULL) END,
-                CASE WHEN @TemporalSpec_Clear = 1 THEN NULL ELSE ISNULL(@TemporalSpec, NULL) END,
-                @DecisionSpec,
-                @IncumbentHeuristic,
-                @AuthoredBy
-            )
-    END
-    ELSE
-    BEGIN
-        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
-        INSERT INTO [${flyway:defaultSchema}].[PredictionUnit]
-            (
-                [LineageRootID],
-                [Version],
-                [Name],
-                [Description],
-                [UnitRows],
-                [LabelRule],
-                [LabelWindowDays],
-                [LabelGapDays],
-                [TaskType],
-                [LabelVersion],
-                [Censoring],
-                [ChangeHistoryPolicy],
-                [GroupKey],
-                [TemporalSpec],
-                [DecisionSpec],
-                [IncumbentHeuristic],
-                [AuthoredBy]
-            )
-        OUTPUT INSERTED.[ID] INTO @InsertedRow
-        VALUES
-            (
-                @LineageRootID,
-                @Version,
-                @Name,
-                CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
-                @UnitRows,
-                @LabelRule,
-                @LabelWindowDays,
-                ISNULL(@LabelGapDays, 0),
-                @TaskType,
-                @LabelVersion,
-                @Censoring,
-                @ChangeHistoryPolicy,
-                CASE WHEN @GroupKey_Clear = 1 THEN NULL ELSE ISNULL(@GroupKey, NULL) END,
-                CASE WHEN @TemporalSpec_Clear = 1 THEN NULL ELSE ISNULL(@TemporalSpec, NULL) END,
-                @DecisionSpec,
-                @IncumbentHeuristic,
-                @AuthoredBy
-            )
-    END
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [${flyway:defaultSchema}].[vwPredictionUnits] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreatePredictionUnit] TO [cdp_Developer], [cdp_Integration];
-
-/* spCreate Permissions for MJ: Prediction Units */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreatePredictionUnit] TO [cdp_Developer], [cdp_Integration];
-
-/* spUpdate SQL for MJ: Prediction Units */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Prediction Units
--- Item: spUpdatePredictionUnit
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ UPDATE PROCEDURE FOR PredictionUnit
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdatePredictionUnit]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdatePredictionUnit];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdatePredictionUnit]
-    @ID uniqueidentifier,
-    @LineageRootID uniqueidentifier = NULL,
-    @Version int = NULL,
-    @Name nvarchar(255) = NULL,
-    @Description_Clear bit = 0,
-    @Description nvarchar(MAX) = NULL,
-    @UnitRows nvarchar(MAX) = NULL,
-    @LabelRule nvarchar(MAX) = NULL,
-    @LabelWindowDays int = NULL,
-    @LabelGapDays int = NULL,
-    @TaskType nvarchar(MAX) = NULL,
-    @LabelVersion int = NULL,
-    @Censoring nvarchar(MAX) = NULL,
-    @ChangeHistoryPolicy nvarchar(MAX) = NULL,
-    @GroupKey_Clear bit = 0,
-    @GroupKey nvarchar(255) = NULL,
-    @TemporalSpec_Clear bit = 0,
-    @TemporalSpec nvarchar(MAX) = NULL,
-    @DecisionSpec nvarchar(MAX) = NULL,
-    @IncumbentHeuristic nvarchar(MAX) = NULL,
-    @AuthoredBy nvarchar(MAX) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[PredictionUnit]
-    SET
-        [LineageRootID] = ISNULL(@LineageRootID, [LineageRootID]),
-        [Version] = ISNULL(@Version, [Version]),
-        [Name] = ISNULL(@Name, [Name]),
-        [Description] = CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, [Description]) END,
-        [UnitRows] = ISNULL(@UnitRows, [UnitRows]),
-        [LabelRule] = ISNULL(@LabelRule, [LabelRule]),
-        [LabelWindowDays] = ISNULL(@LabelWindowDays, [LabelWindowDays]),
-        [LabelGapDays] = ISNULL(@LabelGapDays, [LabelGapDays]),
-        [TaskType] = ISNULL(@TaskType, [TaskType]),
-        [LabelVersion] = ISNULL(@LabelVersion, [LabelVersion]),
-        [Censoring] = ISNULL(@Censoring, [Censoring]),
-        [ChangeHistoryPolicy] = ISNULL(@ChangeHistoryPolicy, [ChangeHistoryPolicy]),
-        [GroupKey] = CASE WHEN @GroupKey_Clear = 1 THEN NULL ELSE ISNULL(@GroupKey, [GroupKey]) END,
-        [TemporalSpec] = CASE WHEN @TemporalSpec_Clear = 1 THEN NULL ELSE ISNULL(@TemporalSpec, [TemporalSpec]) END,
-        [DecisionSpec] = ISNULL(@DecisionSpec, [DecisionSpec]),
-        [IncumbentHeuristic] = ISNULL(@IncumbentHeuristic, [IncumbentHeuristic]),
-        [AuthoredBy] = ISNULL(@AuthoredBy, [AuthoredBy])
-    WHERE
-        [ID] = @ID
-
-    -- Check if the update was successful
-    IF @@ROWCOUNT = 0
-        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwPredictionUnits] WHERE 1=0
-    ELSE
-        -- Return the updated record so the caller can see the updated values and any calculated fields
-        SELECT
-                                        *
-                                    FROM
-                                        [${flyway:defaultSchema}].[vwPredictionUnits]
-                                    WHERE
-                                        [ID] = @ID
-                                    
-END
-GO
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdatePredictionUnit] TO [cdp_Developer], [cdp_Integration]
-GO
-
-------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the PredictionUnit table
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdatePredictionUnit]', 'TR') IS NOT NULL
-    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdatePredictionUnit];
-GO
-CREATE TRIGGER [${flyway:defaultSchema}].trgUpdatePredictionUnit
-ON [${flyway:defaultSchema}].[PredictionUnit]
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE
-        [${flyway:defaultSchema}].[PredictionUnit]
-    SET
-        __mj_UpdatedAt = GETUTCDATE()
-    FROM
-        [${flyway:defaultSchema}].[PredictionUnit] AS _organicTable
-    INNER JOIN
-        INSERTED AS I ON
-        _organicTable.[ID] = I.[ID];
-END;
-GO
-
-/* spUpdate Permissions for MJ: Prediction Units */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdatePredictionUnit] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete SQL for MJ: Prediction Units */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Prediction Units
--- Item: spDeletePredictionUnit
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR PredictionUnit
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spDeletePredictionUnit]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spDeletePredictionUnit];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeletePredictionUnit]
-    @ID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM
-        [${flyway:defaultSchema}].[PredictionUnit]
-    WHERE
-        [ID] = @ID
-
-
-    -- Check if the delete was successful
-    IF @@ROWCOUNT = 0
-        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
-    ELSE
-        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeletePredictionUnit] TO [cdp_Developer], [cdp_Integration];
-
-/* spDelete Permissions for MJ: Prediction Units */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeletePredictionUnit] TO [cdp_Developer], [cdp_Integration];
-
-/* Index for Foreign Keys for TrainingSnapshot */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Training Snapshots
--- Item: Index for Foreign Keys
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
--- Index for foreign key PipelineID in table TrainingSnapshot
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_TrainingSnapshot_PipelineID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[TrainingSnapshot]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_TrainingSnapshot_PipelineID ON [${flyway:defaultSchema}].[TrainingSnapshot] ([PipelineID]);
-
--- Index for foreign key PredictionUnitID in table TrainingSnapshot
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_TrainingSnapshot_PredictionUnitID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[TrainingSnapshot]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_TrainingSnapshot_PredictionUnitID ON [${flyway:defaultSchema}].[TrainingSnapshot] ([PredictionUnitID]);
-
--- Index for foreign key EvaluationProtocolID in table TrainingSnapshot
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_TrainingSnapshot_EvaluationProtocolID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[TrainingSnapshot]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_TrainingSnapshot_EvaluationProtocolID ON [${flyway:defaultSchema}].[TrainingSnapshot] ([EvaluationProtocolID]);
-
--- Index for foreign key StorageProviderID in table TrainingSnapshot
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_TrainingSnapshot_StorageProviderID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[TrainingSnapshot]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_TrainingSnapshot_StorageProviderID ON [${flyway:defaultSchema}].[TrainingSnapshot] ([StorageProviderID]);
-
--- Index for foreign key MatrixFileID in table TrainingSnapshot
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_TrainingSnapshot_MatrixFileID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[TrainingSnapshot]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_TrainingSnapshot_MatrixFileID ON [${flyway:defaultSchema}].[TrainingSnapshot] ([MatrixFileID]);
-
--- Index for foreign key RowManifestFileID in table TrainingSnapshot
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_TrainingSnapshot_RowManifestFileID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[TrainingSnapshot]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_TrainingSnapshot_RowManifestFileID ON [${flyway:defaultSchema}].[TrainingSnapshot] ([RowManifestFileID]);
-
--- Index for foreign key ProvenanceFileID in table TrainingSnapshot
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_TrainingSnapshot_ProvenanceFileID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[TrainingSnapshot]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_TrainingSnapshot_ProvenanceFileID ON [${flyway:defaultSchema}].[TrainingSnapshot] ([ProvenanceFileID]);
-
-/* SQL text to update entity field related entity name field map for entity field ID B378836D-E724-4F0B-8041-81FACDEC8644 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='B378836D-E724-4F0B-8041-81FACDEC8644', @RelatedEntityNameFieldMap='Pipeline';
-
-/* SQL text to update entity field related entity name field map for entity field ID 7CAF679B-4A83-45E4-BE1F-5FEA308ED03A */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='7CAF679B-4A83-45E4-BE1F-5FEA308ED03A', @RelatedEntityNameFieldMap='PredictionUnit';
-
-/* SQL text to update entity field related entity name field map for entity field ID 9587F907-23EE-4F46-A8BF-18DA1CD112FB */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='9587F907-23EE-4F46-A8BF-18DA1CD112FB', @RelatedEntityNameFieldMap='EvaluationProtocol';
-
-/* SQL text to update entity field related entity name field map for entity field ID 78E9F5E7-AF2A-46D5-9305-6AE12B29B283 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='78E9F5E7-AF2A-46D5-9305-6AE12B29B283', @RelatedEntityNameFieldMap='StorageProvider';
-
-/* SQL text to update entity field related entity name field map for entity field ID 081C2C3D-F102-4FBF-AF31-BD8C435427F8 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='081C2C3D-F102-4FBF-AF31-BD8C435427F8', @RelatedEntityNameFieldMap='MatrixFile';
-
-/* SQL text to update entity field related entity name field map for entity field ID 996B9364-8C11-4046-902D-AEE414F3C7BD */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='996B9364-8C11-4046-902D-AEE414F3C7BD', @RelatedEntityNameFieldMap='RowManifestFile';
-
-/* SQL text to update entity field related entity name field map for entity field ID 6F468FEE-462C-4A24-8DB2-AFDB40718B8D */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='6F468FEE-462C-4A24-8DB2-AFDB40718B8D', @RelatedEntityNameFieldMap='ProvenanceFile';
-
-/* Base View SQL for MJ: Training Snapshots */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: MJ: Training Snapshots
--- Item: vwTrainingSnapshots
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ BASE VIEW FOR ENTITY:      MJ: Training Snapshots
------               SCHEMA:      ${flyway:defaultSchema}
------               BASE TABLE:  TrainingSnapshot
------               PRIMARY KEY: ID
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[vwTrainingSnapshots]', 'V') IS NOT NULL
-    DROP VIEW [${flyway:defaultSchema}].[vwTrainingSnapshots];
-GO
-
-CREATE VIEW [${flyway:defaultSchema}].[vwTrainingSnapshots]
-AS
-SELECT
-    t.*,
+    m.*,
     MJMLTrainingPipeline_PipelineID.[Name] AS [Pipeline],
-    MJPredictionUnit_PredictionUnitID.[Name] AS [PredictionUnit],
-    MJEvaluationProtocol_EvaluationProtocolID.[Name] AS [EvaluationProtocol],
+    MJMLPredictionUnit_PredictionUnitID.[Name] AS [PredictionUnit],
+    MJMLEvaluationProtocol_EvaluationProtocolID.[Name] AS [EvaluationProtocol],
     MJFileStorageProvider_StorageProviderID.[Name] AS [StorageProvider],
     MJFile_MatrixFileID.[Name] AS [MatrixFile],
     MJFile_RowManifestFileID.[Name] AS [RowManifestFile],
     MJFile_ProvenanceFileID.[Name] AS [ProvenanceFile]
 FROM
-    [${flyway:defaultSchema}].[TrainingSnapshot] AS t
+    [${flyway:defaultSchema}].[MLTrainingSnapshot] AS m
 INNER JOIN
     [${flyway:defaultSchema}].[MLTrainingPipeline] AS MJMLTrainingPipeline_PipelineID
   ON
-    [t].[PipelineID] = MJMLTrainingPipeline_PipelineID.[ID]
+    [m].[PipelineID] = MJMLTrainingPipeline_PipelineID.[ID]
 INNER JOIN
-    [${flyway:defaultSchema}].[PredictionUnit] AS MJPredictionUnit_PredictionUnitID
+    [${flyway:defaultSchema}].[MLPredictionUnit] AS MJMLPredictionUnit_PredictionUnitID
   ON
-    [t].[PredictionUnitID] = MJPredictionUnit_PredictionUnitID.[ID]
+    [m].[PredictionUnitID] = MJMLPredictionUnit_PredictionUnitID.[ID]
 LEFT OUTER JOIN
-    [${flyway:defaultSchema}].[EvaluationProtocol] AS MJEvaluationProtocol_EvaluationProtocolID
+    [${flyway:defaultSchema}].[MLEvaluationProtocol] AS MJMLEvaluationProtocol_EvaluationProtocolID
   ON
-    [t].[EvaluationProtocolID] = MJEvaluationProtocol_EvaluationProtocolID.[ID]
+    [m].[EvaluationProtocolID] = MJMLEvaluationProtocol_EvaluationProtocolID.[ID]
 INNER JOIN
     [${flyway:defaultSchema}].[FileStorageProvider] AS MJFileStorageProvider_StorageProviderID
   ON
-    [t].[StorageProviderID] = MJFileStorageProvider_StorageProviderID.[ID]
+    [m].[StorageProviderID] = MJFileStorageProvider_StorageProviderID.[ID]
 INNER JOIN
     [${flyway:defaultSchema}].[File] AS MJFile_MatrixFileID
   ON
-    [t].[MatrixFileID] = MJFile_MatrixFileID.[ID]
+    [m].[MatrixFileID] = MJFile_MatrixFileID.[ID]
 INNER JOIN
     [${flyway:defaultSchema}].[File] AS MJFile_RowManifestFileID
   ON
-    [t].[RowManifestFileID] = MJFile_RowManifestFileID.[ID]
+    [m].[RowManifestFileID] = MJFile_RowManifestFileID.[ID]
 INNER JOIN
     [${flyway:defaultSchema}].[File] AS MJFile_ProvenanceFileID
   ON
-    [t].[ProvenanceFileID] = MJFile_ProvenanceFileID.[ID]
+    [m].[ProvenanceFileID] = MJFile_ProvenanceFileID.[ID]
 GO
-GRANT SELECT ON [${flyway:defaultSchema}].[vwTrainingSnapshots] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+GRANT SELECT ON [${flyway:defaultSchema}].[vwMLTrainingSnapshots] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
 
-/* Base View Permissions SQL for MJ: Training Snapshots */
+/* Base View Permissions SQL for MJ: ML Training Snapshots */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: Training Snapshots
--- Item: Permissions for vwTrainingSnapshots
+-- Entity: MJ: ML Training Snapshots
+-- Item: Permissions for vwMLTrainingSnapshots
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
-GRANT SELECT ON [${flyway:defaultSchema}].[vwTrainingSnapshots] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+GRANT SELECT ON [${flyway:defaultSchema}].[vwMLTrainingSnapshots] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
 
-/* spCreate SQL for MJ: Training Snapshots */
+/* spCreate SQL for MJ: ML Training Snapshots */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: Training Snapshots
--- Item: spCreateTrainingSnapshot
+-- Entity: MJ: ML Training Snapshots
+-- Item: spCreateMLTrainingSnapshot
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
 ------------------------------------------------------------
------ CREATE PROCEDURE FOR TrainingSnapshot
+----- CREATE PROCEDURE FOR MLTrainingSnapshot
 ------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateTrainingSnapshot]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateTrainingSnapshot];
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateMLTrainingSnapshot]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateMLTrainingSnapshot];
 GO
 
-CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateTrainingSnapshot]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateMLTrainingSnapshot]
     @ID uniqueidentifier = NULL,
     @ContentHash nvarchar(64),
     @PipelineID uniqueidentifier,
@@ -9703,7 +9707,7 @@ BEGIN
     IF @ID IS NOT NULL
     BEGIN
         -- User provided a value, use it
-        INSERT INTO [${flyway:defaultSchema}].[TrainingSnapshot]
+        INSERT INTO [${flyway:defaultSchema}].[MLTrainingSnapshot]
             (
                 [ID],
                 [ContentHash],
@@ -9782,7 +9786,7 @@ BEGIN
     ELSE
     BEGIN
         -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
-        INSERT INTO [${flyway:defaultSchema}].[TrainingSnapshot]
+        INSERT INTO [${flyway:defaultSchema}].[MLTrainingSnapshot]
             (
                 [ContentHash],
                 [PipelineID],
@@ -9857,33 +9861,33 @@ BEGIN
             )
     END
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [${flyway:defaultSchema}].[vwTrainingSnapshots] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [${flyway:defaultSchema}].[vwMLTrainingSnapshots] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateTrainingSnapshot] TO [cdp_Developer], [cdp_Integration];
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateMLTrainingSnapshot] TO [cdp_Developer], [cdp_Integration];
 
-/* spCreate Permissions for MJ: Training Snapshots */
+/* spCreate Permissions for MJ: ML Training Snapshots */
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateTrainingSnapshot] TO [cdp_Developer], [cdp_Integration];
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateMLTrainingSnapshot] TO [cdp_Developer], [cdp_Integration];
 
-/* spUpdate SQL for MJ: Training Snapshots */
+/* spUpdate SQL for MJ: ML Training Snapshots */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: Training Snapshots
--- Item: spUpdateTrainingSnapshot
+-- Entity: MJ: ML Training Snapshots
+-- Item: spUpdateMLTrainingSnapshot
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
 ------------------------------------------------------------
------ UPDATE PROCEDURE FOR TrainingSnapshot
+----- UPDATE PROCEDURE FOR MLTrainingSnapshot
 ------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateTrainingSnapshot]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateTrainingSnapshot];
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateMLTrainingSnapshot]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateMLTrainingSnapshot];
 GO
 
-CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateTrainingSnapshot]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateMLTrainingSnapshot]
     @ID uniqueidentifier,
     @ContentHash nvarchar(64) = NULL,
     @PipelineID uniqueidentifier = NULL,
@@ -9924,7 +9928,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE
-        [${flyway:defaultSchema}].[TrainingSnapshot]
+        [${flyway:defaultSchema}].[MLTrainingSnapshot]
     SET
         [ContentHash] = ISNULL(@ContentHash, [ContentHash]),
         [PipelineID] = ISNULL(@PipelineID, [PipelineID]),
@@ -9965,75 +9969,75 @@ BEGIN
     -- Check if the update was successful
     IF @@ROWCOUNT = 0
         -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwTrainingSnapshots] WHERE 1=0
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwMLTrainingSnapshots] WHERE 1=0
     ELSE
         -- Return the updated record so the caller can see the updated values and any calculated fields
         SELECT
                                         *
                                     FROM
-                                        [${flyway:defaultSchema}].[vwTrainingSnapshots]
+                                        [${flyway:defaultSchema}].[vwMLTrainingSnapshots]
                                     WHERE
                                         [ID] = @ID
                                     
 END
 GO
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateTrainingSnapshot] TO [cdp_Developer], [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateMLTrainingSnapshot] TO [cdp_Developer], [cdp_Integration]
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the TrainingSnapshot table
+----- TRIGGER FOR __mj_UpdatedAt field for the MLTrainingSnapshot table
 ------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateTrainingSnapshot]', 'TR') IS NOT NULL
-    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateTrainingSnapshot];
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateMLTrainingSnapshot]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateMLTrainingSnapshot];
 GO
-CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateTrainingSnapshot
-ON [${flyway:defaultSchema}].[TrainingSnapshot]
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateMLTrainingSnapshot
+ON [${flyway:defaultSchema}].[MLTrainingSnapshot]
 AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE
-        [${flyway:defaultSchema}].[TrainingSnapshot]
+        [${flyway:defaultSchema}].[MLTrainingSnapshot]
     SET
         __mj_UpdatedAt = GETUTCDATE()
     FROM
-        [${flyway:defaultSchema}].[TrainingSnapshot] AS _organicTable
+        [${flyway:defaultSchema}].[MLTrainingSnapshot] AS _organicTable
     INNER JOIN
         INSERTED AS I ON
         _organicTable.[ID] = I.[ID];
 END;
 GO
 
-/* spUpdate Permissions for MJ: Training Snapshots */
+/* spUpdate Permissions for MJ: ML Training Snapshots */
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateTrainingSnapshot] TO [cdp_Developer], [cdp_Integration];
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateMLTrainingSnapshot] TO [cdp_Developer], [cdp_Integration];
 
-/* spDelete SQL for MJ: Training Snapshots */
+/* spDelete SQL for MJ: ML Training Snapshots */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: Training Snapshots
--- Item: spDeleteTrainingSnapshot
+-- Entity: MJ: ML Training Snapshots
+-- Item: spDeleteMLTrainingSnapshot
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
 ------------------------------------------------------------
------ DELETE PROCEDURE FOR TrainingSnapshot
+----- DELETE PROCEDURE FOR MLTrainingSnapshot
 ------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteTrainingSnapshot]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteTrainingSnapshot];
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteMLTrainingSnapshot]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteMLTrainingSnapshot];
 GO
 
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteTrainingSnapshot]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteMLTrainingSnapshot]
     @ID uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
 
     DELETE FROM
-        [${flyway:defaultSchema}].[TrainingSnapshot]
+        [${flyway:defaultSchema}].[MLTrainingSnapshot]
     WHERE
         [ID] = @ID
 
@@ -10045,11 +10049,11 @@ BEGIN
         SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
 END
 GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteTrainingSnapshot] TO [cdp_Developer], [cdp_Integration];
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteMLTrainingSnapshot] TO [cdp_Developer], [cdp_Integration];
 
-/* spDelete Permissions for MJ: Training Snapshots */
+/* spDelete Permissions for MJ: ML Training Snapshots */
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteTrainingSnapshot] TO [cdp_Developer], [cdp_Integration];
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteMLTrainingSnapshot] TO [cdp_Developer], [cdp_Integration];
 
 /* spDelete SQL for MJ: AI Prompts */
 -----------------------------------------------------------------
@@ -11314,7 +11318,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
 
 /* SQL text to insert 12 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e9577966-e25e-422b-975b-08ede8bcd093' OR (EntityID = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND Name = 'LineageRoot')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2659c3fc-5c4a-45a1-8503-ea35e535dc86' OR (EntityID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND Name = 'LineageRoot')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -11347,9 +11351,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
          VALUES
          (
-            'e9577966-e25e-422b-975b-08ede8bcd093',
-            '8F160CCC-8743-40FE-B2B1-0799829CDBDA', -- Entity: MJ: Prediction Units
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA'),
+            '2659c3fc-5c4a-45a1-8503-ea35e535dc86',
+            'D5052EB0-354C-4C4D-80D8-2832FCC720E6', -- Entity: MJ: ML Prediction Units
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'),
             'LineageRoot',
             'Lineage Root',
             NULL,
@@ -11377,7 +11381,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '92a67137-2316-4104-a89a-eb24cc809b71' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'Pipeline')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e3cb7ff9-ef00-4328-91b5-1636e0fe28a2' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'Pipeline')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -11410,9 +11414,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
          VALUES
          (
-            '92a67137-2316-4104-a89a-eb24cc809b71',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            'e3cb7ff9-ef00-4328-91b5-1636e0fe28a2',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'Pipeline',
             'Pipeline',
             NULL,
@@ -11440,7 +11444,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a7d8769c-ddab-43cf-936c-ea720df757a9' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'PredictionUnit')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3209c303-58d1-4664-92e5-25346fe4c7c8' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'PredictionUnit')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -11473,9 +11477,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
          VALUES
          (
-            'a7d8769c-ddab-43cf-936c-ea720df757a9',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '3209c303-58d1-4664-92e5-25346fe4c7c8',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'PredictionUnit',
             'Prediction Unit',
             NULL,
@@ -11503,7 +11507,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4f3a1925-8c21-4cec-993a-0f7ea11ff15e' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'EvaluationProtocol')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8da58777-5274-49b8-b769-6b0414de7778' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'EvaluationProtocol')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -11536,9 +11540,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
          VALUES
          (
-            '4f3a1925-8c21-4cec-993a-0f7ea11ff15e',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '8da58777-5274-49b8-b769-6b0414de7778',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'EvaluationProtocol',
             'Evaluation Protocol',
             NULL,
@@ -11566,7 +11570,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '57d7b31b-ccd8-4175-8eb4-11defb91dab4' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'StorageProvider')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '29b6e621-51f1-440c-8ef9-591e60ad2c8b' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'StorageProvider')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -11599,9 +11603,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
          VALUES
          (
-            '57d7b31b-ccd8-4175-8eb4-11defb91dab4',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '29b6e621-51f1-440c-8ef9-591e60ad2c8b',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'StorageProvider',
             'Storage Provider',
             NULL,
@@ -11629,7 +11633,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bc088b2c-80a5-479e-93ab-660e93836fd5' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'MatrixFile')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e9b5c93d-9be8-4dc8-a6ca-1fc07af0c9c1' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'MatrixFile')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -11662,9 +11666,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
          VALUES
          (
-            'bc088b2c-80a5-479e-93ab-660e93836fd5',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            'e9b5c93d-9be8-4dc8-a6ca-1fc07af0c9c1',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'MatrixFile',
             'Matrix File',
             NULL,
@@ -11692,7 +11696,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '18ad627c-925b-401c-b3da-55f82a850675' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'RowManifestFile')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ad7d26ec-0d16-4859-a709-e65dedb0336e' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'RowManifestFile')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -11725,9 +11729,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
          VALUES
          (
-            '18ad627c-925b-401c-b3da-55f82a850675',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            'ad7d26ec-0d16-4859-a709-e65dedb0336e',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'RowManifestFile',
             'Row Manifest File',
             NULL,
@@ -11755,7 +11759,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f974d613-4210-43b7-99ba-235e38c74072' OR (EntityID = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND Name = 'ProvenanceFile')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '932935b3-e8ab-43b8-a9f8-1bee61f1f8c9' OR (EntityID = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND Name = 'ProvenanceFile')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -11788,9 +11792,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
          VALUES
          (
-            'f974d613-4210-43b7-99ba-235e38c74072',
-            '947FF197-FAAF-4557-AE52-6FDCF4313762', -- Entity: MJ: Training Snapshots
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762'),
+            '932935b3-e8ab-43b8-a9f8-1bee61f1f8c9',
+            'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', -- Entity: MJ: ML Training Snapshots
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6'),
             'ProvenanceFile',
             'Provenance File',
             NULL,
@@ -11818,7 +11822,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '125928c4-0807-4e8f-b75e-1b83173b7b73' OR (EntityID = '1A4DF72F-68E0-410C-B42C-815687BFE2D2' AND Name = 'EvaluationProtocol')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f4d9a19f-c0f1-4a25-b2c3-a8328b332c0d' OR (EntityID = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND Name = 'LineageRoot')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -11851,7 +11855,70 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
          VALUES
          (
-            '125928c4-0807-4e8f-b75e-1b83173b7b73',
+            'f4d9a19f-c0f1-4a25-b2c3-a8328b332c0d',
+            '7DB88C96-C922-4724-AE93-7B91798CEAFE', -- Entity: MJ: ML Evaluation Protocols
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE'),
+            'LineageRoot',
+            'Lineage Root',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f3bf248e-6359-45b4-8054-c5ce314ab738' OR (EntityID = '1A4DF72F-68E0-410C-B42C-815687BFE2D2' AND Name = 'EvaluationProtocol')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'f3bf248e-6359-45b4-8054-c5ce314ab738',
             '1A4DF72F-68E0-410C-B42C-815687BFE2D2', -- Entity: MJ: ML Training Runs
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1A4DF72F-68E0-410C-B42C-815687BFE2D2'),
             'EvaluationProtocol',
@@ -11881,7 +11948,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '66512d06-519c-4cf9-bfe1-043c13410b28' OR (EntityID = '703FD109-331B-438D-902B-8E4A93C3F6AA' AND Name = 'PredictionUnit')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '10e2d48e-5d23-4ccf-b10a-8ac9bc84726f' OR (EntityID = '703FD109-331B-438D-902B-8E4A93C3F6AA' AND Name = 'PredictionUnit')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -11914,7 +11981,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
          VALUES
          (
-            '66512d06-519c-4cf9-bfe1-043c13410b28',
+            '10e2d48e-5d23-4ccf-b10a-8ac9bc84726f',
             '703FD109-331B-438D-902B-8E4A93C3F6AA', -- Entity: MJ: ML Training Pipelines
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '703FD109-331B-438D-902B-8E4A93C3F6AA'),
             'PredictionUnit',
@@ -11944,7 +12011,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd5b566c3-0ea4-4548-b08f-db40ee9a4c7f' OR (EntityID = '703FD109-331B-438D-902B-8E4A93C3F6AA' AND Name = 'EvaluationProtocol')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b4d5c9f6-af81-425a-b535-5fe9ffe84047' OR (EntityID = '703FD109-331B-438D-902B-8E4A93C3F6AA' AND Name = 'EvaluationProtocol')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -11977,7 +12044,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
          VALUES
          (
-            'd5b566c3-0ea4-4548-b08f-db40ee9a4c7f',
+            'b4d5c9f6-af81-425a-b535-5fe9ffe84047',
             '703FD109-331B-438D-902B-8E4A93C3F6AA', -- Entity: MJ: ML Training Pipelines
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '703FD109-331B-438D-902B-8E4A93C3F6AA'),
             'EvaluationProtocol',
@@ -12007,110 +12074,61 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIPrompt] TO [cdp_Developer]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8177c60c-2607-464d-a5a2-8acc2f5da40b' OR (EntityID = '0B0C469C-146C-4731-B064-CCB391D67889' AND Name = 'LineageRoot')) BEGIN
-         INSERT INTO [${flyway:defaultSchema}].[EntityField]
-         (
-            [ID],
-            [EntityID],
-            [Sequence],
-            [Name],
-            [DisplayName],
-            [Description],
-            [Type],
-            [Length],
-            [Precision],
-            [Scale],
-            [AllowsNull],
-            [DefaultValue],
-            [AutoIncrement],
-            [AllowUpdateAPI],
-            [IsVirtual],
-            [IsComputed],
-            [RelatedEntityID],
-            [RelatedEntityFieldName],
-            [IsNameField],
-            [IncludeInUserSearchAPI],
-            [IncludeRelatedEntityNameFieldInBaseView],
-            [DefaultInView],
-            [IsPrimaryKey],
-            [IsUnique],
-            [RelatedEntityDisplayType],
-            [__mj_CreatedAt],
-            [__mj_UpdatedAt]
-         )
-         VALUES
-         (
-            '8177c60c-2607-464d-a5a2-8acc2f5da40b',
-            '0B0C469C-146C-4731-B064-CCB391D67889', -- Entity: MJ: Evaluation Protocols
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889'),
-            'LineageRoot',
-            'Lineage Root',
-            NULL,
-            'nvarchar',
-            510,
-            0,
-            0,
-            0,
-            NULL,
-            0,
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search',
-            GETUTCDATE(),
-            GETUTCDATE()
-         )
-      END;
-
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'AA666C1A-8280-4DBB-B5E2-1959185725D9'
-               AND AutoUpdateDefaultInView = 1;
-
-/* Set field properties for entity */
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = 'B65EC6C7-30E1-4E85-A131-94AC3EB7656B'
+               WHERE ID = 'A0E507E5-ACC9-4D6B-AB4A-49FE2BE84B96'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'E9577966-E25E-422B-975B-08EDE8BCD093'
+               WHERE ID = '2153C8C2-8DFF-422C-9759-8EE80F53F0AE'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = 'B636042B-BC4B-4526-B70F-B7E40B43827C'
+               WHERE ID = 'D44848C6-9CAB-4C17-A4E8-27EDA46692D6'
                AND AutoUpdateUserSearchPredicate = 1;
 
-/* Set categories for 2 fields */
+/* Set field properties for entity */
 
--- UPDATE Entity Field Category Info MJ: Feature Values.EffectiveAsOf 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Record Context',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '7CEEC4F5-82F2-465D-A196-263A555A9274';
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IsNameField = 1
+               WHERE ID = 'FA8D93A6-C4F0-4B15-9516-7815BBC9BBC0'
+               AND AutoUpdateIsNameField = 1;
 
--- UPDATE Entity Field Category Info MJ: Feature Values.InputAsOf 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Record Context',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'F6312095-3040-470C-8E28-7096E2AE6766';
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'AB85C20F-FF13-41C9-A11E-2CF9E8294260'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'A69B3C8C-BDE6-4674-B41D-A56C677DE157'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '8FAA92F0-8F7C-4739-A762-9489835D71B9'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'E3CB7FF9-EF00-4328-91B5-1636E0FE28A2'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = '3209C303-58D1-4664-92E5-25346FE4C7C8'
+               AND AutoUpdateDefaultInView = 1;
+
+/* Set field properties for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'B27C085B-E8B8-4E9B-93AE-F9B018CB6BA6'
+               AND AutoUpdateDefaultInView = 1;
 
 /* Set categories for 4 fields */
 
@@ -12121,7 +12139,7 @@ SET
    GeneratedFormSection = 'Category',
    DisplayName = 'Prediction Unit'
 WHERE 
-   ID = '3A27B360-4935-48B6-A46A-62F39FFF939C';
+   ID = '5F6D36E6-64EB-4972-8590-DFF51BFEED77';
 
 -- UPDATE Entity Field Category Info MJ: ML Training Pipelines.EvaluationProtocolID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -12130,7 +12148,7 @@ SET
    GeneratedFormSection = 'Category',
    DisplayName = 'Evaluation Protocol'
 WHERE 
-   ID = '6B14E812-7B20-493A-AD29-53AFE948E662';
+   ID = '50D68B63-68B4-4A71-82C0-02FD0D7CCFC0';
 
 -- UPDATE Entity Field Category Info MJ: ML Training Pipelines.PredictionUnit 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -12139,7 +12157,7 @@ SET
    GeneratedFormSection = 'Category',
    DisplayName = 'Prediction Unit Name'
 WHERE 
-   ID = '66512D06-519C-4CF9-BFE1-043C13410B28';
+   ID = '10E2D48E-5D23-4CCF-B10A-8AC9BC84726F';
 
 -- UPDATE Entity Field Category Info MJ: ML Training Pipelines.EvaluationProtocol 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -12148,18 +12166,18 @@ SET
    GeneratedFormSection = 'Category',
    DisplayName = 'Evaluation Protocol Name'
 WHERE 
-   ID = 'D5B566C3-0EA4-4548-B08F-DB40EE9A4C7F';
+   ID = 'B4D5C9F6-AF81-425A-B535-5FE9FFE84047';
 
 /* Set categories for 5 fields */
 
 -- UPDATE Entity Field Category Info MJ: ML Training Runs.TrainingSnapshotID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Model Configuration',
+   Category = 'Execution Context',
    GeneratedFormSection = 'Category',
    DisplayName = 'Training Snapshot'
 WHERE 
-   ID = 'CE8B8910-7580-452F-8DBA-B0B99D24379C';
+   ID = '4B08D0B2-50B0-492E-8639-98538371560E';
 
 -- UPDATE Entity Field Category Info MJ: ML Training Runs.EvaluationProtocolID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -12168,7 +12186,7 @@ SET
    GeneratedFormSection = 'Category',
    DisplayName = 'Evaluation Protocol'
 WHERE 
-   ID = '4639BF78-3A72-4A69-9299-C5C6F5A24F68';
+   ID = '40A9AC69-85A2-4F16-8910-7E96274DEB16';
 
 -- UPDATE Entity Field Category Info MJ: ML Training Runs.CodeVersion 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -12177,7 +12195,7 @@ SET
    GeneratedFormSection = 'Category',
    ExtendedType = 'JSON'
 WHERE 
-   ID = '980D96A7-29A4-4E06-986C-823ECCBBEDEC';
+   ID = '82FA5EA5-51C7-46ED-8447-58FA5E3D023F';
 
 -- UPDATE Entity Field Category Info MJ: ML Training Runs.ComputeSeconds 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -12185,7 +12203,7 @@ SET
    Category = 'Resource Usage',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'AA666C1A-8280-4DBB-B5E2-1959185725D9';
+   ID = 'B27C085B-E8B8-4E9B-93AE-F9B018CB6BA6';
 
 -- UPDATE Entity Field Category Info MJ: ML Training Runs.EvaluationProtocol 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -12194,684 +12212,672 @@ SET
    GeneratedFormSection = 'Category',
    DisplayName = 'Evaluation Protocol Details'
 WHERE 
-   ID = '125928C4-0807-4E8F-B75E-1B83173B7B73';
+   ID = 'F3BF248E-6359-45B4-8054-C5CE314AB738';
 
 /* Set field properties for entity */
 
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IsNameField = 1
-               WHERE ID = 'A0F6B242-8C4C-415F-904B-FC0FF1D82F27'
-               AND AutoUpdateIsNameField = 1;
+            UPDATE [${flyway:defaultSchema}].[Entity]
+            SET AllowUserSearchAPI = 0
+            WHERE ID = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6'
+            AND AutoUpdateAllowUserSearchAPI = 1;
 
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '1B7B804D-3522-4A64-9C45-ED33E2578277'
-               AND AutoUpdateDefaultInView = 1;
+/* Set categories for 2 fields */
 
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = 'EB2935AE-7B24-4B97-BEAB-74E031EA5A7D'
-               AND AutoUpdateDefaultInView = 1;
+-- UPDATE Entity Field Category Info MJ: Feature Values.EffectiveAsOf 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Record Context',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'A9142009-7413-48C2-AFC9-23528C97083A';
 
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '3B6F7084-15B3-456E-BCA2-91ECD6442599'
-               AND AutoUpdateDefaultInView = 1;
+-- UPDATE Entity Field Category Info MJ: Feature Values.InputAsOf 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Record Context',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '7C731F43-07C1-4972-A06A-92209286F478';
 
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = 'D0CB2EBE-9E53-40DB-9007-CB287D8AC3B3'
-               AND AutoUpdateDefaultInView = 1;
+/* Set categories for 43 fields */
 
-/* Set categories for 21 fields */
-
--- UPDATE Entity Field Category Info MJ: Prediction Units.ID 
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.ID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'AC8D46D3-B0A5-41CF-9A56-B9DB7E2DB126';
+   ID = '28D4BE83-B39F-4E10-B368-0FE0C171A22B';
 
--- UPDATE Entity Field Category Info MJ: Prediction Units.LineageRootID 
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.ContentHash 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Snapshot Identity',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'FA8D93A6-C4F0-4B15-9516-7815BBC9BBC0';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.PipelineID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Configuration References',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Pipeline'
+WHERE 
+   ID = '8F8D2651-B8BD-4406-A051-567B13BDCA78';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.PredictionUnitID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Configuration References',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Prediction Unit'
+WHERE 
+   ID = '517ACE76-EC37-449F-8AB2-737099D8C1D2';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.LabelVersion 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Configuration References',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'F2EC3773-FCE0-461A-BDDB-88489F0AB03D';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.FeatureSpecVersion 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Configuration References',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'C4FA37EF-982B-456F-BBFC-4497138B31EB';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.EvaluationProtocolID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Configuration References',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Evaluation Protocol'
+WHERE 
+   ID = '5F49F9E6-7306-4F1A-8179-0A04EE34415A';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.StorageProviderID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'File Storage Metadata',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Storage Provider'
+WHERE 
+   ID = '366BD221-DEAD-41DC-AD75-3642FC088FA9';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.MatrixFileID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'File Storage Metadata',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Matrix File'
+WHERE 
+   ID = '8E286DA2-8662-49FB-B490-94148BC6F2C9';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.MatrixSha256 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'File Storage Metadata',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Matrix SHA-256'
+WHERE 
+   ID = '2C1D1E86-BE68-4BB1-B4EC-6D0483A55C3A';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.MatrixSizeBytes 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'File Storage Metadata',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Matrix Size (Bytes)'
+WHERE 
+   ID = 'DC5FA05B-7FE5-46F1-9A98-6423FAE0DE42';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.RowManifestFileID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'File Storage Metadata',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Row Manifest File'
+WHERE 
+   ID = '19A80161-8C30-4528-B62F-F528DACF4F0B';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.RowManifestSha256 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'File Storage Metadata',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Row Manifest SHA-256'
+WHERE 
+   ID = 'B37E93BE-197F-4B74-B48E-62234B9517C8';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.RowManifestSizeBytes 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'File Storage Metadata',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Row Manifest Size (Bytes)'
+WHERE 
+   ID = '516F7D0D-F38E-4395-AB5C-32C77E664C1D';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.ProvenanceFileID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'File Storage Metadata',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Provenance File'
+WHERE 
+   ID = '2E6DA552-0E71-4FB7-8E9C-F435F11D1FC7';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.ProvenanceSha256 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'File Storage Metadata',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Provenance SHA-256'
+WHERE 
+   ID = '2A05375B-B318-46B5-A58E-6028B17B7E17';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.ProvenanceSizeBytes 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'File Storage Metadata',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Provenance Size (Bytes)'
+WHERE 
+   ID = 'A79C79E3-9BA0-4C54-A5C3-96A5D874FB7F';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.ManifestRowCount 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Row Metrics and Statistics',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'AB85C20F-FF13-41C9-A11E-2CF9E8294260';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.HoldoutRowCount 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Row Metrics and Statistics',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'A69B3C8C-BDE6-4674-B41D-A56C677DE157';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.FeatureSpec 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Schema and Features',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '62861DC3-7A4F-4111-B64E-A3B8AFAA664D';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.FeatureSchema 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Schema and Features',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '40DEF3C6-04B1-4246-99D7-6965D37961D5';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.FeatureSchemaHash 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Schema and Features',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '84377039-15BD-41FF-AC27-B86D47E655DF';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.ColumnProvenance 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Schema and Features',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '7EB7A214-D268-4BA4-97BA-E6D2330EFE95';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.PinnedFeatureVersions 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Schema and Features',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '6A1C77E5-A702-4ED3-89B5-D9495F9B85A2';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.RowsRead 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Row Metrics and Statistics',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'FCD672B4-13C6-4B49-A7A3-3CE86A1C135C';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.ReadComplete 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Row Metrics and Statistics',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '8DBCA900-1A90-4D1B-B7CB-A95353041A58';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.CensoredRowsExcluded 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Exclusions and Metrics',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'C5447115-F0D9-4E3E-A5F7-99B604CAE9D7';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.LabelKnownRowsExcluded 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Exclusions and Metrics',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'F8A7611F-6332-465B-B2BF-7FF6BBD329A9';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.EmptyLabelRowsExcluded 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Exclusions and Metrics',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'C2C36E97-D80C-47A6-B1BE-52E9D9253A13';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.UncoveredHistoryRowsExcluded 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Exclusions and Metrics',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '19F7A467-C851-4C98-843B-1235819DA36F';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.DuplicateRowsRemoved 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Exclusions and Metrics',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '8F0B40EF-42CF-4A22-B77B-320E5AAB0542';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.ClassBalance 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Exclusions and Metrics',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '6A9FECD0-FB18-4F21-A6F8-F5F48ED17203';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.DataCutoff 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Configuration References',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '8FAA92F0-8F7C-4739-A762-9489835D71B9';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.AssemblyCodeVersion 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Snapshot Identity',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'DBC13174-3A1D-4F40-A5D3-95D40FBB2819';
+
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Lineage Root'
+   GeneratedFormSection = 'Category'
 WHERE 
-   ID = '16564F1C-1781-4768-AC1B-A72C51D66B8B';
+   ID = '68F17137-6405-460D-9796-60785602A4D3';
 
--- UPDATE Entity Field Category Info MJ: Prediction Units.Version 
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'CAE6FDCE-1F4B-40D0-91B7-E781F0A9B500';
+   ID = 'ABFCFA3F-1315-4DF2-AC8A-E710F99823C2';
 
--- UPDATE Entity Field Category Info MJ: Prediction Units.Name 
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.Pipeline 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Prediction Definition',
+   Category = 'Configuration References',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'B636042B-BC4B-4526-B70F-B7E40B43827C';
+   ID = 'E3CB7FF9-EF00-4328-91B5-1636E0FE28A2';
 
--- UPDATE Entity Field Category Info MJ: Prediction Units.Description 
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.PredictionUnit 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Prediction Definition',
+   Category = 'Configuration References',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '054392D0-ECFA-4740-828A-02F6D873CBDF';
+   ID = '3209C303-58D1-4664-92E5-25346FE4C7C8';
 
--- UPDATE Entity Field Category Info MJ: Prediction Units.UnitRows 
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.EvaluationProtocol 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Unit and Grain Configuration',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '0F9D59E5-DDB8-4735-9AA5-7A342C82297A';
-
--- UPDATE Entity Field Category Info MJ: Prediction Units.LabelRule 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Outcome and Labeling',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '8EB9C42B-50E4-4144-A886-4D0B1C98F937';
-
--- UPDATE Entity Field Category Info MJ: Prediction Units.LabelWindowDays 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Outcome and Labeling',
+   Category = 'Configuration References',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '3A58CE37-8D6C-4161-871F-CB6397078A18';
+   ID = '8DA58777-5274-49B8-B769-6B0414DE7778';
 
--- UPDATE Entity Field Category Info MJ: Prediction Units.LabelGapDays 
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.StorageProvider 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Outcome and Labeling',
+   Category = 'File Storage Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '6B029681-7B2A-4323-9B99-ACC02501D4C4';
+   ID = '29B6E621-51F1-440C-8EF9-591E60AD2C8B';
 
--- UPDATE Entity Field Category Info MJ: Prediction Units.TaskType 
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.MatrixFile 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Task and Decision Settings',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '4456C4B2-ECE1-4FEB-9663-196541455543';
-
--- UPDATE Entity Field Category Info MJ: Prediction Units.LabelVersion 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Outcome and Labeling',
+   Category = 'File Storage Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'DF2DF49B-2441-47B7-9CBF-C8173B62C7E7';
+   ID = 'E9B5C93D-9BE8-4DC8-A6CA-1FC07AF0C9C1';
 
--- UPDATE Entity Field Category Info MJ: Prediction Units.Censoring 
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.RowManifestFile 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Unit and Grain Configuration',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = 'D03DC2F6-BC4A-46F3-8C6F-7FC6AB0B1959';
-
--- UPDATE Entity Field Category Info MJ: Prediction Units.ChangeHistoryPolicy 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Unit and Grain Configuration',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '56DFCD6B-21DF-4001-89AF-077904C55961';
-
--- UPDATE Entity Field Category Info MJ: Prediction Units.GroupKey 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Unit and Grain Configuration',
+   Category = 'File Storage Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'B65EC6C7-30E1-4E85-A131-94AC3EB7656B';
+   ID = 'AD7D26EC-0D16-4859-A709-E65DEDB0336E';
 
--- UPDATE Entity Field Category Info MJ: Prediction Units.TemporalSpec 
+-- UPDATE Entity Field Category Info MJ: ML Training Snapshots.ProvenanceFile 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Task and Decision Settings',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '8AB16416-1E1B-407D-B668-8337CA302DCB';
-
--- UPDATE Entity Field Category Info MJ: Prediction Units.DecisionSpec 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Task and Decision Settings',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '06C64FC5-C28B-44EA-B302-E476E217E825';
-
--- UPDATE Entity Field Category Info MJ: Prediction Units.IncumbentHeuristic 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Task and Decision Settings',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '09145C46-36E1-454F-A3F6-58E1569C5704';
-
--- UPDATE Entity Field Category Info MJ: Prediction Units.AuthoredBy 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = 'C530988D-862C-4803-B13C-38D78D871542';
-
--- UPDATE Entity Field Category Info MJ: Prediction Units.__mj_CreatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
+   Category = 'File Storage Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'F35FE58D-4A7F-4748-A485-7ABE68E2901F';
+   ID = '932935B3-E8AB-43B8-A9F8-1BEE61F1F8C9';
 
--- UPDATE Entity Field Category Info MJ: Prediction Units.__mj_UpdatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'E38AFCD3-E459-4408-B8FE-993B0491A920';
-
--- UPDATE Entity Field Category Info MJ: Prediction Units.LineageRoot 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'E9577966-E25E-422B-975B-08EDE8BCD093';
-
-/* Set entity icon to fa fa-chart-line */
+/* Set entity icon to fa fa-database */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-chart-line', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA';
+               SET [Icon] = 'fa fa-database', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6';
 
 /* Insert FieldCategoryInfo setting for entity */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND [Name] = 'FieldCategoryInfo'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND [Name] = 'FieldCategoryInfo'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('28bd7c80-5b73-5f29-a8bb-d0cb15e69dc4', '8F160CCC-8743-40FE-B2B1-0799829CDBDA', 'FieldCategoryInfo', '{
-  "Outcome and Labeling": {
-    "description": "Rules and windows for observing and labeling outcomes",
-    "icon": "fa fa-tag"
-  },
-  "Prediction Definition": {
-    "description": "Core descriptive information and identity of the prediction unit",
-    "icon": "fa fa-file-alt"
-  },
-  "System Metadata": {
-    "description": "System-managed audit, versioning, and tracking fields",
-    "icon": "fa fa-cog"
-  },
-  "Task and Decision Settings": {
-    "description": "Machine learning task types, temporal specs, and decision parameters",
+               VALUES ('7a2a7e43-c12c-5b20-9c72-10509bd216b8', 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', 'FieldCategoryInfo', '{
+  "Configuration References": {
+    "description": "Pipeline, prediction unit, protocol, and cutoff configurations",
     "icon": "fa fa-cogs"
   },
-  "Unit and Grain Configuration": {
-    "description": "Configuration rules defining training rows, grain, censoring, and history",
-    "icon": "fa fa-sliders-h"
+  "Exclusions and Metrics": {
+    "description": "Details on censored, excluded, or removed rows and class balancing",
+    "icon": "fa fa-filter"
+  },
+  "File Storage Metadata": {
+    "description": "Storage providers, file references, file sizes, and hashes for underlying snapshot files",
+    "icon": "fa fa-file-archive"
+  },
+  "Row Metrics and Statistics": {
+    "description": "Counts and statistics regarding rows read, manifest totals, and holdouts",
+    "icon": "fa fa-list-ol"
+  },
+  "Schema and Features": {
+    "description": "JSON schemas, feature specifications, column provenance, and pinned versions",
+    "icon": "fa fa-table"
+  },
+  "Snapshot Identity": {
+    "description": "Unique identifiers, hashes, and versioning info for the training snapshot",
+    "icon": "fa fa-fingerprint"
   }
 }', GETUTCDATE(), GETUTCDATE())
    END;
 
 /* Insert FieldCategoryIcons setting (legacy) */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA' AND [Name] = 'FieldCategoryIcons'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6' AND [Name] = 'FieldCategoryIcons'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('2b1cf741-3fde-59f4-af5b-f198e1554887', '8F160CCC-8743-40FE-B2B1-0799829CDBDA', 'FieldCategoryIcons', '{
-  "Outcome and Labeling": "fa fa-tag",
-  "Prediction Definition": "fa fa-file-alt",
-  "System Metadata": "fa fa-cog",
-  "Task and Decision Settings": "fa fa-cogs",
-  "Unit and Grain Configuration": "fa fa-sliders-h"
+               VALUES ('5aaf856e-03ac-5309-8a7a-9f4576696e17', 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6', 'FieldCategoryIcons', '{
+  "Configuration References": "fa fa-cogs",
+  "Exclusions and Metrics": "fa fa-filter",
+  "File Storage Metadata": "fa fa-file-archive",
+  "Row Metrics and Statistics": "fa fa-list-ol",
+  "Schema and Features": "fa fa-table",
+  "Snapshot Identity": "fa fa-fingerprint"
 }', GETUTCDATE(), GETUTCDATE())
    END;
 
-/* Set DefaultForNewUser=true for NEW entity (category: primary, confidence: high) */
+/* Set DefaultForNewUser=false for NEW entity (category: supporting, confidence: high) */
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
-         SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '8F160CCC-8743-40FE-B2B1-0799829CDBDA';
+         SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
+         WHERE [EntityID] = 'F36CDE0E-DBCD-4527-9AF6-66D8C710C8E6';
 
-/* Set field properties for entity */
+/* Set categories for 21 fields */
 
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = 'EAA27903-181E-4CAE-B5F1-DC9E09A95B99'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = 'BBE9C397-250A-4F9F-BE6F-3AE4A08068A7'
-               AND AutoUpdateUserSearchPredicate = 1;
-
-/* Set categories for 42 fields */
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.ContentHash 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Snapshot Identity',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'A0F6B242-8C4C-415F-904B-FC0FF1D82F27';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.PipelineID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Snapshot Identity',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Pipeline'
-WHERE 
-   ID = 'B378836D-E724-4F0B-8041-81FACDEC8644';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.PredictionUnitID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Snapshot Identity',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Prediction Unit'
-WHERE 
-   ID = '7CAF679B-4A83-45E4-BE1F-5FEA308ED03A';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.LabelVersion 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Snapshot Identity',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'D2FE84CF-E581-4BA2-B5AB-61D43CFD7FD2';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.FeatureSpecVersion 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Snapshot Identity',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '9FB556D7-DC88-4E58-A113-9C394805138C';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.EvaluationProtocolID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Snapshot Identity',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Evaluation Protocol'
-WHERE 
-   ID = '9587F907-23EE-4F46-A8BF-18DA1CD112FB';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.StorageProviderID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'File Storage',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Storage Provider'
-WHERE 
-   ID = '78E9F5E7-AF2A-46D5-9305-6AE12B29B283';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.MatrixFileID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'File Storage',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Matrix File'
-WHERE 
-   ID = '081C2C3D-F102-4FBF-AF31-BD8C435427F8';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.MatrixSha256 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'File Storage',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Matrix SHA-256'
-WHERE 
-   ID = '52F24C48-931C-4212-8BF3-DDE543971714';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.MatrixSizeBytes 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'File Storage',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Matrix Size (Bytes)'
-WHERE 
-   ID = '1BA05957-D3FB-4043-B0BF-D4C76C5FA993';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.RowManifestFileID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'File Storage',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Row Manifest File'
-WHERE 
-   ID = '996B9364-8C11-4046-902D-AEE414F3C7BD';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.RowManifestSha256 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'File Storage',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Row Manifest SHA-256'
-WHERE 
-   ID = '6616E878-29B1-4F7A-A84C-DF4C9D3F7710';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.RowManifestSizeBytes 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'File Storage',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Row Manifest Size (Bytes)'
-WHERE 
-   ID = 'F9690459-17D5-46A3-87DA-33624BEAFDF1';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.ProvenanceFileID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'File Storage',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Provenance File'
-WHERE 
-   ID = '6F468FEE-462C-4A24-8DB2-AFDB40718B8D';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.ProvenanceSha256 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'File Storage',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Provenance SHA-256'
-WHERE 
-   ID = 'F9BF5E7D-113A-45D5-BF30-3B0D5166BB5F';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.ProvenanceSizeBytes 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'File Storage',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Provenance Size (Bytes)'
-WHERE 
-   ID = '2EF30714-7E7B-47DF-A10F-CD6966C7F945';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.ManifestRowCount 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Row Statistics',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '1B7B804D-3522-4A64-9C45-ED33E2578277';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.HoldoutRowCount 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Row Statistics',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'EB2935AE-7B24-4B97-BEAB-74E031EA5A7D';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.FeatureSpec 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Feature Specifications',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '47EE8BA7-1287-4E84-94C1-28E31AAFEEC7';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.FeatureSchema 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Feature Specifications',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '3FF74780-54EB-4A27-AE70-88F968372B1F';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.FeatureSchemaHash 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Feature Specifications',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '825F178D-8871-49F5-A757-51B81E8DC0B2';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.ColumnProvenance 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Feature Specifications',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = 'D182B640-205C-400D-BAC8-AA5B0A418AF7';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.PinnedFeatureVersions 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Feature Specifications',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '2FACFFDF-87D1-40A6-9444-BFD3ADA2CFAE';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.RowsRead 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Row Processing Exclusions',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'A0FB3BFC-91A9-4258-93C8-D22C5EA96978';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.ReadComplete 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Row Processing Exclusions',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'E85AE20A-F1F0-40CA-9398-8B9D274C4894';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.CensoredRowsExcluded 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Row Processing Exclusions',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '54FFB93E-2BAD-43B5-BE78-7C1344724C67';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.LabelKnownRowsExcluded 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Row Processing Exclusions',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'D45567A0-364F-4CBF-8CFC-F4B2366BD49D';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.EmptyLabelRowsExcluded 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Row Processing Exclusions',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '8EFD75EC-E558-46DE-B701-73B6676792CE';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.UncoveredHistoryRowsExcluded 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Row Processing Exclusions',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '15764390-A402-46F5-9937-4B532D72C0D1';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.DuplicateRowsRemoved 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Row Processing Exclusions',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'DD4BCBDC-40F8-48DA-9805-743BB3D67FCB';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.ClassBalance 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Assembly Metadata',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '747D5D3C-9F5E-4D04-ACB2-2EC279EC9A50';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.DataCutoff 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Assembly Metadata',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '3B6F7084-15B3-456E-BCA2-91ECD6442599';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.AssemblyCodeVersion 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Assembly Metadata',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '1AED42F4-E861-4158-8EE7-11F8D3CCC7BC';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.__mj_CreatedAt 
+-- UPDATE Entity Field Category Info MJ: ML Prediction Units.ID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'D0CB2EBE-9E53-40DB-9007-CB287D8AC3B3';
+   ID = 'F4CAAED2-29AD-4AE4-9D27-662406E3876F';
 
--- UPDATE Entity Field Category Info MJ: Training Snapshots.__mj_UpdatedAt 
+-- UPDATE Entity Field Category Info MJ: ML Prediction Units.LineageRootID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Lineage and Versioning',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'D4C1CA8F-92F6-4D1F-91B8-7989C68A2FF3';
+
+-- UPDATE Entity Field Category Info MJ: ML Prediction Units.Version 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Lineage and Versioning',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '75BD5E78-48BB-44D8-8B1F-CFB4EDFEF309';
+
+-- UPDATE Entity Field Category Info MJ: ML Prediction Units.LabelVersion 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Lineage and Versioning',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '1A414A7A-B576-49C5-917C-5586FD9E645F';
+
+-- UPDATE Entity Field Category Info MJ: ML Prediction Units.LineageRoot 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Lineage and Versioning',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '2659C3FC-5C4A-45A1-8503-EA35E535DC86';
+
+-- UPDATE Entity Field Category Info MJ: ML Prediction Units.Name 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Prediction Definition',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '367EF229-E773-4EFF-9050-D5D864329C7B';
+
+-- UPDATE Entity Field Category Info MJ: ML Prediction Units.Description 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Prediction Definition',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '40751F77-3489-4BB1-A007-C3BF4F909221';
+
+-- UPDATE Entity Field Category Info MJ: ML Prediction Units.TaskType 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Prediction Definition',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '6DA08AF0-F2F5-4294-ABE1-F2DE92A4278C';
+
+-- UPDATE Entity Field Category Info MJ: ML Prediction Units.UnitRows 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Data and Feature Configuration',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = 'D3AAFFD7-39E7-4318-9C7E-78D1B274CF2E';
+
+-- UPDATE Entity Field Category Info MJ: ML Prediction Units.GroupKey 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Data and Feature Configuration',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'E6E6F6EE-8E03-44CD-91D3-F0A699D94A23';
+
+-- UPDATE Entity Field Category Info MJ: ML Prediction Units.TemporalSpec 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Data and Feature Configuration',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '599B6550-9744-441D-8D28-25DC8505914F';
+
+-- UPDATE Entity Field Category Info MJ: ML Prediction Units.LabelRule 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Outcome and Labeling',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = 'B1701DB5-91DC-477C-8E8A-8191F18F3945';
+
+-- UPDATE Entity Field Category Info MJ: ML Prediction Units.LabelWindowDays 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Outcome and Labeling',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '497D0450-7569-4AE2-AC34-2110C4CCE6FC';
+
+-- UPDATE Entity Field Category Info MJ: ML Prediction Units.LabelGapDays 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Outcome and Labeling',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'E6D5425D-6E89-42DB-A089-E6020B969496';
+
+-- UPDATE Entity Field Category Info MJ: ML Prediction Units.Censoring 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Outcome and Labeling',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Censoring Rule',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '6E84BDAE-C220-42F7-9716-AE7DA85BB277';
+
+-- UPDATE Entity Field Category Info MJ: ML Prediction Units.ChangeHistoryPolicy 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Model Execution and Governance',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '02F695D3-28BB-414A-876D-37B0AD1DCAEB';
+
+-- UPDATE Entity Field Category Info MJ: ML Prediction Units.DecisionSpec 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Model Execution and Governance',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = 'B01E7DA7-5AA2-43E0-8414-47F2158F208D';
+
+-- UPDATE Entity Field Category Info MJ: ML Prediction Units.IncumbentHeuristic 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Model Execution and Governance',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '743899B5-546D-47B9-AA4B-28623BC2885E';
+
+-- UPDATE Entity Field Category Info MJ: ML Prediction Units.AuthoredBy 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Model Execution and Governance',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = 'C44C7B71-E487-4C32-A7FC-12A714715BBD';
+
+-- UPDATE Entity Field Category Info MJ: ML Prediction Units.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '878B22AB-4F36-4FAB-8EC8-CC3C359610A2';
+   ID = '247807BD-B812-4DE5-9D17-49788C5E7B29';
 
--- UPDATE Entity Field Category Info MJ: Training Snapshots.Pipeline 
+-- UPDATE Entity Field Category Info MJ: ML Prediction Units.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Snapshot Identity',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Pipeline Name'
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
 WHERE 
-   ID = '92A67137-2316-4104-A89A-EB24CC809B71';
+   ID = 'A565F607-69D9-4D1E-B326-5067CD19DD8B';
 
--- UPDATE Entity Field Category Info MJ: Training Snapshots.PredictionUnit 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Snapshot Identity',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Prediction Unit Name'
-WHERE 
-   ID = 'A7D8769C-DDAB-43CF-936C-EA720DF757A9';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.EvaluationProtocol 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Snapshot Identity',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Evaluation Protocol Name'
-WHERE 
-   ID = '4F3A1925-8C21-4CEC-993A-0F7EA11FF15E';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.StorageProvider 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'File Storage',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Storage Provider Name'
-WHERE 
-   ID = '57D7B31B-CCD8-4175-8EB4-11DEFB91DAB4';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.MatrixFile 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'File Storage',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Matrix File Details'
-WHERE 
-   ID = 'BC088B2C-80A5-479E-93AB-660E93836FD5';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.RowManifestFile 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'File Storage',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Row Manifest File Details'
-WHERE 
-   ID = '18AD627C-925B-401C-B3DA-55F82A850675';
-
--- UPDATE Entity Field Category Info MJ: Training Snapshots.ProvenanceFile 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'File Storage',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Provenance File Details'
-WHERE 
-   ID = 'F974D613-4210-43B7-99BA-235E38C74072';
-
-/* Set entity icon to fa fa-database */
+/* Set entity icon to fa fa-chart-line */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-database', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '947FF197-FAAF-4557-AE52-6FDCF4313762';
+               SET [Icon] = 'fa fa-chart-line', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6';
 
 /* Insert FieldCategoryInfo setting for entity */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND [Name] = 'FieldCategoryInfo'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND [Name] = 'FieldCategoryInfo'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('dbb7153b-bb91-58ca-8b3d-1279a85bbe1d', '947FF197-FAAF-4557-AE52-6FDCF4313762', 'FieldCategoryInfo', '{
-  "Assembly Metadata": {
-    "description": "Execution environment, cutoff dates, class balances, and code versions used during assembly",
+               VALUES ('65441f16-8ce2-51b7-846d-c0518ad1e20a', 'D5052EB0-354C-4C4D-80D8-2832FCC720E6', 'FieldCategoryInfo', '{
+  "Data and Feature Configuration": {
+    "description": "Configuration defining training rows, groupings, and temporal specifications",
+    "icon": "fa fa-database"
+  },
+  "Lineage and Versioning": {
+    "description": "Tracks immutable versions and lineage root identifiers for models",
+    "icon": "fa fa-code-branch"
+  },
+  "Model Execution and Governance": {
+    "description": "Decision specifications, change history policies, heuristics, and authorship",
     "icon": "fa fa-cogs"
   },
-  "Feature Specifications": {
-    "description": "Feature schemas, specifications, provenance, and version pins",
-    "icon": "fa fa-code"
+  "Outcome and Labeling": {
+    "description": "Rules governing outcome observation windows, gaps, and censoring",
+    "icon": "fa fa-tags"
   },
-  "File Storage": {
-    "description": "Metadata, hashes, and file references for snapshot storage files",
-    "icon": "fa fa-file-archive"
-  },
-  "Row Processing Exclusions": {
-    "description": "Metrics and counts regarding rows read and various exclusion rules applied",
-    "icon": "fa fa-filter"
-  },
-  "Row Statistics": {
-    "description": "Row counts and holdout metrics for the snapshot",
-    "icon": "fa fa-list-ol"
-  },
-  "Snapshot Identity": {
-    "description": "Core identifiers, hashes, and version details defining the training snapshot",
-    "icon": "fa fa-fingerprint"
+  "Prediction Definition": {
+    "description": "Core identity, task type, and description of what the unit predicts",
+    "icon": "fa fa-bullseye"
   },
   "System Metadata": {
     "description": "System-managed audit and tracking fields",
@@ -12882,354 +12888,17 @@ IF NOT EXISTS (
 
 /* Insert FieldCategoryIcons setting (legacy) */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762' AND [Name] = 'FieldCategoryIcons'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6' AND [Name] = 'FieldCategoryIcons'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('2f1b390c-57ea-52b3-9f04-267e6bcc5670', '947FF197-FAAF-4557-AE52-6FDCF4313762', 'FieldCategoryIcons', '{
-  "Assembly Metadata": "fa fa-cogs",
-  "Feature Specifications": "fa fa-code",
-  "File Storage": "fa fa-file-archive",
-  "Row Processing Exclusions": "fa fa-filter",
-  "Row Statistics": "fa fa-list-ol",
-  "Snapshot Identity": "fa fa-fingerprint",
+               VALUES ('c912dfe4-1540-534e-8e0e-2e8d1229e257', 'D5052EB0-354C-4C4D-80D8-2832FCC720E6', 'FieldCategoryIcons', '{
+  "Data and Feature Configuration": "fa fa-database",
+  "Lineage and Versioning": "fa fa-code-branch",
+  "Model Execution and Governance": "fa fa-cogs",
+  "Outcome and Labeling": "fa fa-tags",
+  "Prediction Definition": "fa fa-bullseye",
   "System Metadata": "fa fa-cog"
-}', GETUTCDATE(), GETUTCDATE())
-   END;
-
-/* Set DefaultForNewUser=false for NEW entity (category: supporting, confidence: high) */
-
-         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
-         SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '947FF197-FAAF-4557-AE52-6FDCF4313762';
-
-/* Set categories for 31 fields */
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.ID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '820307AD-A880-43F9-BF4F-B372952280A2';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.LineageRootID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Version Control',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '681C028A-CC37-40CF-93A2-184DD7848FDC';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.Version 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Version Control',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'BB775E4A-B311-47D4-AE71-E5373574FE88';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.Name 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Protocol Details',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'BBE9C397-250A-4F9F-BE6F-3AE4A08068A7';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.Description 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Protocol Details',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '56BADE9A-C2D3-4864-AA87-83F5939F0636';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.Holdout 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Validation and Holdout',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '836279D3-A61F-4743-8EAD-48DFE3A7ABF6';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.InnerValidation 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Validation and Holdout',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '5E6C119F-6339-4B5D-BDAE-FE1182E077AE';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.Seed 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Validation and Holdout',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'F6E2D51E-7143-45BA-8F9D-CC4B141CF0DB';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.HoldoutAccessBudget 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Validation and Holdout',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '5478CE75-7A40-437E-AAC8-C15DBD5152BC';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.PrimaryScore 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Metrics and Scoring',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = 'DF7406BD-4DEA-4FCB-A946-B66575ED6ECF';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.SecondaryMetrics 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Metrics and Scoring',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = 'E70A771F-996D-4EAD-96FF-FCC8A007FC65';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.Baselines 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Model Configuration',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = 'A09DA5DA-31B6-44BF-A4E8-49929B094A3C';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.Calibration 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Model Configuration',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '4F99D3E0-6B55-4EF4-9F35-C9C2CEB55117';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.Resampling 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Model Configuration',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = 'F3F04860-EB0E-4A3A-9714-88485B0E814C';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.Intervals 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Metrics and Scoring',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '6EC9E06B-1B67-445B-BD73-FDA680082832';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.Promotion 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Promotion and Outcomes',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = 'B44F0713-9F1E-4966-9863-7E72F5D0EC61';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.AllowedOutcomes 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Promotion and Outcomes',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = 'C44EB743-E9D9-4B5A-A2F9-7027D7838435';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.LeakageAudit 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Audits and Guards',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = 'E327B941-D09F-44F7-8B92-6C04AF6E4624';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.Exclusions 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Audits and Guards',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '8D4787C0-84E4-4841-9B5B-839C4C52AB9F';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.Slices 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Audits and Guards',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '079EE702-E829-472E-8EC6-39DB7E068A09';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.PredictionIntervals 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Metrics and Scoring',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '1A7819FD-80E0-454E-9DF1-A7CEC246417B';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.ResidualDiagnostics 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Audits and Guards',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '4D2A5640-5A7E-4D60-9AD0-B36266D2C683';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.RetrainTriggers 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Promotion and Outcomes',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = 'E499134D-E42C-49E5-81CF-E071BA2167A7';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.SearchStrategy 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Model Configuration',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '55F5FC86-9AB7-49EE-86CA-C39FBF3FAD01';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.Budgets 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Audits and Guards',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = 'A73475E3-3866-43C0-BADC-2E64F59E1332';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.MinMinorityClassRows 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Validation and Holdout',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '2D43D765-A3E4-4A3A-A14F-1A2C69DBB03D';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.GuardFieldsEditableBy 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Protocol Details',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'EDF32039-D2DF-4F3B-B762-4A557587D08A';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.AuthoredBy 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Version Control',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'JSON'
-WHERE 
-   ID = '0E34F94C-3832-48E8-AE65-A3A923015091';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.__mj_CreatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = 'EAA27903-181E-4CAE-B5F1-DC9E09A95B99';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.__mj_UpdatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'System Metadata',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '0B2E5762-CBCC-4297-B56A-E260EB9BC88D';
-
--- UPDATE Entity Field Category Info MJ: Evaluation Protocols.LineageRoot 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Version Control',
-   GeneratedFormSection = 'Category'
-WHERE 
-   ID = '8177C60C-2607-464D-A5A2-8ACC2F5DA40B';
-
-/* Set entity icon to fa fa-sliders-h */
-
-               UPDATE [${flyway:defaultSchema}].[Entity]
-               SET [Icon] = 'fa fa-sliders-h', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '0B0C469C-146C-4731-B064-CCB391D67889';
-
-/* Insert FieldCategoryInfo setting for entity */
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889' AND [Name] = 'FieldCategoryInfo'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('c79e231b-ead6-523f-9c7b-760927d825be', '0B0C469C-146C-4731-B064-CCB391D67889', 'FieldCategoryInfo', '{
-  "Audits and Guards": {
-    "description": "Leakage audits, exclusions, slices, residuals, and compute budgets",
-    "icon": "fa fa-tasks"
-  },
-  "Metrics and Scoring": {
-    "description": "Primary and secondary scores, intervals, and prediction metrics",
-    "icon": "fa fa-chart-line"
-  },
-  "Model Configuration": {
-    "description": "Baselines, calibration, resampling, and search strategy settings",
-    "icon": "fa fa-cogs"
-  },
-  "Promotion and Outcomes": {
-    "description": "Promotion rules, allowed outcomes, and retrain triggers",
-    "icon": "fa fa-flag-checkered"
-  },
-  "Protocol Details": {
-    "description": "General protocol naming, description, and authorship configurations",
-    "icon": "fa fa-file-alt"
-  },
-  "Validation and Holdout": {
-    "description": "Holdout split, inner validation, and data partitioning rules",
-    "icon": "fa fa-shield-alt"
-  },
-  "Version Control": {
-    "description": "Versioning lineage, history, and authorship details",
-    "icon": "fa fa-code-branch"
-  }
-}', GETUTCDATE(), GETUTCDATE())
-   END;
-
-/* Insert FieldCategoryIcons setting (legacy) */
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889' AND [Name] = 'FieldCategoryIcons'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('95a0e736-4f16-5bff-a0bd-9092b2e46c20', '0B0C469C-146C-4731-B064-CCB391D67889', 'FieldCategoryIcons', '{
-  "Audits and Guards": "fa fa-tasks",
-  "Metrics and Scoring": "fa fa-chart-line",
-  "Model Configuration": "fa fa-cogs",
-  "Promotion and Outcomes": "fa fa-flag-checkered",
-  "Protocol Details": "fa fa-file-alt",
-  "Validation and Holdout": "fa fa-shield-alt",
-  "Version Control": "fa fa-code-branch"
 }', GETUTCDATE(), GETUTCDATE())
    END;
 
@@ -13237,79 +12906,340 @@ IF NOT EXISTS (
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '0B0C469C-146C-4731-B064-CCB391D67889';
+         WHERE [EntityID] = 'D5052EB0-354C-4C4D-80D8-2832FCC720E6';
+
+/* Set categories for 31 fields */
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Basic Information',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '1B8C4AD9-59E6-421E-B28D-C2C60D8C9AEF';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.LineageRootID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Basic Information',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'CC21F4D2-0D46-44B0-8FE4-C16DFDF4C522';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.Version 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Basic Information',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'E16B9172-338C-4D7A-8DFE-F9FA06CF4DB8';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.Name 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Basic Information',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'D44848C6-9CAB-4C17-A4E8-27EDA46692D6';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.Description 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Basic Information',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'B1985F44-5F4F-4831-BB96-3470CE296583';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.LineageRoot 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Basic Information',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'F4D9A19F-C0F1-4A25-B2C3-A8328B332C0D';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.Holdout 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Validation and Splits',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = 'D3C7BAEF-DF62-4355-A7ED-CDE904B888D5';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.InnerValidation 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Validation and Splits',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '968AFD18-C8A9-41C6-A03C-4D284033BD6B';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.Seed 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Validation and Splits',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'A0E507E5-ACC9-4D6B-AB4A-49FE2BE84B96';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.HoldoutAccessBudget 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Validation and Splits',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '2153C8C2-8DFF-422C-9759-8EE80F53F0AE';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.PrimaryScore 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Metrics and Evaluation',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '18636BB2-A8BE-4A84-9C8F-211A35FF4D00';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.SecondaryMetrics 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Metrics and Evaluation',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '252225D0-F65A-453D-9390-2C2C7DA687A2';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.Baselines 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Metrics and Evaluation',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '89230037-5A26-4441-911F-2B9FAE0369B9';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.Calibration 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Metrics and Evaluation',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = 'E170CD66-F89B-4403-8538-E80E3757DF23';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.Resampling 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Metrics and Evaluation',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '7B16E14F-39A2-4405-B612-AEDB8FB5A4E5';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.Intervals 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Metrics and Evaluation',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = 'E12EF381-23CB-44F0-9234-27AD4854A41E';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.PredictionIntervals 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Metrics and Evaluation',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '32743338-0281-4A24-BA0A-4EF8D5281866';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.ResidualDiagnostics 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Metrics and Evaluation',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '0AE6C0A7-5B72-4C3A-A080-154BE17DA485';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.Promotion 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Guards and Governance',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '53A6B363-0C31-4A02-8098-7997FFA6773B';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.AllowedOutcomes 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Guards and Governance',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = 'F849C1E5-2A72-459C-9C5B-65BF039E73BC';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.LeakageAudit 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Guards and Governance',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '30B68CF1-3409-453A-98C2-E6C2255AC836';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.Exclusions 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Guards and Governance',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = 'F3F5A513-4467-46A9-865E-1BEC926439F1';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.Slices 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Guards and Governance',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = 'FB620DF0-FC76-4D02-B7C8-1BFA3C19770C';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.RetrainTriggers 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Guards and Governance',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = 'ACBD66B0-1219-4441-A7C0-0F82808E40F7';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.SearchStrategy 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Guards and Governance',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '2B05F9BD-D5A9-4852-B5B1-48C58796AE02';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.Budgets 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Guards and Governance',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '2AF1A4EE-1133-458C-AD90-AD95DD2F1043';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.MinMinorityClassRows 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Guards and Governance',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '5A26CA06-0E44-4CE3-AB6D-C7541002EED3';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.GuardFieldsEditableBy 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Guards and Governance',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'ECF141B1-F1F5-4DB6-BF75-CCC11817C2D8';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.AuthoredBy 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'JSON'
+WHERE 
+   ID = '7937B713-FF95-424F-A2E6-553E2B545B21';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'E1B8FC2B-3BD5-420A-A8D6-6AF5BECB306E';
+
+-- UPDATE Entity Field Category Info MJ: ML Evaluation Protocols.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '59F85AC9-0097-463C-B91B-6D74777C5A55';
+
+/* Set entity icon to fa fa-sliders-h */
+
+               UPDATE [${flyway:defaultSchema}].[Entity]
+               SET [Icon] = 'fa fa-sliders-h', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE';
+
+/* Insert FieldCategoryInfo setting for entity */
+IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND [Name] = 'FieldCategoryInfo'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('fc0cdb71-ad41-564d-b1c9-7ca29ba55f9b', '7DB88C96-C922-4724-AE93-7B91798CEAFE', 'FieldCategoryInfo', '{
+  "Basic Information": {
+    "description": "Core identification, naming, and version lineage details",
+    "icon": "fa fa-info-circle"
+  },
+  "Guards and Governance": {
+    "description": "Promotion rules, leakage audits, exclusions, budgets, and governance settings",
+    "icon": "fa fa-shield-alt"
+  },
+  "Metrics and Evaluation": {
+    "description": "Scoring metrics, baselines, calibration, and intervals",
+    "icon": "fa fa-chart-line"
+  },
+  "System Metadata": {
+    "description": "System-managed audit and tracking fields",
+    "icon": "fa fa-cog"
+  },
+  "Validation and Splits": {
+    "description": "Holdout splits, inner validation, and randomness seeds",
+    "icon": "fa fa-random"
+  }
+}', GETUTCDATE(), GETUTCDATE())
+   END;
+
+/* Insert FieldCategoryIcons setting (legacy) */
+IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE' AND [Name] = 'FieldCategoryIcons'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('550557b9-1140-5c42-a744-9d339bb2f2d4', '7DB88C96-C922-4724-AE93-7B91798CEAFE', 'FieldCategoryIcons', '{
+  "Basic Information": "fa fa-info-circle",
+  "Guards and Governance": "fa fa-shield-alt",
+  "Metrics and Evaluation": "fa fa-chart-line",
+  "System Metadata": "fa fa-cog",
+  "Validation and Splits": "fa fa-random"
+}', GETUTCDATE(), GETUTCDATE())
+   END;
+
+/* Set DefaultForNewUser=false for NEW entity (category: supporting, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
+         SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
+         WHERE [EntityID] = '7DB88C96-C922-4724-AE93-7B91798CEAFE';
 
 
 
+/* ---- CodeGen pass 2 ---- */
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/* =====================================================================================
- * EVERYTHING BELOW THIS BLOCK WAS GENERATED BY THE MEMBERJUNCTION CODEGEN TOOL (SECOND PASS).
- *
- * A second CodeGen run over the schema above: the virtual name field of the new
- * ML Training Runs -> Training Snapshot link, which CodeGen can only add once the
- * Training Snapshot entity exists, and the ML Training Runs view and procedures that carry it.
- * Do NOT edit by hand: if the DDL above changes, re-run CodeGen and replace both generated sections.
- * ===================================================================================== */
-
-/* SQL text to update entity field related entity name field map for entity field ID CE8B8910-7580-452F-8DBA-B0B99D24379C */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='CE8B8910-7580-452F-8DBA-B0B99D24379C', @RelatedEntityNameFieldMap='TrainingSnapshot';
+/* SQL text to update entity field related entity name field map for entity field ID 4B08D0B2-50B0-492E-8639-98538371560E */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='4B08D0B2-50B0-492E-8639-98538371560E', @RelatedEntityNameFieldMap='TrainingSnapshot';
 
 /* Base View SQL for MJ: ML Training Runs */
 -----------------------------------------------------------------
@@ -13338,8 +13268,8 @@ SELECT
     MJMLTrainingPipeline_PipelineID.[Name] AS [Pipeline],
     MJExperimentSessionIteration_ExperimentSessionIterationID.[Label] AS [ExperimentSessionIteration],
     MJMLAlgorithm_AlgorithmID.[Name] AS [Algorithm],
-    MJTrainingSnapshot_TrainingSnapshotID.[ContentHash] AS [TrainingSnapshot],
-    MJEvaluationProtocol_EvaluationProtocolID.[Name] AS [EvaluationProtocol]
+    MJMLTrainingSnapshot_TrainingSnapshotID.[ContentHash] AS [TrainingSnapshot],
+    MJMLEvaluationProtocol_EvaluationProtocolID.[Name] AS [EvaluationProtocol]
 FROM
     [${flyway:defaultSchema}].[MLTrainingRun] AS m
 INNER JOIN
@@ -13355,13 +13285,13 @@ INNER JOIN
   ON
     [m].[AlgorithmID] = MJMLAlgorithm_AlgorithmID.[ID]
 LEFT OUTER JOIN
-    [${flyway:defaultSchema}].[TrainingSnapshot] AS MJTrainingSnapshot_TrainingSnapshotID
+    [${flyway:defaultSchema}].[MLTrainingSnapshot] AS MJMLTrainingSnapshot_TrainingSnapshotID
   ON
-    [m].[TrainingSnapshotID] = MJTrainingSnapshot_TrainingSnapshotID.[ID]
+    [m].[TrainingSnapshotID] = MJMLTrainingSnapshot_TrainingSnapshotID.[ID]
 LEFT OUTER JOIN
-    [${flyway:defaultSchema}].[EvaluationProtocol] AS MJEvaluationProtocol_EvaluationProtocolID
+    [${flyway:defaultSchema}].[MLEvaluationProtocol] AS MJMLEvaluationProtocol_EvaluationProtocolID
   ON
-    [m].[EvaluationProtocolID] = MJEvaluationProtocol_EvaluationProtocolID.[ID]
+    [m].[EvaluationProtocolID] = MJMLEvaluationProtocol_EvaluationProtocolID.[ID]
 GO
 REVOKE SELECT ON [${flyway:defaultSchema}].[vwMLTrainingRuns] FROM [cdp_Developer]
 REVOKE SELECT ON [${flyway:defaultSchema}].[vwMLTrainingRuns] FROM [cdp_Integration]
@@ -13719,7 +13649,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteMLTrainingRun] TO [cdp_Devel
 
 /* SQL text to insert 1 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ac82bf5a-ecdf-4965-83e6-006a598ed146' OR (EntityID = '1A4DF72F-68E0-410C-B42C-815687BFE2D2' AND Name = 'TrainingSnapshot')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c79e2fe7-bd1f-4262-a732-ec3026b6f789' OR (EntityID = '1A4DF72F-68E0-410C-B42C-815687BFE2D2' AND Name = 'TrainingSnapshot')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -13752,7 +13682,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteMLTrainingRun] TO [cdp_Devel
          )
          VALUES
          (
-            'ac82bf5a-ecdf-4965-83e6-006a598ed146',
+            'c79e2fe7-bd1f-4262-a732-ec3026b6f789',
             '1A4DF72F-68E0-410C-B42C-815687BFE2D2', -- Entity: MJ: ML Training Runs
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1A4DF72F-68E0-410C-B42C-815687BFE2D2'),
             'TrainingSnapshot',
@@ -13787,8 +13717,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteMLTrainingRun] TO [cdp_Devel
 -- UPDATE Entity Field Category Info MJ: ML Training Runs.TrainingSnapshot 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Model Configuration',
+   Category = 'Execution Context',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'AC82BF5A-ECDF-4965-83E6-006A598ED146';
+   ID = 'C79E2FE7-BD1F-4262-A732-EC3026B6F789';
 

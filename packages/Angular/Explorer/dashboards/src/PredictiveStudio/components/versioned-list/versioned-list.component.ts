@@ -46,7 +46,7 @@ export interface LineageItem {
 })
 export class PSVersionedListComponent extends BaseAngularComponent implements OnInit {
   private readonly cdr = inject(ChangeDetectorRef);
-  private _entityName: VersionedEntityName = 'MJ: Evaluation Protocols';
+  private _entityName: VersionedEntityName = 'MJ: ML Evaluation Protocols';
   private isInitialized = false;
 
   @Input()

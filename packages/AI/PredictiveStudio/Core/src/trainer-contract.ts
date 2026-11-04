@@ -64,7 +64,7 @@ export interface TrainerRequest {
   readonly snapshot: {  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
     readonly id: string;  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
     readonly contentHash: string;  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
-    /** The `MJ: Training Snapshots` row's `FeatureSchemaHash`; the sidecar copies it onto every returned artifact instead of recomputing it. */
+    /** The `MJ: ML Training Snapshots` row's `FeatureSchemaHash`; the sidecar copies it onto every returned artifact instead of recomputing it. */
     readonly featureSchemaHash: string;  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
     readonly matrix: PreAuthDownload;  // case-violation-ok-legacy-back-compat: trainer sidecar wire name
     readonly rowManifest: PreAuthDownload;  // case-violation-ok-legacy-back-compat: trainer sidecar wire name

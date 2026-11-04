@@ -38,7 +38,7 @@ function world(labels: Cell[]): WizardWorld {
       ID: '', LatestResult: null, EntityInfo: { Name: entity }, PrimaryKey: { ToString: (): string => r.ID },
       NewRecord: (): boolean => true,
       Save: async (): Promise<boolean> => {
-        if (entity === 'MJ: Prediction Units' && w.FailUnitSave) return false;
+        if (entity === 'MJ: ML Prediction Units' && w.FailUnitSave) return false;
         // The server mints the ID and adopts it as version 1's lineage root.
         r.ID = `${prefix}-SERVER`;
         r.LineageRootID = r.ID;
@@ -65,7 +65,7 @@ function world(labels: Cell[]): WizardWorld {
       const rows = all.slice(start, start + 2);
       return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: w.TotalRowCount === null ? w.Labels.length : w.TotalRowCount, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
     },
-    GetEntityObject: async (entity: string): Promise<RowDouble> => row(entity, entity === 'MJ: Prediction Units' ? 'U' : 'EP'),
+    GetEntityObject: async (entity: string): Promise<RowDouble> => row(entity, entity === 'MJ: ML Prediction Units' ? 'U' : 'EP'),
   });
   return w;
 }
@@ -147,7 +147,7 @@ describe('PipelineWizardBindings.SaveWithBindings', () => {
     const w = world([true, false, true, null]);
     const p = newPipeline(w);
     expect(await PipelineWizardBindings.SaveWithBindings(p, 'Members', w.Provider, undefined)).toEqual({ Ok: true });
-    expect(w.Order).toEqual(['MJ: Prediction Units', 'MJ: Evaluation Protocols', 'MJ: ML Training Pipelines unit=U-SERVER protocol=EP-SERVER']);
+    expect(w.Order).toEqual(['MJ: ML Prediction Units', 'MJ: ML Evaluation Protocols', 'MJ: ML Training Pipelines unit=U-SERVER protocol=EP-SERVER']);
     expect([p.TargetVariable, p.ProblemType]).toEqual(['Renewed within 1 days', 'classification']);
     // every row read, in keyset pages ordered by the key: the second page starts after the first page's last row
     expect(w.Reads.map((r) => [r.AfterKey ? r.AfterKey.ToString() : null, r.StartRow, r.OrderBy])).toEqual([[null, undefined, 'ID'], ['ID=R1', undefined, 'ID']]);
@@ -161,7 +161,7 @@ describe('PipelineWizardBindings.SaveWithBindings', () => {
     const w = world(['1', '0']);
     const r = await PipelineWizardBindings.SaveWithBindings(newPipeline(w, 'Renewed', true), 'Members', w.Provider, undefined);
     expect(r).toEqual({ Ok: false, Reason: 'saving the pipeline: pipeline refused' });
-    expect(w.Deleted).toEqual(['MJ: Evaluation Protocols', 'MJ: Prediction Units']);
+    expect(w.Deleted).toEqual(['MJ: ML Evaluation Protocols', 'MJ: ML Prediction Units']);
   });
   it('saves nothing for a held target, a failed unit save or a label read that misses rows', async () => {
     const held = world(['A', 'B']);

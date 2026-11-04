@@ -10,10 +10,10 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Version Control Section -->
+    <!-- Lineage and Versioning Section -->
     <mj-collapsible-panel
-        SectionKey="versionControl"
-        SectionName="Version Control"
+        SectionKey="lineageAndVersioning"
+        SectionName="Lineage and Versioning"
         Icon="fa fa-code-branch"
         [Form]="this"
         [FormContext]="formContext">
@@ -37,19 +37,19 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="AuthoredBy"
-            Type="textarea"
+            FieldName="LabelVersion"
+            Type="number"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Protocol Details Section -->
+    <!-- Prediction Definition Section -->
     <mj-collapsible-panel
-        SectionKey="protocolDetails"
-        SectionName="Protocol Details"
-        Icon="fa fa-file-alt"
+        SectionKey="predictionDefinition"
+        SectionName="Prediction Definition"
+        Icon="fa fa-bullseye"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -71,25 +71,25 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="GuardFieldsEditableBy"
-            Type="select"
+            FieldName="TaskType"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Validation and Holdout Section -->
+    <!-- Data and Feature Configuration Section -->
     <mj-collapsible-panel
-        SectionKey="validationAndHoldout"
-        SectionName="Validation and Holdout"
-        Icon="fa fa-shield-alt"
+        SectionKey="dataAndFeatureConfiguration"
+        SectionName="Data and Feature Configuration"
+        Icon="fa fa-database"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Holdout"
+            FieldName="UnitRows"
             Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -97,7 +97,33 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="InnerValidation"
+            FieldName="GroupKey"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="TemporalSpec"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Outcome and Labeling Section -->
+    <mj-collapsible-panel
+        SectionKey="outcomeAndLabeling"
+        SectionName="Outcome and Labeling"
+        Icon="fa fa-tags"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="LabelRule"
             Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -105,7 +131,7 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Seed"
+            FieldName="LabelWindowDays"
             Type="number"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -113,57 +139,15 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="HoldoutAccessBudget"
-            Type="select"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="MinMinorityClassRows"
+            FieldName="LabelGapDays"
             Type="number"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Metrics and Scoring Section -->
-    <mj-collapsible-panel
-        SectionKey="metricsAndScoring"
-        SectionName="Metrics and Scoring"
-        Icon="fa fa-chart-line"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="PrimaryScore"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="SecondaryMetrics"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Intervals"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="PredictionIntervals"
+            FieldName="Censoring"
             Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -171,17 +155,17 @@
 
     </mj-collapsible-panel>
 
-    <!-- Model Configuration Section -->
+    <!-- Model Execution and Governance Section -->
     <mj-collapsible-panel
-        SectionKey="modelConfiguration"
-        SectionName="Model Configuration"
+        SectionKey="modelExecutionAndGovernance"
+        SectionName="Model Execution and Governance"
         Icon="fa fa-cogs"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Baselines"
+            FieldName="ChangeHistoryPolicy"
             Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -189,7 +173,7 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Calibration"
+            FieldName="DecisionSpec"
             Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -197,7 +181,7 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Resampling"
+            FieldName="IncumbentHeuristic"
             Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -205,91 +189,7 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="SearchStrategy"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Promotion and Outcomes Section -->
-    <mj-collapsible-panel
-        SectionKey="promotionAndOutcomes"
-        SectionName="Promotion and Outcomes"
-        Icon="fa fa-flag-checkered"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Promotion"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="AllowedOutcomes"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="RetrainTriggers"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Audits and Guards Section -->
-    <mj-collapsible-panel
-        SectionKey="auditsAndGuards"
-        SectionName="Audits and Guards"
-        Icon="fa fa-tasks"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="LeakageAudit"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Exclusions"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Slices"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ResidualDiagnostics"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Budgets"
+            FieldName="AuthoredBy"
             Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -329,50 +229,50 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Training Snapshots Section -->
+    <!-- ML Prediction Units Section -->
     <mj-collapsible-panel
-        SectionKey="mJTrainingSnapshots"
-        SectionName="Training Snapshots"
-        Icon="fa fa-database"
+        SectionKey="mJMLPredictionUnits"
+        SectionName="ML Prediction Units"
+        Icon="fa fa-chart-line"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTrainingSnapshots')"
+        [BadgeCount]="GetSectionRowCount('mJMLPredictionUnits')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Training Snapshots','EvaluationProtocolID')"
-                [NewRecordValues]="NewRecordValues('MJ: Training Snapshots','EvaluationProtocolID')"
-                [AllowLoad]="IsSectionExpanded('mJTrainingSnapshots')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Prediction Units','LineageRootID')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Prediction Units','LineageRootID')"
+                [AllowLoad]="IsSectionExpanded('mJMLPredictionUnits')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTrainingSnapshots', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJMLPredictionUnits', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
         }
     </mj-collapsible-panel>
 
-    <!-- ML Training Runs Section -->
+    <!-- ML Training Snapshots Section -->
     <mj-collapsible-panel
-        SectionKey="mJMLTrainingRuns"
-        SectionName="ML Training Runs"
-        Icon="fa fa-microchip"
+        SectionKey="mJMLTrainingSnapshots"
+        SectionName="ML Training Snapshots"
+        Icon="fa fa-database"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJMLTrainingRuns')"
+        [BadgeCount]="GetSectionRowCount('mJMLTrainingSnapshots')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Training Runs','EvaluationProtocolID')"
-                [NewRecordValues]="NewRecordValues('MJ: ML Training Runs','EvaluationProtocolID')"
-                [AllowLoad]="IsSectionExpanded('mJMLTrainingRuns')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Training Snapshots','PredictionUnitID')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Training Snapshots','PredictionUnitID')"
+                [AllowLoad]="IsSectionExpanded('mJMLTrainingSnapshots')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJMLTrainingRuns', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJMLTrainingSnapshots', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -392,37 +292,12 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Training Pipelines','EvaluationProtocolID')"
-                [NewRecordValues]="NewRecordValues('MJ: ML Training Pipelines','EvaluationProtocolID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Training Pipelines','PredictionUnitID')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Training Pipelines','PredictionUnitID')"
                 [AllowLoad]="IsSectionExpanded('mJMLTrainingPipelines')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMLTrainingPipelines', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Evaluation Protocols Section -->
-    <mj-collapsible-panel
-        SectionKey="mJEvaluationProtocols"
-        SectionName="Evaluation Protocols"
-        Icon="fa fa-sliders-h"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJEvaluationProtocols')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Evaluation Protocols','LineageRootID')"
-                [NewRecordValues]="NewRecordValues('MJ: Evaluation Protocols','LineageRootID')"
-                [AllowLoad]="IsSectionExpanded('mJEvaluationProtocols')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJEvaluationProtocols', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

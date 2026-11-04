@@ -8,7 +8,7 @@
  */
 import { RunView } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
-import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
+import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import {
   EvaluationProtocolRules, PredictionUnit,
   type ColumnEncodingKind, type DecisionDateRule, type EvaluationProtocolDraft, type FeatureStep, type FeatureStepGraph, type HoldoutSplit, type InnerValidation, type LeakageGuard,
@@ -79,7 +79,7 @@ const LATEST_TRAINING_RUN_FIELDS = ['ID', 'PipelineID', 'EvaluationProtocolID', 
 export type LatestTrainingRun = Pick<MJMLTrainingRunEntity, (typeof LATEST_TRAINING_RUN_FIELDS)[number]>;
 
 export interface ProvisionedUnitPipeline {
-  readonly UnitRow: MJPredictionUnitEntity;
+  readonly UnitRow: MJMLPredictionUnitEntity;
   readonly Unit: PredictionUnitSpec;
   readonly Pipeline: MJMLTrainingPipelineEntity;
 }

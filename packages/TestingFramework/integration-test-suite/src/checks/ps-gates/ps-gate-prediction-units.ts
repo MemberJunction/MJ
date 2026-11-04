@@ -6,14 +6,14 @@
 import { join } from 'node:path';
 import { RunView } from '@memberjunction/core';
 import { EscapeSQLString, UUIDMap, UUIDsEqual } from '@memberjunction/global';
-import type { MJMLModelEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
+import type { MJMLModelEntity, MJMLTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import { DOMINANCE_THRESHOLD_DEFAULT, JsonParse, TrainingRunResultsParser, type FeatureImportance, type PredictionUnitSpec, type SnapshotRowKey } from '@memberjunction/predictive-studio-core';
 import { DetectSingleFeatureDominance, PredictionUnitRowReader, ProviderAssemblyMetadata, RunViewDataAccess, PredictionUnitVersioning, SnapshotManifest, StorageProviderSnapshotFileStore, type UnitRowReadResult } from '@memberjunction/predictive-studio';
 import { C1CorpusFixture, C1_CORPUS_DIR, UnitFixtures, W_WORLD_DENY_FIELDS, W_WORLD_FEATURES, type GateMeasurement, type TruthHarness, type LatestTrainingRun } from '@memberjunction/predictive-studio-truth-suite';
 import { EvaluationProtocolGates } from './ps-gate-evaluation-protocols';
 
 /** The Training Snapshot columns the snapshot assertions read. */
-type SnapshotCounts = Pick<MJTrainingSnapshotEntity, 'ManifestRowCount' | 'CensoredRowsExcluded' | 'LabelKnownRowsExcluded' | 'RowManifestFileID' | 'RowManifestSha256'>;
+type SnapshotCounts = Pick<MJMLTrainingSnapshotEntity, 'ManifestRowCount' | 'CensoredRowsExcluded' | 'LabelKnownRowsExcluded' | 'RowManifestFileID' | 'RowManifestSha256'>;
 
 /** A key set compared with the reference's keys. */
 interface KeyComparison { readonly Matched: number; readonly Expected: number; readonly Extra: number }
@@ -36,7 +36,7 @@ export class PredictionUnitGates {
   private static async snapshotCounts(h: TruthHarness, run: LatestTrainingRun): Promise<SnapshotCounts | null> {
     if (!run.TrainingSnapshotID) return null;
     const r = await RunView.FromMetadataProvider(h.Provider).RunView<SnapshotCounts>({
-      EntityName: 'MJ: Training Snapshots', ExtraFilter: `ID='${EscapeSQLString(run.TrainingSnapshotID)}'`,
+      EntityName: 'MJ: ML Training Snapshots', ExtraFilter: `ID='${EscapeSQLString(run.TrainingSnapshotID)}'`,
       Fields: ['ManifestRowCount', 'CensoredRowsExcluded', 'LabelKnownRowsExcluded', 'RowManifestFileID', 'RowManifestSha256'], ResultType: 'simple',
     }, h.User);
     if (!r.Success) throw new Error(`Reading Training Snapshot ${run.TrainingSnapshotID} failed: ${r.ErrorMessage || 'unknown error'}`);

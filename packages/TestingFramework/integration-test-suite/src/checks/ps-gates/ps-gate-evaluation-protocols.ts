@@ -6,7 +6,7 @@
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { RunView } from '@memberjunction/core';
-import type { MJEvaluationProtocolEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
+import type { MJMLEvaluationProtocolEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMLTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import { JsonParse, StoreSchemas, TrainingRunResultsParser, type ClassBalanceEntry, type HoldoutCarveSummary, type SnapshotRowKey, type TrainingRunResults } from '@memberjunction/predictive-studio-core';
 import { SnapshotManifest, StorageProviderSnapshotFileStore } from '@memberjunction/predictive-studio';
 import { EscapeSQLString, OrdinalCompare, UUIDMap, UUIDSet } from '@memberjunction/global';
@@ -18,7 +18,7 @@ type RunTimes = Pick<MJMLTrainingRunEntity, 'ID' | 'EvaluationProtocolID' | '__m
 type DuesPeriod = { ID: string; PersonID: string; PeriodIndex: number };
 
 /** A trained run's stored results, its snapshot row and its verified manifest. */
-interface StoredRun { readonly Results: Completed; readonly Snapshot: MJTrainingSnapshotEntity; readonly Manifest: readonly SnapshotRowKey[] }
+interface StoredRun { readonly Results: Completed; readonly Snapshot: MJMLTrainingSnapshotEntity; readonly Manifest: readonly SnapshotRowKey[] }
 
 /**
  * The new-entity measurement read from a stored manifest and the run's report. The gate rebuilds the held set itself from
@@ -89,7 +89,7 @@ export class EvaluationProtocolGates {
     const parsed = TrainingRunResultsParser.ParseTrainingRunResults(run.ValidationResults);
     if (!parsed.Ok || parsed.Value.status !== 'completed') return `run ${run.ID} did not complete (${run.Notes || ''})`;
     if (!run.TrainingSnapshotID) return `run ${run.ID} has no snapshot`;
-    const snaps = await RunView.FromMetadataProvider(h.Provider).RunView<MJTrainingSnapshotEntity>({ EntityName: 'MJ: Training Snapshots', ExtraFilter: `ID='${EscapeSQLString(run.TrainingSnapshotID)}'`, ResultType: 'entity_object' }, h.User);
+    const snaps = await RunView.FromMetadataProvider(h.Provider).RunView<MJMLTrainingSnapshotEntity>({ EntityName: 'MJ: ML Training Snapshots', ExtraFilter: `ID='${EscapeSQLString(run.TrainingSnapshotID)}'`, ResultType: 'entity_object' }, h.User);
     if (!snaps.Success) return `snapshot ${run.TrainingSnapshotID} could not be read: ${snaps.ErrorMessage}`;
     const snap = snaps.Results[0];
     if (!snap) return `snapshot ${run.TrainingSnapshotID} not found`;
@@ -116,7 +116,7 @@ export class EvaluationProtocolGates {
     const out = new UUIDMap<Date>();
     if (ids.length === 0) return out;
     const list = [...new UUIDSet(ids)].map((id) => `'${EscapeSQLString(id)}'`).join(',');
-    const r = await RunView.FromMetadataProvider(h.Provider).RunView<Pick<MJEvaluationProtocolEntity, 'ID' | '__mj_CreatedAt'>>({ EntityName: 'MJ: Evaluation Protocols', ExtraFilter: `ID IN (${list})`, Fields: ['ID', '__mj_CreatedAt'], ResultType: 'simple' }, h.User);
+    const r = await RunView.FromMetadataProvider(h.Provider).RunView<Pick<MJMLEvaluationProtocolEntity, 'ID' | '__mj_CreatedAt'>>({ EntityName: 'MJ: ML Evaluation Protocols', ExtraFilter: `ID IN (${list})`, Fields: ['ID', '__mj_CreatedAt'], ResultType: 'simple' }, h.User);
     if (!r.Success) return `protocol rows could not be read: ${r.ErrorMessage}`;
     for (const p of r.Results) out.Set(p.ID, new Date(p.__mj_CreatedAt));
     return out;
@@ -241,7 +241,7 @@ export class EvaluationProtocolGates {
   }
 
   /** The snapshot's stored class balance, checked with Core's schema; a message when it is not JSON or malformed. */
-  private static classBalance(snapshot: MJTrainingSnapshotEntity): readonly ClassBalanceEntry[] | string {
+  private static classBalance(snapshot: MJMLTrainingSnapshotEntity): readonly ClassBalanceEntry[] | string {
     const json = snapshot.ClassBalance ? JsonParse.ParseJsonText(snapshot.ClassBalance, 'ClassBalance') : null;
     if (json !== null && !json.Ok) return `snapshot ${snapshot.ID} ClassBalance is not JSON: ${json.Errors.join('; ')}`;
     const parsed = StoreSchemas.ClassBalance.safeParse(json === null ? [] : json.Value);

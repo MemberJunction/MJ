@@ -50,7 +50,7 @@ export interface TrainRunFacts {
   readonly RunID: string;
   readonly TrainingSnapshotID: string | null;
   readonly EvaluationProtocolID: string | null;
-  /** `MJ: Evaluation Protocols.Version` of `EvaluationProtocolID`, read through the FK. */
+  /** `MJ: ML Evaluation Protocols.Version` of `EvaluationProtocolID`, read through the FK. */
   readonly EvaluationProtocolVersion: number | null;
   readonly ValidationResults: string | null;
 }

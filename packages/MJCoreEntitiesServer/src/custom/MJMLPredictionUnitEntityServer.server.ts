@@ -1,6 +1,6 @@
 import { BaseEntity, BaseEntityResult, LogStatus, RunView, ValidationErrorInfo, ValidationErrorType, type EntitySaveOptions, type IEntityDataProvider, type IMetadataProvider, type UserInfo, type ValidationResult } from '@memberjunction/core';
 import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
-import { MJPredictionUnitEntity } from '@memberjunction/core-entities';
+import { MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import { PredictionUnit, type ParseResult, type PredictionUnitColumns, type PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
 
 /** One row read as a plain object: the row (null when absent), or why the read failed. */
@@ -155,14 +155,14 @@ export class VersionedRowGuard {
 }
 
 /**
- * `MJ: Prediction Units`: a version row is written once and never updated, and must parse. On insert, every entity
+ * `MJ: ML Prediction Units`: a version row is written once and never updated, and must parse. On insert, every entity
  * and field the unit names must exist, versions of a lineage must be consecutive, and LabelVersion must move exactly
  * when the outcome definition changed from the previous version.
  */
-@RegisterClass(BaseEntity, 'MJ: Prediction Units')
-export class MJPredictionUnitEntityServer extends MJPredictionUnitEntity {
+@RegisterClass(BaseEntity, 'MJ: ML Prediction Units')
+export class MJMLPredictionUnitEntityServer extends MJMLPredictionUnitEntity {
   /** Shape problems of a unit row (all JSON columns parse; cross-field rules hold). Pure. */
-  public static GetPredictionUnitRowProblems(row: MJPredictionUnitEntity): readonly string[] {
+  public static GetPredictionUnitRowProblems(row: MJMLPredictionUnitEntity): readonly string[] {
     const parsed = PredictionUnit.ParsePredictionUnitRow(row);
     return parsed.Ok === true ? [] : parsed.Errors;
   }
@@ -179,7 +179,7 @@ export class MJPredictionUnitEntityServer extends MJPredictionUnitEntity {
   }
 
   public override Validate(): ValidationResult {
-    return VersionedRowGuard.AddProblems(this, super.Validate(), 'Version', 'UnitRows', () => MJPredictionUnitEntityServer.GetPredictionUnitRowProblems(this));
+    return VersionedRowGuard.AddProblems(this, super.Validate(), 'Version', 'UnitRows', () => MJMLPredictionUnitEntityServer.GetPredictionUnitRowProblems(this));
   }
 
   public override get DefaultSkipAsyncValidation(): boolean {
@@ -195,7 +195,7 @@ export class MJPredictionUnitEntityServer extends MJPredictionUnitEntity {
     if (!result.Success || this.IsSaved) return result;
     const provider = this.ProviderToUse;
     if (!VersionedRowGuard.IsMetadataProvider(provider)) {
-      LogStatus(`MJPredictionUnitEntityServer: the provider is not a metadata provider, so the reference and LabelVersion checks were skipped for "${this.Name}" v${this.Version}`);
+      LogStatus(`MJMLPredictionUnitEntityServer: the provider is not a metadata provider, so the reference and LabelVersion checks were skipped for "${this.Name}" v${this.Version}`);
       return result;
     }
     const parsed = PredictionUnit.ParsePredictionUnitRow(this);
@@ -224,12 +224,12 @@ export class MJPredictionUnitEntityServer extends MJPredictionUnitEntity {
   private async checkLabelVersion(result: ValidationResult, provider: IMetadataProvider, spec: PredictionUnitSpec): Promise<void> {
     const previous = await VersionedRowGuard.PreviousVersion<PredictionUnitColumns, PredictionUnitSpec>(result, {
       Label: 'Prediction Unit', LineageRootID: this.LineageRootID, Version: this.Version,
-      Load: (version) => VersionedRowGuard.LoadVersion<PredictionUnitColumns>(provider, 'MJ: Prediction Units', this.LineageRootID, version, this.ActiveUser),
+      Load: (version) => VersionedRowGuard.LoadVersion<PredictionUnitColumns>(provider, 'MJ: ML Prediction Units', this.LineageRootID, version, this.ActiveUser),
       Parse: (row) => PredictionUnit.ParsePredictionUnitRow(row),
     });
     if (!previous) return;
     const changed = PredictionUnit.LabelDefinitionChanged(previous.Spec, spec);
-    const expected = MJPredictionUnitEntityServer.ExpectedLabelVersion(previous.Row.LabelVersion, changed);
+    const expected = MJMLPredictionUnitEntityServer.ExpectedLabelVersion(previous.Row.LabelVersion, changed);
     if (this.LabelVersion !== expected) {
       VersionedRowGuard.Fail(result, 'LabelVersion', `LabelVersion must be ${expected}: the outcome definition ${changed ? 'changed' : 'did not change'} from version ${this.Version - 1}`);
     }

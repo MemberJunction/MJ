@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
-import type { MJEvaluationProtocolEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
+import type { MJMLEvaluationProtocolEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 import {
   ADVERSE_CLASS_HOLD_REASON, GateRecords, TRAINING_RUN_RESULTS_SCHEMA, TrainerContract, TrainingRunResultsParser, TrustVerdicts,
   type CandidateInnerScore, type StoredGateRecord, type ModelingPlanSpec, type PredictionUnitColumns, type TrainingRunResults,
@@ -130,8 +130,8 @@ class BuildWorld {
       EntityByName: (name: string) => (name === 'Members' ? world.target : undefined),
       async GetEntityObject(name: string) {
         if (name === 'MJ: ML Training Pipelines') return world.Pipeline;
-        if (name === 'MJ: Evaluation Protocols') return world.Protocol;
-        if (name === 'MJ: Prediction Units') return world.Unit;
+        if (name === 'MJ: ML Evaluation Protocols') return world.Protocol;
+        if (name === 'MJ: ML Prediction Units') return world.Unit;
         throw new Error(`unexpected entity ${name}`);
       },
       async RunView<T>(_params: RunViewParams): Promise<RunViewResult<T>> {
@@ -413,7 +413,7 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
     const result = await new PredictiveStudioPipelineBuilder().Build({ spec: plan(['A', 'B', 'C']), provider: world.Provider(), user, autoPublish: false });
     expect(result.success).toBe(true);
     expect(world.Order).toEqual(['save:pipeline', 'save:protocol', 'save:pipeline', 'train']);
-    const protocol = world.Protocol as unknown as MJEvaluationProtocolEntity;
+    const protocol = world.Protocol as unknown as MJMLEvaluationProtocolEntity;
     expect(world.Pipeline.EvaluationProtocolID).toBe(protocol.ID);
     expect(JSON.parse(protocol.Holdout)).toEqual({ kind: 'seeded-random', fraction: 0.25 });
     expect(JSON.parse(protocol.Budgets)).toMatchObject({ maxCandidates: 3 });

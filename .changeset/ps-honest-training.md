@@ -19,6 +19,7 @@
 "@memberjunction/ng-bootstrap": minor
 "@memberjunction/ng-bootstrap-lite": minor
 "@memberjunction/ng-core-entity-forms": minor
+"@memberjunction/ng-explorer-core": minor
 "@memberjunction/server": minor
 "@memberjunction/server-bootstrap": minor
 "@memberjunction/server-bootstrap-lite": minor
@@ -88,8 +89,8 @@ version 1 of each, and the training path without them is removed.
   gate decision, the snapshot and the protocol version, `modelId`/`version` are absent when no model ships (status
   `NoSignal` or `KeptExistingRule`), and an unreadable stored result fails. The Train ML Model Action loses its `MaxRows`
   input and gains `GateOutcome`, `GateReason`, `TrainingSnapshotID` and `EvaluationProtocolID` outputs.
-- `@memberjunction/core-entities`: the regenerated TrainModel remote-operation types and the `MJ: Prediction Units`,
-  `MJ: Evaluation Protocols` and `MJ: Training Snapshots` entities.
+- `@memberjunction/core-entities`: the regenerated TrainModel remote-operation types and the `MJ: ML Prediction Units`,
+  `MJ: ML Evaluation Protocols` and `MJ: ML Training Snapshots` entities.
 - `@memberjunction/core-entities-server`: server subclasses that keep a saved Prediction Unit, Evaluation Protocol or
   Training Snapshot row from ever being updated (`VersionedRowGuard`, shared by the three), check a new unit or
   protocol version against version n−1, and check that a pipeline agrees with the unit and protocol it binds.
@@ -108,6 +109,8 @@ version 1 of each, and the training path without them is removed.
 - `@memberjunction/server`, `@memberjunction/server-bootstrap`, `@memberjunction/server-bootstrap-lite`,
   `@memberjunction/ng-bootstrap`, `@memberjunction/ng-bootstrap-lite`, `@memberjunction/ng-core-entity-forms`: the
   generated GraphQL schema, class registrations and record forms for the three new entities.
+- `@memberjunction/ng-explorer-core`: the generated lazy-load keys of the Studio record panels on `MJ: ML Prediction Units` and
+  `MJ: ML Evaluation Protocols` forms.
 - `@memberjunction/ng-dashboards`: the Studio's Prediction Units and Evaluation Protocols sections, the unit and
   protocol editors and version lists, the pipeline bindings panel and the model form's protocol results panel; the
   pipeline wizard binds a new pipeline to version 1 of its unit and the default protocol. The deprecated lowercase

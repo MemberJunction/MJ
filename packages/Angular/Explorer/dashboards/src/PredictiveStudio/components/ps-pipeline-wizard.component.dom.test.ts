@@ -454,10 +454,10 @@ describe('PSPipelineWizardComponent (DOM) — every control round-trips', () => 
       Entities: [ENTITY, WIDE], CurrentUser: { ID: 'U1' },
       GetEntityObject: async (entity: string): Promise<MJMLTrainingPipelineEntity | UnitRowDouble> => {
         if (entity === 'MJ: ML Training Pipelines') return saveable(w.Pipelines, 'P', { Hyperparameters: null, FeatureSteps: null, PredictionUnitID: null });
-        return saveable<UnitRowDouble>(entity === 'MJ: Prediction Units' ? w.Units : [], entity === 'MJ: Prediction Units' ? 'U' : 'EP', {});
+        return saveable<UnitRowDouble>(entity === 'MJ: ML Prediction Units' ? w.Units : [], entity === 'MJ: ML Prediction Units' ? 'U' : 'EP', {});
       },
       RunView: async (params: RunViewParams): Promise<RunViewResult<UnitRowDouble>> => {
-        const rows = params.EntityName === 'MJ: Prediction Units' ? w.Units.filter((u) => typeof params.ExtraFilter === 'string' && params.ExtraFilter.includes(`'${u.ID}'`)) : [];
+        const rows = params.EntityName === 'MJ: ML Prediction Units' ? w.Units.filter((u) => typeof params.ExtraFilter === 'string' && params.ExtraFilter.includes(`'${u.ID}'`)) : [];
         return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
       },
     });

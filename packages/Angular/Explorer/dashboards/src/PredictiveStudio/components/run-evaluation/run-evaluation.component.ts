@@ -1,7 +1,7 @@
 import { ChangeDetectorRef, Component, inject, Input, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RunView, type RunViewParams } from '@memberjunction/core';
-import type { MJMLModelEntity, MJMLTrainingRunEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
+import type { MJMLModelEntity, MJMLTrainingRunEntity, MJMLTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -10,7 +10,7 @@ import { PSEvaluationResultsComponent } from '../evaluation-results/evaluation-r
 import type { ValueRead } from '../versioned-list/lineage-reads';
 
 type RunFields = Pick<MJMLTrainingRunEntity, 'ID' | 'ValidationResults' | 'ResultingModelID' | 'Status' | 'TrainingSnapshotID'>;
-type SnapshotFields = Pick<MJTrainingSnapshotEntity, 'ID' | 'UncoveredHistoryRowsExcluded'>;
+type SnapshotFields = Pick<MJMLTrainingSnapshotEntity, 'ID' | 'UncoveredHistoryRowsExcluded'>;
 type ModelFields = Pick<MJMLModelEntity, 'ID' | 'Lineage'>;
 
 /** What the results state is built from when there is no run. */
@@ -122,7 +122,7 @@ export class PSRunEvaluationComponent extends BaseAngularComponent implements On
     const input = { ValidationResults: run.ValidationResults, Lineage: lineage, RunStatus: run.Status };
     if (!run.TrainingSnapshotID) return { Ok: true, Value: { ...input, UncoveredHistoryRows: null } };
     const snapshots = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<SnapshotFields>({
-      EntityName: 'MJ: Training Snapshots',
+      EntityName: 'MJ: ML Training Snapshots',
       ExtraFilter: `ID='${EscapeSQLString(run.TrainingSnapshotID)}'`,
       Fields: ['ID', 'UncoveredHistoryRowsExcluded'],
       ResultType: 'simple',

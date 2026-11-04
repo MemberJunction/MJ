@@ -10,7 +10,7 @@
  * only), by the truth-suite harness and by the release step.
  */
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import type { MJEvaluationProtocolEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
+import type { MJMLEvaluationProtocolEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDSet } from '@memberjunction/global';
 import {
   LegacyPipelines, PredictionUnit, TaskTypeRules,
@@ -57,7 +57,7 @@ export interface IPipelineMigrationReads {
   /** `Lineage` of the pipeline's newest Published model, else its newest model; null when it has none. */
   NewestModelLineage(pipelineId: string): Promise<string | null>;
   /** The unit version row with this ID, or null. */
-  LoadUnit(unitId: string): Promise<MJPredictionUnitEntity | null>;
+  LoadUnit(unitId: string): Promise<MJMLPredictionUnitEntity | null>;
 }
 
 export interface MigrationDeps {
@@ -281,7 +281,7 @@ export class PipelineMigration {
   }
 
   /** Deletes a row the migration just created after a later write failed; the reason names both failures when the delete fails too. */
-  private static async undo(row: MJPredictionUnitEntity | MJEvaluationProtocolEntity, reason: string): Promise<{ readonly Ok: false; readonly Reason: string }> {
+  private static async undo(row: MJMLPredictionUnitEntity | MJMLEvaluationProtocolEntity, reason: string): Promise<{ readonly Ok: false; readonly Reason: string }> {
     if (await row.Delete()) return { Ok: false, Reason: reason };
     return { Ok: false, Reason: `${reason}; deleting the unbound ${row.EntityInfo?.Name || 'row'} ${row.ID} also failed: ${row.LatestResult?.CompleteMessage || 'delete failed'}` };
   }
@@ -348,7 +348,7 @@ export class ProviderMigrationReads implements IPipelineMigrationReads {
     return null;
   }
 
-  public LoadUnit(unitId: string): Promise<MJPredictionUnitEntity | null> {
+  public LoadUnit(unitId: string): Promise<MJMLPredictionUnitEntity | null> {
     return new RunViewPredictionUnitStore(this.provider, this.user).Load(unitId);
   }
 }

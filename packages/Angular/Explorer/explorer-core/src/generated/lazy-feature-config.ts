@@ -281,10 +281,10 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::DatabaseDesignerDashboard': loadNgDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module
-  'BaseFormPanel::form-panel:MJEvaluationProtocols:versions': loadNgDashboardsPredictiveStudioDashboardsModule,
+  'BaseFormPanel::form-panel:MJMLEvaluationProtocols:versions': loadNgDashboardsPredictiveStudioDashboardsModule,
   'BaseFormPanel::form-panel:MJMLModels:evaluation': loadNgDashboardsPredictiveStudioDashboardsModule,
+  'BaseFormPanel::form-panel:MJMLPredictionUnits:versions': loadNgDashboardsPredictiveStudioDashboardsModule,
   'BaseFormPanel::form-panel:MJMLTrainingPipelines:bindings': loadNgDashboardsPredictiveStudioDashboardsModule,
-  'BaseFormPanel::form-panel:MJPredictionUnits:versions': loadNgDashboardsPredictiveStudioDashboardsModule,
   'BaseResourceComponent::PredictiveStudioModelsResource': loadNgDashboardsPredictiveStudioDashboardsModule,
   'BaseResourceComponent::PredictiveStudioPredictionsResource': loadNgDashboardsPredictiveStudioDashboardsModule,
   'BaseResourceComponent::PredictiveStudioStudioResource': loadNgDashboardsPredictiveStudioDashboardsModule,

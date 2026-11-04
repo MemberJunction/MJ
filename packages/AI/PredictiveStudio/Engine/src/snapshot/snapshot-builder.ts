@@ -2,13 +2,13 @@
  * @module snapshot/snapshot-builder
  *
  * Builds the immutable Training Snapshot a model is trained on: its content (matrix, row manifest and per-value
- * provenance), the three files, the fingerprint, and the `MJ: Training Snapshots` row with every count the gates
+ * provenance), the three files, the fingerprint, and the `MJ: ML Training Snapshots` row with every count the gates
  * read. Identical content resolves to one snapshot: the content hash is unique, so a build whose hash already exists
  * reuses that snapshot instead of writing another.
  */
 import type { UserInfo } from '@memberjunction/core';
 import { OrdinalCompare } from '@memberjunction/global';
-import type { MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
+import type { MJMLTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import {
   IncumbentExpressions,
   TaskTypeRules,
@@ -57,7 +57,7 @@ export interface SnapshotBuildInput {
   readonly EntityFactory: IEntityFactory;
   readonly ContextUser?: UserInfo;
   /** The saved snapshot with this content hash, or null when there is none. */
-  readonly ExistingByContentHash: (contentHash: string) => Promise<MJTrainingSnapshotEntity | null>;
+  readonly ExistingByContentHash: (contentHash: string) => Promise<MJMLTrainingSnapshotEntity | null>;
 }
 
 /**
@@ -67,7 +67,7 @@ export interface SnapshotBuildInput {
  * snapshot that was reused. Only that stored provenance file is authoritative for the snapshot.
  */
 export interface BuiltSnapshot {
-  readonly Entity: MJTrainingSnapshotEntity;
+  readonly Entity: MJMLTrainingSnapshotEntity;
   readonly Content: SnapshotContent;
   readonly Reused: boolean;
 }
@@ -88,7 +88,7 @@ export interface SnapshotHashes {
 
 /** The outcome of saving the snapshot row: the saved row, or the failed Save's CompleteMessage. */
 export type SnapshotRowSave =
-  | { readonly Status: 'saved'; readonly Entity: MJTrainingSnapshotEntity }
+  | { readonly Status: 'saved'; readonly Entity: MJMLTrainingSnapshotEntity }
   | { readonly Status: 'failed'; readonly Error: string };
 
 /** A column appended after the label: its name and the cell of assembled row i. */
@@ -205,9 +205,9 @@ export class TrainingSnapshotBuilder {
     return { Matrix: matrix, Manifest: manifest, Provenance: provenance };
   }
 
-  /** The `MJ: Training Snapshots` row with every count the gates read, or the failed Save's CompleteMessage. */
+  /** The `MJ: ML Training Snapshots` row with every count the gates read, or the failed Save's CompleteMessage. */
   protected async SaveSnapshotRow(input: SnapshotBuildInput, content: SnapshotContent, stored: StoredSnapshotFiles, hashes: SnapshotHashes): Promise<SnapshotRowSave> {
-    const s = await input.EntityFactory.getEntityObject<MJTrainingSnapshotEntity>('MJ: Training Snapshots', input.ContextUser);
+    const s = await input.EntityFactory.getEntityObject<MJMLTrainingSnapshotEntity>('MJ: ML Training Snapshots', input.ContextUser);
     s.ContentHash = hashes.ContentHash;
     s.PipelineID = input.PipelineID;
     s.PredictionUnitID = input.Unit.id;
@@ -237,7 +237,7 @@ export class TrainingSnapshotBuilder {
    * unique content hash is what refused this row, and that snapshot is the one identical content resolves to. When
    * none exists, the save failed for another reason and that reason is thrown.
    */
-  protected async SnapshotSavedFirst(input: SnapshotBuildInput, contentHash: string, saveError: string): Promise<MJTrainingSnapshotEntity> {
+  protected async SnapshotSavedFirst(input: SnapshotBuildInput, contentHash: string, saveError: string): Promise<MJMLTrainingSnapshotEntity> {
     const existing = await input.ExistingByContentHash(contentHash);
     if (existing) return existing;
     throw new Error(`Saving the Training Snapshot failed: ${saveError}`);
@@ -329,7 +329,7 @@ export class TrainingSnapshotBuilder {
   }
 
   /** The three files' IDs, hashes and sizes on the snapshot row. */
-  private static setFiles(s: MJTrainingSnapshotEntity, stored: StoredSnapshotFiles): void {
+  private static setFiles(s: MJMLTrainingSnapshotEntity, stored: StoredSnapshotFiles): void {
     s.MatrixFileID = stored.Matrix.FileID;
     s.MatrixSha256 = stored.Matrix.Sha256;
     s.MatrixSizeBytes = stored.Matrix.SizeBytes;
@@ -342,7 +342,7 @@ export class TrainingSnapshotBuilder {
   }
 
   /** The unit read's resolution counts and the assembly's uncovered-row counts. A snapshot exists only for a complete read. */
-  private static setCounts(s: MJTrainingSnapshotEntity, input: SnapshotBuildInput): void {
+  private static setCounts(s: MJMLTrainingSnapshotEntity, input: SnapshotBuildInput): void {
     const counts = input.UnitRead.Counts;
     s.RowsRead = counts.rowsRead;
     s.ReadComplete = true;

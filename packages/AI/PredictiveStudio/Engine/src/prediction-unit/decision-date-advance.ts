@@ -6,7 +6,7 @@
  * unit's label window, and points the pipeline at it. The model then references the exact version it was trained under.
  */
 import type { UserInfo } from '@memberjunction/core';
-import type { MJMLTrainingPipelineEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
+import type { MJMLTrainingPipelineEntity, MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { PredictionUnit, UtcDay, type Actor, type PredictionUnitSpec, type UnitDraft } from '@memberjunction/predictive-studio-core';
 import type { IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
@@ -78,7 +78,7 @@ export class DecisionDateAdvance {
   }
 
   /** Points the pipeline at the new version and saves it: null when bound, else why not (a throw is reported, not raised). */
-  private static async bindPipeline(pipeline: MJMLTrainingPipelineEntity, next: MJPredictionUnitEntity, metadata: IAssemblyMetadata): Promise<string | null> {
+  private static async bindPipeline(pipeline: MJMLTrainingPipelineEntity, next: MJMLPredictionUnitEntity, metadata: IAssemblyMetadata): Promise<string | null> {
     try {
       const nextSpec = PredictionUnit.ParsePredictionUnitRow(next);
       if (nextSpec.Ok === false) return `Advanced unit ${next.ID} does not parse: ${nextSpec.Errors.join('; ')}`;

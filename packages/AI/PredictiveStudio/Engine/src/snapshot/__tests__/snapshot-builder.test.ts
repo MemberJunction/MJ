@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import type { BaseEntity, IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type { MJFileStorageProviderEntity, MJTrainingSnapshotEntity } from '@memberjunction/core-entities';
+import type { MJFileStorageProviderEntity, MJMLTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { FileStorageBase, FileStorageEngine, LocalFileSystemStorage } from '@memberjunction/storage';
 import type { FeatureColumnSpec, PredictionUnitSpec, SnapshotRowRole } from '@memberjunction/predictive-studio-core';
@@ -154,7 +154,7 @@ class FakeEntityFactory implements IEntityFactory {
   public FileSaveFailures = 0;
   constructor(private snapshotSaveFailures = 0, private readonly failure = 'Violation of UNIQUE KEY constraint \'UQ_TrainingSnapshot_ContentHash\'') {}
   async getEntityObject<T extends BaseEntity>(entityName: string, _contextUser?: UserInfo): Promise<T> {
-    if (entityName === 'MJ: Training Snapshots') {
+    if (entityName === 'MJ: ML Training Snapshots') {
       const failing = this.snapshotSaveFailures > 0;
       if (failing) this.snapshotSaveFailures -= 1;
       const s = new FakeSnapshotEntity(failing ? this.failure : null);
@@ -179,7 +179,7 @@ const input = (files: InMemorySnapshotFileStore, factory: IEntityFactory = new F
   PipelineID: 'pipe', FeatureSpecVersion: 3, Unit: unit, UnitRead: unitRead, Features: features, Assembled: assembled, Roles: roles,
   EvaluationProtocolID: null, IncumbentScore: false, SliceFields: [], Files: files, EntityFactory: factory, ExistingByContentHash: async () => null,
 });
-const asSnapshot = (s: FakeSnapshotEntity): MJTrainingSnapshotEntity => s as unknown as MJTrainingSnapshotEntity;
+const asSnapshot = (s: FakeSnapshotEntity): MJMLTrainingSnapshotEntity => s as unknown as MJMLTrainingSnapshotEntity;
 
 describe('TrainingSnapshotBuilder', () => {
   it('writes three files, fingerprints them and stores the counts the gates read', async () => {
@@ -232,7 +232,7 @@ describe('TrainingSnapshotBuilder', () => {
     const winner = asSnapshot(new FakeSnapshotEntity(null));
     let lookups = 0;
     // The first lookup (before writing) finds nothing; the build's own save then fails on the unique content hash.
-    const existing = async (): Promise<MJTrainingSnapshotEntity | null> => (lookups++ === 0 ? null : winner);
+    const existing = async (): Promise<MJMLTrainingSnapshotEntity | null> => (lookups++ === 0 ? null : winner);
     const raced = await new TrainingSnapshotBuilder().Build({ ...input(new InMemorySnapshotFileStore('p'), new FakeEntityFactory(1)), ExistingByContentHash: existing });
     expect(raced.Reused).toBe(true);
     expect(raced.Entity).toBe(winner);
@@ -306,7 +306,7 @@ describe('Snapshot provenance object', () => {
     const later: AsOfAssembledMatrix = { ...assembled, Rows: assembled.Rows.map((r) => ({ ...r, Provenance: r.Provenance.map((v) => ({ ...v, computedAt: '2026-10-28T00:00:00.000Z' })) })) };
     let lookups = 0;
     // The later build finds no snapshot before writing, then loses the unique content hash to the first build's row.
-    const existing = async (): Promise<MJTrainingSnapshotEntity | null> => (lookups++ === 0 ? null : first.Entity);
+    const existing = async (): Promise<MJMLTrainingSnapshotEntity | null> => (lookups++ === 0 ? null : first.Entity);
     const second = await new TrainingSnapshotBuilder().Build({ ...input(files, new FakeEntityFactory(1)), Assembled: later, ExistingByContentHash: existing });
     expect(second.Reused).toBe(true);
     expect(second.Entity).toBe(first.Entity);

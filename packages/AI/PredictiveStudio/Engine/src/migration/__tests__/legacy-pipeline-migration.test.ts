@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { BaseEntity, UserInfo } from '@memberjunction/core';
-import type { MJMLTrainingPipelineEntity, MJPredictionUnitEntity } from '@memberjunction/core-entities';
+import type { MJMLTrainingPipelineEntity, MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import { ADVERSE_CLASS_HOLD_REASON, TIME_INDEX_HOLD_REASON } from '@memberjunction/predictive-studio-core';
 import { PipelineMigration, type IPipelineMigrationReads, type MigrationDeps } from '../legacy-pipeline-migration';
 import type { AssemblyEntityInfo } from '../../feature-assembly/assembly-metadata';
@@ -13,7 +13,7 @@ import { fakeProvider, fakeUser } from '../../__tests__/fakes/training-fakes';
 class FakeProtocolRow {
   public ID = '';
   public LatestResult: { CompleteMessage: string } | null = null;
-  public EntityInfo = { Name: 'MJ: Evaluation Protocols' };
+  public EntityInfo = { Name: 'MJ: ML Evaluation Protocols' };
   public Holdout = '';
   public InnerValidation = '';
   public Exclusions = '';
@@ -36,7 +36,7 @@ class MigrationFactory implements IEntityFactory {
   public readonly Protocols: FakeProtocolRow[] = [];
   private readonly units = new UnitVersionFactory(this.Units);
   public async getEntityObject<T extends BaseEntity>(entityName: string, contextUser?: UserInfo): Promise<T> {
-    if (entityName === 'MJ: Evaluation Protocols') return new FakeProtocolRow(this.Protocols) as unknown as T;
+    if (entityName === 'MJ: ML Evaluation Protocols') return new FakeProtocolRow(this.Protocols) as unknown as T;
     return this.units.getEntityObject<T>(entityName, contextUser);
   }
 }
@@ -88,7 +88,7 @@ class FixedReads implements IPipelineMigrationReads {
   public async NewestModelLineage(): Promise<string | null> {
     return null;
   }
-  public LoadUnit(unitId: string): Promise<MJPredictionUnitEntity | null> {
+  public LoadUnit(unitId: string): Promise<MJMLPredictionUnitEntity | null> {
     return this.units.Load(unitId);
   }
 }

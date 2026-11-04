@@ -123,14 +123,14 @@ describe('PSUnitVersionsPanel (DOM)', () => {
 
   it('opens a saved version on its own Prediction Unit record', async () => {
     const r = await render(PSUnitVersionsPanel, UnitVersionsStub, recordDouble(), formDouble());
-    r.Widget.AfterVersionSaved.emit(new AfterVersionSavedEventArgs('MJ: Prediction Units', 2, NEW_VERSION_ID, true));
-    expect(r.Navigation.Opened).toEqual([{ Entity: 'MJ: Prediction Units', ID: NEW_VERSION_ID }]);
+    r.Widget.AfterVersionSaved.emit(new AfterVersionSavedEventArgs('MJ: ML Prediction Units', 2, NEW_VERSION_ID, true));
+    expect(r.Navigation.Opened).toEqual([{ Entity: 'MJ: ML Prediction Units', ID: NEW_VERSION_ID }]);
   });
 
   it('does not navigate when the save failed or returned no ID', async () => {
     const r = await render(PSUnitVersionsPanel, UnitVersionsStub, recordDouble(), formDouble());
-    r.Widget.AfterVersionSaved.emit(new AfterVersionSavedEventArgs('MJ: Prediction Units', 2, null, false, 'refused'));
-    r.Widget.AfterVersionSaved.emit(new AfterVersionSavedEventArgs('MJ: Prediction Units', 2, null, true));
+    r.Widget.AfterVersionSaved.emit(new AfterVersionSavedEventArgs('MJ: ML Prediction Units', 2, null, false, 'refused'));
+    r.Widget.AfterVersionSaved.emit(new AfterVersionSavedEventArgs('MJ: ML Prediction Units', 2, null, true));
     expect(r.Navigation.Opened).toEqual([]);
   });
 });
@@ -139,13 +139,13 @@ describe('PSProtocolVersionsPanel (DOM)', () => {
   it('passes the record to the widget and opens a saved version on its Evaluation Protocol record', async () => {
     const r = await render(PSProtocolVersionsPanel, ProtocolVersionsStub, recordDouble(), formDouble());
     expect(r.Widget.EvaluationProtocolID).toBe(RECORD_ID);
-    r.Widget.AfterVersionSaved.emit(new AfterVersionSavedEventArgs('MJ: Evaluation Protocols', 2, NEW_VERSION_ID, true));
-    expect(r.Navigation.Opened).toEqual([{ Entity: 'MJ: Evaluation Protocols', ID: NEW_VERSION_ID }]);
+    r.Widget.AfterVersionSaved.emit(new AfterVersionSavedEventArgs('MJ: ML Evaluation Protocols', 2, NEW_VERSION_ID, true));
+    expect(r.Navigation.Opened).toEqual([{ Entity: 'MJ: ML Evaluation Protocols', ID: NEW_VERSION_ID }]);
   });
 
   it('does not navigate when the save failed', async () => {
     const r = await render(PSProtocolVersionsPanel, ProtocolVersionsStub, recordDouble(), formDouble());
-    r.Widget.AfterVersionSaved.emit(new AfterVersionSavedEventArgs('MJ: Evaluation Protocols', 2, null, false, 'refused'));
+    r.Widget.AfterVersionSaved.emit(new AfterVersionSavedEventArgs('MJ: ML Evaluation Protocols', 2, null, false, 'refused'));
     expect(r.Navigation.Opened).toEqual([]);
   });
 });

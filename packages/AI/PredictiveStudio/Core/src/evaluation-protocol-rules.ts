@@ -74,7 +74,7 @@ export interface DefaultProtocolArgs {
 
 /** Row identity of a protocol version being written. */
 export interface ProtocolRowMeta {
-  /** `MJ: Evaluation Protocols`.ID of the new row. */
+  /** `MJ: ML Evaluation Protocols`.ID of the new row. */
   readonly ID: string;
   /** The ID of version 1 of the lineage (the row's own ID for version 1). */
   readonly LineageRootID: string;
@@ -85,7 +85,7 @@ export interface ProtocolRowMeta {
 }
 
 /**
- * The `MJ: Evaluation Protocols` columns a draft determines (every column except the row identity and the author),
+ * The `MJ: ML Evaluation Protocols` columns a draft determines (every column except the row identity and the author),
  * with the two fixed-value columns as narrow as the entity declares them.
  */
 export type EvaluationProtocolDraftColumns = Omit<EvaluationProtocolColumns, 'ID' | 'LineageRootID' | 'Version' | 'AuthoredBy' | 'HoldoutAccessBudget' | 'GuardFieldsEditableBy'> & {
@@ -240,7 +240,7 @@ export class EvaluationProtocolRules {
     return draft;
   }
 
-  /** The columns a draft determines: every `MJ: Evaluation Protocols` column but the row identity and the author. */
+  /** The columns a draft determines: every `MJ: ML Evaluation Protocols` column but the row identity and the author. */
   public static EvaluationProtocolDraftColumns(d: EvaluationProtocolDraft): EvaluationProtocolDraftColumns {
     return {
       Name: d.name,
@@ -257,7 +257,7 @@ export class EvaluationProtocolRules {
     };
   }
 
-  /** The `MJ: Evaluation Protocols` columns of a draft (the inverse of `ParseEvaluationProtocolRow`). */
+  /** The `MJ: ML Evaluation Protocols` columns of a draft (the inverse of `ParseEvaluationProtocolRow`). */
   public static EvaluationProtocolColumnsFromDraft(d: EvaluationProtocolDraft, meta: ProtocolRowMeta): EvaluationProtocolColumns {
     return {
       ID: meta.ID, LineageRootID: meta.LineageRootID, Version: meta.Version, AuthoredBy: JSON.stringify(meta.AuthoredBy),
