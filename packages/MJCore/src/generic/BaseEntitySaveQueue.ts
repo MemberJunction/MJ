@@ -24,6 +24,7 @@ export class BaseEntitySaveQueue {
     private readonly queue = new KeyedSerialTaskQueue();
     private readonly onError?: (message: string) => void;
     private readonly saveReturnMode?: EntitySaveReturnMode;
+    private readonly detachFromTransaction: boolean;
 
     /**
      * @param opts.onError Optional handler for a failed save's diagnostic message. Defaults to the
@@ -32,10 +33,18 @@ export class BaseEntitySaveQueue {
      * @param opts.saveReturnMode Optional {@link EntitySaveReturnMode} forwarded to every queued
      *   `entity.Save(options)` call (e.g. `'datestamps_only'` for high-write execution log queues
      *   whose wide JSON/text payload columns are already in memory).
+     * @param opts.detachFromTransaction When true, each save runs outside the enqueuer's transaction
+     *   (see `IEntityDataProvider.RunOutsideAmbientTransaction`) and commits on its own. Default false:
+     *   a save queued by a transaction member joins that transaction. Turn it on only for a queue that
+     *   nobody awaits before the transaction commits AND whose rows reference only committed rows. A
+     *   queue its owner `Flush()`es inside the transaction, with a foreign key to a row that transaction
+     *   wrote, must stay attached: detached, its INSERT waits on the transaction's lock while the owner
+     *   waits on the INSERT.
      */
-    constructor(opts?: { onError?: (message: string) => void; saveReturnMode?: EntitySaveReturnMode }) {
+    constructor(opts?: { onError?: (message: string) => void; saveReturnMode?: EntitySaveReturnMode; detachFromTransaction?: boolean }) {
         this.onError = opts?.onError;
         this.saveReturnMode = opts?.saveReturnMode;
+        this.detachFromTransaction = opts?.detachFromTransaction === true;
     }
 
     /**
@@ -123,13 +132,7 @@ export class BaseEntitySaveQueue {
             if (applyMutation) {
                 applyMutation(entity);
             }
-            // Never in the enqueuer's transaction: nobody awaits this save, so it could reach SQL
-            // behind that transaction's COMMIT and be rejected (#6251 EA6).
-            const save = (): Promise<boolean> => entity.Save(options);
-            const provider = entity.ProviderToUse;
-            const ok = provider?.RunOutsideAmbientTransaction
-                ? await provider.RunOutsideAmbientTransaction(save)
-                : await save();
+            const ok = await this.save(entity, options);
             if (!ok) {
                 this.logFailure(`${label} failed: ${this.saveError(entity)}`);
             }
@@ -138,6 +141,15 @@ export class BaseEntitySaveQueue {
             this.logFailure(`${label} threw: ${e instanceof Error ? e.message : String(e)}`);
             return false;
         }
+    }
+
+    /** Saves the entity, outside the enqueuer's transaction when the queue was built with `detachFromTransaction`. */
+    private save(entity: BaseEntity, options?: EntitySaveOptions): Promise<boolean> {
+        const provider = entity.ProviderToUse;
+        if (this.detachFromTransaction && provider?.RunOutsideAmbientTransaction) {
+            return provider.RunOutsideAmbientTransaction(() => entity.Save(options));
+        }
+        return entity.Save(options);
     }
 
     /** Routes a failure message to the caller-supplied handler, or the global `LogError` by default. */
