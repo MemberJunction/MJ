@@ -5,7 +5,7 @@
  * {@link PredictiveStudioPipelineBuilder}. It mirrors Database Designer's `DatabaseDesignerSchemaBuilder`
  * and Agent Manager's builder: a `BaseAgent` whose `executeAgentInternal` runs **once, in pure code
  * (no LLM)**, reads the approved {@link ModelingPlanSpec} off the agent payload, builds the pipeline +
- * trains + publishes-gated-on-trust, and writes the outcome back to the payload. The conversational
+ * trains (publishing gated on trust only when the run turns publishing on), and writes the outcome back to the payload. The conversational
  * sub-agents (Goal Analyst / Data Scout / Experiment Designer) accumulate the plan; THIS agent commits
  * it to metadata, so the structure created is type-safe and deterministic — never LLM-emitted.
  *
@@ -32,7 +32,12 @@ export interface PredictiveStudioBuildOutcome {
   /** The trust verdict's headline ("Beats the flat guess by X [lo, hi] …"); absent when the build trained no model. */
   headline?: string;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
   published: boolean;
-  /** When not published, the plain reason (the stored gate decision's reason, leakage, a calibration hold or the promotion gate's refusal); else null. */
+  /**
+   * True when the model stays in Draft only because this build does not publish: it clears the bar, so the user may ask
+   * for it to be published (Promote ML Model, Draft → Validated → Published).
+   */
+  readyToPublish: boolean;
+  /** When not published, the plain reason (the stored gate decision's reason, leakage, a calibration hold, kept in Draft, or the promotion gate's refusal); else null. */
   heldReason: string | null;
   /** A clean error message when the build failed; else null. */
   errorMessage: string | null;
@@ -89,6 +94,22 @@ export interface PredictiveStudioBuilderPayload extends Omit<ModelingPlanSpec, '
   GateReason?: string;
 }
 
+/** Where a build's model stands in the catalog, as the report's Outcome line says it. */
+export type CatalogStatus = 'published' | 'ready-to-publish' | 'held';
+
+/** The catalog status of a build's outcome. */
+export function CatalogStatusOf(o: Pick<PredictiveStudioBuildOutcome, 'published' | 'readyToPublish'>): CatalogStatus {
+  if (o.published) return 'published';
+  return o.readyToPublish ? 'ready-to-publish' : 'held';
+}
+
+/** The report's words for a catalog status. */
+const CATALOG_STATUS_TEXT: Readonly<Record<CatalogStatus, string>> = {
+  'published': 'Published to Catalog',
+  'ready-to-publish': 'In Draft — ready to publish when you ask',
+  'held': 'Held for Review',
+};
+
 /** Project the rich {@link BuildPredictionResult} into the compact, payload-safe outcome (pure → testable). */
 export function SummarizeBuildResult(result: BuildPredictionResult): PredictiveStudioBuildOutcome {
   return {
@@ -98,6 +119,7 @@ export function SummarizeBuildResult(result: BuildPredictionResult): PredictiveS
     trustTitle: result.trust === undefined ? undefined : TrustVerdicts.OutcomeTitle(result.trust),
     headline: result.trust?.Headline,
     published: result.published,
+    readyToPublish: result.readyToPublish,
     heldReason: result.heldReason,
     errorMessage: result.errorMessage,
     warnings: result.warnings && result.warnings.length > 0 ? result.warnings : undefined,
@@ -112,6 +134,7 @@ export function BuildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
   if (!o.success) return `I couldn't build the prediction: ${o.errorMessage ?? 'unknown error'}.${warningText}`;
   // a published build always carries its verdict's title (only a verdict that lets a user act on it publishes)
   if (o.published) return `Done — I built and published your prediction (${o.trustTitle}). It's now in your Predictions.${warningText}`;
+  if (o.readyToPublish) return `Done — I built and trained your prediction (${o.trustTitle}). It is in Draft and clears the bar to publish; it is published only when you ask.${warningText}`;
   const heldMessage = o.heldReason
     ? (o.heldReason.trim().endsWith('.') ? o.heldReason.trim() : `${o.heldReason.trim()}.`)
     : 'it needs review before it can be published.';
@@ -173,14 +196,14 @@ export function GenerateMarkdownReport(
   score: number | null,
   trustTitle: string,
   headline: string,
-  published: boolean,
+  status: CatalogStatus,
   features: MLFeatureImportancePayload[],
   leaderboard: MLLeaderboardEntryPayload[] | undefined,
   gate: BuildGateDecision | null,
   importanceHidden: boolean,
   hiddenImportanceNote: string = ImportanceDisplay.HiddenNote,
 ): string {
-  return renderMarkdownReport(name, targetVar, targetMetric, score, trustTitle, headline, published, features, leaderboard, gate, importanceHidden, hiddenImportanceNote);
+  return renderMarkdownReport(name, targetVar, targetMetric, score, trustTitle, headline, status, features, leaderboard, gate, importanceHidden, hiddenImportanceNote);
 }
 
 /** The report body. */
@@ -191,7 +214,7 @@ function renderMarkdownReport(
   score: number | null,
   trustTitle: string,
   headline: string,
-  published: boolean,
+  status: CatalogStatus,
   features: MLFeatureImportancePayload[],
   leaderboard: MLLeaderboardEntryPayload[] | undefined,
   gate: BuildGateDecision | null,
@@ -215,7 +238,7 @@ ${headline}
 ## ${performanceHeading(gate, isTournament, hasWinner)}
 ${gate !== null && !shipped ? `- **Why**: ${gate.Reason}\n` : ''}- **Target Variable**: \`${targetVar}\`
 - **Primary Metric**: **${targetMetric}** = **${score !== null && score !== undefined ? score.toFixed(3) : 'not measured'}**
-- **Outcome**: **${trustTitle}** (${published ? 'Published to Catalog' : 'Held for Review'})
+- **Outcome**: **${trustTitle}** (${CATALOG_STATUS_TEXT[status]})
 ${renderLeaderboardSection(leaderboard, targetMetric, hasWinner, gate)}
 ## Features the model weighted most (associations, not causes)
 ${topFeatures}
@@ -310,9 +333,21 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     return plan;
   }
 
+  /** The run-data key that turns publishing on for a build: `true` publishes a model that clears the bar, as automation. */
+  public static readonly AUTO_PUBLISH_DATA_KEY = 'PredictiveStudioAutoPublish';
+
+  /**
+   * Whether this build publishes a model that clears the bar. Off unless the run's `data` (set by whoever starts the
+   * run, never by the plan an LLM writes) holds `PredictiveStudioAutoPublish: true`: a model the conversation builds
+   * stays in Draft until the user asks for it to be published. Automated runs such as the truth suite's turn it on.
+   */
+  public static AutoPublishOf(params: Pick<ExecuteAgentParams, 'data'>): boolean {
+    return params.data?.[PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY] === true;
+  }
+
   /**
    * Run the deterministic build once. Reads the approved plan off `params.payload`, builds the
-   * pipeline + trains + publishes-gated-on-trust, writes the outcome to the payload, and terminates
+   * pipeline + trains (+ publishes-gated-on-trust when {@link AutoPublishOf} is on), writes the outcome to the payload, and terminates
    * the sub-agent with Success (build ran — even when the model is held, that's a successful run with
    * a held outcome) or Failed (the build itself errored).
    */
@@ -332,11 +367,12 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
 
     let result: BuildPredictionResult;
     try {
-      result = await this.createBuilder().Build({ spec: PredictiveStudioPipelineBuilderAgent.PlanOf(payload), provider, user });
+      const autoPublish = PredictiveStudioPipelineBuilderAgent.AutoPublishOf(params);
+      result = await this.createBuilder().Build({ spec: PredictiveStudioPipelineBuilderAgent.PlanOf(payload), provider, user, autoPublish });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       LogError(`PredictiveStudioPipelineBuilderAgent: build threw: ${errorMessage}`);
-      result = { success: false, published: false, leakageFlagged: false, heldReason: null, errorMessage };
+      result = { success: false, published: false, readyToPublish: false, leakageFlagged: false, heldReason: null, errorMessage };
     }
 
     const outcome = SummarizeBuildResult(result);
@@ -370,7 +406,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     const reportMarkdown = GenerateMarkdownReport(
       name, goal, targetVar, reportMetric, comparison === null ? null : comparison.Value,
       result.trust === undefined ? 'No model shipped' : TrustVerdicts.OutcomeTitle(result.trust),
-      summaryText, result.published, featureBars, leaderboard, result.Gate || null,
+      summaryText, CatalogStatusOf(outcome), featureBars, leaderboard, result.Gate || null,
       rawFeatures.length > 0 && !showable, HiddenImportanceNote(result.model?.Lineage),
     );
     return {

@@ -303,6 +303,41 @@ describe('PredictiveStudioPipelineBuilder.Build — one pipeline, one training',
     expect(result.heldReason).toBe('Held — its calibration slope 0.50 is outside 0.8–1.2, so its family is hidden (calibration hold); a hidden family is never published.');
   });
 
+  it('keeps a model that clears the bar in Draft when publishing is off, ready to publish, without asking the promotion gate', async () => {
+    const world = new BuildWorld();
+    world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
+    world.Pipeline.EvaluationProtocolID = 'EP-1';
+    const model = publishableModel();
+    const promotions = new RecordingGate((status) => { model.Stored = status; });
+    vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: model.Entity, run: completedRun([inner('A', 0.42), inner('B', 0.40)], 'B') });
+    const result = await new GatedBuilder(promotions).Build({ spec: plan(['A', 'B']), provider: world.Provider(), user, autoPublish: false });
+    expect([result.published, result.readyToPublish, promotions.Requests.length, model.Saves, model.Entity.Status]).toEqual([false, true, 0, 0, 'Draft']);
+    expect(result.heldReason).toBe(PredictiveStudioPipelineBuilder.KeptInDraftReason);
+  });
+
+  it('names the real blocker, not publishing being off, for a calibration-held model built with publishing off', async () => {
+    const world = new BuildWorld();
+    world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
+    world.Pipeline.EvaluationProtocolID = 'EP-1';
+    const model = publishableModel(JSON.stringify({ shippedMember: 'B', calibrationHold: { slope: 0.5 } }));
+    const promotions = new RecordingGate((status) => { model.Stored = status; });
+    vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: model.Entity, run: completedRun([inner('A', 0.42), inner('B', 0.40)], 'B') });
+    const result = await new GatedBuilder(promotions).Build({ spec: plan(['A', 'B']), provider: world.Provider(), user, autoPublish: false });
+    expect([result.published, result.readyToPublish, promotions.Requests.length]).toEqual([false, false, 0]);
+    expect(result.heldReason).toBe('Held — its calibration slope 0.50 is outside 0.8–1.2, so its family is hidden (calibration hold); a hidden family is never published.');
+  });
+
+  it('reports a published model as not waiting to be published', async () => {
+    const world = new BuildWorld();
+    world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;
+    world.Pipeline.EvaluationProtocolID = 'EP-1';
+    const model = publishableModel();
+    const promotions = new RecordingGate((status) => { model.Stored = status; });
+    vi.spyOn(TrainingDelegation, 'TrainModelViaEngine').mockResolvedValue({ model: model.Entity, run: completedRun([inner('A', 0.42), inner('B', 0.40)], 'B') });
+    const result = await new GatedBuilder(promotions).Build({ spec: plan(['A', 'B']), provider: world.Provider(), user, autoPublish: true });
+    expect([result.published, result.readyToPublish]).toEqual([true, false]);
+  });
+
   it("holds a model whose run's stored gate decision is no-signal, with the stored reason", async () => {
     const world = new BuildWorld();
     world.Pipeline.PredictionUnitID = UnitYearsWorld.UnitID;

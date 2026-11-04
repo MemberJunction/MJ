@@ -5,9 +5,12 @@ import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import type { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import { TrustVerdicts } from '@memberjunction/predictive-studio-core';
-import type { PredictiveStudioBuilderPayload } from '@memberjunction/predictive-studio';
+import { PredictiveStudioPipelineBuilderAgent, type PredictiveStudioBuilderPayload } from '@memberjunction/predictive-studio';
 import type { RunContext } from './run-fixtures';
 import type { AgentStepResult } from './types';
+
+/** The parameters of one Pipeline Builder run. */
+export type BuilderRunParams = Parameters<GraphQLAIClient['RunAIAgent']>[0];
 
 /**
  * Agent runs for the truth harness, in process over the harness's client provider: `GraphQLAIClient.RunAIAgent` runs
@@ -21,17 +24,26 @@ export class HarnessAgent {
    * Run the Pipeline Builder agent on `plan` and report the run, its build, and every pipeline the run created — read
    * back by the exact names the builder gives them, so a failed run's pipelines are reported too.
    */
+  /**
+   * The Pipeline Builder run of a plan. The gates measure what automation publishes, so the run turns publishing on (a
+   * conversation's build leaves its model in Draft).
+   */
+  public static BuilderRunParams(agent: MJAIAgentEntityExtended, plan: ModelingPlanSpec): BuilderRunParams {
+    return {
+      agent,
+      conversationMessages: [{ role: 'user', content: 'build it' }],
+      payload: plan,
+      data: { [PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY]: true },
+    };
+  }
+
   public static async RunBuilderAgent(ctx: RunContext, plan: ModelingPlanSpec): Promise<AgentStepResult> {
     const agent = await HarnessAgent.loadAgent(ctx, 'Pipeline Builder');
     if (agent.DriverClass !== 'PredictiveStudioPipelineBuilderAgent') {
       throw new Error(`'Pipeline Builder' agent has DriverClass '${agent.DriverClass || 'none'}'`);
     }
     const t0 = Date.now();
-    const result: ExecuteAgentResult<PredictiveStudioBuilderPayload> = await new GraphQLAIClient(ctx.Provider).RunAIAgent({
-      agent,
-      conversationMessages: [{ role: 'user', content: 'build it' }],
-      payload: plan,
-    });
+    const result: ExecuteAgentResult<PredictiveStudioBuilderPayload> = await new GraphQLAIClient(ctx.Provider).RunAIAgent(HarnessAgent.BuilderRunParams(agent, plan));
     const wallMs = Date.now() - t0;
     const build = result.payload?.BuildResult || null;
     const pipelineIds = await HarnessAgent.PipelineIDsNamed(ctx.Provider, ctx.User, HarnessAgent.BuilderPipelineNames(plan));

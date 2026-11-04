@@ -152,8 +152,9 @@ function buildLeakageGuard(spec: ModelingPlanSpec): LeakageGuard {
 }
 
 /**
- * Validation strategy straight from the plan (LockedHoldoutFraction is always carried, as are the evaluation
- * settings `TimeIndexColumn` and `MajorityBaselineRule`). An unknown `MajorityBaselineRule` is refused here with
+ * Validation strategy straight from the plan, with the evaluation settings `TimeIndexColumn` and `MajorityBaselineRule`.
+ * A plan's `LockedHoldoutFraction` is not carried: the pipeline's bound Evaluation Protocol decides its holdout, so a
+ * fraction on the pipeline would only contradict it. An unknown `MajorityBaselineRule` is refused here with
  * `InvalidMajorityBaselineRuleError`, the same refusal training raises.
  */
 function buildValidation(spec: ModelingPlanSpec): ValidationStrategy {
@@ -162,7 +163,6 @@ function buildValidation(spec: ModelingPlanSpec): ValidationStrategy {
     Strategy: v?.Strategy ?? 'holdout',
     TestSize: v?.TestSize,
     K: v?.K,
-    LockedHoldoutFraction: v?.LockedHoldoutFraction ?? 0.2,
   };
   if (v?.TimeIndexColumn) {
     validation.TimeIndexColumn = v.TimeIndexColumn;

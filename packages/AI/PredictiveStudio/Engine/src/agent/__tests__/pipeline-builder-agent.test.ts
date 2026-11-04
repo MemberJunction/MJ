@@ -10,6 +10,7 @@ import {
   HiddenImportanceNote,
   UNSHOWN_IMPORTANCE_KIND_NOTE,
   PredictiveStudioPipelineBuilderAgent,
+  CatalogStatusOf,
   type PredictiveStudioBuilderPayload,
 } from '../pipeline-builder-agent';
 import {
@@ -44,18 +45,18 @@ function storedRun(decision: GateDecision, reason: string): string {
 const shippedTrust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: storedRun({ outcome: 'model', branch: 'a:Q15-only-model-beats-dummy', shipped: 'xgb', shippedRole: 'model', note: null }, 'The model beats the flat guess.'), Lineage: null });
 const noSignalTrust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: storedRun({ outcome: 'no-signal', branch: 'c:no-signal', shipped: null, shippedRole: null, note: null }, 'Nothing beats the flat guess, so nothing ships.'), Lineage: null });
 const published: BuildPredictionResult = {
-  success: true, pipelineId: 'p1', modelId: 'm1', published: true, leakageFlagged: false, heldReason: null, errorMessage: null, trust: shippedTrust,
+  success: true, pipelineId: 'p1', modelId: 'm1', published: true, readyToPublish: false, leakageFlagged: false, heldReason: null, errorMessage: null, trust: shippedTrust,
 };
 const held: BuildPredictionResult = {
-  success: true, pipelineId: 'p2', modelId: 'm2', published: false, leakageFlagged: false, errorMessage: null,
+  success: true, pipelineId: 'p2', modelId: 'm2', published: false, readyToPublish: false, leakageFlagged: false, errorMessage: null,
   heldReason: noSignalTrust.Reason, trust: noSignalTrust,
 };
-const failed: BuildPredictionResult = { success: false, published: false, leakageFlagged: false, heldReason: null, errorMessage: 'Algorithm not found' };
+const failed: BuildPredictionResult = { success: false, published: false, readyToPublish: false, leakageFlagged: false, heldReason: null, errorMessage: 'Algorithm not found' };
 
 describe('SummarizeBuildResult', () => {
   it('projects a published result', () => {
     expect(SummarizeBuildResult(published)).toMatchObject({
-      success: true, pipelineId: 'p1', modelId: 'm1', published: true, heldReason: null, errorMessage: null,
+      success: true, pipelineId: 'p1', modelId: 'm1', published: true, readyToPublish: false, heldReason: null, errorMessage: null,
       trustTitle: 'Ships — the model beats the flat guess', headline: 'Beats the flat guess by 0.0200 [0.0100, 0.0300] (log-loss).',
     });
   });
@@ -70,7 +71,7 @@ describe('SummarizeBuildResult', () => {
     expect([o.trustTitle, o.headline]).toEqual([undefined, undefined]);
   });
   it('projects a failed build', () => {
-    expect(SummarizeBuildResult(failed)).toMatchObject({ success: false, published: false, errorMessage: 'Algorithm not found' });
+    expect(SummarizeBuildResult(failed)).toMatchObject({ success: false, published: false, readyToPublish: false, errorMessage: 'Algorithm not found' });
   });
 });
 
@@ -178,7 +179,7 @@ describe('GenerateMarkdownReport', () => {
       0.864,
       'Ships — the model beats the flat guess',
       'Beats the flat guess by 0.0200 [0.0100, 0.0300] (log-loss).',
-      true,
+      'published',
       [{ feature: 'DuesAmount', importance: 0.45 }],
       [],
       null,
@@ -226,7 +227,7 @@ describe('ResolveEntity', () => {
 
 describe('GenerateMarkdownReport — model not evaluated', () => {
   it('says the metric was not measured and names the not-evaluated outcome', () => {
-    const md = GenerateMarkdownReport('Renewal', 'Predict renewal', 'Renewed', 'AUC', null, 'Not evaluated yet', 'Not evaluated yet.', false, [], [], null, false);
+    const md = GenerateMarkdownReport('Renewal', 'Predict renewal', 'Renewed', 'AUC', null, 'Not evaluated yet', 'Not evaluated yet.', 'held', [], [], null, false);
     expect(md).toContain('**AUC** = **not measured**');
     expect(md).not.toMatch(/0\.850/);
     expect(md).toContain('**Outcome**: **Not evaluated yet** (Held for Review)');
@@ -239,7 +240,7 @@ describe('GenerateMarkdownReport — measurement copy (M8)', () => {
     IterationID: `m${rank}`, Metric: score, rank, algorithm: `Algo ${rank}`, score, metricName: score === null ? null : 'AUC', isWinner,
   });
   it('says nothing about picking a winner for a single-model build', () => {
-    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Ships — the model beats the flat guess', 'ok', true, [], [row(1, 0.8, true)], null, false);
+    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Ships — the model beats the flat guess', 'ok', 'published', [], [row(1, 0.8, true)], null, false);
     expect(md).not.toMatch(/winner was picked/);
     expect(md).toContain('## Model Performance');
   });
@@ -247,7 +248,7 @@ describe('GenerateMarkdownReport — measurement copy (M8)', () => {
     const searchRow = (rank: number, mean: number, isWinner: boolean): MLLeaderboardEntryPayload => ({
       IterationID: 'run-1', Metric: mean, rank, algorithm: `Algo ${rank}`, score: mean, metricName: 'log-loss', innerLower: mean - 0.02, innerUpper: mean + 0.02, optimistic: true, isWinner,
     });
-    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Ships — the model beats the flat guess', 'ok', true, [], [searchRow(1, 0.4, false), searchRow(2, 0.41, true)], { Outcome: 'model', Reason: 'The model beats the flat guess.' }, false);
+    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Ships — the model beats the flat guess', 'ok', 'published', [], [searchRow(1, 0.4, false), searchRow(2, 0.41, true)], { Outcome: 'model', Reason: 'The model beats the flat guess.' }, false);
     expect(md).toContain('The winner is the simplest candidate whose inner-fold score is within one standard error of the best; inner-fold scores are optimistic, and the held-back rows were read once, for the winner.');
     expect(md).toContain('| Rank | Algorithm | Inner-CV log-loss [95% interval] (optimistic) | Status |');
     expect(md).toContain('| 1 | Algo 1 | 0.400 [0.380, 0.420] | Evaluated |');
@@ -255,7 +256,7 @@ describe('GenerateMarkdownReport — measurement copy (M8)', () => {
     expect(md).toContain('## Winning Model Performance');
   });
   it('says a single model was scored on the held-back rows', () => {
-    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Ships — the model beats the flat guess', 'ok', true, [], [row(1, 0.8, true)], null, false, ImportanceDisplay.HiddenNote);
+    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', 0.8, 'Ships — the model beats the flat guess', 'ok', 'published', [], [row(1, 0.8, true)], null, false, ImportanceDisplay.HiddenNote);
     expect(md).toContain('- The score comes from the rows held back from training.\n');
     expect(md).toContain('| Rank | Algorithm | Score (AUC) | Status |');
   });
@@ -272,7 +273,7 @@ describe('GenerateMarkdownReport — the stored gate outcome', () => {
     IterationID: 'run-1', Metric: mean, rank, algorithm: `Algo ${rank}`, score: mean, metricName: 'log-loss', innerLower: mean - 0.02, innerUpper: mean + 0.02, optimistic: true, isWinner,
   });
   const rows = [searchRow(1, 0.4, false), searchRow(2, 0.41, true)];
-  const report = (gate: BuildGateDecision | null) => GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', null, 'No model shipped', 'held', false, [], rows, gate, false);
+  const report = (gate: BuildGateDecision | null) => GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', null, 'No model shipped', 'held', 'held', [], rows, gate, false);
 
   it('crowns no winner on a no-signal search and titles the section by the outcome with the stored reason', () => {
     const md = report({ Outcome: 'no-signal', Reason: 'Neither the model nor any simple baseline beats the flat guess.' });
@@ -309,7 +310,7 @@ describe('GenerateMarkdownReport — the stored gate outcome', () => {
 class NoSignalSearchBuilder extends PredictiveStudioPipelineBuilder {
   public override async Build(_input: BuildPredictionInput): Promise<BuildPredictionResult> {
     return {
-      success: true, pipelineId: 'pipe-1', published: false, leakageFlagged: false, errorMessage: null,
+      success: true, pipelineId: 'pipe-1', published: false, readyToPublish: false, leakageFlagged: false, errorMessage: null,
       leaderboard: [{ IterationID: 'run-1', Metric: 0.41, rank: 1, algorithm: 'xgb', score: 0.41, metricName: 'log-loss', innerLower: 0.39, innerUpper: 0.43, optimistic: true, isWinner: true }],
       heldReason: 'Not published — the training run shipped no model: no signal.',
       Gate: { Outcome: 'no-signal', Reason: 'no signal.' },
@@ -332,7 +333,7 @@ describe('HiddenImportanceNote (M7)', () => {
 
 describe('GenerateMarkdownReport — copy', () => {
   const report = (features: Array<{ feature: string; importance: number }>, importanceHidden = true) =>
-    GenerateMarkdownReport('Renewal', 'Predict renewal', 'Renewed', 'AUC', 0.72, 'Ships — the model beats the flat guess', 'Beats the flat guess by 0.0200 [0.0100, 0.0300] (log-loss).', true, features, [], null, importanceHidden);
+    GenerateMarkdownReport('Renewal', 'Predict renewal', 'Renewed', 'AUC', 0.72, 'Ships — the model beats the flat guess', 'Beats the flat guess by 0.0200 [0.0100, 0.0300] (log-loss).', 'published', features, [], null, importanceHidden);
   it('prints the hidden-list note instead of inventing a ranking when importance is hidden', () => {
     const md = report([]);
     expect(md).toContain('split or impurity counts');
@@ -370,7 +371,7 @@ class UnmeasuredBuilder extends PredictiveStudioPipelineBuilder {
     const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: null, Lineage: null });
     const leaderboard = oneRowLeaderboard(model, trust.Comparison);
     return {
-      success: true, pipelineId: 'pipe-1', modelId: model.ID, model, trust, published: false, leakageFlagged: false,
+      success: true, pipelineId: 'pipe-1', modelId: model.ID, model, trust, published: false, readyToPublish: false, leakageFlagged: false,
       heldReason: trust.Reason, errorMessage: null, leaderboard,
     };
   }
@@ -382,7 +383,7 @@ class ShippedBuilder extends PredictiveStudioPipelineBuilder {
     const model = unmeasuredModel('model-shipped');
     const leaderboard = oneRowLeaderboard(model, shippedTrust.Comparison);
     return {
-      success: true, pipelineId: 'pipe-1', modelId: model.ID, model, trust: shippedTrust, published: true, leakageFlagged: false,
+      success: true, pipelineId: 'pipe-1', modelId: model.ID, model, trust: shippedTrust, published: true, readyToPublish: false, leakageFlagged: false,
       heldReason: null, errorMessage: null, leaderboard,
     };
   }
@@ -399,9 +400,9 @@ class TestableBuilderAgent extends PredictiveStudioPipelineBuilderAgent {
   protected override get ProviderToUse(): IMetadataProvider {
     return {} as IMetadataProvider;
   }
-  public async Run(payload: PredictiveStudioBuilderPayload): Promise<BaseAgentNextStep<PredictiveStudioBuilderPayload>> {
-    // Test double for the framework params: executeAgentInternal reads only payload + contextUser.
-    const params = { payload, contextUser: { ID: 'user-1' } as UserInfo } as unknown as ExecuteAgentParams;
+  public async Run(payload: PredictiveStudioBuilderPayload, data?: ExecuteAgentParams['data']): Promise<BaseAgentNextStep<PredictiveStudioBuilderPayload>> {
+    // Test double for the framework params: executeAgentInternal reads only payload, contextUser and data.
+    const params = { payload, contextUser: { ID: 'user-1' } as UserInfo, data } as unknown as ExecuteAgentParams;
     const { finalStep } = await this.executeAgentInternal<PredictiveStudioBuilderPayload>(params, {} as AgentConfiguration);
     return finalStep;
   }
@@ -450,7 +451,7 @@ class NoModelBuilder extends PredictiveStudioPipelineBuilder {
   public override async Build(input: BuildPredictionInput): Promise<BuildPredictionResult> {
     this.Specs.push(input.spec);
     return {
-      success: true, pipelineId: 'pipe-1', published: false, leakageFlagged: false, errorMessage: null, leaderboard: [],
+      success: true, pipelineId: 'pipe-1', published: false, readyToPublish: false, leakageFlagged: false, errorMessage: null, leaderboard: [],
       heldReason: 'Not published — the training run shipped no model: Neither the model nor any simple baseline beats the flat guess.',
       Gate: { Outcome: 'no-signal', Reason: 'Neither the model nor any simple baseline beats the flat guess.' },
     };
@@ -490,5 +491,53 @@ describe('PredictiveStudioPipelineBuilderAgent.executeAgentInternal — a build 
     expect(builder.Specs).toHaveLength(1);
     expect('Leaderboard' in builder.Specs[0]).toBe(false);
     expect(builder.Specs[0].Goal).toBe('Predict renewal');
+  });
+});
+
+/** A builder stub that records whether the agent asked it to publish, and keeps a model that clears the bar in Draft. */
+class DraftBuilder extends PredictiveStudioPipelineBuilder {
+  public AutoPublish: (boolean | undefined)[] = [];
+  public override async Build(input: BuildPredictionInput): Promise<BuildPredictionResult> {
+    this.AutoPublish.push(input.autoPublish);
+    const model = unmeasuredModel('model-draft');
+    return {
+      success: true, pipelineId: 'pipe-1', modelId: model.ID, model, trust: shippedTrust, published: false, readyToPublish: true, leakageFlagged: false,
+      heldReason: PredictiveStudioPipelineBuilder.KeptInDraftReason, errorMessage: null, leaderboard: [],
+    };
+  }
+}
+
+describe('PredictiveStudioPipelineBuilderAgent — publishing', () => {
+  it('builds with publishing off unless the run data turns it on', async () => {
+    const builder = new DraftBuilder();
+    await new TestableBuilderAgent(builder).Run({ ...plan });
+    await new TestableBuilderAgent(builder).Run({ ...plan }, { [PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY]: true });
+    expect(builder.AutoPublish).toEqual([false, true]);
+  });
+
+  it('ignores a payload that asks to publish: only the run data turns publishing on', async () => {
+    const builder = new DraftBuilder();
+    const payload = { ...plan, [PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY]: true } as PredictiveStudioBuilderPayload;
+    await new TestableBuilderAgent(builder).Run(payload);
+    expect(builder.AutoPublish).toEqual([false]);
+  });
+
+  it('turns publishing on only for the boolean true', () => {
+    const key = PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY;
+    expect([undefined, {}, { [key]: false }, { [key]: 'true' }, { [key]: 1 }, { [key]: true }].map((data) => PredictiveStudioPipelineBuilderAgent.AutoPublishOf({ data })))
+      .toEqual([false, false, false, false, false, true]);
+  });
+
+  it('reports a Draft model that clears the bar as ready to publish, in the outcome, the message and the report', async () => {
+    const step = await new TestableBuilderAgent(new DraftBuilder()).Run({ ...plan });
+    const payload = step.newPayload as PredictiveStudioBuilderPayload;
+    expect([payload.BuildResult?.published, payload.BuildResult?.readyToPublish]).toEqual([false, true]);
+    expect(payload.Markdown).toContain('(In Draft — ready to publish when you ask)');
+    expect(step.reasoning).toBe('Done — I built and trained your prediction (Ships — the model beats the flat guess). It is in Draft and clears the bar to publish; it is published only when you ask.');
+  });
+
+  it('names each catalog status', () => {
+    expect([CatalogStatusOf({ published: true, readyToPublish: false }), CatalogStatusOf({ published: false, readyToPublish: true }), CatalogStatusOf({ published: false, readyToPublish: false })])
+      .toEqual(['published', 'ready-to-publish', 'held']);
   });
 });

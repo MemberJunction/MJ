@@ -94,7 +94,10 @@ export interface BuildPredictionInput {
   provider: IMetadataProvider;
   /** The acting user (isolation/audit). */
   user: UserInfo;
-  /** Publish the trained model when the trust verdict clears the bar. Default true. */
+  /**
+   * Publish the trained model when the trust verdict clears the bar. Default true. The Model Development Agent's build
+   * turns it off, so the model it trains stays in Draft until the user asks for it to be published.
+   */
   autoPublish?: boolean;
   /** Sidecar version marker recorded in lineage. */
   sidecarVersion?: string;
@@ -154,10 +157,15 @@ export interface BuildPredictionResult {
   trust?: TrustVerdict;
   /** Whether the model was published into the business catalog. */
   published: boolean;
+  /**
+   * True when the model was not published only because auto-publish was off: it shipped under its protocol, training
+   * flagged no leakage and it holds no calibration hold, so the promotion gate may be asked to publish it.
+   */
+  readyToPublish: boolean;
   /** Whether training flagged a leakage warning (held for analyst review). */
   leakageFlagged: boolean;
   /**
-   * When not published, the plain reason (auto-publish off, leakage, a calibration hold, the trust verdict, or the
+   * When not published, the plain reason (leakage, a calibration hold, the trust verdict, auto-publish off, or the
    * promotion gate's refusal); else null.
    */
   heldReason: string | null;
@@ -197,6 +205,7 @@ interface PublishInputs {
 interface PublishResult {
   readonly published: boolean;  // case-violation-ok-legacy-back-compat: spread into BuildPredictionResult, whose members are camelCase
   readonly heldReason: string | null;  // case-violation-ok-legacy-back-compat: spread into BuildPredictionResult, whose members are camelCase
+  readonly readyToPublish: boolean;  // case-violation-ok-legacy-back-compat: spread into BuildPredictionResult, whose members are camelCase
 }
 
 /** Deterministic builder: approved {@link ModelingPlanSpec} → pipeline + trained (+ maybe published) model. */
@@ -216,6 +225,7 @@ export class PredictiveStudioPipelineBuilder {
       return {
         success: false,
         published: false,
+        readyToPublish: false,
         leakageFlagged: false,
         heldReason: null,
         errorMessage,
@@ -239,9 +249,9 @@ export class PredictiveStudioPipelineBuilder {
     if (model === null) return PredictiveStudioPipelineBuilder.heldWithoutModel(pipeline, training, warnings);
     const trust = TrustVerdicts.DeriveTrustVerdict({ ValidationResults: training.Train.run.ValidationResults, Lineage: model.Lineage });
     const leakageFlagged = WasTrainingLeakageFlagged(training.Train);
-    const { published, heldReason } = await this.maybePublish({ Model: model, Trust: trust, LeakageFlagged: leakageFlagged, AutoPublish: autoPublish, Provider: provider, User: user });
+    const { published, heldReason, readyToPublish } = await this.maybePublish({ Model: model, Trust: trust, LeakageFlagged: leakageFlagged, AutoPublish: autoPublish, Provider: provider, User: user });
     return {
-      success: true, pipelineId: pipeline.ID, modelId: model.ID, model, pipeline, trust, published, leakageFlagged, heldReason,
+      success: true, pipelineId: pipeline.ID, modelId: model.ID, model, pipeline, trust, published, readyToPublish, leakageFlagged, heldReason,
       errorMessage: null, leaderboard: training.Leaderboard, Gate: training.Gate || undefined,
       warnings: warnings.length > 0 ? warnings : undefined,
     };
@@ -283,7 +293,7 @@ export class PredictiveStudioPipelineBuilder {
    */
   private static heldWithoutModel(pipeline: MJMLTrainingPipelineEntity, training: BuildTraining, warnings: FeatureStepWarning[]): BuildPredictionResult {
     return {
-      success: true, pipelineId: pipeline.ID, pipeline, published: false, leakageFlagged: WasTrainingLeakageFlagged(training.Train),
+      success: true, pipelineId: pipeline.ID, pipeline, published: false, readyToPublish: false, leakageFlagged: WasTrainingLeakageFlagged(training.Train),
       heldReason: `Not published — the training run shipped no model: ${TrainingEngine.NoModelReason(training.Train)}`,
       errorMessage: null, leaderboard: training.Leaderboard, Gate: training.Gate || undefined,
       warnings: warnings.length > 0 ? warnings : undefined,
@@ -585,13 +595,19 @@ export class PredictiveStudioPipelineBuilder {
    */
   private async maybePublish(p: PublishInputs): Promise<PublishResult> {
     const held = PredictiveStudioPipelineBuilder.heldBeforePromotion(p);
-    if (held !== null) return { published: false, heldReason: held };
+    if (held !== null) return { published: false, heldReason: held, readyToPublish: false };
+    if (!p.AutoPublish) return { published: false, heldReason: PredictiveStudioPipelineBuilder.KeptInDraftReason, readyToPublish: true };
     return this.publishThroughGate(p.Model, p.Provider, p.User);
   }
 
-  /** Why a trained model is held before it reaches the promotion gate; null when the gate may be asked to publish it. */
+  /** The held reason of a model that clears the bar to publish and stays in Draft only because auto-publish was off. */
+  public static readonly KeptInDraftReason = 'Kept in Draft — it clears the bar to publish, and is published only when you ask.';
+
+  /**
+   * Why a trained model cannot be published; null when the promotion gate may be asked to publish it. Auto-publish is
+   * not one of these reasons: a model that is off only for that is ready to publish ({@link maybePublish}).
+   */
   private static heldBeforePromotion(p: PublishInputs): string | null {
-    if (!p.AutoPublish) return 'Not published — auto-publish was off; review and publish when ready.';
     if (p.LeakageFlagged) return 'Held for analyst review — training flagged a possible data-leakage issue.';
     const hold = TrainerModelLineageReader.CalibrationHoldOf(p.Model.Lineage);
     if (hold !== null) {
@@ -608,13 +624,13 @@ export class PredictiveStudioPipelineBuilder {
    */
   private async publishThroughGate(model: MJMLModelEntity, provider: IMetadataProvider, user: UserInfo): Promise<PublishResult> {
     const gate = this.CreatePromotionGate();
-    let result: PublishResult = { published: true, heldReason: null };
+    let result: PublishResult = { published: true, heldReason: null, readyToPublish: false };
     let moved = false;
     for (const targetStatus of ['Validated', 'Published'] as const) {
       const outcome = await gate.promote({ modelId: model.ID, targetStatus, signOff: false, contextUser: user, provider });
       if (outcome.kind !== 'promoted') {
         const reason = ProductionModelPromotionGate.DescribeRefusal(outcome);
-        result = { published: false, heldReason: `Not published — the promotion gate refused to move it to ${targetStatus}: ${reason}${reason.endsWith('.') ? '' : '.'}` };
+        result = { published: false, heldReason: `Not published — the promotion gate refused to move it to ${targetStatus}: ${reason}${reason.endsWith('.') ? '' : '.'}`, readyToPublish: false };
         break;
       }
       moved = true;
