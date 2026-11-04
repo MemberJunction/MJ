@@ -1,5 +1,81 @@
 # @memberjunction/integration-progress-artifacts
 
+## 6.2.0
+
+### Minor Changes
+
+- ccfd553: Integration GraphQL additions: `IntegrationStartSchemaRefresh` (detached discovery start returning a tailable run id), live `RecordsCreated/Updated/Errored/Skipped` that actually count, offset paging on sync history and run listing with per-entity counts recovered from the run artifact, `IntegrationGetActiveOperations`, and `IntegrationProbeCredentials` (tests credentials without persisting anything).
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- 14c7719: The runtime schema update is observable across its own restart: the progress emitter can resume a run (manifest preserved, sequence continues), RSU run artifacts carry the connection id so they are readable over the API, and the post-restart half emits `CreateEntityMaps` and `StartSync` steps before closing the run.
+
+  A run is also survivable and stoppable. Listing runs now applies its filters and limit to the run manifests before hydrating anything, and a finished run's counts, warnings, event count and final event come from the `result.json` the emitter already wrote — so `IntegrationListRuns` with `limit:1` reads one journal instead of every journal four times. Retention prunes by run start time and sacrifices finished runs before result-less ones, so a stranded run's evidence is no longer the first thing deleted. `MJ_INTEGRATION_RUN_ARTIFACT_ROOT` moves the artifact tree out of the directory a deploy swaps. And the RSU compile runs with bounded turbo concurrency in its own process group, is killed (group-wide) when it exceeds its timeout instead of running on unattended, reports elapsed time while it runs, and fails the pipeline before the commit and restart steps rather than restarting the API onto an uncompiled tree.
+
+- 48c974e: A runtime schema update survives the process being killed, and says so if it doesn't. Child builds get a heap ceiling sized to free memory instead of inheriting the parent's, so a large build can no longer take down the server. Pending work is recorded before the build starts, so a restart resumes it. At startup, MJServer closes out any run a dead process left open (`SweepInterruptedRuns`) and marks it failed with a `process-killed` result, so the wizard and the active-operations panel stop waiting on it.
+- Updated dependencies [1419ba7]
+- Updated dependencies [709de1a]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [29b16ee]
+- Updated dependencies [81aea34]
+- Updated dependencies [59e32e0]
+- Updated dependencies [4283a82]
+- Updated dependencies [914e6ff]
+- Updated dependencies [2274f42]
+- Updated dependencies [80905a1]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [25f7b82]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [4d647e6]
+- Updated dependencies [17a4137]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [5b41d48]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/global@6.2.0
+
 ## 6.2.0-edge.8
 
 ### Patch Changes
