@@ -1,5 +1,36 @@
 # @memberjunction/ai-prompts
 
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- 373b180: Realtime voice sessions now resolve their key through MJ Credentials the way prompts do: AI Credential Bindings on the model-vendor row, then the vendor, then the vendor's default credential, then the run's `apiKeys`, then `AI_VENDOR_API_KEY__<driver>`. The binding walk moves from `BaseModelRunner` into the shared `ResolvePlatformAICredential` helper (no change for prompts). A `'RuntimeOnly'` credential scope keeps the run's own keys as the whole chain. When no realtime vendor has a key, the server log names each vendor considered and what it needed, and the session error says how to fix it.
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [e69634e]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/aiengine@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+  - @memberjunction/ai-core-plus@6.2.0-edge.8
+  - @memberjunction/ai-engine-base@6.2.0-edge.8
+  - @memberjunction/credentials@6.2.0-edge.8
+  - @memberjunction/templates-base-types@6.2.0-edge.8
+  - @memberjunction/templates@6.2.0-edge.8
+  - @memberjunction/ai@6.2.0-edge.8
+
 ## 6.2.0-edge.7
 
 ### Minor Changes

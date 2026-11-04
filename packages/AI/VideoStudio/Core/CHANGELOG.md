@@ -1,5 +1,7 @@
 # @memberjunction/video-studio-core
 
+## 6.2.0-edge.8
+
 ## 6.2.0-edge.7
 
 ### Minor Changes
