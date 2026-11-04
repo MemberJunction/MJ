@@ -102,6 +102,7 @@ import {
     ResolveViewPropertyValues,
     BuildViewPropertyFilter,
     ServerOperationScopeManager,
+    NormalizeRunViewParameters,
 } from '@memberjunction/core';
 
 import { BytesToBase64, GroupByUUID, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, ScanSQLForScreening, SQLExpressionValidator, UUIDsEqual, UUIDSet } from '@memberjunction/global';
@@ -2727,21 +2728,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         parameters: RunViewParameters | undefined,
         queryParameters?: NamedQueryParameter[],
     ): string {
-        const normalizedParams = new Map<string, RunViewParameterValue>();
-        if (parameters !== undefined && parameters !== null) {
-            if (typeof parameters !== 'object' || Array.isArray(parameters)) {
-                throw new Error('Invalid RunViewParams.Parameters: expected a plain object mapping parameter names to scalar or scalar-array values.');
-            }
-            for (const rawKey of Object.keys(parameters)) {
-                const val = parameters[rawKey];
-                if (val === undefined) continue;
-                const cleanKey = rawKey.startsWith('@') ? rawKey.slice(1) : rawKey;
-                if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(cleanKey)) {
-                    throw new Error(`Invalid RunView parameter name '${rawKey}': parameter names must match @[A-Za-z_][A-Za-z0-9_]*.`);
-                }
-                normalizedParams.set(cleanKey, val);
-            }
-        }
+        const normalizedParams = NormalizeRunViewParameters(parameters);
 
         if (!extraFilter) {
             return '';
@@ -2827,6 +2814,33 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         }
 
         return edits.IsEmpty ? extraFilter : edits.Apply().Text;
+    }
+
+    /**
+     * Rewrites `@paramName` word tokens to `@replacementName` using dialect-aware token lexing
+     * (`SqlTokens.Lex`) and non-overlapping span edits (`EditSet`), so `@paramName` inside string
+     * literals, quoted/bracketed identifiers, line/nested block comments, and `@@system` variables
+     * is never modified.
+     */
+    protected static RewriteSqlParameterReferences(
+        sqlText: string,
+        paramName: string,
+        replacementName: string,
+        dialect: SQLDialect,
+    ): string {
+        if (!sqlText) {
+            return sqlText;
+        }
+        const targetToken = `@${paramName}`;
+        const replacementToken = `@${replacementName}`;
+        const lexed = SqlTokens.Lex(sqlText, dialect);
+        let edits = EditSet.For(sqlText);
+        for (const token of lexed.Tokens) {
+            if (token.Kind === 'Word' && token.Text === targetToken) {
+                edits = edits.Replace(token.Span, replacementToken);
+            }
+        }
+        return edits.IsEmpty ? sqlText : edits.Apply().Text;
     }
 
     /**

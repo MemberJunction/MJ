@@ -24,7 +24,7 @@
  *   RVF8 — RunViewParams.Parameters scalar + array IN (@list) binding matches unparameterized PK sets
  *   RVF9 — RunViewParams.Parameters binds SQL-injection payloads as inert literal values over the wire
  *   RVF10 — RunViewParams.Parameters + Aggregates + MaxRows + count_only multi-statement batch parity
- *   RVF11 — RunViewParams.Parameters fail-closed validation rejects missing, unused, and invalid params
+ *   RVF11 — RunViewParams.Parameters fail-closed validation rejects missing, empty-array, and invalid params
  *   RVF12 — RunViewParams.Parameters cache fingerprint isolation across distinct parameter values
  *
  * Deliberately NOT implemented here:

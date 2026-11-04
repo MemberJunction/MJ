@@ -21,7 +21,7 @@ import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
 import { Metadata } from "./metadata";
-import { RunView, RunViewParams, IsMaterializedDataSource } from "../views/runView";
+import { RunView, RunViewParams, IsMaterializedDataSource, ExtractRunViewParameterNames } from "../views/runView";
 import { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
 import { Observable, Subscription } from "rxjs";
 import { GetDataHooks, PreRunViewHook, PostRunViewHook } from "./dataHooks";
@@ -3554,8 +3554,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return;
         }
         const view = params.ViewEntity as SavedViewSortSource | undefined;
+        const parameterNames = ExtractRunViewParameterNames(params.Parameters);
+        if (parameterNames.size > 0) {
+            this.AssertClausesRespectFieldSecurityForEntity(entity, [params.ExtraFilter], contextUser, parameterNames);
+        }
         this.AssertClausesRespectFieldSecurityForEntity(entity, [
-            params.ExtraFilter,
+            ...(parameterNames.size > 0 ? [] : [params.ExtraFilter]),
             params.OverrideExcludeFilter,
             ...(params.Aggregates ?? []).map(a => a?.expression),
             view ? view.Get('WhereClause') : undefined,
@@ -3575,8 +3579,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * The shared entry point for every clause slot a provider runs: RunView parameters, a saved
      * view's stored clauses, dataset item filters, user-search text spliced as SQL.
      */
-    protected AssertClausesRespectFieldSecurityForEntity(entity: EntityInfo, clauses: Iterable<unknown>, user: UserInfo): void {
-        this.assertFragmentsAllowed(entity, clauses, user, (sql, context) => FieldSecuritySQLGate.FindViolation(sql, context));
+    protected AssertClausesRespectFieldSecurityForEntity(
+        entity: EntityInfo,
+        clauses: Iterable<unknown>,
+        user: UserInfo,
+        parameterNames?: ReadonlySet<string>,
+    ): void {
+        this.assertFragmentsAllowed(entity, clauses, user, (sql, context) => FieldSecuritySQLGate.FindViolation(sql, context), parameterNames);
     }
 
     /**
@@ -3594,8 +3603,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         fragments: Iterable<unknown>,
         user: UserInfo,
         find: (sql: string, context: FieldSecuritySQLContext) => FieldSecurityViolation | null,
+        parameterNames?: ReadonlySet<string>,
     ): void {
-        const context: FieldSecuritySQLContext = { User: user, Dialect: this.PlatformKey, Catalog: this.Entities, TargetEntity: entity };
+        const context: FieldSecuritySQLContext = {
+            User: user,
+            Dialect: this.PlatformKey,
+            Catalog: this.Entities,
+            TargetEntity: entity,
+            ParameterNames: parameterNames,
+        };
         for (const clause of fragments) {
             if (typeof clause !== 'string' || clause.trim().length === 0) {
                 continue;

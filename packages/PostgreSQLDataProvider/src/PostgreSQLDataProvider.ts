@@ -1470,14 +1470,16 @@ SELECT * FROM delete_result`;
             // Negative lookahead: don't quote words followed by ( — those are function calls
             // (e.g., LENGTH(...), LEFT(...)), not column references. Without this, a field
             // named "Length" causes LENGTH() to be quoted as "Length"() which PG can't resolve.
-            // Negative lookbehind (?<![@$]): don't quote @paramName or $1 parameter tokens
-            // whose identifier matches an entity field name.
+            // Negative lookbehind (?<!\$): don't quote $1 parameter tokens whose identifier
+            // part might match a numeric/field pattern (BindExtraFilterParameters rewrites
+            // @paramName to $1 before TransformExternalSQLClause runs; on PostgreSQL, @ is the
+            // unary absolute-value operator, so @FieldName must still quote "FieldName").
             // `fieldName` is escaped before interpolation: PostgreSQL identifiers may
             // legally contain regex metacharacters (`$`, `(`, `.`), and injecting one
             // raw built a pattern that either matched nothing — a `$` became an
             // end-anchor, so `a$$b` was never quoted at all — or matched the wrong
             // text. Discovered alongside issue #3171.
-            const re = new RegExp(`(?<![@$])\\b${escapeRegExp(fieldName)}\\b(?!\\s*\\()`, 'gi');
+            const re = new RegExp(`(?<!\\$)\\b${escapeRegExp(fieldName)}\\b(?!\\s*\\()`, 'gi');
             // Function replacement, for the same reason on the other side: a quoted
             // identifier containing `$` would be expanded by a string replacement.
             const quoted = pgDialect.QuoteIdentifier(fieldName);

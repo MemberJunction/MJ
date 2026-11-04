@@ -307,6 +307,9 @@ describe('GenericDatabaseProvider parameterized RunView (BindExtraFilterParamete
         expect(() => provider.BindFilter('Score = @score', { score: Number.NaN }, [])).toThrow(
             /numeric parameter values must be finite numbers/,
         );
+        expect(() => provider.BindFilter('Status = @status', { status: 'Active', '@status': 'Pending' }, [])).toThrow(
+            /Duplicate RunView parameter name '@status'/,
+        );
     });
 
     it('threads bound parameters through InternalRunView to ExecuteSQL and returns ErrorMessage on missing parameter', async () => {

@@ -4,7 +4,7 @@ import { FieldSecuritySQLGate } from '../generic/fieldSecuritySQLGate';
 import { IMetadataProvider } from '../generic/interfaces';
 import { LocalCacheManager } from '../generic/localCacheManager';
 import { UserInfo } from '../generic/securityInfo';
-import { RunViewParametersKey, RunViewParams } from '../views/runView';
+import { NormalizeRunViewParameters, RunViewParametersKey, RunViewParams } from '../views/runView';
 
 describe('RunViewParametersKey & RunViewParams.Parameters', () => {
     it('returns empty string for undefined, null, or empty parameter maps', () => {
@@ -82,7 +82,24 @@ describe('RunViewParametersKey & RunViewParams.Parameters', () => {
         expect(prmSegments).toHaveLength(1);
     });
 
-    it('FieldSecuritySQLGate permits @paramName tokens even when paramName matches a denied field on SQL Server and PostgreSQL', () => {
+    it('NormalizeRunViewParameters validates keys, rejects duplicates after @-stripping, and rejects empty arrays', () => {
+        const normalized = NormalizeRunViewParameters({ '@status': 'Active', count: 5, ids: ['a', 'b'] });
+        expect(normalized.get('status')).toBe('Active');
+        expect(normalized.get('count')).toBe(5);
+        expect(normalized.get('ids')).toEqual(['a', 'b']);
+
+        expect(() => NormalizeRunViewParameters({ status: 'Active', '@status': 'Pending' })).toThrow(
+            /Duplicate RunView parameter name '@status'/,
+        );
+        expect(() => NormalizeRunViewParameters({ ids: [] })).toThrow(
+            /parameter '@ids' cannot be an empty array/,
+        );
+        expect(() => NormalizeRunViewParameters({ '123bad': 'x' })).toThrow(
+            /Invalid RunView parameter name '123bad'/,
+        );
+    });
+
+    it('FieldSecuritySQLGate permits @paramName tokens when declared in ParameterNames and refuses unbound @column on PostgreSQL', () => {
         const user = new UserInfo(null as unknown as IMetadataProvider, {
             ID: '11111111-1111-4111-8111-111111111111',
             Email: 'user@example.com',
@@ -102,16 +119,37 @@ describe('RunViewParametersKey & RunViewParams.Parameters', () => {
             GetDeniedReadFields: () => new Set(['salary']),
         } as unknown as EntityInfo;
 
-        for (const dialect of ['sqlserver', 'postgresql'] as const) {
-            const context = {
-                User: user,
-                Dialect: dialect,
-                Catalog: [entityStub],
-                TargetEntity: entityStub,
-            };
+        // On SQL Server, @Salary is always lexed as a T-SQL variable token.
+        const sqlServerContext = {
+            User: user,
+            Dialect: 'sqlserver' as const,
+            Catalog: [entityStub],
+            TargetEntity: entityStub,
+        };
+        expect(FieldSecuritySQLGate.FindViolation('Status = @Salary', sqlServerContext)).toBeNull();
+        expect(FieldSecuritySQLGate.FindViolation('Salary = @status', sqlServerContext)).not.toBeNull();
 
-            expect(FieldSecuritySQLGate.FindViolation('Status = @Salary', context)).toBeNull();
-            expect(FieldSecuritySQLGate.FindViolation('Salary = @status', context)).not.toBeNull();
-        }
+        // On PostgreSQL, @ is the unary absolute-value operator, so @Salary / @salary is skipped
+        // ONLY when the parameter name is present in ParameterNames (as supplied for ExtraFilter).
+        const pgContextWithSalaryParam = {
+            User: user,
+            Dialect: 'postgresql' as const,
+            Catalog: [entityStub],
+            TargetEntity: entityStub,
+            ParameterNames: new Set(['Salary']),
+        };
+        expect(FieldSecuritySQLGate.FindViolation('Status = @Salary', pgContextWithSalaryParam)).toBeNull();
+        expect(FieldSecuritySQLGate.FindViolation('Salary = @Salary', pgContextWithSalaryParam)).not.toBeNull();
+
+        // Without ParameterNames (e.g. OrderBy, OverrideExcludeFilter, saved view WhereClause, or unbound @salary),
+        // PostgreSQL refuses @salary as a read of the denied `salary` column.
+        const pgContextUnbound = {
+            User: user,
+            Dialect: 'postgresql' as const,
+            Catalog: [entityStub],
+            TargetEntity: entityStub,
+        };
+        expect(FieldSecuritySQLGate.FindViolation('Status = @Salary', pgContextUnbound)).not.toBeNull();
+        expect(FieldSecuritySQLGate.FindSortViolation('@salary DESC', pgContextUnbound)).not.toBeNull();
     });
 });

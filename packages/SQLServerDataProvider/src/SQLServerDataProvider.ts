@@ -182,12 +182,16 @@ function buildRequest(
   }
   if (IsNamedQueryParameterList(parameters)) {
     // Named inputs whose type the driver infers; the statement already references them by name.
-    const boundParameterNames = new Set<string>();
+    const boundByName = new Map<string, unknown>();
     for (const p of parameters) {
-      if (!boundParameterNames.has(p.Name)) {
-        boundParameterNames.add(p.Name);
-        request.input(p.Name, p.Value);
+      if (boundByName.has(p.Name)) {
+        if (!Object.is(boundByName.get(p.Name), p.Value)) {
+          throw new Error(`Duplicate query parameter '@${p.Name}' bound with conflicting values.`);
+        }
+        continue;
       }
+      boundByName.set(p.Name, p.Value);
+      request.input(p.Name, p.Value);
     }
     return { request, processedQuery: query };
   }
@@ -1122,15 +1126,13 @@ export class SQLServerDataProvider
       return results;
     }
 
-    if (items.some((entry) => entry.queryParameters && entry.queryParameters.length > 0)) {
-      return await super.getBatchedServerCacheStatus(items, contextUser);
-    }
-
     // Build array of SQL statements for batch execution (recording per-item resolution errors
     // in `results` without aborting valid sibling items in the batch)
     const sqlStatements: string[] = [];
+    const batchParameters: Array<NamedQueryParameter[] | undefined> = [];
+    let hasAnyParameters = false;
     const validItems: Array<{ index: number }> = [];
-    for (const { index, entityInfo, whereSQL, item } of items) {
+    for (const { index, entityInfo, whereSQL, item, queryParameters } of items) {
       // The freshness probe MUST target the same physical view the read targets. For a
       // DataSource:'Materialized' read that's the materialized_vw<CodeName> wrapper (a full SELECT *
       // snapshot of the base view, so it carries __mj_UpdatedAt) — NOT the live base view. Probing the
@@ -1143,6 +1145,12 @@ export class SQLServerDataProvider
       try {
         const effectiveTarget = await this.resolveEffectiveBaseViewTarget(entityInfo, item.params, contextUser);
         sqlStatements.push(this.BuildCacheStatusSQL(entityInfo, effectiveTarget.viewName, whereSQL, effectiveTarget.schemaName));
+        if (queryParameters && queryParameters.length > 0) {
+          batchParameters.push(queryParameters);
+          hasAnyParameters = true;
+        } else {
+          batchParameters.push(undefined);
+        }
         validItems.push({ index });
       } catch (err) {
         results.set(index, {
@@ -1158,7 +1166,12 @@ export class SQLServerDataProvider
 
     try {
       // Execute the batched SQL using existing ExecuteSQLBatch method
-      const resultSets = await this.ExecuteSQLBatch(sqlStatements, undefined, undefined, contextUser);
+      const resultSets = await this.ExecuteSQLBatch(
+        sqlStatements,
+        hasAnyParameters ? batchParameters : undefined,
+        undefined,
+        contextUser,
+      );
 
       // Process each result set and map to the corresponding item index
       for (let i = 0; i < validItems.length; i++) {
@@ -2886,16 +2899,6 @@ export class SQLServerDataProvider
   }
 
   /**
-   * Static method to execute a batch of SQL queries using a provided connection source.
-   * This allows the batch logic to be reused from external contexts like TransactionGroup.
-   * All queries are combined into a single SQL statement and executed together within
-   * the same connection/transaction context for optimal performance.
-   *
-   * @param connectionSource - Either a sql.ConnectionPool, sql.Transaction, or sql.Request to use for execution
-   * @param queries - Array of SQL queries to execute
-   * @param parameters - Optional array of parameter arrays, one for each query
-   * @returns Promise<any[][]> - Array of result arrays, one for each query
-  /**
    * Builds the combined SQL statement and bound parameter map/list for a multi-query batch.
    *
    * When multiple statements in the batch pass `NamedQueryParameter[]` or `TypedQueryParameter[]`
@@ -2943,10 +2946,11 @@ export class SQLServerDataProvider
               boundMeta.set(scopedName, { value: p.Value, sqlType: p.SQLType });
               typedBatchParameters.push(new TypedQueryParameter(scopedName, p.SQLType, p.Value));
               batchParameters[scopedName] = p.Value;
-              processedQuery = SQLServerDataProvider.replaceSqlParameterOutsideLiterals(
+              processedQuery = GenericDatabaseProvider.RewriteSqlParameterReferences(
                 processedQuery,
                 p.Name,
                 scopedName,
+                SQLServerDataProvider._dialectInstance,
               );
             }
           }
@@ -2970,10 +2974,11 @@ export class SQLServerDataProvider
               boundParameterNames.add(scopedName);
               boundMeta.set(scopedName, { value: p.Value });
               batchParameters[scopedName] = p.Value;
-              processedQuery = SQLServerDataProvider.replaceSqlParameterOutsideLiterals(
+              processedQuery = GenericDatabaseProvider.RewriteSqlParameterReferences(
                 processedQuery,
                 p.Name,
                 scopedName,
+                SQLServerDataProvider._dialectInstance,
               );
             }
           }
@@ -3045,131 +3050,16 @@ export class SQLServerDataProvider
   }
 
   /**
-   * Rewrites `@paramName` tokens to `@replacementName` outside of single-quoted string literals,
-   * double-quoted identifiers, bracketed identifiers, and SQL comments, ignoring `@@system` variables.
+   * Static method to execute a batch of SQL queries using a provided connection source.
+   * This allows the batch logic to be reused from external contexts like TransactionGroup.
+   * All queries are combined into a single SQL statement and executed together within
+   * the same connection/transaction context for optimal performance.
+   *
+   * @param connectionSource - Either a sql.ConnectionPool, sql.Transaction, or sql.Request to use for execution
+   * @param queries - Array of SQL queries to execute
+   * @param parameters - Optional array of parameter arrays, one for each query
+   * @returns Promise<any[][]> - Array of result arrays, one for each query
    */
-  private static replaceSqlParameterOutsideLiterals(
-    sqlText: string,
-    paramName: string,
-    replacementName: string,
-  ): string {
-    const len = sqlText.length;
-    let out = '';
-    let i = 0;
-    const isIdentStart = (ch: string): boolean => /[A-Za-z0-9_$]/.test(ch);
-    const isIdentPart = (ch: string): boolean => /[A-Za-z0-9_$]/.test(ch);
-
-    while (i < len) {
-      const ch = sqlText[i];
-      // Single-quoted string literal ('...' with '' escapes)
-      if (ch === "'") {
-        const start = i++;
-        while (i < len) {
-          if (sqlText[i] === "'") {
-            i++;
-            if (i < len && sqlText[i] === "'") {
-              i++;
-              continue;
-            }
-            break;
-          }
-          i++;
-        }
-        out += sqlText.slice(start, i);
-        continue;
-      }
-      // Double-quoted identifier ("..." with "" escapes)
-      if (ch === '"') {
-        const start = i++;
-        while (i < len) {
-          if (sqlText[i] === '"') {
-            i++;
-            if (i < len && sqlText[i] === '"') {
-              i++;
-              continue;
-            }
-            break;
-          }
-          i++;
-        }
-        out += sqlText.slice(start, i);
-        continue;
-      }
-      // Bracketed identifier ([...] with ]] escapes)
-      if (ch === '[') {
-        const start = i++;
-        while (i < len) {
-          if (sqlText[i] === ']') {
-            i++;
-            if (i < len && sqlText[i] === ']') {
-              i++;
-              continue;
-            }
-            break;
-          }
-          i++;
-        }
-        out += sqlText.slice(start, i);
-        continue;
-      }
-      // Line comment (-- ...)
-      if (ch === '-' && i + 1 < len && sqlText[i + 1] === '-') {
-        const start = i;
-        i += 2;
-        while (i < len && sqlText[i] !== '\n') {
-          i++;
-        }
-        out += sqlText.slice(start, i);
-        continue;
-      }
-      // Block comment (/* ... */)
-      if (ch === '/' && i + 1 < len && sqlText[i + 1] === '*') {
-        const start = i;
-        i += 2;
-        while (i + 1 < len && !(sqlText[i] === '*' && sqlText[i + 1] === '/')) {
-          i++;
-        }
-        if (i + 1 < len) {
-          i += 2;
-        } else {
-          i = len;
-        }
-        out += sqlText.slice(start, i);
-        continue;
-      }
-      // Parameter reference (@ident), ignoring @@system variables
-      if (ch === '@') {
-        if (i + 1 < len && sqlText[i + 1] === '@') {
-          const start = i;
-          i += 2;
-          while (i < len && isIdentPart(sqlText[i])) {
-            i++;
-          }
-          out += sqlText.slice(start, i);
-          continue;
-        }
-        if (i + 1 < len && isIdentStart(sqlText[i + 1]) && (i === 0 || !isIdentPart(sqlText[i - 1]))) {
-          const identStart = i + 1;
-          let j = identStart;
-          while (j < len && isIdentPart(sqlText[j])) {
-            j++;
-          }
-          const ident = sqlText.slice(identStart, j);
-          if (ident === paramName) {
-            out += `@${replacementName}`;
-          } else {
-            out += `@${ident}`;
-          }
-          i = j;
-          continue;
-        }
-      }
-      out += ch;
-      i++;
-    }
-    return out;
-  }
-
   public static async ExecuteSQLBatchStatic(
     connectionSource: sql.ConnectionPool | sql.Transaction | sql.Request,
     queries: string[],

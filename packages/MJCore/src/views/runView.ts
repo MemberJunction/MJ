@@ -149,6 +149,112 @@ function normalizeParameterValue(value: RunViewParameterValue): CanonicalParamet
 }
 
 /**
+ * Validates and normalizes a {@link RunViewParameters} map, stripping any leading `@` from
+ * parameter keys and rejecting non-plain objects, prototype-pollution keys (`__proto__`,
+ * `constructor`, `prototype`), invalid parameter identifiers, duplicate keys after `@`-stripping
+ * (e.g. `{ status: 'A', '@status': 'B' }`), empty arrays, non-finite numbers, invalid Dates,
+ * and unsupported value types.
+ *
+ * Returns a `Map<string, RunViewParameterValue>` keyed by normalized parameter name (without `@`).
+ */
+export function NormalizeRunViewParameters(
+    parameters: RunViewParameters | undefined | null,
+): Map<string, RunViewParameterValue> {
+    const normalized = new Map<string, RunViewParameterValue>();
+    if (parameters === undefined || parameters === null) {
+        return normalized;
+    }
+    if (typeof parameters !== 'object' || Array.isArray(parameters)) {
+        throw new Error(
+            'Invalid RunViewParams.Parameters: expected a plain object mapping parameter names to scalar or scalar-array values.',
+        );
+    }
+    const proto = Object.getPrototypeOf(parameters);
+    if (proto !== null && proto !== Object.prototype) {
+        throw new Error('Invalid RunViewParams.Parameters: expected a plain object.');
+    }
+
+    const validateScalar = (paramName: string, value: RunViewParameterScalar): RunViewParameterScalar => {
+        if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+            return value;
+        }
+        if (typeof value === 'number') {
+            if (!Number.isFinite(value)) {
+                throw new Error(`Invalid RunView parameter '@${paramName}': numeric parameter values must be finite numbers.`);
+            }
+            return value;
+        }
+        if (value instanceof Date) {
+            if (Number.isNaN(value.getTime())) {
+                throw new Error(`Invalid RunView parameter '@${paramName}': Date parameter value is invalid.`);
+            }
+            return value;
+        }
+        throw new Error(`Invalid RunView parameter '@${paramName}': unsupported value type '${typeof value}'.`);
+    };
+
+    const seenKeys = new Set<string>();
+    for (const rawKey of Object.getOwnPropertyNames(parameters)) {
+        if (rawKey === '__proto__' || rawKey === 'constructor' || rawKey === 'prototype') {
+            throw new Error(`Invalid RunView parameter name '${rawKey}'.`);
+        }
+        const cleanKey = rawKey.startsWith('@') ? rawKey.slice(1) : rawKey;
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(cleanKey)) {
+            throw new Error(
+                `Invalid RunView parameter name '${rawKey}': parameter names must match @[A-Za-z_][A-Za-z0-9_]*.`,
+            );
+        }
+        if (cleanKey === '__proto__' || cleanKey === 'constructor' || cleanKey === 'prototype') {
+            throw new Error(`Invalid RunView parameter name '${rawKey}'.`);
+        }
+        if (seenKeys.has(cleanKey)) {
+            throw new Error(`Duplicate RunView parameter name '@${cleanKey}'.`);
+        }
+        seenKeys.add(cleanKey);
+
+        const rawVal = parameters[rawKey];
+        if (rawVal === undefined) {
+            continue;
+        }
+        if (Array.isArray(rawVal)) {
+            if (rawVal.length === 0) {
+                throw new Error(`RunView parameter '@${cleanKey}' cannot be an empty array.`);
+            }
+            normalized.set(
+                cleanKey,
+                rawVal.map((item: RunViewParameterScalar) => validateScalar(cleanKey, item)),
+            );
+        } else {
+            normalized.set(cleanKey, validateScalar(cleanKey, rawVal as RunViewParameterScalar));
+        }
+    }
+
+    return normalized;
+}
+
+/**
+ * Extracts the set of valid normalized parameter names (without leading `@`) from a
+ * {@link RunViewParameters} map without throwing on malformed entries. Used by
+ * {@link FieldSecuritySQLGate} when screening `ExtraFilter` before parameter binding runs.
+ */
+export function ExtractRunViewParameterNames(
+    parameters: RunViewParameters | undefined | null,
+): ReadonlySet<string> {
+    const names = new Set<string>();
+    if (!parameters || typeof parameters !== 'object' || Array.isArray(parameters)) {
+        return names;
+    }
+    for (const rawKey of Object.keys(parameters)) {
+        if (parameters[rawKey] === undefined) continue;
+        const cleanKey = rawKey.startsWith('@') ? rawKey.slice(1) : rawKey;
+        if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(cleanKey)) {
+            names.add(cleanKey);
+        }
+    }
+    return names;
+}
+
+/**
  * Produces a deterministic, pipe-safe canonical string for {@link RunViewParams.Parameters}
  * suitable for cache fingerprinting and {@link RunViewParams.Equals}.
  * Returns `''` when `parameters` is undefined, null, or contains no defined keys.

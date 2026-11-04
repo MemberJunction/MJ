@@ -166,4 +166,38 @@ describe('SQLServerDataProvider.ExecuteSQL parameter binding', () => {
       ['q1_mj_p0', 'Closed'],
     ]);
   });
+
+  it('ExecuteSQLBatch scopes colliding parameters using dialect lexer (ignoring nested T-SQL block comments)', async () => {
+    await makeProvider().ExecuteSQLBatch(
+      [
+        "SELECT * FROM [__mj].[vwUsers] WHERE Status = @p0",
+        "SELECT /* outer /* @p0 inside nested block comment */ still comment @p0 */ * FROM [__mj].[vwUsers] WHERE Status = @p0",
+      ],
+      [
+        [new NamedQueryParameter('p0', 'Active')],
+        [new NamedQueryParameter('p0', 'Closed')],
+      ],
+    );
+
+    expect(mssqlState.Queries[0].sql).toBe(
+      "SELECT * FROM [__mj].[vwUsers] WHERE Status = @p0;\n" +
+      "SELECT /* outer /* @p0 inside nested block comment */ still comment @p0 */ * FROM [__mj].[vwUsers] WHERE Status = @q1_p0",
+    );
+  });
+
+  it('ExecuteSQL rejects duplicate parameter names within a single statement when values or types conflict', async () => {
+    await expect(
+      makeProvider().ExecuteSQL("SELECT * FROM [__mj].[vwUsers] WHERE Status = @p0", [
+        new NamedQueryParameter('p0', 'Active'),
+        new NamedQueryParameter('p0', 'Pending'),
+      ]),
+    ).rejects.toThrow(/Duplicate query parameter '@p0' bound with conflicting values/);
+
+    await expect(
+      makeProvider().ExecuteSQL("SELECT * FROM [__mj].[vwUsers] WHERE Status = @p0", [
+        new TypedQueryParameter('p0', 'varchar(20)', 'Active'),
+        new TypedQueryParameter('p0', 'varchar(20)', 'Pending'),
+      ]),
+    ).rejects.toThrow(/Duplicate typed query parameter '@p0' bound with conflicting type or value/);
+  });
 });
