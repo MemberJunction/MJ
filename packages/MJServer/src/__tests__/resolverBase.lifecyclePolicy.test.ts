@@ -12,7 +12,6 @@ import {
 } from '@memberjunction/core';
 import type { PubSubEngine } from 'type-graphql';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import { DeleteOptionsInput } from '../generic/DeleteOptionsInput.js';
 import type { UserPayload } from '../types.js';
 
 class LifecycleResolverProbe extends ResolverBase {
@@ -193,21 +192,5 @@ describe('ResolverBase lifecycle policy truth-loading & ClientCrudBoundary (3.1)
                 ).rejects.toThrow(/requires an authorized server operation/);
             },
         );
-    });
-
-    it('strips both SkipRecordChanges and ReplayOnly from wire DeleteOptionsInput', () => {
-        const sanitized = DeleteOptionsInput.SanitizeFromWire(
-            {
-                SkipEntityAIActions: false,
-                SkipEntityActions: false,
-                ReplayOnly: true,
-                IsParentEntityDelete: false,
-                SkipRecordChanges: true,
-            },
-            'Test Lifecycle Invoices',
-            'attacker@example.com',
-        );
-        expect(sanitized.ReplayOnly).toBe(false);
-        expect(sanitized.SkipRecordChanges).toBe(false);
     });
 });

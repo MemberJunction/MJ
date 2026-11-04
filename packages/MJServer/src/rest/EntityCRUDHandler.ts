@@ -266,21 +266,17 @@ export class EntityCRUDHandler {
             }
             
             // Sanitize delete options from wire (never allow ReplayOnly or SkipRecordChanges)
-            const sanitizedOptions = new EntityDeleteOptions();
-            if (options) {
-                sanitizedOptions.SkipEntityAIActions = !!options.SkipEntityAIActions;
-                sanitizedOptions.SkipEntityActions = !!options.SkipEntityActions;
-                sanitizedOptions.IsParentEntityDelete = !!options.IsParentEntityDelete;
-                if (options.ReplayOnly) {
-                    LogError(`Ignoring ReplayOnly on a ${entityName} REST delete requested by ${user?.Email ?? 'an unidentified caller'}`);
-                }
-                if (options.SkipRecordChanges) {
-                    LogError(`Ignoring SkipRecordChanges on a ${entityName} REST delete requested by ${user?.Email ?? 'an unidentified caller'}`);
-                }
+            if (options?.ReplayOnly) {
+                LogError(`Ignoring ReplayOnly on a ${entityName} REST delete requested by ${user?.Email ?? 'an unidentified caller'}`);
+                options.ReplayOnly = false;
+            }
+            if (options?.SkipRecordChanges) {
+                LogError(`Ignoring SkipRecordChanges on a ${entityName} REST delete requested by ${user?.Email ?? 'an unidentified caller'}`);
+                options.SkipRecordChanges = false;
             }
 
             // Delete the entity
-            const deleteSuccess = await entity.Delete(sanitizedOptions);
+            const deleteSuccess = await entity.Delete(options);
             
             if (!deleteSuccess) {
                 const latestResult = entity.LatestResult;

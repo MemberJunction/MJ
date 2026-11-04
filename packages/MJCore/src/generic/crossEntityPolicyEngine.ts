@@ -408,14 +408,15 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
         contextUser: UserInfo | undefined,
         transactionGroup?: object | null,
     ): Promise<string | null> {
-        if (items.length === 0) {
+        const validItems = items.filter((item) => Boolean(item.Entity?.EntityInfo?.Name));
+        if (validItems.length === 0) {
             return null;
         }
         const scope = this.resolveInternalScope(provider, contextUser, transactionGroup);
 
         // 1. Bulk-prime declarative ParentStateLock lookups (including in-batch parent creates/updates/deletes)
         //    with chunked `ID IN (...)` RunView queries per parent entity.
-        await this.primeDeclarativeParentLocksForBatch(items, scope);
+        await this.primeDeclarativeParentLocksForBatch(validItems, scope);
 
         // 2. Run programmatic policies that implement `EvaluateBatch`.
         const allProgrammatic = this.sortedProgrammaticPolicies();
@@ -424,7 +425,7 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
                 continue;
             }
             const targetSet = new Set(policy.TargetEntityNames.map((n) => n.trim().toLowerCase()));
-            const matchingItems = items.filter((item) =>
+            const matchingItems = validItems.filter((item) =>
                 targetSet.has(item.Entity.EntityInfo.Name.trim().toLowerCase()),
             );
             if (matchingItems.length === 0) {
@@ -446,7 +447,7 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
 
         // 3. Evaluate declarative locks and per-item programmatic policies against the now-primed scope
         //    so batch callers fail fast before SQL runs.
-        for (const item of items) {
+        for (const item of validItems) {
             const declPolicies = this.ResolveDeclarativePolicies(item.Entity.EntityInfo);
             for (const decl of declPolicies) {
                 const err = await this.evaluateDeclarativeLock(item.Entity, item.Operation, decl, scope);
@@ -716,6 +717,9 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
         >();
 
         for (const item of items) {
+            if (!item.Entity?.EntityInfo?.Name) {
+                continue;
+            }
             const policies = this.ResolveDeclarativePolicies(item.Entity.EntityInfo);
             for (const policy of policies) {
                 const ops = policy.operations ?? ['Create', 'Update', 'Delete'];

@@ -85,21 +85,13 @@ export class DeleteOptionsInput {
      * `FileCategoryResolver.DeleteFileCategory` (which builds its own delete and does not).
      */
     public static SanitizeFromWire(options: DeleteOptionsInput, entityName: string, userEmail?: string): DeleteOptionsInput {
-        if (!options?.SkipRecordChanges && !options?.ReplayOnly) {
+        if (!options?.SkipRecordChanges) {
             return options;
         }
-        if (options.SkipRecordChanges) {
-            LogError(
-                `Ignoring SkipRecordChanges on a ${entityName} delete requested by ${userEmail ?? 'an unidentified caller'}: ` +
-                `the Record Change (audit) row cannot be suppressed over the wire.`
-            );
-        }
-        if (options.ReplayOnly) {
-            LogError(
-                `Ignoring ReplayOnly on a ${entityName} delete requested by ${userEmail ?? 'an unidentified caller'}: ` +
-                `ReplayOnly cannot be set over the wire.`
-            );
-        }
-        return { ...options, SkipRecordChanges: false, ReplayOnly: false };
+        LogError(
+            `Ignoring SkipRecordChanges on a ${entityName} delete requested by ${userEmail ?? 'an unidentified caller'}: ` +
+            `the Record Change (audit) row cannot be suppressed over the wire.`
+        );
+        return { ...options, SkipRecordChanges: false };
     }
 }

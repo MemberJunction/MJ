@@ -528,7 +528,7 @@ export abstract class TransactionGroupBase {
         const grouped = new Map<IMetadataProvider, { items: CrossEntityBatchItem[]; user: BaseEntity['ContextCurrentUser'] }>();
         for (const pending of this._pendingTransactions) {
             const entity = pending.BaseEntity;
-            if (!entity?.ProviderToUse) {
+            if (!entity?.ProviderToUse || !entity.EntityInfo?.Name) {
                 continue;
             }
             const mdProvider = entity.ProviderToUse as object as IMetadataProvider;
