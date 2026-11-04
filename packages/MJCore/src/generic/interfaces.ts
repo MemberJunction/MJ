@@ -278,6 +278,21 @@ export interface IEntityDataProvider {
     FindISAChildEntities?(entityInfo: EntityInfo, recordPKValue: string, contextUser?: UserInfo): Promise<{ ChildEntityName: string }[]>;
 
     /**
+     * Batch-discovers IS-A child entity types for multiple parent primary keys in a single
+     * UNION ALL SQL query (chunked automatically for large batches).
+     *
+     * @param entityInfo The parent entity's EntityInfo (whose `ChildEntities` are probed)
+     * @param recordPKValues Primary key values to probe across child views
+     * @param contextUser Optional context user for server-side operations
+     * @returns Map keyed by canonical lowercased primary-key string to ordered matching child entity names
+     */
+    FindISAChildEntitiesBatch?(
+        entityInfo: EntityInfo,
+        recordPKValues: string[],
+        contextUser?: UserInfo
+    ): Promise<Map<string, string[]>>;
+
+    /**
      * Whether this provider can execute a multi-record unit of work atomically, in-process.
      *
      * `true` for server-side database providers (`DatabaseProviderBase` and subclasses); `false`

@@ -452,6 +452,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             if (!entityName) {
                 return;
             }
+            const isaHierarchyEntities = ProviderBase.collectISAHierarchyEntityNamesLower(entityEvent.baseEntity?.EntityInfo, entityName);
             for (const ref of ProviderBase._invalidationTargets) {
                 const instance = ref.deref();
                 if (!instance) {
@@ -462,8 +463,47 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 }
                 instance.invalidateInflightViewsForEntity(entityName);
                 instance.handleMetadataMemberEntityEvent(entityName, entityEvent);
+                for (const isaRelLower of isaHierarchyEntities) {
+                    instance.invalidateInflightViewsForEntity(isaRelLower);
+                }
             }
         });
+    }
+
+    /**
+     * Collects all ancestor and descendant entity names (lowercased) in the same IS-A hierarchy
+     * as `entityInfo`, excluding `excludeLower`. Child views join parent tables (and parent
+     * hydration reads child rows), so a write to any node in an IS-A tree can affect in-flight
+     * or lingered views across its IS-A relatives.
+     */
+    private static collectISAHierarchyEntityNamesLower(entityInfo: EntityInfo | undefined, excludeLower: string): string[] {
+        if (!entityInfo || (!entityInfo.IsChildType && !entityInfo.IsParentType)) {
+            return [];
+        }
+        let root: EntityInfo = entityInfo;
+        const seenAncestors = new Set<EntityInfo>();
+        while (root.ParentEntityInfo && !seenAncestors.has(root.ParentEntityInfo)) {
+            seenAncestors.add(root);
+            root = root.ParentEntityInfo;
+        }
+        const results: string[] = [];
+        const visited = new Set<string>();
+        const queue: EntityInfo[] = [root];
+        while (queue.length > 0) {
+            const current = queue.shift()!;
+            const lower = current?.Name?.trim().toLowerCase();
+            if (!lower || visited.has(lower)) {
+                continue;
+            }
+            visited.add(lower);
+            if (lower !== excludeLower) {
+                results.push(lower);
+            }
+            if (Array.isArray(current.ChildEntities) && current.ChildEntities.length > 0) {
+                queue.push(...current.ChildEntities);
+            }
+        }
+        return results;
     }
 
     /**
@@ -1095,6 +1135,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // allCached ⇒ every param produced a hit and was pushed in order (PreRunViews only
             // pushes a null placeholder on the path that clears allCached), so index i of
             // cachedResults corresponds to params[i].
+            await this.TransformBatchRunViewResults(
+                params,
+                preResult.cachedResults as RunViewResult[],
+                undefined,
+                preResult.callerFieldsMap,
+                contextUser
+            );
             for (let i = 0; i < preResult.cachedResults.length; i++) {
                 await this.ApplyPostRunViewHooksToCacheHit(params[i], preResult.cachedResults[i], contextUser);
             }
@@ -3081,8 +3128,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         // different Aggregates[] order — remap to THIS caller's requested order.
                         AggregateResults: LocalCacheManager.Instance.ReorderAggregateResultsToRequest(cached.aggregateResults, param.Aggregates)
                     };
-                    // if needed this will transform each result into an entity object
-                    await this.TransformSimpleObjectToEntityObject(param, cachedViewResult, contextUser);
+                    // Entity transformation (`ResultType: 'entity_object'`) is deferred to
+                    // TransformBatchRunViewResults in ExecuteRunViewsPipeline / PostRunViews so
+                    // cache hits and DB misses participate together in two-phase sibling IS-A hydration.
 
                     if (!param.CacheLocal && this.TrustLocalCacheCompletely) {
                         LogStatusEx({ message: `    ✅ [Server Cache HIT] RunViews "${param.EntityName || param.ViewName || 'unknown'}" — ${cached.results.length} rows served from server cache (no DB query)`, verboseOnly: true });
@@ -3262,6 +3310,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         );
 
         const processedResults = await Promise.all(processingPromises);
+        const batchResults = processedResults.map(r => r.result);
+        const alreadyTransformedIndices = new Set<number>();
+        for (let i = 0; i < processedResults.length; i++) {
+            if (processedResults[i].alreadyTransformed) {
+                alreadyTransformedIndices.add(i);
+            }
+        }
+        await this.TransformBatchRunViewResults(
+            params,
+            batchResults as RunViewResult[],
+            alreadyTransformedIndices,
+            undefined,
+            contextUser
+        );
 
         // Aggregate telemetry stats
         let cacheHits = 0;
@@ -3280,7 +3342,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             batchSize: params.length
         });
 
-        return processedResults.map(r => r.result);
+        return batchResults;
     }
 
     /**
@@ -3298,7 +3360,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         checkResult: RunViewWithCacheCheckResult<T> | undefined,
         preResolvedCache: Map<string, CachedRunViewResult | null>,
         contextUser?: UserInfo
-    ): Promise<{ result: RunViewResult<T>; cacheHit: boolean; cacheMiss: boolean }> {
+    ): Promise<{ result: RunViewResult<T>; cacheHit: boolean; cacheMiss: boolean; alreadyTransformed?: boolean }> {
         if (!checkResult) {
             return {
                 result: {
@@ -3335,8 +3397,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     // different Aggregates[] order — remap to THIS caller's requested order.
                     AggregateResults: LocalCacheManager.Instance.ReorderAggregateResultsToRequest(cached.aggregateResults, param.Aggregates)
                 };
-                // Transform to entity objects if needed
-                await this.TransformSimpleObjectToEntityObject(param, cachedResult, contextUser);
                 return { result: cachedResult, cacheHit: true, cacheMiss: false };
             } else {
                 // Cache miss - shouldn't happen but handle gracefully
@@ -3397,8 +3457,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         // Include aggregate results - either fresh from server or from merged cache
                         AggregateResults: checkResult.aggregateResults || merged.aggregateResults
                     };
-                    // Transform to entity objects if needed
-                    await this.TransformSimpleObjectToEntityObject(param, mergedResult, contextUser);
                     return { result: mergedResult, cacheHit: true, cacheMiss: false };
                 }
             }
@@ -3421,7 +3479,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             LogStatusEx({ message: `Differential merge declined for '${param.EntityName}' — refetching in full.`, verboseOnly: true });
             const fallbackParam: RunViewParams = { ...param, CacheLocal: false, BypassCache: true };
             const freshFetch = await (this as unknown as IRunViewProvider).RunView<T>(fallbackParam, contextUser);
-            return { result: freshFetch, cacheHit: false, cacheMiss: true };
+            return { result: freshFetch, cacheHit: false, cacheMiss: true, alreadyTransformed: true };
         } else if (checkResult.status === 'stale') {
             // Cache is stale - use fresh data and update cache (entity doesn't support differential)
             const staleResults = checkResult.results || [];
@@ -3454,8 +3512,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 ).catch(e => LogError(`Failed to update cache: ${e}`));
             }
 
-            // Transform to entity objects if needed
-            await this.TransformSimpleObjectToEntityObject(param, freshResult, contextUser);
             return { result: freshResult, cacheHit: false, cacheMiss: true };
         } else {
             // Error status
@@ -3752,17 +3808,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             results[i].Results = this.ApplyRecordChangeFieldSecurityProjection(results[i].Results, params[i], contextUser);
         }
 
-        // Transform results to entity objects AFTER caching plain objects.
-        // Skip results that came from cache hits — they're already entity objects.
-        const transformPromises: Promise<void>[] = [];
-        for (let i = 0; i < results.length; i++) {
-            const cacheInfo = preResult.cacheStatusMap?.get(i);
-            if (cacheInfo?.status === 'hit') {
-                continue;
-            }
-            transformPromises.push(this.TransformSimpleObjectToEntityObject(params[i], results[i], contextUser));
-        }
-        await Promise.all(transformPromises);
+        // Transform results (both cache hits and DB misses) to entity objects AFTER caching plain objects.
+        await this.TransformBatchRunViewResults(
+            params,
+            results,
+            undefined,
+            preResult.callerFieldsMap,
+            contextUser
+        );
 
         // Run registered PostRunView hooks on each result in the batch
         for (let i = 0; i < results.length; i++) {
@@ -4227,12 +4280,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     protected async PostProcessRunViews(results: RunViewResult[], params: RunViewParams[], contextUser?: UserInfo): Promise<void> {
         if (params && params.length > 0) {
-            const promises = [];
-            for (let i = 0; i < results.length; i++) {
-                promises.push(this.TransformSimpleObjectToEntityObject(params[i], results[i], contextUser));
-            }
-            // await the promises for all transformations
-            await Promise.all(promises);
+            await this.TransformBatchRunViewResults(params, results, undefined, undefined, contextUser);
 
             // End telemetry tracking for batch operation
             const eventId = (params[0] as Record<string, unknown>)._telemetryBatchEventId as string | undefined;
@@ -4243,20 +4291,153 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
     }
 
+    /**
+     * Two-phase batch entity transformation for `RunViews`:
+     * 1. Transforms all non-IS-A-parent views in parallel first so lookup tables (`SubtypeSelector`)
+     *    and IS-A child tables in the same batch are hydrated before parent views run.
+     * 2. Registers all unfiltered full-entity views from this batch on `BaseEntity` for the duration
+     *    of Phase 2, then transforms IS-A parent views so they can resolve child records and
+     *    `SubtypeSelector` targets directly from memory with 0 extra queries.
+     */
+    protected async TransformBatchRunViewResults(
+        params: RunViewParams[],
+        results: RunViewResult[],
+        skipTransformIndices?: ReadonlySet<number>,
+        callerFieldsMap?: Map<number, string[]>,
+        contextUser?: UserInfo
+    ): Promise<void> {
+        if (!params || params.length === 0) {
+            return;
+        }
+
+        const nonParentIndices: number[] = [];
+        const isaParentIndices: number[] = [];
+
+        for (let i = 0; i < results.length; i++) {
+            if (skipTransformIndices?.has(i)) {
+                continue;
+            }
+            const firstRow = results[i]?.Results?.[0];
+            if (firstRow instanceof BaseEntity) {
+                continue;
+            }
+            const param = params[i];
+            if (!param) {
+                continue;
+            }
+            const entity = param.EntityName ? this.EntityByName(param.EntityName) : undefined;
+            if (param.ResultType === 'entity_object' && entity?.IsParentType && entity.ChildEntities.length > 0) {
+                isaParentIndices.push(i);
+            } else {
+                nonParentIndices.push(i);
+            }
+        }
+
+        if (nonParentIndices.length > 0) {
+            await Promise.all(
+                nonParentIndices.map(i => this.TransformSimpleObjectToEntityObject(params[i], results[i], contextUser))
+            );
+        }
+
+        if (isaParentIndices.length === 0) {
+            return;
+        }
+
+        const batchUnfilteredCache = new Map<string, ReadonlyArray<BaseEntity | Record<string, unknown>>>();
+        for (let i = 0; i < results.length; i++) {
+            const param = params[i];
+            if (param && this.isUnfilteredFullEntityBatchView(param, results[i], callerFieldsMap, i)) {
+                const key = param.EntityName!.trim().toLowerCase();
+                if (!batchUnfilteredCache.has(key)) {
+                    batchUnfilteredCache.set(
+                        key,
+                        results[i].Results as ReadonlyArray<BaseEntity | Record<string, unknown>>
+                    );
+                }
+            }
+        }
+
+        const batchCache = batchUnfilteredCache.size > 0 ? batchUnfilteredCache : undefined;
+        await Promise.all(
+            isaParentIndices.map(i => this.TransformSimpleObjectToEntityObject(params[i], results[i], contextUser, batchCache))
+        );
+    }
+
+    private isUnfilteredFullEntityBatchView(
+        param: RunViewParams,
+        result: RunViewResult | undefined,
+        callerFieldsMap?: Map<number, string[]>,
+        viewIndex?: number
+    ): boolean {
+        if (!param.EntityName || !result?.Success || !Array.isArray(result.Results)) {
+            return false;
+        }
+        if (param.ResultType === 'count_only') {
+            return false;
+        }
+        const filter = typeof param.ExtraFilter === 'string' ? param.ExtraFilter.trim() : '';
+        const search = typeof param.UserSearchString === 'string' ? param.UserSearchString.trim() : '';
+        if (filter.length > 0 || search.length > 0) {
+            return false;
+        }
+        if (param.ViewID || param.ViewName || param.ViewEntity) {
+            return false;
+        }
+        const alternateBaseView = (param as { AlternateBaseView?: string }).AlternateBaseView;
+        if (alternateBaseView && alternateBaseView.trim().length > 0) {
+            return false;
+        }
+        if (param.MaxRows || param.StartRow || param.AfterKey) {
+            return false;
+        }
+        if (
+            typeof result.TotalRowCount === 'number' &&
+            result.TotalRowCount > result.Results.length
+        ) {
+            return false;
+        }
+        if (param.IgnoreMaxRows !== true) {
+            const entity = this.EntityByName(param.EntityName);
+            const maxRowsCap = entity?.UserViewMaxRows ?? 0;
+            if (maxRowsCap > 0 && result.Results.length >= maxRowsCap) {
+                return false;
+            }
+        }
+        if (viewIndex !== undefined && callerFieldsMap?.has(viewIndex)) {
+            return false;
+        }
+        if (param.Fields && param.Fields.length > 0 && !this.isFullCoverageFieldList(param)) {
+            return false;
+        }
+        return true;
+    }
+
 
     /**
      * Transforms the result set from simple objects to entity objects if needed.
      * @param param - The RunViewParams used for the request
      * @param result - The RunViewResult returned from the request
      * @param contextUser - The user context for permissions
+     * @param batchUnfilteredCache - Optional map of unfiltered full-entity sibling views from the same RunViews call
      */
-    protected async TransformSimpleObjectToEntityObject(param: RunViewParams, result: RunViewResult, contextUser?: UserInfo) {
+    protected async TransformSimpleObjectToEntityObject(
+        param: RunViewParams,
+        result: RunViewResult,
+        contextUser?: UserInfo,
+        batchUnfilteredCache?: ReadonlyMap<string, ReadonlyArray<BaseEntity | Record<string, unknown>>>
+    ) {
         // Mutually exclusive with the entity branch below: entity objects get real types from
         // BaseEntity's Get/Set conversion, so normalization applies only to non-entity results.
         this.NormalizeSimpleRowTypes(param, result);
 
         if (param.ResultType === 'entity_object' && result && result.Success && result.Results?.length > 0) {
-            result.Results = await TransformSimpleObjectToEntityObject(this, param.EntityName, result.Results, contextUser);
+            result.Results = await TransformSimpleObjectToEntityObject(
+                this,
+                param.EntityName,
+                result.Results,
+                contextUser,
+                batchUnfilteredCache
+            );
 
             // Opt-in batched child loading: ONE query per named collection across the whole result
             // set, not one per row. Companion eager loading is deliberately kept out of
