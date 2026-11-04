@@ -202,6 +202,11 @@ import { MJDataContextFormComponent } from "./Entities/MJDataContext/mjdataconte
 import { MJDataContextItemFormComponent } from "./Entities/MJDataContextItem/mjdatacontextitem.form.component";
 import { MJDatasetFormComponent } from "./Entities/MJDataset/mjdataset.form.component";
 import { MJDatasetItemFormComponent } from "./Entities/MJDatasetItem/mjdatasetitem.form.component";
+import { MJDiagnosticBundleFormComponent } from "./Entities/MJDiagnosticBundle/mjdiagnosticbundle.form.component";
+import { MJDiagnosticSenderRegistrationFormComponent } from "./Entities/MJDiagnosticSenderRegistration/mjdiagnosticsenderregistration.form.component";
+import { MJDiagnosticSessionChunkFormComponent } from "./Entities/MJDiagnosticSessionChunk/mjdiagnosticsessionchunk.form.component";
+import { MJDiagnosticSessionFormComponent } from "./Entities/MJDiagnosticSession/mjdiagnosticsession.form.component";
+import { MJDocumentSequenceCounterFormComponent } from "./Entities/MJDocumentSequenceCounter/mjdocumentsequencecounter.form.component";
 import { MJDuplicateRunDetailFormComponent } from "./Entities/MJDuplicateRunDetail/mjduplicaterundetail.form.component";
 import { MJDuplicateRunDetailMatchFormComponent } from "./Entities/MJDuplicateRunDetailMatch/mjduplicaterundetailmatch.form.component";
 import { MJDuplicateRunFormComponent } from "./Entities/MJDuplicateRun/mjduplicaterun.form.component";
@@ -588,6 +593,7 @@ declarations: [
     MJAISkillActionFormComponent,
     MJArtifactPermissionFormComponent,
     MJCredentialTypeFormComponent,
+    MJDiagnosticSessionFormComponent,
     MJEntityRelationshipFormComponent,
     MJExperimentSessionFormComponent,
     MJMCPServerConnectionToolFormComponent
@@ -795,6 +801,7 @@ declarations: [
     MJCompanyIntegrationRunFormComponent,
     MJDashboardUserStateFormComponent,
     MJDataContextItemFormComponent,
+    MJDocumentSequenceCounterFormComponent,
     MJExperimentSessionIterationFormComponent,
     MJListCategoryFormComponent,
     MJQueryFormComponent,
@@ -889,6 +896,7 @@ declarations: [
     MJConversationDetailAttachmentFormComponent,
     MJConversationDetailRatingFormComponent,
     MJDashboardPermissionFormComponent,
+    MJDiagnosticSenderRegistrationFormComponent,
     MJFeatureValueCacheFormComponent,
     MJLibraryFormComponent,
     MJMCPServerConnectionFormComponent,
@@ -1136,6 +1144,7 @@ declarations: [
     MJAPIKeyApplicationFormComponent,
     MJContentItemDuplicateFormComponent,
     MJDashboardCategoryPermissionFormComponent,
+    MJDiagnosticBundleFormComponent,
     MJDuplicateRunDetailFormComponent,
     MJEmployeeCompanyIntegrationFormComponent,
     MJEntityDocumentRunFormComponent,
@@ -1369,6 +1378,7 @@ declarations: [
     MJAIBridgeProviderFormComponent,
     MJAIClientToolDefinitionFormComponent,
     MJContentProcessRunPromptRunFormComponent,
+    MJDiagnosticSessionChunkFormComponent,
     MJExplorerNavigationItemFormComponent,
     MJExternalDataSourceFormComponent,
     MJFileCategoryFormComponent,

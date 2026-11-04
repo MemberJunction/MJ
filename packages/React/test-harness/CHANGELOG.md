@@ -1,5 +1,392 @@
 # @memberjunction/react-test-harness
 
+## 6.2.0
+
+### Minor Changes
+
+- 4c0eaec: Local embeddings move to `@huggingface/transformers` 4.3.1 and can switch models safely; EmbeddingGemma 2 is available as an opt-in model.
+  - `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` names the local model every process embeds with (default: the highest-PowerRank active local model). Agent note, example, tag and query indexes leave out vectors from other models, a save re-embeds such a row, and the new "Re-embed Local Vectors" action moves them all.
+  - Embedding calls take an optional `inputType` (`'query' | 'document'`); Cohere and Bedrock map it natively, and catalog prefixes come from `ModelConfiguration.Embedding`. `LocalEmbedding` batches, honors `dimensions`, truncates to the catalog's `MaxInputTokens`, and sizes ONNX Runtime's thread pool to the CPUs the process may use (in a 2-CPU container, queries were about 10× faster).
+  - A failed embed now returns `null` from `AIEngine.EmbedText` instead of an empty vector.
+
+  **Upgrade notes:**
+  - After upgrading, run `mj ai actions run -n "Re-embed Local Vectors" --param "Force=true"`, then restart the MJ server processes. The new runtime changes all-mpnet-base-v2's vectors (about 0.95 cosine on Linux x64) under the same model ID, and long texts are now truncated at `MaxInputTokens` (256 tokens for all-MiniLM-L6-v2, matching sentence-transformers).
+  - A `MJ_DEFAULT_LOCAL_EMBEDDING_MODEL` that names no active local model turns local embedding off, with an error. An inactive model is no longer picked as the default.
+  - TagEngine embeds with the default local model whenever one exists, even if the "Tag Semantic Matching" prompt names a hosted model.
+  - `LocalEmbedding` honors a vector index's `Dimensions`: a value above the model's size now fails instead of being ignored.
+  - The GraphQL `EmbedText` mutation's `modelSize: 'medium'` now means the default local model.
+  - `LocalEmbedding` no longer reads the `useQuantized` / `localURL` settings or `TRANSFORMERS_LOCAL_URL`; it always loads the 8-bit weights.
+
+### Patch Changes
+
+- 0da5fd4: fix(react-test-harness): bound what the browser boundary carries
+
+  Three places where the harness handed unbounded, client-shaped data across a boundary that charges for every node, guarded — where guarded at all — only after the allocation the guard existed to prevent.
+  - **Entity metadata is projected to what the page reads, not deep-cloned whole.** `exposeMJUtilities` cloned the full `EntityInfo` array with `JSON.parse(JSON.stringify(...))` and passed it to `page.evaluate`. Playwright does not JSON-encode an evaluate argument; it walks the graph building a tagged protocol representation, so cost scales with **node count** rather than byte size — and field objects dominate that count, one entity with 1,043 fields at ~77 own properties contributing ~80,000 property slots by itself. Against a client with 363 entities and 32,209 fields the injection blocked the event loop for ~18s and allocated ~2.6GB (a 2s sampling timer fired at +5.6s and +16.6s while heap passed 3.3GB), after which the caller's memory watchdog closed the harness, the in-flight evaluate failed as `Target page, context or browser has been closed`, and the run reported `renderCount: 0` — which callers read as a browser crash. `projectEntitiesForBrowser` keeps the field properties the in-page React runtime actually reads, derived from its bundle, plus a few cheap scalars component code plausibly touches; the ~54 omitted are server-side concerns (search predicates, generated form layout, schema auto-update). Entity-level properties are untouched and the input is never mutated. With the caller also narrowing to the entities a component declares, the injection went from 1,059ms to 321ms and total component-test time roughly halved.
+  - **The clone it replaces was redundant, and silently lossy on cycles.** Stripping functions is already what Playwright does by taking only own enumerable properties. `JSON.stringify`, meanwhile, throws on a circular graph, and the surrounding `catch` then yields an **empty** entity list with no indication anything was lost.
+  - **Console collection is bounded.** `consoleLogs` had no ceiling on message count or per-message size, so a component in a render or error loop could grow it without limit inside a process the harness shares with its host. Now capped at 5,000 messages and 32KB per message, with the overflow recorded once so a truncated run is never mistaken for a quiet one — a passing test measured ~1,800 messages and 0.7MB, so normal runs sit far below both. Warning de-duplication moves from `warnings.includes` (a linear scan per message, quadratic overall) to a `Set`; `warnings` remains an array for callers that index it.
+  - **HTML capture is sliced in the page.** The 25MB ceiling was enforced only after `page.content()` had materialised the entire document as a Node string, and beyond Node's ~536MB string limit the transfer throws before any check can run. The slice now happens in the page, so this side stays bounded by the cap regardless of document size; the true length still crosses, so an oversized render remains just as visible in the reported error.
+
+- 51e4d95: fix(react-test-harness): cap data-bridge rows and report what each call returned
+
+  A generated component could ask the harness data bridges for an unbounded result set and get it — `RunQueryParams.MaxRows` is documented as "if not provided, all rows will be returned", and nothing supplied a default. In production a component's query returned 205,802 rows and exhausted the host process heap. A bridge result is JSON-serialized in Node, shipped over CDP and rehydrated in Chromium, so one oversized answer becomes several resident copies.
+
+  `__mjRunView`, `__mjRunViews` and `__mjRunQuery` now clamp `MaxRows` to the new `ComponentExecutionOptions.dataCaps` (default 1000 each), clamping downward only so a component asking for 50 rows still gets 50. The provider applies `MaxRows` at the SQL level, so the surplus is never produced rather than fetched and discarded.
+
+  `ComponentExecutionResult.dataAccess` records every call — `kind`, `target`, `identity`, `rowsReturned`, `totalRowCount`, `capped`, applied and requested ceilings, duration, and any error. `RunViewResult` and `RunQueryResult` already carry `TotalRowCount`, so a capped call reports "1000 of 205802" without a second query; providers that omit it yield `capped: false` rather than a guess. A capped call also raises a `data-row-cap` warning, so a deliberately sparser render is not mistaken for a defect. These counts were already computed and logged under `debug` but never reached the caller — which left consumers unable to distinguish "no data displayed" from "the query returned nothing", where only the first is a code defect.
+
+  Call targets are now resolved the way `RunView`/`RunQuery` resolve them. A query name is not unique (name and category path identify a query together), so query targets are category-qualified and `QueryID` takes precedence, matching `RunQuery` ignoring `QueryName` when both are supplied. `RunView` follows its own documented order — `ViewEntity` → `ViewID` → `ViewName` → `EntityName` — where a saved-view call previously reported `unknown`. `DataAccessIdentity` exposes the parts separately using the same field names as `ComponentSpec.dataRequirements`, so callers can correlate declared against actual data access without parsing a display string.
+
+  Also lowers the HTML truncation backstop from 100MB to 25MB (it is a backstop behind the row caps now, and the old threshold was calibrated against Node's string limit rather than the heap), and deletes the unused 444KB `component-linter.ts.working` left behind when the linter moved to `@memberjunction/react-linter`.
+
+  Additive: `dataCaps` and `dataAccess` are both optional. The behavioural change for existing consumers is that a previously unbounded request is now bounded at 1000.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- 38099f7: React test harness reports what it knows about a failure instead of collapsing it. Field-access violations carry a structured `Details` object with up to three existing fields that resemble the one the component read (`SimilarFields`, from the new `FindSimilarNames` helper) and the complete list of valid fields (`AvailableFields`). A component that fails to register is reported once per component, naming the component and the phase that failed, instead of as one JSON blob. Harness setup failures and unusable component roots get their own rules (`harness-setup-error`, `component-load-error`). A call to a utility the harness was not given (such as `utilities.ai` with no AI tools) is now a medium `sandbox-utility-unavailable` warning, not a critical error that blames the component.
+
+  The linter now follows query and view rows to where generated components read them, so a misnamed field is reported in far more of the places it occurs. It follows rows through a `|| []` or `?? []` fallback, through React state set inside an effect (including `React.useMemo` / `React.useState`), through spread copies such as `[...rows].sort(...)`, and into lodash iteratees such as `_.sumBy(rows, r => ...)`. Variables are now resolved in the scope that reads them, so two callbacks that each name a parameter `row` no longer share a type; this removes false reports where one callback's row type was applied to another.
+
+  "Invalid JSX element type" errors are graded by volume instead of discarded. A few occurrences stay a non-blocking `low` violation (a child component resolving a moment late); 25 or more of the same error is `high` and fails the run, where before a component could throw hundreds and still report success. The detector no longer flags `React.memo`, `forwardRef`, `lazy` or context components, which are valid element types. Text extraction in `AssertionHelpers` and category-path trimming no longer use regular expressions that slow down quadratically on adversarial input, and the unsafe-array-operations suggestion makes every bracket access optional (`data?.[0]?.[1]`), not only the first.
+
+  The `type-mismatch-operation` and `type-compatibility` rules no longer report an array method called on a type that has it too: `Map#forEach`, `Set#forEach`, and `slice`, `concat`, `includes`, `indexOf`, `lastIndexOf` and `at` on strings. Both rules now share one list of array methods instead of two that had drifted apart.
+
+- f1f0c8c: Report failed and unfinished data calls in `dataAccess`. `BuildDataAccessRecord` now records a result with `Success: false` as a failure carrying its `ErrorMessage` (a client-database timeout was recorded as a 0-row success), and `RunView` / `RunViews` / `RunQuery` calls are recorded when they start, so a call still running when the test finishes is reported as "still running after Ns" instead of being missing. Debug logs print FAILED for failed results.
+- Updated dependencies [0d81c53]
+- Updated dependencies [ddcd666]
+- Updated dependencies [622f166]
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [1419ba7]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [96d6ec2]
+- Updated dependencies [305c429]
+- Updated dependencies [a709bb6]
+- Updated dependencies [39b35f1]
+- Updated dependencies [e97d95c]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [a50948e]
+- Updated dependencies [2552b1e]
+- Updated dependencies [25bb295]
+- Updated dependencies [432cb73]
+- Updated dependencies [3080e83]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [6c36fb6]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [cc36de5]
+- Updated dependencies [9cb815b]
+- Updated dependencies [709de1a]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [d2db108]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [d43d86e]
+- Updated dependencies [a3539d2]
+- Updated dependencies [db39145]
+- Updated dependencies [41274aa]
+- Updated dependencies [91cba84]
+- Updated dependencies [b14c72f]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c671f85]
+- Updated dependencies [49f26d9]
+- Updated dependencies [5e4205c]
+- Updated dependencies [8fd1c46]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [7be1684]
+- Updated dependencies [21f9e15]
+- Updated dependencies [1090caa]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [f2248d5]
+- Updated dependencies [81aea34]
+- Updated dependencies [7384dd6]
+- Updated dependencies [6849b00]
+- Updated dependencies [67f6c85]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [5465489]
+- Updated dependencies [3bace5a]
+- Updated dependencies [88e6902]
+- Updated dependencies [953086f]
+- Updated dependencies [142d524]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [f3c6161]
+- Updated dependencies [01fafc6]
+- Updated dependencies [9b8a84e]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [59e32e0]
+- Updated dependencies [d122a41]
+- Updated dependencies [0a7c255]
+- Updated dependencies [0adaf76]
+- Updated dependencies [0ff7523]
+- Updated dependencies [0ff7523]
+- Updated dependencies [64b6fa5]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [307da67]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [af6f892]
+- Updated dependencies [a65dfb8]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [f65fec7]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [cb205de]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [0c634ba]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [223669e]
+- Updated dependencies [683f652]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [914e6ff]
+- Updated dependencies [a8be410]
+- Updated dependencies [7316ac3]
+- Updated dependencies [2274f42]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [0fb3649]
+- Updated dependencies [131f3c4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [705ab4e]
+- Updated dependencies [a7da50b]
+- Updated dependencies [0f04590]
+- Updated dependencies [0c68021]
+- Updated dependencies [5fed75a]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [1d43161]
+- Updated dependencies [f26084f]
+- Updated dependencies [db39145]
+- Updated dependencies [f48dffc]
+- Updated dependencies [41c2c08]
+- Updated dependencies [96c44bf]
+- Updated dependencies [630bb88]
+- Updated dependencies [e69634e]
+- Updated dependencies [7658d68]
+- Updated dependencies [9160fd9]
+- Updated dependencies [7110019]
+- Updated dependencies [6779eed]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [6d5c6ad]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [1141164]
+- Updated dependencies [44faf83]
+- Updated dependencies [17cc774]
+- Updated dependencies [dae1d31]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [80905a1]
+- Updated dependencies [4c97994]
+- Updated dependencies [397ae9a]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [20650af]
+- Updated dependencies [7e72c86]
+- Updated dependencies [b545842]
+- Updated dependencies [a17a228]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [ce758af]
+- Updated dependencies [db1528d]
+- Updated dependencies [a9614be]
+- Updated dependencies [89a5b59]
+- Updated dependencies [38099f7]
+- Updated dependencies [cfb3aab]
+- Updated dependencies [fb7ac5d]
+- Updated dependencies [1ea4085]
+- Updated dependencies [975948b]
+- Updated dependencies [22c9074]
+- Updated dependencies [88b85fc]
+- Updated dependencies [aee2d53]
+- Updated dependencies [8420f36]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [25f7b82]
+- Updated dependencies [8b90b41]
+- Updated dependencies [02bb563]
+- Updated dependencies [104125c]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [d296edd]
+- Updated dependencies [66fd011]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [509d2aa]
+- Updated dependencies [68f5c01]
+- Updated dependencies [196160a]
+- Updated dependencies [5513c2a]
+- Updated dependencies [90829e3]
+- Updated dependencies [1d29837]
+- Updated dependencies [ba61c0b]
+- Updated dependencies [5986939]
+- Updated dependencies [801036d]
+- Updated dependencies [7408dbb]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [8c120db]
+- Updated dependencies [bea2386]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [aac148b]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [e1942c7]
+- Updated dependencies [b4afc13]
+- Updated dependencies [74d44e1]
+- Updated dependencies [c7d1170]
+- Updated dependencies [79d4f27]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [539dfe3]
+- Updated dependencies [7e57b48]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [60bd774]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [ac18db8]
+- Updated dependencies [35da130]
+- Updated dependencies [5b41d48]
+- Updated dependencies [bd83dec]
+- Updated dependencies [81c5f3f]
+- Updated dependencies [c4a4eb9]
+- Updated dependencies [28395e0]
+- Updated dependencies [4b9542c]
+- Updated dependencies [28c92e0]
+- Updated dependencies [5f707d1]
+- Updated dependencies [369e229]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [aca4317]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [3204a32]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [3cb20c0]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [d1b1958]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [718b01c]
+- Updated dependencies [57fea6a]
+- Updated dependencies [374b1a4]
+- Updated dependencies [2c590b0]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [ced8414]
+- Updated dependencies [8389c99]
+- Updated dependencies [2854a2e]
+- Updated dependencies [03c085c]
+- Updated dependencies [28df136]
+- Updated dependencies [b0b2cc9]
+- Updated dependencies [dc38250]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/core-entities@6.2.0
+  - @memberjunction/aiengine@6.2.0
+  - @memberjunction/ai-core-plus@6.2.0
+  - @memberjunction/global@6.2.0
+  - @memberjunction/core-entities-server@6.2.0
+  - @memberjunction/core@6.2.0
+  - @memberjunction/sql-dialect@6.2.0
+  - @memberjunction/ai-vectors-memory@6.2.0
+  - @memberjunction/interactive-component-types@6.2.0
+  - @memberjunction/react-runtime@6.2.0
+  - @memberjunction/react-linter@6.2.0
+  - @memberjunction/sql-parser@6.2.0
+
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [e69634e]
+- Updated dependencies [db1528d]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/core-entities-server@6.2.0-edge.8
+  - @memberjunction/aiengine@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+  - @memberjunction/ai-core-plus@6.2.0-edge.8
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.8
+  - @memberjunction/interactive-component-types@6.2.0-edge.8
+  - @memberjunction/react-linter@6.2.0-edge.8
+  - @memberjunction/react-runtime@6.2.0-edge.8
+  - @memberjunction/sql-dialect@6.2.0-edge.8
+  - @memberjunction/sql-parser@6.2.0-edge.8
+
 ## 6.2.0-edge.7
 
 ### Minor Changes
