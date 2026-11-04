@@ -1,5 +1,47 @@
 # @memberjunction/ng-entity-viewer
 
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- f215220: Record forms on a phone (<= 768px). The section rail becomes a single section picker that opens a searchable bottom sheet listing the first-class sections and the More folder's children; the sheet's search is cleared when a row is picked or the sheet is closed. The form toolbar auto-hides behind an [Edit | ...] pill in Read Mode, with per-entity and global "pin toolbar open" preferences stored in `UserInfoEngine` (`mj.form.toolbar.visibility`); hiding the toolbar on one form only unpins that entity, and focus moves between the pill and the toolbar's hide chevron when they swap. Desktop keeps the full toolbar. An entity with a custom view keeps it at phone width, and the standard-form switch moves into the toolbar's View sheet (honouring `ShowFormModeSwitch`) instead of rendering as a strip. Related-grid toolbars stay on one row and empty states are no longer clipped. `FormChromeCoordinator.Apply` keeps a More child active across a re-resolve instead of snapping back to the first group.
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [e69634e]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+  - @memberjunction/actions-base@6.2.0-edge.8
+  - @memberjunction/ng-base-types@6.2.0-edge.8
+  - @memberjunction/ng-code-editor@6.2.0-edge.8
+  - @memberjunction/ng-entity-action-ux@6.2.0-edge.8
+  - @memberjunction/ng-export-service@6.2.0-edge.8
+  - @memberjunction/ng-filter-builder@6.2.0-edge.8
+  - @memberjunction/ng-list-management@6.2.0-edge.8
+  - @memberjunction/ng-map-view@6.2.0-edge.8
+  - @memberjunction/ng-notifications@6.2.0-edge.8
+  - @memberjunction/ng-record-changes@6.2.0-edge.8
+  - @memberjunction/ng-record-merge@6.2.0-edge.8
+  - @memberjunction/ng-shared-generic@6.2.0-edge.8
+  - @memberjunction/ng-timeline@6.2.0-edge.8
+  - @memberjunction/communication-types@6.2.0-edge.8
+  - @memberjunction/excel-addin@6.2.0-edge.8
+  - @memberjunction/ng-ui-components@6.2.0-edge.8
+  - @memberjunction/ng-pagination@6.2.0-edge.8
+  - @memberjunction/export-engine@6.2.0-edge.8
+
 ## 6.2.0-edge.7
 
 ### Patch Changes

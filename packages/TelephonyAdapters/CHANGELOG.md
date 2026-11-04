@@ -1,5 +1,46 @@
 # @memberjunction/telephony-adapters
 
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- 5bd0135: Wire LiveKit SIP room teardown hook, support `livekit-server-sdk` v2 camelCase SIP webhook attributes, voice comfort-tone chords in the PSTN 300–3400 Hz passband, and isolate `hold-*` audio and microphone state during call hold.
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [5bd0135]
+- Updated dependencies [e69634e]
+- Updated dependencies [db1528d]
+- Updated dependencies [373b180]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/core-entities-server@6.2.0-edge.8
+  - @memberjunction/generic-database-provider@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+  - @memberjunction/ai-agents@6.2.0-edge.8
+  - @memberjunction/livekit-room-server@6.2.0-edge.8
+  - @memberjunction/ai-engine-base@6.2.0-edge.8
+  - @memberjunction/ai-bridge-base@6.2.0-edge.8
+  - @memberjunction/ai-bridge-ringcentral@6.2.0-edge.8
+  - @memberjunction/ai-bridge-teams@6.2.0-edge.8
+  - @memberjunction/ai-bridge-twilio@6.2.0-edge.8
+  - @memberjunction/ai-bridge-vonage@6.2.0-edge.8
+  - @memberjunction/ai-bridge-server@6.2.0-edge.8
+  - @memberjunction/communication-ms-graph@6.2.0-edge.8
+  - @memberjunction/server-extensions-core@6.2.0-edge.8
+  - @memberjunction/ai@6.2.0-edge.8
+
 ## 6.2.0-edge.7
 
 ### Minor Changes

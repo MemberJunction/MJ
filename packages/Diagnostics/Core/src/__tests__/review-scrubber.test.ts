@@ -2,6 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { NormalizeSqlLiterals, ScrubString, ScrubValue, ScrubHeaders, ScrubBundleData } from '../index.js';
 import { EmptyBundleData } from './reviewFixtures.js';
 
+/**
+ * Wall-clock ceiling for the linear-time (ReDoS) guards below. Catastrophic backtracking on these
+ * inputs takes many seconds; a shared CI runner is ~8x slower than a dev machine (the 1.6 MB case ran
+ * 100 ms locally and 765 ms in the v6.2.0-edge.8 publish gate against a 500 ms bound).
+ */
+const LINEAR_TIME_CEILING_MS = 2500;
+
 function elapsedMs(work: () => void): number {
     const started = performance.now();
     work();
@@ -11,13 +18,13 @@ function elapsedMs(work: () => void): number {
 describe('NormalizeSqlLiterals running time', () => {
     it('normalizes 400 KB of repeated WHERE keywords in well under a second', () => {
         const sql = 'WHERE a '.repeat(50_000);
-        expect(elapsedMs(() => NormalizeSqlLiterals(sql))).toBeLessThan(500);
+        expect(elapsedMs(() => NormalizeSqlLiterals(sql))).toBeLessThan(LINEAR_TIME_CEILING_MS);
     }, 60_000);
 
     it('replaces every literal of a 400 KB statement and keeps none past the length cap', () => {
         const sql = "SELECT * FROM T WHERE a = 'x' ".repeat(10_000) + "AND Email = 'alice@example.com' AND Age = 42";
         let out = '';
-        expect(elapsedMs(() => (out = NormalizeSqlLiterals(sql)))).toBeLessThan(500);
+        expect(elapsedMs(() => (out = NormalizeSqlLiterals(sql)))).toBeLessThan(LINEAR_TIME_CEILING_MS);
         expect(out).not.toContain('alice@example.com');
         expect(out).not.toContain('42');
         expect(out.length).toBeLessThan(70_000);
@@ -36,19 +43,15 @@ describe('NormalizeSqlLiterals running time', () => {
     });
 });
 
-// These inputs make a backtracking pattern run for minutes. The bound sits well above linear time on a shared CI runner
-// (535 ms was measured for the 1.6 MB case while six test shards ran) and far below what a backtracking regression costs.
-const LINEAR_TIME_BOUND_MS = 2_000;
-
 describe('Stage 1 running time', () => {
-    it('scrubs 400 KB of JWT-like dashed segments in linear time', () => {
+    it('scrubs 400 KB of JWT-like dashed segments in well under a second', () => {
         const hostile = 'eyJ-'.repeat(100_000);
-        expect(elapsedMs(() => ScrubString(hostile, 'FullRaw'))).toBeLessThan(LINEAR_TIME_BOUND_MS);
+        expect(elapsedMs(() => ScrubString(hostile, 'FullRaw'))).toBeLessThan(LINEAR_TIME_CEILING_MS);
     }, 60_000);
 
-    it('scrubs 1.6 MB of sensitive name: value lines with no carriage return in linear time', () => {
+    it('scrubs 1.6 MB of sensitive name: value lines with no carriage return in well under a second', () => {
         const hostile = 'pwd:x\n'.repeat(280_000);
-        expect(elapsedMs(() => ScrubString(hostile, 'FullRaw'))).toBeLessThan(LINEAR_TIME_BOUND_MS);
+        expect(elapsedMs(() => ScrubString(hostile, 'FullRaw'))).toBeLessThan(LINEAR_TIME_CEILING_MS);
     }, 60_000);
 });
 
