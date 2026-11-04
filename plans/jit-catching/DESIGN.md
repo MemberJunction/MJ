@@ -106,7 +106,7 @@ stubs (`DatabaseProviderStub`, `EntitiesOnlyProvider`, `TestLLM`); `@vitest/cove
 | D2 | Where it runs | Nightly GitHub Actions workflow **and** a `jit-catch` PR label, from the start; one CLI behind both | Shared infrastructure; keys already in CI; developers can still request a run |
 | D3 | Track B audience | Internal first, product later | Fast start; interfaces designed so the move needs no rewrite |
 | D4 | Tests that pass on both revisions | Offer up to 3 as promotion candidates | Free byproduct with real coverage value; capped to avoid bloat |
-| D5 | Success measure | Two gates: backtest, then 4 weeks of live label runs | Proves value before anyone is contacted, then proves it with real authors |
+| D5 | Success measure | Two gates: backtest, then 4 weeks of live label runs | Proves value before any PR comment is posted, then proves it with real authors |
 | D6 | Approach | Code runs every step; an agent only writes tests, on base only | Measurable, repeatable, bounded cost; the agent cannot fit tests to head |
 | D7 | Code location | Private workspace package `@memberjunction/jit-catching` | No npm gate; full TypeScript, vitest and standards tooling |
 | D8 | Base revision | `git merge-base origin/next <head>` | Changes merged by other PRs do not become false catches |
@@ -127,6 +127,8 @@ stubs (`DatabaseProviderStub`, `EntitiesOnlyProvider`, `TestLLM`); `@vitest/cove
 | D23 | Nightly volume | At most 10 PRs a night, ordered by a rule-based risk score | Caps cost until gate 1 gives real numbers |
 | D24 | Generator model | Gate 1 compares `claude-opus-5-5`, `claude-sonnet-5-5` and `claude-haiku-5-5`; keep the cheapest that passes | Price per PR differs ~30x; only data shows cost per real catch |
 | D25 | Gemini judge | `gemini-4-argon` | Strongest Gemini on the price list; judge cost is negligible |
+| D26 | Gate 1 clean-set labels | The original PR author labels each catch; a reviewer of that PR if the author is gone or silent for a week | Only the author knows the intent; Meta also asks the author |
+| D27 | Nightly start | 07:45 UTC, inside MJ's existing 06:00–08:30 UTC nightly window; at most 2 PRs in parallel | Follows `test.yml`'s 07:00 rebuild of `next` (warm turbo cache); avoids the top of the hour, when GitHub delays scheduled runs |
 
 ---
 
@@ -145,6 +147,7 @@ stubs (`DatabaseProviderStub`, `EntitiesOnlyProvider`, `TestLLM`); `@vitest/cove
 | `jit-catch recheck --pr <n>` | Re-run earlier catching tests on a new head | Push to a labeled PR |
 | `jit-catch feedback --event <file>` | Record a checkbox answer or a promotion request | Feedback workflow |
 | `jit-catch backtest --corpus <file>` | Run the pipeline over a labeled corpus | Gate 1 |
+| `jit-catch label --catch <id> --answer <answer>` | Record a human label collected outside the PR comment | Gate 1 |
 | `jit-catch report` | Gate metrics, cost, judge agreement | Nightly summary, on demand |
 
 Making B a product later means flipping `private` and doing the one-time npm trusted-publisher setup (manual 2FA).
@@ -236,7 +239,7 @@ Jobs pass data as workflow artifacts. Job 3 validates job 2's output against a s
 
 | Trigger | Action |
 |---|---|
-| Nightly schedule (outside working hours) | Full run on open PRs to `next` from this repo, whose head SHA has no run yet and which change TypeScript source in packages with vitest tests. Ordered by risk score; at most 10 per night. Results go to the store and the workflow summary only, until gate 2 passes. |
+| Nightly schedule, 07:45 UTC (`45 7 * * *`) | Full run on open PRs to `next` from this repo, whose head SHA has no run yet and which change TypeScript source in packages with vitest tests. Ordered by risk score; at most 10 per night, at most 2 in parallel. Results go to the store and the workflow summary only, until gate 2 passes. |
 | `jit-catch` label added | Full run on the current head SHA. Posts the PR comment. At most 10 label runs a day. |
 | Comment `/jit run` on a labeled PR | Full run on the current head SHA. Same daily limit. |
 | Push to a labeled PR | `recheck` only: re-run earlier catching tests on the new head (no generation). Runs as jobs 2 and 3, without job 1, because it executes PR code. |
@@ -537,7 +540,7 @@ daily limit. Monthly spend limit: when reached, nightly runs stop and the summar
 
 ## 14. Success gates
 
-### 14.1 Gate 1 — backtest (before anyone is contacted)
+### 14.1 Gate 1 — backtest (before any PR comment is posted)
 
 **Bug set (~30 PRs).** Merged PRs whose bug a later PR fixed, where a unit test can show the bug. Found with the SZZ
 method: for each fix PR, `git blame` the lines the fix changed (at the fix's parent) to find the commit and PR that
@@ -562,6 +565,11 @@ catching test. If it passes after the fix, the catch matches the known bug. If t
 **Clean-set labels (human).** Each reported clean-set catch gets one label: *RealBug*, *Intended* or *TestFault*. Only
 *Intended* and *TestFault* count as false alarms. A *RealBug* counts for the pipeline and is filed as an issue: a clean
 set selected by "no later fix" can still contain bugs nobody found.
+
+The **original PR author** labels each catch, because only the author knows what the change was meant to do. If the
+author has left the team or does not answer within a week, a reviewer of that PR labels it. Gate 1 runs before the PR
+comment workflow exists, so the spec owner sends each author the catches for their PRs (expected: 3–6 catches in total,
+a few minutes each) and records the answers with `jit-catch label`. No comments are posted on the old PRs.
 
 ### 14.2 Gate 2 — live label runs (4 weeks)
 
@@ -624,7 +632,7 @@ judges, reporting model and gates carry over.
 | Most generated tests fail on base, so few reach head | Agent loop; prompt includes MJ test examples and stubs; three-model comparison |
 | Noise erodes trust | Two gates; one comment per PR; thresholds as settings; nightly comments only after gate 2 |
 | Agent SDK cannot enforce the tool limits | Spike question 2; fall back to a hand-written tool loop with the Anthropic SDK |
-| Contention with normal CI | Nightly outside working hours; parallel-job limit |
+| Contention with normal CI | Nightly at 07:45 UTC in the existing nightly window, after `test.yml` starts; at most 2 PRs in parallel |
 | Model prices change (Gemini rates double on fixed dates) | Prices are settings in the report; spend limit stops nightly runs |
 
 ---
@@ -634,11 +642,16 @@ judges, reporting model and gates carry over.
 | # | Question | Owner |
 |---|---|---|
 | Q1 | May the promotion workflow commit with the existing release GitHub App token, or a new App? | Repo admins |
-| Q2 | Orphan branch `jit-catch-data`, or a separate private repo? | Repo admins |
 | Q3 | Is an OpenAI key available to CI (inside `INTEGRATION_LIVE_MODEL_KEYS` or new)? | Repo admins |
-| Q4 | Who labels gate 1 clean-set catches, and how much time do they have? | Team |
 | Q5 | Monthly spend limit after gate 1 measures real cost | Team |
-| Q6 | Nightly start time, given the team's time zones | Team |
+
+**Resolved (2026-11-04):**
+
+| # | Question | Answer |
+|---|---|---|
+| Q2 | Orphan branch or a separate private repo for the store? | Orphan branch `jit-catch-data` (D21) |
+| Q4 | Who labels gate 1 clean-set catches? | The original PR author; a reviewer of that PR as fallback (D26) |
+| Q6 | Nightly start time? | 07:45 UTC, inside the existing nightly window (D27) |
 
 ---
 
