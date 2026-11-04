@@ -13,7 +13,7 @@ import { GenericDatabaseProviderTestBase } from './helpers/GenericDatabaseProvid
 import { IsCoalescibleCountBatch } from '../countOnlyBatch.js';
 import { NamedQueryParameter } from '../typedQueryParameter.js';
 import type { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '../saveTypes.js';
-import { GetDialect, type SQLDialect } from '@memberjunction/sql-dialect';
+import { GetDialect, type DatabasePlatform, type SQLDialect } from '@memberjunction/sql-dialect';
 import {
     CompositeKey,
     UserInfo,
@@ -57,6 +57,9 @@ class ParameterizedRunViewTestProvider extends GenericDatabaseProviderTestBase {
         super();
     }
 
+    public override get PlatformKey(): DatabasePlatform {
+        return this.testDialect.PlatformKey;
+    }
     public override get Dialect(): SQLDialect {
         return this.testDialect;
     }
@@ -340,6 +343,112 @@ describe('GenericDatabaseProvider parameterized RunView (BindExtraFilterParamete
         );
         expect(badResult.Success).toBe(false);
         expect(badResult.ErrorMessage).toMatch(/references parameter '@missingParam'/);
+    });
+
+    it('runs parameterized ExtraFilter on PostgreSQL through InternalRunView and GetRunViewsDatabaseStatus, while refusing raw $ placeholders', async () => {
+        const provider = new ParameterizedRunViewTestProvider([makeMembersEntity()], GetDialect('postgresql'));
+        const okResult = await provider.Run(
+            {
+                EntityName: 'Members',
+                ExtraFilter: 'Name = @n AND ID IN (@l)',
+                Parameters: { n: 'Alice', l: ['id-1', 'id-2'] },
+            },
+            ADA,
+        );
+
+        expect(okResult.Success).toBe(true);
+        expect(provider.ExecutedCalls).toHaveLength(1);
+        expect(provider.ExecutedCalls[0].sql).toContain('WHERE (Name = $1 AND ID IN ($2, $3))');
+        expect(provider.ExecutedCalls[0].parameters).toEqual([
+            new NamedQueryParameter('$1', 'Alice'),
+            new NamedQueryParameter('$2', 'id-1'),
+            new NamedQueryParameter('$3', 'id-2'),
+        ]);
+
+        provider.ExecutedCalls.length = 0;
+        const statuses = await provider.GetRunViewsDatabaseStatus(
+            [
+                {
+                    EntityName: 'Members',
+                    ExtraFilter: 'Name = @n AND ID IN (@l)',
+                    Parameters: { n: 'Alice', l: ['id-1', 'id-2'] },
+                },
+            ],
+            ADA,
+        );
+        expect(statuses[0].Success).toBe(true);
+        expect(provider.ExecutedCalls).toHaveLength(1);
+        expect(provider.ExecutedCalls[0].sql).toContain('WHERE (Name = $1 AND ID IN ($2, $3))');
+        expect(provider.ExecutedCalls[0].parameters).toEqual([
+            new NamedQueryParameter('$1', 'Alice'),
+            new NamedQueryParameter('$2', 'id-1'),
+            new NamedQueryParameter('$3', 'id-2'),
+        ]);
+
+        // Raw $1 or dollar-quoted strings in caller ExtraFilter must still be refused before binding
+        const rawDollarResult = await provider.Run(
+            {
+                EntityName: 'Members',
+                ExtraFilter: 'Name = $1 AND Status = @n',
+                Parameters: { n: 'Alice' },
+            },
+            ADA,
+        );
+        expect(rawDollarResult.Success).toBe(false);
+        expect(rawDollarResult.ErrorMessage).toMatch(/dollar/);
+    });
+
+    it('enforces field-level security on PostgreSQL in both InternalRunView and GetRunViewsDatabaseStatus against #@col and [@col]', async () => {
+        const base = makeMembersEntity();
+        const restrictedEntity: EntityInfo = Object.assign(Object.create(Object.getPrototypeOf(base)), base, {
+            EnableFieldLevelSecurity: true,
+            FieldLevelSecurityApplies: true,
+            GetDeniedReadFields: () => new Set(['score']),
+        });
+        const provider = new ParameterizedRunViewTestProvider([restrictedEntity], GetDialect('postgresql'));
+
+        for (const hostileFilter of ['0#@Score > 100', '[@Score] > 100', '@Score#1 > 100']) {
+            await expect(
+                provider.Run(
+                    {
+                        EntityName: 'Members',
+                        ExtraFilter: hostileFilter,
+                        Parameters: { Score: 1 },
+                    },
+                    ADA,
+                ),
+            ).rejects.toThrow(/Score/i);
+
+            const cacheStatuses = await provider.GetRunViewsDatabaseStatus(
+                [
+                    {
+                        EntityName: 'Members',
+                        ExtraFilter: hostileFilter,
+                        Parameters: { Score: 1 },
+                    },
+                ],
+                ADA,
+            );
+            expect(cacheStatuses[0].Success).toBe(false);
+            expect(cacheStatuses[0].ErrorMessage).toMatch(/Score/i);
+
+            const cacheCheckRes = await provider.RunViewsWithCacheCheck(
+                [
+                    {
+                        params: {
+                            EntityName: 'Members',
+                            ExtraFilter: hostileFilter,
+                            Parameters: { Score: 1 },
+                        },
+                        cacheStatus: { maxUpdatedAt: '2026-01-01T00:00:00.000Z', rowCount: 5 },
+                    },
+                ],
+                ADA,
+            );
+            expect(cacheCheckRes.results[0].status).toBe('error');
+            expect(cacheCheckRes.results[0].errorMessage).toMatch(/Score/i);
+        }
+        expect(provider.ExecutedCalls).toHaveLength(0);
     });
 
     it('excludes parameterized count_only requests from IsCoalescibleCountBatch', () => {

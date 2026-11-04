@@ -130,16 +130,24 @@ describe('RunViewParametersKey & RunViewParams.Parameters', () => {
         expect(FieldSecuritySQLGate.FindViolation('Salary = @status', sqlServerContext)).not.toBeNull();
 
         // On PostgreSQL, @ is the unary absolute-value operator, so @Salary / @salary is skipped
-        // ONLY when the parameter name is present in ParameterNames (as supplied for ExtraFilter).
+        // ONLY when the parameter name is present in ParameterNames (as supplied for ExtraFilter)
+        // AND its surrounding characters form a standalone @paramName token in SqlTokens.Lex.
         const pgContextWithSalaryParam = {
             User: user,
             Dialect: 'postgresql' as const,
             Catalog: [entityStub],
             TargetEntity: entityStub,
-            ParameterNames: new Set(['Salary']),
+            ParameterNames: new Set(['Salary', 'salary']),
         };
         expect(FieldSecuritySQLGate.FindViolation('Status = @Salary', pgContextWithSalaryParam)).toBeNull();
         expect(FieldSecuritySQLGate.FindViolation('Salary = @Salary', pgContextWithSalaryParam)).not.toBeNull();
+        // Tokens that SqlTokens.Lex merges with a preceding/following character or skips as bracketed
+        // must NOT be treated as bound parameter tokens by the gate:
+        expect(FieldSecuritySQLGate.FindViolation('0#@salary > 100000', pgContextWithSalaryParam)).not.toBeNull();
+        expect(FieldSecuritySQLGate.FindViolation('#@salary > 100000', pgContextWithSalaryParam)).not.toBeNull();
+        expect(FieldSecuritySQLGate.FindViolation('[@salary] > 100000', pgContextWithSalaryParam)).not.toBeNull();
+        expect(FieldSecuritySQLGate.FindViolation('@salary#1 > 100000', pgContextWithSalaryParam)).not.toBeNull();
+        expect(FieldSecuritySQLGate.FindViolation('@@salary > 100000', pgContextWithSalaryParam)).not.toBeNull();
 
         // Without ParameterNames (e.g. OrderBy, OverrideExcludeFilter, saved view WhereClause, or unbound @salary),
         // PostgreSQL refuses @salary as a read of the denied `salary` column.

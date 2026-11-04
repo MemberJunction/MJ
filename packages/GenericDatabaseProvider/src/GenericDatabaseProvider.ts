@@ -2857,18 +2857,31 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         parameters?: RunViewParameters,
         queryParameters?: NamedQueryParameter[],
     ): string {
-        const boundFilter = this.BindExtraFilterParameters(extraFilter, parameters, queryParameters);
+        const targetParams = queryParameters ?? [];
+        if (!extraFilter) {
+            this.BindExtraFilterParameters(extraFilter, parameters, targetParams);
+            return '';
+        }
+        this.AssertClauseBalanced(extraFilter, 'ExtraFilter');
+        const priorParamCount = targetParams.length;
+        const boundFilter = this.BindExtraFilterParameters(extraFilter, parameters, targetParams);
         if (!boundFilter) return '';
+        const allowedPlaceholders = new Set<string>();
+        for (let i = priorParamCount; i < targetParams.length; i++) {
+            allowedPlaceholders.add(this.Dialect.Binding.ParameterPlaceholder(i));
+        }
+        const balanceOptions: BalancedFragmentOptions | undefined =
+            allowedPlaceholders.size > 0 ? { AllowedParameterPlaceholders: allowedPlaceholders } : undefined;
         const transformed = this.TransformExternalSQLClause(boundFilter, entityInfo);
         const terms = transformed === boundFilter ? null : SplitTopLevelAndTerms(boundFilter, this.Dialect);
         if (!terms || terms.length < 2) {
-            this.AssertClauseBalanced(transformed, 'ExtraFilter');
+            this.AssertClauseBalanced(transformed, 'ExtraFilter', balanceOptions);
             return transformed;
         }
         return terms
             .map((term) => {
                 const termSQL = this.TransformExternalSQLClause(term.trim(), entityInfo);
-                this.AssertClauseBalanced(termSQL, 'ExtraFilter');
+                this.AssertClauseBalanced(termSQL, 'ExtraFilter', balanceOptions);
                 return `(${termSQL})`;
             })
             .join(' AND ');
@@ -4978,9 +4991,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         let bHasWhere = false;
 
         // PrepareExtraFilterSQL transforms and balance-checks the filter; the single-statement
-        // check then runs on the result, as on the main view path.
+        // check and post-bind field-security gate then run on the result, as on the main view path.
         const extraFilter = this.PrepareExtraFilterSQL((params.ExtraFilter as string) || '', entityInfo, params.Parameters, queryParameters);
         this.AssertClauseFragmentIsSingleStatement(extraFilter, 'ExtraFilter');
+        this.AssertClausesRespectFieldSecurityForEntity(entityInfo, [extraFilter], user);
         if (extraFilter.length > 0) {
             if (!this.ValidateUserProvidedSQLClause(extraFilter))
                 throw new Error(`Invalid Extra Filter: ${extraFilter}`);
