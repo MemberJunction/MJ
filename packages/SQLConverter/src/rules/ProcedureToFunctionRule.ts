@@ -13,6 +13,7 @@ import {
   ConvertCommonFunctions, ConvertStuff, EmitDropOverloadsBlock,
 } from './ExpressionHelpers.js';
 import { ResolveType } from './TypeResolver.js';
+import { CrudCallPerformLines, type CrudCallArg } from './CrudCallEmitter.js';
 
 /**
  * Views referenced via `RETURNS SETOF` by CRUD sprocs for deprecated entities
@@ -372,7 +373,7 @@ $$ LANGUAGE plpgsql;
   // Body conversion
   // ---------------------------------------------------------------------------
 
-  private convertProcBody(body: string, _procName: string, context?: ConversionContext, booleanParams?: Set<string>): string {
+  private convertProcBody(body: string, _procName: string, context: ConversionContext, booleanParams?: Set<string>): string {
     let sql = body;
 
     // Remove SET NOCOUNT ON
@@ -599,7 +600,7 @@ $$ LANGUAGE plpgsql;
     sql = convertCursorLoops(sql);
 
     // Convert EXEC proc → PERFORM proc()
-    sql = convertExecCalls(sql);
+    sql = convertExecCalls(sql, context);
 
     // Convert BEGIN TRY/CATCH → EXCEPTION blocks
     sql = convertBeginTryCatch(sql);
@@ -1071,7 +1072,7 @@ function convertCursorLoops(sql: string): string {
  * Convert T-SQL EXEC/sp_executesql to PostgreSQL EXECUTE/PERFORM.
  * Ported from Python convert_exec_calls().
  */
-function convertExecCalls(sql: string): string {
+function convertExecCalls(sql: string, context: ConversionContext): string {
   // EXEC sp_executesql @sql → EXECUTE p_sql
   sql = sql.replace(/\bEXEC\s+sp_executesql\s+/gi, 'EXECUTE ');
 
@@ -1091,30 +1092,53 @@ function convertExecCalls(sql: string): string {
   // parameter declarations.
   sql = sql.replace(
     /\bEXEC\s+(__mj\."sp\w+")\s*(.*?)(?:;|$)/gim,
-    (_match: string, procRef: string, paramsStr: string) => {
+    (_match: string, procRef: string, paramsStr: string, offset: number, whole: string) => {
       const trimmedParams = paramsStr.trim().replace(/;$/, '');
       if (!trimmedParams) {
         return `PERFORM ${procRef}();`;
       }
-      const paramParts = trimmedParams.split(/,\s*/);
-      const args: string[] = [];
-      for (const p of paramParts) {
-        // Capture both the parameter name and the value so we can emit
-        // PG's named-arg call syntax `name => value`.
-        const eqMatch = p.trim().match(/^(p_\w+)\s*=\s*(.+)/);
-        if (eqMatch) {
-          args.push(`${eqMatch[1]} => ${eqMatch[2].trim()}`);
-        } else {
-          // Fallback: positional argument (no `param = value` form). Rare
-          // for MJ-generated SS sprocs, but preserved for robustness.
-          args.push(p.trim());
-        }
-      }
-      return `PERFORM ${procRef}(${args.join(', ')});`;
+      const lineStart = whole.lastIndexOf('\n', offset - 1) + 1;
+      const indent = whole.slice(lineStart, offset).match(/^[ \t]*/)?.[0] ?? '';
+      return convertNamedExec(procRef, trimmedParams.split(/,\s*/), indent, context);
     }
   );
 
   return sql;
+}
+
+/**
+ * PERFORM for an EXEC whose arguments are `p_param = value` pairs. The call works whether
+ * the callee takes typed parameters or a single `p_data JSONB` argument, and passes `0`/`1`
+ * to boolean parameters as `FALSE`/`TRUE`. The first line carries no indent, because the
+ * EXEC's own indent stays in place; later lines get `indent`.
+ */
+function convertNamedExec(procRef: string, paramParts: string[], indent: string, context: ConversionContext): string {
+  const args: CrudCallArg[] = [];
+  for (const p of paramParts) {
+    const eqMatch = p.trim().match(/^(p_\w+)\s*=\s*(.+)/);
+    if (!eqMatch) {
+      return `PERFORM ${procRef}(${positionalExecArgs(paramParts)});`;
+    }
+    args.push({ ParamName: eqMatch[1], ValueExpr: eqMatch[2].trim() });
+  }
+  const lines = CrudCallPerformLines(procRef, args, context, indent, {
+    ParamLimit: POSTGRESQL_PROCEDURE_PARAM_LIMIT,
+    NamedArgOperator: '=>',
+  });
+  return lines.join('\n').trimStart();
+}
+
+/**
+ * Argument list for an EXEC that has positional arguments. Rare for MJ-generated SS sprocs;
+ * named arguments become `name => value` and positional ones pass through.
+ */
+function positionalExecArgs(paramParts: string[]): string {
+  return paramParts
+    .map(p => {
+      const eqMatch = p.trim().match(/^(p_\w+)\s*=\s*(.+)/);
+      return eqMatch ? `${eqMatch[1]} => ${eqMatch[2].trim()}` : p.trim();
+    })
+    .join(', ');
 }
 
 /**

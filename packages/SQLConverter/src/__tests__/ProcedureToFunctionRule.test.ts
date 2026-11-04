@@ -734,7 +734,8 @@ END`;
       const result = convert(input);
       // Named-arg PERFORM (`p_X => value`) — NOT positional
       expect(result).toContain('p_ID => p_ID');
-      expect(result).toContain('p_IsActive => 0');
+      // User.IsActive is BOOLEAN, so the BIT literal becomes FALSE
+      expect(result).toContain('p_IsActive => FALSE');
       // The bug pattern would have been positional `(p_ID, 0)` — verify
       // we don't emit that.
       expect(result).not.toMatch(/PERFORM\s+__mj\."spUpdateUser"\(p_ID,\s*0\)/);
@@ -761,6 +762,66 @@ BEGIN
 END`;
       const result = convert(input);
       expect(result).toContain(`PERFORM __mj."spCleanupOrphans"()`);
+    });
+  });
+
+  // ─── Cascade EXEC calls into CRUD sprocs ────
+  //
+  // CodeGen's spDelete cascades call the child's spUpdate with `@FK_Clear = 1`.
+  // On PostgreSQL the `_Clear` param is BOOLEAN and a wide child's spUpdate takes
+  // a single `p_data JSONB` argument, so the call must fit either shape.
+  describe('cascade EXEC calls into CRUD sprocs', () => {
+    const cascadeInput = `CREATE PROCEDURE [__mj].[spDeleteConversationDetail]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    -- Cascade update on AIAgentNote using cursor to call spUpdateAIAgentNote
+    DECLARE @Notes_ID uniqueidentifier
+    DECLARE @Notes_Note nvarchar(MAX)
+    DECLARE @Notes_SourceConversationDetailID uniqueidentifier
+    DECLARE cascade_update_Notes_cursor CURSOR FOR
+        SELECT [ID], [Note], [SourceConversationDetailID]
+        FROM [__mj].[AIAgentNote]
+        WHERE [SourceConversationDetailID] = @ID
+
+    OPEN cascade_update_Notes_cursor
+    FETCH NEXT FROM cascade_update_Notes_cursor INTO @Notes_ID, @Notes_Note, @Notes_SourceConversationDetailID
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @Notes_SourceConversationDetailID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [__mj].[spUpdateAIAgentNote] @ID = @Notes_ID, @Note = @Notes_Note, @SourceConversationDetailID_Clear = 1, @SourceConversationDetailID = @Notes_SourceConversationDetailID
+
+        FETCH NEXT FROM cascade_update_Notes_cursor INTO @Notes_ID, @Notes_Note, @Notes_SourceConversationDetailID
+    END
+
+    CLOSE cascade_update_Notes_cursor
+    DEALLOCATE cascade_update_Notes_cursor
+
+    DELETE FROM [__mj].[ConversationDetail] WHERE [ID] = @ID
+END`;
+
+    it('passes a _Clear flag literal as BOOLEAN', () => {
+      const result = convert(cascadeInput);
+      expect(result).toContain('p_SourceConversationDetailID_Clear => TRUE');
+      expect(result).not.toMatch(/_Clear\s*=>\s*1\b/);
+    });
+
+    it('calls the single-JSONB shape when the callee has it', () => {
+      const result = convert(cascadeInput);
+      expect(result).toContain(
+        `IF EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace ` +
+        `WHERE n.nspname = '__mj' AND p.proname = 'spUpdateAIAgentNote' ` +
+        `AND p.pronargs = 1 AND p.proargtypes[0] = 'jsonb'::regtype) THEN`,
+      );
+      const jsonArg = result.match(/PERFORM __mj\."spUpdateAIAgentNote"\(p_data := (jsonb_build_object\([\s\S]*?\))\);/);
+      expect(jsonArg).not.toBeNull();
+      expect(jsonArg![1]).toContain(`'SourceConversationDetailID', p_Notes_SourceConversationDetailID`);
+      expect(jsonArg![1]).not.toContain('_Clear');
     });
   });
 });
