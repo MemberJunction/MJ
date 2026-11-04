@@ -943,7 +943,7 @@
       "references": "MLTrainingSnapshot",
       "nullable": true,
       "action": "null",
-      "reason": "Nullable reference to a MLTrainingSnapshot row this proc deletes; cleared."
+      "reason": "Nullable reference to an MLTrainingSnapshot row this proc deletes; cleared."
     },
     {
       "table": "FeatureValue",

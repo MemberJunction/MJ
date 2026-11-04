@@ -124,6 +124,9 @@ version 1 of each, and the training path without them is removed.
 - `@memberjunction/predictive-studio-truth-suite`, `@memberjunction/integration-test-suite`: the harness trains every
   pipeline through its unit; six containment checks are re-pinned to the unit path; the pipeline-migration rig.
   `RunRecords.PipelineIDs` / `ModelIDs` are `RecordIDSet`s (iteration yields IDs as recorded, not lower-cased).
+  `HarnessFileStorage` (and the rigs' `RigStorage`) is removed: training stores files through the provider
+  `PS_STORAGE_PROVIDER` names whatever its `IsActive` flag, so the harness and rigs no longer switch a File Storage
+  Provider on.
 - `@memberjunction/core`: listed for the Migrate Pipelines Action and the Train ML Model parameter metadata.
 
 Holds no sign-off overrides: a binary or multiclass model whose holdout calibration slope is outside 0.8–1.2, or could

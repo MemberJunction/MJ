@@ -3,9 +3,8 @@
  * one JSON line — with the stored gate outcome and its reason, and `modelId: null` when the decision shipped no model —
  * or the typed refusal (`{"refused": …}`). Training needs the Python sidecar
  * (`PREDICTIVE_STUDIO_SIDECAR_URL`), so the check runs only with `PS_INTEGRATION=1`; without it the script exits 0
- * after saying so. Training stores its artifacts through an active File Storage Provider: `RigStorage` makes one
- * available the way the gate harness does (its `HarnessFileStorage` helper, private truth-suite databases only) and puts
- * it back afterwards.
+ * after saying so. Training stores its artifacts through the provider `PS_STORAGE_PROVIDER` names (default
+ * "Local File System"), whatever its `IsActive` flag, so the check switches no File Storage Provider on.
  *
  * With `--via-operation` the training goes through the `PredictiveStudio.TrainModel` Remote Operation, dispatched
  * in-process (`DispatchRemoteOperationInProcess`, the server path every client call reaches), and the line is the
@@ -28,7 +27,6 @@ import type {
 import { EscapeSQLString } from '@memberjunction/global';
 import { GateRecords } from '@memberjunction/predictive-studio-core';
 import { TrainingDelegation, TrainingRefusedError } from '@memberjunction/predictive-studio';
-import { RigStorage } from './lib/rig-storage';
 
 /** Sample values for each retired input a `--retired=` flag names (the operation refuses them by presence). */
 const RETIRED_SAMPLES: Required<RetiredTrainModelInputs> = {
@@ -78,13 +76,8 @@ async function main(): Promise<void> {
   }
   const { provider, user, pool } = await BootstrapAI();
   try {
-    const storage = await RigStorage.Activate(provider, user);
-    try {
-      if (process.argv.includes('--via-operation')) return await trainViaOperation(pipelineId, provider, user);
-      await trainViaEngine(pipelineId, provider, user);
-    } finally {
-      await RigStorage.Restore(provider, user, storage);
-    }
+    if (process.argv.includes('--via-operation')) return await trainViaOperation(pipelineId, provider, user);
+    await trainViaEngine(pipelineId, provider, user);
   } finally {
     await pool.close();
   }

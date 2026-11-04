@@ -39,7 +39,7 @@ The catalog (`src/data/catalog.ts`) has 24 entries. With their base seeds that m
 
 It records the ID of every pipeline and model it creates, and the exact names of every agent run's pipelines. `RunFixtures.CleanupRun` looks those names up again (an agent run can create its pipelines after the client call returns), deletes exactly the recorded rows, and closes the harness's database pool.
 
-Training stores model artifacts through an active File Storage Provider. When none is active, the harness switches on the first one by priority, but only on a private database (`MJ_PS_PR<n>_<agent>` or CI's `test`); on any other database it refuses. `CleanupRun` sets the provider's `IsActive` back to what it was.
+Training stores model artifacts through the File Storage Provider `PS_STORAGE_PROVIDER` names in MJAPI's environment (default `Local File System`, rooted at `STORAGE_LOCAL_ROOT`), whatever its `IsActive` flag, so the harness switches no provider on. A provider whose driver is not configured on the server refuses every training run before the sidecar is called.
 
 ### Python
 

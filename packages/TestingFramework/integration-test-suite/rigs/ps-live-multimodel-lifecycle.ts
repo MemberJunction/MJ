@@ -52,8 +52,8 @@
  * AUTH: system API key from MJ_API_KEY (x-mj-api-key) via the shared harness — no secrets here.
  *
  * PREREQUISITES:
- *   - MJAPI up on :4000, built WITH the Predictive Studio server-bootstrap fix AND the
- *     local-disk artifact fallback (so train/score work without remote artifact storage).
+ *   - MJAPI up on :4000, built WITH the Predictive Studio server-bootstrap fix, and `PS_STORAGE_PROVIDER` naming a
+ *     provider configured on it for model files (default "Local File System", rooted at STORAGE_LOCAL_ROOT).
  *   - The Python sidecar reachable by MJAPI (managed child-process default is fine).
  *   - AssociationDemo data loaded (Memberships / Event Registrations / Enrollments populated).
  *   - MJ_API_KEY set in the environment (or .env resolved by the harness).
@@ -61,8 +61,7 @@
  * USAGE (from the repo root, with MJAPI already up on :4000 and its Python sidecar reachable):
  *   PS_INTEGRATION=1 npx tsx packages/TestingFramework/integration-test-suite/rigs/ps-live-multimodel-lifecycle.ts
  */
-import { RigStorage } from './lib/rig-storage';
-import { RunRecords, type FileStorageActivation } from '@memberjunction/predictive-studio-truth-suite';
+import { RunRecords } from '@memberjunction/predictive-studio-truth-suite';
 import { LoadEnv, LoadClientConfig } from './lib/harness';
 import { RequireCheck, ShippedModelID } from './lib/ps-train-output';
 import { BindUnitAndProtocol, DeleteCreatedAlgorithm, DeleteRecordedRows, EnsureDriverAlgorithm, ReportCleanup, type RigAlgorithm } from './lib/ps-rig-lifecycle';
@@ -402,12 +401,9 @@ async function main(): Promise<void> {
 
   let algorithm: RigAlgorithm | undefined;
   const results: ModelResult[] = [];
-  let storage: FileStorageActivation | null = null;
   let algorithmCleanupFailures = 0;
 
   try {
-    // Training stores its artifacts through an active File Storage Provider, made available as the gate harness does.
-    storage = await RigStorage.Activate(route, user);
     banner('RESOLVE SHARED ALGORITHM');
     algorithm = await EnsureDriverAlgorithm(route, user, DRIVER_KEY, TAG);
     console.log(`  Algorithm row: ${algorithm.ID} (driver '${DRIVER_KEY}', ${algorithm.Created ? 'created' : 'reused'})`);
@@ -422,7 +418,6 @@ async function main(): Promise<void> {
     if (algorithm && !algorithm.Created) console.log(`  reused algorithm ${algorithm.ID} — left in place`);
     algorithmCleanupFailures = ReportCleanup(await DeleteCreatedAlgorithm(route, user, algorithm));
     printSummary(results, (Date.now() - t0) / 1000);
-    await RigStorage.Restore(route, user, storage);
   }
   const cleanupFailures = algorithmCleanupFailures + results.reduce((n, r) => n + r.cleanupFailures, 0);
   process.exit(cleanupFailures === 0 ? 0 : 1);

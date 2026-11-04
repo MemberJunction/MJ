@@ -4,7 +4,6 @@ export * from './stats/seed-rules';
 export * from './harness/types';
 export * from './harness/run-fixtures';
 export * from './harness/cleanup';
-export * from './harness/file-storage';
 export * from './harness/containment-probe';
 export * from './harness/datasets';
 export * from './harness/agent-plan';

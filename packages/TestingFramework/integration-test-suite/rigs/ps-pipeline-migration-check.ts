@@ -29,7 +29,6 @@ import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { ADVERSE_CLASS_HOLD_REASON, PredictionUnit, UtcDay } from '@memberjunction/predictive-studio-core';
 import { MetadataEntityFactory, PipelineMigration, TrainingDelegation, type MigrationDeps, type MigrationReportRow } from '@memberjunction/predictive-studio';
 import { HarnessCleanup, RunRecords } from '@memberjunction/predictive-studio-truth-suite';
-import { RigStorage } from './lib/rig-storage';
 
 const PREFIX = 'Pipeline migration check';
 const LEGACY_PIPELINE_ID = process.env.PS_LEGACY_PIPELINE_ID || '50616EEC-34BB-4E7C-B3DA-5CFF94E1ECF2';
@@ -191,12 +190,7 @@ async function main(): Promise<void> {
     const copies = await createCopies(provider, user, await loadPipeline(provider, user, LEGACY_PIPELINE_ID));
     console.log(JSON.stringify({ copies: Object.fromEntries(Object.entries(copies).map(([k, p]) => [k, p.ID])) }));
     await steps1to3(deps, copies);
-    const storage = await RigStorage.Activate(provider, user);
-    try {
-      await step4(deps, copies);
-    } finally {
-      await RigStorage.Restore(provider, user, storage);
-    }
+    await step4(deps, copies);
     await step5(deps);
   } finally {
     await pool.close();

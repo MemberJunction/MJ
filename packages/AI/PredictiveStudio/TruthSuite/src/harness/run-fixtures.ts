@@ -3,7 +3,6 @@ import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { RunView, type UserInfo } from '@memberjunction/core';
 import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
-import { HarnessFileStorage, type FileStorageActivation } from './file-storage';
 import { HarnessDatasets, type DatasetPool } from './datasets';
 import { HarnessPipelines, type AlgorithmRow } from './pipelines';
 import { HarnessTraining } from './train';
@@ -28,11 +27,10 @@ export interface RunContext {
   readonly RunID: string;
 }
 
-/** One harness and what it holds open: its mssql pool and the File Storage Provider it switched on, if any. */
+/** One harness and what it holds open: its mssql pool. */
 interface HarnessConnection {
   readonly Harness: TruthHarness;
   readonly Pool: DatasetPool;
-  readonly FileStorage: FileStorageActivation | null;
 }
 
 /** A harness bound to one client provider (see {@link RunFixtures.HarnessFor}). */
@@ -67,8 +65,8 @@ export class RunFixtures {
   /**
    * For every harness bound since the last cleanup: look up the pipelines of its agent runs again by their exact names
    * (a run can create them after the client call returned), delete the pipelines and models it recorded with their
-   * training runs and scoring bindings through the entity layer, put back the File Storage Provider it switched on,
-   * and close its pool. Every step is attempted; throws one error naming each failure. No-op when nothing was bound.
+   * training runs and scoring bindings through the entity layer, and close its pool. Every step is attempted; throws
+   * one error naming each failure. No-op when nothing was bound.
    */
   public static async CleanupRun(user: UserInfo): Promise<void> {
     const bound = RunFixtures.bound;
@@ -90,7 +88,7 @@ export class RunFixtures {
     try {
       conn = await b.Connection;
     } catch {
-      return []; // the harness never connected, so it created, switched on and opened nothing
+      return []; // the harness never connected, so it created and opened nothing
     }
     const h = conn.Harness;
     const failures: string[] = [];
@@ -101,13 +99,6 @@ export class RunFixtures {
       failures.push(...(await HarnessCleanup.DeleteRecorded(HarnessCleanup.EntityStore(h.Provider, user), h.Created)));
     } catch (e) {
       failures.push(e instanceof Error ? e.message : String(e));
-    }
-    if (conn.FileStorage) {
-      try {
-        await HarnessFileStorage.Restore(h.Provider, user, conn.FileStorage);
-      } catch (e) {
-        failures.push(e instanceof Error ? e.message : String(e));
-      }
     }
     try {
       await conn.Pool.close();
@@ -172,17 +163,16 @@ export class RunFixtures {
   }
 
   /**
-   * The harness on a caller's provider: makes sure model artifacts have an active storage provider (recording any it
-   * switched on), then opens the dataset pool. The pool is closed again if building the harness fails.
+   * The harness on a caller's provider: opens the dataset pool, closed again if building the harness fails. Model
+   * files need no setup here: training stores them through the provider `PS_STORAGE_PROVIDER` names, whatever its
+   * `IsActive` flag.
    */
   private static async connect(provider: GraphQLDataProvider, user: UserInfo): Promise<HarnessConnection> {
-    const fileStorage = await HarnessFileStorage.EnsureActive(provider, user);
     const pool = await HarnessDatasets.OpenDatasetPool();
     try {
-      return { Harness: await RunFixtures.harnessFrom(provider, user, pool), Pool: pool, FileStorage: fileStorage };
+      return { Harness: await RunFixtures.harnessFrom(provider, user, pool), Pool: pool };
     } catch (e) {
       await pool.close();
-      if (fileStorage) await HarnessFileStorage.Restore(provider, user, fileStorage);
       throw e;
     }
   }

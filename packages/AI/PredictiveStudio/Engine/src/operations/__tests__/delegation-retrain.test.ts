@@ -6,7 +6,7 @@ import { SnapshotRetrainer, type RetrainResult } from '../../snapshot/snapshot-r
 import { MJSidecarTrainer } from '../../training/seams';
 import type { ITrainerEvaluator, TrainingDeps } from '../../training/types';
 
-/** A provider whose RunView answers no rows (the deps builder only looks up the active File Storage Provider). */
+/** A provider whose RunView answers no rows (building the deps reads nothing: the storage provider is resolved lazily). */
 const provider = {
   CurrentUser: { Email: 'spy@example.com' } as UserInfo,
   async RunView<T>(_params: RunViewParams): Promise<RunViewResult<T>> {

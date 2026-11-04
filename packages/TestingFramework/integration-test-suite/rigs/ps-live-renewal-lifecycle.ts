@@ -27,8 +27,7 @@
  * USAGE (from the repo root, with MJAPI already up on :4000 and its Python sidecar reachable):
  *   PS_INTEGRATION=1 npx tsx packages/TestingFramework/integration-test-suite/rigs/ps-live-renewal-lifecycle.ts
  */
-import { RigStorage } from './lib/rig-storage';
-import { RunRecords, type FileStorageActivation } from '@memberjunction/predictive-studio-truth-suite';
+import { RunRecords } from '@memberjunction/predictive-studio-truth-suite';
 import { LoadEnv, LoadClientConfig } from './lib/harness';
 import { RequireCheck, ShippedModelID } from './lib/ps-train-output';
 import { BindUnitAndProtocol, DeleteRecordedRows, EnsureDriverAlgorithm, ReportCleanup, type RigAlgorithm } from './lib/ps-rig-lifecycle';
@@ -153,7 +152,6 @@ async function main(): Promise<void> {
   let algorithm: RigAlgorithm | undefined;
   let cleanupFailures = 0;
 
-  let storage: FileStorageActivation | null = null;
   try {
     // ── 1. Resolve entities + algorithm ──────────────────────────────────────
     banner('1. RESOLVE ENTITIES + ALGORITHM');
@@ -171,8 +169,6 @@ async function main(): Promise<void> {
     console.log(`  Algorithm row: ${algorithm.ID} (driver '${DRIVER_KEY}', ${algorithm.Created ? 'created' : 'reused'})`);
 
     // ── 2. Create the renewal pipeline ───────────────────────────────────────
-    // Training stores its artifacts through an active File Storage Provider, made available as the gate harness does.
-    storage = await RigStorage.Activate(route, user);
     banner('2. CREATE ML TRAINING PIPELINE + BIND UNIT AND PROTOCOL');
     const pipeline = await createPipeline(md, user, algorithm.ID);
     records.RecordPipeline(pipeline.ID);
@@ -250,7 +246,6 @@ async function main(): Promise<void> {
   } finally {
     banner('CLEANUP');
     cleanupFailures = ReportCleanup(await DeleteRecordedRows(route, user, records, algorithm));
-    await RigStorage.Restore(route, user, storage);
   }
   process.exit(cleanupFailures === 0 ? 0 : 1);
 }
