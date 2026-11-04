@@ -34,6 +34,11 @@ function SimpleChart({
   
   const canvasRef = React.useRef(null);
   const chartInstanceRef = React.useRef(null);
+  // The Chart.js instance is only rebuilt when the chart's data or options change, so its
+  // onClick reads the caller's handler through a ref. Otherwise a handler that compares
+  // against the caller's state (selection toggles) keeps the first render's values.
+  const onDataPointClickRef = React.useRef(onDataPointClick);
+  onDataPointClickRef.current = onDataPointClick;
   const [error, setError] = React.useState(null);
   const [entityInfo, setEntityInfo] = React.useState(null);
 
@@ -500,7 +505,7 @@ function SimpleChart({
           event.native.target.style.cursor = activeElements.length > 0 ? 'pointer' : 'default';
         },
         onClick: (_event, elements) => {
-          if (elements && elements.length > 0 && onDataPointClick) {
+          if (elements && elements.length > 0 && onDataPointClickRef.current) {
             const clickedElement = elements[0];
             const categoryIndex = clickedElement.index;
             const datasetIndex = clickedElement.datasetIndex;
@@ -558,7 +563,7 @@ function SimpleChart({
               total = processData.values.reduce((a, b) => a + b, 0);
             }
 
-            onDataPointClick({
+            onDataPointClickRef.current({
               chartType: actualChartType,
               series: isStacked ? clickedLabel : (valueField || 'Count'),
               label: clickedLabel,
