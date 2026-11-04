@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/excel-addin-server",
-  "version": "6.2.0-edge.8",
+  "version": "6.2.0",
   "description": "MemberJunction: the Excel add-in's server half - a Server Extension that serves the add-in to Excel from each MJ host, the add-in manifest and connected-workbook builders, and the server bodies of the ExcelAddin.* Remote Operations",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,13 +17,13 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/api-keys": "6.2.0-edge.8",
-    "@memberjunction/api-keys-base": "6.2.0-edge.8",
-    "@memberjunction/core": "6.2.0-edge.8",
-    "@memberjunction/core-entities": "6.2.0-edge.8",
-    "@memberjunction/excel-addin": "6.2.0-edge.8",
-    "@memberjunction/global": "6.2.0-edge.8",
-    "@memberjunction/server-extensions-core": "6.2.0-edge.8",
+    "@memberjunction/api-keys": "6.2.0",
+    "@memberjunction/api-keys-base": "6.2.0",
+    "@memberjunction/core": "6.2.0",
+    "@memberjunction/core-entities": "6.2.0",
+    "@memberjunction/excel-addin": "6.2.0",
+    "@memberjunction/global": "6.2.0",
+    "@memberjunction/server-extensions-core": "6.2.0",
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "jszip": "^3.10.1"
