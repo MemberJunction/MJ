@@ -157,3 +157,53 @@ describe('bracket identifiers left in a dollar-quoted block', () => {
     expect(result.OutputSQL).toContain(`p_ID_ab12 := (SELECT "ID" FROM __mj."Widget" WHERE LOWER("Name") = LOWER('Widgets'));`);
   });
 });
+
+/**
+ * #6337: a Metadata_Sync whose last save was followed by the session footer converted to almost
+ * nothing and reported 0 errors and 0 gaps. Two sessions, as DEPLOYMENT.md Step 3 produces, each
+ * ending with the logger's footer in the same GO batch as its last save.
+ */
+describe('Metadata_Sync session footers (#6337)', () => {
+  const save = (suffix: string, guard = `[ID] = @ID_${suffix}`): string => [
+    `DECLARE @ID_${suffix} UNIQUEIDENTIFIER,`,
+    `@Name_${suffix} NVARCHAR(50)`,
+    'SET',
+    `  @ID_${suffix} = '5F935B01-EC5F-4409-AADC-8063A94936D6'`,
+    'SET',
+    `  @Name_${suffix} = N'Widget' IF NOT EXISTS (`,
+    `    SELECT 1 FROM [\${flyway:defaultSchema}].[Widget] WHERE ${guard}`,
+    '  )',
+    'BEGIN',
+    `EXEC [\${flyway:defaultSchema}].spCreateWidget @ID = @ID_${suffix},`,
+    `  @Name = @Name_${suffix}`,
+    'END ELSE',
+    'BEGIN',
+    `EXEC [\${flyway:defaultSchema}].spUpdateWidget @ID = @ID_${suffix},`,
+    `  @Name = @Name_${suffix}`,
+    'END;',
+  ].join('\n');
+  const footer = '\n\n-- End of SQL Logging Session\n-- Session ID: abc\n-- Total Statements: 2\n';
+  const performs = (sql: string): number => (sql.match(/\bPERFORM\b/g) ?? []).length;
+
+  it('keeps every save of a two-session file', () => {
+    const result = convertSQL([save('a1'), save('a2') + footer, save('b1'), save('b2') + footer].join('\n\n'));
+    // Each save calls the create or the update, each through its JSONB and typed forms.
+    expect(performs(result.OutputSQL)).toBe(16);
+    expect(result.Stats.Gaps).toBe(0);
+    expect(result.OutputSQL).not.toContain('SKIPPED');
+  });
+
+  it('keeps every save of a single session ending in a create-or-update', () => {
+    const result = convertSQL(save('a1') + '\n\n' + save('a2') + footer);
+    expect(performs(result.OutputSQL)).toBe(8);
+    expect(result.Stats.Gaps).toBe(0);
+  });
+
+  it('counts a save it could not convert as a gap and keeps the saves around it', () => {
+    const unconvertible = save('a2', '[ID] = @ID_a2 OR [Name] = @Name_a2');
+    const result = convertSQL([save('a1'), unconvertible, save('a3')].join('\n\n'));
+    expect(result.Stats.Gaps).toBe(1);
+    expect(result.Stats.GapBatches.join('\n')).toContain('-- SKIPPED: EXEC block');
+    expect(performs(result.OutputSQL)).toBe(8);
+  });
+});

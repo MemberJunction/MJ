@@ -174,6 +174,66 @@ describe('ExecBlockRule — mj-sync create-or-update (IF NOT EXISTS … ELSE …
     expect(out).not.toMatch(/\[__mj\]|\bEXEC\b|\bBEGIN\s*\n\s*EXEC/);
     expect(out).not.toContain('SKIPPED');
   });
+
+  /** A create-or-update block whose guard is not the `[c] = @v` shape the rule converts. */
+  const unconvertibleGuard = upsert.replace('[ID] = @ID_af78', '[ID] = @ID_af78 OR [Name] = @Name_af78');
+
+  describe('comments after the closing END (#6337)', () => {
+    const footer = [
+      '',
+      '',
+      '-- End of SQL Logging Session',
+      '-- Session ID: d342985b-e1d0-4880-9a4c-d62a692eba26',
+      '-- Total Statements: 14',
+      '',
+    ].join('\n');
+
+    it('converts a last save followed by the session footer, and keeps the footer', () => {
+      const out = convert(`${upsert}\n${footer}`);
+      expect(out).toMatch(/THEN[\s\S]*PERFORM __mj\."spCreateAIVendor"\([\s\S]*ELSE[\s\S]*PERFORM __mj\."spUpdateAIVendor"\([\s\S]*END IF;/);
+      expect(out).not.toMatch(/\bEXEC\b|SKIPPED/);
+      expect(out).toContain('-- End of SQL Logging Session');
+    });
+
+    it('converts a save whose closing END carries a comment on the same line', () => {
+      const out = convert(`${upsert} -- last save`);
+      expect(out).toMatch(/PERFORM __mj\."spUpdateAIVendor"\(/);
+      expect(out).not.toMatch(/\bEXEC\b|SKIPPED/);
+    });
+
+    it('leaves a batch of comments alone', () => {
+      expect(convert('-- End of SQL Logging Session\n-- Duration: 5833ms')).toBe('-- End of SQL Logging Session\n-- Duration: 5833ms');
+    });
+  });
+
+  describe('a block that is not convertible as a whole (#6337)', () => {
+    it('skips it instead of emitting a DO block holding raw T-SQL', () => {
+      const out = convert(unconvertibleGuard);
+      expect(out).toContain('-- SKIPPED: EXEC block (unparseable upsert)');
+      expect(out).not.toMatch(/^DO \$/m);
+      expect(out).not.toMatch(/^\s*BEGIN\s*$/m);
+    });
+
+    it('skips a parsed create-or-update that uses an undeclared variable', () => {
+      const out = convert(upsert.replace('@ID_af78 UNIQUEIDENTIFIER,\n', ''));
+      expect(out).toContain('-- SKIPPED: EXEC block (unparseable upsert)');
+      expect(out).not.toMatch(/^DO \$/m);
+    });
+
+    it('does not mistake the guard text inside a string value for a guard', () => {
+      const out = convert([
+        'DECLARE @ID_ab12 UNIQUEIDENTIFIER,',
+        '@Notes_ab12 NVARCHAR(MAX)',
+        'SET',
+        "  @ID_ab12 = '5F935B01-EC5F-4409-AADC-8063A94936D6'",
+        'SET',
+        "  @Notes_ab12 = N'Wrap it: IF NOT EXISTS (SELECT 1 FROM t) BEGIN x END' EXEC [__mj].spUpdateWidget @ID = @ID_ab12,",
+        '  @Notes = @Notes_ab12',
+      ].join('\n'));
+      expect(out).toMatch(/PERFORM __mj\."spUpdateWidget"\(/);
+      expect(out).not.toContain('SKIPPED');
+    });
+  });
 });
 
 /**
