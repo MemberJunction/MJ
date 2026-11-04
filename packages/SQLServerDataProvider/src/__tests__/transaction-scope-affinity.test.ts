@@ -129,7 +129,7 @@ describe('SQLServerDataProvider — transaction scope affinity (#4786)', () => {
     expect(savepointSQL.every((q) => q.viaTransaction === true)).toBe(true);
   });
 
-  it('a fire-and-forget BaseEntitySaveQueue write queued by a member lands on the pool, even when it runs behind the COMMIT (#6251 EA6)', async () => {
+  it('a detachFromTransaction queue write queued by a member lands on the pool, even when it runs behind the COMMIT (#6251 EA6)', async () => {
     // ActionEngine logs a durable submission this way from inside the save's transaction: the
     // write is queued, never awaited, and the save commits. Bound to the transaction, the write
     // reached SQL behind the COMMIT and was rejected, so the log row was lost.
@@ -150,7 +150,7 @@ describe('SQLServerDataProvider — transaction scope affinity (#4786)', () => {
         return true;
       },
     } as unknown as BaseEntity;
-    const queue = new BaseEntitySaveQueue({ onError: () => undefined });
+    const queue = new BaseEntitySaveQueue({ onError: () => undefined, detachFromTransaction: true });
     queue.Update(entity);
 
     const commit = provider.CommitTransaction();
@@ -162,5 +162,32 @@ describe('SQLServerDataProvider — transaction scope affinity (#4786)', () => {
 
     expect((await queue.Flush()).failures).toBe(0);
     expect(via("INSERT INTO Log VALUES ('submitted')")).toBe(false);
+  });
+
+  describe('BaseEntitySaveQueue transaction membership', () => {
+    const queuedInsert = (text: string) => ({
+      EntityInfo: { Name: 'Row' },
+      LatestResult: null,
+      ProviderToUse: provider,
+      Save: async () => { await provider.ExecuteSQL(text); return true; },
+    }) as unknown as BaseEntity;
+
+    it('by default a save queued by a member joins its transaction (an owner that flushes before commit relies on it)', async () => {
+      await provider.BeginTransaction();
+      const queue = new BaseEntitySaveQueue({ onError: () => undefined });
+      queue.Insert(queuedInsert("INSERT INTO Child VALUES ('attached')"));
+      expect((await queue.Flush()).failures).toBe(0);
+      await provider.CommitTransaction();
+      expect(via("INSERT INTO Child VALUES ('attached')")).toBe(true);
+    });
+
+    it('with detachFromTransaction a save queued by a member runs on the pool', async () => {
+      await provider.BeginTransaction();
+      const queue = new BaseEntitySaveQueue({ onError: () => undefined, detachFromTransaction: true });
+      queue.Insert(queuedInsert("INSERT INTO Log VALUES ('detached')"));
+      expect((await queue.Flush()).failures).toBe(0);
+      await provider.CommitTransaction();
+      expect(via("INSERT INTO Log VALUES ('detached')")).toBe(false);
+    });
   });
 });

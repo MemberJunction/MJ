@@ -255,8 +255,13 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * race the INSERT's reload (the "stuck at EndedAt=NULL / shows Running forever" bug is structurally
     * impossible). The queue is self-bounding (in-flight tasks only), so it needs no flush on this
     * long-lived singleton.
+    *
+    * `detachFromTransaction`: nobody awaits these saves, so a log row written from inside a save's
+    * transaction (a durable submission) would otherwise reach SQL behind its COMMIT and be lost
+    * (#6251 EA6). Detaching is safe here because every FK on the row points at committed metadata
+    * (Action, User, Entity Action), never at a row the open transaction wrote.
     */
-   private readonly _logQueue = new BaseEntitySaveQueue({ saveReturnMode: 'datestamps_only' });
+   private readonly _logQueue = new BaseEntitySaveQueue({ saveReturnMode: 'datestamps_only', detachFromTransaction: true });
    /** Per-run cache of resolved BaseAction instances so CheckAudience, ValidateInputs, and RunClassBasedAction share one instance. */
    private readonly _actionInstanceCache = new WeakMap<RunActionParams, BaseAction | null>();
 
