@@ -653,6 +653,6 @@ judges, reporting model and gates carry over.
 - Paper: [Just-in-Time Catching Test Generation at Meta (arXiv:2601.22832)](https://arxiv.org/abs/2601.22832)
 - Blog: [Catching Bugs Before They Land (Meta, 2026-10-29)](https://engineering.fb.com/2026/10/29/security/catching-bugs-before-they-land-jittestings-human-on-the-loop-approach-at-full-scale/)
 - Gemini prices: [aistudio.google.com/docs/pricing](https://aistudio.google.com/docs/pricing)
-- MJ: [`plans/autodev/PLAN.md`](../autodev/PLAN.md), `.github/workflows/test.yml`, `.github/workflows/integration.yml`,
+- MJ: [`plans/autodev/PLAN.md`](autodev/PLAN.md), `.github/workflows/test.yml`, `.github/workflows/integration.yml`,
   `packages/Rubrics/Engine/src/statistics.ts`, `packages/TestingFramework/testing-integration/src/check.ts`,
   `packages/UnitTesting/src/`
