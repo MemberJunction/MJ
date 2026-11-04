@@ -1,5 +1,59 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 6.2.0-edge.8
+
+### Minor Changes
+
+- ac18db8: `spDeleteEntityWithCoreDependencies` now deletes an entity's `GraphEdge` rows (as source or target) and its `GraphEdgeTypeEndpoint` rows, and clears `Conversation.AnchorType`, `AnchorKey`, and `AnchorMetadata` alongside `LinkedEntityID` / `LinkedRecordID` (satisfying `CK_Conversation_AnchorLinkBinding`), so removing an entity that has semantic graph data or anchored conversations no longer fails. The CodeGenLib delete-policy fixture records the new references and `alsoNull` columns. CI's unit-test shards also now fail when a test task fails, instead of reporting `tee`'s exit code.
+
+### Patch Changes
+
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [e69634e]
+- Updated dependencies [db1528d]
+- Updated dependencies [373b180]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/core-entities-server@6.2.0-edge.8
+  - @memberjunction/aiengine@6.2.0-edge.8
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.8
+  - @memberjunction/generic-database-provider@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+  - @memberjunction/postgresql-dataprovider@6.2.0-edge.8
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.8
+  - @memberjunction/actions-base@6.2.0-edge.8
+  - @memberjunction/actions@6.2.0-edge.8
+  - @memberjunction/ai-core-plus@6.2.0-edge.8
+  - @memberjunction/ai-prompts@6.2.0-edge.8
+  - @memberjunction/external-data-sources@6.2.0-edge.8
+  - @memberjunction/external-data-source-databricks@6.2.0-edge.8
+  - @memberjunction/external-data-source-mongodb@6.2.0-edge.8
+  - @memberjunction/external-data-source-mysql@6.2.0-edge.8
+  - @memberjunction/external-data-source-oracle@6.2.0-edge.8
+  - @memberjunction/external-data-source-postgres@6.2.0-edge.8
+  - @memberjunction/external-data-source-sqlserver@6.2.0-edge.8
+  - @memberjunction/external-data-source-snowflake@6.2.0-edge.8
+  - @memberjunction/query-processor@6.2.0-edge.8
+  - @memberjunction/ai@6.2.0-edge.8
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.8
+  - @memberjunction/cli-core@6.2.0-edge.8
+  - @memberjunction/sql-dialect@6.2.0-edge.8
+  - @memberjunction/sql-parser@6.2.0-edge.8
+  - @memberjunction/config@6.2.0-edge.8
+
 ## 6.2.0-edge.7
 
 ### Minor Changes

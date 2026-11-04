@@ -1,5 +1,149 @@
 # Change Log - @memberjunction/server
 
+## 6.2.0-edge.8
+
+### Minor Changes
+
+- 9cb815b: Add Anchored Conversations and Record Commenting across the database schema (`AnchorType`, `AnchorKey`, `AnchorMetadata` with `IConversationAnchorMetadata`, `IsResolved`, `ResolvedByUserID`, `ResolvedAt`), `ConversationEngine`, server-side RLS + FLS read enforcement (`AnchoredConversationPostRunViewHook` on `MJ: Conversations` and `MJ: Conversation Details`), two-stage write-time FLS restricted-field classification via `AIPromptRunner` (`Anchored Comment Restricted Field Classifier`) without value-matching refusal oracles or restricted `quotedValue` snapshots, FLS/RLS-aware `@mention` notifications, entity-level commenting configuration (`MJ: Entities.Configuration.Comments.Enabled` and `RequiredPermission` — enabled by default and configurable per entity via `Configuration.Comments.Enabled: false`), record-bound "Ask AI" overlay conversations (`LinkedEntityID` + `LinkedRecordID`), and `@memberjunction/ng-base-forms` (`<mj-record-comments>` with `MJ_CommentsPanel_Width` user preference persistence, field/section/group comment badges, `FormSectionIndicators` rollup, and click-to-navigate anchor scrolling).
+- 59e32e0: Add Diagnostic Bundles: scoped diagnostic sessions that capture server logs, SQL and traces and client logs, network, telemetry and breadcrumbs; a two-stage scrubber; the `.mjdiag` archive format with structural verification; X25519 + AES-256-GCM envelope encryption; an MJAPI intake endpoint with quarantine-then-promote storage; automated findings; and CLI and Explorer surfaces. Adds the diagnostic session, chunk and bundle tables and their metadata. Adds the `MJ: Diagnostic Sender Registrations` table: a sender enrols once with a one-time registration code, then signs every intake request with `MJDiag-Ed25519`, so the intake endpoint reads no API key. Adds the `Diagnostics.IssueSenderRegistrationCode` and `Diagnostics.EnrolSender` remote operations and the `Diagnostics Sender Key` and `Diagnostics Intake Key` credential types. Adds `SanitizeForLog` to `@memberjunction/global`. `BaseServerMiddleware.Initialize` and `ConfigureExpressApp` now receive an optional `ServerMiddlewareContext` that carries the server's `ApiRoute` builder. The Slack messaging extension and the component-registry auth example log request values on one line. `Diagnostics.RevokeSender` and `Diagnostics.ReactivateSender` revoke and reactivate a sender; a direct save of a sender registration needs `Diagnostics: Manage Intake` and cannot change its status, key, code or timestamp fields. The `MJ: Diagnostic Sender Registrations` form has **Revoke** and **Reactivate** toolbar buttons that call these operations. `FormToolbarActionLifecycleContext` in `@memberjunction/ng-base-forms` gains an optional `Injector` (the form container's injector), so a toolbar action can resolve Angular services such as `MJConfirmService`. `BaseFormComponent.RefreshRecord` accepts an optional `{ ShowSuccessNotification: false }` that skips the "Record refreshed" notification. The intake routes and `POST /enroll` answer 503 when the registration lookup fails. Adds the `Diagnostics.External.AllowUnscrubbedSend` setting: a bundle sent to an external collector must be built with literal scrubbing unless it is `true`. `Diagnostics.GetMySessionStatus` returns `CaptureEnabled` and `RequireLiteralScrubbing`. Diagnostics access comes only from the `Diagnostics: *` authorizations (directly or through a parent authorization) or the Owner user type. The `GetServerTelemetry*` queries in MJServer's `TelemetryResolver` now need Owner privileges or the `Diagnostics: Run Sessions` authorization. `WithoutDiagnosticCapture` in `@memberjunction/core` suppresses capture only in the current async context when a context provider is registered. `GraphQLDataProvider.ClearClientCache` also deletes the `MJ_Diagnostics` IndexedDB database. `mj diag` reads the private key from `--private-key-file` or `MJ_DIAG_PRIVATE_KEY`. MJServer logs only the user ID for a verified token.
+
+### Patch Changes
+
+- 88cdaf3: A streamed agent chunk carries a run summary (ID, AgentID, Agent, ParentRunID, Status, ConversationID, ConversationDetailID) instead of the run's full values. The full values hold every step and prompt run, so a long run sent megabytes per chunk. Progress messages and the final result still carry the full run.
+- 6849b00: Conversation folders (`MJ: Projects`) get a three-tier permission model: Private (the default for new folders, owner only), Shared (granted to users or roles through `MJ: Resource Permissions` with the new `Projects` resource type) and Public (`OwnerUserID` null). A conversation in a Shared or Public folder is listed for the people the folder is shared with, at the folder's level (View for a Public folder), only when its owner opts in with `inheritFolderAccess: true` in `AdditionalData`; by default it stays visible only to its owner and the people it is shared with. Each folder is shared on its own: a subfolder does not inherit its parent's grants, the same rule the server's read filter applies.
+
+  Only a conversation's owner can move it to another folder, change its owner, or change whether it inherits its folder's access; `MJConversationEntityServer` refuses anyone else, and the list and chat header ask before moving an inheriting conversation into a Shared or Public folder. Only a folder's owner can change its owner or parent, including making it Public; the new `MJProjectEntityServer` refuses anyone else, and nobody can claim a Public folder. `MJ: Projects` updates always baseline on the stored row, so the owner check holds even if a host turns off record-change tracking for folders. Nobody, the server included, can move a folder into itself or one of its subfolders. The server saves `AdditionalData` as compact JSON and refuses a value the list's SQL filter and the parser would read differently, so they agree on whether a conversation inherits. Both checks exempt the server itself and the system user, so agent runs as the system user (for example a widget agent using an update-record action) can still move or change these. The upgrade migration backfills `OwnerUserID` on legacy folders (the folder's creator first), so they do not all become Public, and widens the UI role's read filter on `MJ: Projects` to folders shared with the user or their roles. It leaves conversations alone: inheritance is off until an owner turns it on, so none becomes visible to anyone who could not see it before.
+
+  Folder sharing decides which conversations appear in a person's list. It is not a read boundary on its own: core ships no UI-role row-level security on `MJ: Conversations` or `MJ: Conversation Details`, so a host that needs hard read isolation must supply that RLS.
+
+- dd34a5c: Knowledge Hub upstream fixes across SearchEngine, ContentAutotagging, TagEngine, GraphQLDataProvider, MJServer, and Angular Explorer dashboards:
+  - Tokenize multi-word SQL search queries in `EntitySearchProvider.convertResults` so records matched across multiple fields are not dropped when scoring in memory.
+  - Filter `GetContentSourceLastRunDate` by `Status = 'Completed' AND ProcessedItems > 0`, skip vector mutations when `vectorDB.IsReadOnly` is true, filter website and cloud storage sources with `FilterByUUIDs`, and emit per-URL crawl progress.
+  - Support client-supplied `pipelineRunID` in `RunAutotagPipeline` (subscribing before firing the mutation to eliminate the initial progress race), reject duplicate `pipelineRunID` values upfront, emit 3s progress heartbeats during long crawls, and pass actual processed counts to `publishProgress`.
+  - Expose `MergeTags` and `RecomputeTagCoOccurrence` GraphQL mutations in `TagGovernanceResolver` and `GraphQLAIClient`, re-parent child tags during `TagGovernanceEngine.MergeTags`, and merge existing active tags during `PromoteSuggestion` with `merge-into-existing`.
+  - Skip redundant `Save()` calls in `TagCoOccurrenceEngine.upsertAndPrune` when `CoOccurrenceCount` is unchanged.
+  - Clean up tag references before deleting orphan tags in `DeleteAllOrphans`, resolve active vector database health by `VectorDatabaseID`, and use `UUIDMap`/`IndexByUUID` for case-insensitive UUID lookups in Knowledge Hub cluster visualization and configuration dashboards.
+- 9b38349: Point the package's `types` entry and a new `types` export condition at the built declarations in `dist/index.d.ts`, so consumers no longer type-check the server's TypeScript sources under their own compiler options.
+- 90e05a4: Replace the nested UUID scans in the meeting participant update and the query-rendering integration check with the UUID set helpers, and drop their entries from the nested-scan baseline.
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [63e6af4]
+- Updated dependencies [477b49b]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [dd34a5c]
+- Updated dependencies [5bd0135]
+- Updated dependencies [e69634e]
+- Updated dependencies [365e3a1]
+- Updated dependencies [db1528d]
+- Updated dependencies [373b180]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/core-entities-server@6.2.0-edge.8
+  - @memberjunction/aiengine@6.2.0-edge.8
+  - @memberjunction/tag-engine@6.2.0-edge.8
+  - @memberjunction/storage@6.2.0-edge.8
+  - @memberjunction/esignature@6.2.0-edge.8
+  - @memberjunction/generic-database-provider@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.8
+  - @memberjunction/postgresql-dataprovider@6.2.0-edge.8
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.8
+  - @memberjunction/actions-base@6.2.0-edge.8
+  - @memberjunction/actions@6.2.0-edge.8
+  - @memberjunction/core-actions@6.2.0-edge.8
+  - @memberjunction/ai-core-plus@6.2.0-edge.8
+  - @memberjunction/ai-agents@6.2.0-edge.8
+  - @memberjunction/actions-bizapps-formbuilders@6.2.0-edge.8
+  - @memberjunction/integration-engine@6.2.0-edge.8
+  - @memberjunction/search-engine@6.2.0-edge.8
+  - @memberjunction/tag-engine-base@6.2.0-edge.8
+  - @memberjunction/livekit-room-server@6.2.0-edge.8
+  - @memberjunction/testing-engine-base@6.2.0-edge.8
+  - @memberjunction/testing-engine@6.2.0-edge.8
+  - @memberjunction/ai-prompts@6.2.0-edge.8
+  - @memberjunction/codegen-lib@6.2.0-edge.8
+  - @memberjunction/ai-agent-manager-actions@6.2.0-edge.8
+  - @memberjunction/ai-agent-manager@6.2.0-edge.8
+  - @memberjunction/ai-engine-base@6.2.0-edge.8
+  - @memberjunction/clustering-engine@6.2.0-edge.8
+  - @memberjunction/computer-use@6.2.0-edge.8
+  - @memberjunction/ai-mcp-client@6.2.0-edge.8
+  - @memberjunction/computer-use-engine@6.2.0-edge.8
+  - @memberjunction/ai-bridge-base@6.2.0-edge.8
+  - @memberjunction/ai-bridge-ringcentral@6.2.0-edge.8
+  - @memberjunction/ai-bridge-teams@6.2.0-edge.8
+  - @memberjunction/ai-bridge-twilio@6.2.0-edge.8
+  - @memberjunction/ai-bridge-vonage@6.2.0-edge.8
+  - @memberjunction/ai-bridge-server@6.2.0-edge.8
+  - @memberjunction/remote-browser-base@6.2.0-edge.8
+  - @memberjunction/remote-browser-cdp@6.2.0-edge.8
+  - @memberjunction/remote-browser-selfhost@6.2.0-edge.8
+  - @memberjunction/remote-browser-server@6.2.0-edge.8
+  - @memberjunction/ai-vectordb@6.2.0-edge.8
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.8
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.8
+  - @memberjunction/ai-vector-sync@6.2.0-edge.8
+  - @memberjunction/api-keys@6.2.0-edge.8
+  - @memberjunction/actions-apollo@6.2.0-edge.8
+  - @memberjunction/actions-bizapps-accounting@6.2.0-edge.8
+  - @memberjunction/actions-bizapps-crm@6.2.0-edge.8
+  - @memberjunction/actions-bizapps-lms@6.2.0-edge.8
+  - @memberjunction/actions-bizapps-social@6.2.0-edge.8
+  - @memberjunction/actions-peopledatalabs@6.2.0-edge.8
+  - @memberjunction/auth-providers@6.2.0-edge.8
+  - @memberjunction/communication-types@6.2.0-edge.8
+  - @memberjunction/communication-engine@6.2.0-edge.8
+  - @memberjunction/entity-communications-base@6.2.0-edge.8
+  - @memberjunction/entity-communications-server@6.2.0-edge.8
+  - @memberjunction/notifications@6.2.0-edge.8
+  - @memberjunction/communication-ms-graph@6.2.0-edge.8
+  - @memberjunction/communication-sendgrid@6.2.0-edge.8
+  - @memberjunction/component-registry-client-sdk@6.2.0-edge.8
+  - @memberjunction/credentials@6.2.0-edge.8
+  - @memberjunction/doc-utils@6.2.0-edge.8
+  - @memberjunction/encryption@6.2.0-edge.8
+  - @memberjunction/external-change-detection@6.2.0-edge.8
+  - @memberjunction/integration-engine-base@6.2.0-edge.8
+  - @memberjunction/integration-schema-builder@6.2.0-edge.8
+  - @memberjunction/interactive-component-types@6.2.0-edge.8
+  - @memberjunction/lists@6.2.0-edge.8
+  - @memberjunction/data-context@6.2.0-edge.8
+  - @memberjunction/data-context-server@6.2.0-edge.8
+  - @memberjunction/queue@6.2.0-edge.8
+  - @memberjunction/record-cloning@6.2.0-edge.8
+  - @memberjunction/record-comparison@6.2.0-edge.8
+  - @memberjunction/redis-provider@6.2.0-edge.8
+  - @memberjunction/scheduling-actions@6.2.0-edge.8
+  - @memberjunction/scheduling-engine-base@6.2.0-edge.8
+  - @memberjunction/scheduling-engine@6.2.0-edge.8
+  - @memberjunction/schema-engine@6.2.0-edge.8
+  - @memberjunction/server-extensions-core@6.2.0-edge.8
+  - @memberjunction/task-graph@6.2.0-edge.8
+  - @memberjunction/templates@6.2.0-edge.8
+  - @memberjunction/version-history@6.2.0-edge.8
+  - @memberjunction/work-queue-engine@6.2.0-edge.8
+  - @memberjunction/ai@6.2.0-edge.8
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.8
+  - @memberjunction/integration-progress-artifacts@6.2.0-edge.8
+  - @memberjunction/sql-dialect@6.2.0-edge.8
+  - @memberjunction/scheduling-base-types@6.2.0-edge.8
+  - @memberjunction/sql-parser@6.2.0-edge.8
+  - @memberjunction/config@6.2.0-edge.8
+  - @memberjunction/lists-base@6.2.0-edge.8
+  - @memberjunction/network-utils@6.2.0-edge.8
+  - @memberjunction/theme-engine@6.2.0-edge.8
+
 ## 6.2.0-edge.7
 
 ### Minor Changes

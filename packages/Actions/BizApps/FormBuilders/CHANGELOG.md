@@ -1,5 +1,32 @@
 # @memberjunction/actions-bizapps-formbuilders
 
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- 63e6af4: Installer and CLI fixes. `mj install` without `--tag` now pins the CLI, migrate and codegen to the release the scaffold resolved (persisted for resume) instead of npm's `latest` dist-tag, and warns when it has to fall back to `latest`. `--dir` is resolved to an absolute path, the resume guidance names that directory, and Windows gets a 30-minute dependency-install timeout. Monorepo installs clone the release tag with `git clone --depth 1` instead of extracting the zipball, and force pnpm. `mj migrate` defaults its request timeout to 30 minutes and names `MJ_MIGRATION_REQUEST_TIMEOUT` when a request times out. pdf-parse is raised to `^1.1.4`.
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [e69634e]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+  - @memberjunction/actions-base@6.2.0-edge.8
+  - @memberjunction/actions@6.2.0-edge.8
+  - @memberjunction/network-utils@6.2.0-edge.8
+
 ## 6.2.0-edge.7
 
 ### Patch Changes

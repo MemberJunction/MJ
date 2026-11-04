@@ -29355,6 +29355,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "StartedAt": "2026-10-13T00:00:00.000Z",
+            "EndedAt": "2026-12-01T00:00:00.000Z",
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
@@ -29362,7 +29363,7 @@
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 4 Argon (gemini-4-argon) introductory pricing on Google direct as of the October 13, 2026 GA launch: $2.00/1M input, $10.00/1M output, $0.10/1M cached input through November 30, 2026. Standard pricing from December 1, 2026 steps up to $4.00/1M input, $20.00/1M output, $0.20/1M cached input.",
+            "Comments": "Gemini 4 Argon (gemini-4-argon) introductory pricing on Google direct as of the October 13, 2026 GA launch: $2.00/1M input, $10.00/1M output, $0.10/1M cached input. Introductory period ends November 30, 2026, so this row is window-closed at 2026-12-01 and the successor row at $4.00/$20.00 takes over automatically (GetModelCost selects on Status='Active' AND the StartedAt/EndedAt window). Confirmed 2026-11-02 against the Gemini Developer API pricing page: https://ai.google.dev/gemini-api/docs/pricing",
             "CacheReadPricePerUnit": 0.1,
             "CacheWritePricePerUnit": null
           },
@@ -29370,8 +29371,8 @@
             "ID": "A4E82C91-71F4-4B83-9D12-8C3A4E5F6006"
           },
           "sync": {
-            "lastModified": "2026-10-20T23:18:42.766Z",
-            "checksum": "7ad33615b5e76d3e7005f894aaa54ee60b9727da9df8664a5b83c4950de8e8d2"
+            "lastModified": "2026-11-03T23:46:02.082Z",
+            "checksum": "0132b76753e68f15f2978b3ace37908bbebc5e929d23cca63bf606e8f67af000"
           }
         },
         {
@@ -29379,6 +29380,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
             "StartedAt": "2026-10-13T00:00:00.000Z",
+            "EndedAt": "2026-12-01T00:00:00.000Z",
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
@@ -29386,7 +29388,7 @@
             "OutputPricePerUnit": 10,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Gemini 4 Argon (gemini-4-argon) introductory pricing on Vertex AI at parity with Google direct: $2.00/1M input, $10.00/1M output, $0.10/1M cached input through November 30, 2026 ($4.00/$20.00 standard from December 1, 2026).",
+            "Comments": "Gemini 4 Argon (gemini-4-argon) introductory pricing on Vertex AI at parity with Google direct: $2.00/1M input, $10.00/1M output, $0.10/1M cached input. Window-closed at 2026-12-01 when the introductory period ends; successor row at $4.00/$20.00 takes over automatically. Rate mirrored from the Gemini Developer API pricing page (https://ai.google.dev/gemini-api/docs/pricing) as MJ has carried this pair at parity since launch; the Vertex AI pricing page was not independently readable on 2026-11-02.",
             "CacheReadPricePerUnit": 0.1,
             "CacheWritePricePerUnit": null
           },
@@ -29394,8 +29396,56 @@
             "ID": "A4E82C91-71F4-4B83-9D12-8C3A4E5F6007"
           },
           "sync": {
-            "lastModified": "2026-10-20T23:18:42.778Z",
-            "checksum": "f28f35dc9c3a59eb98d04882fdfa4f12aafd27faada8c80294b08a638cc04bf3"
+            "lastModified": "2026-11-03T23:46:02.089Z",
+            "checksum": "ddb4b8590c0c4da7a500b2a0848cbfb8205188c6c3b03c9eb55d9540e4056a79"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-12-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 4,
+            "OutputPricePerUnit": 20,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 4 Argon (gemini-4-argon) standard (post-introductory) pricing on Google direct, effective December 1, 2026: $4.00/1M input, $20.00/1M output, $0.20/1M cached input (output price includes thinking tokens). Not selected by GetModelCost until StartedAt passes, so the cutover from the $2.00/$10.00 introductory row needs no further edit. Confirmed 2026-11-02 from the Gemini Developer API pricing page: https://ai.google.dev/gemini-api/docs/pricing",
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "00F4F41D-AC4D-48D8-B763-C48FB68D2CB7"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:02.153Z",
+            "checksum": "881bfa5241de5dc5d8527ce598ca8525e39aaee93f7381addcc24b2c0050ed7e"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "StartedAt": "2026-12-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 4,
+            "OutputPricePerUnit": 20,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 4 Argon (gemini-4-argon) standard (post-introductory) pricing on Vertex AI, effective December 1, 2026: $4.00/1M input, $20.00/1M output, $0.20/1M cached input. Mirrored from the Gemini Developer API pricing page (https://ai.google.dev/gemini-api/docs/pricing), matching the parity MJ has carried on this pair since launch; the Vertex AI pricing page was not independently readable on 2026-11-02. Note the Developer API page states non-global endpoints run roughly 10% above global.",
+            "CacheReadPricePerUnit": 0.2,
+            "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "07DA0DD5-0AEB-4DC3-B795-724B64973AFE"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:02.168Z",
+            "checksum": "d7aafc38428fb22ab06eb489c2f944a3406d96bb74633796921a2795516d0341"
           }
         }
       ]
@@ -30444,6 +30494,80 @@
     "sync": {
       "lastModified": "2026-11-01T22:53:21.385Z",
       "checksum": "a61d5c938959adb84a93f63dbcf9c41b7f8332cb6b04e992227fdf5ae2a2b6d3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qwen 3.8 27B",
+      "PowerRank": 15,
+      "Description": "Alibaba's dense 27B-parameter update to the Qwen 3.6 27B open-weights model, and the model Groq names as the direct replacement for `qwen/qwen3.6-27b` on its deprecation schedule (qwen3.6-27b shut down 2026-09-14). Carried here for the Groq route: ~131K-token context with up to 16,384 output tokens, tool calling, structured outputs and vision input. Served on Groq's Preview tier, which Groq documents as intended for evaluation and subject to discontinuation at short notice, so the route is seeded at Preview and is never selected automatically. Reported Groq pricing is $0.80/1M input and $4.00/1M output (against $0.60/$3.00 for qwen3.6-27b), but that figure comes only from third-party aggregators — Groq's own pricing page was unreachable when this record was added on 2026-11-02 — so no cost row is seeded. Add one once the rate is confirmed first-party.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 3,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Qwen 3.6 27B",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "BB40D1F8-7B5C-4DA4-83EB-80EBF19EF710"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:01.994Z",
+            "checksum": "98ce0a4e83ae6a9cb3f3b849a20a4cbef8e8d1deb8e82010c412576efe27537a"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10,
+            "Status": "Preview",
+            "DriverClass": "GroqLLM",
+            "APIName": "qwen/qwen3.8-27b",
+            "MaxInputTokens": 131072,
+            "MaxOutputTokens": 16384,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "6D7FAA1D-AB82-4863-8402-9B12F33283AB"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:46:02.028Z",
+            "checksum": "4542af1f839d45787370a99effee818107775aedd42b952debb7bc0fc0e46616"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F85E5A1F-2793-49F2-A850-F6B4B2FCEFBC"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:01.868Z",
+      "checksum": "811d45d3b06d333f89c11121e11fa75d301672d486b5c289da2680fbeafbc3be"
     }
   }
 ]

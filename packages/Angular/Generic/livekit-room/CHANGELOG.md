@@ -1,5 +1,16 @@
 # @memberjunction/ng-livekit-room
 
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- 5bd0135: Wire LiveKit SIP room teardown hook, support `livekit-server-sdk` v2 camelCase SIP webhook attributes, voice comfort-tone chords in the PSTN 300–3400 Hz passband, and isolate `hold-*` audio and microphone state during call hold.
+  - @memberjunction/ng-whiteboard@6.2.0-edge.8
+  - @memberjunction/ai-realtime-client@6.2.0-edge.8
+  - @memberjunction/livekit-room-core@6.2.0-edge.8
+  - @memberjunction/ng-realtime-media@6.2.0-edge.8
+  - @memberjunction/ng-ui-components@6.2.0-edge.8
+
 ## 6.2.0-edge.7
 
 ### Patch Changes

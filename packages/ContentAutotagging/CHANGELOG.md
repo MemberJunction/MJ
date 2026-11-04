@@ -1,5 +1,55 @@
 # Change Log - @memberjunction/content-autotagging
 
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- 63e6af4: Installer and CLI fixes. `mj install` without `--tag` now pins the CLI, migrate and codegen to the release the scaffold resolved (persisted for resume) instead of npm's `latest` dist-tag, and warns when it has to fall back to `latest`. `--dir` is resolved to an absolute path, the resume guidance names that directory, and Windows gets a 30-minute dependency-install timeout. Monorepo installs clone the release tag with `git clone --depth 1` instead of extracting the zipball, and force pnpm. `mj migrate` defaults its request timeout to 30 minutes and names `MJ_MIGRATION_REQUEST_TIMEOUT` when a request times out. pdf-parse is raised to `^1.1.4`.
+- dd34a5c: Knowledge Hub upstream fixes across SearchEngine, ContentAutotagging, TagEngine, GraphQLDataProvider, MJServer, and Angular Explorer dashboards:
+  - Tokenize multi-word SQL search queries in `EntitySearchProvider.convertResults` so records matched across multiple fields are not dropped when scoring in memory.
+  - Filter `GetContentSourceLastRunDate` by `Status = 'Completed' AND ProcessedItems > 0`, skip vector mutations when `vectorDB.IsReadOnly` is true, filter website and cloud storage sources with `FilterByUUIDs`, and emit per-URL crawl progress.
+  - Support client-supplied `pipelineRunID` in `RunAutotagPipeline` (subscribing before firing the mutation to eliminate the initial progress race), reject duplicate `pipelineRunID` values upfront, emit 3s progress heartbeats during long crawls, and pass actual processed counts to `publishProgress`.
+  - Expose `MergeTags` and `RecomputeTagCoOccurrence` GraphQL mutations in `TagGovernanceResolver` and `GraphQLAIClient`, re-parent child tags during `TagGovernanceEngine.MergeTags`, and merge existing active tags during `PromoteSuggestion` with `merge-into-existing`.
+  - Skip redundant `Save()` calls in `TagCoOccurrenceEngine.upsertAndPrune` when `CoOccurrenceCount` is unchanged.
+  - Clean up tag references before deleting orphan tags in `DeleteAllOrphans`, resolve active vector database health by `VectorDatabaseID`, and use `UUIDMap`/`IndexByUUID` for case-insensitive UUID lookups in Knowledge Hub cluster visualization and configuration dashboards.
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [dd34a5c]
+- Updated dependencies [e69634e]
+- Updated dependencies [373b180]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/aiengine@6.2.0-edge.8
+  - @memberjunction/tag-engine@6.2.0-edge.8
+  - @memberjunction/storage@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+  - @memberjunction/ai-core-plus@6.2.0-edge.8
+  - @memberjunction/tag-engine-base@6.2.0-edge.8
+  - @memberjunction/ai-prompts@6.2.0-edge.8
+  - @memberjunction/content-pipeline-base@6.2.0-edge.8
+  - @memberjunction/entity-documents@6.2.0-edge.8
+  - @memberjunction/ai-segmentation@6.2.0-edge.8
+  - @memberjunction/ai-vectors@6.2.0-edge.8
+  - @memberjunction/ai-vectordb@6.2.0-edge.8
+  - @memberjunction/ai-vector-sync@6.2.0-edge.8
+  - @memberjunction/credentials@6.2.0-edge.8
+  - @memberjunction/templates@6.2.0-edge.8
+  - @memberjunction/ai@6.2.0-edge.8
+  - @memberjunction/ai-provider-bundle@6.2.0-edge.8
+  - @memberjunction/network-utils@6.2.0-edge.8
+
 ## 6.2.0-edge.7
 
 ### Minor Changes
