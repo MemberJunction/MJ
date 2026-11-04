@@ -123,7 +123,13 @@ export class BaseEntitySaveQueue {
             if (applyMutation) {
                 applyMutation(entity);
             }
-            const ok = await entity.Save(options);
+            // Never in the enqueuer's transaction: nobody awaits this save, so it could reach SQL
+            // behind that transaction's COMMIT and be rejected (#6251 EA6).
+            const save = (): Promise<boolean> => entity.Save(options);
+            const provider = entity.ProviderToUse;
+            const ok = provider?.RunOutsideAmbientTransaction
+                ? await provider.RunOutsideAmbientTransaction(save)
+                : await save();
             if (!ok) {
                 this.logFailure(`${label} failed: ${this.saveError(entity)}`);
             }
