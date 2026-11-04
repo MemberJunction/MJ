@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   BuildCompareMetricRows, DeriveCompareColumns, SessionSuccessMetric, DeriveLeaderboard, FormatMetricValue, GroupIterationsToKanban, ParseMetrics, ParseSessionLeaderboard, PrimaryModelScore,
   ReadStoredGate, ScoreOnMetric, GateCrowns, PublishedModelTag,
-  type PSIterationRow,
+  type PSIterationRow, type PSModelRow,
 } from './predictive-studio.view-models';
 import { WidgetFixtures } from './components/evaluation-results/widget-fixtures';
 
@@ -13,8 +13,11 @@ import { WidgetFixtures } from './components/evaluation-results/widget-fixtures'
  * only, and the inner-CV mean is in `Metrics`.
  */
 describe('PrimaryModelScore over the stored proper scores', () => {
+  // a model row as stored: it carries Metrics (the inner-CV estimate), which the holdout score must never read
+  const row = (holdout: string | null, metrics: string, ProblemType = 'classification'): Pick<PSModelRow, 'Metrics' | 'HoldoutMetrics'> & { ProblemType: string } =>
+    ({ ProblemType, Metrics: metrics, HoldoutMetrics: holdout });
   const score = (holdout: Record<string, number>, metrics: Record<string, number> = {}, ProblemType = 'classification') =>
-    PrimaryModelScore({ ProblemType, Metrics: JSON.stringify(metrics), HoldoutMetrics: JSON.stringify(holdout) });
+    PrimaryModelScore(row(JSON.stringify(holdout), JSON.stringify(metrics), ProblemType));
 
   it('shows the stored primary holdout score of a kept baseline under its own label, for every proper score', () => {
     const cases: [string, string, string][] = [
@@ -32,7 +35,7 @@ describe('PrimaryModelScore over the stored proper scores', () => {
   });
 
   it('shows no score for a model with no holdout metrics, never its training or inner-CV score', () => {
-    expect([score({}, { auc: 0.91 }), PrimaryModelScore({ ProblemType: 'classification', Metrics: '{"auc":0.91}', HoldoutMetrics: null })]).toEqual([null, null]);
+    expect([score({}, { auc: 0.91 }), PrimaryModelScore(row(null, '{"auc":0.91}'))]).toEqual([null, null]);
   });
 
   it('keeps showing AUC for a shipped binary model whose holdout carries it', () => {
