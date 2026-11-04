@@ -6,6 +6,7 @@ import { BaseFormComponent, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { MJAIAgentSessionFormComponent } from '../../generated/Entities/MJAIAgentSession/mjaiagentsession.form.component';
+import { JoinHeroSummary, CountLabel } from '../../shared/phone-hero';
 
 /**
  * Authoritative shape persisted in `AIAgentSession.Config` for a client-direct
@@ -113,9 +114,29 @@ export interface SessionChannelDisplayRow {
     standalone: false,
     selector: 'mj-ai-agent-session-form',
     templateUrl: './ai-agent-session-form.component.html',
-    styleUrls: ['./ai-agent-session-form.component.css']
+    styleUrls: ['./ai-agent-session-form.component.css', '../../shared/phone-hero.css']
 })
 export class MJAIAgentSessionFormComponentExtended extends MJAIAgentSessionFormComponent implements OnInit {
+
+    /** Phone hero (6A): whether the summary line is expanded to show the rest of the hero. */
+    public HeroDetailsOpen = false;
+
+    /** Toggles the phone hero between its compact identity row and the full hero. */
+    public ToggleHeroDetails(): void {
+        this.HeroDetailsOpen = !this.HeroDetailsOpen;
+        this.cdr.markForCheck();
+    }
+
+    /** The phone hero's one-line summary of what the compact hero leaves out. */
+    public get HeroSummary(): string {
+        const agent = this.TargetAgentName ? `${this.record.Agent} → ${this.TargetAgentName}` : this.record.Agent;
+        return JoinHeroSummary([
+            agent,
+            this.SessionDuration,
+            CountLabel(this.Channels.length, 'channel'),
+            this.DelegatedRunCount > 0 ? CountLabel(this.DelegatedRunCount, 'delegated run') : null,
+        ]);
+    }
     public record!: MJAIAgentSessionEntity;
 
     /** Hide the generated-section controls — this form has a fully custom layout. */

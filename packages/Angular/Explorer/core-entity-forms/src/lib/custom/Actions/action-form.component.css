@@ -622,6 +622,13 @@
     gap: 16px;
 }
 
+/* Phone: one full-width column, so a card can never be wider than the form. */
+@media (max-width: 768px) {
+    .result-codes-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
 .result-code-card {
     display: flex;
     align-items: flex-start;
@@ -981,5 +988,20 @@
 
     .action-buttons > div > button {
         flex: 1;
+    }
+}
+
+/* Phone: sections sit on the page's 12px gutter, so the container and the inline-padded body
+   wrappers drop their side padding (they would indent every section twice). */
+@media (max-width: 768px) {
+    .configuration-sections {
+        padding: 12px 0 !important;
+        border-top: 0 !important;
+        background: transparent !important;
+    }
+
+    .phone-flush-x {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
     }
 }

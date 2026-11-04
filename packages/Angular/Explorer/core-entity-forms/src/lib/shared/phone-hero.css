@@ -1,0 +1,119 @@
+/* ============================================
+   PHONE HERO (design call 6A), shared by the custom forms that own a hero.
+   Under 768px the hero keeps icon, name, status and the primary action. Anything tagged
+   .phone-hero-detail hides while the hero is compact and comes back when the summary line is
+   tapped. Edit mode is untouched: the host only gets .hero-compact / .hero-view in view mode.
+   Host:    .phone-hero [class.hero-view]="!EditMode" [class.hero-compact]="!EditMode && !HeroDetailsOpen"
+   Tags:    .phone-hero-detail  hidden while compact
+            .phone-hero-hide    hidden in view mode (said elsewhere on the phone hero)
+            .phone-hero-only    shown only on phones
+            .phone-hero-top     a title + action row that stacks
+            .phone-hero-actions / .phone-hero-run   the primary action, full width at 44px
+            .phone-hero-stats   a metric row that reflows to a 2-up grid when the hero is expanded
+            .phone-hero-status  a status chip in the identity row (with .phone-hero-only)
+   ============================================ */
+.phone-hero-summary,
+.phone-hero-only {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .phone-hero {
+        padding: 12px !important;
+    }
+
+    /* !important: several heroes carry inline display/padding styles on these rows */
+    .phone-hero.hero-compact .phone-hero-detail,
+    .phone-hero.hero-view .phone-hero-hide {
+        display: none !important;
+    }
+
+    .phone-hero-only {
+        display: inline-flex;
+    }
+
+    /* Lower specificity than the compact rule above, so a compact hero still hides it */
+    .phone-hero .phone-hero-stats {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .phone-hero-status {
+        align-items: center;
+        gap: 4px;
+        margin-left: 8px;
+        padding: 2px 8px;
+        border-radius: var(--mj-radius-full, 999px);
+        background: color-mix(in srgb, currentColor 14%, transparent);
+        font-size: var(--mj-text-xs);
+        font-weight: var(--mj-font-semibold);
+        vertical-align: middle;
+        white-space: nowrap;
+    }
+
+    .phone-hero-top {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .phone-hero-actions {
+        width: 100%;
+    }
+
+    .phone-hero .phone-hero-run {
+        width: 100%;
+        min-height: 44px;
+        justify-content: center;
+    }
+
+    /* Inherits the hero's text colour, so it reads on light heroes and on the brand-blue
+       Queries hero alike; a muted token would be grey on blue. */
+    .phone-hero-summary {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        min-height: 44px;
+        margin-top: 8px;
+        padding: 0 4px;
+        border: 0;
+        border-top: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        font-size: var(--mj-text-sm);
+        text-align: left;
+        cursor: pointer;
+        opacity: 0.85;
+    }
+
+    .phone-hero-summary:focus-visible {
+        outline: none;
+        box-shadow: var(--mj-focus-ring);
+    }
+
+    .phone-hero-summary-text {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .phone-hero-summary > i {
+        flex-shrink: 0;
+        transition: transform 0.15s ease;
+    }
+
+    .phone-hero-summary[aria-expanded="true"] > i {
+        transform: rotate(180deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .phone-hero-summary > i {
+        transition: none;
+    }
+}

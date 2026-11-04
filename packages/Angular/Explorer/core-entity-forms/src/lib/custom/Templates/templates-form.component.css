@@ -215,3 +215,18 @@
         width: 100%;
     }
 }
+
+/* Phone: sections sit on the page's 12px gutter, so the container and the inline-padded body
+   wrappers drop their side padding (they would indent every section twice). */
+@media (max-width: 768px) {
+    .configuration-sections {
+        padding: 12px 0;
+        border-top: 0;
+        background: transparent;
+    }
+
+    .phone-flush-x {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+}

@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 import { HIERARCHY_FORM_PANELS } from './HierarchyPanels/hierarchy-form-panels';
-import { MJButtonDirective, MJAccordionModule, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent, MjSlidePanelComponent, MJEmptyStateComponent, MJAlertComponent, MJTabNavComponent, MJSectionPickerComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJAccordionModule, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent, MjSlidePanelComponent, MJEmptyStateComponent, MJAlertComponent, MJTabNavComponent, MJSectionPickerComponent, MJAccordionSectionsComponent } from '@memberjunction/ng-ui-components';
 import { AngularSplitModule } from 'angular-split';
 import { AgGridModule } from 'ag-grid-angular';
 import { BaseFormsModule, MjFormDialogComponent } from '@memberjunction/ng-base-forms';
@@ -229,6 +229,7 @@ LoadDiagnosticSenderRegistrationToolbarActions();
         MJAlertComponent,
         MJTabNavComponent,
         MJSectionPickerComponent,
+        MJAccordionSectionsComponent,
         MJButtonDirective,
         MJAccordionModule,
         MJDropdownComponent,

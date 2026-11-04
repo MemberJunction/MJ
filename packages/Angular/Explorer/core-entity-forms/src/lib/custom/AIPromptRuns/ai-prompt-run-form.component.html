@@ -10,7 +10,7 @@
         <form class="record-form" #form="ngForm" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
 
             <!-- Header Section -->
-            <div class="prompt-run-header">
+            <div class="prompt-run-header phone-hero" [class.hero-view]="!EditMode" [class.hero-compact]="!EditMode && !HeroDetailsOpen">
                 <div class="header-content">
                     <div class="run-overview">
                         <div class="run-icon-wrapper" [style.background-color]="getStatusColor() + '20'">
@@ -22,8 +22,12 @@
                                 @if (record.ID) {
                                     <span class="run-id">#{{ record.ID.substring(0, 8) }}</span>
                                 }
+                                <span class="phone-hero-only phone-hero-status" [style.color]="getStatusColor()">
+                                    <i [class]="'fa-solid ' + getStatusIcon()" aria-hidden="true"></i>
+                                    {{ getStatusText() }}
+                                </span>
                             </h1>
-                            <div class="run-meta">
+                            <div class="run-meta phone-hero-detail">
                                 <!-- Status Card -->
                                 <div class="meta-card status-card">
                                     <div class="c3-card-label">Status</div>
@@ -101,7 +105,7 @@
                     </div>
                     
                     <!-- Action Buttons -->
-                    <div class="run-actions">
+                    <div class="run-actions phone-hero-detail">
                         <button mjButton variant="outline" size="sm" (click)="reRunPrompt()" title="Re-run this prompt">
                             <i class="fa-solid fa-play-circle"></i>
                             Re-Run
@@ -115,7 +119,7 @@
                 <!-- Key Metrics Bar -->
                 @if (record.ConfigurationID) {
                     <!-- Configuration Bar -->
-                    <div class="metrics-bar">
+                    <div class="metrics-bar phone-hero-detail phone-hero-stats">
                         <div class="metric-item">
                             <i class="fa-solid fa-cog"></i>
                             <div class="metric-content">
@@ -175,7 +179,7 @@
                     </div>
                     
                     <!-- Execution Metrics Bar (always show when configuration exists) -->
-                    <div class="metrics-bar">
+                    <div class="metrics-bar phone-hero-detail phone-hero-stats">
                         <div class="metric-item">
                             <i class="fa-solid fa-clock"></i>
                             <div class="metric-content">
@@ -218,7 +222,7 @@
                     </div>
                 } @else {
                     <!-- Execution Metrics Bar (original behavior when no configuration) -->
-                    <div class="metrics-bar">
+                    <div class="metrics-bar phone-hero-detail phone-hero-stats">
                         <div class="metric-item">
                             <i class="fa-solid fa-clock"></i>
                             <div class="metric-content">
@@ -260,13 +264,21 @@
                         }
                     </div>
                 }
+              @if (!EditMode && HeroSummary) {
+                <button type="button" class="phone-hero-summary" [attr.aria-expanded]="HeroDetailsOpen" (click)="ToggleHeroDetails()">
+                  <span class="phone-hero-summary-text">{{ HeroSummary }}</span>
+                  <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                </button>
+              }
             </div>
 
             <!-- Main Content with Expansion Panels -->
             <div class="form-content" style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto;">
+                <!-- Phone: one section at a time behind a picker; desktop keeps the accordions -->
+                <mj-accordion-sections [Enabled]="Phone.IsPhone" [ActiveKey]="Phone.Section" (ActiveKeyChange)="Phone.Pick($event)">
 
                     <!-- Input Panel with nested sub-panels -->
-                    <mj-accordion-panel [Expanded]="inputExpanded" (ExpandedChange)="onInputPanelToggle($event)" style="margin-bottom: 8px;">
+                    <mj-accordion-panel SectionKey="input" SectionTitle="Input" SectionIcon="fa-solid fa-comment-dots" [Expanded]="inputExpanded" (ExpandedChange)="onInputPanelToggle($event)" style="margin-bottom: 8px;">
                         <ng-template mjAccordionTitle>
                             <span class="panel-title">
                                 <i class="fa-solid fa-comment-dots"></i>
@@ -416,7 +428,7 @@
                     </mj-accordion-panel>
 
                     <!-- Result Panel -->
-                    <mj-accordion-panel [Expanded]="resultExpanded" (ExpandedChange)="onResultPanelToggle($event)" style="margin-bottom: 8px;">
+                    <mj-accordion-panel SectionKey="result" SectionTitle="Result" SectionIcon="fa-solid fa-square-check" [Expanded]="resultExpanded" (ExpandedChange)="onResultPanelToggle($event)" style="margin-bottom: 8px;">
                         <ng-template mjAccordionTitle>
                             <span class="panel-title">
                                 <i class="fa-solid fa-square-check"></i>
@@ -513,7 +525,7 @@
                     </mj-accordion-panel>
 
                     <!-- Token Usage & Metrics Panel -->
-                    <mj-accordion-panel [Expanded]="metricsExpanded" (ExpandedChange)="onMetricsPanelToggle($event)" style="margin-bottom: 8px;">
+                    <mj-accordion-panel SectionKey="metrics" SectionTitle="Token Usage &amp; Metrics" SectionIcon="fa-solid fa-chart-line" [Expanded]="metricsExpanded" (ExpandedChange)="onMetricsPanelToggle($event)" style="margin-bottom: 8px;">
                         <ng-template mjAccordionTitle>
                             <span class="panel-title">
                                 <i class="fa-solid fa-chart-line"></i>
@@ -664,7 +676,7 @@
 
                     <!-- Validation & Retry Panel -->
                     @if (record && ((record.ValidationAttemptCount && record.ValidationAttemptCount > 0) || record.ValidationBehavior)) {
-                        <mj-accordion-panel [Expanded]="validationExpanded" (ExpandedChange)="onValidationPanelToggle($event)" style="margin-bottom: 8px;">
+                        <mj-accordion-panel SectionKey="validation" SectionTitle="Validation &amp; Retries" SectionIcon="fa-solid fa-shield-check" [Expanded]="validationExpanded" (ExpandedChange)="onValidationPanelToggle($event)" style="margin-bottom: 8px;">
                             <ng-template mjAccordionTitle>
                                 <span class="panel-title">
                                     <i class="fa-solid fa-shield-check"></i>
@@ -834,7 +846,7 @@
 
                     <!-- Hierarchy Panel (for parent/child relationships) -->
                     @if (record.ParentID || childRuns.length > 0) {
-                        <mj-accordion-panel [Expanded]="hierarchyExpanded" style="margin-bottom: 8px;">
+                        <mj-accordion-panel SectionKey="hierarchy" SectionTitle="Run Hierarchy" SectionIcon="fa-solid fa-sitemap" [Expanded]="hierarchyExpanded" style="margin-bottom: 8px;">
                             <ng-template mjAccordionTitle>
                                 <span class="panel-title">
                                     <i class="fa-solid fa-sitemap"></i>
@@ -905,7 +917,7 @@
                     }
 
                     <!-- Additional Details Panel -->
-                    <mj-accordion-panel [Expanded]="false" style="margin-bottom: 8px;">
+                    <mj-accordion-panel SectionKey="details" SectionTitle="Additional Details" SectionIcon="fa-solid fa-info-circle" [Expanded]="false" style="margin-bottom: 8px;">
                         <ng-template mjAccordionTitle>
                             <span class="panel-title">
                                 <i class="fa-solid fa-info-circle"></i>
@@ -1043,7 +1055,7 @@
 
                     <!-- Model Specific Response Details Panel -->
                     @if (record.ModelSpecificResponseDetails) {
-                        <mj-accordion-panel [Expanded]="modelSpecificExpanded" (ExpandedChange)="onModelSpecificPanelToggle($event)" style="margin-bottom: 8px;">
+                        <mj-accordion-panel SectionKey="model-response" SectionTitle="Model Specific Response Details" SectionIcon="fa-solid fa-microchip" [Expanded]="modelSpecificExpanded" (ExpandedChange)="onModelSpecificPanelToggle($event)" style="margin-bottom: 8px;">
                             <ng-template mjAccordionTitle>
                                 <span class="panel-title">
                                     <i class="fa-solid fa-microchip"></i>
@@ -1083,7 +1095,7 @@
                     }
 
                     <!-- Model Selection & Performance Panel (v2.78 fields) -->
-                    <mj-accordion-panel [Expanded]="false" (ExpandedChange)="onModelSelectionPanelToggle($event)" style="margin-bottom: 8px;">
+                    <mj-accordion-panel SectionKey="model-selection" SectionTitle="Model Selection &amp; Performance" SectionIcon="fa-solid fa-microchip" [Expanded]="false" (ExpandedChange)="onModelSelectionPanelToggle($event)" style="margin-bottom: 8px;">
                         <ng-template mjAccordionTitle>
                             <span class="panel-title">
                                 <i class="fa-solid fa-microchip"></i>
@@ -1266,6 +1278,7 @@
                             </div>
                     </mj-accordion-panel>
 
+                </mj-accordion-sections>
             </div>
         </form>
 </mj-record-form-container>

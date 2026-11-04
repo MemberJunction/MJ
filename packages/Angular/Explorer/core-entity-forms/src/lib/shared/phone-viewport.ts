@@ -12,3 +12,17 @@ export function IsPhoneViewport(): boolean {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
     return window.matchMedia(PHONE_VIEWPORT_QUERY).matches;
 }
+
+/**
+ * Calls `onChange` whenever the viewport crosses the phone breakpoint (rotation, a resized
+ * window, DevTools device mode). Returns the function that stops watching; always returns one,
+ * even where `matchMedia` does not exist.
+ */
+export function WatchPhoneViewport(onChange: () => void): () => void {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => undefined;
+    const media = window.matchMedia(PHONE_VIEWPORT_QUERY);
+    if (!media || typeof media.addEventListener !== 'function') return () => undefined;
+    const listener = (): void => onChange();
+    media.addEventListener('change', listener);
+    return () => media.removeEventListener('change', listener);
+}

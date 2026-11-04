@@ -9,16 +9,40 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { ChatMessage } from '@memberjunction/ai';
 import { TestHarnessWindowManagerService } from '@memberjunction/ng-ai-test-harness';
 import { ParseJSONOptions, ParseJSONRecursive } from '@memberjunction/global';
+import { JoinHeroSummary } from '../../shared/phone-hero';
+import { PhoneSectionsState } from '../../shared/phone-sections-state';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Prompt Runs')
 @Component({
   standalone: false,
     selector: 'mj-ai-prompt-run-form',
     templateUrl: './ai-prompt-run-form.component.html',
-    styleUrls: ['./ai-prompt-run-form.component.css'],
+    styleUrls: ['./ai-prompt-run-form.component.css', '../../shared/phone-hero.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormComponent implements AfterViewInit, OnDestroy {
+
+    /** Phone width shows the stacked accordions as sections behind one picker (design call 7A). */
+    public Phone = new PhoneSectionsState(() => this.cdr.markForCheck());
+
+    /** Phone hero (6A): whether the summary line is expanded to show the rest of the hero. */
+    public HeroDetailsOpen = false;
+
+    /** Toggles the phone hero between its compact identity row and the full hero. */
+    public ToggleHeroDetails(): void {
+        this.HeroDetailsOpen = !this.HeroDetailsOpen;
+        this.cdr.markForCheck();
+    }
+
+    /** The phone hero's one-line summary of what the compact hero leaves out. */
+    public get HeroSummary(): string {
+        return JoinHeroSummary([
+            this.record.RunType,
+            this.record.ChildPrompt || this.Prompt?.Name,
+            this.model?.Name,
+            this.formatDuration(this.record.ExecutionTimeMS),
+        ]);
+    }
     public record!: MJAIPromptRunEntityExtended;
     public readonly ToolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
 
@@ -364,6 +388,7 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     
     ngOnDestroy() {
         super.ngOnDestroy();
+        this.Phone.Stop();
         // Clean up any resources
         // Currently no subscriptions or timers to clean up
         // This is here for future use and to complete the lifecycle
