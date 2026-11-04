@@ -192,8 +192,7 @@ describe('findMissingSubclasses', () => {
 
     it('does not flag an allowlisted non-entity table', () => {
         expect(NON_ENTITY_TABLES.has('systemevent')).toBe(true);
-        expect(NON_ENTITY_TABLES.has('documentsequencecounter')).toBe(true);
-        expect(findMissingSubclasses(scan([['systemevent', 'a.sql'], ['documentsequencecounter', 'b.sql']]), new Set())).toEqual([]);
+        expect(findMissingSubclasses(scan([['systemevent', 'a.sql']]), new Set())).toEqual([]);
     });
 });
 

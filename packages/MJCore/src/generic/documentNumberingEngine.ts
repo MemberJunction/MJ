@@ -130,13 +130,13 @@ export class SqlTableDocumentSequenceStore implements IDocumentSequenceStore {
         if (platform === 'postgresql') {
             const sql = [
                 `INSERT INTO "${schemaName}"."DocumentSequenceCounter"`,
-                `    ("ID", "SequenceKey", "ScopeKey", "CurrentValue", "CreatedAt", "UpdatedAt")`,
+                `    ("ID", "SequenceKey", "ScopeKey", "CurrentValue")`,
                 `VALUES`,
-                `    (gen_random_uuid(), $1, $2, $3, NOW(), NOW())`,
+                `    (gen_random_uuid(), $1, $2, $3)`,
                 `ON CONFLICT ("SequenceKey", "ScopeKey")`,
                 `DO UPDATE SET`,
                 `    "CurrentValue" = "${schemaName}"."DocumentSequenceCounter"."CurrentValue" + $4,`,
-                `    "UpdatedAt" = NOW()`,
+                `    "__mj_UpdatedAt" = NOW()`,
                 `RETURNING "CurrentValue" AS "AllocatedValue";`,
             ].join('\n');
             return {
@@ -152,16 +152,15 @@ export class SqlTableDocumentSequenceStore implements IDocumentSequenceStore {
             `DECLARE @startVal BIGINT = ?;`,
             `DECLARE @allocated TABLE (AllocatedValue BIGINT NOT NULL);`,
             `UPDATE [${schemaName}].[DocumentSequenceCounter] WITH (UPDLOCK, HOLDLOCK)`,
-            `SET [CurrentValue] = [CurrentValue] + @inc,`,
-            `    [UpdatedAt] = GETUTCDATE()`,
+            `SET [CurrentValue] = [CurrentValue] + @inc`,
             `OUTPUT inserted.[CurrentValue] INTO @allocated(AllocatedValue)`,
             `WHERE [SequenceKey] = @seqKey AND [ScopeKey] = @scpKey;`,
             `IF NOT EXISTS (SELECT 1 FROM @allocated)`,
             `BEGIN`,
             `    INSERT INTO [${schemaName}].[DocumentSequenceCounter]`,
-            `        ([ID], [SequenceKey], [ScopeKey], [CurrentValue], [CreatedAt], [UpdatedAt])`,
+            `        ([ID], [SequenceKey], [ScopeKey], [CurrentValue])`,
             `    OUTPUT inserted.[CurrentValue] INTO @allocated(AllocatedValue)`,
-            `    VALUES (NEWSEQUENTIALID(), @seqKey, @scpKey, @startVal, GETUTCDATE(), GETUTCDATE());`,
+            `    VALUES (NEWSEQUENTIALID(), @seqKey, @scpKey, @startVal);`,
             `END;`,
             `SELECT AllocatedValue FROM @allocated;`,
         ].join('\n');

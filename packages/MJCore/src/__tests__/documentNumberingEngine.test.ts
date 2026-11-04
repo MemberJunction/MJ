@@ -593,11 +593,16 @@ describe('DocumentNumberingEngine & SqlTableDocumentSequenceStore (3.3)', () => 
         expect(mssql.sql).toContain('DECLARE @allocated TABLE');
         expect(mssql.sql).toContain('WITH (UPDLOCK, HOLDLOCK)');
         expect(mssql.sql).toContain('OUTPUT inserted.[CurrentValue] INTO @allocated(AllocatedValue)');
+        expect(mssql.sql).not.toContain('CreatedAt');
+        expect(mssql.sql).not.toContain('UpdatedAt');
         expect(mssql.parameters).toEqual([1, 'Orders.OrderNumber', 'YYYY=2026', 1000]);
 
         const pg = sqlStore.BuildAllocateStatement('postgresql', '__mj', 'Orders.OrderNumber', 'YYYY=2026', 1000, 1);
         expect(pg.sql).toContain('INSERT INTO "__mj"."DocumentSequenceCounter"');
         expect(pg.sql).toContain('ON CONFLICT ("SequenceKey", "ScopeKey")');
+        expect(pg.sql).toContain('"__mj_UpdatedAt" = NOW()');
+        expect(pg.sql).not.toContain('"CreatedAt"');
+        expect(pg.sql).not.toContain('"UpdatedAt"');
         expect(pg.sql).toContain('RETURNING "CurrentValue" AS "AllocatedValue"');
         expect(pg.parameters).toEqual(['Orders.OrderNumber', 'YYYY=2026', 1000, 1]);
 

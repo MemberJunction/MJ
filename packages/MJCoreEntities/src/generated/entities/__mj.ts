@@ -18804,6 +18804,44 @@ export const MJDiagnosticSessionSchema = z.object({
 export type MJDiagnosticSessionEntityType = z.infer<typeof MJDiagnosticSessionSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Document Sequence Counters
+ */
+export const MJDocumentSequenceCounterSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SequenceKey: z.string().describe(`
+        * * Field Name: SequenceKey
+        * * Display Name: Sequence Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Globally unique logical sequence identifier (for example Orders.OrderNumber or Accounting.JournalEntry.EntryNumber).`),
+    ScopeKey: z.string().describe(`
+        * * Field Name: ScopeKey
+        * * Display Name: Scope Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Deterministic partition key combining tenant, scope fields, and reset period (or __GLOBAL__ for unpartitioned sequences).`),
+    CurrentValue: z.number().describe(`
+        * * Field Name: CurrentValue
+        * * Display Name: Current Value
+        * * SQL Data Type: bigint
+        * * Description: Most recently allocated integer value for this (SequenceKey, ScopeKey) partition.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJDocumentSequenceCounterEntityType = z.infer<typeof MJDocumentSequenceCounterSchema>;
+
+/**
  * zod schema definition for the entity MJ: Duplicate Run Detail Matches
  */
 export const MJDuplicateRunDetailMatchSchema = z.object({
@@ -96032,6 +96070,110 @@ export class MJDiagnosticSessionEntity extends BaseEntity<MJDiagnosticSessionEnt
     */
     get Company(): string | null {
         return this.Get('Company');
+    }
+}
+
+
+/**
+ * MJ: Document Sequence Counters - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: DocumentSequenceCounter
+ * * Base View: vwDocumentSequenceCounters
+ * * @description Atomic sequence counter storage for DocumentNumberingEngine, partitioned by (SequenceKey, ScopeKey).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Document Sequence Counters')
+export class MJDocumentSequenceCounterEntity extends BaseEntity<MJDocumentSequenceCounterEntityType> {
+    /**
+    * Loads the MJ: Document Sequence Counters record from the database
+    * @param ID: string - primary key value to load the MJ: Document Sequence Counters record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJDocumentSequenceCounterEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SequenceKey
+    * * Display Name: Sequence Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Globally unique logical sequence identifier (for example Orders.OrderNumber or Accounting.JournalEntry.EntryNumber).
+    */
+    get SequenceKey(): string {
+        return this.Get('SequenceKey');
+    }
+    set SequenceKey(value: string) {
+        this.Set('SequenceKey', value);
+    }
+
+    /**
+    * * Field Name: ScopeKey
+    * * Display Name: Scope Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Deterministic partition key combining tenant, scope fields, and reset period (or __GLOBAL__ for unpartitioned sequences).
+    */
+    get ScopeKey(): string {
+        return this.Get('ScopeKey');
+    }
+    set ScopeKey(value: string) {
+        this.Set('ScopeKey', value);
+    }
+
+    /**
+    * * Field Name: CurrentValue
+    * * Display Name: Current Value
+    * * SQL Data Type: bigint
+    * * Description: Most recently allocated integer value for this (SequenceKey, ScopeKey) partition.
+    */
+    get CurrentValue(): number {
+        return this.Get('CurrentValue');
+    }
+    set CurrentValue(value: number) {
+        this.Set('CurrentValue', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 
