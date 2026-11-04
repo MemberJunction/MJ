@@ -173,3 +173,42 @@ export class ViewportTransformEventArgs {
         public readonly Transform: GraphViewportTransform
     ) {}
 }
+
+// ────────────────────────────────────────────────────────────────────
+// 7. Governance / Custom Node Action Events (e.g. Approve into Canon)
+// ────────────────────────────────────────────────────────────────────
+
+/**
+ * Standard governance or inspector actions triggered on a graph node.
+ */
+export type GraphNodeActionKind =
+    | 'approve'
+    | 'reject'
+    | 'resolve-conflict'
+    | 'open-grounding'
+    | 'open-chunk'
+    | (string & {});
+
+/**
+ * Fired BEFORE a governance or custom action executes on a node in the inspector.
+ */
+export class BeforeNodeActionEventArgs extends CancellableGraphEventArgs {
+    constructor(
+        public readonly Node: GraphNode,
+        public readonly Action: GraphNodeActionKind,
+        public readonly Payload?: Record<string, unknown>
+    ) {
+        super();
+    }
+}
+
+/**
+ * Fired AFTER a governance or custom action is requested on a node in the inspector.
+ */
+export class NodeActionEventArgs {
+    constructor(
+        public readonly Node: GraphNode,
+        public readonly Action: GraphNodeActionKind,
+        public readonly Payload?: Record<string, unknown>
+    ) {}
+}

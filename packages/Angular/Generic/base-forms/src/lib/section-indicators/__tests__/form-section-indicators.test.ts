@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
 import {
   ClaimedCollectionErrors,
+  DescribeSectionComments,
   DescribeSectionDirty,
   DescribeSectionErrors,
   DescribeSectionWarnings,
@@ -55,6 +56,15 @@ describe('SumSectionIndicators', () => {
     expect(sum).toEqual(EMPTY_SECTION_INDICATORS);
     expect(sum).not.toBe(EMPTY_SECTION_INDICATORS);
   });
+
+  it('rolls up positive CommentCount across sets while omitting zero CommentCount', () => {
+    expect(
+      SumSectionIndicators(
+        { DirtyCount: 1, ErrorCount: 0, WarningCount: 0, CommentCount: 2 },
+        { DirtyCount: 0, ErrorCount: 1, WarningCount: 0, CommentCount: 3 },
+      ),
+    ).toEqual({ DirtyCount: 1, ErrorCount: 1, WarningCount: 0, CommentCount: 5 });
+  });
 });
 
 describe('SectionIndicatorsAreEmpty', () => {
@@ -67,6 +77,7 @@ describe('SectionIndicatorsAreEmpty', () => {
   it('is false as soon as one count is positive', () => {
     expect(SectionIndicatorsAreEmpty({ DirtyCount: 1 })).toBe(false);
     expect(SectionIndicatorsAreEmpty({ WarningCount: 1 })).toBe(false);
+    expect(SectionIndicatorsAreEmpty({ CommentCount: 1 })).toBe(false);
   });
 });
 
@@ -167,12 +178,15 @@ describe('Describe* titles', () => {
     expect(DescribeSectionWarnings(2)).toBe('2 fields in this section have warnings');
     expect(DescribeSectionDirty(1)).toBe('1 unsaved change in this section');
     expect(DescribeSectionDirty(4, 'Overview')).toBe('4 unsaved changes in Overview');
+    expect(DescribeSectionComments(1)).toBe('1 open comment in this section');
+    expect(DescribeSectionComments(3, 'Compensation')).toBe('3 open comments in Compensation');
   });
 
   it('are empty at zero', () => {
     expect(DescribeSectionErrors(0)).toBe('');
     expect(DescribeSectionWarnings(0)).toBe('');
     expect(DescribeSectionDirty(0)).toBe('');
+    expect(DescribeSectionComments(0)).toBe('');
   });
 });
 

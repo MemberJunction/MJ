@@ -112,6 +112,8 @@ const { mockInstallStateLoad, mockStateInstance } = vi.hoisted(() => ({
   mockStateInstance: {
     Tag: '',
     Dir: '',
+    ResolvedTag: undefined as string | undefined,
+    SetResolvedTag: vi.fn(),
     StartedAt: new Date().toISOString(),
     GetPhaseStatus: vi.fn().mockReturnValue('pending'),
     MarkCompleted: vi.fn(),
@@ -251,6 +253,7 @@ describe('InstallerEngine', () => {
     mockInstallStateLoad.mockResolvedValue(null);
     mockStateInstance.GetPhaseStatus.mockReturnValue('pending');
     mockStateInstance.Save.mockResolvedValue(undefined);
+    mockStateInstance.ResolvedTag = undefined;
     // Reset config function mocks
     mockResolveFromEnv.mockReturnValue({});
     mockLoadConfigFile.mockResolvedValue({});
@@ -519,6 +522,83 @@ describe('InstallerEngine', () => {
 
   // ── Resume ────────────────────────────────────────────────────────
 
+  describe('effective tag (#4598)', () => {
+    it('a default plan (no --tag) hands the scaffold-resolved tag to configure, dependencies, migrate and codegen', async () => {
+      mockScaffoldRun.mockResolvedValue({ Version: { Tag: 'v6.1.2' }, ExtractedDir: '/test' });
+      const plan = await engine.CreatePlan({ Dir: '/test' });
+      expect(plan.Tag).toBe('latest');
+
+      const result = await engine.Run(plan, { Yes: true });
+
+      expect(result.Success).toBe(true);
+      expect(mockScaffoldRun).toHaveBeenCalledWith(expect.objectContaining({ Tag: undefined }));
+      expect(mockConfigureRun).toHaveBeenCalledWith(expect.objectContaining({ ResolvedVersion: 'v6.1.2' }));
+      expect(mockDependencyRun).toHaveBeenCalledWith(expect.objectContaining({ Tag: 'v6.1.2' }));
+      expect(mockMigrateRun).toHaveBeenCalledWith(expect.objectContaining({ VersionTag: 'v6.1.2' }));
+      expect(mockCodeGenRun).toHaveBeenCalledWith(expect.objectContaining({ VersionTag: 'v6.1.2' }));
+    });
+
+    it('persists the resolved tag in the install state when scaffold completes', async () => {
+      mockScaffoldRun.mockResolvedValue({ Version: { Tag: 'v6.1.2' }, ExtractedDir: '/test' });
+      const plan = await engine.CreatePlan({ Dir: '/test' });
+      await engine.Run(plan, { Yes: true });
+      expect(mockStateInstance.SetResolvedTag).toHaveBeenCalledWith('v6.1.2');
+    });
+
+    it('a resumed install (scaffold already done) uses the tag persisted in the state', async () => {
+      const mockState = {
+        Tag: 'latest',
+        Dir: '/test/dir',
+        StartedAt: new Date().toISOString(),
+        GetPhaseStatus: vi.fn((id: string) => (id === 'preflight' || id === 'scaffold' ? 'completed' : 'pending')),
+        MarkCompleted: vi.fn(),
+        MarkFailed: vi.fn(),
+        MarkSkipped: vi.fn(),
+        Save: vi.fn().mockResolvedValue(undefined),
+        FirstIncompletePhase: vi.fn().mockReturnValue('configure'),
+        ResolvedTag: 'v6.1.2',
+        SetResolvedTag: vi.fn(),
+      };
+      mockInstallStateLoad.mockResolvedValue(mockState as unknown as InstallState);
+
+      await engine.Resume('/test/dir', { Yes: true });
+
+      expect(mockScaffoldRun).not.toHaveBeenCalled();
+      expect(mockDependencyRun).toHaveBeenCalledWith(expect.objectContaining({ Tag: 'v6.1.2' }));
+      expect(mockMigrateRun).toHaveBeenCalledWith(expect.objectContaining({ VersionTag: 'v6.1.2' }));
+      expect(mockCodeGenRun).toHaveBeenCalledWith(expect.objectContaining({ VersionTag: 'v6.1.2' }));
+    });
+
+    it('an explicit --tag is passed through unchanged', async () => {
+      mockScaffoldRun.mockResolvedValue({ Version: { Tag: 'v5.2.0' }, ExtractedDir: '/test' });
+      const plan = await engine.CreatePlan({ Dir: '/test', Tag: 'v5.2.0' });
+      await engine.Run(plan, { Yes: true });
+      expect(mockScaffoldRun).toHaveBeenCalledWith(expect.objectContaining({ Tag: 'v5.2.0' }));
+      expect(mockDependencyRun).toHaveBeenCalledWith(expect.objectContaining({ Tag: 'v5.2.0' }));
+    });
+  });
+
+  describe('monorepo package manager (#4562)', () => {
+    it('coerces a non-pnpm PackageManager to pnpm for a monorepo install and warns', async () => {
+      const warns: string[] = [];
+      engine.On('warn', (e) => { warns.push(e.Message); });
+      const plan = await engine.CreatePlan({ Dir: '/test', Tag: 'v5.2.0' });
+      await engine.Run(plan, { Yes: true, Config: { InstallMode: 'monorepo', PackageManager: 'npm' } });
+
+      expect(mockPreflightRun).toHaveBeenCalledWith(
+        expect.objectContaining({ Config: expect.objectContaining({ PackageManager: 'pnpm' }) })
+      );
+      expect(mockDependencyRun).toHaveBeenCalledWith(expect.objectContaining({ PackageManager: 'pnpm' }));
+      expect(warns.some((m) => m.includes('"npm" is not supported for a monorepo install'))).toBe(true);
+    });
+
+    it('leaves npm alone for a distribution install', async () => {
+      const plan = await engine.CreatePlan({ Dir: '/test', Tag: 'v5.2.0' });
+      await engine.Run(plan, { Yes: true, Config: { InstallMode: 'distribution', PackageManager: 'npm' } });
+      expect(mockDependencyRun).toHaveBeenCalledWith(expect.objectContaining({ PackageManager: 'npm' }));
+    });
+  });
+
   describe('Resume', () => {
     it('throws InstallerError with NO_STATE_FILE when no state exists', async () => {
       mockInstallStateLoad.mockResolvedValue(null);
@@ -542,6 +622,8 @@ describe('InstallerEngine', () => {
         MarkSkipped: vi.fn(),
         Save: vi.fn().mockResolvedValue(undefined),
         FirstIncompletePhase: vi.fn().mockReturnValue('configure'),
+        ResolvedTag: undefined,
+        SetResolvedTag: vi.fn(),
       };
       mockInstallStateLoad.mockResolvedValue(mockState as unknown as InstallState);
 

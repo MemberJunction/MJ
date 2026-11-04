@@ -26,6 +26,8 @@ export interface CapturedGraphQLRequest {
     document: string;
     /** The variables object exactly as the provider sent it. */
     variables: Record<string, unknown> | null | undefined;
+    /** Per-request headers passed to `client.request(document, variables, requestHeaders)`. */
+    requestHeaders?: Record<string, string>;
     /** Index (into `GraphQLWire.Clients`) of the client instance that sent it. */
     clientIndex: number;
 }
@@ -155,11 +157,13 @@ export class FakeGraphQLClient {
 
     public async request(
         document: string,
-        variables?: Record<string, unknown> | null
+        variables?: Record<string, unknown> | null,
+        requestHeaders?: Record<string, string>
     ): Promise<unknown> {
         GraphQLWire.Requests.push({
             document,
             variables,
+            requestHeaders,
             clientIndex: GraphQLWire.Clients.indexOf(this),
         });
         return GraphQLWire.NextResponse(document, variables);
