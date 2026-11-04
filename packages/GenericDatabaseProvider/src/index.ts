@@ -1,4 +1,12 @@
-export { GenericDatabaseProvider, DoomedTransactionError, ExecuteSQLBatchOptions } from './GenericDatabaseProvider.js';
+export {
+    GenericDatabaseProvider,
+    DoomedTransactionError,
+    ExecuteSQLBatchOptions,
+    SummarizeSqlParameters,
+    FormatSqlParameterTypesForError,
+} from './GenericDatabaseProvider.js';
+export type { SqlParameterSummary, SqlObservation, ISqlObserver } from './GenericDatabaseProvider.js';
+export { NodeAsyncServerOperationScopeTracker } from './NodeAsyncServerOperationScopeTracker.js';
 // Side-effect import: registers DatabaseWellKnownUserSource with the class factory so any
 // process holding a database provider can resolve MJ's built-in accounts.
 export { DatabaseWellKnownUserSource } from './DatabaseWellKnownUserSource.js';
@@ -31,7 +39,7 @@ export {
 // Side-effect import: registers the startup sweep that reports a system user which has lost
 // field-level access on an FLS-enabled entity.
 export { SystemUserFieldAccessCheck, LoadSystemUserFieldAccessCheck } from './SystemUserFieldAccessCheck.js';
-export { SqlLoggingOptions, SqlLoggingSession, SqlSchemaPlaceholder } from './types.js';
+export { SqlLoggingOptions, SqlLoggingSession, SqlSchemaPlaceholder, DatabasePoolStats } from './types.js';
 export { SqlLoggingSessionImpl, SCHEMA_PLACEHOLDER_LOOKBEHIND } from './SqlLogger.js';
 export { QueryCompositionEngine, CompositionCTEInfo, CompositionResult } from './queryCompositionEngine.js';
 export { CountOnlyBatchCoalescer, IsCoalescibleCountBatch } from './countOnlyBatch.js';

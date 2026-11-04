@@ -18,7 +18,7 @@ import { mj_core_schema } from '../../config.js';
 
 
 
-import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentCredentialEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentHarnessEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPersonaEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRubricEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionRecordingShardEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentUserPolicyEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPersonaEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPersonaVendorEntity, MJAIPersonaEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSearchScopeEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIUsageTypeEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthenticationProviderEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJBrandKitAssetEntity, MJBrandKitEntity, MJCalendarEventLinkEntity, MJCalendarSyncStateEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationObjectFieldEntity, MJCompanyIntegrationObjectEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemChunkEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationBranchEntity, MJConversationCompactionRunEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationSkillEntity, MJConversationWidgetInstanceEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityAIActionEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAlternateBaseViewEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldPermissionEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormContributionEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFeaturePipelineTypeEntity, MJFeaturePipelineVersionEntity, MJFeatureValueCacheEntity, MJFeatureValueEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJFormChromeRuleEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJGraphAuthorityTierEntity, MJGraphConceptTypeEntity, MJGraphConceptEntity, MJGraphEdgeProviderEntity, MJGraphEdgeTypeEndpointEntity, MJGraphEdgeTypeEntity, MJGraphEdgeEntity, MJGraphTypeEntity, MJGraphEntity, MJIdentityClaimTypeEntity, MJIdentityClaimEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJInteractionEventEntity, MJInteractionLinkEntity, MJInteractionOfferEntity, MJInteractionEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMaterializedResultQueryEntity, MJMaterializedResultEntity, MJMeetingParticipantEntity, MJMeetingEntity, MJNumberPoolEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJPermissionDomainEntity, MJPhoneNumberEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRSUPendingWorkEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordCloneLogItemEntity, MJRecordCloneLogEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJRubricBandEntity, MJRubricCategoryEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEvaluationScoreEntity, MJRubricEvaluationEntity, MJRubricScaleLevelEntity, MJRubricScaleEntity, MJRubricVersionEntity, MJRubricEntity, MJSQLDialectEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedNotificationConfigEntity, MJScopedPromptConfigEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJThemeEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJVideoArchetypeEntity, MJViewTypeEntity, MJWebSearchProviderEntity, MJWorkQueueDeduplicationEntity, MJWorkQueueDeliveryEntity, MJWorkQueueMessageEntity, MJWorkQueueSubscriptionEntity, MJWorkQueueTopicEntity, MJWorkQueueTransportEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentCredentialEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentHarnessEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPersonaEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRubricEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionRecordingShardEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentUserPolicyEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPersonaEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPersonaVendorEntity, MJAIPersonaEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSearchScopeEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIUsageTypeEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthenticationProviderEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJBrandKitAssetEntity, MJBrandKitEntity, MJCalendarEventLinkEntity, MJCalendarSyncStateEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationObjectFieldEntity, MJCompanyIntegrationObjectEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemChunkEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationBranchEntity, MJConversationCompactionRunEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationSkillEntity, MJConversationWidgetInstanceEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDiagnosticBundleEntity, MJDiagnosticSenderRegistrationEntity, MJDiagnosticSessionChunkEntity, MJDiagnosticSessionEntity, MJDocumentSequenceCounterEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityAIActionEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAlternateBaseViewEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldPermissionEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormContributionEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFeaturePipelineTypeEntity, MJFeaturePipelineVersionEntity, MJFeatureValueCacheEntity, MJFeatureValueEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJFormChromeRuleEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJGraphAuthorityTierEntity, MJGraphConceptTypeEntity, MJGraphConceptEntity, MJGraphEdgeProviderEntity, MJGraphEdgeTypeEndpointEntity, MJGraphEdgeTypeEntity, MJGraphEdgeEntity, MJGraphTypeEntity, MJGraphEntity, MJIdentityClaimTypeEntity, MJIdentityClaimEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJInteractionEventEntity, MJInteractionLinkEntity, MJInteractionOfferEntity, MJInteractionEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMaterializedResultQueryEntity, MJMaterializedResultEntity, MJMeetingParticipantEntity, MJMeetingEntity, MJNumberPoolEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJPermissionDomainEntity, MJPhoneNumberEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRSUPendingWorkEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordCloneLogItemEntity, MJRecordCloneLogEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJRubricBandEntity, MJRubricCategoryEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEvaluationScoreEntity, MJRubricEvaluationEntity, MJRubricScaleLevelEntity, MJRubricScaleEntity, MJRubricVersionEntity, MJRubricEntity, MJSQLDialectEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedNotificationConfigEntity, MJScopedPromptConfigEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJThemeEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJVideoArchetypeEntity, MJViewTypeEntity, MJWebSearchProviderEntity, MJWorkQueueDeduplicationEntity, MJWorkQueueDeliveryEntity, MJWorkQueueMessageEntity, MJWorkQueueSubscriptionEntity, MJWorkQueueTopicEntity, MJWorkQueueTransportEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -45977,6 +45977,1261 @@ export class MJDatasetResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Datasets', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Diagnostic Bundles
+//****************************************************************************
+@ObjectType({ description: "Assembled .mjdiag diagnostic bundles (both locally built bundles and external bundles received via MJAPI intake) with manifest, scrubbing report, automated findings, and MJStorage link." })
+export class MJDiagnosticBundle_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Display name of the diagnostic bundle."}) 
+    @MaxLength(255)
+    Name?: string;
+        
+    @Field({nullable: true, description: "Optional description or summary notes attached to the bundle."}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: "Indicates whether this bundle was built locally on this instance (Local) or ingested via the MJAPI intake endpoint (Received)."}) 
+    @MaxLength(20)
+    Direction?: string;
+        
+    @Field({nullable: true, description: "Source diagnostic session when built from a server session; NULL for client-only or received bundles."}) 
+    @MaxLength(36)
+    DiagnosticSessionID?: string;
+        
+    @Field({nullable: true, description: "Current lifecycle status of the diagnostic bundle."}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: "True when inline SQL and filter literals were normalized to ? placeholders in this bundle."}) 
+    ScrubLiterals?: boolean;
+        
+    @Field({nullable: true, description: "Start of the time window covered by this bundle."}) 
+    WindowStart?: Date;
+        
+    @Field({nullable: true, description: "End of the time window covered by this bundle."}) 
+    WindowEnd?: Date;
+        
+    @Field({nullable: true, description: "Reference to MJ: Files when the bundle archive is persisted in MJStorage."}) 
+    @MaxLength(36)
+    FileID?: string;
+        
+    @Field({nullable: true, description: "Fallback binary storage for the .mjdiag archive when no MJStorage account is configured."}) 
+    Data?: string;
+        
+    @Field(() => Int, {nullable: true, description: "Total size of the .mjdiag archive in bytes."}) 
+    SizeBytes?: number;
+        
+    @Field({nullable: true, description: "Hex-encoded SHA-256 digest of the unencrypted .mjdiag archive."}) 
+    @MaxLength(64)
+    SHA256?: string;
+        
+    @Field({nullable: true, description: "Parsed manifest.json contents including file inventory and SHA-256 digests."}) 
+    ManifestJSON?: string;
+        
+    @Field({nullable: true, description: "Summary counts of credential tokens scrubbed and literals normalized across all bundle entries."}) 
+    ScrubReportJSON?: string;
+        
+    @Field({nullable: true, description: "Automated rules-engine diagnostic findings extracted from this bundle."}) 
+    FindingsJSON?: string;
+        
+    @Field({nullable: true, description: "Error details when Status is Failed (e.g., build error, send failure, or malware/structural verification rejection)."}) 
+    FailureReason?: string;
+        
+    @Field({nullable: true, description: "User who built or uploaded this bundle; NULL for remotely ingested bundles."}) 
+    @MaxLength(36)
+    CreatedByUserID?: string;
+        
+    @Field({nullable: true, description: "Administrator who approved sending this bundle externally."}) 
+    @MaxLength(36)
+    ApprovedByUserID?: string;
+        
+    @Field({nullable: true, description: "UTC timestamp when external transmission was approved."}) 
+    ApprovedAt?: Date;
+        
+    @Field({nullable: true, description: "Target external destination when sending a bundle (MJC, CustomerCollector, or StorageAccount)."}) 
+    @MaxLength(30)
+    Destination?: string;
+        
+    @Field({nullable: true, description: "UTC timestamp when the bundle was transmitted to Destination."}) 
+    SentAt?: Date;
+        
+    @Field({nullable: true, description: "Reference ID returned by the receiving collector intake endpoint."}) 
+    @MaxLength(255)
+    ExternalReferenceID?: string;
+        
+    @Field({nullable: true, description: "InstallID of the sender instance when Direction = Received."}) 
+    @MaxLength(36)
+    SenderInstallID?: string;
+        
+    @Field({nullable: true, description: "MemberJunction version reported by the sender instance when Direction = Received."}) 
+    @MaxLength(50)
+    SenderMJVersion?: string;
+        
+    @Field({nullable: true, description: "Optional reporter or administrator contact information on received bundles."}) 
+    @MaxLength(500)
+    ContactInfo?: string;
+        
+    @Field({nullable: true, description: "UTC timestamp when this bundle becomes eligible for automatic retention purge."}) 
+    ExpiresAt?: Date;
+        
+    @Field({nullable: true, description: "Optional tenant CompanyID scoping this diagnostic bundle."}) 
+    @MaxLength(36)
+    CompanyID?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    DiagnosticSession?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(500)
+    File?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    CreatedByUser?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    ApprovedByUser?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    Company?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Diagnostic Bundles
+//****************************************************************************
+@InputType()
+export class CreateMJDiagnosticBundleInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    Direction?: string;
+
+    @Field({ nullable: true })
+    DiagnosticSessionID: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    ScrubLiterals?: boolean;
+
+    @Field({ nullable: true })
+    WindowStart: Date | null;
+
+    @Field({ nullable: true })
+    WindowEnd: Date | null;
+
+    @Field({ nullable: true })
+    FileID: string | null;
+
+    @Field({ nullable: true })
+    Data: string | null;
+
+    @Field(() => Int, { nullable: true })
+    SizeBytes?: number;
+
+    @Field({ nullable: true })
+    SHA256: string | null;
+
+    @Field({ nullable: true })
+    ManifestJSON: string | null;
+
+    @Field({ nullable: true })
+    ScrubReportJSON: string | null;
+
+    @Field({ nullable: true })
+    FindingsJSON: string | null;
+
+    @Field({ nullable: true })
+    FailureReason: string | null;
+
+    @Field({ nullable: true })
+    CreatedByUserID: string | null;
+
+    @Field({ nullable: true })
+    ApprovedByUserID: string | null;
+
+    @Field({ nullable: true })
+    ApprovedAt: Date | null;
+
+    @Field({ nullable: true })
+    Destination: string | null;
+
+    @Field({ nullable: true })
+    SentAt: Date | null;
+
+    @Field({ nullable: true })
+    ExternalReferenceID: string | null;
+
+    @Field({ nullable: true })
+    SenderInstallID: string | null;
+
+    @Field({ nullable: true })
+    SenderMJVersion: string | null;
+
+    @Field({ nullable: true })
+    ContactInfo: string | null;
+
+    @Field({ nullable: true })
+    ExpiresAt: Date | null;
+
+    @Field({ nullable: true })
+    CompanyID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Diagnostic Bundles
+//****************************************************************************
+@InputType()
+export class UpdateMJDiagnosticBundleInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    Direction?: string;
+
+    @Field({ nullable: true })
+    DiagnosticSessionID?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    ScrubLiterals?: boolean;
+
+    @Field({ nullable: true })
+    WindowStart?: Date | null;
+
+    @Field({ nullable: true })
+    WindowEnd?: Date | null;
+
+    @Field({ nullable: true })
+    FileID?: string | null;
+
+    @Field({ nullable: true })
+    Data?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    SizeBytes?: number;
+
+    @Field({ nullable: true })
+    SHA256?: string | null;
+
+    @Field({ nullable: true })
+    ManifestJSON?: string | null;
+
+    @Field({ nullable: true })
+    ScrubReportJSON?: string | null;
+
+    @Field({ nullable: true })
+    FindingsJSON?: string | null;
+
+    @Field({ nullable: true })
+    FailureReason?: string | null;
+
+    @Field({ nullable: true })
+    CreatedByUserID?: string | null;
+
+    @Field({ nullable: true })
+    ApprovedByUserID?: string | null;
+
+    @Field({ nullable: true })
+    ApprovedAt?: Date | null;
+
+    @Field({ nullable: true })
+    Destination?: string | null;
+
+    @Field({ nullable: true })
+    SentAt?: Date | null;
+
+    @Field({ nullable: true })
+    ExternalReferenceID?: string | null;
+
+    @Field({ nullable: true })
+    SenderInstallID?: string | null;
+
+    @Field({ nullable: true })
+    SenderMJVersion?: string | null;
+
+    @Field({ nullable: true })
+    ContactInfo?: string | null;
+
+    @Field({ nullable: true })
+    ExpiresAt?: Date | null;
+
+    @Field({ nullable: true })
+    CompanyID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Diagnostic Bundles
+//****************************************************************************
+@ObjectType()
+export class RunMJDiagnosticBundleViewResult {
+    @Field(() => [MJDiagnosticBundle_])
+    Results: MJDiagnosticBundle_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJDiagnosticBundle_)
+export class MJDiagnosticBundleResolver extends ResolverBase {
+    @Query(() => RunMJDiagnosticBundleViewResult)
+    async RunMJDiagnosticBundleViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJDiagnosticBundleViewResult)
+    async RunMJDiagnosticBundleViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJDiagnosticBundleViewResult)
+    async RunMJDiagnosticBundleDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Diagnostic Bundles';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJDiagnosticBundle_, { nullable: true })
+    async MJDiagnosticBundle(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJDiagnosticBundle_ | null> {
+        this.CheckUserReadPermissions('MJ: Diagnostic Bundles', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwDiagnosticBundles')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Diagnostic Bundles', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Diagnostic Bundles', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJDiagnosticBundle_)
+    async CreateMJDiagnosticBundle(
+        @Arg('input', () => CreateMJDiagnosticBundleInput) input: CreateMJDiagnosticBundleInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Diagnostic Bundles', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJDiagnosticBundle_)
+    async UpdateMJDiagnosticBundle(
+        @Arg('input', () => UpdateMJDiagnosticBundleInput) input: UpdateMJDiagnosticBundleInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Diagnostic Bundles', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJDiagnosticBundle_)
+    async DeleteMJDiagnosticBundle(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Diagnostic Bundles', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Diagnostic Sender Registrations
+//****************************************************************************
+@ObjectType({ description: "An installation that is allowed to send diagnostic bundles to this collector. Holds its enrollment state, the public key that verifies its signed requests, the hash of its one-time registration code, and its daily bundle quota." })
+export class MJDiagnosticSenderRegistration_ {
+    @Field({description: "Unique identifier of the sender registration."}) 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Installation ID of the sending MemberJunction instance. Unique per registration."}) 
+    @MaxLength(100)
+    InstallID?: string;
+        
+    @Field({nullable: true, description: "Display name of the customer or installation that sends the bundles."}) 
+    @MaxLength(255)
+    Name?: string;
+        
+    @Field({nullable: true, description: "Lifecycle status of the registration. Pending: created, waiting for the sender to enroll with its registration code. Active: enrolled, bundles are accepted. Revoked: bundles are refused."}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field({nullable: true, description: "Signature algorithm of the sender public key."}) 
+    @MaxLength(20)
+    KeyAlgorithm?: string;
+        
+    @Field({nullable: true, description: "Identifier of the sender signing key. Set at enrollment; a key rotation replaces it."}) 
+    @MaxLength(100)
+    KeyID?: string;
+        
+    @Field({nullable: true, description: "Base64-encoded public key that verifies the sender signed requests. Set at enrollment."}) 
+    @MaxLength(255)
+    PublicKeyBase64?: string;
+        
+    @Field({nullable: true, description: "SHA-256 hex digest of the one-time registration code. The plain code is never stored."}) 
+    @MaxLength(128)
+    RegistrationCodeHash?: string;
+        
+    @Field({nullable: true, description: "Time after which the one-time registration code can no longer be used to enroll."}) 
+    RegistrationCodeExpiresAt?: Date;
+        
+    @Field({nullable: true, description: "Time the sender enrolled its public key."}) 
+    EnrolledAt?: Date;
+        
+    @Field({nullable: true, description: "Time the registration was revoked."}) 
+    RevokedAt?: Date;
+        
+    @Field({nullable: true, description: "Time of the last authenticated request from the sender."}) 
+    LastSeenAt?: Date;
+        
+    @Field(() => Int, {nullable: true, description: "Maximum number of bundles the collector accepts from this sender per day."}) 
+    MaxBundlesPerDay?: number;
+        
+    @Field({nullable: true, description: "Free-form administrator notes about the registration."}) 
+    Comments?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Diagnostic Sender Registrations
+//****************************************************************************
+@InputType()
+export class CreateMJDiagnosticSenderRegistrationInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    InstallID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    KeyAlgorithm?: string;
+
+    @Field({ nullable: true })
+    KeyID: string | null;
+
+    @Field({ nullable: true })
+    PublicKeyBase64: string | null;
+
+    @Field({ nullable: true })
+    RegistrationCodeHash: string | null;
+
+    @Field({ nullable: true })
+    RegistrationCodeExpiresAt: Date | null;
+
+    @Field({ nullable: true })
+    EnrolledAt: Date | null;
+
+    @Field({ nullable: true })
+    RevokedAt: Date | null;
+
+    @Field({ nullable: true })
+    LastSeenAt: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxBundlesPerDay?: number;
+
+    @Field({ nullable: true })
+    Comments: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Diagnostic Sender Registrations
+//****************************************************************************
+@InputType()
+export class UpdateMJDiagnosticSenderRegistrationInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    InstallID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    KeyAlgorithm?: string;
+
+    @Field({ nullable: true })
+    KeyID?: string | null;
+
+    @Field({ nullable: true })
+    PublicKeyBase64?: string | null;
+
+    @Field({ nullable: true })
+    RegistrationCodeHash?: string | null;
+
+    @Field({ nullable: true })
+    RegistrationCodeExpiresAt?: Date | null;
+
+    @Field({ nullable: true })
+    EnrolledAt?: Date | null;
+
+    @Field({ nullable: true })
+    RevokedAt?: Date | null;
+
+    @Field({ nullable: true })
+    LastSeenAt?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxBundlesPerDay?: number;
+
+    @Field({ nullable: true })
+    Comments?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Diagnostic Sender Registrations
+//****************************************************************************
+@ObjectType()
+export class RunMJDiagnosticSenderRegistrationViewResult {
+    @Field(() => [MJDiagnosticSenderRegistration_])
+    Results: MJDiagnosticSenderRegistration_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJDiagnosticSenderRegistration_)
+export class MJDiagnosticSenderRegistrationResolver extends ResolverBase {
+    @Query(() => RunMJDiagnosticSenderRegistrationViewResult)
+    async RunMJDiagnosticSenderRegistrationViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJDiagnosticSenderRegistrationViewResult)
+    async RunMJDiagnosticSenderRegistrationViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJDiagnosticSenderRegistrationViewResult)
+    async RunMJDiagnosticSenderRegistrationDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Diagnostic Sender Registrations';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJDiagnosticSenderRegistration_, { nullable: true })
+    async MJDiagnosticSenderRegistration(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJDiagnosticSenderRegistration_ | null> {
+        this.CheckUserReadPermissions('MJ: Diagnostic Sender Registrations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwDiagnosticSenderRegistrations')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Diagnostic Sender Registrations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Diagnostic Sender Registrations', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJDiagnosticSenderRegistration_)
+    async CreateMJDiagnosticSenderRegistration(
+        @Arg('input', () => CreateMJDiagnosticSenderRegistrationInput) input: CreateMJDiagnosticSenderRegistrationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Diagnostic Sender Registrations', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJDiagnosticSenderRegistration_)
+    async UpdateMJDiagnosticSenderRegistration(
+        @Arg('input', () => UpdateMJDiagnosticSenderRegistrationInput) input: UpdateMJDiagnosticSenderRegistrationInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Diagnostic Sender Registrations', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJDiagnosticSenderRegistration_)
+    async DeleteMJDiagnosticSenderRegistration(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Diagnostic Sender Registrations', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Diagnostic Session Chunks
+//****************************************************************************
+@ObjectType({ description: "Compressed NDJSON capture chunks flushed by server instances and client browsers during a diagnostic session." })
+export class MJDiagnosticSessionChunk_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Owning diagnostic session for this chunk."}) 
+    @MaxLength(36)
+    DiagnosticSessionID?: string;
+        
+    @Field({nullable: true, description: "Origin tier that produced the chunk (Server or Client)."}) 
+    @MaxLength(20)
+    Source?: string;
+        
+    @Field({nullable: true, description: "Process UUID, hostname, or browser tab identifier that flushed this chunk."}) 
+    @MaxLength(255)
+    HostInstanceLabel?: string;
+        
+    @Field(() => Int, {nullable: true, description: "Monotonically increasing sequence number per (DiagnosticSessionID, Source, HostInstanceLabel, ContentKind)."}) 
+    Sequence?: number;
+        
+    @Field({nullable: true, description: "Type of diagnostic data stored in this chunk."}) 
+    @MaxLength(30)
+    ContentKind?: string;
+        
+    @Field({nullable: true, description: "DEFLATE/gzip compressed NDJSON or JSON payload (~256 KB max per chunk)."}) 
+    Data?: string;
+        
+    @Field(() => Int, {nullable: true, description: "Number of records or events contained in this chunk."}) 
+    EntryCount?: number;
+        
+    @Field({nullable: true, description: "Timestamp of the earliest event in this chunk."}) 
+    FirstEntryAt?: Date;
+        
+    @Field({nullable: true, description: "Timestamp of the latest event in this chunk."}) 
+    LastEntryAt?: Date;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    DiagnosticSession?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Diagnostic Session Chunks
+//****************************************************************************
+@InputType()
+export class CreateMJDiagnosticSessionChunkInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    DiagnosticSessionID?: string;
+
+    @Field({ nullable: true })
+    Source?: string;
+
+    @Field({ nullable: true })
+    HostInstanceLabel?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    ContentKind?: string;
+
+    @Field({ nullable: true })
+    Data?: string;
+
+    @Field(() => Int, { nullable: true })
+    EntryCount?: number;
+
+    @Field({ nullable: true })
+    FirstEntryAt: Date | null;
+
+    @Field({ nullable: true })
+    LastEntryAt: Date | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Diagnostic Session Chunks
+//****************************************************************************
+@InputType()
+export class UpdateMJDiagnosticSessionChunkInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    DiagnosticSessionID?: string;
+
+    @Field({ nullable: true })
+    Source?: string;
+
+    @Field({ nullable: true })
+    HostInstanceLabel?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    ContentKind?: string;
+
+    @Field({ nullable: true })
+    Data?: string;
+
+    @Field(() => Int, { nullable: true })
+    EntryCount?: number;
+
+    @Field({ nullable: true })
+    FirstEntryAt?: Date | null;
+
+    @Field({ nullable: true })
+    LastEntryAt?: Date | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Diagnostic Session Chunks
+//****************************************************************************
+@ObjectType()
+export class RunMJDiagnosticSessionChunkViewResult {
+    @Field(() => [MJDiagnosticSessionChunk_])
+    Results: MJDiagnosticSessionChunk_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJDiagnosticSessionChunk_)
+export class MJDiagnosticSessionChunkResolver extends ResolverBase {
+    @Query(() => RunMJDiagnosticSessionChunkViewResult)
+    async RunMJDiagnosticSessionChunkViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJDiagnosticSessionChunkViewResult)
+    async RunMJDiagnosticSessionChunkViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJDiagnosticSessionChunkViewResult)
+    async RunMJDiagnosticSessionChunkDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Diagnostic Session Chunks';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJDiagnosticSessionChunk_, { nullable: true })
+    async MJDiagnosticSessionChunk(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJDiagnosticSessionChunk_ | null> {
+        this.CheckUserReadPermissions('MJ: Diagnostic Session Chunks', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwDiagnosticSessionChunks')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Diagnostic Session Chunks', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Diagnostic Session Chunks', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJDiagnosticSessionChunk_)
+    async CreateMJDiagnosticSessionChunk(
+        @Arg('input', () => CreateMJDiagnosticSessionChunkInput) input: CreateMJDiagnosticSessionChunkInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Diagnostic Session Chunks', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJDiagnosticSessionChunk_)
+    async UpdateMJDiagnosticSessionChunk(
+        @Arg('input', () => UpdateMJDiagnosticSessionChunkInput) input: UpdateMJDiagnosticSessionChunkInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Diagnostic Session Chunks', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJDiagnosticSessionChunk_)
+    async DeleteMJDiagnosticSessionChunk(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Diagnostic Session Chunks', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Diagnostic Sessions
+//****************************************************************************
+@ObjectType({ description: "Bounded server and client diagnostic recording sessions with tenant isolation, scope targeting, and byte-budget controls." })
+export class MJDiagnosticSession_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Human-readable label for the diagnostic session."}) 
+    @MaxLength(255)
+    Name?: string;
+        
+    @Field({nullable: true, description: "Optional explanation of why this diagnostic session was started (such as a ticket number or reproduction notes)."}) 
+    Reason?: string;
+        
+    @Field({nullable: true, description: "Current lifecycle status of the diagnostic session."}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field({nullable: true, description: "Determines which incoming requests are matched and captured by this session."}) 
+    @MaxLength(30)
+    ScopeType?: string;
+        
+    @Field({nullable: true, description: "JSON specification of targeted UserIDs, APIKeyIDs, GraphQL/RemoteOperation names, or BrowserSessionID."}) 
+    ScopeJSON?: string;
+        
+    @Field({nullable: true, description: "Capture verbosity level applied to requests matched by this session."}) 
+    @MaxLength(20)
+    Level?: string;
+        
+    @Field({nullable: true, description: "JSON array of diagnostic categories enabled for this session (e.g., Logs, SQL, Spans, Network, Telemetry)."}) 
+    CategoriesJSON?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: "When true, replaces inline SQL and filter string/number/UUID literals with ? placeholders in addition to mandatory credential scrubbing."}) 
+    ScrubLiterals?: boolean;
+        
+    @Field({nullable: true, description: "UTC timestamp when the diagnostic session became active."}) 
+    StartedAt?: Date;
+        
+    @Field({nullable: true, description: "UTC timestamp when the diagnostic session automatically expires."}) 
+    EndsAt?: Date;
+        
+    @Field({nullable: true, description: "UTC timestamp when the diagnostic session was manually stopped."}) 
+    StoppedAt?: Date;
+        
+    @Field(() => Int, {nullable: true, description: "Maximum total compressed chunk bytes allowed for this session before capture stops (defaults to 50 MB)."}) 
+    MaxBytes?: number;
+        
+    @Field({nullable: true, description: "User who initiated the diagnostic session."}) 
+    @MaxLength(36)
+    CreatedByUserID?: string;
+        
+    @Field({nullable: true, description: "Optional tenant CompanyID isolating session capture in multi-tenant deployments."}) 
+    @MaxLength(36)
+    CompanyID?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    CreatedByUser?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    Company?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Diagnostic Sessions
+//****************************************************************************
+@InputType()
+export class CreateMJDiagnosticSessionInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Reason: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ScopeType?: string;
+
+    @Field({ nullable: true })
+    ScopeJSON: string | null;
+
+    @Field({ nullable: true })
+    Level?: string;
+
+    @Field({ nullable: true })
+    CategoriesJSON: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    ScrubLiterals?: boolean;
+
+    @Field({ nullable: true })
+    StartedAt?: Date;
+
+    @Field({ nullable: true })
+    EndsAt?: Date;
+
+    @Field({ nullable: true })
+    StoppedAt: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxBytes?: number;
+
+    @Field({ nullable: true })
+    CreatedByUserID?: string;
+
+    @Field({ nullable: true })
+    CompanyID: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Diagnostic Sessions
+//****************************************************************************
+@InputType()
+export class UpdateMJDiagnosticSessionInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Reason?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    ScopeType?: string;
+
+    @Field({ nullable: true })
+    ScopeJSON?: string | null;
+
+    @Field({ nullable: true })
+    Level?: string;
+
+    @Field({ nullable: true })
+    CategoriesJSON?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    ScrubLiterals?: boolean;
+
+    @Field({ nullable: true })
+    StartedAt?: Date;
+
+    @Field({ nullable: true })
+    EndsAt?: Date;
+
+    @Field({ nullable: true })
+    StoppedAt?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    MaxBytes?: number;
+
+    @Field({ nullable: true })
+    CreatedByUserID?: string;
+
+    @Field({ nullable: true })
+    CompanyID?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Diagnostic Sessions
+//****************************************************************************
+@ObjectType()
+export class RunMJDiagnosticSessionViewResult {
+    @Field(() => [MJDiagnosticSession_])
+    Results: MJDiagnosticSession_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJDiagnosticSession_)
+export class MJDiagnosticSessionResolver extends ResolverBase {
+    @Query(() => RunMJDiagnosticSessionViewResult)
+    async RunMJDiagnosticSessionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJDiagnosticSessionViewResult)
+    async RunMJDiagnosticSessionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJDiagnosticSessionViewResult)
+    async RunMJDiagnosticSessionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Diagnostic Sessions';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJDiagnosticSession_, { nullable: true })
+    async MJDiagnosticSession(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJDiagnosticSession_ | null> {
+        this.CheckUserReadPermissions('MJ: Diagnostic Sessions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwDiagnosticSessions')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Diagnostic Sessions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Diagnostic Sessions', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJDiagnosticSession_)
+    async CreateMJDiagnosticSession(
+        @Arg('input', () => CreateMJDiagnosticSessionInput) input: CreateMJDiagnosticSessionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Diagnostic Sessions', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJDiagnosticSession_)
+    async UpdateMJDiagnosticSession(
+        @Arg('input', () => UpdateMJDiagnosticSessionInput) input: UpdateMJDiagnosticSessionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Diagnostic Sessions', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJDiagnosticSession_)
+    async DeleteMJDiagnosticSession(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Diagnostic Sessions', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Document Sequence Counters
+//****************************************************************************
+@ObjectType({ description: "Atomic sequence counter storage for DocumentNumberingEngine, partitioned by (SequenceKey, ScopeKey)." })
+export class MJDocumentSequenceCounter_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Globally unique logical sequence identifier (for example Orders.OrderNumber or Accounting.JournalEntry.EntryNumber)."}) 
+    @MaxLength(255)
+    SequenceKey?: string;
+        
+    @Field({nullable: true, description: "Deterministic partition key combining tenant, scope fields, and reset period (or __GLOBAL__ for unpartitioned sequences)."}) 
+    @MaxLength(255)
+    ScopeKey?: string;
+        
+    @Field(() => Int, {nullable: true, description: "Most recently allocated integer value for this (SequenceKey, ScopeKey) partition."}) 
+    CurrentValue?: number;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+//****************************************************************************
+// RESOLVER for MJ: Document Sequence Counters
+//****************************************************************************
+@ObjectType()
+export class RunMJDocumentSequenceCounterViewResult {
+    @Field(() => [MJDocumentSequenceCounter_])
+    Results: MJDocumentSequenceCounter_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJDocumentSequenceCounter_)
+export class MJDocumentSequenceCounterResolver extends ResolverBase {
+    @Query(() => RunMJDocumentSequenceCounterViewResult)
+    async RunMJDocumentSequenceCounterViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJDocumentSequenceCounterViewResult)
+    async RunMJDocumentSequenceCounterViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJDocumentSequenceCounterViewResult)
+    async RunMJDocumentSequenceCounterDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Document Sequence Counters';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJDocumentSequenceCounter_, { nullable: true })
+    async MJDocumentSequenceCounter(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJDocumentSequenceCounter_ | null> {
+        this.CheckUserReadPermissions('MJ: Document Sequence Counters', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwDocumentSequenceCounters')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Document Sequence Counters', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Document Sequence Counters', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
     }
     
 }

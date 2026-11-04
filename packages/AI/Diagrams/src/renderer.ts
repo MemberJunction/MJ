@@ -9,12 +9,15 @@
 
 import dagre from '@dagrejs/dagre';
 import {
+    DIAGRAM_CSS,
     MJ_DIAGRAM_CONTRACT_VERSION,
     type MJDiagramCard,
     type MJDiagramEdge,
     type MJDiagramNode,
     type MJDiagramSpec,
 } from './spec.js';
+
+export { DIAGRAM_CSS };
 
 const esc = (s: unknown): string =>
     String(s ?? '')
@@ -113,30 +116,29 @@ function toBox(p: PositionedNode): Box {
 }
 
 type Segment = [number, number, number, number];
+type OrthogonalOpts = { sidePort: boolean; channelY: number; gapX?: number; channelOffset: number; clearanceY?: number };
 
-function routeOrthogonal(
-    s: Box,
-    t: Box,
-    opts: { sidePort: boolean; channelY: number; gapX?: number; channelOffset: number; clearanceY?: number }
-): { d: string; segs: Segment[] } {
-    if (t.l - s.r >= 24) {
-        const mx = (opts.gapX ?? Math.round((s.r + t.l) / 2)) - (opts.sidePort ? 0 : 12 + opts.channelOffset);
-        if (Math.abs(s.y - t.y) < 1) {
-            return { d: `M${s.r} ${s.y}H${t.l}`, segs: [[s.r, s.y, t.l, t.y]] };
-        }
-        if (opts.sidePort) {
-            return {
-                d: `M${s.r} ${s.y}H${mx}V${t.y}H${t.l}`,
-                segs: [[s.r, s.y, mx, s.y], [mx, s.y, mx, t.y], [mx, t.y, t.l, t.y]],
-            };
-        }
-        const sy = t.y > s.y ? s.b : s.t;
-        const cy = opts.channelY;
+function routeForwardOrthogonal(s: Box, t: Box, opts: OrthogonalOpts): { d: string; segs: Segment[] } {
+    const mx = (opts.gapX ?? Math.round((s.r + t.l) / 2)) - (opts.sidePort ? 0 : 12 + opts.channelOffset);
+    if (Math.abs(s.y - t.y) < 1) {
+        return { d: `M${s.r} ${s.y}H${t.l}`, segs: [[s.r, s.y, t.l, t.y]] };
+    }
+    if (opts.sidePort) {
         return {
-            d: `M${s.x} ${sy}V${cy}H${mx}V${t.y}H${t.l}`,
-            segs: [[s.x, sy, s.x, cy], [s.x, cy, mx, cy], [mx, cy, mx, t.y], [mx, t.y, t.l, t.y]],
+            d: `M${s.r} ${s.y}H${mx}V${t.y}H${t.l}`,
+            segs: [[s.r, s.y, mx, s.y], [mx, s.y, mx, t.y], [mx, t.y, t.l, t.y]],
         };
     }
+    const sy = t.y > s.y ? s.b : s.t;
+    const cy = opts.channelY;
+    return {
+        d: `M${s.x} ${sy}V${cy}H${mx}V${t.y}H${t.l}`,
+        segs: [[s.x, sy, s.x, cy], [s.x, cy, mx, cy], [mx, cy, mx, t.y], [mx, t.y, t.l, t.y]],
+    };
+}
+
+function routeOrthogonal(s: Box, t: Box, opts: OrthogonalOpts): { d: string; segs: Segment[] } {
+    if (t.l - s.r >= 24) return routeForwardOrthogonal(s, t, opts);
     if (s.l - t.r >= 24) {
         if (s.laneId !== t.laneId && t.y > s.y) {
             const y0 = opts.channelY - opts.channelOffset;
@@ -329,6 +331,26 @@ function layoutHorizontalBands(spec: MJDiagramSpec): LayoutOutput {
     return { pos, lanes, edges, width: right + LEFT, bottom };
 }
 
+function routeStageColumnEdges(
+    spec: MJDiagramSpec,
+    pos: Record<string, PositionedNode>,
+    totalStageH: number
+): RoutedEdge[] {
+    const main = spec.mainPath ?? [];
+    const placedLabels: Array<{ x: number; y: number; w: number; h: number }> = [];
+    const allBoxes = Object.values(pos).map(toBox);
+    return spec.edges.map((e, i) => {
+        const s = toBox(pos[e.from]);
+        const t = toBox(pos[e.to]);
+        const mainIdx = main.indexOf(e.from);
+        const mainFlag = e.role === 'emphasis' || (mainIdx >= 0 && main[mainIdx + 1] === e.to);
+        const r = routeOrthogonal(s, t, { sidePort: true, channelY: TOP + totalStageH, gapX: Math.round((s.r + t.l) / 2), channelOffset: 0 });
+        const fullLabel = e.data ? (e.label ? `${e.label} · ${e.data}` : e.data) : e.label;
+        const lbl = placeEdgeLabel(fullLabel, r.segs, allBoxes, placedLabels);
+        return { ...e, id: e.id ?? `f${i + 1}`, d: r.d, isMain: mainFlag, ...lbl };
+    });
+}
+
 function layoutStageColumns(spec: MJDiagramSpec): LayoutOutput {
     const HEADER_H = 40;
     const COL_PAD_X = 28;
@@ -364,22 +386,40 @@ function layoutStageColumns(spec: MJDiagramSpec): LayoutOutput {
     }
 
     const right = curX - STAGE_GAP;
-    const main = spec.mainPath ?? [];
-    const placedLabels: Array<{ x: number; y: number; w: number; h: number }> = [];
-    const allBoxes = Object.values(pos).map(toBox);
-
-    const edges: RoutedEdge[] = spec.edges.map((e, i) => {
-        const s = toBox(pos[e.from]);
-        const t = toBox(pos[e.to]);
-        const mainIdx = main.indexOf(e.from);
-        const mainFlag = e.role === 'emphasis' || (mainIdx >= 0 && main[mainIdx + 1] === e.to);
-        const r = routeOrthogonal(s, t, { sidePort: true, channelY: TOP + totalStageH, gapX: Math.round((s.r + t.l) / 2), channelOffset: 0 });
-        const fullLabel = e.data ? (e.label ? `${e.label} · ${e.data}` : e.data) : e.label;
-        const lbl = placeEdgeLabel(fullLabel, r.segs, allBoxes, placedLabels);
-        return { ...e, id: e.id ?? `f${i + 1}`, d: r.d, isMain: mainFlag, ...lbl };
-    });
-
+    const edges = routeStageColumnEdges(spec, pos, totalStageH);
     return { pos, lanes, edges, width: right + LEFT, bottom: TOP + totalStageH };
+}
+
+function routeSequenceMessages(
+    spec: MJDiagramSpec,
+    pos: Record<string, PositionedNode>,
+    msgStartY: number,
+    msgStepY: number,
+    sequenceDots: Array<{ x: number; y: number; role?: string }>
+): RoutedEdge[] {
+    return spec.edges.map((e, i) => {
+        const sx = pos[e.from].x;
+        const tx = pos[e.to].x;
+        const y = msgStartY + i * msgStepY;
+        const dir = tx >= sx ? 1 : -1;
+        const x1 = sx + dir * 6;
+        const x2 = tx - dir * 6;
+        // A message to oneself loops out to the right of the lifeline and back.
+        const self = e.from === e.to;
+        sequenceDots.push({ x: sx, y, role: e.role }, { x: tx, y: self ? y + 16 : y, role: e.role });
+        const stepBadge = `${i + 1}. `;
+        return {
+            ...e,
+            id: e.id ?? `m${i + 1}`,
+            d: self ? `M${sx + 6} ${y}H${sx + 42}V${y + 16}H${sx + 6}` : `M${x1} ${y}H${x2}`,
+            lx: self ? sx + 10 : Math.round((x1 + x2) / 2),
+            ly: y - 8,
+            anchor: self ? 'start' : 'middle',
+            isMain: e.role !== 'conditional',
+            order: i,
+            label: e.label ? `${stepBadge}${e.label}` : `${stepBadge}${e.from} → ${e.to}`,
+        };
+    });
 }
 
 function layoutSequence(spec: MJDiagramSpec): LayoutOutput {
@@ -407,72 +447,9 @@ function layoutSequence(spec: MJDiagramSpec): LayoutOutput {
     });
     const lifelines = spec.nodes.map((n) => ({ id: n.id, x: pos[n.id].x, y1: TOP + PART_H, y2: lifelineBottom }));
     const sequenceDots: Array<{ x: number; y: number; role?: string }> = [];
-
-    const edges: RoutedEdge[] = spec.edges.map((e, i) => {
-        const sx = pos[e.from].x;
-        const tx = pos[e.to].x;
-        const y = MSG_START_Y + i * MSG_STEP_Y;
-        const dir = tx >= sx ? 1 : -1;
-        const x1 = sx + dir * 6;
-        const x2 = tx - dir * 6;
-        // A message to oneself loops out to the right of the lifeline and back.
-        const self = e.from === e.to;
-        sequenceDots.push({ x: sx, y, role: e.role }, { x: tx, y: self ? y + 16 : y, role: e.role });
-        const stepBadge = `${i + 1}. `;
-        return {
-            ...e,
-            id: e.id ?? `m${i + 1}`,
-            d: self ? `M${sx + 6} ${y}H${sx + 42}V${y + 16}H${sx + 6}` : `M${x1} ${y}H${x2}`,
-            lx: self ? sx + 10 : Math.round((x1 + x2) / 2),
-            ly: y - 8,
-            anchor: self ? 'start' : 'middle',
-            isMain: e.role !== 'conditional',
-            order: i,
-            label: e.label ? `${stepBadge}${e.label}` : `${stepBadge}${e.from} → ${e.to}`,
-        };
-    });
-
+    const edges = routeSequenceMessages(spec, pos, MSG_START_Y, MSG_STEP_Y, sequenceDots);
     return { pos, lanes, edges, width: right + LEFT, bottom: lifelineBottom, lifelines, sequenceDots };
 }
-
-const DIAGRAM_CSS = `
-.mjd{--bg:var(--mj-bg-surface,#fff);--ink:var(--mj-text-primary,#1f2328);--muted:var(--mj-text-muted,#59636e);--line:var(--mj-border-strong,#8c959f);--grid:var(--mj-border-default,#d1d9e0);--node:var(--mj-bg-surface,#fff);--stroke:var(--mj-border-strong,#8c959f);--lane:var(--mj-bg-surface-card,#f6f8fa);--lane-alt:var(--mj-bg-surface-sunken,#eff2f5);--lane-exc:var(--mj-status-error-bg,#fff5f4);--lane-wait:var(--mj-status-warning-bg,#fffbeb);--accent:var(--mj-brand-primary,#0969da);--accent-tint:color-mix(in srgb,var(--accent) 12%,var(--bg));--success:var(--mj-status-success,#1a7f37);--success-tint:var(--mj-status-success-bg,#dafbe1);--warn:var(--mj-status-warning,#9a6700);--warn-tint:var(--mj-status-warning-bg,#fff8c5);--error:var(--mj-status-error,#cf222e);--error-tint:var(--mj-status-error-bg,#ffebe9);font-family:system-ui,-apple-system,'Segoe UI',sans-serif}
-.mjd .bg{fill:var(--bg)}
-.mjd .title{fill:var(--ink);font-size:18px;font-weight:650}
-.mjd .subtitle{fill:var(--muted);font-size:13px}
-.mjd .lane rect{fill:var(--lane);stroke:var(--grid)}
-.mjd .lane.alt rect{fill:var(--lane-alt)}
-.mjd .lane[data-lane-role=exceptions] rect,.mjd .lane[data-lane-role=terminal] rect{fill:var(--lane-exc)}
-.mjd .lane[data-lane-role=waiting] rect{fill:var(--lane-wait)}
-.mjd .lane line{stroke:var(--grid)}
-.mjd .lane text{fill:var(--muted);font-size:11.5px;font-weight:650;letter-spacing:.05em;text-transform:uppercase}
-.mjd .lifeline{stroke:var(--grid);stroke-width:1.5;stroke-dasharray:5 5}
-.mjd .seq-dot{fill:var(--accent);stroke:var(--bg);stroke-width:1.5}
-.mjd .node rect,.mjd .node polygon{fill:var(--node);stroke:var(--stroke);stroke-width:1.25}
-.mjd .node[data-main-path] rect,.mjd .node[data-main-path] polygon{fill:var(--accent-tint);stroke:var(--accent);stroke-width:2}
-.mjd .node[data-node-kind=success] rect{fill:var(--success-tint);stroke:var(--success);stroke-width:1.75}
-.mjd .node[data-node-kind=waiting] rect{fill:var(--warn-tint);stroke:var(--warn);stroke-width:1.75}
-.mjd .node[data-node-kind=error] rect{fill:var(--error-tint);stroke:var(--error);stroke-width:1.75}
-.mjd .node rect.step-pill,.mjd .node[data-main-path] rect.step-pill,.mjd .node[data-node-kind] rect.step-pill{fill:var(--accent);stroke:none}
-.mjd .node .step-txt{fill:var(--bg);font-size:10px;font-weight:700}
-.mjd .node .lbl{fill:var(--ink);font-size:13.5px;font-weight:600}
-.mjd .node .sub{fill:var(--muted);font-size:11.5px}
-.mjd .edge path{fill:none;stroke:var(--line);stroke-width:1.5}
-.mjd .edge[data-edge-role=error] path{stroke:var(--error);stroke-dasharray:5 4}
-.mjd .edge[data-edge-role=return] path,.mjd .edge[data-edge-role=conditional] path{stroke:var(--line);stroke-dasharray:5 4}
-.mjd .edge[data-main-path] path{stroke:var(--accent);stroke-width:2.5}
-.mjd .edge[data-edge-role=return][data-main-path] path{stroke:var(--line);stroke-width:1.75;stroke-dasharray:5 4}
-.mjd .edge text{fill:var(--muted);font-size:11.5px;paint-order:stroke;stroke:var(--bg);stroke-width:4px;stroke-linejoin:round}
-.mjd .mk-line{fill:var(--line)} .mjd .mk-accent{fill:var(--accent)} .mjd .mk-error{fill:var(--error)}
-.mjd .card rect{fill:var(--node);stroke:var(--grid)}
-.mjd .card .bar{fill:var(--accent);stroke:none}
-.mjd .card[data-card-tone=success] .bar{fill:var(--success)}
-.mjd .card[data-card-tone=warning] .bar{fill:var(--warn)}
-.mjd .card[data-card-tone=error] .bar{fill:var(--error)}
-.mjd .card .ct{fill:var(--ink);font-size:13px;font-weight:600}
-.mjd .card .cb{fill:var(--muted);font-size:12px}
-.mjd .legend text{fill:var(--muted);font-size:11.5px}
-`;
 
 function wrapText(text: string, maxChars: number): string[] {
     if (!text) return [];
@@ -504,24 +481,24 @@ function renderLanesSvg(lanes: PositionedLane[], isSequence: boolean): string[] 
         if (l.vertical) {
             return (
                 `<g class="lane${i % 2 ? ' alt' : ''}" data-lane-id="${esc(l.id)}"${roleAttr}>` +
-                `<rect x="${l.x}" y="${l.y}" width="${l.w}" height="${l.h}" rx="8"/>` +
-                `<line x1="${l.x}" y1="${l.y + 38}" x2="${l.x + l.w}" y2="${l.y + 38}"/>` +
+                `<rect x="${l.x}" y="${l.y}" width="${l.w}" height="${l.h}" rx="8" fill="#f6f8fa" stroke="#d1d9e0"/>` +
+                `<line x1="${l.x}" y1="${l.y + 38}" x2="${l.x + l.w}" y2="${l.y + 38}" stroke="#d1d9e0"/>` +
                 `<text x="${l.x + Math.round(l.w / 2)}" y="${l.y + 24}" text-anchor="middle">${esc(l.label)}</text>` +
                 `</g>`
             );
         }
         return (
             `<g class="lane${i % 2 ? ' alt' : ''}" data-lane-id="${esc(l.id)}"${roleAttr}>` +
-            `<rect x="${l.x}" y="${l.y}" width="${l.w}" height="${l.h}" rx="${isSequence ? 6 : 0}"/>` +
+            `<rect x="${l.x}" y="${l.y}" width="${l.w}" height="${l.h}" rx="${isSequence ? 6 : 0}" fill="#f6f8fa" stroke="#d1d9e0"/>` +
             `<text x="${l.x + 14}" y="${l.y + Math.round(l.h / 2) + 4}">${esc(l.label)}</text>` +
-            `<line x1="${l.x + l.labelW}" y1="${l.y}" x2="${l.x + l.labelW}" y2="${l.y + l.h}"/>` +
+            `<line x1="${l.x + l.labelW}" y1="${l.y}" x2="${l.x + l.labelW}" y2="${l.y + l.h}" stroke="#d1d9e0"/>` +
             `</g>`
         );
     });
 }
 
 function renderEdgesSvg(edges: RoutedEdge[], prefix: string, nodeLabels: Record<string, string>): string[] {
-    return edges.map((e) => {
+    return edges.map((e, i) => {
         const role = e.role ?? 'default';
         const isMain = Boolean(e.isMain);
         const mk = role === 'error' ? 'error' : isMain && role !== 'return' ? 'accent' : 'line';
@@ -529,8 +506,8 @@ function renderEdgesSvg(edges: RoutedEdge[], prefix: string, nodeLabels: Record<
         const orderAttr = e.order !== undefined ? ` data-edge-order="${e.order}"` : '';
         const aria = `${nodeLabels[e.from] ?? e.from} to ${nodeLabels[e.to] ?? e.to}${e.label ? `, ${e.label}` : ''}`;
         return (
-            `<g class="edge" data-edge-id="${esc(e.id)}" data-edge-from="${esc(e.from)}" data-edge-to="${esc(e.to)}" data-edge-role="${esc(role)}"${isMain ? ' data-main-path="true"' : ''}${orderAttr} tabindex="0" role="button" aria-label="${esc(aria)}">` +
-            `<path d="${esc(e.d)}" marker-end="url(#${esc(prefix)}-mk-${mk})"/>${labelMarkup}</g>`
+            `<g class="edge" data-edge-id="${esc(e.id)}" data-edge-from="${esc(e.from)}" data-edge-to="${esc(e.to)}" data-edge-role="${esc(role)}"${isMain ? ' data-main-path="true"' : ''}${orderAttr} tabindex="${i === 0 ? 0 : -1}" role="button" aria-label="${esc(aria)}">` +
+            `<path d="${esc(e.d)}" fill="none" stroke="#8c959f" marker-end="url(#${esc(prefix)}-mk-${mk})"/>${labelMarkup}</g>`
         );
     });
 }
@@ -546,10 +523,10 @@ function renderNodesSvg(
         const kind = n.kind ?? 'task';
         const shape =
             kind === 'decision'
-                ? `<polygon points="${p.l},${p.y} ${p.l + 18},${p.t} ${p.r - 18},${p.t} ${p.r},${p.y} ${p.r - 18},${p.b} ${p.l + 18},${p.b}"/>`
-                : `<rect x="${p.l}" y="${p.t}" width="${p.w}" height="${p.h}" rx="${kind === 'start' || kind === 'end' ? Math.round(p.h / 2) : 8}"/>`;
+                ? `<polygon points="${p.l},${p.y} ${p.l + 18},${p.t} ${p.r - 18},${p.t} ${p.r},${p.y} ${p.r - 18},${p.b} ${p.l + 18},${p.b}" fill="#ffffff" stroke="#8c959f"/>`
+                : `<rect x="${p.l}" y="${p.t}" width="${p.w}" height="${p.h}" rx="${kind === 'start' || kind === 'end' ? Math.round(p.h / 2) : 8}" fill="#ffffff" stroke="#8c959f"/>`;
         const stepMarkup = n.step
-            ? `<rect class="step-pill" x="${p.l + 8}" y="${p.t + 8}" width="22" height="16" rx="8"/><text class="step-txt" x="${p.l + 19}" y="${p.t + 19.5}" text-anchor="middle">${esc(n.step)}</text>`
+            ? `<rect class="step-pill" x="${p.l + 8}" y="${p.t + 8}" width="22" height="16" rx="8" fill="#0969da"/><text class="step-txt" x="${p.l + 19}" y="${p.t + 19.5}" text-anchor="middle">${esc(n.step)}</text>`
             : '';
         const textMarkup = n.sublabel
             ? `<text class="lbl" x="${p.x}" y="${p.y - 3}" text-anchor="middle">${esc(n.label)}</text><text class="sub" x="${p.x}" y="${p.y + 14}" text-anchor="middle">${esc(n.sublabel)}</text>`
@@ -574,7 +551,8 @@ function renderSummaryCardsSvg(cards: MJDiagramCard[], y: number, width: number)
     const markup = cards.map((c, i) => {
         const x = LEFT + (i % perRow) * (cw + 16);
         const cy = y + Math.floor(i / perRow) * (ch + 16);
-        const titleText = c.title.length > 40 ? `${c.title.slice(0, 39)}…` : c.title;
+        const maxTitle = /[A-Z]{8}/.test(c.title) ? 29 : 32;
+        const titleText = c.title.length > maxTitle ? `${c.title.slice(0, maxTitle - 1)}…` : c.title;
         const lines = wrapText(c.body ?? '', 42);
         // Two lines fit on the card; the full text is in <desc> for the details panel.
         if (lines.length > 2) lines[1] = `${lines[1].slice(0, 41)}…`;
@@ -586,8 +564,8 @@ function renderSummaryCardsSvg(cards: MJDiagramCard[], y: number, width: number)
         return (
             `<g class="card" data-card-id="${esc(c.id)}" data-card-nodes="${esc((c.nodes ?? []).join(' '))}"${toneAttr} tabindex="0" role="button" aria-label="${esc(c.title)}">` +
             (c.body ? `<desc>${esc(c.body)}</desc>` : '') +
-            `<rect x="${x}" y="${cy}" width="${cw}" height="${ch}" rx="8"/>` +
-            `<rect class="bar" x="${x}" y="${cy}" width="4" height="${ch}" rx="2"/>` +
+            `<rect x="${x}" y="${cy}" width="${cw}" height="${ch}" rx="8" fill="#ffffff" stroke="#d1d9e0"/>` +
+            `<rect class="bar" x="${x}" y="${cy}" width="4" height="${ch}" rx="2" fill="#0969da"/>` +
             `<text class="ct" x="${x + 18}" y="${cy + 24}">${esc(titleText)}</text>${bodyLines}</g>`
         );
     });
@@ -628,8 +606,8 @@ export function RenderDiagramSvg(spec: MJDiagramSpec, prefix = 'mjd'): string {
     const out: string[] = [
         ...renderLanesSvg(layout.lanes, spec.kind === 'sequence'),
         ...(layout.lifelines ?? []).map((ll) => `<line class="lifeline" x1="${ll.x}" y1="${ll.y1}" x2="${ll.x}" y2="${ll.y2}"/>`),
-        ...renderNodesSvg(spec, layout.pos, mainSet, laneLabels),
         ...renderEdgesSvg(layout.edges, prefix, Object.fromEntries(spec.nodes.map((n) => [n.id, n.label]))),
+        ...renderNodesSvg(spec, layout.pos, mainSet, laneLabels),
         ...(layout.sequenceDots ?? []).map((d) => `<circle class="seq-dot" cx="${d.x}" cy="${d.y}" r="4"/>`),
     ];
 
@@ -647,7 +625,7 @@ export function RenderDiagramSvg(spec: MJDiagramSpec, prefix = 'mjd'): string {
     return (
         `<svg xmlns="http://www.w3.org/2000/svg" class="mjd" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" data-mj-diagram="${MJ_DIAGRAM_CONTRACT_VERSION}" data-mj-kind="${esc(spec.kind)}" role="group" aria-label="${esc(spec.title)}">\n` +
         `<style>${DIAGRAM_CSS}</style><defs>${mk('line')}${mk('accent')}${mk('error')}</defs>\n` +
-        `<rect class="bg" x="0" y="0" width="${W}" height="${H}"/>\n` +
+        `<rect class="bg" x="0" y="0" width="${W}" height="${H}" fill="#ffffff"/>\n` +
         `<text class="title" x="${LEFT}" y="38">${esc(spec.title)}</text>\n` +
         (spec.subtitle ? `<text class="subtitle" x="${LEFT}" y="58">${esc(spec.subtitle)}</text>\n` : '') +
         `${out.join('\n')}\n` +
