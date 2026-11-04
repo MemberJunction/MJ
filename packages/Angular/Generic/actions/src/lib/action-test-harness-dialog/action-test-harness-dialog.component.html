@@ -1,38 +1,37 @@
-@if (IsOpen) {
-    <div class="dialog-backdrop" (click)="OnBackdropClick($event)">
-        <div class="dialog-container">
-            <div class="dialog-header">
-                <div class="dialog-title">
-                    <i class="fa-solid fa-flask"></i>
-                    @if (Action) {
-                        Action Test Harness - {{ Action.Name }}
-                    } @else {
-                        Action Test Harness
-                    }
-                </div>
-                <button class="dialog-close-btn" (click)="OnClose()" title="Close">
-                    <i class="fa-solid fa-times"></i>
-                </button>
-            </div>
-
-            <div class="dialog-content">
-                @if (Action) {
-                    <mj-action-test-harness
-                        [Action]="Action"
-                        [ActionParams]="ActionParams"
-                        (ExecutionComplete)="OnExecutionComplete($event)">
-                    </mj-action-test-harness>
-                } @else {
-                    <div class="loading-state">
-                        <i class="fa-solid fa-spinner fa-spin"></i>
-                        Loading...
-                    </div>
-                }
-            </div>
-
-            <div class="dialog-footer">
-                <button class="btn btn-outline" (click)="OnClose()">Close</button>
-            </div>
+<!-- The shared mj-dialog: 700px on desktop; full-screen on phones. The harness's actions live in
+     the dialog footer (pinned on every screen), so the harness hides its own button row. No footer Close:
+     the title bar's close is the one way out. -->
+<mj-dialog [Visible]="IsOpen" [Title]="DialogTitle" [Width]="700" (Close)="OnClose()">
+    @if (Action) {
+        <mj-action-test-harness
+            [Action]="Action"
+            [ActionParams]="ActionParams"
+            [ShowActionButtons]="false"
+            (StateChange)="OnHarnessStateChange()"
+            (ExecutionComplete)="OnExecutionComplete($event)">
+        </mj-action-test-harness>
+    } @else {
+        <div class="loading-state">
+            <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+            Loading...
         </div>
-    </div>
-}
+    }
+
+    <mj-dialog-actions>
+        <button mjButton variant="primary" class="harness-run" [disabled]="!CanRun" (click)="RunAction()">
+            @if (IsRunning) {
+                <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Executing...
+            } @else {
+                <i class="fa-solid fa-play" aria-hidden="true"></i> Execute Action
+            }
+        </button>
+        <button mjButton variant="secondary" [disabled]="!Action || IsRunning" (click)="ResetHarness()">
+            <i class="fa-solid fa-undo" aria-hidden="true"></i> Reset
+        </button>
+        @if (HasResults) {
+            <button mjButton variant="secondary" [disabled]="IsRunning" (click)="ClearHarnessResults()">
+                <i class="fa-solid fa-trash" aria-hidden="true"></i> Clear Results
+            </button>
+        }
+    </mj-dialog-actions>
+</mj-dialog>

@@ -64,8 +64,16 @@ export class ActionTestHarnessComponent extends BaseAngularComponent implements 
         return this._isVisible;
     }
 
+    /**
+     * Show the Execute / Reset / Clear Results row inside the harness. A host that renders those
+     * actions itself (the test harness dialog puts them in its footer) turns this off.
+     */
+    @Input() ShowActionButtons = true;
+
     @Output() VisibilityChange = new EventEmitter<boolean>();
     @Output() ExecutionComplete = new EventEmitter<ActionResult>();
+    /** Emitted when IsExecuting or the results change, so a host rendering the actions can refresh. */
+    @Output() StateChange = new EventEmitter<void>();
 
     // Public state properties
     public ParamValues: ActionParamValue[] = [];
@@ -283,6 +291,7 @@ export class ActionTestHarnessComponent extends BaseAngularComponent implements 
         this.IsExecuting = true;
         this.ExecutionResult = null;
         this.ExecutionError = null;
+        this.StateChange.emit();
 
         const startTime = Date.now();
 
@@ -396,6 +405,7 @@ export class ActionTestHarnessComponent extends BaseAngularComponent implements 
             });
         } finally {
             this.IsExecuting = false;
+            this.StateChange.emit();
 
             // Auto-collapse inputs and scroll to results
             this.InputsCollapsed = true;
@@ -421,6 +431,7 @@ export class ActionTestHarnessComponent extends BaseAngularComponent implements 
         this.ExecutionResult = null;
         this.ExecutionError = null;
         this.ExecutionTime = 0;
+        this.StateChange.emit();
     }
 
     public ResetParams(): void {

@@ -110,33 +110,35 @@
             }
     </mj-accordion-panel>
 
-    <!-- Action Buttons -->
-    <div class="action-buttons">
-        <button
-            class="btn btn-primary btn-large"
-            (click)="ExecuteAction()"
-            [disabled]="IsExecuting || Action.Status !== 'Active'">
-            @if (IsExecuting) {
-                <i class="fa-solid fa-spinner fa-spin"></i> Executing...
-            } @else {
-                <i class="fa-solid fa-play"></i> Execute Action
-            }
-        </button>
+    <!-- Action Buttons (a host such as the test harness dialog may render these itself) -->
+    @if (ShowActionButtons) {
+        <div class="action-buttons">
+            <button
+                class="btn btn-primary btn-large"
+                (click)="ExecuteAction()"
+                [disabled]="IsExecuting || Action.Status !== 'Active'">
+                @if (IsExecuting) {
+                    <i class="fa-solid fa-spinner fa-spin"></i> Executing...
+                } @else {
+                    <i class="fa-solid fa-play"></i> Execute Action
+                }
+            </button>
 
-        <button
-            class="btn btn-outline"
-            (click)="ResetParams()">
-            <i class="fa-solid fa-undo"></i> Reset
-        </button>
-
-        @if (ExecutionResult || ExecutionError) {
             <button
                 class="btn btn-outline"
-                (click)="ClearResults()">
-                <i class="fa-solid fa-trash"></i> Clear Results
+                (click)="ResetParams()">
+                <i class="fa-solid fa-undo"></i> Reset
             </button>
-        }
-    </div>
+
+            @if (ExecutionResult || ExecutionError) {
+                <button
+                    class="btn btn-outline"
+                    (click)="ClearResults()">
+                    <i class="fa-solid fa-trash"></i> Clear Results
+                </button>
+            }
+        </div>
+    }
 
     <!-- Results Section -->
     @if (ExecutionResult || ExecutionError) {

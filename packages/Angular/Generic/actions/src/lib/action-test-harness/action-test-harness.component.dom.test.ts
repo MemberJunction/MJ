@@ -3,7 +3,7 @@ import { Component, Directive, EventEmitter, Input, Output } from '@angular/core
 import { FormsModule } from '@angular/forms';
 import type { MJActionEntity, MJActionParamEntity } from '@memberjunction/core-entities';
 import type { ActionResult } from '@memberjunction/actions-base';
-import { renderComponentFixture, query } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
 import { ActionTestHarnessComponent } from './action-test-harness.component';
 
 /**
@@ -77,6 +77,22 @@ describe('ActionTestHarnessComponent (DOM)', () => {
     f.componentInstance.ClearResults();
     expect(f.componentInstance.ExecutionResult).toBeNull();
     expect(f.componentInstance.ExecutionError).toBeNull();
+  });
+
+  it('shows its own action buttons by default and hides them when a host renders them instead', () => {
+    const f = render();
+    expect(query(f, '.action-buttons')).not.toBeNull();
+    f.componentRef.setInput('ShowActionButtons', false);
+    f.detectChanges();
+    expect(query(f, '.action-buttons')).toBeNull();
+  });
+
+  it('announces a state change on ClearResults and ResetParams so a host footer can refresh', () => {
+    const f = render({ ExecutionResult: { Success: true } as unknown as ActionResult });
+    const changes = capture<void>(f.componentInstance.StateChange);
+    f.componentInstance.ClearResults();
+    f.componentInstance.ResetParams();
+    expect(changes.length).toBeGreaterThanOrEqual(2);
   });
 
   it('re-initializes the parameter model and clears results on ResetParams', () => {
