@@ -51,7 +51,8 @@
     "packages/Rubrics/*",
     "packages/eSignature/*",
     "packages/eSignature/Providers/*",
-    "packages/WorkQueue/*"
+    "packages/WorkQueue/*",
+    "packages/Diagnostics/*"
   ],
   "scripts": {
     "prebuild": "node -e \"try { require.resolve('turbo') } catch (e) { console.error('\\n\u274c Dependencies not installed. Run: pnpm install\\n'); process.exit(1); }\"",

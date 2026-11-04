@@ -21,8 +21,32 @@ import {
 } from '../index';
 
 class TestTransactionGroup extends TransactionGroupBase {
+    private scope: EntityTransactionScope | null = null;
+
     constructor(private readonly provider: EnlistmentTestProvider) {
         super();
+    }
+
+    protected override BeginGroupTransaction(): Promise<void> {
+        return this.provider.BeginEntityTransaction().then((s) => {
+            this.scope = s;
+        });
+    }
+
+    protected override async CommitGroupTransaction(): Promise<void> {
+        const s = this.scope;
+        this.scope = null;
+        if (s) {
+            await s.Commit();
+        }
+    }
+
+    protected override async RollbackGroupTransaction(): Promise<void> {
+        const s = this.scope;
+        this.scope = null;
+        if (s) {
+            await s.Rollback();
+        }
     }
 
     protected async HandleSubmit(): Promise<TransactionResult[]> {
@@ -241,10 +265,8 @@ describe('DatabaseProviderBase durable after-save transactional enlistment', () 
         expect(await provider.Save(entity, user, new EntitySaveOptions())).toBe(true);
         expect(provider.Events).toEqual([]);
 
-        const scope = await provider.BeginEntityTransaction();
         const submitted = await tg.Submit();
         expect(submitted).toBe(true);
-        await scope.Commit();
 
         expect(provider.ObservedPkInDurableHook).toBe('ID|db-generated-id-99');
         expect(provider.Events).toEqual([
@@ -257,7 +279,7 @@ describe('DatabaseProviderBase durable after-save transactional enlistment', () 
         expect(tg.Status).toBe('Complete');
     });
 
-    it('fails TransactionGroup.Submit, skips OnAfterSaveExecute, and allows caller transaction rollback when OnDurableAfterSaveExecute throws', async () => {
+    it('fails TransactionGroup.Submit, skips OnAfterSaveExecute, and rolls back the group transaction when OnDurableAfterSaveExecute throws', async () => {
         const provider = new EnlistmentTestProvider();
         provider.EnlistSave = true;
         provider.FailDurableHook = true;
@@ -269,11 +291,7 @@ describe('DatabaseProviderBase durable after-save transactional enlistment', () 
 
         expect(await provider.Save(entity, user, new EntitySaveOptions())).toBe(true);
 
-        const scope = await provider.BeginEntityTransaction();
         const submitted = await tg.Submit();
-        if (!submitted) {
-            await scope.Rollback();
-        }
 
         expect(submitted).toBe(false);
         expect(tg.Status).toBe('Failed');
