@@ -2078,8 +2078,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 this.OnResumeRefresh();
             }
         };
+        let transactionPreprocessingRegistered = false;
+        let transactionReadyRaised = false;
         try {
             entity.RegisterTransactionPreprocessing();
+            transactionPreprocessingRegistered = Boolean(entity.TransactionGroup);
 
             // External-data-source entities are read-only — MJ is never the system of record for
             // remote data. Refuse writes at the provider layer so the guarantee holds regardless of
@@ -2219,6 +2222,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 if (entity.TransactionGroup && !bReplay) {
                     // ---- Transaction Group path ----
                     entity.RaiseReadyForTransaction();
+                    transactionReadyRaised = true;
                     suspendRefresh();
 
                     const extraData = this.GetTransactionExtraData(entity);
@@ -2261,18 +2265,30 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                                     if (await this.ShouldEnlistSaveInTransaction(entity, user, options, bNewRecord)) {
                                         await this.OnDurableAfterSaveExecute(entity, user, options, saveContext);
                                     }
+                                    if (preSaveValues) {
+                                        for (const [key, val] of Object.entries(preSaveValues as Record<string, TransactionRowValue>)) {
+                                            if (!(key in transactionResult)) {
+                                                transactionResult[key] = val;
+                                            }
+                                        }
+                                        Object.defineProperty(transactionResult, '__mj_preMerged', {
+                                            value: true,
+                                            enumerable: false,
+                                            configurable: true,
+                                        });
+                                    }
+                                    const patches = await this.OnSaveCompleted(entity, sqlDetails, user, options, saveContext);
+                                    if (patches) {
+                                        Object.assign(transactionResult, patches);
+                                    }
                                     this.OnAfterSaveExecute(entity, user, options, saveContext);
                                     entityResult.Success = true;
-                                    const mergedResult: Record<string, TransactionRowValue> = preSaveValues
-                                        ? { ...(preSaveValues as Record<string, TransactionRowValue>), ...transactionResult }
-                                        : transactionResult;
-                                    entityResult.NewValues = this.MapTransactionResultToNewValues(mergedResult);
+                                    entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
                                 } else {
                                     entityResult.Success = false;
                                     if (!entityResult.Message) {
-                                        entityResult.Message = transactionResult instanceof Error
-                                            ? transactionResult.message
-                                            : 'Transaction Failed';
+                                        entityResult.Message =
+                                            transactionResult instanceof Error ? transactionResult.message : 'Transaction Failed';
                                     }
                                 }
                             },
@@ -2377,6 +2393,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             entityResult.Message = (e as Error).message;
             LogError(e);
             throw e;
+        } finally {
+            if (transactionPreprocessingRegistered && !transactionReadyRaised) {
+                entity.RaiseReadyForTransaction();
+            }
         }
     }
 
@@ -2392,8 +2412,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      */
     public async Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo): Promise<boolean> {
         const entityResult = new BaseEntityResult();
+        let transactionPreprocessingRegistered = false;
+        let transactionReadyRaised = false;
         try {
             entity.RegisterTransactionPreprocessing();
+            transactionPreprocessingRegistered = Boolean(entity.TransactionGroup);
 
             // External-data-source entities are read-only (see Save) — refuse deletes at the provider
             // layer regardless of the generated base class. The normal path (ReadOnlyExternalBaseEntity)
@@ -2440,6 +2463,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             if (entity.TransactionGroup && !bReplay) {
                 // ---- Transaction Group path ----
                 entity.RaiseReadyForTransaction();
+                transactionReadyRaised = true;
 
                 const extraData = this.GetTransactionExtraData(entity);
                 if (entity.EntityInfo.TrackRecordChanges) {
@@ -2465,14 +2489,20 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                                 // (PostgreSQL accepts its legacy `_result_id` shape there).
                                 if (!this.ValidateDeleteResult(entity, [transactionResult], entityResult)) {
                                     entityResult.Success = false;
-                                    return;
+                                    throw new Error(
+                                        entityResult.Message ||
+                                            `Failed to delete ${entity.EntityInfo.Name}: record not found or primary key mismatch`,
+                                    );
                                 }
                                 this.OnAfterDeleteExecute(entity, user, options);
                                 entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
                                 entityResult.Success = true;
                             } else {
                                 entityResult.Success = false;
-                                entityResult.Message = 'Transaction failed to commit';
+                                if (!entityResult.Message) {
+                                    entityResult.Message =
+                                        transactionResult instanceof Error ? transactionResult.message : 'Transaction failed to commit';
+                                }
                             }
                         },
                     ),
@@ -2515,6 +2545,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             entityResult.Success = false;
             entityResult.EndedAt = new Date();
             return false;
+        } finally {
+            if (transactionPreprocessingRegistered && !transactionReadyRaised) {
+                entity.RaiseReadyForTransaction();
+            }
         }
     }
 
