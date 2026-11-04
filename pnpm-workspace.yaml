@@ -92,3 +92,4 @@ packages:
   - 'packages/eSignature/*'
   - 'packages/eSignature/Providers/*'
   - 'packages/WorkQueue/*'
+  - 'packages/Diagnostics/*'
