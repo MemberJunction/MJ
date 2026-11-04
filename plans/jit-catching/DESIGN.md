@@ -642,16 +642,8 @@ judges, reporting model and gates carry over.
 | # | Question | Owner |
 |---|---|---|
 | Q1 | May the promotion workflow commit with the existing release GitHub App token, or a new App? | Repo admins |
-| Q3 | Is an OpenAI key available to CI (inside `INTEGRATION_LIVE_MODEL_KEYS` or new)? | Repo admins |
-| Q5 | Monthly spend limit after gate 1 measures real cost | Team |
-
-**Resolved (2026-11-04):**
-
-| # | Question | Answer |
-|---|---|---|
-| Q2 | Orphan branch or a separate private repo for the store? | Orphan branch `jit-catch-data` (D21) |
-| Q4 | Who labels gate 1 clean-set catches? | The original PR author; a reviewer of that PR as fallback (D26) |
-| Q6 | Nightly start time? | 07:45 UTC, inside the existing nightly window (D27) |
+| Q2 | Is an OpenAI key available to CI (inside `INTEGRATION_LIVE_MODEL_KEYS` or new)? | Repo admins |
+| Q3 | Monthly spend limit after gate 1 measures real cost | Team |
 
 ---
 
