@@ -474,3 +474,34 @@ describe('PSPipelinesComponent (DOM) — what a Prediction Unit decides', () => 
     expect([editable, stored.TargetVariable, stored.ProblemType, JSON.parse(stored.SourceBindings ?? '[]').length]).toEqual([[2, null], 'Lapsed', 'regression', 2]);
   });
 });
+
+describe('PSPipelinesComponent (DOM) — Validate reports what training refuses', () => {
+  const validate = (over: Record<string, unknown>): string => {
+    const fixture = render([makePipeline({ EvaluationProtocolID: 'ep1', EvaluationProtocol: 'Renewal protocol', ...over })]);
+    const notify = vi.spyOn(fixture.debugElement.injector.get(MJNotificationService), 'CreateSimpleNotification');
+    (query(fixture, '[data-testid="ps-pipelines-validate"]') as HTMLButtonElement).click();
+    return String(notify.mock.calls.at(-1)?.[0]);
+  };
+
+  it('calls a complete pipeline valid', () => {
+    expect(validate({})).toBe('Pipeline looks valid — ready to train.');
+  });
+
+  it('never asks a unit pipeline for the sources or target the unit decides', () => {
+    expect(validate({ PredictionUnitID: 'u1', PredictionUnit: 'Renewal unit', SourceBindings: '[]', TargetVariable: '' })).toBe('Pipeline looks valid — ready to train.');
+  });
+
+  it('still asks a pipeline without a unit for its sources and target', () => {
+    expect(validate({ SourceBindings: '[]', TargetVariable: '' })).toBe('Pipeline needs at least one source, a target variable.');
+  });
+
+  it('names each step, cutoff and missing protocol training refuses', () => {
+    const steps = [
+      { Id: 'step_1', Kind: 'select', Columns: ['Tenure'] },
+      { Id: 'step_2', Kind: 'impute', Column: 'Tenure', Strategy: 'constant', Inputs: ['step_1'] },
+      { Id: 'step_3', Kind: 'embedding', Entity: 'Members', EmbeddingModelRef: 'm', Dims: 8, Inputs: ['step_1'] },
+    ];
+    expect(validate({ FeatureSteps: JSON.stringify({ Steps: steps }), AsOfStrategy: JSON.stringify({ Mode: 'offset', OffsetDays: 30 }), EvaluationProtocolID: null }))
+      .toBe('Pipeline needs a bound Evaluation Protocol, a numeric fill value for the constant impute of Tenure. Training refuses the embedding step step_3, an as-of cutoff (offset).');
+  });
+});

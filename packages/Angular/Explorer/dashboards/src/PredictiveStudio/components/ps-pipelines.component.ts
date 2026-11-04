@@ -77,6 +77,8 @@ const TRAINER_STEP_NOTES: Partial<Record<FeatureStepKind, string>> = {
   'flow-agent': 'Training refuses this step: the trainer cannot assemble a flow-agent step.',
   'vision-llm': 'Training refuses this step: the trainer cannot assemble a vision-llm step.',
 };
+/** The step kinds FeatureResolver.ResolveStep refuses, so training fails on them (the "Training refuses" notes above). */
+const REFUSED_STEP_KINDS: ReadonlySet<FeatureStepKind> = new Set<FeatureStepKind>(['embedding', 'llm-derived', 'flow-agent', 'vision-llm']);
 const PROBLEM_TYPES: ProblemType[] = ['classification', 'regression'];
 const IMPUTE_STRATEGIES: Array<'mean' | 'median' | 'mode' | 'constant'> = ['mean', 'median', 'mode', 'constant'];
 
@@ -1842,27 +1844,52 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     }
   }
 
+  /**
+   * Reports what the pipeline still needs and what training would refuse, from the same rules the editor badges: the
+   * steps FeatureResolver refuses, a constant impute with no finite fill, a cutoff other than `none` and a missing
+   * Evaluation Protocol. A unit pipeline is not asked for the sources or target its Prediction Unit decides.
+   */
   public validate(): void {
-    const issues: string[] = [];
-    if (this.EditSources.length === 0) {
-      issues.push('at least one source');
-    }
-    if (!this.EditTargetVariable) {
-      issues.push('a target variable');
-    }
-    if (!this.EditAlgorithmId) {
-      issues.push('an algorithm');
-    }
-    try {
-      JSON.parse(this.EditHyperparams || '{}');
-    } catch {
-      issues.push('valid hyperparameters JSON');
-    }
-    if (issues.length > 0) {
-      this.notifications.CreateSimpleNotification(`Pipeline needs ${issues.join(', ')}.`, 'warning', 4500);
+    const needs = [...this.missingPieces(), ...this.missingFillValues()];
+    const refusals = this.trainingRefusals();
+    const parts = [
+      needs.length > 0 ? `Pipeline needs ${needs.join(', ')}.` : '',
+      refusals.length > 0 ? `Training refuses ${refusals.join(', ')}.` : '',
+    ].filter((x) => x !== '');
+    if (parts.length > 0) {
+      this.notifications.CreateSimpleNotification(parts.join(' '), 'warning', 4500);
     } else {
       this.notifications.CreateSimpleNotification('Pipeline looks valid — ready to train.', 'success', 3000);
     }
+  }
+
+  /** The pipeline-level settings training needs that are unset or unreadable. */
+  private missingPieces(): string[] {
+    const needs: string[] = [];
+    if (!this.IsUnitBound && this.EditSources.length === 0) needs.push('at least one source');
+    if (!this.IsUnitBound && !this.EditTargetVariable) needs.push('a target variable');
+    if (!this.EditAlgorithmId) needs.push('an algorithm');
+    if (!this.SelectedPipeline?.EvaluationProtocolID) needs.push('a bound Evaluation Protocol');
+    try {
+      JSON.parse(this.EditHyperparams || '{}');
+    } catch {
+      needs.push('valid hyperparameters JSON');
+    }
+    return needs;
+  }
+
+  /** Each constant impute whose fill is not a finite number, which training refuses on a numeric column. */
+  private missingFillValues(): string[] {
+    return this.EditSteps
+      .filter((s): s is Extract<FeatureStep, { Kind: 'impute' }> => s.Kind === 'impute')
+      .filter((s) => s.Strategy === 'constant' && !(typeof s.FillValue === 'number' && Number.isFinite(s.FillValue)))
+      .map((s) => `a numeric fill value for the constant impute of ${s.Column || s.Id}`);
+  }
+
+  /** The steps and settings training refuses outright. */
+  private trainingRefusals(): string[] {
+    const refused = this.EditSteps.filter((s) => REFUSED_STEP_KINDS.has(s.Kind)).map((s) => `the ${s.Kind} step ${s.Label || s.Id}`);
+    return this.EditAsOf.Mode === 'none' ? refused : [...refused, `an as-of cutoff (${this.EditAsOf.Mode})`];
   }
 
   public async train(): Promise<void> {
