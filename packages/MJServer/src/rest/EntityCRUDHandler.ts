@@ -30,14 +30,16 @@ export class EntityCRUDHandler {
             // Create new record
             entity.NewRecord();
             
-            // Extract save options if provided
+            // Extract save options if provided (wire-unreachable flags like ReplayOnly/SkipRecordChanges are never honored)
             const options = new EntitySaveOptions();
             if (data.options) {
                 const { IgnoreDirtyState, SkipEntityAIActions, SkipEntityActions, ReplayOnly, SkipOldValuesCheck } = data.options;
                 if (IgnoreDirtyState !== undefined) options.IgnoreDirtyState = !!IgnoreDirtyState;
                 if (SkipEntityAIActions !== undefined) options.SkipEntityAIActions = !!SkipEntityAIActions;
                 if (SkipEntityActions !== undefined) options.SkipEntityActions = !!SkipEntityActions;
-                if (ReplayOnly !== undefined) options.ReplayOnly = !!ReplayOnly;
+                if (ReplayOnly) {
+                    LogError(`Ignoring ReplayOnly on a ${entityName} REST create requested by ${user?.Email ?? 'an unidentified caller'}`);
+                }
                 if (SkipOldValuesCheck !== undefined) options.SkipOldValuesCheck = !!SkipOldValuesCheck;
                 
                 // Remove options from data
@@ -164,14 +166,16 @@ export class EntityCRUDHandler {
                 };
             }
             
-            // Extract save options if provided
+            // Extract save options if provided (wire-unreachable flags like ReplayOnly/SkipRecordChanges are never honored)
             const options = new EntitySaveOptions();
             if (data.options) {
                 const { IgnoreDirtyState, SkipEntityAIActions, SkipEntityActions, ReplayOnly, SkipOldValuesCheck } = data.options;
                 if (IgnoreDirtyState !== undefined) options.IgnoreDirtyState = !!IgnoreDirtyState;
                 if (SkipEntityAIActions !== undefined) options.SkipEntityAIActions = !!SkipEntityAIActions;
                 if (SkipEntityActions !== undefined) options.SkipEntityActions = !!SkipEntityActions;
-                if (ReplayOnly !== undefined) options.ReplayOnly = !!ReplayOnly;
+                if (ReplayOnly) {
+                    LogError(`Ignoring ReplayOnly on a ${entityName} REST create requested by ${user?.Email ?? 'an unidentified caller'}`);
+                }
                 if (SkipOldValuesCheck !== undefined) options.SkipOldValuesCheck = !!SkipOldValuesCheck;
                 
                 // Remove options from data
@@ -261,8 +265,22 @@ export class EntityCRUDHandler {
                 };
             }
             
+            // Sanitize delete options from wire (never allow ReplayOnly or SkipRecordChanges)
+            const sanitizedOptions = new EntityDeleteOptions();
+            if (options) {
+                sanitizedOptions.SkipEntityAIActions = !!options.SkipEntityAIActions;
+                sanitizedOptions.SkipEntityActions = !!options.SkipEntityActions;
+                sanitizedOptions.IsParentEntityDelete = !!options.IsParentEntityDelete;
+                if (options.ReplayOnly) {
+                    LogError(`Ignoring ReplayOnly on a ${entityName} REST delete requested by ${user?.Email ?? 'an unidentified caller'}`);
+                }
+                if (options.SkipRecordChanges) {
+                    LogError(`Ignoring SkipRecordChanges on a ${entityName} REST delete requested by ${user?.Email ?? 'an unidentified caller'}`);
+                }
+            }
+
             // Delete the entity
-            const deleteSuccess = await entity.Delete(options);
+            const deleteSuccess = await entity.Delete(sanitizedOptions);
             
             if (!deleteSuccess) {
                 const latestResult = entity.LatestResult;

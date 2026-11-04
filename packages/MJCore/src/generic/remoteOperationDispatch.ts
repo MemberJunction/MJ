@@ -78,6 +78,8 @@ export async function DispatchRemoteOperationInProcess<TInput = unknown, TOutput
             {
                 operationKey: op.OperationKey || operationKey,
                 source: 'RemotableOperation',
+                allowedEntities: op.AuthorizedWriteEntities,
+                userId: user.ID,
             },
             () => op.ExecuteServer(input, context),
         );

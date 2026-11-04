@@ -183,6 +183,13 @@ export abstract class BaseRemotableOperation<TInput = unknown, TOutput = unknown
     }
 
     /**
+     * Optional allow-list of entity names (or `['*']`) that this Remote Operation is authorized
+     * to mutate when `GrantsServerWriteAuthority` is `true`. Forwarded into the active
+     * `ServerOperationScopeFrame.allowedEntities` by `DispatchRemoteOperationInProcess`.
+     */
+    public readonly AuthorizedWriteEntities?: ReadonlyArray<string>;
+
+    /**
      * Optional structural contract fingerprint emitted by CodeGen (or set by a hand-authored
      * operation). Automatically forwarded on {@link Execute} when the caller didn't override
      * `options.contractFingerprint`, allowing the server resolver to detect stale client bundles.

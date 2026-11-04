@@ -25,13 +25,16 @@
 import {
     BaseSingleton,
     SafeJSONParse,
+    UUIDsEqual,
     UUIDSet,
     ValidationErrorInfo,
     ValidationErrorType,
     ValidationResult,
 } from '@memberjunction/global';
 import type { BaseEntity, EntityField } from './baseEntity';
+import { DocumentNumberingEngine } from './documentNumberingEngine';
 import type { EntityInfo } from './entityInfo';
+import { LogError } from './logging';
 import type { UserInfo } from './securityInfo';
 
 export type WriteAuthorityMode = 'Standard' | 'AppendOnly' | 'ServerOperationOnly';
@@ -98,16 +101,21 @@ export interface IEntityLifecyclePolicy {
 }
 
 export const CLIENT_DIRECT_CRUD_BOUNDARY_KEY = '__MJ_CLIENT_DIRECT_CRUD__';
+export const DOCUMENT_SEQUENCE_SQL_STORE_OPERATION_KEY = '__MJ_INTERNAL_DOCUMENT_SEQUENCE_SQL_STORE__';
 
 export interface ServerOperationScopeFrame {
     readonly operationKey: string;
     readonly source: 'RemotableOperation' | 'ServerEngine' | 'ServerAction' | 'ClientCrudBoundary';
-    /** Optional entity names this scope covers. Omit or pass `['*']` to cover all entities accepting `operationKey`. */
+    /** Optional entity names this scope covers. Pass `['*']` to cover all entities. */
     readonly allowedEntities?: ReadonlyArray<string>;
+    /** Optional acting User ID bound to this scope frame. When set, must match the entity's acting user. */
+    readonly userId?: string;
 }
 
 export interface IServerOperationScopeTracker {
+    readonly IsAsyncSafe?: boolean;
     RunInScope<T>(frame: ServerOperationScopeFrame, fn: () => T): T;
+    RunWithoutAuthority?<T>(fn: () => T): T;
     GetActiveFrames(): ReadonlyArray<ServerOperationScopeFrame>;
 }
 
@@ -127,6 +135,7 @@ function isPromiseLike<T>(value: T): value is T & PromiseLike<object | string | 
  * On Node servers, `@memberjunction/generic-database-provider` installs `NodeAsyncServerOperationScopeTracker`.
  */
 export class StackServerOperationScopeTracker implements IServerOperationScopeTracker {
+    public readonly IsAsyncSafe = false;
     private readonly _stack: ServerOperationScopeFrame[] = [];
 
     public RunInScope<T>(frame: ServerOperationScopeFrame, fn: () => T): T {
@@ -164,6 +173,17 @@ export class StackServerOperationScopeTracker implements IServerOperationScopeTr
         }
     }
 
+    public RunWithoutAuthority<T>(fn: () => T): T {
+        return this.RunInScope(
+            {
+                operationKey: CLIENT_DIRECT_CRUD_BOUNDARY_KEY,
+                source: 'ClientCrudBoundary',
+                allowedEntities: [],
+            },
+            fn,
+        );
+    }
+
     public GetActiveFrames(): ReadonlyArray<ServerOperationScopeFrame> {
         return [...this._stack];
     }
@@ -179,7 +199,7 @@ export class StackServerOperationScopeTracker implements IServerOperationScopeTr
 export class ServerOperationScopeManager extends BaseSingleton<ServerOperationScopeManager> {
     private _tracker: IServerOperationScopeTracker = new StackServerOperationScopeTracker();
 
-    public constructor() {
+    protected constructor() {
         super();
     }
 
@@ -218,6 +238,17 @@ export class ServerOperationScopeManager extends BaseSingleton<ServerOperationSc
     }
 
     /**
+     * Executes `fn` with all outer authority frames cleared/masked (using `AsyncLocalStorage.run([], fn)`
+     * when `NodeAsyncServerOperationScopeTracker` is installed).
+     */
+    public RunWithoutAuthority<T>(fn: () => T): T {
+        if (this._tracker.RunWithoutAuthority) {
+            return this._tracker.RunWithoutAuthority(fn);
+        }
+        return this.RunInClientCrudBoundary(fn);
+    }
+
+    /**
      * Returns the effective active authority frames since the innermost {@link RunInClientCrudBoundary}
      * (if any). Frames outside a client CRUD boundary are masked.
      */
@@ -233,7 +264,11 @@ export class ServerOperationScopeManager extends BaseSingleton<ServerOperationSc
         return boundaryIdx >= 0 ? all.slice(boundaryIdx + 1) : all;
     }
 
-    public IsOperationActive(allowedOperations?: ReadonlyArray<string>, entityName?: string): boolean {
+    public IsOperationActive(
+        allowedOperations?: ReadonlyArray<string>,
+        entityName?: string,
+        actingUser?: UserInfo,
+    ): boolean {
         const frames = this.GetEffectiveAuthorityFrames();
         if (frames.length === 0) {
             return false;
@@ -243,13 +278,22 @@ export class ServerOperationScopeManager extends BaseSingleton<ServerOperationSc
             allowedOperations && allowedOperations.length > 0
                 ? new Set(allowedOperations.map((k) => k.trim().toLowerCase()))
                 : null;
+        const hasAllowedOps = normalizedAllowedOps !== null && normalizedAllowedOps.size > 0;
 
         for (let i = frames.length - 1; i >= 0; i--) {
             const frame = frames[i];
-            if (normalizedAllowedOps && !normalizedAllowedOps.has(frame.operationKey.trim().toLowerCase())) {
+            if (frame.userId && actingUser?.ID && !UUIDsEqual(frame.userId, actingUser.ID)) {
                 continue;
             }
-            if (normalizedEntity && frame.allowedEntities && frame.allowedEntities.length > 0) {
+            if (hasAllowedOps && !normalizedAllowedOps.has(frame.operationKey.trim().toLowerCase())) {
+                continue;
+            }
+            const hasFrameEntities = Boolean(frame.allowedEntities && frame.allowedEntities.length > 0);
+            if (!hasAllowedOps && !hasFrameEntities) {
+                // Fail closed when neither the policy's allowedOperations nor the frame's allowedEntities scopes the authority.
+                continue;
+            }
+            if (normalizedEntity && hasFrameEntities && frame.allowedEntities) {
                 const coversAll = frame.allowedEntities.some((e) => e.trim() === '*');
                 const coversEntity = frame.allowedEntities.some((e) => e.trim().toLowerCase() === normalizedEntity);
                 if (!coversAll && !coversEntity) {
@@ -275,12 +319,14 @@ export class EntityLifecyclePolicyEngine extends BaseSingleton<EntityLifecyclePo
     public static readonly LIFECYCLE_SETTING_NAME = 'LifecyclePolicy';
     public static readonly STATE_MACHINE_SETTING_NAME = 'StateMachinePolicy';
     public static readonly WRITE_AUTHORITY_SETTING_NAME = 'WriteAuthorityPolicy';
+    public static readonly DOCUMENT_SEQUENCE_COUNTERS_ENTITY_NAME = 'MJ: Document Sequence Counters';
 
     private readonly _programmaticPolicies = new Map<string, IEntityLifecyclePolicy>();
     private readonly _metadataCache = new Map<string, CachedMetadataPolicyEntry>();
 
-    public constructor() {
+    protected constructor() {
         super();
+        this.seedBuiltInPolicies();
     }
 
     public static get Instance(): EntityLifecyclePolicyEngine {
@@ -302,6 +348,23 @@ export class EntityLifecyclePolicyEngine extends BaseSingleton<EntityLifecyclePo
     public ClearProgrammaticPolicies(): void {
         this._programmaticPolicies.clear();
         this._metadataCache.clear();
+        this.seedBuiltInPolicies();
+    }
+
+    private seedBuiltInPolicies(): void {
+        const counterPolicy: IEntityLifecyclePolicy = {
+            writeAuthority: {
+                mode: 'ServerOperationOnly',
+                allowedOperations: [DOCUMENT_SEQUENCE_SQL_STORE_OPERATION_KEY],
+                errorMessage:
+                    'MJ: Document Sequence Counters is a system counter table and can only be mutated via DocumentNumberingEngine.',
+            },
+        };
+        this._programmaticPolicies.set(
+            EntityLifecyclePolicyEngine.DOCUMENT_SEQUENCE_COUNTERS_ENTITY_NAME.toLowerCase(),
+            counterPolicy,
+        );
+        this._programmaticPolicies.set('document sequence counters', counterPolicy);
     }
 
     public ResolvePolicy(entityInfo: EntityInfo | null | undefined): IEntityLifecyclePolicy | null {
@@ -332,7 +395,10 @@ export class EntityLifecyclePolicyEngine extends BaseSingleton<EntityLifecyclePo
      * on entities where `TrackRecordChanges === false`).
      */
     public RequiresStoredTruthOnUpdate(entityInfo: EntityInfo | null | undefined): boolean {
-        return this.ResolvePolicy(entityInfo) !== null;
+        return (
+            this.ResolvePolicy(entityInfo) !== null ||
+            DocumentNumberingEngine.Instance.RequiresStoredTruthOnUpdate(entityInfo)
+        );
     }
 
     /**
@@ -342,7 +408,7 @@ export class EntityLifecyclePolicyEngine extends BaseSingleton<EntityLifecyclePo
     public CheckWritePermissionGate(
         entity: BaseEntity,
         operation: EntityWriteOperation,
-        _user: UserInfo | undefined,
+        user: UserInfo | undefined,
         isServerProvider: boolean,
     ): string | null {
         const policy = this.ResolvePolicy(entity.EntityInfo);
@@ -368,6 +434,7 @@ export class EntityLifecyclePolicyEngine extends BaseSingleton<EntityLifecyclePo
             const allowed = ServerOperationScopeManager.Instance.IsOperationActive(
                 policy.writeAuthority?.allowedOperations,
                 entity.EntityInfo.Name,
+                user,
             );
             if (!allowed) {
                 const opsHint =
@@ -384,8 +451,14 @@ export class EntityLifecyclePolicyEngine extends BaseSingleton<EntityLifecyclePo
         if (operation === 'Delete' && policy.stateMachine) {
             const sm = policy.stateMachine;
             const statusField = entity.GetFieldByName(sm.statusField);
+            if (!statusField) {
+                LogError(
+                    `EntityLifecyclePolicyEngine: configured statusField '${sm.statusField}' does not exist on entity '${entity.EntityInfo.Name}'.`,
+                );
+                return `Lifecycle policy error on ${entity.EntityInfo.Name}: configured statusField '${sm.statusField}' does not exist.`;
+            }
             const currentStatus = this.stringifyStatusValue(
-                statusField ? (statusField.Dirty ? statusField.OldValue : statusField.Value) : null,
+                statusField.Dirty ? statusField.OldValue : statusField.Value,
             );
             if (
                 sm.terminalStates?.includes(currentStatus) &&
@@ -444,6 +517,15 @@ export class EntityLifecyclePolicyEngine extends BaseSingleton<EntityLifecyclePo
 
         const statusField = entity.GetFieldByName(sm.statusField);
         if (!statusField) {
+            LogError(
+                `EntityLifecyclePolicyEngine: configured statusField '${sm.statusField}' does not exist on entity '${entity.EntityInfo.Name}'.`,
+            );
+            this.failValidation(
+                result,
+                sm.statusField,
+                `Lifecycle policy error on ${entity.EntityInfo.Name}: configured statusField '${sm.statusField}' does not exist.`,
+                null,
+            );
             return;
         }
 
@@ -467,8 +549,9 @@ export class EntityLifecyclePolicyEngine extends BaseSingleton<EntityLifecyclePo
         const nextStatus = this.stringifyStatusValue(statusField.Value);
         const isStatusTransition = statusField.Dirty && priorStatus !== nextStatus;
 
+        let matchedTransitionRule: IStateTransitionRule | null = null;
         if (isStatusTransition) {
-            this.validateStateTransition(entity, sm, priorStatus, nextStatus, user, result);
+            matchedTransitionRule = this.validateStateTransition(entity, sm, priorStatus, nextStatus, user, result);
         }
 
         // Post-create immutable fields cannot change on any saved record.
@@ -493,9 +576,10 @@ export class EntityLifecyclePolicyEngine extends BaseSingleton<EntityLifecyclePo
             ServerOperationScopeManager.Instance.IsOperationActive(
                 sm.fieldFreezeExemptOperations,
                 entity.EntityInfo.Name,
+                user,
             );
         if (!freezeExempt) {
-            this.validateFieldFreezeForState(entity, sm, priorStatus, result);
+            this.validateFieldFreezeForState(entity, sm, priorStatus, result, matchedTransitionRule);
         }
     }
 
@@ -506,7 +590,7 @@ export class EntityLifecyclePolicyEngine extends BaseSingleton<EntityLifecyclePo
         nextStatus: string,
         user: UserInfo | undefined,
         result: ValidationResult,
-    ): void {
+    ): IStateTransitionRule | null {
         if (sm.terminalStates?.includes(priorStatus)) {
             this.failValidation(
                 result,
@@ -514,7 +598,7 @@ export class EntityLifecyclePolicyEngine extends BaseSingleton<EntityLifecyclePo
                 `Cannot transition ${entity.EntityInfo.Name}.${sm.statusField} out of terminal state '${priorStatus}' to '${nextStatus}'.`,
                 nextStatus,
             );
-            return;
+            return null;
         }
 
         const matchingRules = sm.transitions.filter(
@@ -538,7 +622,7 @@ export class EntityLifecyclePolicyEngine extends BaseSingleton<EntityLifecyclePo
                 `Invalid state transition on ${entity.EntityInfo.Name}.${sm.statusField}: '${priorStatus}' -> '${nextStatus}'.${targetHint}`,
                 nextStatus,
             );
-            return;
+            return null;
         }
 
         // Prefer an exact `from === priorStatus` rule over wildcard `from === '*'` if both exist,
@@ -552,7 +636,7 @@ export class EntityLifecyclePolicyEngine extends BaseSingleton<EntityLifecyclePo
         for (const rule of candidates) {
             const ruleFailure = this.evaluateTransitionRuleGuards(entity, sm, rule, user);
             if (!ruleFailure) {
-                return; // This edge satisfied every guard!
+                return rule; // This edge satisfied every guard!
             }
             if (firstFailureMessage === null) {
                 firstFailureMessage = ruleFailure.message;
@@ -563,6 +647,7 @@ export class EntityLifecyclePolicyEngine extends BaseSingleton<EntityLifecyclePo
         if (firstFailureMessage !== null) {
             this.failValidation(result, firstFailureField, firstFailureMessage, nextStatus);
         }
+        return null;
     }
 
     private evaluateTransitionRuleGuards(
@@ -586,6 +671,7 @@ export class EntityLifecyclePolicyEngine extends BaseSingleton<EntityLifecyclePo
             const opAllowed = ServerOperationScopeManager.Instance.IsOperationActive(
                 rule.allowedOperations,
                 entity.EntityInfo.Name,
+                user,
             );
             if (!opAllowed) {
                 return {
@@ -635,12 +721,25 @@ export class EntityLifecyclePolicyEngine extends BaseSingleton<EntityLifecyclePo
         sm: IEntityStateMachinePolicy,
         priorStatus: string,
         result: ValidationResult,
+        matchedTransitionRule: IStateTransitionRule | null = null,
     ): void {
         const statusKeyLower = sm.statusField.trim().toLowerCase();
+        const transitionExemptFields = new Set<string>([statusKeyLower]);
+        if (matchedTransitionRule) {
+            for (const req of matchedTransitionRule.requiredFieldsOnEnter ?? []) {
+                transitionExemptFields.add(req.trim().toLowerCase());
+            }
+            for (const clr of matchedTransitionRule.clearedFieldsOnTransition ?? []) {
+                transitionExemptFields.add(clr.trim().toLowerCase());
+            }
+        }
 
         if (sm.terminalStates?.includes(priorStatus) && sm.freezeAllFieldsInTerminalStates !== false) {
             for (const field of entity.Fields) {
-                if (this.isUserMutatedDataField(field) && field.Name.trim().toLowerCase() !== statusKeyLower) {
+                if (
+                    this.isUserMutatedDataField(field) &&
+                    !transitionExemptFields.has(field.Name.trim().toLowerCase())
+                ) {
                     this.failValidation(
                         result,
                         field.Name,
@@ -655,7 +754,9 @@ export class EntityLifecyclePolicyEngine extends BaseSingleton<EntityLifecyclePo
         const editableList = sm.editableFieldsByState?.[priorStatus];
         if (editableList) {
             const allowedSet = new Set(editableList.map((f) => f.trim().toLowerCase()));
-            allowedSet.add(statusKeyLower);
+            for (const exempt of transitionExemptFields) {
+                allowedSet.add(exempt);
+            }
             for (const field of entity.Fields) {
                 if (!this.isUserMutatedDataField(field)) {
                     continue;
@@ -677,6 +778,9 @@ export class EntityLifecyclePolicyEngine extends BaseSingleton<EntityLifecyclePo
             const frozenSet = new Set(
                 [...globalFrozen, ...stateFrozen].map((f) => f.trim().toLowerCase()),
             );
+            for (const exempt of transitionExemptFields) {
+                frozenSet.delete(exempt);
+            }
             for (const field of entity.Fields) {
                 if (!this.isUserMutatedDataField(field)) {
                     continue;
@@ -738,18 +842,49 @@ export class EntityLifecyclePolicyEngine extends BaseSingleton<EntityLifecyclePo
             return cached.policy;
         }
 
-        const parsedUnified = lifecycleSetting?.Value
-            ? SafeJSONParse<IEntityLifecyclePolicy>(lifecycleSetting.Value, false)
-            : null;
-        const parsedSm = smSetting?.Value
-            ? SafeJSONParse<IEntityStateMachinePolicy>(smSetting.Value, false)
-            : null;
-        const parsedWa = waSetting?.Value
-            ? SafeJSONParse<IEntityWriteAuthorityPolicy>(waSetting.Value, false)
-            : null;
+        let parseFailed = false;
+        const parseSettingJson = (settingName: string, rawVal: string | null | undefined): Record<string, object | string | number | boolean | null> | null => {
+            if (!rawVal || rawVal.trim().length === 0) {
+                return null;
+            }
+            const parsed = SafeJSONParse<Record<string, object | string | number | boolean | null>>(rawVal, false);
+            if (!parsed || typeof parsed !== 'object') {
+                LogError(
+                    `EntityLifecyclePolicyEngine: invalid JSON in EntitySetting '${settingName}' on entity '${entityInfo.Name}'; failing closed.`,
+                );
+                parseFailed = true;
+                return null;
+            }
+            return parsed;
+        };
 
-        const stateMachine = parsedSm ?? parsedUnified?.stateMachine ?? configLifecycle?.stateMachine;
-        const writeAuthority = parsedWa ?? parsedUnified?.writeAuthority ?? configLifecycle?.writeAuthority;
+        const rawUnified = parseSettingJson(EntityLifecyclePolicyEngine.LIFECYCLE_SETTING_NAME, lifecycleSetting?.Value);
+        const rawSm = parseSettingJson(EntityLifecyclePolicyEngine.STATE_MACHINE_SETTING_NAME, smSetting?.Value);
+        const rawWa = parseSettingJson(EntityLifecyclePolicyEngine.WRITE_AUTHORITY_SETTING_NAME, waSetting?.Value);
+
+        if (parseFailed) {
+            const failClosedPolicy: IEntityLifecyclePolicy = {
+                writeAuthority: {
+                    mode: 'ServerOperationOnly',
+                    allowedOperations: ['__MJ_MALFORMED_METADATA_LIFECYCLE_POLICY__'],
+                    errorMessage: `Lifecycle policy metadata JSON on ${entityInfo.Name} is malformed; writes are blocked until repaired.`,
+                },
+            };
+            this._metadataCache.set(cacheKey, { signature, policy: failClosedPolicy });
+            return failClosedPolicy;
+        }
+
+        const rawConfigLifecycle = configLifecycle as Record<string, object | string | number | boolean | null> | undefined;
+        const unifiedSmObj = (rawUnified?.stateMachine ?? rawUnified?.StateMachine) as Record<string, object | string | number | boolean | null> | undefined;
+        const unifiedWaObj = (rawUnified?.writeAuthority ?? rawUnified?.WriteAuthority) as Record<string, object | string | number | boolean | null> | undefined;
+        const configSmObj = (rawConfigLifecycle?.stateMachine ?? rawConfigLifecycle?.StateMachine) as Record<string, object | string | number | boolean | null> | undefined;
+        const configWaObj = (rawConfigLifecycle?.writeAuthority ?? rawConfigLifecycle?.WriteAuthority) as Record<string, object | string | number | boolean | null> | undefined;
+
+        const stateMachineSource = rawSm ?? unifiedSmObj ?? configSmObj;
+        const writeAuthoritySource = rawWa ?? unifiedWaObj ?? configWaObj;
+
+        const stateMachine = stateMachineSource ? this.normalizeStateMachinePolicy(stateMachineSource) : undefined;
+        const writeAuthority = writeAuthoritySource ? this.normalizeWriteAuthorityPolicy(writeAuthoritySource) : undefined;
 
         const policy: IEntityLifecyclePolicy | null =
             stateMachine || writeAuthority
@@ -761,6 +896,57 @@ export class EntityLifecyclePolicyEngine extends BaseSingleton<EntityLifecyclePo
 
         this._metadataCache.set(cacheKey, { signature, policy });
         return policy;
+    }
+
+    private normalizeStateMachinePolicy(
+        raw: Record<string, object | string | number | boolean | null>,
+    ): IEntityStateMachinePolicy {
+        const rawTransitions = (raw.transitions ?? raw.Transitions) as Array<Record<string, object | string | number | boolean | null>> | undefined;
+        const transitions: IStateTransitionRule[] = Array.isArray(rawTransitions)
+            ? rawTransitions.map((t) => ({
+                  from: String(t.from ?? t.From ?? ''),
+                  to: String(t.to ?? t.To ?? ''),
+                  allowedRoles: (t.allowedRoles ?? t.AllowedRoles) as string[] | undefined,
+                  requireServerOperation: (t.requireServerOperation ?? t.RequireServerOperation) as boolean | undefined,
+                  allowedOperations: (t.allowedOperations ?? t.AllowedOperations) as string[] | undefined,
+                  requiredFieldsOnEnter: (t.requiredFieldsOnEnter ?? t.RequiredFieldsOnEnter) as string[] | undefined,
+                  clearedFieldsOnTransition: (t.clearedFieldsOnTransition ?? t.ClearedFieldsOnTransition) as string[] | undefined,
+                  errorMessage: (t.errorMessage ?? t.ErrorMessage) as string | undefined,
+              }))
+            : [];
+        return {
+            statusField: String(raw.statusField ?? raw.StatusField ?? ''),
+            initialStates: (raw.initialStates ?? raw.InitialStates) as string[] | undefined,
+            transitions,
+            terminalStates: (raw.terminalStates ?? raw.TerminalStates) as string[] | undefined,
+            freezeAllFieldsInTerminalStates: (raw.freezeAllFieldsInTerminalStates ??
+                raw.FreezeAllFieldsInTerminalStates) as boolean | undefined,
+            immutableAfterCreateFields: (raw.immutableAfterCreateFields ??
+                raw.ImmutableAfterCreateFields) as string[] | undefined,
+            editableFieldsByState: (raw.editableFieldsByState ?? raw.EditableFieldsByState) as
+                | Record<string, string[]>
+                | undefined,
+            frozenFieldsByState: (raw.frozenFieldsByState ?? raw.FrozenFieldsByState) as
+                | Record<string, string[]>
+                | undefined,
+            deletableInStates: (raw.deletableInStates ?? raw.DeletableInStates) as string[] | undefined,
+            nonDeletableStates: (raw.nonDeletableStates ?? raw.NonDeletableStates) as string[] | undefined,
+            fieldFreezeExemptOperations: (raw.fieldFreezeExemptOperations ??
+                raw.FieldFreezeExemptOperations) as string[] | undefined,
+        };
+    }
+
+    private normalizeWriteAuthorityPolicy(
+        raw: Record<string, object | string | number | boolean | null>,
+    ): IEntityWriteAuthorityPolicy {
+        return {
+            mode: ((raw.mode ?? raw.Mode) as WriteAuthorityMode) ?? 'Standard',
+            perOperationMode: (raw.perOperationMode ?? raw.PerOperationMode) as
+                | Partial<Record<EntityWriteOperation, WriteAuthorityMode>>
+                | undefined,
+            allowedOperations: (raw.allowedOperations ?? raw.AllowedOperations) as string[] | undefined,
+            errorMessage: (raw.errorMessage ?? raw.ErrorMessage) as string | undefined,
+        };
     }
 
     private userHasAnyRole(user: UserInfo | undefined, allowedRoles: ReadonlyArray<string>): boolean {

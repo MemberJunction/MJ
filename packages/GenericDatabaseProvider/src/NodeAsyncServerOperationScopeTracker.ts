@@ -17,12 +17,17 @@ import type {
 } from '@memberjunction/core';
 
 export class NodeAsyncServerOperationScopeTracker implements IServerOperationScopeTracker {
+    public readonly IsAsyncSafe = true;
     private readonly _storage = new AsyncLocalStorage<ReadonlyArray<ServerOperationScopeFrame>>();
 
     public RunInScope<T>(frame: ServerOperationScopeFrame, fn: () => T): T {
         const current = this._storage.getStore() ?? [];
         const nextFrames: ReadonlyArray<ServerOperationScopeFrame> = [...current, frame];
         return this._storage.run(nextFrames, fn);
+    }
+
+    public RunWithoutAuthority<T>(fn: () => T): T {
+        return this._storage.run([], fn);
     }
 
     public GetActiveFrames(): ReadonlyArray<ServerOperationScopeFrame> {

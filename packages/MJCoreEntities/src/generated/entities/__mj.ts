@@ -96105,6 +96105,30 @@ export class MJDocumentSequenceCounterEntity extends BaseEntity<MJDocumentSequen
     }
 
     /**
+    * MJ: Document Sequence Counters - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJDocumentSequenceCounterEntity
+    * @throws {Error} - Save is not allowed for MJ: Document Sequence Counters, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    */
+    public override async Save(options?: EntitySaveOptions) : Promise<boolean> {
+        throw new Error('Save is not allowed for MJ: Document Sequence Counters, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
+    }
+
+    /**
+    * MJ: Document Sequence Counters - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJDocumentSequenceCounterEntity
+    * @throws {Error} - Delete is not allowed for MJ: Document Sequence Counters, to enable it set AllowDeleteAPI to 1 in the database.
+    */
+    public override async Delete(): Promise<boolean> {
+        throw new Error('Delete is not allowed for MJ: Document Sequence Counters, to enable it set AllowDeleteAPI to 1 in the database.');
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -96126,9 +96150,6 @@ export class MJDocumentSequenceCounterEntity extends BaseEntity<MJDocumentSequen
     get SequenceKey(): string {
         return this.Get('SequenceKey');
     }
-    set SequenceKey(value: string) {
-        this.Set('SequenceKey', value);
-    }
 
     /**
     * * Field Name: ScopeKey
@@ -96139,9 +96160,6 @@ export class MJDocumentSequenceCounterEntity extends BaseEntity<MJDocumentSequen
     get ScopeKey(): string {
         return this.Get('ScopeKey');
     }
-    set ScopeKey(value: string) {
-        this.Set('ScopeKey', value);
-    }
 
     /**
     * * Field Name: CurrentValue
@@ -96151,9 +96169,6 @@ export class MJDocumentSequenceCounterEntity extends BaseEntity<MJDocumentSequen
     */
     get CurrentValue(): number {
         return this.Get('CurrentValue');
-    }
-    set CurrentValue(value: number) {
-        this.Set('CurrentValue', value);
     }
 
     /**

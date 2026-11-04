@@ -1,6 +1,9 @@
 import { Subject } from "rxjs";
 import { BaseEntity } from "./baseEntity";
 import { CrossEntityPolicyEngine, type CrossEntityBatchItem } from "./crossEntityPolicyEngine";
+import { DocumentNumberingEngine } from "./documentNumberingEngine";
+import { ValidationResult } from "./entityInfo";
+import { EntityLifecyclePolicyEngine } from "./entityLifecyclePolicy";
 import type { IMetadataProvider } from "./interfaces";
 import { LogError, LogStatus } from "./logging";
 import { LocalCacheManager } from "./localCacheManager";
@@ -20,9 +23,14 @@ export class TransactionItem {
     private _extraData: any // any additional stuff that is needed for processing by the provider
     private _baseEntity: BaseEntity; // the base entity object that this transaction is associated with
     private _operationType: 'Create' | 'Update' | 'Delete';
+    public PrepareBeforeSubmit?: () => Promise<void>;
+    public RevertAfterRollback?: () => void;
 
     public get Vars(): any {
         return this._vars;
+    }
+    public set Vars(value: any) {
+        this._vars = value;
     }
     public get ExtraData(): any {
         return this._extraData;
@@ -344,6 +352,7 @@ export abstract class TransactionGroupBase {
             if (this._pendingTransactions.length > 0) {
                 await this.preEvaluateCrossEntityPolicies();
                 await this.BeginGroupTransaction();
+                await this.preparePendingTransactions();
 
                 // subclass handles the actual submit implementation whatever that does
                 const results: TransactionResult[] = await this.HandleSubmit();
@@ -368,6 +377,7 @@ export abstract class TransactionGroupBase {
                         } catch (rollbackErr) {
                             LogError(rollbackErr);
                         }
+                        this.revertPendingTransactions();
                         this._status = 'Failed';
                     }
                     return false;
@@ -382,6 +392,7 @@ export abstract class TransactionGroupBase {
         }
         catch (err) {
             await this.RollbackGroupTransaction();
+            this.revertPendingTransactions();
             console.error(err);
             // it failed, so we have to call the callback functions with the error
             for (let i = 0; i < this._pendingTransactions.length; i++) {
@@ -484,6 +495,32 @@ export abstract class TransactionGroupBase {
     }
 
     /**
+     * Runs any deferred per-item preparation hooks (such as transactional auto-number allocation
+     * and SQL regeneration) after {@link BeginGroupTransaction} has opened the group transaction.
+     */
+    private async preparePendingTransactions(): Promise<void> {
+        for (const pending of this._pendingTransactions) {
+            if (pending.PrepareBeforeSubmit) {
+                await pending.PrepareBeforeSubmit();
+            }
+        }
+    }
+
+    /**
+     * Runs per-item rollback cleanup hooks (such as reverting auto-assigned numbers on entities)
+     * when the group transaction rolls back.
+     */
+    private revertPendingTransactions(): void {
+        for (const pending of this._pendingTransactions) {
+            try {
+                pending.RevertAfterRollback?.();
+            } catch (err) {
+                LogError(err);
+            }
+        }
+    }
+
+    /**
      * Runs batch cross-entity policy pre-evaluation across all pending items grouped by provider,
      * throwing before `HandleSubmit()` executes SQL if any policy vetoes the batch.
      */
@@ -551,6 +588,19 @@ export abstract class TransactionGroupBase {
                     // we can't set the value, must throw an exception and blow up the transaction
                     throw new Error(`Unable to find variable definition for variable ${varItem.Name}, can't continue with transaction`);
                 }
+            }
+        }
+        if (numSet > 0) {
+            const valResult = new ValidationResult();
+            valResult.Success = true;
+            EntityLifecyclePolicyEngine.Instance.ValidateLifecycleOnEntity(
+                entityObject,
+                entityObject.ContextCurrentUser,
+                valResult,
+            );
+            DocumentNumberingEngine.Instance.ValidateAutoNumberFields(entityObject, valResult);
+            if (!valResult.Success) {
+                throw new Error(valResult.Errors.map((e) => e.Message).join('; '));
             }
         }
         return numSet;

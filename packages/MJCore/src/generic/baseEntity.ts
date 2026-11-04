@@ -2,6 +2,7 @@ import { Base64DecodedByteLength, ClassFactory, ClassRegistration, DeserializeVa
 import { GetDataHooks, PreDeleteHook, PreSaveHook } from './dataHooks';
 import { EntityLifecyclePolicyEngine } from './entityLifecyclePolicy';
 import { DocumentNumberingEngine } from './documentNumberingEngine';
+import { CrossEntityPolicyEngine } from './crossEntityPolicyEngine';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityError, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntitySubtypeResolver } from './entitySubtypeResolver';
 import { CanonicalPrimaryKeyValue } from './util';
@@ -3580,6 +3581,16 @@ export abstract class BaseEntity<T = unknown> {
                 for (const record of records) {
                     record._unitOfWork = part.unit;
                 }
+                if (!saveOptions?.ReplayOnly && !deleteOptions?.ReplayOnly && provider) {
+                    await CrossEntityPolicyEngine.Instance.PrimeParentLocksForBatch(
+                        plan.Nodes.map((n) => ({
+                            Entity: n.Entity,
+                            Operation: n.Operation === 'Delete' ? 'Delete' : (n.Entity.IsSaved ? 'Update' : 'Create'),
+                        })),
+                        provider as object as IMetadataProvider,
+                        this.ActiveUser,
+                    );
+                }
             }
             const result = await ExecuteEntitySavePlan(plan, {
                 SaveOptions: childSaveOptions,
@@ -5163,6 +5174,7 @@ export abstract class BaseEntity<T = unknown> {
         this.init();
         this.discardJSONFieldObjects();
         this._everSaved = false; // Reset save state for new record
+        DocumentNumberingEngine.Instance.ClearSystemAssignedMarkers(this);
 
         // Clear child entity state — new records don't have children yet
         this._childEntity = null;
@@ -5638,18 +5650,6 @@ export abstract class BaseEntity<T = unknown> {
             this.CheckFieldLevelUpdatePermissions() // field-level security — throws if a dirty field is not updatable by this user
             this.ApplyFieldLevelCreateSuppression() // field-level security on INSERT — omits fields, never rejects
 
-            if (!_options.ReplayOnly) {
-                const gateError = EntityLifecyclePolicyEngine.Instance.CheckWritePermissionGate(
-                    this,
-                    this.IsSaved ? 'Update' : 'Create',
-                    this.ActiveUser,
-                    this.isDatabaseProvider(),
-                );
-                if (gateError) {
-                    throw new Error(gateError);
-                }
-            }
-
             // IS-A disjoint subtype enforcement: on CREATE, ensure parent record
             // isn't already claimed by another child type (e.g., can't create Meeting
             // if a Publication already exists with the same Product ID).
@@ -5663,6 +5663,18 @@ export abstract class BaseEntity<T = unknown> {
             }
 
             if (_options.IgnoreDirtyState || initialDirtyState || _options.ReplayOnly) {
+                if (!_options.ReplayOnly) {
+                    const gateError = EntityLifecyclePolicyEngine.Instance.CheckWritePermissionGate(
+                        this,
+                        this.IsSaved ? 'Update' : 'Create',
+                        this.ActiveUser,
+                        this.isDatabaseProvider(),
+                    );
+                    if (gateError) {
+                        throw new Error(gateError);
+                    }
+                }
+
                 // Raise save_started event only when we're actually going to save
                 this.RaiseEvent('save_started', null, saveSubType);
 

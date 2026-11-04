@@ -527,9 +527,10 @@ describe('CrossEntityPolicyEngine, PreDelete DataHooks & AppCapabilityRegistry (
             expect(await line.Save()).toBe(true);
         }
 
-        // All 200 enrollments shared the TransactionGroup scope -> exactly 1 RunView!
-        expect(provider.RunViewCallCount).toBe(1);
+        // Enrollment defers parent lookup to Submit() -> 0 RunViews during Save(), 1 batched RunView at Submit()!
+        expect(provider.RunViewCallCount).toBe(0);
         expect(await tg.Submit()).toBe(true);
+        expect(provider.RunViewCallCount).toBe(1);
         expect(tg.HandleSubmitCalled).toBe(1);
 
         // Now test a programmatic batch policy rejecting at Submit() before HandleSubmit() runs
@@ -707,5 +708,30 @@ describe('CrossEntityPolicyEngine, PreDelete DataHooks & AppCapabilityRegistry (
         );
         expect(entResult.ObligationID).toBe('OBL-ENT-C-99-14');
         expect(entResult.HandledBy).toBe('enterprise');
+
+        // 4. Higher-priority candidate with VersionMismatch falls back to compatible lower-priority provider
+        const v2MismatchContract = DefineCapabilityContract<CreateObligationInput, CreateObligationOutput>(
+            'Contracts.CreateObligation',
+            2,
+        );
+        @RegisterAppCapability(v2MismatchContract, {
+            priority: 500,
+            ownerApp: '@acme/v2-incompatible',
+            requiredEntities: ['Contract Obligations'],
+        })
+        class V2IncompatibleObligationCapability implements IAppCapabilityProvider<CreateObligationInput, CreateObligationOutput> {
+            public async Execute(input: CreateObligationInput): Promise<CreateObligationOutput> {
+                return { ObligationID: `V2-${input.ContractID}`, HandledBy: 'v2' };
+            }
+        }
+        expect(V2IncompatibleObligationCapability).toBeDefined();
+
+        // Calling with v1 contract skips priority 500 (version 2) and executes priority 100 (version 1)
+        const fallbackResult = await AppCapabilityRegistry.Instance.ExecuteRequired(
+            CreateObligationContract,
+            { ContractID: 'C-100', Title: 'Fallback Check', DueDays: 7 },
+            ctxReady,
+        );
+        expect(fallbackResult.HandledBy).toBe('enterprise');
     });
 });

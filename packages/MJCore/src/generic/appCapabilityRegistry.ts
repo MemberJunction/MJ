@@ -84,7 +84,11 @@ export interface AppCapabilityRegistration<TInput, TOutput> {
     readonly Sequence: number;
 }
 
-export type CapabilityUnavailableReason = 'NotRegistered' | 'HostEntitiesMissing' | 'ProviderUnavailable';
+export type CapabilityUnavailableReason =
+    | 'NotRegistered'
+    | 'VersionMismatch'
+    | 'HostEntitiesMissing'
+    | 'ProviderUnavailable';
 
 export interface CapabilityOptionalResult<TOutput> {
     readonly Executed: boolean;
@@ -118,7 +122,7 @@ export class AppCapabilityRegistry extends BaseSingleton<AppCapabilityRegistry> 
     private readonly _registrations = new Map<string, InternalCapabilityEntry[]>();
     private _sequenceCounter = 0;
 
-    public constructor() {
+    protected constructor() {
         super();
     }
 
@@ -174,13 +178,13 @@ export class AppCapabilityRegistry extends BaseSingleton<AppCapabilityRegistry> 
     }
 
     public IsRegistered<TInput, TOutput>(contract: CapabilityContract<TInput, TOutput>): boolean {
-        return this.selectWinningEntry(contract.Key) !== null;
+        return this.selectWinningEntry(contract.Key, contract.Version) !== null;
     }
 
     public ResolveRegistration<TInput, TOutput>(
         contract: CapabilityContract<TInput, TOutput>,
     ): AppCapabilityRegistration<TInput, TOutput> | null {
-        const winner = this.selectWinningEntry(contract.Key);
+        const winner = this.selectWinningEntry(contract.Key, contract.Version);
         if (!winner) {
             return null;
         }
@@ -208,28 +212,46 @@ export class AppCapabilityRegistry extends BaseSingleton<AppCapabilityRegistry> 
         contract: CapabilityContract<TInput, TOutput>,
         context: AppCapabilityExecutionContext,
     ): Promise<CapabilityAvailabilityResult<TInput, TOutput>> {
-        const reg = this.ResolveRegistration(contract);
-        if (!reg) {
+        const candidates = this.sortedEntriesForKey(contract.Key);
+        if (candidates.length === 0) {
             return { Available: false, Reason: 'NotRegistered' };
         }
-        if (reg.RequiredEntities && reg.RequiredEntities.length > 0) {
-            const hostEntityNames = new Set(
-                (context.Provider.Entities ?? []).map((e) => e.Name.trim().toLowerCase()),
-            );
-            for (const required of reg.RequiredEntities) {
-                if (!hostEntityNames.has(required.trim().toLowerCase())) {
-                    return { Available: false, Reason: 'HostEntitiesMissing' };
+
+        let firstFailureReason: CapabilityUnavailableReason | undefined;
+
+        for (const candidate of candidates) {
+            if (candidate.version !== contract.Version) {
+                firstFailureReason ??= 'VersionMismatch';
+                continue;
+            }
+            if (
+                candidate.requiredEntities &&
+                candidate.requiredEntities.length > 0 &&
+                !this.hasRequiredHostEntities(context.Provider, candidate.requiredEntities)
+            ) {
+                firstFailureReason ??= 'HostEntitiesMissing';
+                continue;
+            }
+            const ProviderClass = candidate.providerRef as AppCapabilityConstructor<TInput, TOutput>;
+            const provider = new ProviderClass();
+            if (provider.IsAvailable) {
+                const ok = await provider.IsAvailable(context);
+                if (!ok) {
+                    firstFailureReason ??= 'ProviderUnavailable';
+                    continue;
                 }
             }
+            return {
+                Available: true,
+                Provider: provider,
+                OwnerApp: candidate.ownerApp,
+            };
         }
-        const provider = new reg.ProviderClass();
-        if (provider.IsAvailable) {
-            const ok = await provider.IsAvailable(context);
-            if (!ok) {
-                return { Available: false, Reason: 'ProviderUnavailable' };
-            }
-        }
-        return { Available: true, Provider: provider, OwnerApp: reg.OwnerApp };
+
+        return {
+            Available: false,
+            Reason: firstFailureReason ?? 'NotRegistered',
+        };
     }
 
     public async IsAvailable<TInput, TOutput>(
@@ -246,7 +268,7 @@ export class AppCapabilityRegistry extends BaseSingleton<AppCapabilityRegistry> 
         context: AppCapabilityExecutionContext,
     ): Promise<CapabilityOptionalResult<TOutput>> {
         const check = await this.CheckAvailability(contract, context);
-        if (!check.Available) {
+        if (!check.Available || !check.Provider) {
             return { Executed: false, Reason: check.Reason };
         }
         const result = await check.Provider.Execute(input, context);
@@ -264,25 +286,54 @@ export class AppCapabilityRegistry extends BaseSingleton<AppCapabilityRegistry> 
                 `Required app capability '${contract.Key}' (v${contract.Version}) is unavailable: ${outcome.Reason}.`,
             );
         }
-        return outcome.Result;
+        return outcome.Result as TOutput;
     }
 
-    private selectWinningEntry(key: string): InternalCapabilityEntry | null {
-        const list = this._registrations.get(this.normalizeKey(key));
-        if (!list || list.length === 0) {
-            return null;
+    private hasRequiredHostEntities(
+        provider: IMetadataProvider,
+        requiredEntities: ReadonlyArray<string>,
+    ): boolean {
+        const entityByNameFn = (provider as { EntityByName?: (name: string) => object | undefined }).EntityByName;
+        if (typeof entityByNameFn === 'function') {
+            for (const required of requiredEntities) {
+                if (!entityByNameFn.call(provider, required.trim())) {
+                    return false;
+                }
+            }
+            return true;
         }
-        let best = list[0];
-        for (let i = 1; i < list.length; i++) {
-            const candidate = list[i];
-            if (
-                candidate.priority > best.priority ||
-                (candidate.priority === best.priority && candidate.sequence >= best.sequence)
-            ) {
-                best = candidate;
+        const hostEntityNames = new Set(
+            (provider.Entities ?? []).map((e) => e.Name.trim().toLowerCase()),
+        );
+        for (const required of requiredEntities) {
+            if (!hostEntityNames.has(required.trim().toLowerCase())) {
+                return false;
             }
         }
-        return best;
+        return true;
+    }
+
+    private sortedEntriesForKey(key: string): InternalCapabilityEntry[] {
+        const list = this._registrations.get(this.normalizeKey(key));
+        if (!list || list.length === 0) {
+            return [];
+        }
+        return [...list].sort((a, b) => {
+            if (b.priority !== a.priority) {
+                return b.priority - a.priority;
+            }
+            return b.sequence - a.sequence;
+        });
+    }
+
+    private selectWinningEntry(key: string, version?: number): InternalCapabilityEntry | null {
+        const sorted = this.sortedEntriesForKey(key);
+        for (const candidate of sorted) {
+            if (version === undefined || candidate.version === version) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     private normalizeKey(key: string): string {

@@ -690,5 +690,13 @@ describe('EntityLifecyclePolicyEngine & ServerOperationScopeManager (3.1)', () =
         expect(domainOpResult.Output?.Posted).toBe(true);
         expect(domainOpResult.Output?.Status).toBe('Posted');
         expect(serverProvider.StoredRows.get('je-srv-1')?.Status).toBe('Posted');
+
+        // 6. Built-in ServerOperationOnly policy protects 'MJ: Document Sequence Counters'
+        const counterPolicy = EntityLifecyclePolicyEngine.Instance.ResolvePolicy({
+            Name: 'MJ: Document Sequence Counters',
+            Settings: [],
+            Configuration: null,
+        } as object as EntityInfo);
+        expect(counterPolicy?.writeAuthority?.mode).toBe('ServerOperationOnly');
     });
 });

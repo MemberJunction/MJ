@@ -25,12 +25,13 @@
  * @module @memberjunction/core
  */
 
-import { BaseSingleton, SafeJSONParse } from '@memberjunction/global';
+import { BaseSingleton, NormalizeUUID, SafeJSONParse } from '@memberjunction/global';
 import type { BaseEntity } from './baseEntity';
 import type { SaveContext } from './databaseProviderBase';
 import type { EntityInfo } from './entityInfo';
 import { ServerOperationScopeManager, type EntityWriteOperation } from './entityLifecyclePolicy';
 import type { IMetadataProvider, IRunViewProvider } from './interfaces';
+import { LogError } from './logging';
 import type { UserInfo } from './securityInfo';
 
 export type CrossEntityCachedValue = object | string | number | boolean | null;
@@ -128,12 +129,25 @@ interface ParentStatusSnapshot {
 
 class DefaultCrossEntityEvaluationScope implements CrossEntityEvaluationScope {
     private readonly _entries = new Map<string, Promise<CrossEntityCachedValue>>();
+    private readonly _preEvaluatedEntities = new Map<BaseEntity, EntityWriteOperation>();
 
     constructor(
         public readonly ScopeId: string,
         public readonly Provider: IMetadataProvider,
         public readonly ContextUser?: UserInfo,
     ) {}
+
+    public MarkPreEvaluated(entity: BaseEntity, operation: EntityWriteOperation): void {
+        this._preEvaluatedEntities.set(entity, operation);
+    }
+
+    public IsPreEvaluated(entity: BaseEntity, operation: EntityWriteOperation): boolean {
+        return this._preEvaluatedEntities.get(entity) === operation;
+    }
+
+    public ClearPreEvaluated(): void {
+        this._preEvaluatedEntities.clear();
+    }
 
     public GetOrLoad<TValue extends CrossEntityCachedValue>(
         cacheNamespace: string,
@@ -165,6 +179,7 @@ class DefaultCrossEntityEvaluationScope implements CrossEntityEvaluationScope {
     }
 
     public Invalidate(cacheNamespace: string, partitionKey?: string): void {
+        this._preEvaluatedEntities.clear();
         const normalizedNs = cacheNamespace.trim().toLowerCase();
         if (partitionKey !== undefined) {
             this._entries.delete(this.composeKey(normalizedNs, partitionKey));
@@ -179,6 +194,7 @@ class DefaultCrossEntityEvaluationScope implements CrossEntityEvaluationScope {
     }
 
     public InvalidateNamespacePrefix(namespacePrefix: string, partitionKey?: string): void {
+        this._preEvaluatedEntities.clear();
         const normalizedPrefix = namespacePrefix.trim().toLowerCase();
         const normalizedSuffix =
             partitionKey !== undefined ? `::${partitionKey.trim().toLowerCase()}` : null;
@@ -203,6 +219,7 @@ interface CachedDeclarativePoliciesEntry {
 }
 
 const SAFE_UUID_OR_ALNUM_KEY_REGEX = /^[A-Za-z0-9_.:-]+$/;
+const BATCH_CHUNK_SIZE = 500;
 
 /**
  * Process-wide singleton managing declarative and programmatic cross-entity save/delete policies
@@ -217,11 +234,14 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
         IMetadataProvider,
         Map<string, DefaultCrossEntityEvaluationScope>
     >();
-    private readonly _transactionGroupScopes = new WeakMap<object, DefaultCrossEntityEvaluationScope>();
+    private readonly _transactionGroupScopes = new WeakMap<
+        object,
+        Map<string, DefaultCrossEntityEvaluationScope>
+    >();
     private _ephemeralScopeCounter = 0;
     private _txGroupScopeCounter = 0;
 
-    public constructor() {
+    protected constructor() {
         super();
     }
 
@@ -254,11 +274,12 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
     }
 
     /**
-     * Resolves or creates the evaluation scope for `provider` (and optional `transactionGroup`):
+     * Resolves or creates the evaluation scope for `provider` (and optional `transactionGroup`),
+     * partitioned by `contextUser?.ID` so two different users never share RLS-scoped parent snapshots:
      * - When `transactionGroup` is supplied (items enrolling into / submitting a `TransactionGroupBase`),
-     *   returns the shared memoizing scope bound to that `TransactionGroupBase` instance.
+     *   returns the shared memoizing scope bound to that `(TransactionGroupBase, user)` pair.
      * - Inside an active provider transaction (`TransactionScopeCacheKey !== null`), returns the shared
-     *   memoizing scope bound to that transaction epoch.
+     *   memoizing scope bound to that `(transactionEpoch, user)` pair.
      * - Outside both, returns a fresh single-call ephemeral scope so snapshots never outlive the call.
      */
     public ResolveScope(
@@ -266,22 +287,36 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
         contextUser?: UserInfo,
         transactionGroup?: object | null,
     ): CrossEntityEvaluationScope {
+        return this.resolveInternalScope(provider, contextUser, transactionGroup);
+    }
+
+    private resolveInternalScope(
+        provider: IMetadataProvider,
+        contextUser?: UserInfo,
+        transactionGroup?: object | null,
+    ): DefaultCrossEntityEvaluationScope {
+        const userKey = contextUser?.ID ? NormalizeUUID(contextUser.ID) : '__anon__';
         if (transactionGroup) {
-            let tgScope = this._transactionGroupScopes.get(transactionGroup);
+            let tgMap = this._transactionGroupScopes.get(transactionGroup);
+            if (!tgMap) {
+                tgMap = new Map<string, DefaultCrossEntityEvaluationScope>();
+                this._transactionGroupScopes.set(transactionGroup, tgMap);
+            }
+            let tgScope = tgMap.get(userKey);
             if (!tgScope) {
                 tgScope = new DefaultCrossEntityEvaluationScope(
-                    `tg:${++this._txGroupScopeCounter}`,
+                    `tg:${++this._txGroupScopeCounter}:${userKey}`,
                     provider,
                     contextUser,
                 );
-                this._transactionGroupScopes.set(transactionGroup, tgScope);
+                tgMap.set(userKey, tgScope);
             }
             return tgScope;
         }
         const txKey = (provider as IMetadataProvider & ITransactionScopeCacheProvider).TransactionScopeCacheKey ?? null;
         if (!txKey) {
             return new DefaultCrossEntityEvaluationScope(
-                `ephemeral:${++this._ephemeralScopeCounter}`,
+                `ephemeral:${++this._ephemeralScopeCounter}:${userKey}`,
                 provider,
                 contextUser,
             );
@@ -291,12 +326,18 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
             mapForProvider = new Map<string, DefaultCrossEntityEvaluationScope>();
             this._providerScopes.set(provider, mapForProvider);
         }
-        let scope = mapForProvider.get(txKey);
+        const compositeKey = `${txKey}::${userKey}`;
+        let scope = mapForProvider.get(compositeKey);
         if (!scope) {
-            // Evict any prior epoch entries on this provider before storing the current transaction scope.
-            mapForProvider.clear();
-            scope = new DefaultCrossEntityEvaluationScope(txKey, provider, contextUser);
-            mapForProvider.set(txKey, scope);
+            // Evict any prior epoch entries on this provider while keeping entries for the current txKey across users.
+            const currentEpochPrefix = `${txKey}::`;
+            for (const existingKey of Array.from(mapForProvider.keys())) {
+                if (!existingKey.startsWith(currentEpochPrefix)) {
+                    mapForProvider.delete(existingKey);
+                }
+            }
+            scope = new DefaultCrossEntityEvaluationScope(compositeKey, provider, contextUser);
+            mapForProvider.set(compositeKey, scope);
         }
         return scope;
     }
@@ -312,10 +353,10 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
         _operation: EntityWriteOperation,
     ): void {
         const mapForProvider = this._providerScopes.get(provider);
-        const tgScope = entity.TransactionGroup
+        const tgMap = entity.TransactionGroup
             ? this._transactionGroupScopes.get(entity.TransactionGroup)
             : undefined;
-        if ((!mapForProvider || mapForProvider.size === 0) && !tgScope) {
+        if ((!mapForProvider || mapForProvider.size === 0) && (!tgMap || tgMap.size === 0)) {
             return;
         }
         const entityNameLower = entity.EntityInfo.Name.trim().toLowerCase();
@@ -327,7 +368,7 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
 
         const scopesToInvalidate: DefaultCrossEntityEvaluationScope[] = [
             ...(mapForProvider ? Array.from(mapForProvider.values()) : []),
-            ...(tgScope ? [tgScope] : []),
+            ...(tgMap ? Array.from(tgMap.values()) : []),
         ];
         for (const scope of scopesToInvalidate) {
             scope.InvalidateNamespacePrefix(`parent:${entityNameLower}:`, partitionPrefix);
@@ -335,6 +376,25 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
             scope.Invalidate(`entity:${entityNameLower}`, partitionPrefix);
             scope.InvalidateNamespacePrefix(`entity:${entityNameLower}:`);
         }
+    }
+
+    /**
+     * Bulk-primes declarative parent-lock snapshots into the active scope for a batch or graph
+     * of entity operations without marking individual items as pre-evaluated, so each item's
+     * own `EnforceBeforeSave` / `EnforceBeforeDelete` still runs after `Prepare()`, RLS, and
+     * before-save hooks while enjoying $O(1)$ cache hits on parent state lookups.
+     */
+    public async PrimeParentLocksForBatch(
+        items: ReadonlyArray<CrossEntityBatchItem>,
+        provider: IMetadataProvider,
+        contextUser: UserInfo | undefined,
+        transactionGroup?: object | null,
+    ): Promise<void> {
+        if (items.length === 0) {
+            return;
+        }
+        const scope = this.resolveInternalScope(provider, contextUser, transactionGroup);
+        await this.primeDeclarativeParentLocksForBatch(items, scope);
     }
 
     /**
@@ -351,9 +411,10 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
         if (items.length === 0) {
             return null;
         }
-        const scope = this.ResolveScope(provider, contextUser, transactionGroup);
+        const scope = this.resolveInternalScope(provider, contextUser, transactionGroup);
 
-        // 1. Bulk-prime declarative ParentStateLock lookups with 1 batched `ID IN (...)` RunView per parent entity.
+        // 1. Bulk-prime declarative ParentStateLock lookups (including in-batch parent creates/updates/deletes)
+        //    with chunked `ID IN (...)` RunView queries per parent entity.
         await this.primeDeclarativeParentLocksForBatch(items, scope);
 
         // 2. Run programmatic policies that implement `EvaluateBatch`.
@@ -383,7 +444,8 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
             }
         }
 
-        // 3. Evaluate declarative locks against the now-primed scope so batch callers fail fast before SQL runs.
+        // 3. Evaluate declarative locks and per-item programmatic policies against the now-primed scope
+        //    so batch callers fail fast before SQL runs.
         for (const item of items) {
             const declPolicies = this.ResolveDeclarativePolicies(item.Entity.EntityInfo);
             for (const decl of declPolicies) {
@@ -392,6 +454,36 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
                     return err;
                 }
             }
+            const progPolicies = this.getProgrammaticPoliciesForEntity(item.Entity.EntityInfo.Name);
+            for (const prog of progPolicies) {
+                // Skip if already evaluated by EvaluateBatch above without per-item hooks, or run per-item hook against primed scope
+                if (item.Operation === 'Delete' && prog.EvaluateBeforeDelete) {
+                    const verdict = await prog.EvaluateBeforeDelete({
+                        Entity: item.Entity,
+                        Operation: 'Delete',
+                        Scope: scope,
+                    });
+                    if (!verdict.Allowed) {
+                        return (
+                            verdict.ErrorMessage ??
+                            `Cross-entity policy '${prog.PolicyKey}' refused Delete on ${item.Entity.EntityInfo.Name}.`
+                        );
+                    }
+                } else if (item.Operation !== 'Delete' && prog.EvaluateBeforeSave) {
+                    const verdict = await prog.EvaluateBeforeSave({
+                        Entity: item.Entity,
+                        Operation: item.Operation,
+                        Scope: scope,
+                    });
+                    if (!verdict.Allowed) {
+                        return (
+                            verdict.ErrorMessage ??
+                            `Cross-entity policy '${prog.PolicyKey}' refused ${item.Operation} on ${item.Entity.EntityInfo.Name}.`
+                        );
+                    }
+                }
+            }
+            scope.MarkPreEvaluated(item.Entity, item.Operation);
         }
 
         return null;
@@ -414,7 +506,10 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
             return null;
         }
 
-        const scope = this.ResolveScope(provider, contextUser, entity.TransactionGroup);
+        const scope = this.resolveInternalScope(provider, contextUser, entity.TransactionGroup);
+        if (scope.IsPreEvaluated(entity, operation)) {
+            return null;
+        }
 
         for (const decl of declPolicies) {
             const err = await this.evaluateDeclarativeLock(entity, operation, decl, scope);
@@ -459,7 +554,10 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
             return null;
         }
 
-        const scope = this.ResolveScope(provider, contextUser, entity.TransactionGroup);
+        const scope = this.resolveInternalScope(provider, contextUser, entity.TransactionGroup);
+        if (scope.IsPreEvaluated(entity, 'Delete')) {
+            return null;
+        }
 
         for (const decl of declPolicies) {
             const err = await this.evaluateDeclarativeLock(entity, 'Delete', decl, scope);
@@ -514,15 +612,34 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
 
         const list: IDeclarativeParentStateLockPolicy[] = [];
         if (configPolicies && configPolicies.length > 0) {
-            list.push(...configPolicies);
+            for (const raw of configPolicies) {
+                list.push(
+                    this.normalizeDeclarativePolicy(
+                        raw as object as Record<string, object | string | number | boolean | null>,
+                    ),
+                );
+            }
         }
-        if (setting?.Value) {
+        if (setting?.Value && setting.Value.trim().length > 0) {
             const parsed = SafeJSONParse<
-                IDeclarativeParentStateLockPolicy | IDeclarativeParentStateLockPolicy[]
+                | Record<string, object | string | number | boolean | null>
+                | Array<Record<string, object | string | number | boolean | null>>
             >(setting.Value, false);
-            if (parsed) {
-                const arr = Array.isArray(parsed) ? parsed : [parsed];
-                list.push(...arr);
+            if (!parsed || typeof parsed !== 'object') {
+                LogError(
+                    `CrossEntityPolicyEngine: invalid JSON in EntitySetting '${CrossEntityPolicyEngine.CROSS_ENTITY_POLICIES_SETTING_NAME}' on entity '${entityInfo.Name}'; failing closed.`,
+                );
+                const invalidSentinel: IDeclarativeParentStateLockPolicy = {
+                    foreignKeyField: '__INVALID_METADATA_CROSS_ENTITY_POLICY__',
+                    parentEntityName: '__INVALID__',
+                    parentStatusField: 'Status',
+                };
+                this._declarativeCache.set(cacheKey, { signature, policies: [invalidSentinel] });
+                return [invalidSentinel];
+            }
+            const arr = Array.isArray(parsed) ? parsed : [parsed];
+            for (const raw of arr) {
+                list.push(this.normalizeDeclarativePolicy(raw));
             }
         }
 
@@ -530,13 +647,64 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
         return list;
     }
 
+    private normalizeDeclarativePolicy(
+        raw: Record<string, object | string | number | boolean | null>,
+    ): IDeclarativeParentStateLockPolicy {
+        return {
+            kind: 'ParentStateLock',
+            policyKey: (raw.policyKey ?? raw.PolicyKey) as string | undefined,
+            foreignKeyField: String(raw.foreignKeyField ?? raw.ForeignKeyField ?? ''),
+            parentEntityName: String(raw.parentEntityName ?? raw.ParentEntityName ?? ''),
+            parentKeyField: (raw.parentKeyField ?? raw.ParentKeyField) as string | undefined,
+            parentStatusField: String(raw.parentStatusField ?? raw.ParentStatusField ?? ''),
+            allowedParentStates: (raw.allowedParentStates ?? raw.AllowedParentStates) as string[] | undefined,
+            forbiddenParentStates: (raw.forbiddenParentStates ?? raw.ForbiddenParentStates) as string[] | undefined,
+            operations: (raw.operations ?? raw.Operations) as EntityWriteOperation[] | undefined,
+            allowOrphanWhenForeignKeyNull: (raw.allowOrphanWhenForeignKeyNull ??
+                raw.AllowOrphanWhenForeignKeyNull) as boolean | undefined,
+            exemptOperations: (raw.exemptOperations ?? raw.ExemptOperations) as string[] | undefined,
+            errorMessage: (raw.errorMessage ?? raw.ErrorMessage) as string | undefined,
+        };
+    }
+
+    private extractForeignKeyIdsForOperation(
+        entity: BaseEntity,
+        operation: EntityWriteOperation,
+        foreignKeyFieldName: string,
+    ): { fieldExists: boolean; ids: string[] } {
+        const fkField = entity.GetFieldByName(foreignKeyFieldName);
+        if (!fkField) {
+            return { fieldExists: false, ids: [] };
+        }
+        if (operation === 'Delete') {
+            const raw = fkField.Dirty ? fkField.OldValue : fkField.Value;
+            const id = raw !== null && raw !== undefined ? String(raw).trim() : '';
+            return { fieldExists: true, ids: id ? [id] : [] };
+        }
+        if (operation === 'Update') {
+            const ids: string[] = [];
+            if (fkField.Dirty && fkField.OldValue !== null && fkField.OldValue !== undefined) {
+                const oldId = String(fkField.OldValue).trim();
+                if (oldId) {
+                    ids.push(oldId);
+                }
+            }
+            const curRaw = fkField.Value;
+            const curId = curRaw !== null && curRaw !== undefined ? String(curRaw).trim() : '';
+            if (curId && !ids.some((existing) => existing.toLowerCase() === curId.toLowerCase())) {
+                ids.push(curId);
+            }
+            return { fieldExists: true, ids };
+        }
+        const raw = fkField.Value;
+        const id = raw !== null && raw !== undefined ? String(raw).trim() : '';
+        return { fieldExists: true, ids: id ? [id] : [] };
+    }
+
     private async primeDeclarativeParentLocksForBatch(
         items: ReadonlyArray<CrossEntityBatchItem>,
         scope: CrossEntityEvaluationScope,
     ): Promise<void> {
-        if (!this.isRunViewCapable(scope.Provider)) {
-            return;
-        }
         const grouped = new Map<
             string,
             {
@@ -554,12 +722,12 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
                 if (!ops.includes(item.Operation)) {
                     continue;
                 }
-                const fkVal = item.Entity.GetFieldByName(policy.foreignKeyField)?.Value;
-                if (fkVal === null || fkVal === undefined || String(fkVal).trim() === '') {
-                    continue;
-                }
-                const fkStr = String(fkVal).trim();
-                if (!SAFE_UUID_OR_ALNUM_KEY_REGEX.test(fkStr)) {
+                const { fieldExists, ids } = this.extractForeignKeyIdsForOperation(
+                    item.Entity,
+                    item.Operation,
+                    policy.foreignKeyField,
+                );
+                if (!fieldExists || ids.length === 0) {
                     continue;
                 }
                 const parentKeyField = policy.parentKeyField ?? 'ID';
@@ -574,44 +742,85 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
                     };
                     grouped.set(groupKey, bucket);
                 }
-                bucket.parentIds.add(fkStr);
+                for (const fkStr of ids) {
+                    if (SAFE_UUID_OR_ALNUM_KEY_REGEX.test(fkStr)) {
+                        bucket.parentIds.add(fkStr);
+                    }
+                }
             }
         }
 
         for (const bucket of grouped.values()) {
-            if (bucket.parentIds.size === 0) {
-                continue;
-            }
-            const ids = Array.from(bucket.parentIds);
-            const quotedList = ids.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
-            const rv = await scope.Provider.RunView<Record<string, string | number | null>>(
-                {
-                    EntityName: bucket.parentEntityName,
-                    ExtraFilter: `${bucket.parentKeyField} IN (${quotedList})`,
-                    Fields: [bucket.parentKeyField, bucket.parentStatusField],
-                    ResultType: 'simple',
-                    BypassCache: true,
-                },
-                scope.ContextUser,
+            const ns = this.parentCacheNamespace(
+                bucket.parentEntityName,
+                `${bucket.parentKeyField}:${bucket.parentStatusField}`,
             );
-            if (!rv.Success) {
-                continue;
-            }
-            const ns = this.parentCacheNamespace(bucket.parentEntityName, `${bucket.parentKeyField}:${bucket.parentStatusField}`);
-            const foundIds = new Set<string>();
-            for (const row of rv.Results ?? []) {
-                const rowId = String(row[bucket.parentKeyField] ?? '').trim();
-                if (rowId) {
-                    foundIds.add(rowId.toLowerCase());
-                    const statusStr = String(row[bucket.parentStatusField] ?? '').trim();
-                    const snap: ParentStatusSnapshot = { exists: true, status: statusStr };
-                    scope.Prime(ns, rowId, snap);
+            const parentEntityLower = bucket.parentEntityName.trim().toLowerCase();
+
+            // First prime any in-batch parent mutations (e.g. a new parent Order created in the same graph/group
+            // alongside its child OrderLines) so children see the in-batch parent state without failing DB lookup.
+            for (const item of items) {
+                if (item.Entity.EntityInfo.Name.trim().toLowerCase() !== parentEntityLower) {
+                    continue;
+                }
+                const pkVal = item.Entity.GetFieldByName(bucket.parentKeyField)?.Value;
+                const pkStr = pkVal !== null && pkVal !== undefined ? String(pkVal).trim() : '';
+                if (!pkStr) {
+                    continue;
+                }
+                if (item.Operation === 'Delete') {
+                    scope.Prime(ns, pkStr, { exists: false, status: '' } satisfies ParentStatusSnapshot);
+                } else {
+                    const statusVal = item.Entity.GetFieldByName(bucket.parentStatusField)?.Value;
+                    const statusStr = statusVal !== null && statusVal !== undefined ? String(statusVal).trim() : '';
+                    scope.Prime(ns, pkStr, { exists: true, status: statusStr } satisfies ParentStatusSnapshot);
+                }
+                for (const id of Array.from(bucket.parentIds)) {
+                    if (id.toLowerCase() === pkStr.toLowerCase()) {
+                        bucket.parentIds.delete(id);
+                    }
                 }
             }
-            for (const requestedId of ids) {
-                if (!foundIds.has(requestedId.toLowerCase())) {
-                    const missingSnap: ParentStatusSnapshot = { exists: false, status: '' };
-                    scope.Prime(ns, requestedId, missingSnap);
+
+            if (bucket.parentIds.size === 0 || !this.isRunViewCapable(scope.Provider)) {
+                continue;
+            }
+            const allIds = Array.from(bucket.parentIds);
+            for (let offset = 0; offset < allIds.length; offset += BATCH_CHUNK_SIZE) {
+                const chunk = allIds.slice(offset, offset + BATCH_CHUNK_SIZE);
+                const quotedList = chunk.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
+                const rv = await scope.Provider.RunView<Record<string, string | number | null>>(
+                    {
+                        EntityName: bucket.parentEntityName,
+                        ExtraFilter: `${bucket.parentKeyField} IN (${quotedList})`,
+                        Fields: [bucket.parentKeyField, bucket.parentStatusField],
+                        IgnoreMaxRows: true,
+                        ResultType: 'simple',
+                        BypassCache: true,
+                    },
+                    scope.ContextUser,
+                );
+                if (!rv.Success) {
+                    LogError(
+                        `CrossEntityPolicyEngine.primeDeclarativeParentLocksForBatch: RunView failed for '${bucket.parentEntityName}': ${rv.ErrorMessage ?? 'unknown error'}`,
+                    );
+                    continue;
+                }
+                const foundIds = new Set<string>();
+                for (const row of rv.Results ?? []) {
+                    const rowId = String(row[bucket.parentKeyField] ?? '').trim();
+                    if (rowId) {
+                        foundIds.add(rowId.toLowerCase());
+                        const statusStr = String(row[bucket.parentStatusField] ?? '').trim();
+                        const snap: ParentStatusSnapshot = { exists: true, status: statusStr };
+                        scope.Prime(ns, rowId, snap);
+                    }
+                }
+                for (const requestedId of chunk) {
+                    if (!foundIds.has(requestedId.toLowerCase())) {
+                        const missingSnap: ParentStatusSnapshot = { exists: false, status: '' };
+                        scope.Prime(ns, requestedId, missingSnap);
+                    }
                 }
             }
         }
@@ -633,15 +842,33 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
             ServerOperationScopeManager.Instance.IsOperationActive(
                 policy.exemptOperations,
                 entity.EntityInfo.Name,
+                scope.ContextUser,
             )
         ) {
             return null;
         }
 
-        const fkField = entity.GetFieldByName(policy.foreignKeyField);
-        const fkRaw = fkField?.Value;
-        const fkId = fkRaw !== null && fkRaw !== undefined ? String(fkRaw).trim() : '';
-        if (!fkId) {
+        const { fieldExists, ids } = this.extractForeignKeyIdsForOperation(
+            entity,
+            operation,
+            policy.foreignKeyField,
+        );
+        if (!fieldExists) {
+            LogError(
+                `CrossEntityPolicyEngine: configured foreignKeyField '${policy.foreignKeyField}' does not exist on entity '${entity.EntityInfo.Name}'.`,
+            );
+            return `Cross-entity policy error on ${entity.EntityInfo.Name}: configured foreignKeyField '${policy.foreignKeyField}' does not exist.`;
+        }
+
+        const curFkVal =
+            operation === 'Delete'
+                ? entity.GetFieldByName(policy.foreignKeyField)?.Dirty
+                    ? entity.GetFieldByName(policy.foreignKeyField)?.OldValue
+                    : entity.GetFieldByName(policy.foreignKeyField)?.Value
+                : entity.GetFieldByName(policy.foreignKeyField)?.Value;
+        const curFkId = curFkVal !== null && curFkVal !== undefined ? String(curFkVal).trim() : '';
+
+        if (!curFkId && ids.length === 0) {
             if (policy.allowOrphanWhenForeignKeyNull === false) {
                 return (
                     policy.errorMessage ??
@@ -651,8 +878,17 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
             return null;
         }
 
-        if (!SAFE_UUID_OR_ALNUM_KEY_REGEX.test(fkId)) {
-            return `Invalid parent key '${fkId}' in ${entity.EntityInfo.Name}.${policy.foreignKeyField}.`;
+        if (!curFkId && policy.allowOrphanWhenForeignKeyNull === false) {
+            return (
+                policy.errorMessage ??
+                `Cannot ${operation.toLowerCase()} ${entity.EntityInfo.Name}: required parent reference '${policy.foreignKeyField}' is empty.`
+            );
+        }
+
+        for (const fkId of ids) {
+            if (!SAFE_UUID_OR_ALNUM_KEY_REGEX.test(fkId)) {
+                return `Invalid parent key '${fkId}' in ${entity.EntityInfo.Name}.${policy.foreignKeyField}.`;
+            }
         }
 
         if (!this.isRunViewCapable(scope.Provider)) {
@@ -665,57 +901,59 @@ export class CrossEntityPolicyEngine extends BaseSingleton<CrossEntityPolicyEngi
             `${parentKeyField}:${policy.parentStatusField}`,
         );
 
-        const snapshot = await scope.GetOrLoad<ParentStatusSnapshot>(ns, fkId, async () => {
-            const escaped = fkId.replace(/'/g, "''");
-            const rv = await runViewProvider.RunView<Record<string, string | number | null>>(
-                {
-                    EntityName: policy.parentEntityName,
-                    ExtraFilter: `${parentKeyField}='${escaped}'`,
-                    Fields: [parentKeyField, policy.parentStatusField],
-                    MaxRows: 1,
-                    ResultType: 'simple',
-                    BypassCache: true,
-                },
-                scope.ContextUser,
-            );
-            if (!rv.Success) {
-                throw new Error(
-                    `CrossEntityPolicyEngine failed to query parent '${policy.parentEntityName}' (${fkId}): ${rv.ErrorMessage ?? 'RunView failed'}`,
+        for (const fkId of ids) {
+            const snapshot = await scope.GetOrLoad<ParentStatusSnapshot>(ns, fkId, async () => {
+                const escaped = fkId.replace(/'/g, "''");
+                const rv = await runViewProvider.RunView<Record<string, string | number | null>>(
+                    {
+                        EntityName: policy.parentEntityName,
+                        ExtraFilter: `${parentKeyField}='${escaped}'`,
+                        Fields: [parentKeyField, policy.parentStatusField],
+                        MaxRows: 1,
+                        ResultType: 'simple',
+                        BypassCache: true,
+                    },
+                    scope.ContextUser,
+                );
+                if (!rv.Success) {
+                    throw new Error(
+                        `CrossEntityPolicyEngine failed to query parent '${policy.parentEntityName}' (${fkId}): ${rv.ErrorMessage ?? 'RunView failed'}`,
+                    );
+                }
+                const row = rv.Results?.[0];
+                if (!row) {
+                    return { exists: false, status: '' };
+                }
+                return {
+                    exists: true,
+                    status: String(row[policy.parentStatusField] ?? '').trim(),
+                };
+            });
+
+            if (!snapshot.exists) {
+                return (
+                    policy.errorMessage ??
+                    `Cannot ${operation.toLowerCase()} ${entity.EntityInfo.Name}: parent ${policy.parentEntityName} '${fkId}' does not exist.`
                 );
             }
-            const row = rv.Results?.[0];
-            if (!row) {
-                return { exists: false, status: '' };
+
+            if (policy.forbiddenParentStates && policy.forbiddenParentStates.includes(snapshot.status)) {
+                return (
+                    policy.errorMessage ??
+                    `Cannot ${operation.toLowerCase()} ${entity.EntityInfo.Name} while parent ${policy.parentEntityName} ${policy.parentStatusField} is '${snapshot.status}'.`
+                );
             }
-            return {
-                exists: true,
-                status: String(row[policy.parentStatusField] ?? '').trim(),
-            };
-        });
 
-        if (!snapshot.exists) {
-            return (
-                policy.errorMessage ??
-                `Cannot ${operation.toLowerCase()} ${entity.EntityInfo.Name}: parent ${policy.parentEntityName} '${fkId}' does not exist.`
-            );
-        }
-
-        if (policy.forbiddenParentStates && policy.forbiddenParentStates.includes(snapshot.status)) {
-            return (
-                policy.errorMessage ??
-                `Cannot ${operation.toLowerCase()} ${entity.EntityInfo.Name} while parent ${policy.parentEntityName} ${policy.parentStatusField} is '${snapshot.status}'.`
-            );
-        }
-
-        if (
-            policy.allowedParentStates &&
-            policy.allowedParentStates.length > 0 &&
-            !policy.allowedParentStates.includes(snapshot.status)
-        ) {
-            return (
-                policy.errorMessage ??
-                `Cannot ${operation.toLowerCase()} ${entity.EntityInfo.Name} while parent ${policy.parentEntityName} ${policy.parentStatusField} is '${snapshot.status}' (allowed: [${policy.allowedParentStates.join(', ')}]).`
-            );
+            if (
+                policy.allowedParentStates &&
+                policy.allowedParentStates.length > 0 &&
+                !policy.allowedParentStates.includes(snapshot.status)
+            ) {
+                return (
+                    policy.errorMessage ??
+                    `Cannot ${operation.toLowerCase()} ${entity.EntityInfo.Name} while parent ${policy.parentEntityName} ${policy.parentStatusField} is '${snapshot.status}' (allowed: [${policy.allowedParentStates.join(', ')}]).`
+                );
+            }
         }
 
         return null;

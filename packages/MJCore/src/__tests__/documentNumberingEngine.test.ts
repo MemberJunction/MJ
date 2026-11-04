@@ -628,13 +628,14 @@ describe('DocumentNumberingEngine & SqlTableDocumentSequenceStore (3.3)', () => 
         expect(first.OrderNumber).toBe('INV-0001');
         expect(provider.CommitCount).toBe(1);
 
-        // 2. Save 2 allocates INV-0002 inside autoNumberTxScope, then fails downstream SQL -> rolls back counter!
+        // 2. Save 2 allocates INV-0002 inside autoNumberTxScope, then fails downstream SQL -> rolls back counter AND reverts field!
         provider.FailNextEntitySaveSql = true;
         const doomed = await provider.GetEntityObject<NumberedOrderEntity>('Test Numbered Orders', user);
         doomed.NewRecord();
         doomed.ID = 'inv-doomed';
         expect(await doomed.Save()).toBe(false);
         expect(provider.RollbackCount).toBe(1);
+        expect(doomed.OrderNumber).toBeNull();
 
         // 3. Save 3 gets INV-0002 (ZERO sequence gap!)
         const third = await provider.GetEntityObject<NumberedOrderEntity>('Test Numbered Orders', user);

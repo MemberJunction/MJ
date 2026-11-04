@@ -25,6 +25,7 @@
 
 import {
     BaseSingleton,
+    NormalizeUUID,
     SafeJSONParse,
     ValidationErrorInfo,
     ValidationErrorType,
@@ -33,6 +34,7 @@ import {
 import type { BaseEntity } from './baseEntity';
 import type { DatabaseProviderBase } from './databaseProviderBase';
 import type { EntityInfo } from './entityInfo';
+import { LogError } from './logging';
 import type { UserInfo } from './securityInfo';
 
 export type DocumentResetPeriod = 'Never' | 'CalendarYear' | 'CalendarMonth' | 'FiscalYear';
@@ -151,17 +153,36 @@ export class SqlTableDocumentSequenceStore implements IDocumentSequenceStore {
             `DECLARE @scpKey NVARCHAR(255) = ?;`,
             `DECLARE @startVal BIGINT = ?;`,
             `DECLARE @allocated TABLE (AllocatedValue BIGINT NOT NULL);`,
-            `UPDATE [${schemaName}].[DocumentSequenceCounter] WITH (UPDLOCK, HOLDLOCK)`,
-            `SET [CurrentValue] = [CurrentValue] + @inc`,
-            `OUTPUT inserted.[CurrentValue] INTO @allocated(AllocatedValue)`,
-            `WHERE [SequenceKey] = @seqKey AND [ScopeKey] = @scpKey;`,
-            `IF NOT EXISTS (SELECT 1 FROM @allocated)`,
+            `DECLARE @startedLocalTran BIT = 0;`,
+            `IF @@TRANCOUNT = 0`,
             `BEGIN`,
-            `    INSERT INTO [${schemaName}].[DocumentSequenceCounter]`,
-            `        ([ID], [SequenceKey], [ScopeKey], [CurrentValue])`,
-            `    OUTPUT inserted.[CurrentValue] INTO @allocated(AllocatedValue)`,
-            `    VALUES (NEWSEQUENTIALID(), @seqKey, @scpKey, @startVal);`,
+            `    BEGIN TRANSACTION;`,
+            `    SET @startedLocalTran = 1;`,
             `END;`,
+            `BEGIN TRY`,
+            `    UPDATE [${schemaName}].[DocumentSequenceCounter] WITH (UPDLOCK, HOLDLOCK)`,
+            `    SET [CurrentValue] = [CurrentValue] + @inc`,
+            `    OUTPUT inserted.[CurrentValue] INTO @allocated(AllocatedValue)`,
+            `    WHERE [SequenceKey] = @seqKey AND [ScopeKey] = @scpKey;`,
+            `    IF NOT EXISTS (SELECT 1 FROM @allocated)`,
+            `    BEGIN`,
+            `        INSERT INTO [${schemaName}].[DocumentSequenceCounter]`,
+            `            ([ID], [SequenceKey], [ScopeKey], [CurrentValue])`,
+            `        OUTPUT inserted.[CurrentValue] INTO @allocated(AllocatedValue)`,
+            `        VALUES (NEWSEQUENTIALID(), @seqKey, @scpKey, @startVal);`,
+            `    END;`,
+            `    IF @startedLocalTran = 1 AND @@TRANCOUNT > 0`,
+            `    BEGIN`,
+            `        COMMIT TRANSACTION;`,
+            `    END;`,
+            `END TRY`,
+            `BEGIN CATCH`,
+            `    IF @startedLocalTran = 1 AND @@TRANCOUNT > 0`,
+            `    BEGIN`,
+            `        ROLLBACK TRANSACTION;`,
+            `    END;`,
+            `    THROW;`,
+            `END CATCH;`,
             `SELECT AllocatedValue FROM @allocated;`,
         ].join('\n');
         return {
@@ -256,9 +277,13 @@ export class DocumentNumberingEngine extends BaseSingleton<DocumentNumberingEngi
     private readonly _scopeResolvers = new Map<string, DocumentScopeResolver>();
     private readonly _reservedPatternRegexCache = new Map<string, RegExp>();
     private readonly _systemAssignedFields = new WeakMap<BaseEntity, Set<string>>();
+    private readonly _assignedPriorValues = new WeakMap<
+        BaseEntity,
+        Map<string, BaseEntity['Fields'][number]['Value']>
+    >();
     private _sequenceStore: IDocumentSequenceStore = new SqlTableDocumentSequenceStore();
 
-    public constructor() {
+    protected constructor() {
         super();
     }
 
@@ -298,6 +323,45 @@ export class DocumentNumberingEngine extends BaseSingleton<DocumentNumberingEngi
         this._reservedPatternRegexCache.clear();
     }
 
+    /**
+     * Clears system-assigned markers and prior-value snapshots for `entity` (invoked on `NewRecord()`).
+     */
+    public ClearSystemAssignedMarkers(entity: BaseEntity): void {
+        this._systemAssignedFields.delete(entity);
+        this._assignedPriorValues.delete(entity);
+    }
+
+    /**
+     * Reverts system-assigned field values on `entity` back to their pre-allocation state (typically `null`)
+     * when a save or transaction group fails and rolls back.
+     */
+    public RevertAssignedNumbers(entity: BaseEntity, fieldNames?: ReadonlyArray<string>): void {
+        const priorMap = this._assignedPriorValues.get(entity);
+        const sysSet = this._systemAssignedFields.get(entity);
+        if (!priorMap && !sysSet) {
+            return;
+        }
+        const targets =
+            fieldNames && fieldNames.length > 0
+                ? fieldNames
+                : priorMap
+                  ? Array.from(priorMap.keys())
+                  : sysSet
+                    ? Array.from(sysSet.values())
+                    : [];
+        for (const rawName of targets) {
+            const keyLower = rawName.trim().toLowerCase();
+            const field = entity.GetFieldByName(rawName);
+            if (field && priorMap && priorMap.has(keyLower)) {
+                field.Value = priorMap.get(keyLower) ?? null;
+            } else if (field && sysSet?.has(keyLower)) {
+                field.Value = null;
+            }
+            priorMap?.delete(keyLower);
+            sysSet?.delete(keyLower);
+        }
+    }
+
     public ResolvePolicies(entityInfo: EntityInfo | null | undefined): ReadonlyArray<IDocumentNumberPolicy> {
         if (!entityInfo || !entityInfo.Name) {
             return [];
@@ -316,6 +380,14 @@ export class DocumentNumberingEngine extends BaseSingleton<DocumentNumberingEngi
             ...fromMetadata.filter((m) => !overriddenFields.has(m.targetField.trim().toLowerCase())),
             ...programmatic,
         ];
+    }
+
+    /**
+     * Whether `ResolverBase.UpdateRecord` MUST load the authoritative stored row from the database
+     * to prevent clients from spoofing `OldValues___` on `immutableAfterCreate` auto-numbered fields.
+     */
+    public RequiresStoredTruthOnUpdate(entityInfo: EntityInfo | null | undefined): boolean {
+        return this.ResolvePolicies(entityInfo).some((p) => p.immutableAfterCreate !== false);
     }
 
     /**
@@ -367,6 +439,48 @@ export class DocumentNumberingEngine extends BaseSingleton<DocumentNumberingEngi
         for (const policy of policies) {
             const field = entity.GetFieldByName(policy.targetField);
             if (!field) {
+                LogError(
+                    `DocumentNumberingEngine: configured targetField '${policy.targetField}' does not exist on entity '${entity.EntityInfo.Name}'.`,
+                );
+                result.Success = false;
+                result.Errors.push(
+                    new ValidationErrorInfo(
+                        policy.targetField || entity.EntityInfo.Name,
+                        `Auto-number policy error on ${entity.EntityInfo.Name}: targetField '${policy.targetField}' does not exist.`,
+                        null,
+                        ValidationErrorType.Failure,
+                    ),
+                );
+                continue;
+            }
+            if (!policy.pattern || !policy.pattern.includes('{SEQ')) {
+                LogError(
+                    `DocumentNumberingEngine: pattern '${policy.pattern}' on '${entity.EntityInfo.Name}.${policy.targetField}' must include a {SEQ} token.`,
+                );
+                result.Success = false;
+                result.Errors.push(
+                    new ValidationErrorInfo(
+                        field.Name,
+                        `Auto-number policy error on ${entity.EntityInfo.Name}.${field.Name}: pattern '${policy.pattern}' must include a {SEQ} token.`,
+                        null,
+                        ValidationErrorType.Failure,
+                    ),
+                );
+                continue;
+            }
+            if (policy.incrementBy !== undefined && policy.incrementBy <= 0) {
+                LogError(
+                    `DocumentNumberingEngine: incrementBy (${policy.incrementBy}) on '${entity.EntityInfo.Name}.${policy.targetField}' must be > 0.`,
+                );
+                result.Success = false;
+                result.Errors.push(
+                    new ValidationErrorInfo(
+                        field.Name,
+                        `Auto-number policy error on ${entity.EntityInfo.Name}.${field.Name}: incrementBy must be > 0.`,
+                        policy.incrementBy,
+                        ValidationErrorType.Failure,
+                    ),
+                );
                 continue;
             }
 
@@ -440,8 +554,24 @@ export class DocumentNumberingEngine extends BaseSingleton<DocumentNumberingEngi
         const assignedFields: string[] = [];
         for (const policy of policies) {
             const field = entity.GetFieldByName(policy.targetField);
-            if (!field || !this.isBlankValue(field.Value)) {
+            if (!field) {
+                throw new Error(
+                    `DocumentNumberingEngine: configured targetField '${policy.targetField}' does not exist on ${entity.EntityInfo.Name}.`,
+                );
+            }
+            if (!this.isBlankValue(field.Value)) {
                 continue;
+            }
+            if (!policy.pattern || !policy.pattern.includes('{SEQ')) {
+                throw new Error(
+                    `DocumentNumberingEngine: pattern '${policy.pattern}' on ${entity.EntityInfo.Name}.${policy.targetField} must include a {SEQ} token.`,
+                );
+            }
+            const incrementBy = policy.incrementBy ?? 1;
+            if (incrementBy <= 0) {
+                throw new Error(
+                    `DocumentNumberingEngine: incrementBy (${incrementBy}) on ${entity.EntityInfo.Name}.${policy.targetField} must be > 0.`,
+                );
             }
 
             const sequenceKey = (policy.sequenceKey?.trim() || `${entity.EntityInfo.Name}.${policy.targetField}`).trim();
@@ -449,12 +579,17 @@ export class DocumentNumberingEngine extends BaseSingleton<DocumentNumberingEngi
             const effectiveDate = this.resolveReferenceDate(entity, policy.dateSourceField, now);
             const fiscalYear = this.computeFiscalYear(effectiveDate, policy.fiscalYearStartMonth ?? 1, customScope);
             const scopeKey = this.BuildScopeKey(entity, policy, contextUser, effectiveDate, fiscalYear, customScope);
+            if (scopeKey.length > 255) {
+                throw new Error(
+                    `DocumentNumberingEngine: derived ScopeKey length (${scopeKey.length}) exceeds 255 characters for '${sequenceKey}'.`,
+                );
+            }
 
             const seqValue = await this._sequenceStore.AllocateNext({
                 sequenceKey,
                 scopeKey,
                 startAt: policy.startAt ?? 1,
-                incrementBy: policy.incrementBy ?? 1,
+                incrementBy,
                 provider,
                 contextUser,
             });
@@ -468,8 +603,15 @@ export class DocumentNumberingEngine extends BaseSingleton<DocumentNumberingEngi
                 fiscalYear,
                 customScope,
             );
+            const maxLen = field.EntityFieldInfo.MaxLength;
+            if (maxLen > 0 && formatted.length > maxLen) {
+                throw new Error(
+                    `DocumentNumberingEngine: generated value '${formatted}' (${formatted.length} chars) exceeds MaxLength (${maxLen}) on ${entity.EntityInfo.Name}.${field.Name}.`,
+                );
+            }
+            const priorVal = field.Value;
             field.Value = formatted;
-            this.markSystemAssigned(entity, field.Name);
+            this.markSystemAssigned(entity, field.Name, priorVal);
             assignedFields.push(field.Name);
         }
 
@@ -499,11 +641,14 @@ export class DocumentNumberingEngine extends BaseSingleton<DocumentNumberingEngi
             segments.push(`Tenant=${tenantId}`);
         }
 
+        const fieldTokenSpecs = this.extractPatternFieldTokenSpecs(policy.pattern);
         if (policy.scopeFields && policy.scopeFields.length > 0) {
             for (const scopeFieldName of policy.scopeFields) {
-                const rawVal = entity.GetFieldByName(scopeFieldName)?.Value;
-                const fallback = policy.scopeFieldFallbacks?.[scopeFieldName];
-                const resolved = !this.isBlankValue(rawVal)
+                const fieldObj = entity.GetFieldByName(scopeFieldName);
+                const rawVal = fieldObj?.Value;
+                const tokenSpec = fieldTokenSpecs.get(scopeFieldName.trim().toLowerCase());
+                const fallback = policy.scopeFieldFallbacks?.[scopeFieldName] ?? tokenSpec?.fallback;
+                let resolved = !this.isBlankValue(rawVal)
                     ? String(rawVal).trim()
                     : fallback !== undefined
                       ? fallback.trim()
@@ -512,6 +657,13 @@ export class DocumentNumberingEngine extends BaseSingleton<DocumentNumberingEngi
                     throw new Error(
                         `DocumentNumberingEngine: required scope field '${scopeFieldName}' is empty on ${entity.EntityInfo.Name} while allocating '${policy.targetField}'.`,
                     );
+                }
+                const sqlType = fieldObj?.EntityFieldInfo?.Type?.trim().toLowerCase() ?? '';
+                if (sqlType === 'uniqueidentifier' || sqlType === 'uuid') {
+                    resolved = NormalizeUUID(resolved);
+                }
+                if (tokenSpec?.transform) {
+                    resolved = this.applyFieldTransform(resolved, tokenSpec.transform);
                 }
                 segments.push(`Field:${scopeFieldName}=${resolved}`);
             }
@@ -533,6 +685,31 @@ export class DocumentNumberingEngine extends BaseSingleton<DocumentNumberingEngi
         }
 
         return segments.length > 0 ? segments.join('|') : '__GLOBAL__';
+    }
+
+    private extractPatternFieldTokenSpecs(
+        pattern: string,
+    ): Map<string, { transform: string; fallback?: string }> {
+        const specs = new Map<string, { transform: string; fallback?: string }>();
+        if (!pattern) {
+            return specs;
+        }
+        const tokenRe = /\{([^{}]+)\}/g;
+        let match: RegExpExecArray | null = tokenRe.exec(pattern);
+        while (match !== null) {
+            const trimmed = match[1].trim();
+            if (trimmed.startsWith('Field:')) {
+                const parts = trimmed.split(':');
+                const fieldName = (parts[1] ?? '').trim().toLowerCase();
+                if (fieldName) {
+                    const transform = (parts[2] ?? '').trim().toUpperCase();
+                    const fallback = parts[3];
+                    specs.set(fieldName, { transform, fallback });
+                }
+            }
+            match = tokenRe.exec(pattern);
+        }
+        return specs;
     }
 
     /**
@@ -647,11 +824,12 @@ export class DocumentNumberingEngine extends BaseSingleton<DocumentNumberingEngi
         }
 
         // Convert pattern tokens into a conservative regular expression matching generated system numbers.
-        // Only compile when the pattern carries at least one static literal or prefix anchor so an unanchored
-        // pattern like `{Field:Code}-{SEQ:1}` with arbitrary prefixes does not falsely match every hyphenated string.
+        // Compile when the pattern has a static prefix/literal, starts with a literal before `{`, starts with
+        // a date/fiscal token, or uses a `{Field:...}` token with a configured fallback prefix.
         const hasStaticPrefix =
             (policy.pattern.includes('{PREFIX}') && Boolean(policy.prefix && policy.prefix.length > 0)) ||
-            /^[A-Za-z0-9]+[-_/]/.test(policy.pattern);
+            /^[A-Za-z0-9]+(\{[A-Za-z]|[-_/:])/.test(policy.pattern) ||
+            /^\{(YYYY|YY|MM|DD|FY|FY2)\}[-_/:]/.test(policy.pattern);
         if (!hasStaticPrefix) {
             return null;
         }
@@ -763,34 +941,88 @@ export class DocumentNumberingEngine extends BaseSingleton<DocumentNumberingEngi
 
         const policies: IDocumentNumberPolicy[] = [];
         if (configAutoNumber) {
-            if (Array.isArray(configAutoNumber)) {
-                policies.push(...configAutoNumber);
-            } else {
-                policies.push(configAutoNumber);
+            const rawList = Array.isArray(configAutoNumber) ? configAutoNumber : [configAutoNumber];
+            for (const item of rawList) {
+                policies.push(
+                    this.normalizeNumberPolicy(
+                        item as object as Record<string, object | string | number | boolean | null>,
+                    ),
+                );
             }
         }
-        if (setting?.Value) {
-            const parsed = SafeJSONParse<IDocumentNumberPolicy | IDocumentNumberPolicy[]>(setting.Value, false);
-            if (parsed) {
-                const fromSetting = Array.isArray(parsed) ? parsed : [parsed];
-                const overrideTargets = new Set(fromSetting.map((p) => p.targetField.trim().toLowerCase()));
-                const retained = policies.filter((p) => !overrideTargets.has(p.targetField.trim().toLowerCase()));
-                policies.length = 0;
-                policies.push(...retained, ...fromSetting);
+        if (setting?.Value && setting.Value.trim().length > 0) {
+            const parsed = SafeJSONParse<
+                | Record<string, object | string | number | boolean | null>
+                | Array<Record<string, object | string | number | boolean | null>>
+            >(setting.Value, false);
+            if (!parsed || typeof parsed !== 'object') {
+                LogError(
+                    `DocumentNumberingEngine: invalid JSON in EntitySetting '${DocumentNumberingEngine.AUTO_NUMBER_SETTING_NAME}' on entity '${entityInfo.Name}'; failing closed.`,
+                );
+                const invalidSentinel: IDocumentNumberPolicy = {
+                    targetField: '__INVALID_METADATA_AUTO_NUMBER_POLICY__',
+                    pattern: '__INVALID__',
+                };
+                this._metadataCache.set(cacheKey, { signature, policies: [invalidSentinel] });
+                return [invalidSentinel];
             }
+            const rawArr = Array.isArray(parsed) ? parsed : [parsed];
+            const fromSetting = rawArr.map((raw) => this.normalizeNumberPolicy(raw));
+            const overrideTargets = new Set(fromSetting.map((p) => p.targetField.trim().toLowerCase()));
+            const retained = policies.filter((p) => !overrideTargets.has(p.targetField.trim().toLowerCase()));
+            policies.length = 0;
+            policies.push(...retained, ...fromSetting);
         }
 
         this._metadataCache.set(cacheKey, { signature, policies });
         return policies;
     }
 
-    private markSystemAssigned(entity: BaseEntity, fieldName: string): void {
+    private normalizeNumberPolicy(
+        raw: Record<string, object | string | number | boolean | null>,
+    ): IDocumentNumberPolicy {
+        return {
+            targetField: String(raw.targetField ?? raw.TargetField ?? ''),
+            sequenceKey: (raw.sequenceKey ?? raw.SequenceKey) as string | undefined,
+            pattern: String(raw.pattern ?? raw.Pattern ?? ''),
+            prefix: (raw.prefix ?? raw.Prefix) as string | undefined,
+            scopeFields: (raw.scopeFields ?? raw.ScopeFields) as string[] | undefined,
+            scopeFieldFallbacks: (raw.scopeFieldFallbacks ?? raw.ScopeFieldFallbacks) as
+                | Record<string, string>
+                | undefined,
+            scopeByTenant: (raw.scopeByTenant ?? raw.ScopeByTenant) as boolean | undefined,
+            resetPeriod: (raw.resetPeriod ?? raw.ResetPeriod) as DocumentResetPeriod | undefined,
+            dateSourceField: (raw.dateSourceField ?? raw.DateSourceField) as string | undefined,
+            fiscalYearStartMonth: (raw.fiscalYearStartMonth ?? raw.FiscalYearStartMonth) as number | undefined,
+            startAt: (raw.startAt ?? raw.StartAt) as number | undefined,
+            incrementBy: (raw.incrementBy ?? raw.IncrementBy) as number | undefined,
+            manualValueMode: (raw.manualValueMode ?? raw.ManualValueMode) as ManualNumberPolicy | undefined,
+            immutableAfterCreate: (raw.immutableAfterCreate ?? raw.ImmutableAfterCreate) as boolean | undefined,
+            gapFreeTransactional: (raw.gapFreeTransactional ?? raw.GapFreeTransactional) as boolean | undefined,
+        };
+    }
+
+    private markSystemAssigned(
+        entity: BaseEntity,
+        fieldName: string,
+        priorValue: BaseEntity['Fields'][number]['Value'],
+    ): void {
+        const keyLower = fieldName.trim().toLowerCase();
         let set = this._systemAssignedFields.get(entity);
         if (!set) {
             set = new Set<string>();
             this._systemAssignedFields.set(entity, set);
         }
-        set.add(fieldName.trim().toLowerCase());
+        set.add(keyLower);
+
+        let priorMap = this._assignedPriorValues.get(entity);
+        if (!priorMap) {
+            priorMap = new Map<string, BaseEntity['Fields'][number]['Value']>();
+            this._assignedPriorValues.set(entity, priorMap);
+        }
+        if (!priorMap.has(keyLower)) {
+            priorMap.set(keyLower, priorValue);
+        }
     }
 
     private isBlankValue(value: BaseEntity['Fields'][number]['Value']): boolean {

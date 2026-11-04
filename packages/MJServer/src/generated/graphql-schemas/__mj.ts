@@ -47177,53 +47177,6 @@ export class MJDocumentSequenceCounter_ {
     ReadableFields___?: string[];
         
 }
-
-//****************************************************************************
-// INPUT TYPE for MJ: Document Sequence Counters
-//****************************************************************************
-@InputType()
-export class CreateMJDocumentSequenceCounterInput {
-    @Field({ nullable: true })
-    ID?: string;
-
-    @Field({ nullable: true })
-    SequenceKey?: string;
-
-    @Field({ nullable: true })
-    ScopeKey?: string;
-
-    @Field(() => Int, { nullable: true })
-    CurrentValue?: number;
-
-    @Field(() => RestoreContextInput, { nullable: true })
-    RestoreContext___?: RestoreContextInput;
-}
-    
-
-//****************************************************************************
-// INPUT TYPE for MJ: Document Sequence Counters
-//****************************************************************************
-@InputType()
-export class UpdateMJDocumentSequenceCounterInput {
-    @Field()
-    ID: string;
-
-    @Field({ nullable: true })
-    SequenceKey?: string;
-
-    @Field({ nullable: true })
-    ScopeKey?: string;
-
-    @Field(() => Int, { nullable: true })
-    CurrentValue?: number;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-
-    @Field(() => RestoreContextInput, { nullable: true })
-    RestoreContext___?: RestoreContextInput;
-}
-    
 //****************************************************************************
 // RESOLVER for MJ: Document Sequence Counters
 //****************************************************************************
@@ -47279,33 +47232,6 @@ export class MJDocumentSequenceCounterResolver extends ResolverBase {
         const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.MapFieldNamesToCodeNames('MJ: Document Sequence Counters', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
         return result;
-    }
-    
-    @Mutation(() => MJDocumentSequenceCounter_)
-    async CreateMJDocumentSequenceCounter(
-        @Arg('input', () => CreateMJDocumentSequenceCounterInput) input: CreateMJDocumentSequenceCounterInput,
-        @Ctx() { providers, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        const provider = GetReadWriteProvider(providers);
-        return this.CreateRecord('MJ: Document Sequence Counters', input, provider, userPayload, pubSub)
-    }
-        
-    @Mutation(() => MJDocumentSequenceCounter_)
-    async UpdateMJDocumentSequenceCounter(
-        @Arg('input', () => UpdateMJDocumentSequenceCounterInput) input: UpdateMJDocumentSequenceCounterInput,
-        @Ctx() { providers, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        const provider = GetReadWriteProvider(providers);
-        return this.UpdateRecord('MJ: Document Sequence Counters', input, provider, userPayload, pubSub);
-    }
-    
-    @Mutation(() => MJDocumentSequenceCounter_)
-    async DeleteMJDocumentSequenceCounter(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadWriteProvider(providers);
-        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('MJ: Document Sequence Counters', key, options, provider, userPayload, pubSub);
     }
     
 }

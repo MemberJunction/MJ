@@ -8915,7 +8915,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * caller must run on the pool, as if no transaction were open. Subclasses consult this — not merely
      * "is a handle open" — before routing a statement to the transaction handle.
      */
-    protected IsCallerInAmbientTransaction(): boolean {
+    protected override IsCallerInAmbientTransaction(): boolean {
         return this._affinity.IsCallerMember;
     }
 
