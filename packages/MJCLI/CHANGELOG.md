@@ -1,5 +1,65 @@
 # Change Log - @memberjunction/cli
 
+## 6.2.0-edge.8
+
+### Minor Changes
+
+- 59e32e0: Add Diagnostic Bundles: scoped diagnostic sessions that capture server logs, SQL and traces and client logs, network, telemetry and breadcrumbs; a two-stage scrubber; the `.mjdiag` archive format with structural verification; X25519 + AES-256-GCM envelope encryption; an MJAPI intake endpoint with quarantine-then-promote storage; automated findings; and CLI and Explorer surfaces. Adds the diagnostic session, chunk and bundle tables and their metadata. Adds the `MJ: Diagnostic Sender Registrations` table: a sender enrols once with a one-time registration code, then signs every intake request with `MJDiag-Ed25519`, so the intake endpoint reads no API key. Adds the `Diagnostics.IssueSenderRegistrationCode` and `Diagnostics.EnrolSender` remote operations and the `Diagnostics Sender Key` and `Diagnostics Intake Key` credential types. Adds `SanitizeForLog` to `@memberjunction/global`. `BaseServerMiddleware.Initialize` and `ConfigureExpressApp` now receive an optional `ServerMiddlewareContext` that carries the server's `ApiRoute` builder. The Slack messaging extension and the component-registry auth example log request values on one line. `Diagnostics.RevokeSender` and `Diagnostics.ReactivateSender` revoke and reactivate a sender; a direct save of a sender registration needs `Diagnostics: Manage Intake` and cannot change its status, key, code or timestamp fields. The `MJ: Diagnostic Sender Registrations` form has **Revoke** and **Reactivate** toolbar buttons that call these operations. `FormToolbarActionLifecycleContext` in `@memberjunction/ng-base-forms` gains an optional `Injector` (the form container's injector), so a toolbar action can resolve Angular services such as `MJConfirmService`. `BaseFormComponent.RefreshRecord` accepts an optional `{ ShowSuccessNotification: false }` that skips the "Record refreshed" notification. The intake routes and `POST /enroll` answer 503 when the registration lookup fails. Adds the `Diagnostics.External.AllowUnscrubbedSend` setting: a bundle sent to an external collector must be built with literal scrubbing unless it is `true`. `Diagnostics.GetMySessionStatus` returns `CaptureEnabled` and `RequireLiteralScrubbing`. Diagnostics access comes only from the `Diagnostics: *` authorizations (directly or through a parent authorization) or the Owner user type. The `GetServerTelemetry*` queries in MJServer's `TelemetryResolver` now need Owner privileges or the `Diagnostics: Run Sessions` authorization. `WithoutDiagnosticCapture` in `@memberjunction/core` suppresses capture only in the current async context when a context provider is registered. `GraphQLDataProvider.ClearClientCache` also deletes the `MJ_Diagnostics` IndexedDB database. `mj diag` reads the private key from `--private-key-file` or `MJ_DIAG_PRIVATE_KEY`. MJServer logs only the user ID for a verified token.
+
+### Patch Changes
+
+- 63e6af4: Installer and CLI fixes. `mj install` without `--tag` now pins the CLI, migrate and codegen to the release the scaffold resolved (persisted for resume) instead of npm's `latest` dist-tag, and warns when it has to fall back to `latest`. `--dir` is resolved to an absolute path, the resume guidance names that directory, and Windows gets a 30-minute dependency-install timeout. Monorepo installs clone the release tag with `git clone --depth 1` instead of extracting the zipball, and force pnpm. `mj migrate` defaults its request timeout to 30 minutes and names `MJ_MIGRATION_REQUEST_TIMEOUT` when a request times out. pdf-parse is raised to `^1.1.4`.
+- f2b54d8: `mj migrate` no longer skips migrations when upgrading a database from a release line. The remote fetch (`--tag` or the install-pinned version) now selects every versioned migration the database has not applied and that lies above its highest baseline row, instead of only files newer than the highest applied version. When core migrations are pending that are older than the database's newest applied migration, and `mj.config.cjs` does not set `outOfOrder`, `mj migrate` enables `outOfOrder` for that run and logs each such file. An explicit `outOfOrder` setting is honoured as written.
+- 365e3a1: Add `--transport=server|client|all` and `--shard=<index>/<total>` options to `mj test suite` and `TestEngine.RunSuite`, enabling deterministic Longest Processing Time (LPT) sharding and parallel multi-DB execution in the SQL Server deterministic integration CI workflow.
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [8f7214a]
+- Updated dependencies [4fedaba]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5ba2565]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [63e6af4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [e69634e]
+- Updated dependencies [365e3a1]
+- Updated dependencies [db1528d]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/core-entities-server@6.2.0-edge.8
+  - @memberjunction/open-app-engine@6.2.0-edge.8
+  - @memberjunction/aiengine@6.2.0-edge.8
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.8
+  - @memberjunction/diagnostics@6.2.0-edge.8
+  - @memberjunction/generic-database-provider@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.8
+  - @memberjunction/installer@6.2.0-edge.8
+  - @memberjunction/testing-cli@6.2.0-edge.8
+  - @memberjunction/metadata-sync@6.2.0-edge.8
+  - @memberjunction/codegen-lib@6.2.0-edge.8
+  - @memberjunction/ai-cli@6.2.0-edge.8
+  - @memberjunction/db-auto-doc@6.2.0-edge.8
+  - @memberjunction/query-gen@6.2.0-edge.8
+  - @memberjunction/record-cloning@6.2.0-edge.8
+  - @memberjunction/redis-provider@6.2.0-edge.8
+  - @memberjunction/work-queue-engine@6.2.0-edge.8
+  - @memberjunction/cli-core@6.2.0-edge.8
+  - @memberjunction/sql-converter@6.2.0-edge.8
+  - @memberjunction/config@6.2.0-edge.8
+  - @memberjunction/dynamic-packages@6.2.0-edge.8
+  - @memberjunction/sqlglot-ts@6.2.0-edge.8
+  - @memberjunction/standards@6.2.0-edge.8
+  - @memberjunction/work-queue-core@6.2.0-edge.8
+
 ## 6.2.0-edge.7
 
 ### Minor Changes

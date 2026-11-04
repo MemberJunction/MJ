@@ -1,5 +1,35 @@
 # @memberjunction/tag-engine-base
 
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- dd34a5c: Knowledge Hub upstream fixes across SearchEngine, ContentAutotagging, TagEngine, GraphQLDataProvider, MJServer, and Angular Explorer dashboards:
+  - Tokenize multi-word SQL search queries in `EntitySearchProvider.convertResults` so records matched across multiple fields are not dropped when scoring in memory.
+  - Filter `GetContentSourceLastRunDate` by `Status = 'Completed' AND ProcessedItems > 0`, skip vector mutations when `vectorDB.IsReadOnly` is true, filter website and cloud storage sources with `FilterByUUIDs`, and emit per-URL crawl progress.
+  - Support client-supplied `pipelineRunID` in `RunAutotagPipeline` (subscribing before firing the mutation to eliminate the initial progress race), reject duplicate `pipelineRunID` values upfront, emit 3s progress heartbeats during long crawls, and pass actual processed counts to `publishProgress`.
+  - Expose `MergeTags` and `RecomputeTagCoOccurrence` GraphQL mutations in `TagGovernanceResolver` and `GraphQLAIClient`, re-parent child tags during `TagGovernanceEngine.MergeTags`, and merge existing active tags during `PromoteSuggestion` with `merge-into-existing`.
+  - Skip redundant `Save()` calls in `TagCoOccurrenceEngine.upsertAndPrune` when `CoOccurrenceCount` is unchanged.
+  - Clean up tag references before deleting orphan tags in `DeleteAllOrphans`, resolve active vector database health by `VectorDatabaseID`, and use `UUIDMap`/`IndexByUUID` for case-insensitive UUID lookups in Knowledge Hub cluster visualization and configuration dashboards.
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [e69634e]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+
 ## 6.2.0-edge.7
 
 ### Patch Changes

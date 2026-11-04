@@ -1,5 +1,32 @@
 # @memberjunction/open-app-engine
 
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- 8f7214a: `mj app install` and `mj app upgrade` check every declared app package against the npm registry (`npm view`) before any database or file change, and stop with a clear message on an npm authentication failure (run `npm login`) or an unpublished package. Skipped for the `workspace` version strategy and inside an `mj dev workspace`. `AddAppPackages` restores the package.json files it already wrote when a later target fails.
+- 4fedaba: Open App schema safety: the configured MJ core schema is reserved like `__mj`, so an app can no longer adopt and later drop it (#4559). Install rollback and remove share one drop-and-report helper, so a rollback refusal now names its remedy (#4560). Teardown scripts are downloaded before migrations run, so a rollback needs no network; rollback runs teardown with the schema in place and, if that fails, once more after dropping the schema (#3506).
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [e69634e]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+  - @memberjunction/record-cloning@6.2.0-edge.8
+  - @memberjunction/sql-dialect@6.2.0-edge.8
+
 ## 6.2.0-edge.7
 
 ### Patch Changes

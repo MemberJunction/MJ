@@ -1,5 +1,65 @@
 # @memberjunction/ng-bootstrap
 
+## 6.2.0-edge.8
+
+### Minor Changes
+
+- 59e32e0: Add Diagnostic Bundles: scoped diagnostic sessions that capture server logs, SQL and traces and client logs, network, telemetry and breadcrumbs; a two-stage scrubber; the `.mjdiag` archive format with structural verification; X25519 + AES-256-GCM envelope encryption; an MJAPI intake endpoint with quarantine-then-promote storage; automated findings; and CLI and Explorer surfaces. Adds the diagnostic session, chunk and bundle tables and their metadata. Adds the `MJ: Diagnostic Sender Registrations` table: a sender enrols once with a one-time registration code, then signs every intake request with `MJDiag-Ed25519`, so the intake endpoint reads no API key. Adds the `Diagnostics.IssueSenderRegistrationCode` and `Diagnostics.EnrolSender` remote operations and the `Diagnostics Sender Key` and `Diagnostics Intake Key` credential types. Adds `SanitizeForLog` to `@memberjunction/global`. `BaseServerMiddleware.Initialize` and `ConfigureExpressApp` now receive an optional `ServerMiddlewareContext` that carries the server's `ApiRoute` builder. The Slack messaging extension and the component-registry auth example log request values on one line. `Diagnostics.RevokeSender` and `Diagnostics.ReactivateSender` revoke and reactivate a sender; a direct save of a sender registration needs `Diagnostics: Manage Intake` and cannot change its status, key, code or timestamp fields. The `MJ: Diagnostic Sender Registrations` form has **Revoke** and **Reactivate** toolbar buttons that call these operations. `FormToolbarActionLifecycleContext` in `@memberjunction/ng-base-forms` gains an optional `Injector` (the form container's injector), so a toolbar action can resolve Angular services such as `MJConfirmService`. `BaseFormComponent.RefreshRecord` accepts an optional `{ ShowSuccessNotification: false }` that skips the "Record refreshed" notification. The intake routes and `POST /enroll` answer 503 when the registration lookup fails. Adds the `Diagnostics.External.AllowUnscrubbedSend` setting: a bundle sent to an external collector must be built with literal scrubbing unless it is `true`. `Diagnostics.GetMySessionStatus` returns `CaptureEnabled` and `RequireLiteralScrubbing`. Diagnostics access comes only from the `Diagnostics: *` authorizations (directly or through a parent authorization) or the Owner user type. The `GetServerTelemetry*` queries in MJServer's `TelemetryResolver` now need Owner privileges or the `Diagnostics: Run Sessions` authorization. `WithoutDiagnosticCapture` in `@memberjunction/core` suppresses capture only in the current async context when a context provider is registered. `GraphQLDataProvider.ClearClientCache` also deletes the `MJ_Diagnostics` IndexedDB database. `mj diag` reads the private key from `--private-key-file` or `MJ_DIAG_PRIVATE_KEY`. MJServer logs only the user ID for a verified token.
+- 539dfe3: Add Semantic Graph substrate (`MJ: Graph Types`, `MJ: Graph Concept Types`, `MJ: Graph Authority Tiers`, `MJ: Graphs`, `MJ: Graph Concepts`, `MJ: Graph Edge Types`, `MJ: Graph Edge Type Endpoints`, `MJ: Graph Edge Providers`, `MJ: Graph Edges`, and `ContentSource.GraphID`), Content Pipeline `GraphStage` with `EntityGraphOverlayStore` and `DeterministicConceptSynthesizer`, deterministic `TaskGraph` DAG similarity & workflow health telemetry in `@memberjunction/ai-core-plus`, and Semantic Graph & Canon Explorer UI in `@memberjunction/ng-graph-view` and `@memberjunction/ng-dashboards`.
+
+### Patch Changes
+
+- 6849b00: Conversation folders (`MJ: Projects`) get a three-tier permission model: Private (the default for new folders, owner only), Shared (granted to users or roles through `MJ: Resource Permissions` with the new `Projects` resource type) and Public (`OwnerUserID` null). A conversation in a Shared or Public folder is listed for the people the folder is shared with, at the folder's level (View for a Public folder), only when its owner opts in with `inheritFolderAccess: true` in `AdditionalData`; by default it stays visible only to its owner and the people it is shared with. Each folder is shared on its own: a subfolder does not inherit its parent's grants, the same rule the server's read filter applies.
+
+  Only a conversation's owner can move it to another folder, change its owner, or change whether it inherits its folder's access; `MJConversationEntityServer` refuses anyone else, and the list and chat header ask before moving an inheriting conversation into a Shared or Public folder. Only a folder's owner can change its owner or parent, including making it Public; the new `MJProjectEntityServer` refuses anyone else, and nobody can claim a Public folder. `MJ: Projects` updates always baseline on the stored row, so the owner check holds even if a host turns off record-change tracking for folders. Nobody, the server included, can move a folder into itself or one of its subfolders. The server saves `AdditionalData` as compact JSON and refuses a value the list's SQL filter and the parser would read differently, so they agree on whether a conversation inherits. Both checks exempt the server itself and the system user, so agent runs as the system user (for example a widget agent using an update-record action) can still move or change these. The upgrade migration backfills `OwnerUserID` on legacy folders (the folder's creator first), so they do not all become Public, and widens the UI role's read filter on `MJ: Projects` to folders shared with the user or their roles. It leaves conversations alone: inheritance is off until an owner turns it on, so none becomes visible to anyone who could not see it before.
+
+  Folder sharing decides which conversations appear in a person's list. It is not a read boundary on its own: core ships no UI-role row-level security on `MJ: Conversations` or `MJ: Conversation Details`, so a host that needs hard read isolation must supply that RLS.
+
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [0b509c0]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [f215220]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [dd34a5c]
+- Updated dependencies [e69634e]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/ng-conversations@6.2.0-edge.8
+  - @memberjunction/ng-core-entity-forms@6.2.0-edge.8
+  - @memberjunction/ng-auth-services@6.2.0-edge.8
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.8
+  - @memberjunction/ng-dashboards@6.2.0-edge.8
+  - @memberjunction/ng-explorer-core@6.2.0-edge.8
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.8
+  - @memberjunction/actions-base@6.2.0-edge.8
+  - @memberjunction/ai-core-plus@6.2.0-edge.8
+  - @memberjunction/tag-engine-base@6.2.0-edge.8
+  - @memberjunction/ng-artifacts@6.2.0-edge.8
+  - @memberjunction/ai-engine-base@6.2.0-edge.8
+  - @memberjunction/feature-pipelines@6.2.0-edge.8
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.8
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.8
+  - @memberjunction/ng-shared@6.2.0-edge.8
+  - @memberjunction/ng-clustering@6.2.0-edge.8
+  - @memberjunction/ng-dashboard-viewer@6.2.0-edge.8
+  - @memberjunction/ng-entity-action-ux@6.2.0-edge.8
+  - @memberjunction/ng-file-storage@6.2.0-edge.8
+  - @memberjunction/communication-types@6.2.0-edge.8
+  - @memberjunction/entity-communications-base@6.2.0-edge.8
+  - @memberjunction/rubrics-base@6.2.0-edge.8
+  - @memberjunction/ai-realtime-client@6.2.0-edge.8
+
 ## 6.2.0-edge.7
 
 ### Minor Changes
