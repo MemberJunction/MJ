@@ -264,10 +264,22 @@ Collapsible panel replacing Kendo panelbar/expansion panel. Inputs: `Title`, `Ex
 </mj-accordion-panel>
 ```
 
+Flat mode: `Flat` renders the panel as a plain headed block, the title as a heading over a body that is always open, with no toggle, border or body padding. A panel nested inside a flat panel, or inside the active section of an `mj-accordion-sections`, renders flat automatically, so accordions within accordions become headed blocks. A flat body is instantiated (lazy `mjAccordionBody` included) and, the first time a panel opens this way, it emits `ExpandedChange(true)` the way a click would, so a body that loads its data on first expand still loads. `SectionKey`, `SectionTitle`, `SectionIcon` and `SectionCount` describe the panel to an `mj-accordion-sections` picker; set `SectionTitle` whenever the title template carries badges or extra text, because the fallback is `Title`, then the rendered title text.
+
+### `mj-accordion-sections` — MJAccordionSectionsComponent
+The phone presentation of a stack of `mj-accordion-panel`s. Disabled, it renders nothing of its own and the panels behave as accordions. Enabled, it puts an `mj-section-picker` above them (sticky), shows one top-level panel at a time with its accordion chrome gone, and renders panels nested inside that section as flat headed blocks. Top-level means a direct child; a panel inside an `@if` counts and joins or leaves the picker as the condition changes. No breakpoint logic, the caller decides. Inputs: `Enabled`, `ActiveKey` (falls back to the first panel). Output: `ActiveKeyChange`. Give every panel a `SectionKey` so the active section survives panels appearing or disappearing (an unkeyed panel is keyed by position). Not exported from `MJAccordionModule` (it depends on the section picker); import `MJAccordionSectionsComponent` alongside it.
+
+```html
+<mj-accordion-sections [Enabled]="IsPhone" [ActiveKey]="phoneSection" (ActiveKeyChange)="phoneSection = $event">
+  <mj-accordion-panel SectionKey="input" SectionTitle="Input" SectionIcon="fa-solid fa-comment-dots" [Expanded]="true">…</mj-accordion-panel>
+  <mj-accordion-panel SectionKey="history" SectionTitle="Execution History" [SectionCount]="runs.length">…</mj-accordion-panel>
+</mj-accordion-sections>
+```
+
 ## Overlays
 
 ### `mj-dialog` — MJDialogComponent
-Modal with backdrop, Esc/backdrop close (`Closeable`), body scroll lock. Inputs: `Visible`, `Title`, `Size: 'sm'|'md'|'lg'|'xl'|'auto'` (400/600/800/1000px), `Width`/`Height`/`MinWidth`, `Role: 'dialog'|'alertdialog'`. Output: `Close`. **`Visible` is not two-way** — set it false in your `(Close)` handler. Slots: default body, `mj-dialog-titlebar`, `mj-dialog-actions`.
+Modal with backdrop, Esc/backdrop close (`Closeable`), body scroll lock. Inputs: `Visible`, `Title`, `Size: 'sm'|'md'|'lg'|'xl'|'auto'` (400/600/800/1000px), `Width`/`Height`/`MinWidth`, `Role: 'dialog'|'alertdialog'`. Output: `Close`. **`Visible` is not two-way** — set it false in your `(Close)` handler. Slots: default body, `mj-dialog-titlebar`, `mj-dialog-actions`. On phones (768px and below) the dialog picks its own presentation from `Size` and `Role` (`PhoneMode`): every `alertdialog`, and `sm` / `auto` dialogs without a `Width`, open as a bottom sheet sized to their content with full-width 44px actions; `md` / `lg` / `xl` and `Width`-set dialogs go full-screen on `100dvh` with the title and actions pinned and safe-area padding. No input changes are needed.
 
 Focus inputs, each on by default:
 
