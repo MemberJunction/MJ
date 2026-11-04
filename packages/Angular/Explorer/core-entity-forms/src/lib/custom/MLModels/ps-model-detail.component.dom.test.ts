@@ -101,4 +101,9 @@ describe('PSModelDetailComponent (DOM) — the performance tiles', () => {
   it('keeps the in-sample caption for an older model trained without a protocol', () => {
     expect(tiles(makeModel({}))[0]).toContain('in-sample');
   });
+
+  it('lists only holdout metrics in the stat bar beside the holdout tile, never the training metrics', () => {
+    const fixture = render(makeModel({ Metrics: '{"AUC":0.9,"Accuracy":0.95,"F1":0.93}', HoldoutMetrics: null }));
+    expect(query(fixture, '.stat-bar')).toBeNull();
+  });
 });

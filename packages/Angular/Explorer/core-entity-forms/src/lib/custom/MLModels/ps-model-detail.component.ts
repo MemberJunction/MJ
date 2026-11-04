@@ -170,9 +170,9 @@ export class PSModelDetailComponent {
     if (!this.Model) return [];
     const score = PrimaryModelScore(this.Model);
     const primaryKey = score?.key;
+    // holdout only: the bar sits under the "Holdout = held-out test fold" heading with unqualified labels
     const holdout = MetricsToDisplay(ParseMetrics(this.Model.HoldoutMetrics), { excludeAuc: false });
-    const all = holdout.length > 0 ? holdout : MetricsToDisplay(ParseMetrics(this.Model.Metrics), { excludeAuc: false });
-    return primaryKey ? all.filter((m) => m.key !== primaryKey) : all.filter((m) => m.key !== 'AUC');
+    return primaryKey ? holdout.filter((m) => m.key !== primaryKey) : holdout.filter((m) => m.key !== 'AUC');
   }
 
   public get GapText(): string {

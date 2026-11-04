@@ -8,14 +8,13 @@ import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJMLModelEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { PSModelDetailComponent } from '@memberjunction/ng-core-entity-forms';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
-import { PrimaryAuc, PrimaryModelScore, FormatMetricValue } from '../predictive-studio.view-models';
+import { PrimaryModelScore, FormatMetricValue } from '../predictive-studio.view-models';
 
 interface ModelRowVM {
   id: string;
   name: string;
   version: number;
   algorithm: string;
-  holdoutAuc: string;
   holdoutScore: string;
   scoreLabel: string;
   status: string;
@@ -247,15 +246,13 @@ export class PSRegistryComponent implements OnInit {
   }
 
   private toVM(m: MJMLModelEntity): ModelRowVM {
-    const holdout = PrimaryAuc(m);
     const score = PrimaryModelScore(m);
-    const formattedScore = score != null ? FormatMetricValue(score.key, score.value) : (holdout != null ? holdout.toFixed(3) : '—');
+    const formattedScore = score != null ? FormatMetricValue(score.key, score.value) : '—';
     return {
       id: m.ID,
       name: this.engine?.ModelDisplayName ? this.engine.ModelDisplayName(m) : (m.Pipeline || `Model v${m.Version}`),
       version: m.Version,
       algorithm: this.engine?.AlgorithmName ? this.engine.AlgorithmName(m.AlgorithmID) : (m.Algorithm || 'Algorithm'),
-      holdoutAuc: holdout != null ? holdout.toFixed(3) : formattedScore,
       holdoutScore: formattedScore,
       scoreLabel: score?.label ?? 'Score',
       status: m.Status,
@@ -264,6 +261,6 @@ export class PSRegistryComponent implements OnInit {
   }
 
   private placeholder(): ModelRowVM {
-    return { id: '', name: 'No model', version: 0, algorithm: '—', holdoutAuc: '—', holdoutScore: '—', scoreLabel: 'Score', status: 'Draft', iconClass: 'xgb' };
+    return { id: '', name: 'No model', version: 0, algorithm: '—', holdoutScore: '—', scoreLabel: 'Score', status: 'Draft', iconClass: 'xgb' };
   }
 }

@@ -9,7 +9,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { MJMLModelEntity, MJMLModelScoringBindingEntity, MJProcessRunDetailEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
-import { PSProcessRunRow, PrimaryAuc, PrimaryModelScore, FormatMetricValue } from '../predictive-studio.view-models';
+import { PSProcessRunRow, PrimaryModelScore, FormatMetricValue } from '../predictive-studio.view-models';
 import { humanizeCron, StatusVariant } from '../production-distribution';
 import { PSOperateDialogComponent } from './ps-operate-dialog.component';
 import { PSPredictionsGridComponent } from './ps-predictions-grid.component';
@@ -661,7 +661,8 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
     );
     const lastRowCount = bindings.find((b) => b.LastRowCount != null)?.LastRowCount ?? null;
     const score = PrimaryModelScore(m);
-    const holdoutMetric = score != null ? FormatMetricValue(score.key, score.value) : '—';
+    // named with its metric: a lower-is-better loss and a higher-is-better AUC must not read as the same kind of number
+    const holdoutMetric = score != null ? `${score.label} ${FormatMetricValue(score.key, score.value)}` : '—';
     return {
       modelId: m.ID,
       label: this.engine.ModelDisplayName(m),

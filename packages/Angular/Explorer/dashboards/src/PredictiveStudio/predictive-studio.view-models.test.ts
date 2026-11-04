@@ -31,6 +31,10 @@ describe('PrimaryModelScore over the stored proper scores', () => {
     expect(score({ mase: 0.82 }, { mase: 0.9 }, 'regression')).toEqual({ key: 'MASE', label: 'MASE', value: 0.82 });
   });
 
+  it('shows no score for a model with no holdout metrics, never its training or inner-CV score', () => {
+    expect([score({}, { auc: 0.91 }), PrimaryModelScore({ ProblemType: 'classification', Metrics: '{"auc":0.91}', HoldoutMetrics: null })]).toEqual([null, null]);
+  });
+
   it('keeps showing AUC for a shipped binary model whose holdout carries it', () => {
     expect(score({ 'log-loss': 0.36, auc: 0.71 })?.key).toBe('AUC');
   });

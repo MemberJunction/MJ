@@ -159,31 +159,31 @@ export function CanonicalMetricKey(rawKey: string): PSMetricKey | null {
   return METRIC_ALIASES[rawKey.trim().toLowerCase()] ?? null;
 }
 
-/** The primary AUC/score of a model: holdout AUC preferred, else training AUC, else null. */
-export function PrimaryAuc(model: Pick<PSModelRow, 'Metrics' | 'HoldoutMetrics'>): number | null {
-  const holdout = ParseMetrics(model.HoldoutMetrics);
-  if (holdout.AUC != null) return holdout.AUC;
-  const train = ParseMetrics(model.Metrics);
-  return train.AUC ?? null;
+/**
+ * A model's holdout AUC, or null when its holdout stores none. Every surface that calls this labels the number
+ * "holdout", so it never reads `Metrics` (the in-sample or inner-CV estimate).
+ */
+export function PrimaryAuc(model: Pick<PSModelRow, 'HoldoutMetrics'>): number | null {
+  return ParseMetrics(model.HoldoutMetrics).AUC ?? null;
 }
 
 /** A model's score as the panels show it: the metric, its label and the value. */
 type PSModelScore = { key: PSMetricKey; label: string; value: number };
 
 /**
- * The primary metric score of a model: holdout preferred, else training. Inspects ProblemType and selects R² for
+ * The primary holdout score of a model, or null when its holdout stores none. Inspects ProblemType and selects R² for
  * regression, AUC for classification; failing those, the first metric the holdout stores, which a trained model's
- * holdout lists first as the protocol's primary proper score (all a kept simple baseline or a forecast stores).
+ * holdout lists first as the protocol's primary proper score (all a kept simple baseline or a forecast stores). The
+ * Registry and Production show it as the holdout score, so it never reads `Metrics` (the in-sample or inner-CV estimate).
  */
 export function PrimaryModelScore(
-  model: Pick<PSModelRow, 'Metrics' | 'HoldoutMetrics'> & { ProblemType?: string | null },
+  model: Pick<PSModelRow, 'HoldoutMetrics'> & { ProblemType?: string | null },
 ): PSModelScore | null {
   const preferred: readonly PSMetricKey[] = (model.ProblemType ?? '').toLowerCase() === 'regression'
     ? ['R2', 'RMSE', 'MAE', 'AUC', 'Accuracy', 'F1']
     : ['AUC', 'Accuracy', 'F1', 'R2', 'RMSE'];
   const holdout = ParseMetrics(model.HoldoutMetrics);
-  const train = ParseMetrics(model.Metrics);
-  return preferredScore(holdout, preferred) || firstStoredScore(holdout) || preferredScore(train, preferred) || firstStoredScore(train);
+  return preferredScore(holdout, preferred) || firstStoredScore(holdout);
 }
 
 /** The first of `keys` the map holds. */

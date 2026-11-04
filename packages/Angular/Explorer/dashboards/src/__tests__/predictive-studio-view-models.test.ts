@@ -123,8 +123,8 @@ describe('primaryAuc', () => {
   it('prefers holdout AUC over training AUC', () => {
     expect(PrimaryAuc(model({ Metrics: '{"AUC":0.9}', HoldoutMetrics: '{"AUC":0.85}' }))).toBe(0.85);
   });
-  it('falls back to training AUC when holdout absent', () => {
-    expect(PrimaryAuc(model({ Metrics: '{"AUC":0.9}', HoldoutMetrics: null }))).toBe(0.9);
+  it('never reads the training AUC: no holdout AUC means no holdout number', () => {
+    expect([PrimaryAuc(model({ Metrics: '{"AUC":0.9}', HoldoutMetrics: null })), PrimaryAuc(model({ Metrics: '{"AUC":0.9}', HoldoutMetrics: '{"log-loss":0.42}' }))]).toEqual([null, null]);
   });
   it('returns null when neither present', () => {
     expect(PrimaryAuc(model({}))).toBeNull();
