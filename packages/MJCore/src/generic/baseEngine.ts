@@ -2092,7 +2092,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         let result: DatasetResultType;
         if (bypassCache) {
             result = await p.GetDatasetByName(config.DatasetName, config.DatasetItemFilters, contextUser, undefined, true);
-            await p.CacheDataset(config.DatasetName, config.DatasetItemFilters, result);
+            if (result?.Success) {
+                await p.CacheDataset(config.DatasetName, config.DatasetItemFilters, result);
+            }
         } else {
             result = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters);
         }
