@@ -74,6 +74,7 @@ import {
   SaveReturnContext,
   IsTypedQueryParameterList,
   IsNamedQueryParameterList,
+  NamedQueryParameter,
   TypedQueryParameter,
   DescribeStatementFailure,
   SummarizeSqlParameters,
@@ -181,8 +182,12 @@ function buildRequest(
   }
   if (IsNamedQueryParameterList(parameters)) {
     // Named inputs whose type the driver infers; the statement already references them by name.
+    const boundParameterNames = new Set<string>();
     for (const p of parameters) {
-      request.input(p.Name, p.Value);
+      if (!boundParameterNames.has(p.Name)) {
+        boundParameterNames.add(p.Name);
+        request.input(p.Name, p.Value);
+      }
     }
     return { request, processedQuery: query };
   }
@@ -1108,13 +1113,17 @@ export class SQLServerDataProvider
    * Uses multiple result sets to return status for each view efficiently.
    */
   protected async getBatchedServerCacheStatus(
-    items: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string }>,
+    items: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; whereSQL: string; queryParameters?: NamedQueryParameter[] }>,
     contextUser?: UserInfo
   ): Promise<Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>> {
     const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
 
     if (items.length === 0) {
       return results;
+    }
+
+    if (items.some((entry) => entry.queryParameters && entry.queryParameters.length > 0)) {
+      return await super.getBatchedServerCacheStatus(items, contextUser);
     }
 
     // Build array of SQL statements for batch execution (recording per-item resolution errors
@@ -1190,6 +1199,7 @@ export class SQLServerDataProvider
     orderBySQL: string,
     user: UserInfo,
     schemaNameOverride?: string,
+    queryParameters?: NamedQueryParameter[],
   ): Promise<{ executeViewSQL: string; runID: string }> {
     // entityInfo + effectiveBaseView are passed in (no reverse-lookup by base-view name) so the logged
     // read honors DataSource:'Materialized' and AlternateBaseView — effectiveBaseView is the materialized
@@ -1206,7 +1216,8 @@ export class SQLServerDataProvider
             INSERT INTO @ViewIDList (ID) (SELECT ${pkName} FROM [${targetSchema}].${effectiveBaseView} WHERE (${whereSQL}))
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `;
-    const runIDResult = await this.ExecuteSQL(sSQL, undefined, undefined, user);
+    const boundParams = queryParameters && queryParameters.length > 0 ? queryParameters : undefined;
+    const runIDResult = await this.ExecuteSQL(sSQL, boundParams, undefined, user);
     const runID: string = runIDResult[0].UserViewRunID;
     const sRetSQL: string = `SELECT * FROM [${targetSchema}].${effectiveBaseView} WHERE ${pkName} IN
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
@@ -2894,7 +2905,9 @@ export class SQLServerDataProvider
     try {
       // Build combined batch SQL and parameters
       let batchSQL = '';
-      const batchParameters: Record<string, any> = {};
+      const batchParameters: Record<string, unknown> = {};
+      const typedBatchParameters: TypedQueryParameter[] = [];
+      const boundParameterNames = new Set<string>();
       let globalParamIndex = 0;
 
       queries.forEach((query, queryIndex) => {
@@ -2903,7 +2916,22 @@ export class SQLServerDataProvider
         // Add parameters for this query if provided
         if (parameters && parameters[queryIndex]) {
           const queryParams = parameters[queryIndex];
-          if (Array.isArray(queryParams)) {
+          if (IsTypedQueryParameterList(queryParams)) {
+            for (const p of queryParams) {
+              if (!boundParameterNames.has(p.Name)) {
+                boundParameterNames.add(p.Name);
+                typedBatchParameters.push(p);
+                batchParameters[p.Name] = p.Value;
+              }
+            }
+          } else if (IsNamedQueryParameterList(queryParams)) {
+            for (const p of queryParams) {
+              if (!boundParameterNames.has(p.Name)) {
+                boundParameterNames.add(p.Name);
+                batchParameters[p.Name] = p.Value;
+              }
+            }
+          } else if (Array.isArray(queryParams)) {
             // Handle positional parameters
             queryParams.forEach((value, localIndex) => {
               const paramName = `p${globalParamIndex}`;
@@ -2970,11 +2998,14 @@ export class SQLServerDataProvider
         }
       };
       
-      // Use named parameters for batch SQL
-      const namedParams: Record<string, any> = batchParameters;
+      // Use named or typed parameters for batch SQL
+      const effectiveBatchParams =
+        typedBatchParameters.length > 0 && typedBatchParameters.length === boundParameterNames.size && globalParamIndex === 0
+          ? typedBatchParameters
+          : batchParameters;
       
       // Execute using the centralized core function
-      const result = await executeSQLCore(batchSQL, namedParams, context, {
+      const result = await executeSQLCore(batchSQL, effectiveBatchParams, context, {
         description: 'Batch execution',
         ignoreLogging: false,
         isMutation: false,
@@ -3024,7 +3055,9 @@ export class SQLServerDataProvider
       }
       // Build combined batch SQL and parameters (same as static method)
       let batchSQL = '';
-      const batchParameters: Record<string, any> = {};
+      const batchParameters: Record<string, unknown> = {};
+      const typedBatchParameters: TypedQueryParameter[] = [];
+      const boundParameterNames = new Set<string>();
       let globalParamIndex = 0;
 
       queries.forEach((query, queryIndex) => {
@@ -3033,7 +3066,22 @@ export class SQLServerDataProvider
         // Add parameters for this query if provided
         if (parameters && parameters[queryIndex]) {
           const queryParams = parameters[queryIndex];
-          if (Array.isArray(queryParams)) {
+          if (IsTypedQueryParameterList(queryParams)) {
+            for (const p of queryParams) {
+              if (!boundParameterNames.has(p.Name)) {
+                boundParameterNames.add(p.Name);
+                typedBatchParameters.push(p);
+                batchParameters[p.Name] = p.Value;
+              }
+            }
+          } else if (IsNamedQueryParameterList(queryParams)) {
+            for (const p of queryParams) {
+              if (!boundParameterNames.has(p.Name)) {
+                boundParameterNames.add(p.Name);
+                batchParameters[p.Name] = p.Value;
+              }
+            }
+          } else if (Array.isArray(queryParams)) {
             // Handle positional parameters
             queryParams.forEach((value, localIndex) => {
               const paramName = `p${globalParamIndex}`;
@@ -3083,7 +3131,11 @@ export class SQLServerDataProvider
       };
 
       // Execute using instance method (which handles queue for transactions)
-      const result = await this._internalExecuteSQLInstance(batchSQL, batchParameters, context, {
+      const effectiveBatchParams =
+        typedBatchParameters.length > 0 && typedBatchParameters.length === boundParameterNames.size && globalParamIndex === 0
+          ? typedBatchParameters
+          : batchParameters;
+      const result = await this._internalExecuteSQLInstance(batchSQL, effectiveBatchParams, context, {
         description: options?.description || 'Batch execution',
         ignoreLogging: options?.ignoreLogging || false,
         isMutation: options?.isMutation || false,

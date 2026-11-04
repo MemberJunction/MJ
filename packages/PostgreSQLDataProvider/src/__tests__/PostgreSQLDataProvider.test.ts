@@ -582,6 +582,12 @@ describe('PostgreSQLDataProvider', () => {
             const fields = new Set(['Amount(USD)']);
             expect(quoter.quoteFieldNamesInToken('Amount(USD)', fields)).toBe('Amount(USD)');
         });
+
+        it('does not quote @paramName or $1 tokens even when their name matches an entity field', () => {
+            const fields = new Set(['Status', 'UserID']);
+            expect(quoter.quoteFieldNamesInToken('Status=@Status', fields)).toBe('"Status"=@Status');
+            expect(quoter.quoteFieldNamesInToken('UserID=$1', fields)).toBe('"UserID"=$1');
+        });
     });
 
     /**

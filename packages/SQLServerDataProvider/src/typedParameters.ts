@@ -81,7 +81,10 @@ export function MssqlTypeFor(sqlType: string): sql.ISqlType | null {
 
 /** Adds each parameter to `request` as a named input declared with its type. */
 export function BindTypedParameters(request: sql.Request, parameters: readonly TypedQueryParameter[]): void {
+    const boundParameterNames = new Set<string>();
     for (const p of parameters) {
+        if (boundParameterNames.has(p.Name)) continue;
+        boundParameterNames.add(p.Name);
         const type = MssqlTypeFor(p.SQLType);
         if (!type) {
             throw new Error(`Parameter '${p.Name}' has the SQL type '${p.SQLType}', which the SQL Server binding does not know.`);

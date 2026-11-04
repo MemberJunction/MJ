@@ -795,6 +795,7 @@ export class FieldSecuritySQLGate {
         for (let i = 0; i < analysis.Tokens.length; i++) {
             const token = analysis.Tokens[i];
             if (!FieldSecuritySQLGate.isName(token) || analysis.RelationDeclarations.has(i) || analysis.AliasDeclarations.has(i)) continue;
+            if (!FieldSecuritySQLGate.isSymbol(analysis.Tokens[i - 1], '.') && FieldSecuritySQLGate.isParameterToken(analysis.Tokens, i)) continue;
             const candidates = FieldSecuritySQLGate.candidatesFor(analysis, i);
             const hit = candidates.find((d) => ReferenceMayNameField(token.Text, d.Name));
             if (hit) {
@@ -909,7 +910,7 @@ export class FieldSecuritySQLGate {
      */
     private static relationValueConstruct(analysis: SQLReadAnalysis, i: number): string | null {
         const token = analysis.Tokens[i];
-        if (!FieldSecuritySQLGate.isName(token) || !analysis.RestrictedQualifiers.has(FoldIdentifier(token.Text))) {
+        if (!FieldSecuritySQLGate.isName(token) || FieldSecuritySQLGate.isParameterToken(analysis.Tokens, i) || !analysis.RestrictedQualifiers.has(FoldIdentifier(token.Text))) {
             return null;
         }
         const next = analysis.Tokens[i + 1];
@@ -920,6 +921,23 @@ export class FieldSecuritySQLGate {
             return null;
         }
         return `whole-row reference '${token.Text}'`;
+    }
+
+    /**
+     * True when the word token at `i` is a `@paramName` placeholder rather than a column or
+     * relation reference. On SQL Server `ScanSQLForScreening` lexes `@paramName` as a single word
+     * starting with `@`; on PostgreSQL it lexes `@` as an adjacent `'@'` symbol token immediately
+     * before the word token (with no preceding `'@'` that would make `@@`).
+     */
+    private static isParameterToken(tokens: SQLScreeningToken[], i: number): boolean {
+        const token = tokens[i];
+        if (!token || token.Kind !== 'word') return false;
+        if (token.Text.startsWith('@')) return true;
+        const prev = tokens[i - 1];
+        const prev2 = tokens[i - 2];
+        return FieldSecuritySQLGate.isSymbol(prev, '@')
+            && prev.End === token.Start
+            && !(FieldSecuritySQLGate.isSymbol(prev2, '@') && prev2.End === prev.Start);
     }
 
     /** Whether a token can end the left operand of a multiplication. */

@@ -100,4 +100,23 @@ describe('SQLServerDataProvider.ExecuteSQL parameter binding', () => {
     expect(mssqlState.Queries[0].sql).toBe(plan!.sql);
     expect(mssqlState.Queries[0].inputs.map((i) => [i.name, i.value])).toEqual([['mj_p0', 'Open']]);
   });
+
+  it('ExecuteSQLBatch with NamedQueryParameter[][]: deduplicates shared @p0 across batched statements without rewriting `?`', async () => {
+    const sharedParams = [new NamedQueryParameter('p0', 'Active'), new NamedQueryParameter('p1', 1)];
+    await makeProvider().ExecuteSQLBatch(
+      [
+        "SELECT 'Why?' AS Q, * FROM [__mj].[vwUsers] WHERE Status = @p0 AND IsActive = @p1",
+        "SELECT COUNT(*) AS TotalRowCount FROM [__mj].[vwUsers] WHERE Status = @p0 AND IsActive = @p1",
+        "SELECT COUNT(ID) AS Agg0 FROM [__mj].[vwUsers] WHERE Status = @p0 AND IsActive = @p1",
+      ],
+      [sharedParams, sharedParams, sharedParams],
+    );
+
+    expect(mssqlState.Queries).toHaveLength(1);
+    expect(mssqlState.Queries[0].sql).toContain("SELECT 'Why?' AS Q");
+    expect(mssqlState.Queries[0].inputs).toEqual([
+      { name: 'p0', value: 'Active' },
+      { name: 'p1', value: 1 },
+    ]);
+  });
 });

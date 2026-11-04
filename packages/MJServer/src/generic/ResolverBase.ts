@@ -23,6 +23,9 @@ import {
   RecordChangeFieldSecurityProjector,
   RecordChangePayloadFields,
   RunView,
+  RunViewParameterScalar,
+  RunViewParameters,
+  RunViewParameterValue,
   RunViewParams,
   RunViewResult,
   UserInfo,
@@ -695,7 +698,8 @@ export class ResolverBase {
           viewInput.IncludeBinaryFields,
           viewInput.AlternateBaseView,
           viewInput.Properties,
-          viewInput.SkipTotalRowCount
+          viewInput.SkipTotalRowCount,
+          viewInput.Parameters
         );
       }
       else {
@@ -745,7 +749,8 @@ export class ResolverBase {
         viewInput.IncludeBinaryFields,
         viewInput.AlternateBaseView,
         viewInput.Properties,
-        viewInput.SkipTotalRowCount
+        viewInput.SkipTotalRowCount,
+        viewInput.Parameters
       );
     } catch (err) {
       console.log(err);
@@ -796,7 +801,8 @@ export class ResolverBase {
         viewInput.IncludeBinaryFields,
         viewInput.AlternateBaseView,
         undefined,
-        viewInput.SkipTotalRowCount
+        viewInput.SkipTotalRowCount,
+        viewInput.Parameters
       );
     } catch (err) {
       console.log(err);
@@ -874,6 +880,7 @@ export class ResolverBase {
           skipTotalRowCount: viewInput.SkipTotalRowCount,
           alternateBaseView: viewInput.AlternateBaseView,
           properties: viewInput.Properties,
+          parameters: viewInput.Parameters,
         });
       } catch (err) {
         LogError(err);
@@ -1254,6 +1261,76 @@ export class ResolverBase {
   }
 
   /**
+   * Validates and normalizes a client-supplied {@link RunViewParameters} map at the GraphQL boundary.
+   * Rejects non-plain objects, prototype-pollution keys (`__proto__`, `constructor`, `prototype`),
+   * invalid parameter names, empty arrays, non-finite numbers, invalid Dates, and nested objects.
+   */
+  protected sanitizeRunViewParameters(raw: RunViewParameters | undefined): RunViewParameters | undefined {
+    if (raw === undefined || raw === null) {
+      return undefined;
+    }
+    if (typeof raw !== 'object' || Array.isArray(raw)) {
+      throw new Error('RunView Parameters must be a plain object mapping parameter names to scalar or scalar-array values.');
+    }
+    const proto = Object.getPrototypeOf(raw);
+    if (proto !== null && proto !== Object.prototype) {
+      throw new Error('RunView Parameters must be a plain object.');
+    }
+
+    const validateScalar = (paramName: string, value: RunViewParameterScalar): RunViewParameterScalar => {
+      if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+        return value;
+      }
+      if (typeof value === 'number') {
+        if (!Number.isFinite(value)) {
+          throw new Error(`RunView parameter '@${paramName}' must be a finite number.`);
+        }
+        return value;
+      }
+      if (value instanceof Date) {
+        if (Number.isNaN(value.getTime())) {
+          throw new Error(`RunView parameter '@${paramName}' is an invalid Date.`);
+        }
+        return value;
+      }
+      throw new Error(`Unsupported value for RunView parameter '@${paramName}'.`);
+    };
+
+    const sanitized: Record<string, RunViewParameterValue> = {};
+    for (const rawKey of Object.getOwnPropertyNames(raw)) {
+      if (rawKey === '__proto__' || rawKey === 'constructor' || rawKey === 'prototype') {
+        throw new Error(`Invalid RunView parameter name '${rawKey}'.`);
+      }
+      const normalizedKey = rawKey.startsWith('@') ? rawKey.slice(1) : rawKey;
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(normalizedKey)) {
+        throw new Error(
+          `Invalid RunView parameter name '${rawKey}'. Parameter names must match /^[A-Za-z_][A-Za-z0-9_]*$/.`
+        );
+      }
+      if (normalizedKey === '__proto__' || normalizedKey === 'constructor' || normalizedKey === 'prototype') {
+        throw new Error(`Invalid RunView parameter name '${rawKey}'.`);
+      }
+      if (Object.prototype.hasOwnProperty.call(sanitized, normalizedKey)) {
+        throw new Error(`Duplicate RunView parameter name '@${normalizedKey}'.`);
+      }
+      const rawVal = raw[rawKey];
+      if (rawVal === undefined) {
+        continue;
+      }
+      if (Array.isArray(rawVal)) {
+        if (rawVal.length === 0) {
+          throw new Error(`RunView parameter '@${normalizedKey}' cannot be an empty array.`);
+        }
+        sanitized[normalizedKey] = rawVal.map((item: RunViewParameterScalar) => validateScalar(normalizedKey, item));
+      } else {
+        sanitized[normalizedKey] = validateScalar(normalizedKey, rawVal as RunViewParameterScalar);
+      }
+    }
+
+    return Object.keys(sanitized).length > 0 ? sanitized : undefined;
+  }
+
+  /**
    * Optimized RunViewGenericInternal implementation with:
    * - Field filtering at source (Fix #7)
    * - Improved error handling (Fix #9)
@@ -1283,10 +1360,13 @@ export class ResolverBase {
     includeBinaryFields?: boolean,
     alternateBaseView?: string,
     properties?: ViewPropertyValues,
-    skipTotalRowCount?: boolean
+    skipTotalRowCount?: boolean,
+    parameters?: RunViewParameters
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
+
+      const sanitizedParameters = this.sanitizeRunViewParameters(parameters);
 
       // Prefer the authenticated session's payload user — it is the authoritative per-request
       // identity and (for magic-link sessions) carries the per-session resource scope / synthesized
@@ -1369,6 +1449,7 @@ export class ResolverBase {
           SkipTotalRowCount: skipTotalRowCount,
           AlternateBaseView: alternateBaseView,
           Properties: properties,
+          Parameters: sanitizedParameters,
           TimeZone: userPayload?.TimeZone,
           PreserveRestrictedApiCiphertext: true,
         },
@@ -1507,6 +1588,8 @@ export class ResolverBase {
           rt = 'count_only';
         }
 
+        const sanitizedParameters = this.sanitizeRunViewParameters(param.parameters);
+
         // Build parameters
         runViewParams.push({
           ViewID: param.viewInfo.ID,
@@ -1535,6 +1618,7 @@ export class ResolverBase {
           SkipTotalRowCount: param.skipTotalRowCount,
           AlternateBaseView: param.alternateBaseView,
           Properties: param.properties,
+          Parameters: sanitizedParameters,
           TimeZone: param.userPayload?.TimeZone,
           PreserveRestrictedApiCiphertext: true,
         });

@@ -116,6 +116,66 @@ export interface RunViewTelemetryOptions {
 }
 
 /**
+ * Allowed scalar value types for a bound parameter in {@link RunViewParams.Parameters}.
+ */
+export type RunViewParameterScalar = string | number | boolean | Date | null;
+
+/**
+ * Allowed value for a bound parameter in {@link RunViewParams.Parameters}:
+ * a scalar value, or a non-empty array of scalars (expanded to comma-separated bound placeholders for `IN (@list)`).
+ */
+export type RunViewParameterValue = RunViewParameterScalar | readonly RunViewParameterScalar[];
+
+/**
+ * Map of named parameter values (`@paramName` in {@link RunViewParams.ExtraFilter}, keyed without the leading `@`).
+ */
+export type RunViewParameters = Record<string, RunViewParameterValue>;
+
+type CanonicalParameterScalar = string | number | boolean | null | { readonly $date: string };
+type CanonicalParameterValue = CanonicalParameterScalar | readonly CanonicalParameterScalar[];
+
+function normalizeParameterScalar(value: RunViewParameterScalar): CanonicalParameterScalar {
+    if (value instanceof Date) {
+        return { $date: value.toISOString() };
+    }
+    return value;
+}
+
+function normalizeParameterValue(value: RunViewParameterValue): CanonicalParameterValue {
+    if (Array.isArray(value)) {
+        return value.map((item: RunViewParameterScalar) => normalizeParameterScalar(item));
+    }
+    return normalizeParameterScalar(value as RunViewParameterScalar);
+}
+
+/**
+ * Produces a deterministic, pipe-safe canonical string for {@link RunViewParams.Parameters}
+ * suitable for cache fingerprinting and {@link RunViewParams.Equals}.
+ * Returns `''` when `parameters` is undefined, null, or contains no defined keys.
+ */
+export function RunViewParametersKey(parameters?: RunViewParameters | null): string {
+    if (!parameters || typeof parameters !== 'object' || Array.isArray(parameters)) {
+        return '';
+    }
+    const keys = Object.keys(parameters)
+        .filter((k) => parameters[k] !== undefined)
+        .sort((a, b) => {
+            const na = a.startsWith('@') ? a.slice(1) : a;
+            const nb = b.startsWith('@') ? b.slice(1) : b;
+            return na.localeCompare(nb);
+        });
+    if (keys.length === 0) {
+        return '';
+    }
+    const entries: [string, CanonicalParameterValue][] = keys.map((k) => {
+        const normalizedKey = k.startsWith('@') ? k.slice(1) : k;
+        return [normalizedKey, normalizeParameterValue(parameters[k])];
+    });
+    // Escape '|' as \u007c so parameter string values containing '|' never split pipe-delimited cache fingerprints.
+    return JSON.stringify(entries).replace(/\|/g, '\\u007c');
+}
+
+/**
  * `RunViewParams` fields only server code may set. A transport that builds run params from a
  * client's request body (the REST endpoint) removes these before running the view, so a client
  * cannot choose them. GraphQL run inputs never carry them in the first place.
@@ -203,6 +263,16 @@ export class RunViewParams {
      * before the query is executed.
      */
     ExtraFilter?: string | PlatformSQL;
+    /**
+     * Optional map of named bind parameters referenced as `@paramName` in {@link ExtraFilter}.
+     * Keys omit the leading `@` (an optional `@` prefix is normalized).
+     *
+     * Each parameter value may be a scalar (`string | number | boolean | Date | null`) or a non-empty
+     * array of scalars (expanded to comma-separated bound placeholders for `IN (@list)` predicates).
+     * Bound via dialect-native placeholders (`@p0` on SQL Server, `$1` on PostgreSQL) and included in
+     * result-cache fingerprints and {@link RunViewParams.Equals}.
+     */
+    Parameters?: RunViewParameters;
     /**
      * An optional SQL ORDER BY clause that you can use for dynamic views, as well as to OVERRIDE the stored view's sorting order.
      *
@@ -652,6 +722,7 @@ export class RunViewParams {
         if ((a.IncludeBinaryFields === true) !== (b.IncludeBinaryFields === true)) return false;
         if (a.TimeZone !== b.TimeZone) return false;
         if (ViewPropertyValuesKey(a.Properties, a.ServerProperties) !== ViewPropertyValuesKey(b.Properties, b.ServerProperties)) return false;
+        if (RunViewParametersKey(a.Parameters) !== RunViewParametersKey(b.Parameters)) return false;
         // A Live↔Materialized DataSource toggle changes the result set and MUST trigger a reload. Compared via
         // IsMaterializedDataSource so undefined/'Live' are treated as equal (no spurious reload) while a switch to
         // (or from) 'Materialized' is not — matching the read-routing decision everywhere else.
