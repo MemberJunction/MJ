@@ -59,4 +59,8 @@ describe('LiveKitSipExtension', () => {
     it('is a pre-auth extension (LiveKit cannot present an MJ token; the webhook signature is the gate)', () => {
         expect(new LiveKitSipExtension().DefaultPhase).toBe('pre-auth');
     });
+
+    it('declares a 1-arg Initialize(context) signature so ServerExtensionLoader passes ServerExtensionInitContext', () => {
+        expect(LiveKitSipExtension.prototype.Initialize.length).toBe(1);
+    });
 });

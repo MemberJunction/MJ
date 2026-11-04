@@ -554,6 +554,62 @@ export function BuildColumnsFromData(data: Record<string, unknown>[]): QueryGrid
     });
 }
 
+/**
+ * The names of the columns a result actually carries, in the order the server returned them: the
+ * keys of the first row, then any key a later row adds.
+ */
+export function ResultColumnNames(data: Record<string, unknown>[]): string[] {
+    const names: string[] = [];
+    const seen = new Set<string>();
+    for (const row of data ?? []) {
+        if (!row) continue;
+        for (const key of Object.keys(row)) {
+            if (!seen.has(key)) {
+                seen.add(key);
+                names.push(key);
+            }
+        }
+    }
+    return names;
+}
+
+/**
+ * Builds the grid's columns from the columns a result actually carries. A column the query's
+ * field metadata describes (matched by name, ignoring case) takes that metadata's type, format and
+ * entity link; any other column is inferred from its values. Field metadata for a column the
+ * result does not carry is ignored, so a column the server left out of the result (for example
+ * one the user may not read) never appears and leaves no trace in the grid.
+ *
+ * @param data The result rows.
+ * @param fields The query's field metadata; may be empty.
+ * @param provider The metadata provider used to resolve entity links.
+ */
+export function BuildColumnsForResult(
+    data: Record<string, unknown>[],
+    fields: MJQueryFieldEntity[],
+    provider?: IMetadataProvider,
+): QueryGridColumnConfig[] {
+    const names = ResultColumnNames(data);
+    if (names.length === 0) return [];
+    const described = new Map(BuildColumnsFromQueryFields([...(fields ?? [])], provider).map(c => [c.field.toLowerCase(), c]));
+    // One inferred column per name, in the same order: the values row's keys are `names`.
+    const inferred = BuildColumnsFromData([valuesRow(data, names)]);
+    return inferred.map((column, index) => {
+        const fromField = described.get(column.field.toLowerCase());
+        return fromField ? { ...fromField, field: column.field, title: column.field, order: index } : { ...column, order: index };
+    });
+}
+
+/** One row holding, for each column, the first non-null value any row has, so inference sees a value where one exists. */
+function valuesRow(data: Record<string, unknown>[], names: string[]): Record<string, unknown> {
+    const row: Record<string, unknown> = {};
+    for (const name of names) {
+        const found = data.find(r => r && r[name] !== null && r[name] !== undefined);
+        row[name] = found ? found[name] : null;
+    }
+    return row;
+}
+
 /** @deprecated Use {@link BuildColumnsFromData}. */
 export function buildColumnsFromData(data: Record<string, unknown>[]): QueryGridColumnConfig[] {
     return BuildColumnsFromData(data);

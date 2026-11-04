@@ -343,18 +343,35 @@ export abstract class TransactionGroupBase {
 
             if (this._pendingTransactions.length > 0) {
                 await this.preEvaluateCrossEntityPolicies();
+                await this.BeginGroupTransaction();
 
                 // subclass handles the actual submit implementation whatever that does
-                let results: TransactionResult[] = await this.HandleSubmit();
+                const results: TransactionResult[] = await this.HandleSubmit();
 
-                // now, see if there are any false values for results[x].Success, if so, we have to return false
+                // now, see if there are any false values for results[x].Success, if so, roll back and return false
                 const overallSuccess = results.every(r => r.Success);
 
-                // now we have the results back, so we can call the callback functions and notify the group's entities
-                await this.completeSubmittedResults(results, overallSuccess);
-
-                this._status = overallSuccess ? 'Complete' : 'Failed';
-                return overallSuccess;
+                if (overallSuccess) {
+                    // Call callbacks and notify the group's entities while the group transaction is still open
+                    // (so OnSaveCompleted runs in-transaction and RunAfterCommit defers post-commit side effects
+                    // until CommitGroupTransaction settles the transaction).
+                    await this.completeSubmittedResults(results, true);
+                    await this.CommitGroupTransaction();
+                    this._status = 'Complete';
+                    return true;
+                } else {
+                    try {
+                        await this.completeSubmittedResults(results, false);
+                    } finally {
+                        try {
+                            await this.RollbackGroupTransaction();
+                        } catch (rollbackErr) {
+                            LogError(rollbackErr);
+                        }
+                        this._status = 'Failed';
+                    }
+                    return false;
+                }
             }
             else {
                 // there are no transactions to submit, so we just return true and go back to pending since there were no transactions
@@ -364,6 +381,7 @@ export abstract class TransactionGroupBase {
             }
         }
         catch (err) {
+            await this.RollbackGroupTransaction();
             console.error(err);
             // it failed, so we have to call the callback functions with the error
             for (let i = 0; i < this._pendingTransactions.length; i++) {
@@ -377,6 +395,34 @@ export abstract class TransactionGroupBase {
         finally {
             CrossEntityPolicyEngine.Instance.ClearTransactionGroupScope(this);
         }
+    }
+
+    /**
+     * Optional hook for database-backed subclasses to open a provider-scoped transaction (or
+     * nested savepoint) before {@link HandleSubmit} executes statements.
+     *
+     * NOTE: Keep overrides non-`async` in their synchronous prefix when delegating to
+     * `provider.BeginTransaction()` so `TransactionAffinity.Claim()` binds the caller's async
+     * execution context before the first `await`.
+     */
+    protected BeginGroupTransaction(): Promise<void> {
+        return Promise.resolve();
+    }
+
+    /**
+     * Optional hook for database-backed subclasses to commit the transaction opened in
+     * {@link BeginGroupTransaction} after {@link completeSubmittedResults} finishes.
+     */
+    protected async CommitGroupTransaction(): Promise<void> {
+        // Default no-op for non-DB subclasses (e.g., GraphQLTransactionGroup)
+    }
+
+    /**
+     * Optional hook for database-backed subclasses to roll back an open group transaction on
+     * statement or callback failure. Implementations MUST be idempotent.
+     */
+    protected async RollbackGroupTransaction(): Promise<void> {
+        // Default no-op for non-DB subclasses (e.g., GraphQLTransactionGroup)
     }
 
     /**
@@ -412,7 +458,8 @@ export abstract class TransactionGroupBase {
         let completed = false;
         try {
             for (const result of results) {
-                await result.Transaction.CallBack(result.Result, result.Success);
+                const effectiveSuccess = groupSucceeded && result.Success;
+                await result.Transaction.CallBack(result.Result, effectiveSuccess);
             }
             this.notifyTransactionStatus(groupSucceeded, results);
             completed = true;

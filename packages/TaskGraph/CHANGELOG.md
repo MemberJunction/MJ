@@ -1,5 +1,79 @@
 # @memberjunction/task-graph
 
+## 6.2.0-edge.7
+
+### Minor Changes
+
+- aca4317: Add multi-step action loop bodies (`steps?: LoopBodyActionStep[]`) to `ForEach` and `While` operations across `@memberjunction/ai-core-plus`, `@memberjunction/task-graph`, `@memberjunction/ai-agents`, and `@memberjunction/server`, together with sanitized native tool-name resolution, structured JSON action-message projection in `Pipeline`, and an updated Loop Agent system prompt covering the full execution primitive hierarchy and single-channel native tool-calling JSON envelope bridge.
+  - **`@memberjunction/ai-core-plus`**: Extend `ForEachOperation` and `WhileOperation` with `steps?: LoopBodyActionStep[]` (`id`, `name`, `params`, optional `condition` over `steps.<id>.*` and loop bindings, optional `outputMapping`), add `ResolveLoopBodyParams` and shared `BuildActionOutputObject` / `LoopStepFold` in `payload-mapping.ts` (blocking prototype-chain lookups across all path resolvers), export `ValidateLoopOperationStructure` in `task-graph-validator.ts` (enforcing `steps.<prevId>` ordering across `step.condition` and `step.params`), and preserve multi-step loop bodies losslessly across `ConvertTaskGraphToAgentSpec` ↔ `CompileFlowToTaskGraph`.
+  - **`@memberjunction/task-graph`**: Pre-resolve per-step `ActionID`s into `TaskStepConfiguration.stepActionIds` in `TaskGraphService` via shared `ResolveRecordsByNameOrToolName` (using `EscapeSQLString` and `SanitizeToolName` fallback with surfaced `RunView` error handling), unify durable single-arm and `steps[]` loop parameter resolution on `ResolveLoopBodyParams` (supporting both `<itemVar>.*` / `{{...}}` and legacy `payload.<itemVar>.*` / `static:*` mappings while preserving unresolved paths and downstream `{{template}}` tokens as literals; note that exact bare binding variable names like `"index"` resolve to the loop binding unless escaped with `"static:index"`), and execute multi-step `ForEach` and `While` loop bodies in `TaskGraphDispatcher` with deterministic ascending-index parallel output folding.
+  - **`@memberjunction/ai-agents`, `@memberjunction/server`, & `metadata/prompts`**: Support `steps[]` and single-arm `action.outputMapping` in in-turn `BaseAgent.executeForEachLoop` and `BaseAgent.executeWhileLoop` as well as `FlowAgentType` in-run execution, resolve sanitized native tool names (`calculate_expression` → `"Calculate Expression"`, `delegate_to_<slug>` → sub-agent name) without mutating caller inputs in validators, include `'Both'` parameters and unambiguous JSON container `ActionResult.Message` payloads in `StructureActionResult` and `TaskGraphActionRunner` via `BuildActionOutputObject`, and update `loop-agent-type-system-prompt.template.md` with comprehensive guidance on `Pipeline`, multi-step `ForEach`/`While`, all 7 runnable `TaskGraphSpec` node kinds, `inputMapping`/`outputMapping`, XOR `exclusiveGroup` forks, `failureSemantics`, `Execute Code` transform nodes, `continuation: 'reinvoke'` sleep/wake, and native tool-calling JSON bridging.
+
+- b0b2cc9: Add Video Studio (`@memberjunction/video-studio-core`, `@memberjunction/video-studio`, `@memberjunction/video-studio-render-worker`), including the Video Studio orchestrator agent and its Pre-Production, Render, Critic, and Repair stages, deterministic G1–G6 quality gates and rubric scoring, optional spoken voiceover narration (`VideoNarrationSpec.Enabled`) with automatic `<audio>` track injection in `BuildRenderBundle`, the isolated HyperFrames render worker and `LocalWorker`, `Remote`, and `Docker` render drivers, the Video Studio application (`Productions`, `Brand Kits`, `Archetypes`) with a built-in `ng-conversations` right-side slide-in copilot pinned to the Video Studio agent, the `Video Production` artifact type and viewer plugin, the `Produce Video` action, and the `VideoStudio.SetupHealth` remote operation and setup health card. Add general `MJ: Brand Kits` (`@memberjunction/ng-brand-kits`) for shared palette, typography, logo, voice, and generation policy management. The Video Studio pages share one right-side slide-in (chat from the first open, the brief above the composer, Iterate on the same conversation), pages can hide the floating chat bubble with `SuppressChatOverlay` in their agent context, and `@memberjunction/ng-brand-kits` adds a brand kit creator with a live preview. Add video generation (`BaseVideoGenerator`, `AIVideoRunner`, the Black Forest Labs FLUX 3 video driver, the `Generate Video` action, and `Per Second` pricing unit support), pre-call generation spend-cap enforcement, and FLUX.2 Pro endpoint, polling, and reported-cost recording fixes. Generated assets are always disclosed in the viewer, inline preview, review notes, and manifest provenance, never stand in for data or `NeverInvent` items, and any integrity criterion failure or synthetic person violation blocks delivery even when repair rounds are exhausted.
+
+  Add the `Consult` sub-agent chat-handling channel (`AIAgent.ChatHandlingOption`, `AIAgent.MaxSubAgentConsultRounds`, `AIAgentRelationship.ChatHandlingOption`), caller-chosen sub-agent configuration presets (`AIAgentRelationship.ConfigurationPresetID`), sub-agent consultation and `resumeRunId` resumption across child, related, parallel, and native sub-agent paths, and root escalation to `MJ: AI Agent Requests` when consult rounds are exhausted. Add peer-to-peer Sage transfers (`Handoff` step type, inline `mj-agent-handoff-card`, conversation ownership chrome, and `FollowHandoffs` messaging-adapter support). `SaveAgentRunMedia` now persists `FileID` on `MJ: AI Agent Run Medias` rows, the artifact viewer registers dedicated Video and Audio plugins, and `AgentScheduledJobDriver` forwards `ConfigurationID` when starting scheduled agent runs.
+
+  Task graphs opted in through agent metadata (`enableTaskGraphs`) now run through `LoopAgentType` with merged prompt parameters and parent hierarchy cycle guards. Explicit `@Sage` mentions or clicking Return to Sage ends specialist agent continuity in every conversation. Follow-up messages to a continued specialist agent resolve that agent's own configuration preset rather than forwarding the conversation manager's preset. Typing a reply in the conversation thread resumes an open sub-agent consult escalated to the user, matching the requests dashboard flow. `ChatHandlingOption = 'Retry'` re-prompts the loop and returns a sub-agent's question to the parent as a result rather than ending the run, capped by the unproductive-retry limit. Claude Opus 5.5, Claude Fable 5.1, Claude Sonnet 5.5, and Gemini 3.8 Flash now declare Image and File (and Gemini also Audio and Video) input modalities; Computer Use auto-select now picks Claude Opus 5.5 or Claude Fable 5.1 instead of the text-only fallback, which can change that feature's cost, and chat file attachments turn on for agents using these models. Also harden regex parsing in `@memberjunction/ai-form-builder` and `@memberjunction/database-designer-core` against polynomial backtracking (ReDoS).
+
+  The Video Studio render worker requires Node >= 22 and system `ffmpeg` on `PATH`; the `Docker` render driver is recommended for production deployments.
+
+### Patch Changes
+
+- f65fec7: Enable durable `WorkQueue` Database transport by default in `MJServer`, defer `NotifyPublished` and `KickTaskGraphDispatchers` onto `RunAfterCommit`, add `ExhaustionBehavior: 'DeadLetter' | 'Discard'` for ordered partitions, and enlist `DurableEntityActionRegistry` submissions atomically inside `entity.Save()`'s SQL transaction.
+- 9a2d7cc: RunView's `TotalRowCount` contract is now explicit: a number is always a real total, and `undefined` means the caller passed `SkipTotalRowCount: true`.
+
+  **Contract change.** `RunViewResult.TotalRowCount` is now optional (`TotalRowCount?: number`). With `SkipTotalRowCount: true` it is always `undefined`, including on a page that was not full, where it used to be the number of rows returned. A caller that needs a total must not pass the flag. Strict TypeScript consumers that read the field will see a compile error; a call without the flag always gets a number, so `?? 0` is safe there. `ResultType: 'count_only'` ignores the flag and always counts.
+
+  `MaxRows: 1` is no longer special-cased: a full page of one row now runs the same count as any other full page and reports the real total. Callers that only read `Results` should pass `SkipTotalRowCount: true` to avoid that second query; about 270 such reads in this repo now do. `SkipTotalRowCount` is now sent over GraphQL, so browser callers can use it too.
+
+- Updated dependencies [54f6563]
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [91cba84]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [b1a656b]
+- Updated dependencies [953086f]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [896334a]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [bbca6b6]
+- Updated dependencies [6779eed]
+- Updated dependencies [0b406e8]
+- Updated dependencies [c018cb9]
+- Updated dependencies [397ae9a]
+- Updated dependencies [89a5b59]
+- Updated dependencies [d7e95b9]
+- Updated dependencies [6b0de38]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/ai-agents@6.2.0-edge.7
+  - @memberjunction/actions-base@6.2.0-edge.7
+  - @memberjunction/ai-core-plus@6.2.0-edge.7
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/aiengine@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/ai-engine-base@6.2.0-edge.7
+  - @memberjunction/ai-prompts@6.2.0-edge.7
+  - @memberjunction/sql-dialect@6.2.0-edge.7
+  - @memberjunction/notifications@6.2.0-edge.7
+
 ## 6.2.0-edge.6
 
 ### Patch Changes

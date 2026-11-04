@@ -5,7 +5,7 @@
  * `MJ: AI Agent Sessions`, their `MJ: AI Agent Session Channels` rows, and the
  * delegated `MJ: AI Agent Runs` linked via `AgentSessionID`. Renders the KPI
  * row (active sessions, sessions in window, avg duration, delegated runs,
- * janitor closes, cost), a sessions-over-time bar chart, the channel-usage
+ * system closes, cost), a sessions-over-time bar chart, the channel-usage
  * donut, the top delegated target agents, and a recent-sessions list with a
  * "View all" jump to the full sessions grid.
  */
@@ -675,9 +675,9 @@ export class AnalyticsRealtimeOverviewComponent extends BaseAngularComponent imp
                 color: 'info'
             },
             {
-                title: 'Janitor closes',
+                title: 'System closes',
                 value: janitorCloses,
-                subtitle: `orphans reconciled (${this.TimeRange})`,
+                subtitle: `orphan, idle & time-limit closes (${this.TimeRange})`,
                 icon: 'fa-broom',
                 color: 'warning'
             },

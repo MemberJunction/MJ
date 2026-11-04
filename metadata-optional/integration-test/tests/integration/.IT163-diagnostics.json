@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT163 - Diagnostic Bundles Capture, Assembly and Intake",
+    "Description": "Exercises the Diagnostic Bundles subsystem in-process (deterministic, no model calls). DIAG1: a registered session captures SQL and log entries through the async diagnostic context, and WithoutDiagnosticCapture suppresses capture. DIAG2: chunks assemble into a .mjdiag archive that passes VerifyBundleArchive, and the HMAC download token is single-use. DIAG3: an MJDB v1 encrypted upload goes through intake quarantine and is promoted. DIAG4: intake rejects a non-MJDB upload before any quarantine write. Each check registers and cleans up its own sessions.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Session capture and suppression work; bundles assemble and verify; download tokens are single-use; encrypted intake promotes valid uploads and rejects junk before quarantine."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "diagnostics"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "F1284236-CD6C-4F60-BFEC-95F6D6BE1A3E"
+  }
+}

@@ -2261,6 +2261,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                     ExtraFilter: `[${pk}] IN (${ids})`,
                     ResultType: 'simple',
                     MaxRows: chunk.length,
+                    SkipTotalRowCount: true,
                     BypassCache: true,
                 }, context.ContextUser);
 

@@ -10,6 +10,9 @@ import {
     ServerExtensionInitContext,
     ExtensionInitResult,
     ExtensionHealthResult,
+    SERVER_EXTENSION_CORE_SERVICE_KEYS,
+    type IServerExtensionMagicLinkService,
+    type IServerExtensionHostRuntimeService,
 } from './types.js';
 
 /**
@@ -39,6 +42,14 @@ export class DefaultServerExtensionServiceRegistry implements ServerExtensionSer
 
     public GetAllServices(): ReadonlyMap<string, object> {
         return this._services;
+    }
+
+    public GetMagicLinkService(): IServerExtensionMagicLinkService | undefined {
+        return this.GetService<IServerExtensionMagicLinkService>(SERVER_EXTENSION_CORE_SERVICE_KEYS.MagicLink);
+    }
+
+    public GetHostRuntimeService(): IServerExtensionHostRuntimeService | undefined {
+        return this.GetService<IServerExtensionHostRuntimeService>(SERVER_EXTENSION_CORE_SERVICE_KEYS.HostRuntime);
     }
 }
 

@@ -22,6 +22,7 @@ import {
   RemoteBrowserActionResult,
   RemoteBrowserAudioChunk,
   RemoteBrowserCapabilityNotSupportedError,
+  RemoteBrowserClickAction,
   RemoteBrowserGoalResult,
   RemoteBrowserHumanInput,
   RemoteBrowserScreencastFrame,
@@ -29,9 +30,13 @@ import {
 } from '@memberjunction/remote-browser-base';
 import { ActionExecutionResult, PlaywrightBrowserAdapter, RunComputerUseParams, ScreencastFrame, ScreencastOptions } from '@memberjunction/computer-use';
 import { MapHumanInput, MapRemoteBrowserAction } from './map-action';
+import { ActivatingKey, ClickTarget, FillPageFields, InspectPageDom, NormalizeNavigableUrl, ResolveClickTarget, ResolveKeyTarget } from './dom-inspection';
 import { ICdpAudioCaptureHandle, ICdpSessionBackend } from './cdp-session-backend';
 import { ComputerUseGoalEngineFactory, DefaultComputerUseGoalEngineFactory } from './computer-use-goal-engine';
 import { WrapAdapterWithContext } from './context-injection';
+
+/** Most page text a `getPageText` action returns (characters); a long article otherwise floods the agent's context. */
+const PAGE_TEXT_MAX_CHARS = 20000;
 
 /**
  * The shared, CDP-backed live remote-browser session. Constructed by
@@ -108,6 +113,9 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
   /** Epoch ms of the last frame emitted on the active stream (repaint OR forced). 0 when not streaming. */
   private lastFrameAt = 0;
 
+  /** Monotonic counter for structured page observations (`obs-1`, `obs-2`, ...). */
+  private observationSequence = 0;
+
   /**
    * The active backend audio-capture handle while an audio stream is running; `null` when not streaming
    * audio. Held so {@link StopAudioStream} and {@link Close} can tear the capture down.
@@ -135,6 +143,13 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
     this.features = features ?? {};
     this.backend = backend;
     this.providerName = providerName;
+    // An agent drives this browser, so it opens only http(s) pages, however the navigation arrives.
+    void adapter.RestrictNavigation(null);
+  }
+
+  /** @inheritdoc */
+  public async RestrictPrivateNetwork(allowedHosts: string[]): Promise<void> {
+    await this.adapter.RestrictNavigation(allowedHosts);
   }
 
   /**
@@ -159,9 +174,9 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
    * @inheritdoc
    */
   public async Navigate(url: string): Promise<RemoteBrowserActionResult> {
-    // The adapter's Navigate returns void and throws on failure, so we build the Base result here.
     try {
-      await this.adapter.Navigate(url);
+      // Bare domains become https:// URLs; any scheme but http(s) is refused.
+      await this.adapter.Navigate(NormalizeNavigableUrl(url));
       // Force an immediate live-view frame: CDP only emits a screencast frame on a repaint, so the
       // first navigation can otherwise leave the user staring at a blank surface (best-effort).
       await this.pushImmediateFrame();
@@ -179,6 +194,49 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
    * @inheritdoc
    */
   public async ExecuteAction(action: RemoteBrowserAction): Promise<RemoteBrowserActionResult> {
+    // Inspect, fill and page text read or write the DOM directly; their failures throw to the caller,
+    // which reports them (and recovers a dead browser) like any other action failure.
+    if (action.Kind === 'inspect') {
+      const observation = await InspectPageDom(this.adapter, this.nextObservationId());
+      return {
+        Success: true,
+        CurrentUrl: observation.Url,
+        Detail: `Inspected "${observation.Title || observation.Url}" (${observation.Fields.length} field(s), ${observation.Actions.length} action(s)).`,
+        Observation: observation,
+      };
+    }
+    if (action.Kind === 'fill') {
+      const filled = await FillPageFields(this.adapter, action.Values, this.nextObservationId());
+      if (filled.Filled?.length) {
+        await this.pushImmediateFrame();
+      }
+      return filled;
+    }
+    if (action.Kind === 'getPageText') {
+      const text = (await this.adapter.GetVisibleText()).slice(0, PAGE_TEXT_MAX_CHARS);
+      return { Success: true, CurrentUrl: this.adapter.CurrentUrl, Detail: text };
+    }
+    if (action.Kind === 'click') {
+      return this.guardedClick(action);
+    }
+    // Enter and Space activate the focused control (Enter also submits a form through its default
+    // button), so each is checked the way a click on what it activates is.
+    const keys = this.activatingKeys(action);
+    if (keys.length > 0 && action.Kind === 'type' && action.Selector) {
+      // Focus the target through the same locator the typing uses (an empty Type only focuses), so the
+      // guard judges the element the keys reach, whatever selector syntax named it.
+      const focused = await this.adapter.ExecuteAction(MapRemoteBrowserAction({ Kind: 'type', Text: '', Selector: action.Selector }));
+      if (!focused.Success) {
+        return this.toActionResult(focused);
+      }
+    }
+    for (const key of keys) {
+      const refusal = this.refusal(await ResolveKeyTarget(this.adapter, key));
+      if (refusal) {
+        return refusal;
+      }
+    }
+
     const result = await this.adapter.ExecuteAction(MapRemoteBrowserAction(action));
     // After a navigation-class action settles, force a fresh frame so the live view reflects the new
     // page immediately even if CDP hasn't fired a repaint frame yet (best-effort; the agent narrates
@@ -513,6 +571,81 @@ export class CdpRemoteBrowserSession implements IRemoteBrowserSession {
     if (this.features[featureName] !== true) {
       throw new RemoteBrowserCapabilityNotSupportedError(String(featureName), this.providerName || 'CdpRemoteBrowserSession');
     }
+  }
+
+  /**
+   * Clicks after checking what the click would hit: a control labelled to submit, pay, place an order,
+   * delete or sign in is refused on EVERY path (ref, text, every match of a selector, the element at a
+   * point) so a person clicks it. A ref or text target is clicked through its ref selector, a selector
+   * or point as given, so the click itself is always the adapter's real Playwright click.
+   */
+  private async guardedClick(action: RemoteBrowserClickAction): Promise<RemoteBrowserActionResult> {
+    const byInspect = Boolean(action.Ref || action.Text);
+    const query = byInspect ? { Ref: action.Ref, Text: action.Text } : action.Selector ? { Selector: action.Selector } : { X: action.X, Y: action.Y };
+    const target = await ResolveClickTarget(this.adapter, query);
+    if ((byInspect || action.Selector) && !target.Found && !target.InvalidSelector) {
+      const what = action.Ref ? `ref "${action.Ref}"` : action.Text ? `text "${action.Text}"` : `selector "${action.Selector}"`;
+      return { Success: false, CurrentUrl: this.adapter.CurrentUrl, Detail: `No clickable element matches ${what}; inspect again for fresh refs.` };
+    }
+    const refusal = this.refusal(target);
+    if (refusal) {
+      return refusal;
+    }
+    const click: RemoteBrowserClickAction = target.Ref ? { Kind: 'click', Ref: target.Ref } : action;
+    const result = await this.adapter.ExecuteAction(MapRemoteBrowserAction(click));
+    if (!result.Success || !byInspect) {
+      return this.toActionResult(result);
+    }
+    // Clicking by ref or text is the inspect-driven flow, so hand back the page as it now is.
+    await this.adapter.WaitForLoadState('domcontentloaded').catch(() => undefined);
+    await this.pushImmediateFrame();
+    const observation = await InspectPageDom(this.adapter, this.nextObservationId());
+    return { Success: true, CurrentUrl: observation.Url, Detail: `Clicked "${target.Label}".`, Observation: observation };
+  }
+
+  /** The activating keys an action presses: Enter (a newline is Enter) and Space, as keys or typed. */
+  private activatingKeys(action: RemoteBrowserAction): ActivatingKey[] {
+    if (action.Kind === 'key') {
+      const key = action.Key;
+      if (/^[\r\n]+$/.test(key) || /(^|\+)(numpad)?enter$/i.test(key.trim())) {
+        return ['enter'];
+      }
+      return key === ' ' || /(^|\+)space$/i.test(key.trim()) ? ['space'] : [];
+    }
+    if (action.Kind !== 'type') {
+      return [];
+    }
+    const keys: ActivatingKey[] = [];
+    if (/[\r\n]/.test(action.Text)) {
+      keys.push('enter');
+    }
+    if (action.Text.includes(' ')) {
+      keys.push('space');
+    }
+    return keys;
+  }
+
+  /** The failed result that stops an action the guard cannot check or must leave to a person; `null` to go ahead. */
+  private refusal(target: ClickTarget): RemoteBrowserActionResult | null {
+    if (target.InvalidSelector) {
+      return { Success: false, CurrentUrl: this.adapter.CurrentUrl, Detail: `"${target.Label}" is not a plain CSS selector, so it cannot be checked; use a ref from browser_Inspect or a CSS selector.` };
+    }
+    if (target.Destructive) {
+      return {
+        Success: false,
+        CurrentUrl: this.adapter.CurrentUrl,
+        Detail: `Refusing to activate "${target.Label}": it is labelled to submit, pay, place an order, confirm a payment, transfer, delete or sign in. Leave the page ready and ask the user to do it.`,
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Returns the next monotonic observation identifier (`obs-1`, `obs-2`, ...) for this session.
+   */
+  private nextObservationId(): string {
+    this.observationSequence += 1;
+    return `obs-${this.observationSequence}`;
   }
 
   /**

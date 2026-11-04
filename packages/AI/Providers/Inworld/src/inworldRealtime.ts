@@ -35,6 +35,7 @@ import {
     type JSONObject,
     type JSONValue,
     type RealtimeInputFrame,
+    type RealtimeDriverFacts,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -161,6 +162,9 @@ interface NativeWebSocketLike {
  */
 @RegisterClass(BaseRealtimeModel, 'InworldRealtime')
 export class InworldRealtime extends BaseRealtimeModel {
+    /** Provider ceiling unconfirmed; unknown until an in-repo source states it. */
+    public static override readonly DriverFacts: Readonly<RealtimeDriverFacts> = {};
+
     /**
      * Opens a server-bridged session: connects the realtime WebSocket authenticated with the API
      * key, sends the full session config as the FIRST frame (`session.update` — model, instructions,
