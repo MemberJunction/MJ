@@ -7,6 +7,7 @@
  */
 
 import * as t from '@babel/types';
+import type { NodePath } from '@babel/traverse';
 import { EntityInfo, EntityFieldInfo, UserInfo, Metadata } from '@memberjunction/core';
 import { ComponentSpec, ComponentQueryDataRequirement } from '@memberjunction/interactive-component-types';
 
@@ -48,6 +49,37 @@ export function FunctionScopeName(node: t.Function, parent: t.Node | null | unde
   const kind = t.isArrowFunctionExpression(node) ? 'anon_arrow' : t.isFunctionExpression(node) ? 'anon_func_expr' : 'anon_func';
   const start = node.loc?.start;
   return start ? `${kind}@L${start.line}C${start.column}` : kind;
+}
+
+/**
+ * The scope names enclosing `path`, outermost function first, named the way type inference
+ * named them while recording variable types (see {@link FunctionScopeName}). Pass the result to
+ * {@link TypeContext.GetVariableTypeInScope} to resolve a name where `path` reads it.
+ */
+export function EnclosingScopePath(path: NodePath): string[] {
+  const names: string[] = [];
+  for (let current: NodePath | null = path.parentPath; current; current = current.parentPath) {
+    if (current.isFunctionDeclaration() || current.isFunctionExpression() || current.isArrowFunctionExpression()) {
+      names.unshift(FunctionScopeName(current.node, current.parent));
+    }
+  }
+  return names;
+}
+
+/**
+ * The type a variable has after a later write (an assignment or a React state setter call),
+ * given the type it had. Inference keeps one type per variable for its whole function, so a
+ * write of a different type widens it to unknown rather than replacing it: `setTier(null)` must
+ * not turn `tier.toLowerCase()` into a call on null, and `aVal = String(aVal)` must not turn an
+ * earlier `aVal - bVal` into arithmetic on a string. A null/undefined write only makes it nullable.
+ */
+export function WidenAssignedType(current: TypeInfo | undefined, assigned: TypeInfo): TypeInfo {
+  const isEmpty = (type: TypeInfo) => type.type === 'null' || type.type === 'undefined';
+  if (!current) return assigned;
+  if (isEmpty(assigned)) return isEmpty(current) ? current : { ...current, nullable: true };
+  if (isEmpty(current)) return { ...assigned, nullable: true };
+  if (current.type === assigned.type && assigned.type !== 'unknown') return assigned;
+  return { type: 'unknown' };
 }
 
 /**
