@@ -27,9 +27,9 @@ function LogStatusVerbose(message: string): void {
  * Freezing the ARRAY matters as much as the rows: `results.sort()` / `.push()` on a live
  * cache array silently reorders or grows the cached slot for every later reader.
  *
- * Freezes BEFORE recursing, so the `isFrozen` short-circuit both skips already-frozen
- * subtrees (cheap re-entry for in-place slot maintenance, which carries existing rows
- * forward by reference) and terminates cycles.
+ * Freezes BEFORE recursing and records each object in `visited`, which terminates cycles.
+ * A call without `visited` starts a new set, so it visits every object it reaches, frozen or
+ * not. In-place slot maintenance skips carried rows by way of {@link fullyFrozenResultArrays}.
  *
  * Two value kinds are skipped, not frozen — accepted residuals:
  * - Binary payloads (`Buffer`/TypedArray/`ArrayBuffer`, e.g. `varbinary` columns): the spec
@@ -47,8 +47,7 @@ function deepFreezeCacheValue<T>(value: T, visited: WeakSet<object> = new WeakSe
     // `Object.isFrozen`. Those are not the same test: an object frozen SHALLOWLY by someone else
     // (a caller that ran `Object.freeze(row)` before handing it over) reports frozen while its
     // nested values are still writable, so keying off isFrozen would skip the whole subtree and
-    // leave shared state mutable. Already-frozen objects are cheap to re-freeze; unvisited
-    // children are the thing that must not be skipped.
+    // leave shared state mutable. Unvisited children are the thing that must not be skipped.
     if (visited.has(value as object)) {
         return value;
     }
@@ -58,6 +57,20 @@ function deepFreezeCacheValue<T>(value: T, visited: WeakSet<object> = new WeakSe
         deepFreezeCacheValue(nested, visited);
     }
     return value;
+}
+
+/**
+ * Result arrays known to be deeply frozen: a complete walk of the array finished, or the array
+ * was built from an array in this set and rows that were deep-frozen. The binary and Date
+ * exceptions above apply.
+ */
+const fullyFrozenResultArrays = new WeakSet<object>();
+
+/** Adds `payload.results` to {@link fullyFrozenResultArrays} when it is an array. */
+function markResultsFullyFrozen(payload: object): void {
+    if ('results' in payload && Array.isArray(payload.results)) {
+        fullyFrozenResultArrays.add(payload.results);
+    }
 }
 
 // ============================================================================
@@ -71,6 +84,16 @@ function deepFreezeCacheValue<T>(value: T, visited: WeakSet<object> = new WeakSe
 export interface CachedRowChange {
     Key: CompositeKey;
     Row: Record<string, unknown> | null;
+}
+
+/**
+ * What an in-place slot rewrite tells the store about the rows it changed, so that the store can
+ * freeze only those rows. `priorResults` is the slot's array before the change; `changedRows` are
+ * the rows of the new array that did not come from it.
+ */
+interface InPlaceFreezeHint {
+    priorResults: CachedRunViewData['results'];
+    changedRows: ReadonlyArray<Record<string, CacheRowValue>>;
 }
 
 /**
@@ -3157,7 +3180,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             return payload;
         }
         try {
-            return deepFreezeCacheValue(payload);
+            deepFreezeCacheValue(payload);
+            if (payload !== null && typeof payload === 'object') {
+                markResultsFullyFrozen(payload);
+            }
+            return payload;
         } catch (e) {
             // The freeze is protective, never load-bearing — an exotic value Object.freeze
             // rejects (beyond the guarded binary kinds) must degrade to a stored write rather
@@ -3896,7 +3923,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                               upsertedRows: deltaChanges.upsertedRows,
                               deletedPrimaryKeys: deltaChanges.deletedPrimaryKeys,
                               primaryKeyFields: pkFieldNames,
-                          }
+                          },
+                    { priorResults: cached.results, changedRows: deltaChanges.upsertedRows }
                 );
             } catch (e) {
                 LogError(`LocalCacheManager.ApplyRowChanges failed: ${e}`);
@@ -3961,6 +3989,34 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
+     * Freezes an in-place rewrite of a slot without re-walking the rows it carries forward.
+     *
+     * Applies only when the active provider shares references and `hint.priorResults` is in
+     * {@link fullyFrozenResultArrays}. Every row of `data.results` other than `hint.changedRows`
+     * then comes from that array and is already deeply frozen, so this freezes the new array,
+     * deep-freezes the changed rows and the rest of the envelope, and marks the new array.
+     *
+     * @returns true when the entry is frozen; false when the caller must do the full walk.
+     */
+    private freezeChangedRowsOnly(data: CachedRunViewData, hint: InPlaceFreezeHint | undefined): boolean {
+        if (!hint || !fullyFrozenResultArrays.has(hint.priorResults) || !this.activeProviderSharesReferences()) {
+            return false;
+        }
+        try {
+            const visited = new WeakSet<object>([data.results]);
+            Object.freeze(data.results);
+            for (const row of hint.changedRows) {
+                deepFreezeCacheValue(row, visited);
+            }
+            deepFreezeCacheValue(data, visited);
+        } catch {
+            return false;
+        }
+        fullyFrozenResultArrays.add(data.results);
+        return true;
+    }
+
+    /**
      * Stores updated results array back to the cache and updates the registry.
      * Shared by UpsertSingleEntity and RemoveSingleEntity to avoid duplication.
      *
@@ -3983,7 +4039,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             upsertedRows: Array<Record<string, CacheRowValue>>;
             deletedPrimaryKeys: Array<Record<string, CachePrimaryKeyValue>>;
             primaryKeyFields: string[];
-        }
+        },
+        freezeHint?: InPlaceFreezeHint
     ): Promise<boolean> {
         // Stamp the slot the way the fill path does — the newest row's __mj_UpdatedAt — so the
         // stamp means the same thing whichever funnel wrote the slot and matches what the database
@@ -4033,10 +4090,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const sizeBytes = this.estimateResultsSize(updatedResults);
 
         // Second write funnel — this path bypasses SetRunViewResult entirely, so it must
-        // freeze too. Rows carried forward from the prior slot are already frozen (the
-        // isFrozen short-circuit makes re-entry cheap); what this catches is the NEW array
-        // and the freshly upserted row. Scaffolding slots stay exempt (see above).
-        if (!prior?.providerInternalScaffolding) {
+        // freeze too. When the prior array is marked fully frozen, only the new array, the
+        // envelope and the changed rows are frozen; otherwise the whole entry is walked.
+        // Scaffolding slots stay exempt (see above).
+        if (!prior?.providerInternalScaffolding && !this.freezeChangedRowsOnly(data, freezeHint)) {
             this.freezeRowDataIfProviderSharesReferences(data);
         }
 
