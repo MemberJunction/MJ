@@ -218,17 +218,19 @@ export class FeatureResolver {
     }
   }
 
-  /** True when the field deny list names this column (names compared as the leakage guard normalizes them). */
   /**
-   * A constant fill on a numeric column must be a finite number: the trainer refuses any other fill when it loads the
-   * snapshot, so the pipeline is refused here, at resolution, naming the column, instead of failing every training run.
+   * A constant fill on a column the trainer reads as numbers (numeric, date-parts and boolean: Sidecar encoding.py
+   * `NumericEncoding`) must be a finite number: the trainer refuses any other fill when it loads the snapshot
+   * (snapshot.py `_policies`), so the pipeline is refused here, at resolution, naming the column, instead of failing
+   * every training run. A categorical or identifier column encodes a missing value as its own level, so it needs none.
    */
   private static refuseNonNumericConstantFill(step: Extract<FeatureStep, { Kind: 'impute' }>, column: FeatureColumnSpec): void {
-    if (step.Strategy !== 'constant' || column.encoding.kind !== 'numeric') return;
+    if (step.Strategy !== 'constant' || column.encoding.kind === 'categorical' || column.encoding.kind === 'identifier') return;
     if (typeof step.FillValue === 'number' && Number.isFinite(step.FillValue)) return;
     throw new AssemblyRefused({ kind: 'non-numeric-in-numeric-column', column: step.Column, sampleValue: step.FillValue === undefined ? '' : String(step.FillValue) });
   }
 
+  /** True when the field deny list names this column (names compared as the leakage guard normalizes them). */
   private isDenied(column: string): boolean {
     return this.deny.has(NormalizeName(column));
   }

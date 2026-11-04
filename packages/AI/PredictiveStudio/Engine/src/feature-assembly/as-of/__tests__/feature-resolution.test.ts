@@ -67,6 +67,17 @@ describe('ResolveFeatureColumns', () => {
     const ok = resolve(0);
     expect(ok.Status === 'resolved' && ok.Columns[0].missing).toEqual({ impute: 'constant', indicator: true, constant: 0 });
   });
+  it('refuses a constant fill without a finite number on a date or boolean column too, which the trainer reads as numbers', () => {
+    const resolve = (Column: string, FillValue: string | number | undefined) => FeatureResolver.ResolveFeatureColumns({ Steps: [
+      { Id: 's', Kind: 'select', Columns: [Column] },
+      { Id: 'i', Kind: 'impute', Column, Strategy: 'constant', FillValue },
+    ] }, unitSpec, years, metadata, { denyFields: [], denySources: [] });
+    expect([resolve('StartDate', undefined), resolve('AutoRenew', 'yes')]).toEqual([
+      { Status: 'refused', Refusal: { kind: 'non-numeric-in-numeric-column', column: 'StartDate', sampleValue: '' } },
+      { Status: 'refused', Refusal: { kind: 'non-numeric-in-numeric-column', column: 'AutoRenew', sampleValue: 'yes' } },
+    ]);
+    expect([resolve('StartDate', 0).Status, resolve('AutoRenew', 1).Status, resolve('Region', undefined).Status]).toEqual(['resolved', 'resolved', 'resolved']);
+  });
   it('refuses a standardize, one-hot or bin step on a column no feature produces', () => {
     const refusedFor = (step: FeatureStepGraph['Steps'][number]) => FeatureResolver.ResolveFeatureColumns({ Steps: [{ Id: 's', Kind: 'select', Columns: ['EventsAttended'] }, step] }, unitSpec, years, metadata, { denyFields: [], denySources: [] });
     const refusal = { Status: 'refused', Refusal: { kind: 'unresolved-column', entity: 'Years', field: 'TenureDays' } };
