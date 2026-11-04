@@ -368,7 +368,8 @@ export class TrainingEngine {
   /**
    * The checks a unit pipeline passes before anything is written: the bound protocol (missing, or over its budget), a
    * time-indexed pipeline under a holdout that does not respect time (`time-index-needs-time-holdout`), a stored
-   * AsOfStrategy that would override the unit, and deps without a snapshot file store or a trainer. Each throws.
+   * AsOfStrategy that would override the unit, deps without a snapshot file store or a trainer, and an artifact store
+   * that cannot write here ({@link requireWritableArtifactStore}). Each throws.
    */
   private async requireUnitRunPrerequisites(resolved: ResolvedPipeline, input: TrainModelInput, deps: TrainingDeps): Promise<{ Training: ProtocolTraining; SnapshotFiles: ISnapshotFileStore }> {
     const protocol = await this.requireBoundProtocol(resolved, input, deps);
@@ -376,7 +377,25 @@ export class TrainingEngine {
     if (timeIndex !== null) throw new TrainingRefusedError({ stage: 'pipeline', reason: timeIndex });
     TrainingEngine.refuseUnitOverrides(resolved);
     const snapshotFiles = TrainingEngine.requireSnapshotFiles(deps);
-    return { Training: { Protocol: protocol, Trainer: TrainingEngine.requireTrainer(deps) }, SnapshotFiles: snapshotFiles };
+    const trainer = TrainingEngine.requireTrainer(deps);
+    await TrainingEngine.requireWritableArtifactStore(deps);
+    return { Training: { Protocol: protocol, Trainer: trainer }, SnapshotFiles: snapshotFiles };
+  }
+
+  /**
+   * The artifact store must be able to write here before anything of the run is written: a run whose snapshot is
+   * reused writes no snapshot file, so without this check a store whose provider is not configured on this server would
+   * first fail after the trainer has spent the run's compute. A store that cannot write is a configuration error (not a
+   * refusal of the pipeline), so no run row is written.
+   *
+   * @throws Error stating the run was refused before training, with the store's reason
+   */
+  private static async requireWritableArtifactStore(deps: TrainingDeps): Promise<void> {
+    try {
+      await deps.artifactStore.AssertWritable();
+    } catch (error) {
+      throw new Error(`TrainingEngine: the run was refused before training: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
   /**

@@ -183,15 +183,16 @@ export class StorageProviderSnapshotFileStore implements ISnapshotFileStore {
    * @param entityFactory creates the `MJ: Files` rows
    * @param provider the provider the `MJ: Files` reads run on
    * @param contextUser the acting user
-   * @param providerName the provider to write to (default: `PS_STORAGE_PROVIDER`, or "Local File System")
+   * @param storage the provider to write to: a provider name (default: `PS_STORAGE_PROVIDER`, or "Local File System"),
+   *   or the {@link PredictiveStudioStorage} to share with the run's artifact store, so both resolve one provider once
    */
   constructor(
     private readonly entityFactory: IEntityFactory,
     private readonly provider: IMetadataProvider,
     private readonly contextUser: UserInfo | undefined,
-    providerName?: string,
+    storage?: string | PredictiveStudioStorage,
   ) {
-    this.storage = new PredictiveStudioStorage(provider, contextUser, providerName);
+    this.storage = storage instanceof PredictiveStudioStorage ? storage : new PredictiveStudioStorage(provider, contextUser, storage);
   }
 
   public async ProviderID(): Promise<string> {

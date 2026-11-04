@@ -35,6 +35,15 @@ export class StorageProviderArtifactStore implements IArtifactStore {
   constructor(private readonly entityFactory: IEntityFactory, private readonly storage: PredictiveStudioStorage) {}
 
   /**
+   * Resolves the configured provider's driver.
+   *
+   * @throws Error naming the provider and `PS_STORAGE_PROVIDER` when no provider has that name or its driver is not configured here
+   */
+  public async AssertWritable(): Promise<void> {
+    await this.storage.ConfiguredDriver();
+  }
+
+  /**
    * Stores the bytes under a fresh key and records the `MJ: Files` row.
    *
    * @throws Error when the name is not one safe key segment (before anything is stored), when storage refuses the

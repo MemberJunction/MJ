@@ -401,6 +401,17 @@ describe('TrainingEngine — Prediction Unit pipelines', () => {
     expect(runs.map((r) => r.TrainingSnapshotID)).toEqual([snapshots[0].ID, snapshots[0].ID]);
   });
 
+  it('refuses a retraining of identical data before the trainer when the artifact store cannot write, writing no run and reusing no snapshot', async () => {
+    const { engine, deps, trainer, pipeline, runs, snapshotStore } = TrainingHarness.ForUnit(years, unitColumns);
+    await engine.trainModel({ pipelineId: pipeline.ID }, deps);
+    const unconfigured = 'Predictive Studio storage: storage provider "S3" is not configured on this server';
+    vi.spyOn(deps.artifactStore, 'AssertWritable').mockRejectedValue(new Error(unconfigured));
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toThrow(/refused before training: .*"S3" is not configured on this server/);
+    expect(trainer.Requests).toHaveLength(1);
+    expect(runs).toHaveLength(1);
+    expect(snapshotStore.ReusedLookups).toBe(0);
+  });
+
   it('refuses to train a unit pipeline without a snapshot file store, before calling the trainer', async () => {
     const { engine, deps, trainer, pipeline, snapshots, runs } = TrainingHarness.ForUnit(years, unitColumns);
     delete deps.snapshotFiles;

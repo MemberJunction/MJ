@@ -160,6 +160,15 @@ export interface IArtifactStore {
    * @throws Error when the artifact cannot be removed
    */
   delete(fileId: string, contextUser?: UserInfo): Promise<void>;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+
+  /**
+   * Refuse when this store cannot write here (for a storage provider: no provider by the configured name, or its driver
+   * is not configured on this server). The training engine calls it before anything of a run is written and before the
+   * trainer runs, so a run never spends its compute and then fails to store its artifacts.
+   *
+   * @throws Error naming what is missing
+   */
+  AssertWritable(): Promise<void>;
 }
 
 /**

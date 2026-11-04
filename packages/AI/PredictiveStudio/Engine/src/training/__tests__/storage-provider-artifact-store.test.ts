@@ -97,6 +97,15 @@ describe('StorageProviderArtifactStore', () => {
     expect(log.filter((e) => e.startsWith('local.'))).toEqual([]);
   });
 
+  it('AssertWritable refuses an unconfigured provider before anything is stored', async () => {
+    await expect(store.AssertWritable()).resolves.toBeUndefined();
+    local.Reset();
+    local.Configured = false;
+    const fresh = new StorageProviderArtifactStore(files, new PredictiveStudioStorage(files.Provider(), TestUser, 'Local File System'));
+    await expect(fresh.AssertWritable()).rejects.toThrow(/"Local File System" is not configured on this server.*PS_STORAGE_PROVIDER/);
+    expect(log.filter((e) => e.startsWith('local.put'))).toEqual([]);
+  });
+
   it('logs the object it could not remove after a failed row save', async () => {
     files.SaveFailure = 'the MJ: Files table is unavailable';
     local.RefuseDelete = true;

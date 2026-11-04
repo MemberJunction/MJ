@@ -51,6 +51,9 @@ export class InMemoryArtifactStore implements IArtifactStore {
     return id;
   }
 
+  /** @inheritdoc An in-memory store can always write. */
+  public async AssertWritable(): Promise<void> {}
+
   /** @inheritdoc */
   public async delete(fileId: string): Promise<void> {
     if (!this.Saved.delete(fileId)) throw new Error(`InMemoryArtifactStore: no artifact ${fileId}`);

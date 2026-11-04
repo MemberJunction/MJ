@@ -451,7 +451,7 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     return {
       entityFactory: { getEntityObject: unused },
       recordLoader: { loadPipeline: async () => pipeline, nextModelVersion: async () => 1, resolveAlgorithmIDForDriver: async () => null },
-      artifactStore: { save: unused, delete: unused },
+      artifactStore: { save: unused, delete: unused, AssertWritable: unused },
       contextUser: user,
       provider,
       predictionUnits: new FakePredictionUnitStore(UnitYearsWorld.UnitColumns()),
@@ -670,7 +670,7 @@ describe('MLModelInferenceProcessor — a fixed decision date that advances each
     const deps: TrainingDeps = {
       entityFactory: { getEntityObject: unused },
       recordLoader: { loadPipeline: async () => pipeline, nextModelVersion: async () => 1, resolveAlgorithmIDForDriver: async () => null },
-      artifactStore: { save: unused, delete: unused },
+      artifactStore: { save: unused, delete: unused, AssertWritable: unused },
       contextUser: user, provider, predictionUnits: units, assemblyMetadata: metadata, dataAccess,
       now: () => new Date(`${TRAIN_DAY}T09:00:00Z`),
     };

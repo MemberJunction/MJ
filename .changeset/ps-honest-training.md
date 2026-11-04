@@ -102,7 +102,8 @@ version 1 of each, and the training path without them is removed.
   provider (`StorageProviderArtifactStore`, keys `predictive-studio/model-artifacts/<uuid>/<name>`) and read through
   the provider their `MJ: Files` row names (`StorageProviderArtifactLoader`); `PredictiveStudioStorage` resolves the
   provider for snapshots and models. Model files trained before 6.3 (`MJ: Files.ProviderKey` empty) are still read
-  from `PS_ARTIFACT_DIR`. `IArtifactLoader.load` takes a required `provider`. The local-disk model
+  from `PS_ARTIFACT_DIR`. `IArtifactLoader.load` takes a required `provider`, and `IArtifactStore.AssertWritable` is a new required
+  member the engine calls before a run is written, so an unconfigured provider refuses the run before training. The local-disk model
   artifact store and loader, and their active-provider lookup, are removed.
 - `@memberjunction/server`, `@memberjunction/server-bootstrap`, `@memberjunction/server-bootstrap-lite`,
   `@memberjunction/ng-bootstrap`, `@memberjunction/ng-bootstrap-lite`, `@memberjunction/ng-core-entity-forms`: the

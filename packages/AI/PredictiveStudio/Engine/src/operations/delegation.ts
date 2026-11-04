@@ -71,7 +71,9 @@ export class TrainingDelegation {
    * Build the {@link TrainingEngine}'s production dependency bundle from a per-call
    * `provider` + `user`. Trained model files and Training Snapshot files go to the one storage provider
    * `PS_STORAGE_PROVIDER` names (default "Local File System"), each recorded as an `MJ: Files` row; the scoring side
-   * reads a model file through the provider its row names ({@link StorageProviderArtifactLoader}).
+   * reads a model file through the provider its row names ({@link StorageProviderArtifactLoader}). The snapshot store and
+   * the artifact store share one {@link PredictiveStudioStorage}, and the engine has the artifact store resolve it before
+   * anything of the run is written, so a provider not configured on this server refuses the run before training.
    *
    * The Record Changes history the as-of assembly replays is left to the engine's default: a complete-read
    * `RunViewRecordHistoryReader` over the same `dataAccess`. The locked holdout is always the one the bound protocol
@@ -83,18 +85,20 @@ export class TrainingDelegation {
    */
   public static async BuildTrainingDeps(provider: IMetadataProvider, user: UserInfo): Promise<TrainingDeps> {
     const entityFactory = new MetadataEntityFactory(provider);
+    // One storage resolution for the run's snapshot files and its model files: one provider, resolved once.
+    const storage = new PredictiveStudioStorage(provider, user);
     return {
       entityFactory,
       recordLoader: new RunViewRecordLoader(),
       trainer: new MJSidecarTrainer(),
-      artifactStore: new StorageProviderArtifactStore(entityFactory, new PredictiveStudioStorage(provider, user)),
+      artifactStore: new StorageProviderArtifactStore(entityFactory, storage),
       contextUser: user,
       provider,
       // The Prediction Unit seams read through the same provider and user as every other training read.
       predictionUnits: new RunViewPredictionUnitStore(provider, user),
       assemblyMetadata: new ProviderAssemblyMetadata(provider),
       dataAccess: new RunViewDataAccess(user, provider),
-      snapshotFiles: new StorageProviderSnapshotFileStore(entityFactory, provider, user),
+      snapshotFiles: new StorageProviderSnapshotFileStore(entityFactory, provider, user, storage),
       snapshots: new RunViewTrainingSnapshotStore(provider, user),
       protocols: new RunViewEvaluationProtocolStore(provider, user),
     };
