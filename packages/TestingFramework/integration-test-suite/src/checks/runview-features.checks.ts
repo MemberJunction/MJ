@@ -502,7 +502,7 @@ const RVF10: NamedCheck = {
 
 const RVF11: NamedCheck = {
     Id: 'runview-features.RVF11',
-    Name: 'RVF11: RunViewParams.Parameters — fail-closed validation rejects missing @param, unused parameter keys, and invalid parameter names',
+    Name: 'RVF11: RunViewParams.Parameters — fail-closed validation rejects missing @param, empty array IN (@list), and invalid parameter names',
     Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
         const rv = new RunView();
 
@@ -518,17 +518,17 @@ const RVF11: NamedCheck = {
         );
         Assert(missingParam.Success === false, 'RVF11 missing @missingKey must fail closed');
 
-        const unusedParam = await rv.RunView(
+        const emptyArrayParam = await rv.RunView(
             {
                 EntityName: 'MJ: Entities',
                 Fields: ['ID'],
-                ExtraFilter: 'Name = @usedKey',
-                Parameters: { usedKey: 'MJ: Entities', unusedExtraKey: 'extra' },
+                ExtraFilter: 'ID IN (@emptyIds)',
+                Parameters: { emptyIds: [] },
                 ResultType: 'simple',
             },
             ctx.User,
         );
-        Assert(unusedParam.Success === false, 'RVF11 unused parameter key must fail closed');
+        Assert(emptyArrayParam.Success === false, 'RVF11 empty array parameter must fail closed');
 
         const invalidName = await rv.RunView(
             {
@@ -541,7 +541,7 @@ const RVF11: NamedCheck = {
             ctx.User,
         );
         Assert(invalidName.Success === false, 'RVF11 invalid parameter identifier must fail closed');
-        console.log(`      → missing @param, unused parameter key, and invalid identifier all failed closed`);
+        console.log(`      → missing @param, empty array parameter, and invalid identifier all failed closed`);
     },
 };
 

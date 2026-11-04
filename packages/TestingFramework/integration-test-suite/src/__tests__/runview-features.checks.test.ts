@@ -36,15 +36,15 @@ function createParameterizedMockProvider(): IRunViewProvider {
                         ErrorMessage: `Invalid parameter name: ${key}`,
                     };
                 }
-                const filterStr = String(params.ExtraFilter ?? '');
-                if (!new RegExp(`@${cleanKey}\\b`).test(filterStr)) {
+                const val = params.Parameters[key];
+                if (Array.isArray(val) && val.length === 0) {
                     return {
                         Success: false,
                         Results: [],
                         RowCount: 0,
                         TotalRowCount: 0,
                         ExecutionTime: 1,
-                        ErrorMessage: `Unused parameter: ${cleanKey}`,
+                        ErrorMessage: `Empty array parameter: ${cleanKey}`,
                     };
                 }
             }
