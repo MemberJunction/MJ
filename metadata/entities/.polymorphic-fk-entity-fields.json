@@ -491,6 +491,45 @@
   },
   {
     "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: Graph Edges: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
+    ],
+    "fields": {
+      "Name": "MJ: Graph Edges"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityIDFieldName": "SourceEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Graph Edges&Name=SourceRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:45:43.903Z",
+            "checksum": "c84b370f28697b2edb7fa5864197b85dd1da7de383ec1512f99c8268aadb081a"
+          }
+        },
+        {
+          "fields": {
+            "EntityIDFieldName": "TargetEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Graph Edges&Name=TargetRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:45:43.914Z",
+            "checksum": "529ead15d12fd0c2cc5f80ecfec3473c2f88e1232dadc72cf71ce997e2979c5f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Graph Edges"
+    }
+  },
+  {
+    "_comments": [
       "Polymorphic foreign key declaration(s) on MJ: Identity Claims: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
     ],
     "fields": {

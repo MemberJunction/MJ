@@ -33,6 +33,7 @@ import { ComposerDraftStore } from '../../services/composer-draft-store';
 import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
 import { TestFeedbackDialogData, TestFeedbackDialogResult } from '@memberjunction/ng-testing';
 import { DialogService as ConversationsDialogService } from '../../services/dialog.service';
+import { ConfirmMoveIntoFolder } from '../../utils/folder-move';
 import { Subject, firstValueFrom } from 'rxjs';
 import { map, takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
@@ -497,6 +498,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   get readReplyFromTop(): ConversationChatAreaComponent['ReadReplyFromTop'] {
     return this.ReadReplyFromTop;
   }
+
+  /**
+   * Whether inline markdown links in conversation messages open in a new browser tab
+   * (`target="_blank"` with `rel="noopener noreferrer"`). In-page fragment links (`#heading`)
+   * and `mailto:` / `tel:` / `sms:` links stay in the current tab. Default `true` so clicking
+   * an external link in a reply does not navigate away from the active conversation; set `false`
+   * to open links in the current tab.
+   */
+  @Input() OpenLinksInNewTab = true;
 
   // --- Additional host-level feature gates (all default true; false removes the
   //     affordance entirely). Forwarded to the message list / message items / empty
@@ -7244,29 +7254,20 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   async OnProjectSelected(project: any): Promise<void> {
-    if (this.Conversation && project) {
-      try {
-        await this.engine.SaveConversation(
-          this.Conversation.ID,
-          { ProjectID: project.ID },
-          this.CurrentUser
-        );
-        this.ShowProjectSelector = false;
-      } catch (error) {
-        console.error('Failed to assign project:', error);
-      }
-    } else if (this.Conversation && !project) {
-      // Remove project assignment
-      try {
-        await this.engine.SaveConversation(
-          this.Conversation.ID,
-          { ProjectID: null },
-          this.CurrentUser
-        );
-        this.ShowProjectSelector = false;
-      } catch (error) {
-        console.error('Failed to remove project:', error);
-      }
+    if (!this.Conversation) return;
+    const projectId: string | null = project?.ID ?? null;
+    // Only the owner moves a conversation (the server refuses anyone else), and a move of an inheriting
+    // conversation into a Shared or Public folder shares it, so it asks first: the same rules as the list.
+    if (!this.CurrentUser || !this.engine.CanMoveConversation(this.Conversation, this.CurrentUser.ID)) {
+      await this.confirmDialog.alert('Cannot Move', "Only the conversation's owner can move it to another folder.");
+      return;
+    }
+    if (!(await ConfirmMoveIntoFolder(this.confirmDialog, this.engine, projectId, [this.Conversation]))) return;
+    try {
+      await this.engine.SaveConversation(this.Conversation.ID, { ProjectID: projectId }, this.CurrentUser);
+      this.ShowProjectSelector = false;
+    } catch (error) {
+      console.error(projectId ? 'Failed to assign project:' : 'Failed to remove project:', error);
     }
   }
 

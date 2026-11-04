@@ -137,6 +137,14 @@ export abstract class BaseMessagingAdapter {
     /** Max entries in the thread map before forced eviction of oldest entries. */
     private static readonly THREAD_MAP_MAX_SIZE = 10_000;
 
+    /**
+     * Per-thread execution chain. Messages on one platform thread are handled one at a time, in
+     * arrival order, so a rapid burst cannot race: the first message creates the MJ Conversation
+     * and stores its id before the second message looks it up, and the per-thread streaming
+     * indicator is never clobbered by a parallel turn.
+     */
+    private inFlightThreadPromises = new Map<string, Promise<void>>();
+
     constructor(settings: MessagingAdapterSettings) {
         this.settings = settings;
     }
@@ -172,6 +180,31 @@ export abstract class BaseMessagingAdapter {
             return;
         }
 
+        // Serialize messages on the same thread behind an in-flight promise so rapid
+        // multi-message bursts in one thread reuse the same MJ Conversation in order.
+        const threadKey = this.getThreadKey(message);
+        const previous = this.inFlightThreadPromises.get(threadKey) ?? Promise.resolve();
+        const current = previous
+            .catch(() => {
+                // Earlier turn errors are already handled; never block subsequent turns in the thread.
+            })
+            .then(() => this.handleMessageForThread(message));
+
+        this.inFlightThreadPromises.set(threadKey, current);
+        try {
+            await current;
+        } finally {
+            if (this.inFlightThreadPromises.get(threadKey) === current) {
+                this.inFlightThreadPromises.delete(threadKey);
+            }
+        }
+    }
+
+    /**
+     * Executes the full message handling pipeline for a single turn once its per-thread
+     * serialization slot has been acquired.
+     */
+    private async handleMessageForThread(message: IncomingMessage): Promise<void> {
         // 2. Resolve the MJ user for this platform sender
         const contextUser = await this.resolveContextUser(message);
 
@@ -711,7 +744,9 @@ export abstract class BaseMessagingAdapter {
         conversationMessages: ChatMessage[],
         multiAgentNote: string | null
     ): Promise<void> {
-        // Look up existing MJ Conversation for this thread
+        // Look up the MJ Conversation for this thread. HandleMessage serializes same-thread turns,
+        // so by the time a follow-up message gets here the earlier turn has finished and stored
+        // the id below; RunAgentInConversation creates the conversation when there is none yet.
         const threadKey = this.getThreadKey(message);
         const existingConversationId = this.getThreadConversationId(threadKey);
 

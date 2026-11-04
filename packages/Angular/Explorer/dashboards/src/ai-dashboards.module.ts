@@ -89,6 +89,10 @@ import {
   LoadVisualizeResource
 } from './KnowledgeHub/components/visualize/visualize-resource.component';
 import { TagCloudComponent } from './KnowledgeHub/components/visualize/tag-cloud/tag-cloud.component';
+import {
+  SemanticGraphExplorerComponent,
+  LoadSemanticGraphExplorerComponent
+} from './KnowledgeHub/components/visualize/semantic-graph/semantic-graph-explorer.component';
 import { RecordDrilldownComponent } from './KnowledgeHub/components/visualize/record-drilldown/record-drilldown.component';
 import {
   SchedulingResourceComponent,
@@ -106,6 +110,7 @@ import { ClusteringModule } from '@memberjunction/ng-clustering';
 import { SchedulingModule } from '@memberjunction/ng-scheduling';
 import { RecordProcessEditorComponent } from '@memberjunction/ng-record-process-studio';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
+import { GraphViewComponent } from '@memberjunction/ng-graph-view';
 
 /**
  * AIDashboardsModule — AI feature area: models, prompts, agents,
@@ -151,6 +156,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     ClusterVisualizationResourceComponent,
     VisualizeResourceComponent,
     TagCloudComponent,
+    SemanticGraphExplorerComponent,
     RecordDrilldownComponent,
     SchedulingResourceComponent,
     AnalyticsResourceComponent,
@@ -222,6 +228,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     ClusteringModule,
     SchedulingModule,
     MJWordCloudComponent,
+    GraphViewComponent,
     RecordProcessEditorComponent
   ],
   providers: [
@@ -244,6 +251,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     SearchResultDetailComponent,
     ClusterVisualizationResourceComponent,
     VisualizeResourceComponent,
+    SemanticGraphExplorerComponent,
     SchedulingResourceComponent,
     AnalyticsResourceComponent,
     FeaturePipelinesResourceComponent,
@@ -274,6 +282,7 @@ export class AIDashboardsModule {
         LoadTagsResource();
         LoadClusterVisualizationResource();
         LoadVisualizeResource();
+        LoadSemanticGraphExplorerComponent();
         LoadSchedulingResource();
         LoadAnalyticsResource();
         LoadFeaturePipelinesResource();

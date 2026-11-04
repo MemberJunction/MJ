@@ -1,5 +1,8 @@
 import { Base64DecodedByteLength, ClassFactory, ClassRegistration, DeserializeValidationErrors, Float32VectorToBase64, IsValidBase64, IsMemberOverridden, MJEventType, MJGlobal, NormalizeUUID, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, UserCacheKeySegment, WarningManager, ComputeContentHashAsync, EscapeSQLString } from '@memberjunction/global';
-import { GetDataHooks, PreSaveHook } from './dataHooks';
+import { GetDataHooks, PreDeleteHook, PreSaveHook } from './dataHooks';
+import { EntityLifecyclePolicyEngine } from './entityLifecyclePolicy';
+import { DocumentNumberingEngine } from './documentNumberingEngine';
+import { CrossEntityPolicyEngine } from './crossEntityPolicyEngine';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityError, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntitySubtypeResolver } from './entitySubtypeResolver';
 import { CanonicalPrimaryKeyValue } from './util';
@@ -11,6 +14,7 @@ import { RunView, type RunViewParams } from '../views/runView';
 import { UserInfo } from './securityInfo';
 import { TransactionGroupBase } from './transactionGroup';
 import { LogDebug, LogError, LogStatus, LogStatusEx, LogWarning } from './logging';
+import { TelemetryManager } from './telemetryManager';
 import { CompositeKey, FieldValueCollection, KeyValuePair } from './compositeKey';
 import { RelatedRecordCollection, RelatedRecordCollectionOptions } from './relatedRecordCollection';
 import { COMPANION_PAYLOAD_KEY, EntityCompanion, EntityCompanionDeserializeMode, EntityCompanionPayload } from './entityCompanion';
@@ -1981,7 +1985,9 @@ export abstract class BaseEntity<T = unknown> {
      *
      * @returns A declared IsA child's entity name, or null when there is no usable hint. Never throws.
      */
-    private async resolveSubtypeLoadHint(): Promise<string | null> {
+    private async resolveSubtypeLoadHint(
+        batchUnfilteredCache?: ReadonlyMap<string, ReadonlyArray<BaseEntity | Record<string, unknown>>>
+    ): Promise<string | null> {
         if (this._skipSubtypeLoadHint) {
             return null;
         }
@@ -1992,7 +1998,7 @@ export abstract class BaseEntity<T = unknown> {
         }
         const selector = this.EntityInfo.SubtypeSelectorConfig;
         const selectorPath = selector?.UseForLoadedRecords ? selector.Path?.trim() : null;
-        return selectorPath ? this.evaluateSelectorForLoadHint(selectorPath) : null;
+        return selectorPath ? this.evaluateSelectorForLoadHint(selectorPath, batchUnfilteredCache) : null;
     }
 
     /**
@@ -2061,11 +2067,14 @@ export abstract class BaseEntity<T = unknown> {
      * Walks the `SubtypeSelector` path through engine caches only. A path that isn't valid for
      * this entity's metadata is logged once and gives no hint; the create path throws on it instead.
      */
-    private async evaluateSelectorForLoadHint(path: string): Promise<string | null> {
+    private async evaluateSelectorForLoadHint(
+        path: string,
+        batchUnfilteredCache?: ReadonlyMap<string, ReadonlyArray<BaseEntity | Record<string, unknown>>>
+    ): Promise<string | null> {
         try {
             const pathResult = await this.evaluateSubtypeSelectorPath(
                 path,
-                (entityName, pkValue) => BaseEntity.findSubtypePathTargetInEngineCache(entityName, pkValue)
+                (entityName, pkValue) => BaseEntity.findSubtypePathTargetInEngineCache(entityName, pkValue, batchUnfilteredCache)
             );
             return this.declaredChildForLoadHint(pathResult, `SubtypeSelector path '${path}' on '${this.EntityInfo.Name}'`);
         }
@@ -2532,18 +2541,30 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * Finds the record a `SubtypeSelector` hop points at among the entity objects that loaded
-     * `BaseEngine` caches already hold. Never queries, and never reads the create path's memo, whose
-     * entries can outlive a change to the row: engine caches are kept current by entity events.
+     * `BaseEngine` caches (or the active `RunViews` batch) already hold. Never queries, and never
+     * reads the create path's memo, whose entries can outlive a change to the row: engine caches
+     * are kept current by entity events.
      *
      * `pkValue` is one foreign-key column's value, matched against the first primary key of the
      * cached rows' entity the way UUIDs compare (trimmed, case-insensitive).
      *
      * @returns The cached record, or null when no loaded engine holds it as an entity object.
      */
-    private static findSubtypePathTargetInEngineCache(entityName: string, pkValue: unknown): BaseEntity | null {
+    private static findSubtypePathTargetInEngineCache(
+        entityName: string,
+        pkValue: unknown,
+        batchUnfilteredCache?: ReadonlyMap<string, ReadonlyArray<BaseEntity | Record<string, unknown>>>
+    ): BaseEntity | null {
         const key = NormalizeUUID(String(pkValue));
         for (const match of BaseEngineRegistry.Instance.FindCachedEntity(entityName)) {
             const found = BaseEntity.findEngineCachedRow(match.records, key);
+            if (found) {
+                return found;
+            }
+        }
+        const batchRecords = batchUnfilteredCache?.get(entityName.trim().toLowerCase());
+        if (batchRecords) {
+            const found = BaseEntity.findEngineCachedRow(batchRecords as readonly BaseEntity[], key);
             if (found) {
                 return found;
             }
@@ -3559,6 +3580,16 @@ export abstract class BaseEntity<T = unknown> {
                 part = BaseEntity.beginUnitOfWork(enclosing, BaseEntity.captureChains(records));
                 for (const record of records) {
                     record._unitOfWork = part.unit;
+                }
+                if (!saveOptions?.ReplayOnly && !deleteOptions?.ReplayOnly && provider) {
+                    await CrossEntityPolicyEngine.Instance.PrimeParentLocksForBatch(
+                        plan.Nodes.map((n) => ({
+                            Entity: n.Entity,
+                            Operation: n.Operation === 'Delete' ? 'Delete' : (n.Entity.IsSaved ? 'Update' : 'Create'),
+                        })),
+                        provider as object as IMetadataProvider,
+                        this.ActiveUser,
+                    );
                 }
             }
             const result = await ExecuteEntitySavePlan(plan, {
@@ -5143,6 +5174,7 @@ export abstract class BaseEntity<T = unknown> {
         this.init();
         this.discardJSONFieldObjects();
         this._everSaved = false; // Reset save state for new record
+        DocumentNumberingEngine.Instance.ClearSystemAssignedMarkers(this);
 
         // Clear child entity state — new records don't have children yet
         this._childEntity = null;
@@ -5631,6 +5663,18 @@ export abstract class BaseEntity<T = unknown> {
             }
 
             if (_options.IgnoreDirtyState || initialDirtyState || _options.ReplayOnly) {
+                if (!_options.ReplayOnly) {
+                    const gateError = EntityLifecyclePolicyEngine.Instance.CheckWritePermissionGate(
+                        this,
+                        this.IsSaved ? 'Update' : 'Create',
+                        this.ActiveUser,
+                        this.isDatabaseProvider(),
+                    );
+                    if (gateError) {
+                        throw new Error(gateError);
+                    }
+                }
+
                 // Raise save_started event only when we're actually going to save
                 this.RaiseEvent('save_started', null, saveSubType);
 
@@ -5716,7 +5760,27 @@ export abstract class BaseEntity<T = unknown> {
                             }
                         }
 
-                        const data = await this.ProviderToUse.Save(this, this.ActiveUser, _options)
+                        const saveTelemetryId = TelemetryManager.Instance.StartEvent(
+                            'Custom',
+                            'BaseEntity.Save',
+                            {
+                                operationName: 'BaseEntity.Save',
+                                EntityName: this.EntityInfo?.Name,
+                                SaveSubType: saveSubType,
+                            },
+                            this.ActiveUser?.ID
+                        );
+                        let data: Record<string, unknown> | null;
+                        try {
+                            data = await this.ProviderToUse.Save(this, this.ActiveUser, _options) as Record<string, unknown> | null;
+                            TelemetryManager.Instance.EndEvent(saveTelemetryId, { success: !!data });
+                        } catch (saveErr) {
+                            TelemetryManager.Instance.EndEvent(saveTelemetryId, {
+                                success: false,
+                                error: saveErr instanceof Error ? saveErr.message : String(saveErr),
+                            });
+                            throw saveErr;
+                        }
                         if (!this.TransactionGroup) {
                             // no transaction group, so we have our results here
                             const result = this.finalizeSave(data, saveSubType, _options);
@@ -5825,6 +5889,41 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * Runs all registered PreDelete hooks. If any hook returns false or a string
+     * (error message), the delete is rejected by throwing an Error.
+     */
+    private async runPreDeleteHooks(): Promise<void> {
+        const preDeleteHooks = GetDataHooks<PreDeleteHook>('PreDelete');
+        for (const hook of preDeleteHooks) {
+            const hookResult = await hook(this, this.ActiveUser);
+            if (hookResult === false) {
+                throw new Error('Delete rejected by pre-delete hook');
+            }
+            if (typeof hookResult === 'string') {
+                throw new Error(hookResult);
+            }
+        }
+    }
+
+    /**
+     * Returns true when `ProviderToUse` is a server-side database provider (`ProviderType.Database`)
+     * rather than a client network transport (`ProviderType.Network`).
+     */
+    private isDatabaseProvider(): boolean {
+        const provider = this.ProviderToUse as (IEntityDataProvider & Partial<Pick<IMetadataProvider, 'ProviderType'>>) | null;
+        if (!provider) {
+            return false;
+        }
+        if (provider.ProviderType === ProviderType.Database) {
+            return true;
+        }
+        if (provider.ProviderType === ProviderType.Network) {
+            return false;
+        }
+        return 'ExecuteSQL' in provider && typeof (provider as { ExecuteSQL?: Function }).ExecuteSQL === 'function';
+    }
+
+    /**
      * Determines whether the parent entity should be deleted after this child entity
      * has been deleted. For overlapping subtype parents (AllowMultipleSubtypes = true),
      * the parent is preserved if other child records still exist. For disjoint parents
@@ -5926,7 +6025,7 @@ export abstract class BaseEntity<T = unknown> {
     protected get ActiveUser(): UserInfo {
         // Use the entity's bound provider (per-instance) before falling back to the global
         // default — multi-provider correctness for server requests with per-request users.
-        return this.ContextCurrentUser || (this.ProviderToUse as unknown as IMetadataProvider)?.CurrentUser || Metadata.Provider.CurrentUser; // global-provider-ok: final fallback when no provider is bound
+        return this.ContextCurrentUser || (this.ProviderToUse as unknown as IMetadataProvider)?.CurrentUser || Metadata.Provider?.CurrentUser; // global-provider-ok: final fallback when no provider is bound
     }
 
     /**
@@ -6619,7 +6718,8 @@ export abstract class BaseEntity<T = unknown> {
             data: BaseEntity | Record<string, string | number | boolean | Date | object | null | undefined>;
         }>,
         md: IMetadataProvider,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        batchUnfilteredCache?: ReadonlyMap<string, ReadonlyArray<BaseEntity | Record<string, unknown>>>
     ): Promise<void> {
         const loadedParents: BaseEntity[] = [];
 
@@ -6636,8 +6736,59 @@ export abstract class BaseEntity<T = unknown> {
         }
 
         if (loadedParents.length > 0) {
-            await BaseEntity.hydrateISAChildrenForLevel(loadedParents, md, contextUser);
+            await BaseEntity.hydrateISAChildrenForLevel(loadedParents, md, contextUser, batchUnfilteredCache);
         }
+    }
+
+    /**
+     * Clones `source` into `target` (already instantiated and bound to the destination provider/user)
+     * while preserving an existing in-memory `ISAChild` chain without issuing redundant database
+     * discovery or load queries. When `source` is a disjoint IS-A parent without an attached
+     * `ISAChild`, delegates child resolution to `hydrateISAChildrenForLevel` so `BaseEngine`
+     * caches are consulted before falling back to the provider.
+     */
+    public static async CloneEntityWithISAChain(
+        source: BaseEntity,
+        target: BaseEntity,
+        md: IMetadataProvider,
+        contextUser?: UserInfo
+    ): Promise<void> {
+        if (
+            source.EntityInfo?.IsParentType &&
+            !source.EntityInfo.AllowMultipleSubtypes &&
+            !IsMemberOverridden(target, 'LoadFromData', BaseEntity)
+        ) {
+            const allPksSet = await target.hydrateSingleISAParentPeer(source);
+            if (!allPksSet) {
+                return;
+            }
+            if (source.ISAChild) {
+                const deniedChildLogged = new Set<string>();
+                let currParent: BaseEntity = target;
+                let currSourceChild: BaseEntity | null = source.ISAChild;
+                while (currSourceChild) {
+                    const linked: BaseEntity[] = [];
+                    const ok = await BaseEntity.linkSingleParentFromRawOrEntityRecord(
+                        currParent,
+                        currSourceChild.EntityInfo.Name,
+                        currSourceChild,
+                        linked,
+                        deniedChildLogged
+                    );
+                    currParent._childEntityDiscoveryDone = true;
+                    if (!ok || linked.length === 0) {
+                        break;
+                    }
+                    currParent = linked[0];
+                    currSourceChild = currSourceChild.ISAChild;
+                }
+                currParent._childEntityDiscoveryDone = true;
+            } else {
+                await BaseEntity.hydrateISAChildrenForLevel([target], md, contextUser);
+            }
+            return;
+        }
+        await target.LoadFromData(source.GetAll());
     }
 
     private async hydrateSingleISAParentPeer(
@@ -6686,7 +6837,8 @@ export abstract class BaseEntity<T = unknown> {
     private static async hydrateISAChildrenForLevel(
         levelEntities: ReadonlyArray<BaseEntity>,
         md: IMetadataProvider,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        batchUnfilteredCache?: ReadonlyMap<string, ReadonlyArray<BaseEntity | Record<string, unknown>>>
     ): Promise<void> {
         const activeParents = levelEntities.filter(
             e => e._recordLoaded && e.EntityInfo.IsParentType && !e._childEntityDiscoveryDone && e.EntityInfo.ChildEntities.length > 0
@@ -6710,28 +6862,73 @@ export abstract class BaseEntity<T = unknown> {
         for (const [, groupParents] of groupsByEntityId) {
             const sampleParent = groupParents[0];
             if (sampleParent.EntityInfo.AllowMultipleSubtypes) {
-                await BaseEntity.hydrateOverlappingChildrenForGroup(groupParents, contextUser);
+                await BaseEntity.hydrateOverlappingChildrenForGroup(groupParents, md, contextUser, batchUnfilteredCache);
             } else {
-                await BaseEntity.hydrateDisjointChildrenForGroup(groupParents, md, contextUser, nextLevelChildren);
+                await BaseEntity.hydrateDisjointChildrenForGroup(groupParents, md, contextUser, nextLevelChildren, batchUnfilteredCache);
             }
         }
 
         if (nextLevelChildren.some(c => c.EntityInfo.IsParentType)) {
-            await BaseEntity.hydrateISAChildrenForLevel(nextLevelChildren, md, contextUser);
+            await BaseEntity.hydrateISAChildrenForLevel(nextLevelChildren, md, contextUser, batchUnfilteredCache);
         }
     }
 
     private static async hydrateOverlappingChildrenForGroup(
         groupParents: ReadonlyArray<BaseEntity>,
-        contextUser?: UserInfo
+        md: IMetadataProvider,
+        contextUser?: UserInfo,
+        batchUnfilteredCache?: ReadonlyMap<string, ReadonlyArray<BaseEntity | Record<string, unknown>>>
     ): Promise<void> {
         const sampleParent = groupParents[0];
         const parentInfo = sampleParent.EntityInfo;
         const entityProvider = sampleParent.ProviderToUse;
+        const rvProvider = sampleParent.RunViewProviderToUse;
+        const effectiveUser = contextUser ?? sampleParent._contextCurrentUser ?? md.CurrentUser;
+
+        const validChildren = parentInfo.ChildEntities.filter(c => c.FirstPrimaryKey != null); // first-pk-ok: IS-A children share the parent's single key
+        if (validChildren.length === 0) {
+            for (const p of groupParents) {
+                p._childEntities = [];
+            }
+            return;
+        }
+
+        const childLookups = validChildren.map(childInfo => {
+            const pkField = childInfo.FirstPrimaryKey; // first-pk-ok: IS-A children share the parent's single key
+            const pkIsUuid = Boolean(pkField.IsUniqueIdentifier);
+            const cachedRecords = BaseEntity.findUnfilteredInMemoryChildRecords(
+                childInfo,
+                entityProvider,
+                md,
+                effectiveUser,
+                batchUnfilteredCache
+            );
+            return {
+                childInfo,
+                pkField,
+                pkIsUuid,
+                cachedByPk: cachedRecords ? BaseEntity.buildInMemoryChildLookupMap(cachedRecords, pkField.Name, pkIsUuid) : null,
+            };
+        });
+
+        if (childLookups.every(c => c.cachedByPk !== null)) {
+            for (const p of groupParents) {
+                const rawPk = String(p.PrimaryKey.Values());
+                const matched: { entityName: string }[] = [];
+                for (const c of childLookups) {
+                    const pkKey = CanonicalPrimaryKeyValue(rawPk, c.pkIsUuid);
+                    if (c.cachedByPk?.has(pkKey)) {
+                        matched.push({ entityName: c.childInfo.Name });
+                    }
+                }
+                p._childEntities = matched;
+            }
+            return;
+        }
 
         if (typeof entityProvider?.FindISAChildEntitiesBatch === 'function') {
             const pks = groupParents.map(p => String(p.PrimaryKey.Values()));
-            const batchMap = await entityProvider.FindISAChildEntitiesBatch(parentInfo, pks, contextUser ?? sampleParent._contextCurrentUser);
+            const batchMap = await entityProvider.FindISAChildEntitiesBatch(parentInfo, pks, effectiveUser);
             const pkField = parentInfo.FirstPrimaryKey; // first-pk-ok: IS-A children share the parent's single key
             for (const p of groupParents) {
                 const rawPk = String(p.PrimaryKey.Values());
@@ -6739,73 +6936,605 @@ export abstract class BaseEntity<T = unknown> {
                 const matched = batchMap.get(pkKey) ?? [];
                 p._childEntities = matched.map(name => ({ entityName: name }));
             }
-        } else {
-            await Promise.all(groupParents.map(p => p.discoverOverlappingChildren()));
+            return;
         }
+
+        if (rvProvider && typeof rvProvider.RunViews === 'function') {
+            const chunkSize = BaseEntity.ISABatchChunkSize;
+            const rawPks = Array.from(new Set(groupParents.map(p => String(p.PrimaryKey.Values()))));
+            const uncachedLookups = childLookups.filter(c => c.cachedByPk === null);
+            const params: RunViewParams[] = [];
+            const meta: Array<(typeof uncachedLookups)[number]> = [];
+            for (const c of uncachedLookups) {
+                for (let i = 0; i < rawPks.length; i += chunkSize) {
+                    const chunk = rawPks.slice(i, i + chunkSize);
+                    params.push({
+                        EntityName: c.childInfo.Name,
+                        ExtraFilter: BaseEntity.buildChildPkInFilter(c.pkField, chunk),
+                        Fields: [c.pkField.Name],
+                        ResultType: 'simple',
+                        BypassCache: true,
+                        // Key-bounded (at most one row per PK in the chunk): the entity's
+                        // UserViewMaxRows cap protects nothing here and would drop subtypes.
+                        IgnoreMaxRows: true,
+                    });
+                    meta.push(c);
+                }
+            }
+            for (const c of uncachedLookups) {
+                c.cachedByPk = new Map<string, BaseEntity | Record<string, unknown>>();
+            }
+            if (params.length > 0) {
+                const rv = new RunView(rvProvider);
+                const results = await rv.RunViews<Record<string, unknown>>(params, effectiveUser);
+                for (let i = 0; i < results.length; i++) {
+                    const res = results[i];
+                    const c = meta[i];
+                    if (!res?.Success || !Array.isArray(res.Results)) {
+                        LogWarning(`BaseEntity: batched IS-A child load of '${c.childInfo.Name}' failed (${res?.ErrorMessage || 'no result'}); matching parent record(s) continue without their subtype`, 'IS-A');
+                        continue;
+                    }
+                    for (const row of res.Results) {
+                        const pkVal = row[c.pkField.Name];
+                        if (pkVal != null) {
+                            c.cachedByPk?.set(CanonicalPrimaryKeyValue(String(pkVal), c.pkIsUuid), row);
+                        }
+                    }
+                }
+            }
+            for (const p of groupParents) {
+                const rawPk = String(p.PrimaryKey.Values());
+                const matched: { entityName: string }[] = [];
+                for (const c of childLookups) {
+                    const pkKey = CanonicalPrimaryKeyValue(rawPk, c.pkIsUuid);
+                    if (c.cachedByPk?.has(pkKey)) {
+                        matched.push({ entityName: c.childInfo.Name });
+                    }
+                }
+                p._childEntities = matched;
+            }
+            return;
+        }
+
+        await Promise.all(groupParents.map(p => p.discoverOverlappingChildren()));
     }
 
     private static async hydrateDisjointChildrenForGroup(
         groupParents: ReadonlyArray<BaseEntity>,
         md: IMetadataProvider,
         contextUser: UserInfo | undefined,
-        nextLevelChildren: BaseEntity[]
+        nextLevelChildren: BaseEntity[],
+        batchUnfilteredCache?: ReadonlyMap<string, ReadonlyArray<BaseEntity | Record<string, unknown>>>
     ): Promise<void> {
         const sampleParent = groupParents[0];
         const parentInfo = sampleParent.EntityInfo;
         const entityProvider = sampleParent.ProviderToUse;
         const rvProvider = sampleParent.RunViewProviderToUse;
         const effectiveUser = contextUser ?? sampleParent._contextCurrentUser;
+        const deniedChildLogged = new Set<string>();
 
         // 1) Evaluate in-memory SubtypeSelector / EntitySubtypeResolver load hints
         const { hintedByChild, hintedNameByParent, needsDiscovery } =
-            await BaseEntity.partitionParentsBySubtypeLoadHint(groupParents, parentInfo, md, contextUser);
+            await BaseEntity.partitionParentsBySubtypeLoadHint(
+                groupParents,
+                parentInfo,
+                md,
+                contextUser,
+                batchUnfilteredCache
+            );
 
-        // 2) Batch-load hinted child rows in 1 RunViews call; any missing/failed row falls back to discovery
+        // 2) Batch-load hinted child rows (from unfiltered memory caches first, then at most 1 RunViews call);
+        //    any missing/failed row falls back to discovery
+        // Hinted parents whose child read succeeded and had no row (as opposed to a read that
+        // failed or was not tried): only those are hint misses, as in the per-row path.
+        const hintNotFound = new Set<BaseEntity>();
         if (hintedByChild.size > 0) {
             const unlinkedFromHints = await BaseEntity.batchLoadAndLinkDisjointChildren(
                 hintedByChild,
                 md,
-                rvProvider,
-                effectiveUser,
-                nextLevelChildren
-            );
-            for (const unlinked of unlinkedFromHints) {
-                // Same diagnostic the per-row path emits when a SubtypeSelector hint names a
-                // child that has no row: operators need the signal that a selector is wrong.
-                const hinted = hintedNameByParent.get(unlinked);
-                if (hinted) {
-                    BaseEntity.logLoadFoundNoRow(hinted, unlinked.PrimaryKey);
-                }
-                needsDiscovery.push(unlinked);
-            }
-        }
-
-        // 3) Batch-discover remaining unresolved parents in 1 query, then batch-load their child rows in 1 RunViews call
-        if (needsDiscovery.length > 0) {
-            const discoveredByChild = await BaseEntity.batchDiscoverDisjointChildren(
-                parentInfo,
-                needsDiscovery,
                 entityProvider,
                 rvProvider,
-                effectiveUser
+                effectiveUser,
+                nextLevelChildren,
+                deniedChildLogged,
+                batchUnfilteredCache,
+                hintNotFound
             );
-            if (discoveredByChild.size > 0) {
+            needsDiscovery.push(...unlinkedFromHints);
+        }
+
+        // 3) Discover and hydrate remaining unresolved parents (consulting unfiltered memory caches first,
+        //    then 1 single-pass RunViews call when FindISAChildEntitiesBatch is absent)
+        if (needsDiscovery.length > 0) {
+            const discoveredByParent = await BaseEntity.discoverAndHydrateDisjointChildren(
+                parentInfo,
+                needsDiscovery,
+                md,
+                entityProvider,
+                rvProvider,
+                effectiveUser,
+                nextLevelChildren,
+                deniedChildLogged,
+                batchUnfilteredCache,
+                new Map(Array.from(hintNotFound, p => [p, hintedNameByParent.get(p) ?? ''] as const))
+            );
+            for (const p of hintNotFound) {
+                BaseEntity.reportBatchSubtypeLoadHintMiss(p, hintedNameByParent.get(p), discoveredByParent.get(p) ?? null);
+            }
+        }
+    }
+
+    /**
+     * The batch twin of the per-row path's diagnostics in {@link initializeDisjointChildEntity}, for
+     * a parent whose hinted child had no row, run once discovery has had its say. When discovery
+     * found the hinted child but could not link it, the row exists and its load came back empty, so
+     * the empty load is logged, as the discovery-only path logs it. Anything else goes to
+     * {@link reportSubtypeLoadHintMiss}: quiet (verbose, once) when no subtype row exists at all,
+     * which is a normal state, and an error once per pair when the row is in a different child.
+     */
+    private static reportBatchSubtypeLoadHintMiss(parent: BaseEntity, hintedName: string | undefined, discoveredName: string | null): void {
+        if (!hintedName) {
+            return;
+        }
+        if (discoveredName && sameEntityName(discoveredName, hintedName)) {
+            if (!parent._childEntity) {
+                BaseEntity.logLoadFoundNoRow(hintedName, parent.PrimaryKey);
+            }
+            return;
+        }
+        parent.reportSubtypeLoadHintMiss(hintedName, discoveredName);
+    }
+
+    /**
+     * Discovers and links the child of each disjoint parent.
+     *
+     * @param readFoundNoRow - The child each parent's hinted read already found no row in. When
+     *   discovery names that same child, its row exists but reads back empty (a row filter), so it
+     *   is not read again; the per-row path stops there too.
+     * @returns The child each parent was found to have, whether or not it could then be linked.
+     *   A parent with no child, or whose child could not be determined, is absent.
+     */
+    private static async discoverAndHydrateDisjointChildren(
+        parentInfo: EntityInfo,
+        parents: ReadonlyArray<BaseEntity>,
+        md: IMetadataProvider,
+        entityProvider: IEntityDataProvider | null,
+        rvProvider: IRunViewProvider | null,
+        contextUser: UserInfo | undefined,
+        outLinkedChildren: BaseEntity[],
+        deniedChildLogged: Set<string>,
+        batchUnfilteredCache?: ReadonlyMap<string, ReadonlyArray<BaseEntity | Record<string, unknown>>>,
+        readFoundNoRow: ReadonlyMap<BaseEntity, string> = new Map()
+    ): Promise<Map<BaseEntity, string>> {
+        const discoveredByParent = new Map<BaseEntity, string>();
+        const validChildren = parentInfo.ChildEntities.filter(c => c.FirstPrimaryKey != null); // first-pk-ok: IS-A children share the parent's single key
+        if (validChildren.length === 0) {
+            return discoveredByParent;
+        }
+
+        const userForPerm = contextUser ?? parents[0]?._contextCurrentUser ?? md.CurrentUser;
+        const readableChildren: Array<{
+            childInfo: EntityInfo;
+            pkField: EntityFieldInfo;
+            pkIsUuid: boolean;
+            cachedByPk: Map<string, BaseEntity | Record<string, unknown>> | null;
+        }> = [];
+
+        for (const child of validChildren) {
+            const canRead = userForPerm ? child.GetUserPermisions(userForPerm).CanRead : true;
+            if (!canRead) {
+                if (!deniedChildLogged.has(child.Name)) {
+                    deniedChildLogged.add(child.Name);
+                    LogWarning(`BaseEntity: current user cannot read IS-A child '${child.Name}'; matching parent records are returned without their subtype`, 'IS-A');
+                }
+                continue;
+            }
+            const pkField = child.FirstPrimaryKey; // first-pk-ok: IS-A children share the parent's single key
+            const pkIsUuid = Boolean(pkField.IsUniqueIdentifier);
+            const cachedRecords = BaseEntity.findUnfilteredInMemoryChildRecords(
+                child,
+                entityProvider,
+                md,
+                userForPerm,
+                batchUnfilteredCache
+            );
+            readableChildren.push({
+                childInfo: child,
+                pkField,
+                pkIsUuid,
+                cachedByPk: cachedRecords ? BaseEntity.buildInMemoryChildLookupMap(cachedRecords, pkField.Name, pkIsUuid) : null,
+            });
+        }
+
+        if (readableChildren.length === 0) {
+            return discoveredByParent;
+        }
+
+        // In a disjoint IS-A hierarchy (`AllowMultipleSubtypes === false`), each parent record
+        // belongs to at most one child subtype across all `ChildEntities`. Resolve any parent whose
+        // PK matches an unfiltered in-memory child cache (from BaseEngineRegistry or the active
+        // RunViews batch) immediately with 0 queries, and only probe uncached child entities for
+        // the remaining unresolved parents.
+        const cachedChildren = readableChildren.filter(rc => rc.cachedByPk !== null);
+        const uncachedChildren = readableChildren.filter(rc => rc.cachedByPk === null);
+        let remainingParents: BaseEntity[] = [];
+        if (cachedChildren.length > 0) {
+            for (const p of parents) {
+                const rawPk = String(p.PrimaryKey.Values());
+                let linkedFromMemory = false;
+                for (const rc of cachedChildren) {
+                    const pkKey = CanonicalPrimaryKeyValue(rawPk, rc.pkIsUuid);
+                    const matched = rc.cachedByPk?.get(pkKey);
+                    if (matched) {
+                        discoveredByParent.set(p, rc.childInfo.Name);
+                        await BaseEntity.linkSingleParentFromRawOrEntityRecord(
+                            p,
+                            rc.childInfo.Name,
+                            matched,
+                            outLinkedChildren,
+                            deniedChildLogged
+                        );
+                        linkedFromMemory = true;
+                        break;
+                    }
+                }
+                if (!linkedFromMemory) {
+                    remainingParents.push(p);
+                }
+            }
+        } else {
+            remainingParents = Array.from(parents);
+        }
+
+        if (remainingParents.length === 0 || uncachedChildren.length === 0) {
+            return discoveredByParent;
+        }
+
+        // Server-side batch UNION ALL discovery when available
+        if (typeof entityProvider?.FindISAChildEntitiesBatch === 'function') {
+            const discoveredByChild = await BaseEntity.batchDiscoverDisjointChildren(
+                parentInfo,
+                remainingParents,
+                entityProvider,
+                rvProvider,
+                contextUser
+            );
+            BaseEntity.recordDiscoveredChildren(discoveredByChild, discoveredByParent);
+            const toRead = BaseEntity.withoutChildrenAlreadyRead(discoveredByChild, readFoundNoRow);
+            if (toRead.size > 0) {
                 await BaseEntity.batchLoadAndLinkDisjointChildren(
-                    discoveredByChild,
+                    toRead,
                     md,
+                    entityProvider,
                     rvProvider,
-                    effectiveUser,
-                    nextLevelChildren
+                    contextUser,
+                    outLinkedChildren,
+                    deniedChildLogged
+                );
+            }
+            return discoveredByParent;
+        }
+
+        // Single-pass RunViews discovery + hydration when FindISAChildEntitiesBatch is absent (e.g. GraphQLDataProvider)
+        if (rvProvider && typeof rvProvider.RunViews === 'function') {
+            await BaseEntity.discoverAndLoadDisjointChildrenViaRunViews(
+                readableChildren,
+                remainingParents,
+                rvProvider,
+                contextUser,
+                outLinkedChildren,
+                deniedChildLogged
+            );
+            // Here discovery and the load are one read, so a child is known only where it linked.
+            for (const p of remainingParents) {
+                if (p._childEntity) {
+                    discoveredByParent.set(p, p._childEntity.EntityInfo.Name);
+                }
+            }
+            return discoveredByParent;
+        }
+
+        // Last-resort per-parent fallback when neither FindISAChildEntitiesBatch nor RunViews exists
+        if (typeof entityProvider?.FindISAChildEntity === 'function') {
+            const discoveredByChild = new Map<string, BaseEntity[]>();
+            for (const p of remainingParents) {
+                const found = await entityProvider.FindISAChildEntity(parentInfo, String(p.PrimaryKey.Values()), contextUser);
+                if (found?.ChildEntityName) {
+                    BaseEntity.appendParentToChildGroup(discoveredByChild, found.ChildEntityName, p);
+                }
+            }
+            BaseEntity.recordDiscoveredChildren(discoveredByChild, discoveredByParent);
+            const toRead = BaseEntity.withoutChildrenAlreadyRead(discoveredByChild, readFoundNoRow);
+            if (toRead.size > 0) {
+                await BaseEntity.batchLoadAndLinkDisjointChildren(
+                    toRead,
+                    md,
+                    entityProvider,
+                    rvProvider,
+                    contextUser,
+                    outLinkedChildren,
+                    deniedChildLogged
                 );
             }
         }
+        return discoveredByParent;
+    }
+
+    /** `byChild` without each parent whose read of that same child already found no row. */
+    private static withoutChildrenAlreadyRead(
+        byChild: ReadonlyMap<string, ReadonlyArray<BaseEntity>>,
+        readFoundNoRow: ReadonlyMap<BaseEntity, string>
+    ): Map<string, BaseEntity[]> {
+        const out = new Map<string, BaseEntity[]>();
+        for (const [childName, parents] of byChild) {
+            const toRead = parents.filter(p => {
+                const alreadyRead = readFoundNoRow.get(p);
+                return !alreadyRead || !sameEntityName(alreadyRead, childName);
+            });
+            if (toRead.length > 0) {
+                out.set(childName, toRead);
+            }
+        }
+        return out;
+    }
+
+    /** Copies a child-name → parents grouping into a parent → child-name map. */
+    private static recordDiscoveredChildren(byChild: ReadonlyMap<string, ReadonlyArray<BaseEntity>>, out: Map<BaseEntity, string>): void {
+        for (const [childName, parents] of byChild) {
+            for (const p of parents) {
+                out.set(p, childName);
+            }
+        }
+    }
+
+    /**
+     * Single-pass `RunViews` child discovery and hydration for providers without `FindISAChildEntitiesBatch`
+     * (such as `GraphQLDataProvider`). Queries only the readable child entities not already present in an
+     * unfiltered memory cache, fetches full child rows (`SELECT *`, no `Fields` narrowing) in 1 `RunViews`
+     * call per chunk, and links the highest-priority matching child row per parent immediately.
+     */
+    private static async discoverAndLoadDisjointChildrenViaRunViews(
+        readableChildren: ReadonlyArray<{
+            childInfo: EntityInfo;
+            pkField: EntityFieldInfo;
+            pkIsUuid: boolean;
+            cachedByPk: Map<string, BaseEntity | Record<string, unknown>> | null;
+        }>,
+        parents: ReadonlyArray<BaseEntity>,
+        rvProvider: IRunViewProvider,
+        contextUser: UserInfo | undefined,
+        outLinkedChildren: BaseEntity[],
+        deniedChildLogged: Set<string>
+    ): Promise<void> {
+        const uncachedChildren = readableChildren.filter(rc => rc.cachedByPk === null);
+        const chunkSize = BaseEntity.ISABatchChunkSize;
+        const rv = new RunView(rvProvider);
+
+        for (let start = 0; start < parents.length; start += chunkSize) {
+            const chunkParents = parents.slice(start, start + chunkSize);
+            const chunkPks = chunkParents.map(p => String(p.PrimaryKey.Values()));
+
+            const queriedRowsByChildName = new Map<string, Map<string, Record<string, string | number | boolean | Date | object | null | undefined>>>();
+            if (uncachedChildren.length > 0) {
+                const params: RunViewParams[] = uncachedChildren.map(rc => ({
+                    EntityName: rc.childInfo.Name,
+                    ExtraFilter: BaseEntity.buildChildPkInFilter(rc.pkField, chunkPks),
+                    ResultType: 'simple',
+                    // Internal hydration read: keep per-batch IN-list reads out of the shared RunView cache.
+                    BypassCache: true,
+                    // Key-bounded (at most one row per PK in the chunk): the entity's
+                    // UserViewMaxRows cap protects nothing here and would drop subtypes.
+                    IgnoreMaxRows: true,
+                }));
+                const results = await rv.RunViews<Record<string, string | number | boolean | Date | object | null | undefined>>(params, contextUser);
+                for (let cIdx = 0; cIdx < uncachedChildren.length; cIdx++) {
+                    const rc = uncachedChildren[cIdx];
+                    const res = results[cIdx];
+                    const rowByPk = new Map<string, Record<string, string | number | boolean | Date | object | null | undefined>>();
+                    queriedRowsByChildName.set(rc.childInfo.Name, rowByPk);
+                    if (!res?.Success || !Array.isArray(res.Results)) {
+                        LogWarning(`BaseEntity: batched IS-A child load of '${rc.childInfo.Name}' failed (${res?.ErrorMessage || 'no result'}); matching parent record(s) continue without their subtype`, 'IS-A');
+                        continue;
+                    }
+                    for (const row of res.Results) {
+                        const rawVal = row[rc.pkField.Name];
+                        if (rawVal != null) {
+                            const norm = CanonicalPrimaryKeyValue(String(rawVal), rc.pkIsUuid);
+                            if (!rowByPk.has(norm)) {
+                                rowByPk.set(norm, row);
+                            }
+                        }
+                    }
+                }
+            }
+
+            for (const p of chunkParents) {
+                const rawPk = String(p.PrimaryKey.Values());
+                for (const rc of readableChildren) {
+                    const norm = CanonicalPrimaryKeyValue(rawPk, rc.pkIsUuid);
+                    const matched = rc.cachedByPk
+                        ? rc.cachedByPk.get(norm)
+                        : queriedRowsByChildName.get(rc.childInfo.Name)?.get(norm);
+                    if (matched) {
+                        await BaseEntity.linkSingleParentFromRawOrEntityRecord(
+                            p,
+                            rc.childInfo.Name,
+                            matched,
+                            outLinkedChildren,
+                            deniedChildLogged
+                        );
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    private static findUnfilteredInMemoryChildRecords(
+        childInfo: EntityInfo,
+        entityProvider: IEntityDataProvider | null,
+        md: IMetadataProvider,
+        userForPerm: UserInfo | undefined,
+        batchUnfilteredCache?: ReadonlyMap<string, ReadonlyArray<BaseEntity | Record<string, unknown>>>
+    ): ReadonlyArray<BaseEntity | Record<string, unknown>> | null {
+        if (userForPerm && !childInfo.GetUserPermisions(userForPerm).CanRead) {
+            return null;
+        }
+        // Check unfiltered views in the caller's own RunViews batch first (fetched in the same call for the same user)
+        const batchMatch = batchUnfilteredCache?.get(childInfo.Name.trim().toLowerCase());
+        if (batchMatch) {
+            return batchMatch;
+        }
+
+        // Server-side BaseEngines load as the system user; do not serve from a shared engine cache when
+        // the calling user has Row-Level Security filters on this child entity.
+        const providerAsMd = (entityProvider as unknown as IMetadataProvider | null) ?? md;
+        const isDatabaseProvider = providerAsMd?.ProviderType === ProviderType.Database;
+        if (
+            isDatabaseProvider &&
+            userForPerm &&
+            childInfo.GetEffectiveRowFilterWhereClause(userForPerm, EntityPermissionType.Read, '').length > 0
+        ) {
+            return null;
+        }
+
+        const providerConn = providerAsMd?.InstanceConnectionString;
+        for (const match of BaseEngineRegistry.Instance.FindCachedEntity(childInfo.Name, { unfilteredOnly: true })) {
+            const engineObj = match.engine as { ProviderToUse?: { InstanceConnectionString?: string } } | null;
+            const engineConn = engineObj?.ProviderToUse?.InstanceConnectionString;
+            if (providerConn && engineConn && providerConn !== engineConn) {
+                continue;
+            }
+            return match.records as ReadonlyArray<BaseEntity | Record<string, unknown>>;
+        }
+        return null;
+    }
+
+    private static buildInMemoryChildLookupMap(
+        records: ReadonlyArray<BaseEntity | Record<string, unknown>>,
+        pkFieldName: string,
+        pkIsUuid: boolean
+    ): Map<string, BaseEntity | Record<string, unknown>> {
+        const byPk = new Map<string, BaseEntity | Record<string, unknown>>();
+        for (const rec of records) {
+            if (!rec || typeof rec !== 'object') continue;
+            const rawPk = typeof (rec as BaseEntity).Get === 'function'
+                ? (rec as BaseEntity).Get(pkFieldName)
+                : (rec as Record<string, unknown>)[pkFieldName];
+            if (rawPk != null) {
+                const norm = CanonicalPrimaryKeyValue(String(rawPk), pkIsUuid);
+                if (!byPk.has(norm)) {
+                    byPk.set(norm, rec);
+                }
+            }
+        }
+        return byPk;
+    }
+
+    private static async linkSingleParentFromRawOrEntityRecord(
+        parent: BaseEntity,
+        childName: string,
+        matchedRecord: BaseEntity | Record<string, unknown>,
+        outLinkedChildren: BaseEntity[],
+        deniedChildLogged: Set<string>
+    ): Promise<boolean> {
+        const childEntity = await parent.createChildEntityObject(childName);
+        if (!childEntity || !childEntity.CheckPermissions(EntityPermissionType.Read, false)) {
+            if (!deniedChildLogged.has(childName)) {
+                deniedChildLogged.add(childName);
+                LogWarning(`BaseEntity: current user cannot read IS-A child '${childName}'; matching parent records are returned without their subtype`, 'IS-A');
+            }
+            return false;
+        }
+        const rawChildRow = (typeof (matchedRecord as BaseEntity).GetAll === 'function'
+            ? (matchedRecord as BaseEntity).GetAll()
+            : matchedRecord) as Record<string, string | number | boolean | Date | object | null | undefined>;
+        const childRow = BaseEntity.inheritedFieldsFromParent(parent, childEntity, rawChildRow);
+        await parent.linkHydratedChildFromBatchRow(childEntity, childRow);
+        outLinkedChildren.push(childEntity);
+        return true;
+    }
+
+    /**
+     * Replaces the fields `parent` (or its IS-A ancestors) owns in an in-memory child row with
+     * `parent`'s own loaded values, before linking the row downward onto `parent`. Keeps the
+     * freshly loaded parent row authoritative for its own columns even when an engine cache holds
+     * an older snapshot of the child view's joined parent columns, and still hydrates the child's
+     * mirror fields: a mirror left NotLoaded would have no old value, so a later `child.Set()` of
+     * an inherited field would report it as changing from null in `GetAll(true)` (and so in
+     * Record Changes).
+     *
+     * "Owned by an ancestor" means the mirrored columns (`ParentEntityFieldNames`) and the
+     * ancestors' virtual columns, which the child view also carries. The shared key and `__mj_`
+     * timestamps are not: the child view's timestamps are its own table's. A replaced field the
+     * parent did not load stays out of the row.
+     */
+    private static inheritedFieldsFromParent(
+        parent: BaseEntity,
+        childEntity: BaseEntity,
+        childRow: Record<string, string | number | boolean | Date | object | null | undefined>
+    ): Record<string, string | number | boolean | Date | object | null | undefined> {
+        if (!childRow || typeof childRow !== 'object') {
+            return childRow;
+        }
+
+        const pkNamesLower = new Set<string>();
+        for (const pk of [...childEntity.EntityInfo.PrimaryKeys, ...parent.EntityInfo.PrimaryKeys]) {
+            pkNamesLower.add(pk.Name.trim().toLowerCase());
+            if (pk.CodeName) pkNamesLower.add(pk.CodeName.trim().toLowerCase());
+        }
+
+        // Canonical field name → its lowercased name and code name, for every replaced field.
+        const replaced = new Map<string, string[]>();
+        const addReplaced = (name: string, codeName: string | undefined): void => {
+            const lower = name.trim().toLowerCase();
+            if (pkNamesLower.has(lower) || lower.startsWith('__mj_')) {
+                return;
+            }
+            replaced.set(name, codeName ? [lower, codeName.trim().toLowerCase()] : [lower]);
+        };
+        for (const name of childEntity.EntityInfo.ParentEntityFieldNames) {
+            addReplaced(name, childEntity.EntityInfo.Fields.find(f => f.Name === name)?.CodeName);
+        }
+        for (const ancestorInfo of childEntity.EntityInfo.ParentChain) {
+            for (const f of ancestorInfo.Fields) {
+                if (f.IsVirtual) {
+                    addReplaced(f.Name, f.CodeName);
+                }
+            }
+        }
+        if (replaced.size === 0) {
+            return childRow;
+        }
+
+        const replacedLower = new Set<string>();
+        for (const keys of replaced.values()) {
+            for (const k of keys) replacedLower.add(k);
+        }
+        const copy: Record<string, string | number | boolean | Date | object | null | undefined> = {};
+        for (const key of Object.keys(childRow)) {
+            if (!replacedLower.has(key.trim().toLowerCase())) {
+                copy[key] = childRow[key];
+            }
+        }
+        // GetAll() holds every field the parent loaded (NotLoaded ones are omitted), keyed by
+        // field name, with its current values. The parent was loaded in this same batch, so its
+        // current values are its loaded values.
+        const parentValues = parent.GetAll() as Record<string, string | number | boolean | Date | object | null | undefined>;
+        for (const name of replaced.keys()) {
+            if (Object.prototype.hasOwnProperty.call(parentValues, name)) {
+                copy[name] = parentValues[name];
+            }
+        }
+        return copy;
     }
 
     private static async partitionParentsBySubtypeLoadHint(
         groupParents: ReadonlyArray<BaseEntity>,
         parentInfo: EntityInfo,
         md: IMetadataProvider,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        batchUnfilteredCache?: ReadonlyMap<string, ReadonlyArray<BaseEntity | Record<string, unknown>>>
     ): Promise<{
         hintedByChild: Map<string, BaseEntity[]>;
         hintedNameByParent: Map<BaseEntity, string>;
@@ -6816,7 +7545,7 @@ export abstract class BaseEntity<T = unknown> {
         const needsDiscovery: BaseEntity[] = [];
 
         for (const p of groupParents) {
-            const hintedName = await p.resolveSubtypeLoadHint();
+            const hintedName = await p.resolveSubtypeLoadHint(batchUnfilteredCache);
             if (hintedName) {
                 const childInfo =
                     md.EntityByName?.(hintedName) ??
@@ -6887,11 +7616,7 @@ export abstract class BaseEntity<T = unknown> {
             return grouped;
         }
 
-        if (rvProvider && typeof rvProvider.RunViews === 'function') {
-            return BaseEntity.discoverDisjointChildrenViaRunViews(parentInfo, parents, pkValues, pkIsUuid, rvProvider, contextUser);
-        }
-
-        // Last-resort per-parent fallback when neither FindISAChildEntitiesBatch nor RunViews exists
+        // Last-resort per-parent fallback when FindISAChildEntitiesBatch is absent
         if (typeof entityProvider?.FindISAChildEntity === 'function') {
             for (const p of parents) {
                 const found = await entityProvider.FindISAChildEntity(parentInfo, String(p.PrimaryKey.Values()), contextUser);
@@ -6903,87 +7628,91 @@ export abstract class BaseEntity<T = unknown> {
         return grouped;
     }
 
-    private static async discoverDisjointChildrenViaRunViews(
-        parentInfo: EntityInfo,
-        parents: ReadonlyArray<BaseEntity>,
-        pkValues: ReadonlyArray<string>,
-        pkIsUuid: boolean,
-        rvProvider: IRunViewProvider,
-        contextUser?: UserInfo
-    ): Promise<Map<string, BaseEntity[]>> {
-        const grouped = new Map<string, BaseEntity[]>();
-        const validChildren = parentInfo.ChildEntities.filter(c => c.FirstPrimaryKey != null); // first-pk-ok: IS-A children share the parent's single key
-        if (validChildren.length === 0) return grouped;
-
-        const chunkSize = BaseEntity.ISABatchChunkSize;
-        const winnerByPk = new Map<string, string>();
-        const rv = new RunView(rvProvider);
-        for (let start = 0; start < pkValues.length; start += chunkSize) {
-            const chunkPks = pkValues.slice(start, start + chunkSize);
-            const probeParams: RunViewParams[] = validChildren.map(child => {
-                const childPk = child.FirstPrimaryKey; // first-pk-ok: IS-A children share the parent's single key
-                return {
-                    EntityName: child.Name,
-                    ExtraFilter: BaseEntity.buildChildPkInFilter(childPk, chunkPks),
-                    Fields: [childPk.Name],
-                    ResultType: 'simple',
-                    // Internal probe: the pre-batch path (InnerLoad) never touched the RunView
-                    // cache. Every distinct IN-list would otherwise become its own filtered
-                    // cache slot that is invalidated (never maintained) on each child save.
-                    BypassCache: true,
-                };
-            });
-            const probeResults = await rv.RunViews<Record<string, string | number>>(probeParams, contextUser);
-            for (let cIdx = 0; cIdx < validChildren.length; cIdx++) {
-                const child = validChildren[cIdx];
-                const pkName = child.FirstPrimaryKey.Name; // first-pk-ok: IS-A children share the parent's single key
-                const res = probeResults[cIdx];
-                if (!res?.Success || !Array.isArray(res.Results)) continue;
-                for (const row of res.Results) {
-                    const rawVal = row[pkName];
-                    if (rawVal != null) {
-                        const norm = CanonicalPrimaryKeyValue(String(rawVal), pkIsUuid);
-                        if (!winnerByPk.has(norm)) {
-                            winnerByPk.set(norm, child.Name);
-                        }
-                    }
-                }
-            }
-        }
-
-        for (const p of parents) {
-            const norm = CanonicalPrimaryKeyValue(String(p.PrimaryKey.Values()), pkIsUuid);
-            const childName = winnerByPk.get(norm);
-            if (childName) {
-                BaseEntity.appendParentToChildGroup(grouped, childName, p);
-            }
-        }
-        return grouped;
-    }
-
     private static async batchLoadAndLinkDisjointChildren(
         parentsByChildName: Map<string, BaseEntity[]>,
         md: IMetadataProvider,
+        entityProvider: IEntityDataProvider | null,
         rvProvider: IRunViewProvider | null,
         contextUser: UserInfo | undefined,
-        outLinkedChildren: BaseEntity[]
+        outLinkedChildren: BaseEntity[],
+        deniedChildLogged: Set<string> = new Set<string>(),
+        batchUnfilteredCache?: ReadonlyMap<string, ReadonlyArray<BaseEntity | Record<string, unknown>>>,
+        outNotFound: Set<BaseEntity> = new Set<BaseEntity>()
     ): Promise<BaseEntity[]> {
         const unlinkedParents: BaseEntity[] = [];
+
+        // Every parent here already has a known subtype (a load hint, or discovery against the
+        // DB), so a miss in a BaseEngine cache means the cache is behind the DB (the engine's event
+        // debounce window, another server node, an out-of-band write), not that the row is absent.
+        // Those parents are read from the DB with the uncached children below. A miss in the
+        // caller's own RunViews batch is final: that read ran in this same call, for this user.
+        // Unhinted discovery is different: there a complete cache does prove absence, and
+        // discoverAndHydrateDisjointChildren never sends such parents here.
+        const remainingByChildName = new Map<string, BaseEntity[]>();
+        for (const [childName, parents] of parentsByChildName) {
+            const childInfo =
+                md.EntityByName?.(childName) ??
+                parents[0]?.EntityInfo.ChildEntities.find(c => sameEntityName(c.Name, childName));
+            const pkField = childInfo?.FirstPrimaryKey; // first-pk-ok: IS-A children share the parent's single key
+            const userForPerm = contextUser ?? parents[0]?._contextCurrentUser ?? md.CurrentUser;
+            const cachedRecords = childInfo && pkField
+                ? BaseEntity.findUnfilteredInMemoryChildRecords(childInfo, entityProvider, md, userForPerm, batchUnfilteredCache)
+                : null;
+            if (childInfo && pkField && cachedRecords) {
+                const pkIsUuid = Boolean(pkField.IsUniqueIdentifier);
+                const byPk = BaseEntity.buildInMemoryChildLookupMap(cachedRecords, pkField.Name, pkIsUuid);
+                const fromCallerBatch = batchUnfilteredCache?.has(childInfo.Name.trim().toLowerCase()) === true;
+                const cacheMisses: BaseEntity[] = [];
+                for (const p of parents) {
+                    const pkKey = CanonicalPrimaryKeyValue(String(p.PrimaryKey.Values()), pkIsUuid);
+                    const matched = byPk.get(pkKey);
+                    if (!matched && fromCallerBatch) {
+                        unlinkedParents.push(p);
+                        outNotFound.add(p);
+                        continue;
+                    }
+                    if (!matched) {
+                        cacheMisses.push(p);
+                        continue;
+                    }
+                    const linked = await BaseEntity.linkSingleParentFromRawOrEntityRecord(
+                        p,
+                        childInfo.Name,
+                        matched,
+                        outLinkedChildren,
+                        deniedChildLogged
+                    );
+                    if (!linked) {
+                        unlinkedParents.push(p);
+                    }
+                }
+                if (cacheMisses.length > 0) {
+                    remainingByChildName.set(childName, cacheMisses);
+                }
+            } else {
+                remainingByChildName.set(childName, parents);
+            }
+        }
+
+        if (remainingByChildName.size === 0) {
+            return unlinkedParents;
+        }
+
         if (!rvProvider || typeof rvProvider.RunViews !== 'function') {
-            for (const [childName, parents] of parentsByChildName) {
+            for (const [childName, parents] of remainingByChildName) {
                 for (const p of parents) {
                     const linked = await p.createAndLinkChildEntity(childName);
                     if (!linked) {
                         unlinkedParents.push(p);
+                        outNotFound.add(p);
                     }
                 }
             }
             return unlinkedParents;
         }
 
-        const deniedChildLogged = new Set<string>();
         const slices = BaseEntity.buildDisjointChildQuerySlices(
-            parentsByChildName,
+            remainingByChildName,
             md,
             contextUser,
             unlinkedParents,
@@ -7006,7 +7735,8 @@ export abstract class BaseEntity<T = unknown> {
                 batchResults[sIdx],
                 unlinkedParents,
                 outLinkedChildren,
-                deniedChildLogged
+                deniedChildLogged,
+                outNotFound
             );
         }
 
@@ -7069,6 +7799,9 @@ export abstract class BaseEntity<T = unknown> {
                         // Internal hydration read: see batchDiscoverDisjointChildren — keep these
                         // per-batch IN-list reads out of the shared RunView cache.
                         BypassCache: true,
+                        // Key-bounded (at most one row per PK in the slice): the entity's
+                        // UserViewMaxRows cap protects nothing here and would drop subtypes.
+                        IgnoreMaxRows: true,
                     },
                 });
             }
@@ -7087,7 +7820,8 @@ export abstract class BaseEntity<T = unknown> {
         res: { Success?: boolean; Results?: Array<Record<string, string | number | boolean | Date | object | null | undefined>>; ErrorMessage?: string } | undefined,
         unlinkedParents: BaseEntity[],
         outLinkedChildren: BaseEntity[],
-        deniedChildLogged: Set<string>
+        deniedChildLogged: Set<string>,
+        outNotFound: Set<BaseEntity>
     ): Promise<void> {
         if (!res?.Success || !Array.isArray(res.Results)) {
             // Not silent: the per-row path surfaced a failed child load; here the parents stay
@@ -7110,6 +7844,7 @@ export abstract class BaseEntity<T = unknown> {
             const childRow = rowByPk.get(pkKey);
             if (!childRow) {
                 unlinkedParents.push(p);
+                outNotFound.add(p);
                 continue;
             }
             const childEntity = await p.createChildEntityObject(slice.childName);
@@ -7308,11 +8043,33 @@ export abstract class BaseEntity<T = unknown> {
                     continue; // skip parent field mirrors — authoritative validation is on _parentEntity
 
                 const err = field.Validate();
-                err.Errors.forEach(element => {
-                    result.Errors.push(element);
-                });
-                result.Success = result.Success && err.Success; // if any field fails, we fail, but keep going to get all of the validation messages
+                const suppressPreSaveNullForAutoNumber =
+                    !this.IsSaved &&
+                    (field.Value === null ||
+                        field.Value === undefined ||
+                        (typeof field.Value === 'string' && field.Value.trim().length === 0)) &&
+                    DocumentNumberingEngine.Instance.WillAutoPopulateOnCreate(this.EntityInfo, field.Name);
+
+                if (suppressPreSaveNullForAutoNumber) {
+                    const nullErrorMessage = `${field.EntityFieldInfo.DisplayNameOrName} cannot be null`;
+                    const retainedErrors = err.Errors.filter((e) => e.Message !== nullErrorMessage);
+                    retainedErrors.forEach((element) => {
+                        result.Errors.push(element);
+                    });
+                    if (retainedErrors.length > 0) {
+                        result.Success = false;
+                    }
+                } else {
+                    err.Errors.forEach(element => {
+                        result.Errors.push(element);
+                    });
+                    result.Success = result.Success && err.Success; // if any field fails, we fail, but keep going to get all of the validation messages
+                }
             }
+
+            // Declarative & programmatic lifecycle state machine, field-freeze, and auto-number reserved-namespace rules
+            EntityLifecyclePolicyEngine.Instance.ValidateLifecycleOnEntity(this, this.ActiveUser, result);
+            DocumentNumberingEngine.Instance.ValidateAutoNumberFields(this, result);
 
             // Companions validate LAST but still BEFORE any write, over their complete state including
             // pending removals. That ordering is what lets a cross-child invariant — "debits must equal
@@ -7544,6 +8301,19 @@ export abstract class BaseEntity<T = unknown> {
 
                 this.CheckPermissions(EntityPermissionType.Delete, true); // this will throw an error and exit out if we don't have permission
 
+                if (!_options.ReplayOnly) {
+                    const gateError = EntityLifecyclePolicyEngine.Instance.CheckWritePermissionGate(
+                        this,
+                        'Delete',
+                        this.ActiveUser,
+                        this.isDatabaseProvider(),
+                    );
+                    if (gateError) {
+                        throw new Error(gateError);
+                    }
+                    await this.runPreDeleteHooks();
+                }
+
                 // Raise delete_started event before the actual delete operation begins
                 this.RaiseEvent('delete_started', null);
 
@@ -7558,7 +8328,27 @@ export abstract class BaseEntity<T = unknown> {
                 });
 
                 // Delete OWN row first (FK constraint: child must be deleted before parent)
-                if (await this.ProviderToUse.Delete(this, _options, this.ActiveUser)) {
+                const deleteTelemetryId = TelemetryManager.Instance.StartEvent(
+                    'Custom',
+                    'BaseEntity.Delete',
+                    {
+                        operationName: 'BaseEntity.Delete',
+                        EntityName: this.EntityInfo?.Name,
+                    },
+                    this.ActiveUser?.ID
+                );
+                let deletedOwnRow = false;
+                try {
+                    deletedOwnRow = await this.ProviderToUse.Delete(this, _options, this.ActiveUser);
+                    TelemetryManager.Instance.EndEvent(deleteTelemetryId, { success: deletedOwnRow });
+                } catch (delErr) {
+                    TelemetryManager.Instance.EndEvent(deleteTelemetryId, {
+                        success: false,
+                        error: delErr instanceof Error ? delErr.message : String(delErr),
+                    });
+                    throw delErr;
+                }
+                if (deletedOwnRow) {
                     ownRowDeleted = true;
                     // IS-A: after own delete succeeds, cascade to parent chain
                     if (hasParentChain) {
