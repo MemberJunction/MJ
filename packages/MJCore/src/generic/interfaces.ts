@@ -343,6 +343,19 @@ export interface IEntityDataProvider {
      *          `RunInEntityTransaction()` which does that for you.
      */
     BeginEntityTransaction?(): Promise<EntityTransactionScope>;
+
+    /**
+     * Runs `fn` as if the caller were in no transaction on this provider, even when its async scope
+     * belongs to an open one: statements `fn` issues run on the pool and commit on their own.
+     *
+     * For fire-and-forget writes (see `BaseEntitySaveQueue`): the caller never awaits them, so it
+     * cannot order them before its transaction's COMMIT. Bound to the transaction, such a write either
+     * reaches SQL behind the COMMIT and is rejected, or is rolled back with work it merely observed.
+     *
+     * Implemented by `GenericDatabaseProvider`, which tracks which async scope owns its transaction.
+     * Absent on providers with no in-process transaction (e.g. `GraphQLDataProvider`): nothing to leave.
+     */
+    RunOutsideAmbientTransaction?<T>(fn: () => Promise<T>): Promise<T>;
 }
 
 /**
