@@ -511,7 +511,7 @@ export interface PredictiveStudioModelingPlanSpec {
         Priority: number;
     }>;
     /** Validation strategy for the search. */
-    ValidationStrategy: { Strategy: 'train_test_split' | 'kfold' | 'holdout'; TestSize?: number; K?: number; LockedHoldoutFraction: number };
+    ValidationStrategy: { Strategy: 'train_test_split' | 'kfold' | 'holdout'; TestSize?: number; K?: number; LockedHoldoutFraction?: number };
     /** Proposed resource budget for the experiment session. */
     ProposedBudget: PredictiveStudioBudget;
     /** User approval gate — execution does not begin until this is true. */
@@ -2088,7 +2088,7 @@ export class PredictiveStudioStartExperimentSessionOperation extends BaseRemotab
     public readonly ExecutionMode = 'LongRunning' as const;
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_6a24af7901f8dd8b";
+    public readonly ContractFingerprint = "ro_fp_869cb01adf6b0bbd";
 }
 
 // ============================================================
