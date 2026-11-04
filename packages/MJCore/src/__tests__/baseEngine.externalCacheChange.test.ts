@@ -237,6 +237,33 @@ describe('BaseEngine.OnExternalCacheChange ordering guard', () => {
         expect((engine._items as MockEntity[]).map((r) => r.data.ID)).toEqual(['fresh']);
     });
 
+    it('a batched full load that started first never overwrites a cache event that committed while it was in flight', async () => {
+        const { engine, provider } = setup();
+        const config = makeConfig();
+        engine.SetConfigsForTest([config]);
+        let releaseBatch: (() => void) | null = null;
+        const batchGate = new Promise<void>((resolve) => { releaseBatch = resolve; });
+        const runViewsProvider = provider as object as IMetadataProvider & {
+            RunViews: (params: unknown[]) => Promise<Array<Record<string, unknown>>>;
+        };
+        runViewsProvider.RunViews = async (params: unknown[]) => {
+            await batchGate;
+            return params.map(() => ({
+                Success: true, Results: [{ ID: 'batch' }], RowCount: 1, TotalRowCount: 1,
+                ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '',
+            }));
+        };
+
+        const batch = engine.LoadMultipleEntityConfigsForTest([config], {} as UserInfo);
+        await engine.OnExternalCacheChangeForTest(config, makeEvent([{ ID: 'event', __mj_CreatedAt: '2026-08-02T00:00:00.000Z' }]));
+        expect((engine._items as MockEntity[]).map((r) => r.data.ID)).toEqual(['event']);
+
+        releaseBatch!();
+        await batch;
+        // The batch read began before the event's payload was built; the newer rows stay.
+        expect((engine._items as MockEntity[]).map((r) => r.data.ID)).toEqual(['event']);
+    });
+
     it('a lone cache event still commits (the guard is a no-op on the normal path)', async () => {
         vi.useFakeTimers();
         const { engine } = setup({ delaysMs: [10] });

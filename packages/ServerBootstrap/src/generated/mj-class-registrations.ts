@@ -246,7 +246,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (472 classes)
+// @memberjunction/core-entities (477 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -452,6 +452,11 @@ import {
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
+    MJDiagnosticBundleEntity,
+    MJDiagnosticSenderRegistrationEntity,
+    MJDiagnosticSessionChunkEntity,
+    MJDiagnosticSessionEntity,
+    MJDocumentSequenceCounterEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -1574,7 +1579,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (168 classes)
+// @memberjunction/core-actions (166 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1642,7 +1647,6 @@ import {
     GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
-    GetArchitectureDiagramReferenceAction,
     GetDefaultFormScaffoldForEntityAction,
     GetDownloadUrlAction,
     GetEntityDetailsAction,
@@ -1698,7 +1702,6 @@ import {
     ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
-    RenderArchitectureDiagramAction,
     ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
@@ -2082,6 +2085,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
+    MJDiagnosticBundleEntity,
+    MJDiagnosticSenderRegistrationEntity,
+    MJDiagnosticSessionChunkEntity,
+    MJDiagnosticSessionEntity,
+    MJDocumentSequenceCounterEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -2198,15 +2206,15 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJMeetingEntity,
     MJMeetingParticipantEntity,
     MJNumberPoolEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
     MJOAuthTokenEntity,
     MJOpenAppDependencyEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJOpenAppEntity,
     MJOpenAppInstallHistoryEntity,
     MJOutputDeliveryTypeEntity,
@@ -2402,15 +2410,15 @@ const CLASS_REGISTRATIONS_2: any[] = [
     CreateJournalEntryAction,
     CreateQuickBooksJournalEntryAction,
     GetAccountBalancesAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     GetBusinessCentralAccountBalancesAction,
     GetBusinessCentralCustomersAction,
     GetBusinessCentralDimensionsAction,
     GetBusinessCentralGLAccountsAction,
     GetBusinessCentralGeneralLedgerEntriesAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     GetBusinessCentralSalesInvoicesAction,
     GetChartOfAccountsAction,
     GetCustomersAction,
@@ -2606,15 +2614,15 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DecisionReranker,
     LLMReranker,
     AdaptiveBoundarySegmenter,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     FixedWindowSegmenter,
     HtmlContentCleaner,
     PagedContentSegmenter,
     PlainTextContentCleaner,
     SemanticTextSegmenter,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     StructuralTextSegmenter,
     TranscriptSegmenter,
     DecisionReasoningProvider,
@@ -2810,15 +2818,15 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJEntityFieldPermissionEntityServer,
     MJEntityFormContributionEntityServer,
     MJEntityFormOverrideEntityServer,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     MJFileEntityServer,
     MJInteractionEventEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     MJMaterializedResultEntityServer,
     MJProjectEntityServer,
     MJQueryEntityServer,
@@ -2952,7 +2960,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
-    GetArchitectureDiagramReferenceAction,
     GetDefaultFormScaffoldForEntityAction,
     GetDownloadUrlAction,
     GetEntityDetailsAction,
@@ -3008,7 +3015,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
-    RenderArchitectureDiagramAction,
     ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
@@ -3016,13 +3022,13 @@ const CLASS_REGISTRATIONS_5: any[] = [
     RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
-    RunDecisionAction,
-    RunRecordProcessAction,
-    RunStoredQueryAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    RunDecisionAction,
+    RunRecordProcessAction,
+    RunStoredQueryAction,
     ScheduleNextAgentWakeAction,
     ScheduledGeocodingAction,
     ScopedSearchAction,
@@ -3099,7 +3105,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1259;
+export const CLASS_REGISTRATIONS_COUNT = 1262;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

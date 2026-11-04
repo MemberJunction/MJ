@@ -1,5 +1,62 @@
 # @memberjunction/ng-graph-view
 
+## 6.2.0
+
+### Minor Changes
+
+- 539dfe3: Add Semantic Graph substrate (`MJ: Graph Types`, `MJ: Graph Concept Types`, `MJ: Graph Authority Tiers`, `MJ: Graphs`, `MJ: Graph Concepts`, `MJ: Graph Edge Types`, `MJ: Graph Edge Type Endpoints`, `MJ: Graph Edge Providers`, `MJ: Graph Edges`, and `ContentSource.GraphID`), Content Pipeline `GraphStage` with `EntityGraphOverlayStore` and `DeterministicConceptSynthesizer`, deterministic `TaskGraph` DAG similarity & workflow health telemetry in `@memberjunction/ai-core-plus`, and Semantic Graph & Canon Explorer UI in `@memberjunction/ng-graph-view` and `@memberjunction/ng-dashboards`.
+
+### Patch Changes
+
+- Updated dependencies [1419ba7]
+- Updated dependencies [709de1a]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [0581392]
+- Updated dependencies [29b16ee]
+- Updated dependencies [81aea34]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [59e32e0]
+- Updated dependencies [8b62f8c]
+- Updated dependencies [490cd8d]
+- Updated dependencies [4283a82]
+- Updated dependencies [914e6ff]
+- Updated dependencies [2274f42]
+- Updated dependencies [80905a1]
+- Updated dependencies [5e1e343]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [25f7b82]
+- Updated dependencies [db4e210]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [4d647e6]
+- Updated dependencies [17a4137]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [920bef8]
+- Updated dependencies [60bd774]
+- Updated dependencies [5b41d48]
+- Updated dependencies [4b9542c]
+- Updated dependencies [369e229]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [e7b2ebc]
+- Updated dependencies [e0cf9ed]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/global@6.2.0
+  - @memberjunction/ng-ui-components@6.2.0
+
+## 6.2.0-edge.8
+
+### Minor Changes
+
+- 539dfe3: Add Semantic Graph substrate (`MJ: Graph Types`, `MJ: Graph Concept Types`, `MJ: Graph Authority Tiers`, `MJ: Graphs`, `MJ: Graph Concepts`, `MJ: Graph Edge Types`, `MJ: Graph Edge Type Endpoints`, `MJ: Graph Edge Providers`, `MJ: Graph Edges`, and `ContentSource.GraphID`), Content Pipeline `GraphStage` with `EntityGraphOverlayStore` and `DeterministicConceptSynthesizer`, deterministic `TaskGraph` DAG similarity & workflow health telemetry in `@memberjunction/ai-core-plus`, and Semantic Graph & Canon Explorer UI in `@memberjunction/ng-graph-view` and `@memberjunction/ng-dashboards`.
+
+### Patch Changes
+
+- Updated dependencies [59e32e0]
+  - @memberjunction/global@6.2.0-edge.8
+  - @memberjunction/ng-ui-components@6.2.0-edge.8
+
 ## 6.2.0-edge.7
 
 ### Patch Changes

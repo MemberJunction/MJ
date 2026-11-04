@@ -380,6 +380,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Diagnostic Bundles Section -->
+    <mj-collapsible-panel
+        SectionKey="mJDiagnosticBundles"
+        SectionName="Diagnostic Bundles"
+        Icon="fa fa-box-open"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJDiagnosticBundles')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Diagnostic Bundles','FileID')"
+                [NewRecordValues]="NewRecordValues('MJ: Diagnostic Bundles','FileID')"
+                [AllowLoad]="IsSectionExpanded('mJDiagnosticBundles')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJDiagnosticBundles', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

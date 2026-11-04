@@ -166,9 +166,11 @@ Two consequences:
    fast with an actionable `Error` result telling you to run via the CLI in a dedicated
    process. The Explorer Testing dashboard therefore **browses** integration runs and their
    per-check results, but execution belongs to the CLI / scripts.
-2. **Integration suites run strictly serially.** Bundles share process-global singletons
-   (`LocalCacheManager`, the instrumented counters, `UserCache`, `Metadata.Provider`), so the
-   CLI forces `parallel: false` whenever `MJ_INTEGRATION_TEST=1`, overriding any `--parallel`.
+2. **Within a single process, integration suites run strictly serially.** Bundles share
+   process-global singletons (`LocalCacheManager`, the instrumented counters, `UserCache`,
+   `Metadata.Provider`), so the CLI forces `parallel: false` whenever `MJ_INTEGRATION_TEST=1`,
+   overriding any `--parallel`. Across processes, CI shards the deterministic suite into 4
+   isolated OS workers against 4 database clones (`test_s1..3` + `test`; see §2.7 below).
 
 **PostgreSQL:** `DB_PLATFORM=postgresql` routes the same bootstrap (and the same downstream
 check code) through `@memberjunction/postgresql-dataprovider` (an optional dependency, loaded
@@ -326,15 +328,48 @@ JSON assertion DSL — a Test row picks which registered bundles run (and with w
 assertions live in the bundle code.
 
 **Suite mechanics:** suite membership rows (`MJ: Test Suite Tests`) carry a `Sequence` (tests
-run in order — integration suites are serial) and a `Status` — members marked `Skip` are
-excluded from suite runs (IT03, IT15, and IT23 ship as `Skip` in the deterministic suite; run
-them individually with MJAPI up).
+within a worker run in ascending `Sequence` order, tie-broken deterministically by `Name` and
+`ID`) and a `Status` — members marked `Skip` are excluded from suite runs.
 For suites, the engine also gives drivers **suite-scoped fixtures**: it builds one
 `SuiteFixtureContext` (`{ SuiteRunID, Data, CreatedRecords }`) per suite run, calls each
 distinct driver's `SetupSuite` once before the tests and `TeardownSuite` in a guaranteed
 `finally`, and threads the context into every `Execute` as `context.fixtures`. The
 IntegrationTestDriver uses this to discover the RLS two-user fixture once per suite run; on the
 no-suite `mj test run` path it lazily re-discovers.
+
+**CI parallel sharding & cross-test isolation invariants:** in `.github/workflows/integration.yml`,
+`Integration Tests — Deterministic` runs across **4 concurrent OS processes against 4 isolated
+SQL Server database clones**:
+- `server-1..3`: `--transport=server --shard=1/3..3/3` against `test_s1`, `test_s2`, and `test_s3`,
+  partitioned via Longest Processing Time (LPT) load balancing (`suite-sharding.ts`).
+- `client`: `--transport=client` against `test` (the database served by the live MJAPI on port 4000).
+
+Because of this architecture, every integration test author must follow three rules:
+1. **Never depend on another test's process or database state.** Tests in different shards run in
+   separate Node processes against separate database clones. Furthermore, because LPT assigns
+   tests by descending weight, adding even a single default-weight (`4s`) server test can shift
+   the majority of server tests into different shards. Any hidden dependency on rows or cache
+   state left behind by an earlier test will break on an unrelated PR when shard assignments
+   rebalance.
+2. **Declare MJAPI database affinity or cross-bundle handoffs explicitly.**
+   - A `server`-transport bundle that connects to the live MJAPI instance (port 4000) or seeds
+     database rows for a `client`-transport bundle must set `"requiresSharedServerDatabase": true`
+     in its Test `Configuration` (or be listed in `WIRE_COMPANION_SERVER_BUNDLES` in
+     [`suite-sharding.ts`](../packages/TestingFramework/Engine/src/utils/suite-sharding.ts)) so it
+     is routed to the `client` worker against MJAPI's `test` database and sequenced before the
+     client bundles.
+   - If two bundles hand off in-process or database fixture state (such as `realtime-session-guard`
+     → `realtime-session-verification`), declare `"coLocateWithBundles": ["<companion-bundle>"]` in
+     `Configuration` (or `CO_LOCATED_BUNDLE_PAIRS` in `suite-sharding.ts`) so LPT never splits them
+     across shards.
+3. **Reproducing a CI shard locally:**
+   ```bash
+   # Reproduce server shard k of 3 (k = 1, 2, or 3):
+   mj test suite "Integration Tests — Deterministic" --transport=server --shard=1/3
+
+   # Reproduce the client worker (including wire-companion server prerequisites):
+   mj test suite "Integration Tests — Deterministic" --transport=client
+   ```
 
 **Server registration:** `@memberjunction/testing-integration` is part of the
 [`ServerBootstrap`](../packages/ServerBootstrap/) class-registration manifest, so any process
