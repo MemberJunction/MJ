@@ -124,7 +124,7 @@
       </div>
 
       <!-- Config bar: target agent / host instance / continuation -->
-      <div class="configuration-bar">
+      <div class="configuration-bar phone-hero-detail">
         <div class="config-item">
           <i class="fas fa-bullseye"></i>
           <div class="config-content">
@@ -170,6 +170,12 @@
         </button>
       }
     </div>
+
+    <!-- Phone: the strip becomes one button that opens the Sections sheet -->
+    <mj-section-picker class="phone-section-picker"
+                       [Items]="SectionPickerItems"
+                       [ActiveKey]="ActiveTab"
+                       (ActiveKeyChange)="OnSectionPicked($event)"></mj-section-picker>
 
     <!-- Tabs -->
     <div class="tabs">

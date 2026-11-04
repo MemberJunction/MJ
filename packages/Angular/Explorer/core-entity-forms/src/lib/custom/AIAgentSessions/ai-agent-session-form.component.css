@@ -717,16 +717,34 @@
   }
 }
 
-/* Phone (375px): the tab strip scrolls sideways instead of spilling past the edge. */
+/* Phone section picker: hidden until the 768px rule swaps it in for the tab strip */
+.phone-section-picker {
+  display: none;
+}
+
+/* Phone (375px): the tab strip becomes one section-picker button (same pattern as the other
+   forms), and the 6A hero keeps the status beside the title on one identity row. */
 @media (max-width: 768px) {
   .tabs {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
+    display: none;
   }
 
-  .tab {
+  .phone-section-picker {
+    display: block;
     flex-shrink: 0;
-    white-space: nowrap;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface-sunken);
+  }
+
+  .header.phone-hero.hero-view .header-content {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .header.phone-hero.hero-view .header-left {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 }

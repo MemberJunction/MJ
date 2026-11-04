@@ -7,6 +7,7 @@ import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { MJAIAgentSessionFormComponent } from '../../generated/Entities/MJAIAgentSession/mjaiagentsession.form.component';
 import { JoinHeroSummary, CountLabel } from '../../shared/phone-hero';
+import { SectionPickerItem } from '@memberjunction/ng-ui-components';
 
 /**
  * Authoritative shape persisted in `AIAgentSession.Config` for a client-direct
@@ -383,6 +384,25 @@ export class MJAIAgentSessionFormComponentExtended extends MJAIAgentSessionFormC
     public ChangeTab(tab: 'runs' | 'channels' | 'transcript' | 'details'): void {
         this.ActiveTab = tab;
     }
+
+    /** The tab strip as `mj-section-picker` items: strip order, a count only where the tab has rows. */
+    public get SectionPickerItems(): SectionPickerItem[] {
+        const count = (n: number): number | null => (n > 0 ? n : null);
+        return [
+            { Key: 'runs', Title: 'Runs', Icon: 'fas fa-diagram-project', Count: count(this.RunTree.length) },
+            { Key: 'channels', Title: 'Channels', Icon: 'fas fa-plug', Count: count(this.Channels.length) },
+            { Key: 'transcript', Title: 'Transcript', Icon: 'fas fa-comments', Count: count(this.Transcript.length) },
+            { Key: 'details', Title: 'Details', Icon: 'fas fa-info-circle', Count: null },
+        ];
+    }
+
+    /** A pick from the phone section sheet; goes through ChangeTab. An unknown key is ignored. */
+    public OnSectionPicked(key: string): void {
+        const tab = MJAIAgentSessionFormComponentExtended.phoneTabs.find((t) => t === key);
+        if (tab) this.ChangeTab(tab);
+    }
+
+    private static readonly phoneTabs: ReadonlyArray<MJAIAgentSessionFormComponentExtended['ActiveTab']> = ['runs', 'channels', 'transcript', 'details'];
 
     public GetStatusIcon(status: string | null): string {
         switch (status) {
