@@ -265,12 +265,20 @@ describe('the navigation stamp is recorded before the readiness guard', () => {
         '',
     );
 
-    /** The NavigationEnd subscriber's body — bounded so another `Initialized` check cannot satisfy it. */
-    const block = (() => {
-        const at = SOURCE.indexOf('this.lastNavigationAt = Date.now()');
-        expect(at, 'the stamp must be assigned on a navigation').toBeGreaterThan(-1);
-        return SOURCE.slice(at, at + 400);
-    })();
+    /**
+     * The NavigationEnd subscriber's body — bounded so another `Initialized` check cannot satisfy it.
+     *
+     * The anchor is located here but asserted in a test of its own below, NOT in this initializer.
+     * An `expect` that runs while the describe body is being evaluated fails before any test is
+     * registered, so a renamed assignment would take all of this file's cases out of the run at once
+     * rather than producing one named failure. Raised in review on MJ#4989 and again on #5710.
+     */
+    const stampAt = SOURCE.indexOf('this.lastNavigationAt = Date.now()');
+    const block = stampAt < 0 ? '' : SOURCE.slice(stampAt, stampAt + 400);
+
+    it('the stamp assignment is still in the source', () => {
+        expect(stampAt, 'the stamp must be assigned on a navigation').toBeGreaterThan(-1);
+    });
 
     it('assigns the stamp before testing initialized', () => {
         const guard = block.indexOf('this.initialized');
