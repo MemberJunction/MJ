@@ -2927,10 +2927,10 @@ export class SQLServerDataProvider
             const existing = boundMeta.get(p.Name);
             if (!existing) {
               boundParameterNames.add(p.Name);
-              boundMeta.set(p.Name, { value: p.Value, sqlType: p.SqlType });
+              boundMeta.set(p.Name, { value: p.Value, sqlType: p.SQLType });
               typedBatchParameters.push(p);
               batchParameters[p.Name] = p.Value;
-            } else if (Object.is(existing.value, p.Value) && existing.sqlType === p.SqlType) {
+            } else if (Object.is(existing.value, p.Value) && existing.sqlType === p.SQLType) {
               // Identical name, value, and SQL type across batched statements — share @Name directly
             } else {
               const scopedName = SQLServerDataProvider.allocateScopedBatchParamName(
@@ -2940,8 +2940,8 @@ export class SQLServerDataProvider
                 localNames,
               );
               boundParameterNames.add(scopedName);
-              boundMeta.set(scopedName, { value: p.Value, sqlType: p.SqlType });
-              typedBatchParameters.push(new TypedQueryParameter(scopedName, p.SqlType, p.Value));
+              boundMeta.set(scopedName, { value: p.Value, sqlType: p.SQLType });
+              typedBatchParameters.push(new TypedQueryParameter(scopedName, p.SQLType, p.Value));
               batchParameters[scopedName] = p.Value;
               processedQuery = SQLServerDataProvider.replaceSqlParameterOutsideLiterals(
                 processedQuery,
