@@ -5,7 +5,7 @@
 - **Created**: 2026-11-04
 - **Author**: Amith Nagarajan + Claude
 - **Branch**: `claude/guided-tours`
-- **Companion doc**: [MJ Guided Tours — Design Proposal](https://claude.ai/artifact/R2s29bJUkhy2iboGB2qmxQ). That doc is the narrative version; **this file is the plan of record** and supersedes it where they differ. The main additions here are the extension model (§5), agent integration (§10) and the default tour catalogs (§16–§17).
+- **Companion doc**: [MJ Guided Tours — Design Proposal](https://claude.ai/artifact/R2s29bJUkhy2iboGB2qmxQ). That doc is the narrative version; **this file is the plan of record** and supersedes it where they differ. The main additions here are hosts beyond Explorer (§4.2), the extension model (§5), agent integration (§10) and the default tour catalogs (§16–§17).
 
 ---
 
@@ -33,6 +33,14 @@ The plan rests on four ideas:
 
    Every agent can start a tour, see that one is running, and help without derailing it.
 4. **Anchors are semantic and checked in CI.** Steps target named things: a registered anchor key, a form field, a section, a nav item by DriverClass. They never target CSS paths. A standards gate fails any PR that breaks a tour, and a replay director turns every tour into a smoke test.
+5. **Any host, not only Explorer.** The engine and the overlay are framework-free, and Explorer is the first host, not a special case. The same tour definition runs in five places:
+   - Explorer
+   - any Angular app, MJ-connected or not
+   - an Angular custom element (`<mj-tour-host>`)
+   - a single `<script>` tag on any HTML page
+   - the MJ mobile app
+
+   Navigation, identity, persistence and the agent bridge are host adapters. This mirrors MJ's public realtime widget, which already ships both as an Angular Elements custom element and as a script-tag loader with guest sessions.
 
 The plan also covers the content:
 
@@ -61,11 +69,13 @@ The plan also covers the content:
 - Analytics built on real goals (data facts), not completion counts.
 - WCAG 2.2 AA conformance for every standard renderer.
 - Default tours shipped for MJ core, the BizApps Open Apps, and More Cheese.
+- **Host independence.** The same tour runs in Explorer, a non-Explorer Angular app, the `<mj-tour-host>` custom element, a plain HTML page through one script tag, and the mobile app. There are no Explorer imports below L3, and no Angular imports in the engine or the overlay, and the `ui-layers` standard enforces both.
 
 ### Non-goals (for this plan)
 - A visual WYSIWYG content editor on par with Appcues' builder. Tour Studio is structured editing plus an element picker; rich design is out of scope.
 - Surveys and NPS. They are adjacent and could later become a step type, but are not designed here.
-- Tours for public web widgets outside Explorer. The runtime is host-agnostic, but only the Explorer and mobile hosts are planned.
+- A React-specific wrapper. React apps use the custom element or the script API; a hook can follow later.
+- Guiding users through third-party SaaS we do not control, such as Salesforce. External pages are supported when their owner adds the script or element; we never inject into sites we do not own.
 - Practice sandboxes that create throwaway records. This is listed as an open question because of cross-app side effects (§20).
 - Framework-wide localization. The tour content model is ready for it, but i18n is a separate initiative.
 
@@ -115,6 +125,9 @@ Nothing tour-shaped exists: there is no tour, coach-mark or spotlight component,
 | Element perception for authoring and health checks | ComputerUse `INTERACTIVITYPROBE`, accessibility snapshots, role+name re-resolution | `packages/AI/ComputerUse/src/browser/` |
 | A CI gate on UI hooks | The Sales selector gate checks every harness selector against mounted templates | `bizapps-sales/scripts/assert-harness-selectors.mjs` |
 | Deterministic rails before each LLM turn | Marketing's strategy-onboarding state machine | `bizapps-marketing/packages/Core/src/business/strategy/onboardingStateMachine.ts` |
+| Shipping UI to any web page | `@memberjunction/realtime-widget`: a script-tag loader that reads `data-*` attributes, mints a scoped anonymous guest session from a publishable key, and mounts inside a shadow DOM with CSP-nonce support. `<mj-realtime-widget>` is registered through `@angular/elements` | `packages/Web/RealtimeWidget/`; `packages/Angular/Generic/realtime-widget/src/lib/realtime-widget.element.ts` |
+| Public surfaces and guest identity | `MJ: Conversation Widget Instances` (`PublicKey`, `AllowedOrigins`, `AuthStrategy`, `GuestRole`, `RateLimitPerMinute`, `RememberReturningVisitors`) and `WidgetSessionService.MintGuestSession` | `packages/MJServer/src/realtimeWidget/WidgetSessionService.ts` |
+| Layer enforcement | `ui-layers` standard: `runtime` packages may not import Angular; `widgets` may not import the router or Explorer | `packages/Standards/src/checks/ui-layers.ts` |
 
 **Gaps this plan closes:**
 - no generic anchored popover or spotlight (CDK overlay exists; an arrowed popover does not)
@@ -131,47 +144,166 @@ Nothing tour-shaped exists: there is no tour, coach-mark or spotlight component,
 
 ```mermaid
 flowchart TD
-    DEF["Tour definitions<br/>metadata/tours JSON, shipped in each app's release migration"] --> ENG["TourEngine<br/>BaseEngine cache: tours, step types, paths, this user's runs"]
-    ENG --> SES
+    SRC["Definition source + progress store<br/>TourEngine (MJ user) · surface guest session · inline JSON"] --> SES
+    HOST["Host adapter (ITourHost)<br/>Explorer · any Angular app · web page · mobile<br/>location · navigation · identity · capabilities"] <--> SES
     VD["Visual director<br/>Next/Back, no LLM (default)"] --> SES
     CD["Chat director<br/>Sage + Guided Tour skill"] --> SES
     VO["Voice director<br/>Realtime co-agent"] --> SES
     XD["Verify director<br/>CI replay"] --> SES
-    SES["TourSession (L0, pure TS)<br/>cursor · pathway on GraphTraversalEngine · conditions · completion"]
+    SES["TourSession (L0, pure TS, also runs in Node)<br/>cursor · pathway on GraphTraversalEngine · conditions · completion"]
     SIG["Signals in<br/>navigation · entity events · TourSignals · form state"] --> SES
-    SES --> ANC["Anchor registry + resolvers<br/>registered and semantic keys, make-visible"]
-    SES --> PRE["Presenter + step renderers<br/>spotlight · popover · beacon · checklist"]
+    SES --> DOM["Overlay host (framework-free DOM)<br/>anchor registry · spotlight · popover · focus and live region"]
+    DOM --> REN["Step renderers<br/>DOM renderers everywhere · Angular renderers where Angular is present"]
     SES --> RUN["Tour Runs / Run Steps<br/>progress · outcomes · anchor health"]
     SES --> EVT["TourEvents$ (Before*/After*)<br/>apps · agents · analytics observe"]
     RUN --> ANA["Analytics and health<br/>funnels · goal lift · broken-anchor alerts"]
 ```
 
-The central decision is to separate *what the tour is* (the session, its pathway and its progress) from *who drives it* and from *how each step behaves and looks*. The tour is data. The session owns state. Directors, step types, presenters and drivers are plugins.
+The central decision is to separate four things:
+- *what the tour is*: the session, its pathway and its progress
+- *who drives it*: a director
+- *how each step behaves and looks*: step types and renderers
+- *where it runs*: the host
 
-### 4.1 Packages (following the UI layering guide)
+The tour is data, and the session owns state. Directors, step types, presenters and drivers are plugins. The host (Explorer, another Angular app, any web page) is an adapter. Explorer is the first host, not a special case.
 
-| Package | Layer | Holds |
+### 4.1 Packages (following the UI layering guide and the `ui-layers` standard)
+
+| Package | Layer (`mjUILayer`) | Holds |
 |---|---|---|
-| `@memberjunction/tours-runtime` (`packages/Tours/Runtime`) | L0, pure TypeScript, no Angular | `TourSession` state machine; the pathway compiler onto `GraphTraversalEngine`; anchor-descriptor and step-config types; the logic-half base classes (`BaseTourDriver`, `BaseTourStepType`, `BaseTourCompletionCheck`, `BaseTourTrigger`, `BaseTourEligibilityPolicy`, `BaseTourDirector`); the standard logic implementations; the `TourEvents` contract. Reusable by the mobile host and in tests |
-| `TourEngine` in `@memberjunction/core-entities` (`packages/MJCoreEntities/src/engines/tours.ts`) | Both tiers | Cached definitions (tours, versions, steps, paths, step types, triggers, prerequisites, learning paths, overrides) and the current user's runs. `ObserveProperty` streams, `ActiveSession$`, and the `Tours.Enabled` kill switch |
-| `@memberjunction/ng-tours` (`packages/Angular/Generic/tours`, `mjUILayer: widgets`) | L1 + L2 | `mjTourAnchor` directive and `AnchorRegistry`; semantic anchor resolvers (DOM half); the UX-half base classes `BaseTourStepRenderer` and `BaseTourPresenter`; the standard renderers and presenters; the spotlight mask, popover, beacon, checklist and launcher widgets; `mj-tour-host`. Emits navigation *intents* and never imports the router |
-| Explorer integration (`explorer-core`, `explorer-app`, `dashboards`) | L3 | Mounting `mj-tour-host` in the shell; the bridge from navigation intents to `NavigationService`; the header launcher; `OmnibarToursProvider`; the Home learning-path card; the "tour" notification type; global tour client tools; the **Tour Studio** app |
-| `@memberjunction/tours-server` (`packages/Tours/Server`) | Server | Remote Operations (server predicates, batched run recording, publish, eligibility for agents); Actions (`Start Tour For User`, `Suggest Tours`, `Get Tour Progress`, `Assign Learning Path`); `BaseTourServerPredicate` and its standard implementations; server entity subclasses for validation |
+| `@memberjunction/tours-runtime` (`packages/Tours/Runtime`) | `runtime`: pure TypeScript, no Angular, no DOM; runs in Node | `TourSession`; the pathway compiler onto `GraphTraversalEngine`; anchor-descriptor and step-config types; the logic-half base classes (`BaseTourDriver`, `BaseTourStepType`, `BaseTourCompletionCheck`, `BaseTourTrigger`, `BaseTourEligibilityPolicy`, `BaseTourDirector`) and their standard implementations; the host, source, store and capability contracts (§4.2); `TourAgentToolkit` (agent tool schemas and handlers); the `TourEvents` contract. The server uses it too, for `Suggest Tours` and the Verify director |
+| `@memberjunction/tours-dom` (`packages/Tours/Dom`) | `runtime`: framework-free, needs a DOM, no Angular | The overlay host (one fixed element with a shadow root); `AnchorRegistry` with the `data-mj-tour-anchor` attribute scanner; the DOM halves of the semantic resolvers; the spotlight mask; popover positioning (`@floating-ui/dom`, MIT); focus management, live region and keyboard; `BaseTourDomRenderer` and the standard DOM renderers (Spotlight, Action, Beacon, Modal, Banner, Navigate, Choice, Checkpoint); the `Overlay` and `SidePanel` presenters; `WebTourHost` |
+| `TourEngine` in `@memberjunction/core-entities` (`packages/MJCoreEntities/src/engines/tours.ts`) | Both tiers | The MJ-connected definition source and progress store: cached definitions and the current user's runs, `ObserveProperty` streams, `ActiveSession$`, and the `Tours.Enabled` kill switch |
+| `@memberjunction/ng-tours` (`packages/Angular/Generic/tours`) | `widgets`: no router, no Explorer | The `mjTourAnchor` directive (sets the attribute and registers eagerly); `BaseTourStepRenderer` and the adapter that mounts Angular renderers inside the DOM overlay; the rich renderers that need Angular (Media, FieldEntry, EmbeddedComponent, AskAgent, KnowledgeCheck); `mj-tour-host`; the `MJ_TOUR_HOST` injection token; `RegisterTourElements()`, which defines `<mj-tour-host>` as a custom element through `@angular/elements` (the `realtime-widget.element.ts` pattern) |
+| `@memberjunction/tours-web` (`packages/Web/Tours`) | `runtime`: plain TypeScript | The script-tag loader (`mj-tours.js`) and `MountTours()`; guest sessions from a surface's publishable key; the surface definition source and progress store; static mode; an optional loader for the rich-step custom-element bundle |
+| Explorer integration (`explorer-core`, `explorer-app`, `dashboards`) | `surface` / `shell` | `ExplorerTourHost` (NavigationService, workspace state, `ResourceLoaded$`, agent bridge); header launcher; `OmnibarToursProvider`; Home learning-path card; the "tour" notification type; the **Tour Studio** app |
+| `@memberjunction/tours-server` (`packages/Tours/Server`) | Server | Remote Operations (server predicates, batched run recording, publish, surface tour delivery); Actions (`Start Tour For User`, `Suggest Tours`, `Get Tour Progress`, `Assign Learning Path`); `BaseTourServerPredicate`; server entity subclasses; guest-session minting for tour surfaces |
+
+`tours-dom` is declared `runtime` so the `ui-layers` gate forbids any Angular import. It is the one `runtime` package that touches the DOM, which is acceptable for a renderer package; its README says so, and §20 asks whether it deserves its own layer value.
+
+### 4.2 Hosts: running tours outside Explorer
+
+Everything a tour needs from its surroundings goes through a host adapter, so the same tour JSON runs in each of these hosts:
+
+| Host | How tours mount | Identity and progress | Navigation | Agent guide | Step renderers |
+|---|---|---|---|---|---|
+| MJ Explorer | Built in: `ExplorerTourHost` and `mj-tour-host` in the shell | MJ user; `TourEngine` | `NavigationService` | Sage in chat; realtime co-agent in voice | DOM and Angular, all types |
+| Any MJ-connected Angular app (a member portal, a custom app) | `ng-tours`, `<mj-tour-host>`, and the app's own `ITourHost` provided under `MJ_TOUR_HOST` | MJ user; `TourEngine` over the app's provider | The app's own router, behind its host adapter (Generic packages stay router-free) | `ng-conversations` chat or `<mj-realtime-widget>`, if the app embeds them | DOM and Angular, all types |
+| Any Angular app, as a custom element | `RegisterTourElements()`, then `<mj-tour-host surface-key="…">` | Guest session from a surface key, or an MJ session the page already holds | Navigation intents emitted as DOM events, handled by the app | `<mj-realtime-widget>` | DOM and Angular |
+| Any HTML page (React, server-rendered, static site) | One `<script>` tag (`mj-tours.js`) or `MountTours()` | Guest session from a surface key; an MJ session if one is present | URL intents: `location.assign` or an `OnNavigate` callback | `<mj-realtime-widget>` linked to the surface | Standard DOM set; rich types if the custom-element bundle is loaded |
+| Static page with no MJ backend | `MountTours({ Definitions })` | In memory, or a callback the page supplies | URL intents | None | Standard DOM set |
+| MJ mobile app | `tours-runtime` with native renderers registered under the same keys | MJ user | Mobile navigation | Mobile chat and voice | Native |
+
+**The host contract** (in `tours-runtime`):
+
+```typescript
+/** What a tour needs from wherever it runs. Explorer is one implementation. */
+export interface ITourHost {
+    /** What this host can do; tours that need more are not offered here. */
+    readonly Capabilities: TourHostCapabilities;
+    /** Where the user is now, and every change. */
+    readonly Location$: Observable<TourLocation>;
+    /** Carry out a navigation intent (app + nav item, record, or URL). Resolves when the destination is ready. */
+    Navigate(intent: TourNavigationIntent): Promise<boolean>;
+    /** The signed-in MJ user, a guest visitor, or nobody. */
+    readonly Principal: TourPrincipal;
+    /** Optional: register the tour agent toolkit with whatever agent surface this host has. */
+    AttachAgentBridge?(toolkit: TourAgentToolkit): void;
+}
+
+export interface TourHostCapabilities {
+    Navigation: 'MJ App' | 'Url' | 'None';
+    EntityEvents: boolean;   // BaseEntity events are observable in this page
+    MJForms: boolean;        // generated MJ forms render here (FormField / FormSection anchors)
+    Angular: boolean;        // Angular renderers can be mounted
+    Agent: 'None' | 'Chat' | 'Voice' | 'Chat and Voice';
+    Persistence: 'MJ User' | 'Guest' | 'Memory';
+}
+
+/** Where definitions come from and where progress goes. */
+export interface ITourDefinitionSource {
+    GetTours(location: TourLocation): Promise<TourDefinition[]>;
+}
+export interface ITourProgressStore {
+    GetRuns(): Promise<TourRunRecord[]>;
+    RecordEvents(events: TourRunEvent[]): Promise<void>;
+}
+```
+
+Each contract has three implementations:
+
+| Implementation | For |
+|---|---|
+| `EngineTourSource` / `EngineProgressStore` | MJ users, over `TourEngine` |
+| `SurfaceTourSource` / `SurfaceProgressStore` | Guests, over a surface's guest session and scoped Remote Operations |
+| `InlineTourSource` / `MemoryProgressStore` | Static pages, optionally with a callback telemetry sink |
+
+**Capabilities gate tours.** Step types, triggers, completion checks and anchor strategies declare the capabilities they need (`RequiredCapabilities`). Examples:
+- `EntityEvent` needs `EntityEvents`.
+- `FormField` needs `MJForms`.
+- `AskAgent` needs `Agent`.
+
+The eligibility chain skips a tour whose needs the host cannot meet, and Tour Studio warns when a tour is assigned to a surface that cannot run it.
+
+**Anchors on any page.** The canonical anchor is a plain attribute, `data-mj-tour-anchor="portal.renew"`. A page MJ does not build can be toured by adding attributes, or by calling `RegisterAnchor(key, element)`. Role-and-name and selector anchors work anywhere. MJ's form anchors (`data-field-name`, `data-section-key`) work wherever MJ forms render, inside Explorer or not.
+
+**The script API.** Exported functions are PascalCase, per MJ naming.
+
+```html
+<script type="module" src="https://cdn.example.org/mj-tours.js"
+        data-surface-key="ts_live_xxx" data-api-url="https://api.example.org"></script>
+<button data-mj-tour-anchor="portal.renew">Renew membership</button>
+```
+
+```typescript
+import { MountTours } from '@memberjunction/tours-web';
+
+const tours = await MountTours({
+    SurfaceKey: 'ts_live_xxx',
+    ApiUrl: 'https://api.example.org',
+    OnNavigate: intent => router.push(intent.Url),   // optional; the default is location.assign
+});
+await tours.Start('portal.renewal');
+tours.Signal('portal.renewal.paid', { Amount: 120 }); // feeds Signal completion checks and triggers
+tours.On('AfterStepComplete', e => analytics.track(e.StepKey));
+
+// Static mode, no MJ backend:
+await MountTours({ Definitions: [/* tour JSON */], Store: 'memory' });
+```
+
+**Isolation, theming and CSP** follow the realtime widget:
+- The overlay host is one fixed-position element on `document.body` with a shadow root, so host CSS cannot leak in or out.
+- `--mj-*` token defaults ship inlined, and a host restyles by setting custom properties on the host element.
+- CSP: the page allows the script origin and the API origin, plus either `style-src 'unsafe-inline'` or a nonce read the way the realtime widget's `csp-nonce.ts` does.
+- **Accessibility across the shadow boundary.** `aria-describedby` cannot point from a shadow root to light-DOM elements, so action-step descriptions are mirrored into a visually hidden light-DOM node. Focus return is tracked across the boundary.
+
+**Public surfaces and guests.**
+- `MJ: Tour Surfaces` (§6) declares each place tours run outside MJ-authenticated hosts. Each surface has a publishable key, allowed origins, an auth strategy, a guest role, a rate limit and visitor retention. It can optionally link a `MJ: Conversation Widget Instances` row to provide a chat or voice guide on that page.
+- Guest sessions reuse the `WidgetSessionService.MintGuestSession` pattern (`packages/MJServer/src/realtimeWidget/WidgetSessionService.ts`). A "Tour Guest" role can read only published tours assigned to that surface and record only its own runs, through scoped Remote Operations, with no entity CRUD.
+- Server predicates run as the guest, so they see only what the guest may see.
+- Guest progress is keyed by `VisitorKey`, as `Conversation.VisitorKey` already is.
+
+**What stays Explorer-only** (correctly, at L3): the header launcher, the omnibar provider, the Home learning-path card, the tour notification type, and Tour Studio.
 
 ---
 
 ## 5. The extension model
 
-Every tour behaviour follows the MJ pattern: a metadata row or JSON key names a class, the class is registered with `@RegisterClass`, and resolution goes through `MJGlobal.ClassFactory`. Last registration wins, so apps override framework defaults by import order, exactly as custom forms do. Where a behaviour has a visual side, it is split into a **logic half** (L0, pure TypeScript, testable without a DOM, runs in any host) and a **UX half** (an Angular component, replaceable per host). The mobile host registers its own UX halves under the same keys, as it does for `BaseMobileResource`.
+Every tour behaviour follows the MJ pattern: a metadata row or JSON key names a class, the class is registered with `@RegisterClass`, and resolution goes through `MJGlobal.ClassFactory`. Last registration wins, so apps override framework defaults by import order, exactly as custom forms do. Where a behaviour has a visual side, it is split into a **logic half** (L0, pure TypeScript, testable without a DOM, runs in any host) and a **UX half**. The UX half comes in two flavors under the same key:
+
+- a framework-free `BaseTourDomRenderer`, which works on any page
+- an Angular `BaseTourStepRenderer`, used where Angular is present
+
+The overlay mounts the best registration the host can run (§4.2). The mobile host registers native UX halves under the same keys, as it does for `BaseMobileResource`.
 
 ### 5.1 Plugin points
 
 | Plugin base | Selected by | Standard implementations shipped by MJ | Example app extensions |
 |---|---|---|---|
-| `BaseTourStepType` (logic) + `BaseTourStepRenderer` (UX) | `MJ: Tour Step Types` row → `DriverClass` / `RendererClass` | Spotlight, Action, Beacon, Modal, Banner, Navigate, Choice, Checkpoint, Media, FieldEntry, EmbeddedComponent, AskAgent, KnowledgeCheck, WaitForSignal (§5.3) | Caliber `PracticeConversation` (starts a short roleplay session); Sales `BoardDrag` (guides dragging a card between stages); Forms `FillSampleForm` |
+| `BaseTourStepType` (logic) + `BaseTourDomRenderer` and/or `BaseTourStepRenderer` (UX) | `MJ: Tour Step Types` row → `DriverClass` / `RendererClass` | Spotlight, Action, Beacon, Modal, Banner, Navigate, Choice, Checkpoint, Media, FieldEntry, EmbeddedComponent, AskAgent, KnowledgeCheck, WaitForSignal (§5.3) | Caliber `PracticeConversation` (starts a short roleplay session); Sales `BoardDrag` (guides dragging a card between stages); Forms `FillSampleForm` |
 | Per-step override (subclass of the step type's class) | `MJ: Tour Steps.DriverClass` (nullable) | n/a | One special step in one tour, e.g. Sales' close-won step that also checks a contract and order were provisioned |
 | `BaseTourDriver` (tour-level logic) | `MJ: Tours.DriverClass` (null = `Default`) | `Default` | Sales `QuoteToCashTourDriver` adds the current deal to the condition context and owns cross-app branching |
-| `BaseTourPresenter` (tour-level UX) | `MJ: Tours.PresenterClass` (null = `Overlay`) | `Overlay` (spotlight + popover), `SidePanel` (a docked step list for long setup tours), `Embedded` (inside a host component such as an empty state) | More Cheese branded `ICFWelcomePresenter` |
+| `BaseTourPresenter` (tour-level UX; DOM or Angular) | `MJ: Tours.PresenterClass` (null = `Overlay`) | `Overlay` (spotlight + popover), `SidePanel` (a docked step list for long setup tours), `Embedded` (inside a host component such as an empty state) | More Cheese branded `ICFWelcomePresenter` |
 | `BaseTourAnchorResolver` | `ITourAnchor.Strategy` | `Registered`, `FormField`, `FormSection`, `FormRailGroup`, `FormToolbarAction`, `NavItem`, `RailPage`, `AppSwitcher`, `GridColumn`, `Omnibar`, `ChatComposer`, `Role`, `Selector` | Sales `DealBoardColumn` (resolves a Kanban column by a pipeline-stage flag, never by stage name); Caliber `StudioDomain` |
 | `BaseTourCompletionCheck` | `ITourCompletion.Checks[].Type` | `NextButton`, `AnchorInteraction`, `Navigation`, `Signal`, `EntityEvent`, `FieldState`, `ServerPredicate`, `AgentConfirmed`, `All`, `Any` | Orders `OrderReachedStatus`; Accounting `BatchDispatched` |
 | `BaseTourServerPredicate` (server) | `ServerPredicate` check config | `HasRecords` (entity + filter, as the user), `QueryReturnsRows`, `AuthorizationHeld` | Sales `UserOwnsPipeline` |
@@ -233,7 +365,14 @@ export class BaseTourDriver {
     public DescribeForAgent(ctx: TourSessionContext): string { return ''; }
 }
 
-// @memberjunction/ng-tours — UX half.
+// @memberjunction/tours-dom — framework-free UX half. Works on any page.
+export abstract class BaseTourDomRenderer<TConfig extends object = object> {
+    /** Render into the overlay's container; return a handle the overlay updates and disposes. */
+    public abstract Mount(container: HTMLElement, step: TourStepView<TConfig>,
+                          session: TourSessionView, intents: TourRendererIntents): TourRendererHandle;
+}
+
+// @memberjunction/ng-tours — Angular UX half, mounted inside the same overlay by an adapter.
 export abstract class BaseTourStepRenderer<TConfig extends object = object> extends BaseAngularComponent {
     @Input() Step!: TourStepView<TConfig>;       // read-only projection of the step
     @Input() Session!: TourSessionView;          // progress, mode, can-go-back…
@@ -253,7 +392,7 @@ export class PracticeConversationStepRenderer extends BaseTourStepRenderer<IPrac
 export function LoadPracticeConversationStep() { /* tree-shaking anchor */ }
 ```
 
-**Resolution order for a step's behaviour.** The step's own `DriverClass` comes first (a subclass for this one step). Otherwise the step type's `DriverClass` applies. The renderer is the step type's `RendererClass`, or its `Name` when that is null. A presenter can wrap or replace step renderers wholesale, for example `SidePanel` renders every step as a row in a docked list.
+**Resolution order for a step's behaviour.** The step's own `DriverClass` comes first (a subclass for this one step). Otherwise the step type's `DriverClass` applies. The renderer is the step type's `RendererClass`, or its `Name` when that is null. The overlay mounts the Angular registration when the host has Angular and one exists, and otherwise the DOM registration. A step type with neither for a host is not offered there. A presenter can wrap or replace step renderers wholesale, for example `SidePanel` renders every step as a row in a docked list.
 
 **Events.** `TourSession` emits class-based `Before*` / `After*` events:
 
@@ -313,12 +452,14 @@ erDiagram
     TourRun ||--o{ TourRunStep : "records"
     User ||--o{ TourRun : "takes"
     Application ||--o{ Tour : "owns"
+    TourSurface ||--o{ Tour : "hosts"
+    TourSurface ||--o{ TourRun : "records"
 ```
 
 | Entity | What it is | Key fields |
 |---|---|---|
 | `MJ: Tour Step Types` | Registry of step types: the plugin catalog authors pick from | `Name`, `Description`, `DriverClass`, `RendererClass`, `ConfigSchema`, `SupportedModes` (Show/Guide/Do), `IsAgentCapable`, `Icon`, `Status` |
-| `MJ: Tours` | One guidance experience | `Name`, `TourKey` (stable, namespaced, e.g. `sales.first-deal`), `Description`, `ApplicationID` (owning app; null = core), `Status` (Draft, Active, Retired), `CurrentVersionID`, `EstimatedMinutes`, `AudienceFilter` (CompositeFilter JSON), `LaunchPolicy` (JSON), `Priority`, `ThrottleTags`, `DefaultGuideMode` (Visual, Chat, Voice, User Choice), `AllowAgentActions`, `GuideAgentID` (null = app default, then Sage), `DriverClass`, `PresenterClass`, `Goal` (`ITourGoal`), `StartLocation` (`ITourStartLocation`, including context requirements such as "any open record") |
+| `MJ: Tours` | One guidance experience | `Name`, `TourKey` (stable, namespaced, e.g. `sales.first-deal`), `Description`, `ApplicationID` (owning app; null = core), `SurfaceID` (null = MJ-authenticated hosts such as Explorer), `Status` (Draft, Active, Retired), `CurrentVersionID`, `EstimatedMinutes`, `AudienceFilter` (CompositeFilter JSON), `LaunchPolicy` (JSON), `Priority`, `ThrottleTags`, `DefaultGuideMode` (Visual, Chat, Voice, User Choice), `AllowAgentActions`, `GuideAgentID` (null = app default, then Sage), `DriverClass`, `PresenterClass`, `Goal` (`ITourGoal`), `StartLocation` (`ITourStartLocation`, including context requirements such as "any open record") |
 | `MJ: Tour Versions` | Immutable published snapshot (same pattern as Rubric Versions and Sonar score-model versions) | `TourID`, `VersionNumber`, `Definition` (steps and paths as JSON), `PublishedAt`, `PublishedByUserID`, `ChangeSummary` |
 | `MJ: Tour Steps` | Editable draft step | `TourID`, `StepKey` (stable), `Sequence`, `StepTypeID`, `DriverClass` (per-step override), `Title`, `Body` (Markdown, MJ template variables), `Configuration` (validated against the type's schema), `Anchor` (`ITourAnchor`), `Placement`, `Mode` (Show, Guide, Do), `Prepare` (`ITourStepPrepare`), `Completion` (`ITourCompletion`), `SkipWhen` (CompositeFilter), `OnMissing` (Skip, Center, Stall, AgentRecover), `IsOptional`, `GuideNotes` (agent-only context), `VoiceScript` (optional) |
 | `MJ: Tour Step Paths` | Branch edge; linear tours need none | `TourID`, `FromStepID`, `ToStepID`, `Condition` (CompositeFilter over session context, or a choice key), `Label`, `Priority`, `IsDefault` |
@@ -326,9 +467,10 @@ erDiagram
 | `MJ: Tour Triggers` | When to offer | `TourID`, `TriggerType` (open key, §5.1), `Configuration`, `Delivery` (Offer, Beacon, Notification, Auto), `CooldownDays`, `Status` |
 | `MJ: Learning Paths` | A curriculum, rendered as a checklist | `Name`, `PathKey`, `Description`, `ApplicationID`, `AudienceFilter`, `Status` |
 | `MJ: Learning Path Tours` | Membership | `LearningPathID`, `TourID`, `Sequence`, `IsRequired` |
-| `MJ: Tour Runs` | One attempt by one user: the progress ledger | `UserID`, `TourID`, `TourVersionID`, `Status` (Pending, In Progress, Completed, Dismissed, Snoozed, Abandoned, Failed), `GuideMode`, `DirectorType`, `CurrentStepKey`, `PathTaken` (JSON), `LaunchSource` (Launcher, Omnibar, Agent, Trigger, Notification, Link), `LaunchedByAgentRunID`, `StartedAt`, `CompletedAt`, `GoalMetAt`, `SnoozedUntil`, `ConversationID`, `AgentSessionID`, `IsHoldout` |
+| `MJ: Tour Runs` | One attempt by one user or guest visitor: the progress ledger | `UserID` (null for guests), `VisitorKey` (guests), `SurfaceID`, `TourID`, `TourVersionID`, `Status` (Pending, In Progress, Completed, Dismissed, Snoozed, Abandoned, Failed), `GuideMode`, `DirectorType`, `CurrentStepKey`, `PathTaken` (JSON), `LaunchSource` (Launcher, Omnibar, Agent, Trigger, Notification, Link), `LaunchedByAgentRunID`, `StartedAt`, `CompletedAt`, `GoalMetAt`, `SnoozedUntil`, `ConversationID`, `AgentSessionID`, `IsHoldout` |
 | `MJ: Tour Run Steps` | Telemetry per stop | `TourRunID`, `StepKey`, `EnteredAt`, `ExitedAt`, `Outcome` (Completed, Skipped, Already Known, Done By Agent, Anchor Missing, Dismissed), `AnchorResolution` (Registered, Semantic, Role, Selector, Failed), `QuestionCount` |
 | `MJ: Tour Overrides` | Host-admin changes that never touch shipped rows | `TourID`, `Scope` (Global, Role, User), `RoleID`, `UserID`, `Precedence`, `Status`, `AudienceFilter`, `LaunchPolicy`, `IsDisabled` |
+| `MJ: Tour Surfaces` | A place tours run outside MJ-authenticated hosts (a portal, a public page) | `Name`, `SurfaceKey`, `SurfaceType` (MJ Angular App, Web Page, Mobile App), `PublicKey`, `AllowedOrigins`, `AuthStrategy` (MJ User, Guest, Either), `GuestRoleID`, `ConversationWidgetInstanceID` (optional chat or voice guide), `RateLimitPerMinute`, `VisitorRetentionDays`, `Status` |
 
 Rules:
 - **Runs pin a version.** An app upgrade that rewrites a tour never corrupts someone's half-finished run. A run on a retired version finishes on its snapshot, or is offered a restart.
@@ -343,7 +485,7 @@ User preferences use the `UserInfoEngine` key `mj.tours.preferences.v1`. It hold
 
 A step stores an anchor descriptor, resolved at run time by the first rung of this ladder that finds a visible element:
 
-1. **Registered key.** `<button mjTourAnchor="sales.deals.board">` registers with `AnchorRegistry` and unregisters on destroy. The engine waits on registry events, with no polling. Keys are namespaced (`core.shell.*`, `sales.*`, `orders.*`) and declared in source, so CI can see them. This is the ngx-ui-tour model.
+1. **Registered key.** The canonical form is a plain attribute, `data-mj-tour-anchor="sales.deals.board"`, which works on any HTML page; the framework-free `AnchorRegistry` watches for it with a `MutationObserver`. In Angular, the `mjTourAnchor` directive sets the attribute and registers the element eagerly. Script hosts can also call `RegisterAnchor(key, element)`. The engine waits on registry events, with no polling. Keys are namespaced (`core.shell.*`, `sales.*`, `orders.*`) and declared in source, so CI can see them. This is the ngx-ui-tour model.
 2. **Semantic.** These resolvers use metadata MJ already has:
    - `FormField`, `FormSection`, `FormRailGroup` via `data-field-name`, `data-section-key`, `data-rail-key`
    - `FormToolbarAction` by key
@@ -416,8 +558,14 @@ Pause, dismiss and anchor-missing exit from any point.
 
 Tours are first-class for every agent, not only the guide.
 
+The agent tools and context live in `tours-runtime` as a host-agnostic `TourAgentToolkit`: JSON schemas plus handlers. Each host attaches it to whatever agent surface it has:
+
+- **Explorer**: `NavigationService.SetAgentClientTools` and `registerClientTools`
+- **another Angular app**: its `ng-conversations` chat
+- **a public page**: `<mj-realtime-widget>`'s browser-declared client tools, as Caliber already does
+
 ### 10.1 Agents can start tours
-- **Global client tools**, registered in `explorer-app.component.ts` `registerClientTools` and declared in `metadata/client-tool-definitions/`, so they are available even when no tour is running. Bind them to Sage through `MJ: AI Agent Client Tools`.
+- **Global client tools**, defined once in `TourAgentToolkit`, attached in Explorer through `explorer-app.component.ts` `registerClientTools`, and declared in `metadata/client-tool-definitions/`, so they are available even when no tour is running. Bind them to Sage through `MJ: AI Agent Client Tools`.
 
   | Tool | Parameters |
   |---|---|
@@ -574,6 +722,7 @@ Tours are kept to five steps or fewer; longer journeys become learning paths.
   - a **pick element** mode that proposes the most stable anchor (registered, then semantic, then role) and warns before saving a CSS fallback; it builds on the component-feedback-panel picker and the Recorder director
   - preview as a role or a specific user
   - overrides and learning-path assignment
+  - surface assignment, with a warning when a tour needs a capability the surface's host lacks
   - publish, which creates a Tour Version
 - **AI-assisted authoring:**
   - "Draft a tour for this screen": an agent reads form sections, fields, descriptions, nav item, registered anchors and permissions.
@@ -596,6 +745,7 @@ Tours are kept to five steps or fewer; longer journeys become learning paths.
 2. **Replay.** The `Verify` director walks each tour headless: it resolves every anchor, runs every `Prepare`, and follows the default path. It runs under the Testing Framework as a Playwright-backed test type, so tours become smoke tests. Sales' `20-demo-tour.spec.ts` is already a tour written as a spec.
 3. **CodeGen diff.** When a regenerated form drops or renames a field or section, tours anchored to it are flagged.
 4. **Runtime telemetry.** `AnchorResolution` and misses are recorded per step. Crossing a threshold pauses that tour's unrequested offers and notifies its owner. There is no silent self-healing, because it hides breakage.
+5. **External surfaces.** The static gate cannot scan a page MJ does not build, so web surfaces rely on two things: the Verify director run against a URL (`mj tours verify --surface <key> --url <url>`), and runtime telemetry.
 
 ---
 
@@ -687,6 +837,8 @@ Each repo gets its own PR, after phase 2 ships in an MJ release. Each PR:
 
 Cross-app tours live in the top-most app of their dependency chain. Consumer blindness forbids Common from naming its consumers.
 
+Public-facing pages are hosts too (§4.2). Candidate- and respondent-facing pages, such as Caliber's session widget and Forms' respondent widget, can carry tours through a tour surface where that helps.
+
 ### 17.1 Open Apps
 
 | Repo | Tours | Extension it showcases |
@@ -716,6 +868,7 @@ These run on the More Cheese generated world: members, creameries, competitions,
 | `icf.academy` | Academy and certifications | Coursework, apprenticeships, credentials |
 | `icf.advocacy` | Advocacy campaigns | Campaigns and legislative monitoring |
 | `icf.ask-sage` | Ask Sage about the ICF (voice director showcase) | Sage narrates the association live, grounded in Knowledge Hub content and real data |
+| `icf.website-visitor` | Explore the ICF (public website, script host) | A visitor tour on the More Cheese public site (`website/`), loaded with `mj-tours.js` and a guest surface key, with the realtime widget offered as a voice guide |
 
 Learning path **ICF Staff Onboarding**: `icf.welcome`, `icf.membership-manager`, `icf.world-cheese-cup`, `icf.academy`. A branded `ICFWelcomePresenter` demonstrates the presenter extension point.
 
@@ -725,46 +878,61 @@ Learning path **ICF Staff Onboarding**: `icf.welcome`, `icf.membership-manager`,
 
 ```mermaid
 flowchart LR
-    P0["Phase 0<br/>Anchors"] -->|"Gate: Sales + one core app anchored; gate in CI"| P1["Phase 1<br/>Visual tours + agents can start them"]
-    P1 -->|"Gate: 3 core tours pass a11y checklist"| P2["Phase 2<br/>Smart offering + Tour Studio"]
-    P2 -->|"Gate: funnel and goal lift measured"| P3["Phase 3<br/>Chat guide"]
-    P3 -->|"Gate: chat-guided goal rate ≥ visual"| P4["Phase 4<br/>Voice + Do mode"]
-    P2 --> P5["Phase 5<br/>Open Apps + More Cheese tours"]
+    P0["Phase 0<br/>Anchors"] -->|"Gate: Sales + one core app anchored; gate in CI"| P1["Phase 1<br/>Visual tours on host contracts"]
+    P1 -->|"Gate: 3 core tours pass a11y; same tours replay in a non-Explorer Angular harness"| P2["Phase 2<br/>Smart offering + Tour Studio"]
+    P2 -->|"Gate: funnel and goal lift measured"| P3["Phase 3<br/>Embedding: element, script, surfaces"]
+    P3 -->|"Gate: one tour JSON replays in Explorer, an Angular app, the element and a plain page"| P4["Phase 4<br/>Chat guide"]
+    P4 -->|"Gate: chat-guided goal rate ≥ visual"| P5["Phase 5<br/>Voice + Do mode"]
+    P2 --> P6["Phase 6<br/>Open Apps + More Cheese tours"]
+    P3 --> P6
 ```
 
-No durations are given here; sizing follows review of this plan.
+No durations are given here; sizing follows review of this plan. Host independence is built in from phase 0, not retrofitted in phase 3. Phase 3 adds packaging and public surfaces on top of contracts that already exist.
 
-### Phase 0 — Anchors (useful on their own for tests and agents)
-1. **Create `@memberjunction/tours-runtime`** at `packages/Tours/Runtime`. It holds the `ITourAnchor` types, `BaseTourAnchorResolver` (logic), and the anchor-key and namespace conventions.
-2. **Create `@memberjunction/ng-tours`** at `packages/Angular/Generic/tours` with `"mjUILayer": "widgets"`. It holds:
-   - the `MJTourAnchorDirective` (`[mjTourAnchor]`)
+### Phase 0 — Anchors (framework-free from the start; useful on their own for tests and agents)
+1. **`@memberjunction/tours-runtime`** (`packages/Tours/Runtime`, `"mjUILayer": "runtime"`): the `ITourAnchor` types, `BaseTourAnchorResolver` (logic), and the anchor-key and namespace conventions.
+2. **`@memberjunction/tours-dom`** (`packages/Tours/Dom`, `"mjUILayer": "runtime"`):
    - `AnchorRegistry`, with register and unregister events and `WaitFor(key, timeoutMs)`
+   - the `data-mj-tour-anchor` `MutationObserver` scanner
+   - `RegisterAnchor(key, element)`
    - the DOM halves of the semantic resolvers
-3. **Extract `FormAnchorNavigator`** from `RecordFormContainerComponent.OnNavigateToCommentAnchor` (`base-forms/src/lib/container/record-form-container.component.ts`). Comments and tours then share "switch rail, expand section, scroll, pulse".
-4. **Shell anchors.** Add `mjTourAnchor` to the app switcher (`explorer-core/.../header/app-switcher.component.ts`), omnibar toggle, chat overlay, notifications, user menu, tab strip and Home.
-5. **Stable nav-item keys.** Add an optional `Key` to `NavItem` (`base-application/src/lib/interfaces/nav-item.interface.ts`). Resolve `NavItem` anchors by `Key`, then by `DriverClass`, never by `Label`.
-6. **`NavigationService.ResourceLoaded$`.** Emit it from the tab container when `LoadCompleteEvent` fires (`explorer-core/.../tabs/tab-container.component.ts`).
-7. **`tour-anchors` standard.** `packages/Standards/src/checks/tour-anchors.ts`, with fixtures, adopted in `.mj-standards.json`.
-8. **Token.** Add `--mj-z-tour` to `_tokens.scss` and document it in the design-tokens rule.
+3. **`@memberjunction/ng-tours`** (`packages/Angular/Generic/tours`, `"mjUILayer": "widgets"`): `MJTourAnchorDirective` (`[mjTourAnchor]`), which sets the attribute and registers eagerly.
+4. **Extract `FormAnchorNavigator`** from `RecordFormContainerComponent.OnNavigateToCommentAnchor` (`base-forms/src/lib/container/record-form-container.component.ts`). Comments and tours then share "switch rail, expand section, scroll, pulse".
+5. **Shell anchors.** Add anchors to the app switcher (`explorer-core/.../header/app-switcher.component.ts`), omnibar toggle, chat overlay, notifications, user menu, tab strip and Home.
+6. **Stable nav-item keys.** Add an optional `Key` to `NavItem` (`base-application/src/lib/interfaces/nav-item.interface.ts`). Resolve `NavItem` anchors by `Key`, then by `DriverClass`, never by `Label`.
+7. **`NavigationService.ResourceLoaded$`.** Emit it from the tab container when `LoadCompleteEvent` fires (`explorer-core/.../tabs/tab-container.component.ts`).
+8. **`tour-anchors` standard.** `packages/Standards/src/checks/tour-anchors.ts`, with fixtures, adopted in `.mj-standards.json`. It recognizes both the attribute and the directive.
+9. **Token.** Add `--mj-z-tour` to `_tokens.scss` and document it in the design-tokens rule.
 
-### Phase 1 — Visual tours, and agents can start them
-1. **Migration.** `migrations/v6/V<YYYYMMDDHHMM>__v6.<minor>.x__Guided_Tours.sql` creates the 12 tables in §6 (sketch in §19), followed by the appended CodeGen output.
+### Phase 1 — Visual tours on the host contracts, and agents can start them
+1. **Migration.** `migrations/v6/V<YYYYMMDDHHMM>__v6.<minor>.x__Guided_Tours.sql` creates the 13 tables in §6 (sketch in §19), followed by the appended CodeGen output.
 2. **JSONType interfaces** in `metadata/entities/JSONType-interfaces/`: `ITourAnchor`, `ITourCompletion`, `ITourGoal`, `ITourStartLocation`, `ITourStepPrepare`, `ITourLaunchPolicy`, `ITourVersionDefinition`, plus one config interface per standard step type.
-3. **CodeGen** after `mj sync push` of the JSONType definitions. Generated classes land in `MJCoreEntities`.
-4. **`TourEngine`** in `packages/MJCoreEntities/src/engines/tours.ts`, on the `InteractiveFormsEngine` model. It caches definitions globally, loads runs with a `UserID` filter, uses `GetConfigData` getters, exposes `ObserveProperty` streams and `ActiveSession$`, and honours the `Tours.Enabled` kill switch.
-5. **Runtime.** `TourSession`, `tour-graph-compiler.ts` (onto `GraphTraversalEngine`), the event-args classes, the `TourSignals` bus, `BaseTourDriver` (`Default`), `BaseTourStepType` with the standard logic types, `BaseTourCompletionCheck` with the standard checks, and the `Visual` director.
-6. **ng-tours UX.** `BaseTourStepRenderer`, the standard renderers (Spotlight, Action, Beacon, Modal, Banner, Navigate, Choice, Checkpoint), `BaseTourPresenter` (`Overlay`), the spotlight mask, a popover on CDK `ConnectedOverlay`, the launcher, and `mj-tour-host`. Cover them with DOM tests and axe.
-7. **Explorer integration.** Mount `mj-tour-host` in the shell, bridge navigation intents to `NavigationService`, add the header launcher and `OmnibarToursProvider`, handle the notification type `tour` in `user-notifications.component.ts`, and add the Home learning-path card.
-8. **Server package.** `@memberjunction/tours-server` (`packages/Tours/Server`) with:
-   - Remote Operations `Tours.RecordEvents` (batched) and `Tours.EvaluatePredicates`, plus `metadata/remote-operations/` rows
-   - server entity subclasses: version immutability, and step `Configuration` validated against `ConfigSchema`
-   - `HasRecords` and `QueryReturnsRows` predicates
-9. **Agents can start tours:**
-   - global client tools `StartTour`, `ListTours`, `GetActiveTour`, `PauseTour`, `ResumeTour`, `StopTour` (`explorer-app.component.ts` and `metadata/client-tool-definitions/`), bound to Sage
-   - the `start:tour` UI command in `ui-commands.ts`
-   - `AppContextSnapshot.ActiveTour` and `AvailableTours`, with `FormatAppContextNote`
-   - the Actions `Start Tour For User`, `Suggest Tours` and `Get Tour Progress`
-10. **Seeds.** `metadata/tour-step-types/` and the first core tours: `core.welcome`, `core.records`, `core.chat`.
+3. **CodeGen** after `mj sync push` of the JSONType definitions.
+4. **`TourEngine`** (`packages/MJCoreEntities/src/engines/tours.ts`) on the `InteractiveFormsEngine` model, exposed to the runtime as `EngineTourSource` / `EngineProgressStore`.
+5. **Runtime:**
+   - `TourSession`, `tour-graph-compiler.ts`, the event-args classes, `TourSignals`
+   - `BaseTourDriver` (`Default`), the standard logic step types and completion checks, the `Visual` director
+   - the `ITourHost`, capability, source and store contracts
+   - `InlineTourSource`, `MemoryProgressStore` and `TourAgentToolkit`
+6. **DOM layer:**
+   - the overlay host (shadow root), spotlight mask and popover positioning
+   - focus management, live region and keyboard
+   - `BaseTourDomRenderer`, the standard DOM renderers and the `Overlay` presenter
+   - `WebTourHost`
+   - DOM tests and axe checks
+7. **ng-tours:** `BaseTourStepRenderer`, the Angular renderer adapter, `mj-tour-host` and the `MJ_TOUR_HOST` token.
+8. **Explorer:** `ExplorerTourHost`; mount `mj-tour-host` in the shell; header launcher; `OmnibarToursProvider`; the notification type `tour` in `user-notifications.component.ts`; the Home learning-path card.
+9. **A second host from day one.** A minimal non-Explorer Angular harness (`packages/Tours/examples/angular-host`) uses `ng-tours` with its own `ITourHost`, so Explorer coupling is caught in phase 1, not discovered in phase 3.
+10. **Server package.** `@memberjunction/tours-server` (`packages/Tours/Server`) with:
+    - the Remote Operations `Tours.RecordEvents` (batched) and `Tours.EvaluatePredicates`, plus their `metadata/remote-operations/` rows
+    - server entity subclasses: version immutability, and step `Configuration` validated against `ConfigSchema`
+    - the `HasRecords` and `QueryReturnsRows` predicates
+11. **Agents can start tours:**
+    - global tour client tools from `TourAgentToolkit`, attached by `ExplorerTourHost.AttachAgentBridge` (`explorer-app.component.ts` `registerClientTools`, plus `metadata/client-tool-definitions/` rows bound to Sage)
+    - the `start:tour` UI command in `ui-commands.ts`
+    - `AppContextSnapshot.ActiveTour` and `AvailableTours`
+    - the Actions `Start Tour For User`, `Suggest Tours` and `Get Tour Progress`
+12. **Seeds.** `metadata/tour-step-types/` and the first core tours: `core.welcome`, `core.records`, `core.chat`.
 
 ### Phase 2 — Smart offering, Tour Studio, health
 1. **Triggers.** `BaseTourTrigger` with the standard implementations: FirstVisit, EntityFormOpened, Signal, AppUpgraded, Schedule, AgentSuggested.
@@ -779,30 +947,56 @@ No durations are given here; sizing follows review of this plan.
    - preview as a role or user
    - publish
    - analytics and holdouts
-7. **`Verify` director.** A Testing Framework test type. Add replay tests for the core tours in `e2e/`.
-8. **Runtime health.** Anchor-health telemetry and auto-pause, plus the CodeGen-diff flagging.
-9. **Remaining step types:** Media, FieldEntry, EmbeddedComponent, AskAgent, KnowledgeCheck, WaitForSignal. Add the `SidePanel` and `Embedded` presenters.
+7. **`Verify` director.** A Testing Framework test type. Add replay tests for the core tours in `e2e/` and in the Angular harness.
+8. **Runtime health.** Anchor-health telemetry and auto-pause, plus CodeGen-diff flagging.
+9. **Remaining step types:** Media, FieldEntry, EmbeddedComponent, AskAgent, KnowledgeCheck, WaitForSignal (Angular renderers where they need Angular). Add the `SidePanel` and `Embedded` presenters.
 10. **Content.** The remaining core tours (§16) and the three core learning paths.
 
-### Phase 3 — Chat guide
+### Phase 3 — Embedding: any Angular app, a custom element, any web page
+1. **Tour surfaces.** `MJ: Tour Surfaces` behaviour:
+   - guest-session minting for surfaces: generalize `WidgetSessionService.MintGuestSession`, or mirror it in a `TourSurfaceSessionService` (§20)
+   - the "Tour Guest" role
+   - scoped Remote Operations `Tours.GetSurfaceTours` and guest `Tours.RecordEvents`
+   - allowed-origin and rate-limit enforcement
+2. **`RegisterTourElements()` in `ng-tours`.** `<mj-tour-host>` through `@angular/elements`, with a guarded `customElements.define`, a CSP nonce, and methods forwarded to the component, following `packages/Angular/Generic/realtime-widget/src/lib/realtime-widget.element.ts`. Plus a rich-step element bundle.
+3. **`@memberjunction/tours-web`** (`packages/Web/Tours`):
+   - `mj-tours.js` and `MountTours()`
+   - `SurfaceTourSource` / `SurfaceProgressStore`
+   - static mode
+   - the optional rich-step loader
+   - a bundle-size budget enforced in CI
+4. **Capability checks.** `RequiredCapabilities` on every plugin, eligibility filtering, Tour Studio warnings, and surface assignment.
+5. **Web start locations.** URL-pattern start locations and a `FirstVisit` trigger by URL pattern, for web hosts.
+6. **Examples and docs:**
+   - `packages/Web/Tours/examples/`: a blank HTML page, a React page using the script, and static mode
+   - the Angular Elements demo in `packages/AngularElements/`
+   - an embedding chapter in `guides/GUIDED_TOURS_GUIDE.md`, with CSP guidance
+7. **External verify.** `mj tours verify --surface <key> --url <url>` for pages MJ does not build.
+
+### Phase 4 — Chat guide
 1. **Guided Tour skill.** Add it to `metadata/ai-skills/` and activate it when a chat-mode run starts.
-2. **Session tools.** `TourGetState`, `TourGetVisibleAnchors`, `TourHighlight`, `TourGoToStep`, `TourPrepareStep`, `TourMarkKnown`, `TourSuggest`, and step-type tools via `DescribeForAgent`. Enforce director-only rights in the runtime.
-3. **Grounding.** Step guide notes, metadata descriptions, Knowledge Hub and scoped search.
-4. **How-do-I matching.** Entity-search index over tours, plus the "Show me" UI command.
-5. **Unscripted tours.** Ephemeral tours composed from nav, rail and anchors, savable as drafts. Retire `BuildTourGuidanceClause` for scripted tours.
-6. **AI drafting** in Tour Studio, and headless or MCP authoring.
-7. **`NativeOnly` gap.** Decide whether to close it or require hybrid mode (§20).
+2. **Session tools** in `TourAgentToolkit`: `TourGetState`, `TourGetVisibleAnchors`, `TourHighlight`, `TourGoToStep`, `TourPrepareStep`, `TourMarkKnown`, `TourSuggest`, plus step-type tools through `DescribeForAgent`. Enforce director-only rights in the runtime.
+3. **The toolkit attaches to `ng-conversations`** in any Angular host, not only Explorer's chat overlay.
+4. **Grounding.** Step guide notes, metadata descriptions, Knowledge Hub and scoped search.
+5. **How-do-I matching.** An entity-search index over tours, plus the "Show me" UI command.
+6. **Unscripted tours.** Ephemeral tours composed from nav, rail and anchors, savable as drafts. Retire `BuildTourGuidanceClause` for scripted tours.
+7. **AI drafting** in Tour Studio, and headless or MCP authoring.
+8. **`NativeOnly` gap.** Decide whether to close it or require hybrid mode (§20).
 
-### Phase 4 — Voice and Do mode
+### Phase 5 — Voice and Do mode
 1. **Voice director** over the Realtime Co-Agent, bridging `TourEngine.Events$` into `ClientContextChannel` (or a Tour channel). Mirror every spoken line as text.
-2. **Do mode.** `TourPerformStep` through typed client tools and Actions, gated by consent and audited.
-3. **Struggle trigger** heuristics, offered through the Sage orb.
-4. **Holdout experiments** surfaced in analytics.
-5. **Mobile host renderers** under the same ClassFactory keys (`packages/MobileApp`).
+2. **Voice on external surfaces** through `<mj-realtime-widget>` linked to the surface. The browser declares the tour tools, and the server validates them the way Caliber's widget validates client tools (`bizapps-caliber/packages/Server/src/runtime/launch/client-tools.ts`).
+3. **Do mode.** `TourPerformStep` through typed client tools and Actions, gated by consent and audited.
+4. **Struggle trigger** heuristics, offered through the Sage orb (or the widget on external pages).
+5. **Holdout experiments** surfaced in analytics.
+6. **Mobile host renderers** under the same ClassFactory keys (`packages/MobileApp`).
 
-### Phase 5 — Downstream content (one PR per repo, after an MJ release ships phase 2)
-1. Each Open App in §17.1: anchors, signals, the `tour-anchors` standard, tours, and any custom step types, triggers or checks.
-2. More Cheese (§17.2): tours, the ICF learning path, `ICFWelcomePresenter`, and Verify replay as a demo smoke test.
+### Phase 6 — Downstream content (one PR per repo, after an MJ release ships phase 2; public pages after phase 3)
+1. **Each Open App in §17.1:** anchors, signals, the `tour-anchors` standard, tours, and any custom step types, triggers or checks.
+2. **More Cheese (§17.2):**
+   - the in-app tours, the ICF learning path and `ICFWelcomePresenter`
+   - the public-website visitor tour through a tour surface
+   - Verify replay as a demo smoke test
 
 ---
 
@@ -839,6 +1033,7 @@ CREATE TABLE ${flyway:defaultSchema}.Tour (
     TourKey NVARCHAR(150) NOT NULL,
     Description NVARCHAR(MAX) NULL,
     ApplicationID UNIQUEIDENTIFIER NULL,
+    SurfaceID UNIQUEIDENTIFIER NULL,
     Status NVARCHAR(20) NOT NULL DEFAULT 'Draft',
     CurrentVersionID UNIQUEIDENTIFIER NULL,
     EstimatedMinutes INT NULL,
@@ -856,6 +1051,7 @@ CREATE TABLE ${flyway:defaultSchema}.Tour (
     CONSTRAINT PK_Tour PRIMARY KEY (ID),
     CONSTRAINT UQ_Tour_TourKey UNIQUE (TourKey),
     CONSTRAINT FK_Tour_Application FOREIGN KEY (ApplicationID) REFERENCES ${flyway:defaultSchema}.Application(ID),
+    CONSTRAINT FK_Tour_Surface FOREIGN KEY (SurfaceID) REFERENCES ${flyway:defaultSchema}.TourSurface(ID),
     CONSTRAINT FK_Tour_GuideAgent FOREIGN KEY (GuideAgentID) REFERENCES ${flyway:defaultSchema}.AIAgent(ID),
     CONSTRAINT CK_Tour_Status CHECK (Status IN ('Draft', 'Active', 'Retired')),
     CONSTRAINT CK_Tour_DefaultGuideMode CHECK (DefaultGuideMode IN ('Visual', 'Chat', 'Voice', 'User Choice'))
@@ -864,7 +1060,9 @@ CREATE TABLE ${flyway:defaultSchema}.Tour (
 
 CREATE TABLE ${flyway:defaultSchema}.TourRun (
     ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
-    UserID UNIQUEIDENTIFIER NOT NULL,
+    UserID UNIQUEIDENTIFIER NULL,
+    VisitorKey NVARCHAR(100) NULL,
+    SurfaceID UNIQUEIDENTIFIER NULL,
     TourID UNIQUEIDENTIFIER NOT NULL,
     TourVersionID UNIQUEIDENTIFIER NOT NULL,
     Status NVARCHAR(20) NOT NULL DEFAULT 'In Progress',
@@ -883,16 +1081,18 @@ CREATE TABLE ${flyway:defaultSchema}.TourRun (
     IsHoldout BIT NOT NULL DEFAULT 0,
     CONSTRAINT PK_TourRun PRIMARY KEY (ID),
     CONSTRAINT FK_TourRun_User FOREIGN KEY (UserID) REFERENCES ${flyway:defaultSchema}.[User](ID),
+    CONSTRAINT FK_TourRun_Surface FOREIGN KEY (SurfaceID) REFERENCES ${flyway:defaultSchema}.TourSurface(ID),
+    CONSTRAINT CK_TourRun_Principal CHECK (UserID IS NOT NULL OR VisitorKey IS NOT NULL),
     CONSTRAINT FK_TourRun_Tour FOREIGN KEY (TourID) REFERENCES ${flyway:defaultSchema}.Tour(ID),
     CONSTRAINT FK_TourRun_TourVersion FOREIGN KEY (TourVersionID) REFERENCES ${flyway:defaultSchema}.TourVersion(ID),
     CONSTRAINT CK_TourRun_Status CHECK (Status IN ('Pending', 'In Progress', 'Completed', 'Dismissed', 'Snoozed', 'Abandoned', 'Failed')),
     CONSTRAINT CK_TourRun_LaunchSource CHECK (LaunchSource IN ('Launcher', 'Omnibar', 'Agent', 'Trigger', 'Notification', 'Link', 'Learning Path'))
 );
--- Remaining tables (TourVersion, TourStep, TourStepPath, TourPrerequisite, TourTrigger,
+-- TourSurface is created before Tour. Remaining tables (TourSurface, TourVersion, TourStep, TourStepPath, TourPrerequisite, TourTrigger,
 -- LearningPath, LearningPathTour, TourRunStep, TourOverride) follow the field lists in §6.
 ```
 
-- **Row-level security:** Tour Runs and Run Steps are readable by their user. Aggregates go to an admin role through a dedicated permission or query.
+- **Row-level security:** Tour Runs and Run Steps are readable by their user. Guest runs are reachable only through the scoped surface Remote Operations. Aggregates go to an admin role through a dedicated permission or query.
 - **Metadata seeds**, not SQL INSERTs: `metadata/tour-step-types/`, `metadata/tours/`, `metadata/learning-paths/`, `metadata/client-tool-definitions/` (the new tools), `metadata/ai-skills/` (Guided Tour), `metadata/remote-operations/`, `metadata/actions/`, `metadata/notifications/` (tour type), `metadata/applications/.tour-studio-application.json`, `metadata/instance-configurations/` (`Tours.*`). Every record has a `primaryKey` from `uuidgen` and no `sync` block. New directories go in `metadata/.mj-sync.json` `directoryOrder` after what they look up: step types before tours, tours before learning paths.
 - **Ordering:** run `mj sync push` before `mj codegen`, because CodeGen reads JSONType definitions from the database. The PR carries the JSON; the release seed carries the rows.
 
@@ -907,6 +1107,9 @@ CREATE TABLE ${flyway:defaultSchema}.TourRun (
 - **Performance.** *Mitigation:* the packages are lazy-loaded; eligibility runs over cached data; there is no polling (registry events), and anchor resolution happens only for the active step.
 - **Dependency weight.** `tours-runtime` depending on `@memberjunction/ai-core-plus` for `GraphTraversalEngine`. *Mitigation:* confirm the package boundary; extract graph traversal into its own small package if needed.
 - **Plugin sprawl.** *Mitigation:* the step-type registry is metadata with `Status`; the standards gate reports unknown keys; Tour Studio shows the provenance of each plugin.
+- **Bundle weight on public pages.** *Mitigation:* the script build carries only the DOM layer and the standard renderers, under a size budget in CI. The Angular rich-step bundle loads only when a tour needs it.
+- **Shadow DOM and accessibility.** ARIA references do not cross shadow roots. *Mitigation:* mirrored light-DOM descriptions and focus tracking, covered by the accessibility audit on the plain-page host.
+- **Guest abuse on public surfaces.** *Mitigation:* allowed origins, rate limits, and a guest role that can read only that surface's published tours and write only its own runs, with no entity CRUD.
 
 **Open questions**
 - [ ] Name: "Tour" (proposed) vs "Guide" vs "Walkthrough" ("Flow" is taken by Flow agents).
@@ -919,6 +1122,10 @@ CREATE TABLE ${flyway:defaultSchema}.TourRun (
 - [ ] Should step types also be shippable as interactive components (no compile), the way Form Contributions allow runtime components?
 - [ ] Retention for Tour Run Steps and agent-guided transcripts.
 - [ ] Is a Tour channel (Channels-v2 descriptor) cleaner than `ContextTool` for the voice director?
+- [ ] Guest sessions: generalize `WidgetSessionService` into a shared embed-surface service for both the realtime widget and tours, or keep a parallel `TourSurfaceSessionService`?
+- [ ] When a guest later signs in, should their guest runs be claimed by the user?
+- [ ] One surface per tour (`Tours.SurfaceID`, proposed), or a many-to-many assignment?
+- [ ] Should `tours-dom` get its own `mjUILayer` value (framework-free but DOM-bound), or is `runtime` with a README note enough?
 
 ---
 
@@ -929,6 +1136,7 @@ CREATE TABLE ${flyway:defaultSchema}.TourRun (
 - **Standards check fixtures** for `tour-anchors`: missing key, unknown step type, selector fallback, a semantic anchor naming a non-existent field.
 - **Integration tier:** a deterministic bundle, "IT — Guided Tours lifecycle". It starts a run, records events, completes it on an `EntityEvent` goal, verifies pinning, and verifies that override precedence works through the client transport (`guides/INTEGRATION_TESTING_QUICKSTART.md`).
 - **Replay:** `Verify` director tests for every shipped core tour in `e2e/`. Each Open App adds its own.
+- **Host conformance:** the same tour JSON replays in Explorer, the non-Explorer Angular harness, the `<mj-tour-host>` element demo, and a plain HTML page. `tours-runtime` tests run in Node with no DOM, and `tours-dom` tests run in a DOM test environment. A bundle-size budget covers `mj-tours.js`.
 - **Agent evals** (Testing Framework): the guide never cites a non-registry anchor, never jumps a non-authored edge, answers off-path questions and offers to return, and respects Do-mode consent.
 - **Accessibility audit** before phase 1's gate, with NVDA, JAWS and VoiceOver.
 
@@ -938,9 +1146,14 @@ CREATE TABLE ${flyway:defaultSchema}.TourRun (
 
 | File | Change |
 |---|---|
-| `packages/Tours/Runtime/**` (new) | `@memberjunction/tours-runtime`: session, compiler, base classes, standard logic plugins, events, signals |
+| `packages/Tours/Runtime/**` (new) | `@memberjunction/tours-runtime`: session, compiler, base classes, standard logic plugins, events, signals, host/source/store contracts, agent toolkit |
+| `packages/Tours/Dom/**` (new) | `@memberjunction/tours-dom`: overlay host, anchor registry and attribute scanner, DOM renderers, presenters, `WebTourHost` |
+| `packages/Web/Tours/**` (new) | `@memberjunction/tours-web`: `mj-tours.js` loader, `MountTours()`, surface source and store, examples |
+| `packages/Tours/examples/angular-host/**` (new) | Non-Explorer Angular reference host |
+| `packages/MJServer/src/realtimeWidget/WidgetSessionService.ts` | Generalize guest-session minting for tour surfaces, or mirror it (§20) |
+| `packages/AngularElements/**` | `<mj-tour-host>` element demo |
 | `packages/Tours/Server/**` (new) | `@memberjunction/tours-server`: Remote Operations, Actions, server predicates, entity server subclasses |
-| `packages/Angular/Generic/tours/**` (new) | `@memberjunction/ng-tours`: directive, registry, resolvers, renderers, presenters, widgets, `mj-tour-host` |
+| `packages/Angular/Generic/tours/**` (new) | `@memberjunction/ng-tours`: directive, Angular renderers and adapter, `mj-tour-host`, `MJ_TOUR_HOST`, `RegisterTourElements()` |
 | `packages/MJCoreEntities/src/engines/tours.ts` (new) | `TourEngine` |
 | `packages/Angular/Generic/base-forms/src/lib/container/record-form-container.component.ts` | Extract `FormAnchorNavigator`; comments use it |
 | `packages/Angular/Explorer/explorer-core/src/lib/shell/**` | Mount `mj-tour-host`; header launcher; shell anchors |
@@ -965,7 +1178,7 @@ CREATE TABLE ${flyway:defaultSchema}.TourRun (
 | `metadata/client-tool-definitions/`, `metadata/ai-skills/`, `metadata/remote-operations/`, `metadata/actions/`, `metadata/notifications/`, `metadata/instance-configurations/`, `metadata/applications/` | New rows |
 | `metadata/.mj-sync.json` | `directoryOrder` entries |
 | `guides/GUIDED_TOURS_GUIDE.md` (new) + `guides/README.md` | Authoring and extension guide |
-| Each Open App repo and `more-cheese` (phase 5) | Anchors, signals, standards adoption, `metadata/tours/`, optional plugins |
+| Each Open App repo and `more-cheese` (phase 6) | Anchors, signals, standards adoption, `metadata/tours/`, optional plugins |
 
 ---
 
