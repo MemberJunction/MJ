@@ -56,6 +56,27 @@ test.describe('Predictive Studio — trust cards render the stored gate decision
   });
 });
 
+test.describe('Predictive Studio — holdout scores and pipeline validation', () => {
+  test('Production names the metric of a holdout score and shows none for a model without a holdout', async ({ page }) => {
+    await openSignedIn(page, '/app/predictive-studio/Models?section=production');
+    const score = (name: string) => page.locator('[data-testid="ps-production-row"]', { hasText: name }).first().locator('.meta .ps-mono');
+    // the kept baseline stores only its primary proper score: shown with its metric's name, never as a bare number
+    await expect(score(need('PS_C1_CARD_NAME'))).toHaveText(/^[A-Z][A-Za-z² ]+ -?\d+\.\d+$/, { timeout: 60_000 });
+    // the temporary W7 model stores no holdout metrics: no number, rather than its training score
+    await expect(score(need('PS_W7_CARD_NAME'))).toHaveText('—');
+  });
+
+  test('Validate never asks a unit-bound pipeline for the sources or target its Prediction Unit decides', async ({ page }) => {
+    await openSignedIn(page, '/app/predictive-studio/Studio?section=pipelines');
+    await page.locator('[data-testid="ps-pipelines-pill"]', { hasText: need('PS_C1_CARD_NAME') }).first().click();
+    await page.locator('[data-testid="ps-pipelines-validate"]').click();
+    const toast = page.getByText(/Pipeline looks valid|Pipeline needs|Training refuses/).first();
+    await expect(toast).toBeVisible({ timeout: 30_000 });
+    const text = (await toast.textContent()) ?? '';
+    expect([text.includes('at least one source'), text.includes('a target variable')]).toEqual([false, false]);
+  });
+});
+
 const record = (entity: string, id: string): string => `${BASE}/app/predictive-studio/record/${encodeURIComponent(entity)}/${id}`;
 
 // The record panels register when the Predictive Studio chunk loads, so a record form is opened inside the app after the
