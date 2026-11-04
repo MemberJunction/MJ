@@ -1,5 +1,121 @@
 # @memberjunction/integration-test-suite
 
+## 6.2.0-edge.8
+
+### Minor Changes
+
+- 9cb815b: Add Anchored Conversations and Record Commenting across the database schema (`AnchorType`, `AnchorKey`, `AnchorMetadata` with `IConversationAnchorMetadata`, `IsResolved`, `ResolvedByUserID`, `ResolvedAt`), `ConversationEngine`, server-side RLS + FLS read enforcement (`AnchoredConversationPostRunViewHook` on `MJ: Conversations` and `MJ: Conversation Details`), two-stage write-time FLS restricted-field classification via `AIPromptRunner` (`Anchored Comment Restricted Field Classifier`) without value-matching refusal oracles or restricted `quotedValue` snapshots, FLS/RLS-aware `@mention` notifications, entity-level commenting configuration (`MJ: Entities.Configuration.Comments.Enabled` and `RequiredPermission` — enabled by default and configurable per entity via `Configuration.Comments.Enabled: false`), record-bound "Ask AI" overlay conversations (`LinkedEntityID` + `LinkedRecordID`), and `@memberjunction/ng-base-forms` (`<mj-record-comments>` with `MJ_CommentsPanel_Width` user preference persistence, field/section/group comment badges, `FormSectionIndicators` rollup, and click-to-navigate anchor scrolling).
+- 59e32e0: Add Diagnostic Bundles: scoped diagnostic sessions that capture server logs, SQL and traces and client logs, network, telemetry and breadcrumbs; a two-stage scrubber; the `.mjdiag` archive format with structural verification; X25519 + AES-256-GCM envelope encryption; an MJAPI intake endpoint with quarantine-then-promote storage; automated findings; and CLI and Explorer surfaces. Adds the diagnostic session, chunk and bundle tables and their metadata. Adds the `MJ: Diagnostic Sender Registrations` table: a sender enrols once with a one-time registration code, then signs every intake request with `MJDiag-Ed25519`, so the intake endpoint reads no API key. Adds the `Diagnostics.IssueSenderRegistrationCode` and `Diagnostics.EnrolSender` remote operations and the `Diagnostics Sender Key` and `Diagnostics Intake Key` credential types. Adds `SanitizeForLog` to `@memberjunction/global`. `BaseServerMiddleware.Initialize` and `ConfigureExpressApp` now receive an optional `ServerMiddlewareContext` that carries the server's `ApiRoute` builder. The Slack messaging extension and the component-registry auth example log request values on one line. `Diagnostics.RevokeSender` and `Diagnostics.ReactivateSender` revoke and reactivate a sender; a direct save of a sender registration needs `Diagnostics: Manage Intake` and cannot change its status, key, code or timestamp fields. The `MJ: Diagnostic Sender Registrations` form has **Revoke** and **Reactivate** toolbar buttons that call these operations. `FormToolbarActionLifecycleContext` in `@memberjunction/ng-base-forms` gains an optional `Injector` (the form container's injector), so a toolbar action can resolve Angular services such as `MJConfirmService`. `BaseFormComponent.RefreshRecord` accepts an optional `{ ShowSuccessNotification: false }` that skips the "Record refreshed" notification. The intake routes and `POST /enroll` answer 503 when the registration lookup fails. Adds the `Diagnostics.External.AllowUnscrubbedSend` setting: a bundle sent to an external collector must be built with literal scrubbing unless it is `true`. `Diagnostics.GetMySessionStatus` returns `CaptureEnabled` and `RequireLiteralScrubbing`. Diagnostics access comes only from the `Diagnostics: *` authorizations (directly or through a parent authorization) or the Owner user type. The `GetServerTelemetry*` queries in MJServer's `TelemetryResolver` now need Owner privileges or the `Diagnostics: Run Sessions` authorization. `WithoutDiagnosticCapture` in `@memberjunction/core` suppresses capture only in the current async context when a context provider is registered. `GraphQLDataProvider.ClearClientCache` also deletes the `MJ_Diagnostics` IndexedDB database. `mj diag` reads the private key from `--private-key-file` or `MJ_DIAG_PRIVATE_KEY`. MJServer logs only the user ID for a verified token.
+- 539dfe3: Add Semantic Graph substrate (`MJ: Graph Types`, `MJ: Graph Concept Types`, `MJ: Graph Authority Tiers`, `MJ: Graphs`, `MJ: Graph Concepts`, `MJ: Graph Edge Types`, `MJ: Graph Edge Type Endpoints`, `MJ: Graph Edge Providers`, `MJ: Graph Edges`, and `ContentSource.GraphID`), Content Pipeline `GraphStage` with `EntityGraphOverlayStore` and `DeterministicConceptSynthesizer`, deterministic `TaskGraph` DAG similarity & workflow health telemetry in `@memberjunction/ai-core-plus`, and Semantic Graph & Canon Explorer UI in `@memberjunction/ng-graph-view` and `@memberjunction/ng-dashboards`.
+
+### Patch Changes
+
+- 90e05a4: Replace the nested UUID scans in the meeting participant update and the query-rendering integration check with the UUID set helpers, and drop their entries from the nested-scan baseline.
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [8f7214a]
+- Updated dependencies [4fedaba]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5ba2565]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [63e6af4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [dd34a5c]
+- Updated dependencies [5bd0135]
+- Updated dependencies [e69634e]
+- Updated dependencies [365e3a1]
+- Updated dependencies [db1528d]
+- Updated dependencies [373b180]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/core-entities-server@6.2.0-edge.8
+  - @memberjunction/open-app-engine@6.2.0-edge.8
+  - @memberjunction/aiengine@6.2.0-edge.8
+  - @memberjunction/storage@6.2.0-edge.8
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.8
+  - @memberjunction/diagnostics@6.2.0-edge.8
+  - @memberjunction/diagnostics-server@6.2.0-edge.8
+  - @memberjunction/generic-database-provider@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.8
+  - @memberjunction/postgresql-dataprovider@6.2.0-edge.8
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.8
+  - @memberjunction/actions-base@6.2.0-edge.8
+  - @memberjunction/actions@6.2.0-edge.8
+  - @memberjunction/ai-core-plus@6.2.0-edge.8
+  - @memberjunction/ai-agents@6.2.0-edge.8
+  - @memberjunction/content-autotagging@6.2.0-edge.8
+  - @memberjunction/search-engine@6.2.0-edge.8
+  - @memberjunction/livekit-room-server@6.2.0-edge.8
+  - @memberjunction/telephony-adapters@6.2.0-edge.8
+  - @memberjunction/testing-engine-base@6.2.0-edge.8
+  - @memberjunction/testing-engine@6.2.0-edge.8
+  - @memberjunction/metadata-sync@6.2.0-edge.8
+  - @memberjunction/ai-prompts@6.2.0-edge.8
+  - @memberjunction/content-pipeline-base@6.2.0-edge.8
+  - @memberjunction/content-pipeline@6.2.0-edge.8
+  - @memberjunction/codegen-lib@6.2.0-edge.8
+  - @memberjunction/ai-agent-harness@6.2.0-edge.8
+  - @memberjunction/ai-engine-base@6.2.0-edge.8
+  - @memberjunction/feature-pipelines@6.2.0-edge.8
+  - @memberjunction/feature-pipelines-engine@6.2.0-edge.8
+  - @memberjunction/predictive-studio@6.2.0-edge.8
+  - @memberjunction/predictive-studio-truth-suite@6.2.0-edge.8
+  - @memberjunction/ai-bridge-base@6.2.0-edge.8
+  - @memberjunction/ai-bridge-server@6.2.0-edge.8
+  - @memberjunction/ai-vectordb@6.2.0-edge.8
+  - @memberjunction/ai-vector-dupe@6.2.0-edge.8
+  - @memberjunction/video-studio@6.2.0-edge.8
+  - @memberjunction/api-keys@6.2.0-edge.8
+  - @memberjunction/auth-providers@6.2.0-edge.8
+  - @memberjunction/communication-types@6.2.0-edge.8
+  - @memberjunction/communication-engine@6.2.0-edge.8
+  - @memberjunction/notifications@6.2.0-edge.8
+  - @memberjunction/communication-ms-graph@6.2.0-edge.8
+  - @memberjunction/communication-expo-push@6.2.0-edge.8
+  - @memberjunction/communication-gmail@6.2.0-edge.8
+  - @memberjunction/communication-sendgrid@6.2.0-edge.8
+  - @memberjunction/communication-twilio@6.2.0-edge.8
+  - @memberjunction/conversations-runtime@6.2.0-edge.8
+  - @memberjunction/credentials@6.2.0-edge.8
+  - @memberjunction/encryption@6.2.0-edge.8
+  - @memberjunction/external-data-sources@6.2.0-edge.8
+  - @memberjunction/queue@6.2.0-edge.8
+  - @memberjunction/query-processor@6.2.0-edge.8
+  - @memberjunction/record-set-processor-base@6.2.0-edge.8
+  - @memberjunction/record-set-processor@6.2.0-edge.8
+  - @memberjunction/redis-provider@6.2.0-edge.8
+  - @memberjunction/rubrics-base@6.2.0-edge.8
+  - @memberjunction/rubrics@6.2.0-edge.8
+  - @memberjunction/scheduling-engine@6.2.0-edge.8
+  - @memberjunction/task-graph@6.2.0-edge.8
+  - @memberjunction/templates-base-types@6.2.0-edge.8
+  - @memberjunction/templates@6.2.0-edge.8
+  - @memberjunction/testing-integration@6.2.0-edge.8
+  - @memberjunction/unit-testing@6.2.0-edge.8
+  - @memberjunction/work-queue-engine@6.2.0-edge.8
+  - @memberjunction/work-queue-server@6.2.0-edge.8
+  - @memberjunction/ai@6.2.0-edge.8
+  - @memberjunction/ai-anthropic@6.2.0-edge.8
+  - @memberjunction/ai-cloudflare@6.2.0-edge.8
+  - @memberjunction/ai-gemini@6.2.0-edge.8
+  - @memberjunction/ai-inception@6.2.0-edge.8
+  - @memberjunction/ai-openai@6.2.0-edge.8
+  - @memberjunction/ai-openrouter@6.2.0-edge.8
+  - @memberjunction/ai-systemone@6.2.0-edge.8
+  - @memberjunction/predictive-studio-core@6.2.0-edge.8
+  - @memberjunction/video-studio-core@6.2.0-edge.8
+  - @memberjunction/work-queue-core@6.2.0-edge.8
+
 ## 6.2.0-edge.7
 
 ### Minor Changes

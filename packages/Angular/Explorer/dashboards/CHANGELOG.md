@@ -1,5 +1,114 @@
 # @memberjunction/ng-dashboards
 
+## 6.2.0-edge.8
+
+### Minor Changes
+
+- 59e32e0: Add Diagnostic Bundles: scoped diagnostic sessions that capture server logs, SQL and traces and client logs, network, telemetry and breadcrumbs; a two-stage scrubber; the `.mjdiag` archive format with structural verification; X25519 + AES-256-GCM envelope encryption; an MJAPI intake endpoint with quarantine-then-promote storage; automated findings; and CLI and Explorer surfaces. Adds the diagnostic session, chunk and bundle tables and their metadata. Adds the `MJ: Diagnostic Sender Registrations` table: a sender enrols once with a one-time registration code, then signs every intake request with `MJDiag-Ed25519`, so the intake endpoint reads no API key. Adds the `Diagnostics.IssueSenderRegistrationCode` and `Diagnostics.EnrolSender` remote operations and the `Diagnostics Sender Key` and `Diagnostics Intake Key` credential types. Adds `SanitizeForLog` to `@memberjunction/global`. `BaseServerMiddleware.Initialize` and `ConfigureExpressApp` now receive an optional `ServerMiddlewareContext` that carries the server's `ApiRoute` builder. The Slack messaging extension and the component-registry auth example log request values on one line. `Diagnostics.RevokeSender` and `Diagnostics.ReactivateSender` revoke and reactivate a sender; a direct save of a sender registration needs `Diagnostics: Manage Intake` and cannot change its status, key, code or timestamp fields. The `MJ: Diagnostic Sender Registrations` form has **Revoke** and **Reactivate** toolbar buttons that call these operations. `FormToolbarActionLifecycleContext` in `@memberjunction/ng-base-forms` gains an optional `Injector` (the form container's injector), so a toolbar action can resolve Angular services such as `MJConfirmService`. `BaseFormComponent.RefreshRecord` accepts an optional `{ ShowSuccessNotification: false }` that skips the "Record refreshed" notification. The intake routes and `POST /enroll` answer 503 when the registration lookup fails. Adds the `Diagnostics.External.AllowUnscrubbedSend` setting: a bundle sent to an external collector must be built with literal scrubbing unless it is `true`. `Diagnostics.GetMySessionStatus` returns `CaptureEnabled` and `RequireLiteralScrubbing`. Diagnostics access comes only from the `Diagnostics: *` authorizations (directly or through a parent authorization) or the Owner user type. The `GetServerTelemetry*` queries in MJServer's `TelemetryResolver` now need Owner privileges or the `Diagnostics: Run Sessions` authorization. `WithoutDiagnosticCapture` in `@memberjunction/core` suppresses capture only in the current async context when a context provider is registered. `GraphQLDataProvider.ClearClientCache` also deletes the `MJ_Diagnostics` IndexedDB database. `mj diag` reads the private key from `--private-key-file` or `MJ_DIAG_PRIVATE_KEY`. MJServer logs only the user ID for a verified token.
+- 539dfe3: Add Semantic Graph substrate (`MJ: Graph Types`, `MJ: Graph Concept Types`, `MJ: Graph Authority Tiers`, `MJ: Graphs`, `MJ: Graph Concepts`, `MJ: Graph Edge Types`, `MJ: Graph Edge Type Endpoints`, `MJ: Graph Edge Providers`, `MJ: Graph Edges`, and `ContentSource.GraphID`), Content Pipeline `GraphStage` with `EntityGraphOverlayStore` and `DeterministicConceptSynthesizer`, deterministic `TaskGraph` DAG similarity & workflow health telemetry in `@memberjunction/ai-core-plus`, and Semantic Graph & Canon Explorer UI in `@memberjunction/ng-graph-view` and `@memberjunction/ng-dashboards`.
+
+### Patch Changes
+
+- dd34a5c: Knowledge Hub upstream fixes across SearchEngine, ContentAutotagging, TagEngine, GraphQLDataProvider, MJServer, and Angular Explorer dashboards:
+  - Tokenize multi-word SQL search queries in `EntitySearchProvider.convertResults` so records matched across multiple fields are not dropped when scoring in memory.
+  - Filter `GetContentSourceLastRunDate` by `Status = 'Completed' AND ProcessedItems > 0`, skip vector mutations when `vectorDB.IsReadOnly` is true, filter website and cloud storage sources with `FilterByUUIDs`, and emit per-URL crawl progress.
+  - Support client-supplied `pipelineRunID` in `RunAutotagPipeline` (subscribing before firing the mutation to eliminate the initial progress race), reject duplicate `pipelineRunID` values upfront, emit 3s progress heartbeats during long crawls, and pass actual processed counts to `publishProgress`.
+  - Expose `MergeTags` and `RecomputeTagCoOccurrence` GraphQL mutations in `TagGovernanceResolver` and `GraphQLAIClient`, re-parent child tags during `TagGovernanceEngine.MergeTags`, and merge existing active tags during `PromoteSuggestion` with `merge-into-existing`.
+  - Skip redundant `Save()` calls in `TagCoOccurrenceEngine.upsertAndPrune` when `CoOccurrenceCount` is unchanged.
+  - Clean up tag references before deleting orphan tags in `DeleteAllOrphans`, resolve active vector database health by `VectorDatabaseID`, and use `UUIDMap`/`IndexByUUID` for case-insensitive UUID lookups in Knowledge Hub cluster visualization and configuration dashboards.
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [0b509c0]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [4583741]
+- Updated dependencies [f215220]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [dd34a5c]
+- Updated dependencies [e69634e]
+- Updated dependencies [365e3a1]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/ng-base-forms@6.2.0-edge.8
+  - @memberjunction/ng-conversations@6.2.0-edge.8
+  - @memberjunction/ng-core-entity-forms@6.2.0-edge.8
+  - @memberjunction/ng-auth-services@6.2.0-edge.8
+  - @memberjunction/ng-markdown@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.8
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.8
+  - @memberjunction/actions-base@6.2.0-edge.8
+  - @memberjunction/ai-core-plus@6.2.0-edge.8
+  - @memberjunction/tag-engine-base@6.2.0-edge.8
+  - @memberjunction/ng-artifacts@6.2.0-edge.8
+  - @memberjunction/testing-engine-base@6.2.0-edge.8
+  - @memberjunction/ng-graph-view@6.2.0-edge.8
+  - @memberjunction/ai-engine-base@6.2.0-edge.8
+  - @memberjunction/feature-pipelines@6.2.0-edge.8
+  - @memberjunction/api-keys-base@6.2.0-edge.8
+  - @memberjunction/ng-base-application@6.2.0-edge.8
+  - @memberjunction/ng-explorer-settings@6.2.0-edge.8
+  - @memberjunction/ng-shared@6.2.0-edge.8
+  - @memberjunction/ng-testing@6.2.0-edge.8
+  - @memberjunction/ng-action-gallery@6.2.0-edge.8
+  - @memberjunction/ng-actions@6.2.0-edge.8
+  - @memberjunction/ng-agent-requests@6.2.0-edge.8
+  - @memberjunction/ng-agents@6.2.0-edge.8
+  - @memberjunction/ng-ai-test-harness@6.2.0-edge.8
+  - @memberjunction/ng-archive-manager@6.2.0-edge.8
+  - @memberjunction/ng-base-types@6.2.0-edge.8
+  - @memberjunction/ng-brand-kits@6.2.0-edge.8
+  - @memberjunction/ng-clustering@6.2.0-edge.8
+  - @memberjunction/ng-code-editor@6.2.0-edge.8
+  - @memberjunction/ng-composer@6.2.0-edge.8
+  - @memberjunction/ng-container-directives@6.2.0-edge.8
+  - @memberjunction/ng-credentials@6.2.0-edge.8
+  - @memberjunction/ng-dashboard-viewer@6.2.0-edge.8
+  - @memberjunction/ng-entity-relationship-diagram@6.2.0-edge.8
+  - @memberjunction/ng-export-service@6.2.0-edge.8
+  - @memberjunction/ng-filter-builder@6.2.0-edge.8
+  - @memberjunction/ng-list-management@6.2.0-edge.8
+  - @memberjunction/ng-media-player@6.2.0-edge.8
+  - @memberjunction/ng-map-view@6.2.0-edge.8
+  - @memberjunction/ng-notifications@6.2.0-edge.8
+  - @memberjunction/ng-query-viewer@6.2.0-edge.8
+  - @memberjunction/ng-react@6.2.0-edge.8
+  - @memberjunction/ng-record-process-studio@6.2.0-edge.8
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.8
+  - @memberjunction/ng-rubrics@6.2.0-edge.8
+  - @memberjunction/ng-scheduling@6.2.0-edge.8
+  - @memberjunction/ng-search@6.2.0-edge.8
+  - @memberjunction/ng-shared-generic@6.2.0-edge.8
+  - @memberjunction/ng-task-graph-editor@6.2.0-edge.8
+  - @memberjunction/ng-trees@6.2.0-edge.8
+  - @memberjunction/ng-user-routines@6.2.0-edge.8
+  - @memberjunction/ng-versions@6.2.0-edge.8
+  - @memberjunction/credentials@6.2.0-edge.8
+  - @memberjunction/integration-engine-base@6.2.0-edge.8
+  - @memberjunction/interactive-component-types@6.2.0-edge.8
+  - @memberjunction/record-set-processor-base@6.2.0-edge.8
+  - @memberjunction/rubrics-base@6.2.0-edge.8
+  - @memberjunction/templates-base-types@6.2.0-edge.8
+  - @memberjunction/work-queue-base@6.2.0-edge.8
+  - @memberjunction/ng-tabstrip@6.2.0-edge.8
+  - @memberjunction/ng-ui-components@6.2.0-edge.8
+  - @memberjunction/ng-word-cloud@6.2.0-edge.8
+  - @memberjunction/predictive-studio-core@6.2.0-edge.8
+  - @memberjunction/video-studio-core@6.2.0-edge.8
+  - @memberjunction/lists-base@6.2.0-edge.8
+  - @memberjunction/export-engine@6.2.0-edge.8
+  - @memberjunction/theme-engine@6.2.0-edge.8
+  - @memberjunction/work-queue-core@6.2.0-edge.8
+
 ## 6.2.0-edge.7
 
 ### Minor Changes

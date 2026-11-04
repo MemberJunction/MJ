@@ -1,5 +1,35 @@
 # @memberjunction/esignature
 
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- d2db108: A forced engine load (`Config(true)`) now returns only with data read after it was called.
+  - `BaseEngine`: a forced load that arrives while another load is running reads again once that load finishes, instead of returning its result. Forced calls that arrive during the same load share one extra read.
+  - `BaseEngine`: a full refresh that a newer refresh of the same property overtook still commits its rows when the newer one hasn't committed yet, so the load that ran it never returns with the property's previous rows. An older refresh still never overwrites a newer one that has committed, a failed read never counts as a commit, and a superseded refresh whose read failed changes nothing.
+  - New `SharedLoad` in `@memberjunction/core` applies the same rules to engines that run their own `Config`. `AIEngine`, `TagEngine`, `QueryEngineServer`, `FileStorageEngine` and `SignatureEngine` returned the running load's promise for a forced call; `WebSearchEngine` started a second load alongside the running one. All six now use it.
+
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [e69634e]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/storage@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+  - @memberjunction/credentials@6.2.0-edge.8
+
 ## 6.2.0-edge.7
 
 ### Patch Changes
