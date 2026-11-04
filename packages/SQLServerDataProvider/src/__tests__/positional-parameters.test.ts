@@ -119,4 +119,51 @@ describe('SQLServerDataProvider.ExecuteSQL parameter binding', () => {
       { name: 'p1', value: 1 },
     ]);
   });
+
+  it('ExecuteSQLBatch with NamedQueryParameter[][]: scopes colliding parameter names with different values without touching string literals or comments', async () => {
+    await makeProvider().ExecuteSQLBatch(
+      [
+        "SELECT * FROM [__mj].[vwUsers] WHERE Status = @p0",
+        "SELECT 'user@p0.com' AS Email, [@p0] FROM [__mj].[vwUsers] WHERE Status = @p0 AND Other = @p0_extra -- keep @p0 in comment",
+      ],
+      [
+        [new NamedQueryParameter('p0', 'Active')],
+        [new NamedQueryParameter('p0', 'Pending'), new NamedQueryParameter('p0_extra', 42)],
+      ],
+    );
+
+    expect(mssqlState.Queries).toHaveLength(1);
+    expect(mssqlState.Queries[0].sql).toBe(
+      "SELECT * FROM [__mj].[vwUsers] WHERE Status = @p0;\n" +
+      "SELECT 'user@p0.com' AS Email, [@p0] FROM [__mj].[vwUsers] WHERE Status = @q1_p0 AND Other = @p0_extra -- keep @p0 in comment",
+    );
+    expect(mssqlState.Queries[0].inputs).toEqual([
+      { name: 'p0', value: 'Active' },
+      { name: 'q1_p0', value: 'Pending' },
+      { name: 'p0_extra', value: 42 },
+    ]);
+  });
+
+  it('ExecuteSQLBatch with TypedQueryParameter[][]: scopes colliding parameter names with different values while preserving SQL types', async () => {
+    await makeProvider().ExecuteSQLBatch(
+      [
+        "SELECT [ID] FROM [__mj].[materialized_vwT] WHERE [Status] = @mj_p0",
+        "SELECT [ID] FROM [__mj].[materialized_vwT] WHERE [Status] = @mj_p0",
+      ],
+      [
+        [new TypedQueryParameter('mj_p0', 'varchar(20)', 'Open')],
+        [new TypedQueryParameter('mj_p0', 'varchar(20)', 'Closed')],
+      ],
+    );
+
+    expect(mssqlState.Queries).toHaveLength(1);
+    expect(mssqlState.Queries[0].sql).toBe(
+      "SELECT [ID] FROM [__mj].[materialized_vwT] WHERE [Status] = @mj_p0;\n" +
+      "SELECT [ID] FROM [__mj].[materialized_vwT] WHERE [Status] = @q1_mj_p0",
+    );
+    expect(mssqlState.Queries[0].inputs.map(i => [i.name, i.value])).toEqual([
+      ['mj_p0', 'Open'],
+      ['q1_mj_p0', 'Closed'],
+    ]);
+  });
 });
