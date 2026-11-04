@@ -140,7 +140,13 @@
     },
     "6.2": {
       "status": "candidate",
-      "candidateDate": "2026-11-04"
+      "candidateDate": "2026-11-04",
+      "newest": "6.2.0",
+      "releases": {
+        "6.2.0": {
+          "dbImpact": "none"
+        }
+      }
     }
   }
 }
