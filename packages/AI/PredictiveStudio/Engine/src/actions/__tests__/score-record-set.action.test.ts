@@ -14,7 +14,7 @@ import type {
 import type { JsonObject } from '../base-predictive-studio.action';
 import type { RecordRef, RecordResult } from '@memberjunction/record-set-processor-base';
 import type { MLInferenceResultPayload } from '../../scoring/ml-model-inference-processor';
-import { LocalArtifactLoader } from '../../scoring/artifact-loader';
+import { StorageProviderArtifactLoader } from '../../scoring/storage-provider-artifact-loader';
 import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
@@ -186,7 +186,7 @@ describe('PredictiveStudioScoreRecordSetAction — default runner', () => {
       throw new Error('expected the action to build a ProductionScoreRecordSetRunner');
     }
     const deps = runner['resolveDeps']();
-    expect(deps.artifactLoader).toBeInstanceOf(LocalArtifactLoader);
+    expect(deps.artifactLoader).toBeInstanceOf(StorageProviderArtifactLoader);
   });
 });
 

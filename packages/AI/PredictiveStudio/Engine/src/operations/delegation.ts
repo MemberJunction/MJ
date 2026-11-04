@@ -22,7 +22,8 @@ import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
 import { TrainingEngine } from '../training/training-engine';
 import { MetadataEntityFactory, RunViewRecordLoader, MJSidecarTrainer } from '../training/seams';
-import { ResolveActiveFileStorageProviderId, BuildArtifactStore } from '../training/artifact-store';
+import { StorageProviderArtifactStore } from '../training/storage-provider-artifact-store';
+import { PredictiveStudioStorage } from '../storage/ps-storage-provider';
 import type { ITrainerEvaluator, TrainModelInput, TrainModelResult, TrainingDeps } from '../training/types';
 import { RunViewDataAccess } from '../feature-assembly/data-access';
 import { ProviderAssemblyMetadata } from '../feature-assembly/assembly-metadata';
@@ -38,7 +39,7 @@ import { ExperimentSessionsUnavailableError } from '../actions/run-experiment.de
 
 import { ProductionScoreRecordSetRunner } from '../actions/score-record-set.runner';
 import { RunViewMLModelLoader, MJSidecarPredictor } from '../scoring/seams';
-import { LocalArtifactLoader } from '../scoring/artifact-loader';
+import { StorageProviderArtifactLoader } from '../scoring/storage-provider-artifact-loader';
 import type { MLInferenceDeps } from '../scoring/types';
 import type {
   IScoreRecordSetRunner,
@@ -68,18 +69,13 @@ import type {
 export class TrainingDelegation {
   /**
    * Build the {@link TrainingEngine}'s production dependency bundle from a per-call
-   * `provider` + `user`. Resolves the active File Storage Provider once and chooses
-   * the artifact-store family accordingly (MJ-Files when a provider is active, local
-   * disk when none is — see {@link ResolveActiveFileStorageProviderId}). Async so the
-   * provider lookup is part of the wiring; the scoring side keys off the SAME
-   * decision (the composite loader routes by whether the artifact exists on local
-   * disk) so a model never gets trained to one family and scored from another.
+   * `provider` + `user`. Trained model files and Training Snapshot files go to the one storage provider
+   * `PS_STORAGE_PROVIDER` names (default "Local File System"), each recorded as an `MJ: Files` row; the scoring side
+   * reads a model file through the provider its row names ({@link StorageProviderArtifactLoader}).
    *
    * The Record Changes history the as-of assembly replays is left to the engine's default: a complete-read
    * `RunViewRecordHistoryReader` over the same `dataAccess`. The locked holdout is always the one the bound protocol
-   * declares (date-carved, seeded-random or rolling-origin). A unit run's Training Snapshot files go to the storage provider
-   * `PS_SNAPSHOT_STORAGE_PROVIDER` names, recorded as `MJ: Files` rows, and snapshots are found by content hash
-   * through the same provider and user. A unit pipeline reads the Evaluation Protocol it is bound to through the
+   * declares (date-carved, seeded-random or rolling-origin). Snapshots are found by content hash through the same provider and user. A unit pipeline reads the Evaluation Protocol it is bound to through the
    * same provider and user and trains through the trainer (`MJSidecarTrainer` over the process-shared sidecar).
    *
    * @param provider the owning provider for data access / multi-provider correctness
@@ -87,12 +83,11 @@ export class TrainingDelegation {
    */
   public static async BuildTrainingDeps(provider: IMetadataProvider, user: UserInfo): Promise<TrainingDeps> {
     const entityFactory = new MetadataEntityFactory(provider);
-    const providerId = await ResolveActiveFileStorageProviderId(user, provider);
     return {
       entityFactory,
       recordLoader: new RunViewRecordLoader(),
       trainer: new MJSidecarTrainer(),
-      artifactStore: BuildArtifactStore(providerId, entityFactory),
+      artifactStore: new StorageProviderArtifactStore(entityFactory, new PredictiveStudioStorage(provider, user)),
       contextUser: user,
       provider,
       // The Prediction Unit seams read through the same provider and user as every other training read.
@@ -168,16 +163,14 @@ export function WasTrainingLeakageFlagged(result: TrainModelResult): boolean {
  * The production {@link MLInferenceDeps} bundle the scorer runs with — the
  * {@link RunViewMLModelLoader} (loads the `MJ: ML Models` row), the
  * {@link MJSidecarPredictor} (runs `/predict` against the Python sidecar) and the
- * {@link LocalArtifactLoader} (reads the model bytes back by their `MJ: Files` row id,
- * the read-side inverse of `MJFilesArtifactStore`). Shared by {@link BuildScoreRecordSetRunner}
+ * {@link StorageProviderArtifactLoader} (reads the model bytes through the storage provider
+ * their `MJ: Files` row names, the read-side inverse of `StorageProviderArtifactStore`; it takes
+ * the provider per call, so the bundle needs none). Shared by {@link BuildScoreRecordSetRunner}
  * (the Score action / Remote Op path) AND the startup work-type registration so a model
  * trained one way is always scored the same way — one source of truth (CLAUDE.md DRY).
- *
- * **Production follow-up**: swap `LocalArtifactLoader` for a provider `GetObject`
- * loader; the id contract (read by File id) is unchanged.
  */
 export function BuildProductionMLInferenceDeps(): MLInferenceDeps {
-  return { modelLoader: new RunViewMLModelLoader(), sidecar: new MJSidecarPredictor(), artifactLoader: new LocalArtifactLoader() };
+  return { modelLoader: new RunViewMLModelLoader(), sidecar: new MJSidecarPredictor(), artifactLoader: new StorageProviderArtifactLoader() };
 }
 
 /**
@@ -192,8 +185,8 @@ export function BuildScoreRecordSetRunner(): ProductionScoreRecordSetRunner {
 /**
  * Score a record set, delegating to the SAME production runner the Score action
  * uses ({@link ProductionScoreRecordSetRunner} → `MLModelInferenceProcessor`). The
- * default runner is wired with the {@link LocalArtifactLoader} so the artifact is
- * read back by its `MJ: Files` row id. The `runner` is injectable for tests.
+ * default runner is wired with the {@link StorageProviderArtifactLoader} so the artifact is
+ * read through the storage provider its `MJ: Files` row names. The `runner` is injectable for tests.
  *
  * @param request the model id + resolved scope + write-back directive + user/provider
  * @param runner optional runner override (defaults to {@link BuildScoreRecordSetRunner})

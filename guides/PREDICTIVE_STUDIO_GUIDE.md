@@ -373,7 +373,7 @@ sequenceDiagram
     TE-->>C: { model | null, run }
 ```
 
-The engine is built on **dependency-injection seams** (`src/training/types.ts` + `src/training/seams.ts`): `IEntityFactory`, `IRecordLoader`, `IArtifactStore`, and on the unit path the snapshot file store, `ITrainerEvaluator`, and the Prediction Unit, Evaluation Protocol and Training Snapshot stores. Production wires `MetadataEntityFactory`, `RunViewRecordLoader`, `MJFilesArtifactStore` and `MJSidecarTrainer`; tests substitute in-memory fakes (which is what makes the engine unit-testable with no DB and no live sidecar — see the live integration test in §19.4).
+The engine is built on **dependency-injection seams** (`src/training/types.ts` + `src/training/seams.ts`): `IEntityFactory`, `IRecordLoader`, `IArtifactStore`, and on the unit path the snapshot file store, `ITrainerEvaluator`, and the Prediction Unit, Evaluation Protocol and Training Snapshot stores. Production wires `MetadataEntityFactory`, `RunViewRecordLoader`, `StorageProviderArtifactStore` and `MJSidecarTrainer`; tests substitute in-memory fakes (which is what makes the engine unit-testable with no DB and no live sidecar — see the live integration test in §19.4).
 
 ### 5.1 Evaluation Protocol and the locked holdout
 
@@ -1311,7 +1311,7 @@ pnpm --filter @memberjunction/predictive-studio-sidecar run setup:python
 brew install libomp          # macOS only (Linux: install libgomp1)
 ```
 
-**Where Training Snapshots are stored.** Every training run writes its snapshot files through the `MJ: File Storage Providers` row named by `PS_SNAPSHOT_STORAGE_PROVIDER` (default `Local File System`, the `Local File System Storage` driver, rooted at `STORAGE_LOCAL_ROOT`). The local driver hands the sidecar `file://` URLs, so it works only when MJAPI and the sidecar share one host and disk. A multi-host install (more than one MJAPI host, or a remote sidecar) must point `PS_SNAPSHOT_STORAGE_PROVIDER` at a cloud provider: snapshot files on one host's disk are unreadable from the others and are lost with that disk.
+**Where Predictive Studio files are stored.** One setting decides it: `PS_STORAGE_PROVIDER` names the `MJ: File Storage Providers` row (default `Local File System`, the `Local File System Storage` driver, rooted at `STORAGE_LOCAL_ROOT`) that every training run writes its Training Snapshot files **and** its trained model files to, each recorded as an `MJ: Files` row with that provider's `ProviderID` and the object's `ProviderKey` (model files under `predictive-studio/model-artifacts/<uuid>/<name>`). The provider is selected by name whatever its `IsActive` flag, and a provider whose driver is not configured on the server (for example `Local File System` without `STORAGE_LOCAL_ROOT`) fails the run before the sidecar is called. A stored file is always read through the provider its own `MJ: Files` row names, so changing `PS_STORAGE_PROVIDER` later never strands an existing model. The local driver hands the sidecar `file://` URLs and keeps files on one host's disk, so it works only when MJAPI and the sidecar share one host and disk; a cloud container or multi-host install (more than one MJAPI host, or a remote sidecar) must point `PS_STORAGE_PROVIDER` at a cloud provider (S3, Azure Blob, Google Cloud Storage…): files on one host's disk are unreadable from the others and are lost with that disk. Model files trained before 6.3 have an empty `ProviderKey`; they are still read from `PS_ARTIFACT_DIR` (default `<os tmpdir>/mj-ps-artifacts`).
 
 ### 19.2 Train
 

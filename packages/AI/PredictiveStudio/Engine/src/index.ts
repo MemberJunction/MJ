@@ -24,6 +24,10 @@ export * from './feature-assembly';
 // holdout carver, the snapshot builder, and training and retraining from a snapshot.
 export * from './snapshot/index';
 
+// Predictive Studio file storage — PredictiveStudioStorage: the one MJ storage provider (PS_STORAGE_PROVIDER) Training
+// Snapshot and trained model files are written to, and the providers stored files' MJ: Files rows name.
+export * from './storage/ps-storage-provider';
+
 // Evaluation Protocol version rows — EvaluationProtocolVersioning: version 1 as its own lineage root, every later
 // version under it, written the way Prediction Unit versions are.
 export * from './protocol';

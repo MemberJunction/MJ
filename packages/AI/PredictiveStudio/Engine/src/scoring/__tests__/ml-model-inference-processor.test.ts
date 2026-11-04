@@ -204,7 +204,7 @@ describe('MLModelInferenceProcessor.ProcessRecord — per-record scoring', () =>
     expect(req.feature_schema).toEqual(FROZEN_SCHEMA);
     expect(req.artifact_b64).toBe(Buffer.from('fake-model-bytes').toString('base64'));
     // The artifact loader held the exact bytes the model referenced.
-    expect(await artifacts.load('file-1')).not.toBeNull();
+    expect(await artifacts.load('file-1', undefined, pipelineRowProvider([], []))).not.toBeNull();
   });
 
   it('scores several records and aligns predictions per record', async () => {

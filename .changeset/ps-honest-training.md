@@ -95,8 +95,15 @@ version 1 of each, and the training path without them is removed.
   protocol version against version n−1, and check that a pipeline agrees with the unit and protocol it binds.
 - `@memberjunction/storage`: `LocalFileSystemStorage` (`Local File System Storage` driver, root `STORAGE_LOCAL_ROOT`;
   its pre-authorised downloads are `file://` URLs, readable only on the same host). The `Local File System` provider
-  row ships inactive; Training Snapshots name it through `PS_SNAPSHOT_STORAGE_PROVIDER` (default `Local File System`),
-  and an install whose sidecar runs on another host points that at a cloud provider.
+  row ships inactive; Predictive Studio names it through `PS_STORAGE_PROVIDER` (default `Local File System`), the one
+  setting for Training Snapshot files and trained model files alike, and a cloud or multi-host install points that at
+  a cloud provider.
+- `@memberjunction/predictive-studio`: trained model files are stored through the `PS_STORAGE_PROVIDER` storage
+  provider (`StorageProviderArtifactStore`, keys `predictive-studio/model-artifacts/<uuid>/<name>`) and read through
+  the provider their `MJ: Files` row names (`StorageProviderArtifactLoader`); `PredictiveStudioStorage` resolves the
+  provider for snapshots and models. Model files trained before 6.3 (`MJ: Files.ProviderKey` empty) are still read
+  from `PS_ARTIFACT_DIR`. `IArtifactLoader.load` takes a required `provider`. The local-disk model
+  artifact store and loader, and their active-provider lookup, are removed.
 - `@memberjunction/server`, `@memberjunction/server-bootstrap`, `@memberjunction/server-bootstrap-lite`,
   `@memberjunction/ng-bootstrap`, `@memberjunction/ng-bootstrap-lite`, `@memberjunction/ng-core-entity-forms`: the
   generated GraphQL schema, class registrations and record forms for the three new entities.

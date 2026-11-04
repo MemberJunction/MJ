@@ -8,9 +8,9 @@
  * orchestrator is unit-testable with no live database and no live sidecar.
  *
  * The production implementations of these seams (`MetadataEntityFactory`,
- * `RunViewRecordLoader`, `MJSidecarTrainer`, `MJFilesArtifactStore`) are thin
+ * `RunViewRecordLoader`, `MJSidecarTrainer`, `StorageProviderArtifactStore`) are thin
  * adapters around `Metadata.GetEntityObject`, `RunView`, `MLSidecar`, and
- * `MJ: Files`; the tests inject in-memory fakes implementing the same contracts.
+ * `MJ: Files` over an MJ storage provider; the tests inject in-memory fakes implementing the same contracts.
  */
 
 import type { BaseEntity, UserInfo, IMetadataProvider } from '@memberjunction/core';

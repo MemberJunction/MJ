@@ -17,6 +17,7 @@
 
 export * from './types';
 export * from './artifact-loader';
+export * from './storage-provider-artifact-loader';
 export * from './model-readiness';
 export * from './seams';
 export * from './training-keys';

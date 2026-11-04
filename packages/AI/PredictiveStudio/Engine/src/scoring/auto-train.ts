@@ -39,7 +39,7 @@ import { ProductionModelPromotionGate } from '../actions/promote-model.gate';
 import type { IModelPromotionGate, PromoteModelOutcome } from '../actions/promote-model.action';
 import { MetadataEntityFactory } from '../training/seams';
 import { TrainingEngine } from '../training/training-engine';
-import { LocalArtifactLoader } from './artifact-loader';
+import { StorageProviderArtifactLoader } from './storage-provider-artifact-loader';
 import { UpsertScoringBinding } from './scoring-binding';
 import { ModelHasTrainedArtifact, ModelReadiness } from './model-readiness';
 import type { AutoTrainRequest, IArtifactLoader, IModelAutoTrainer } from './types';
@@ -79,7 +79,7 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
   constructor(options: PipelineAutoTrainerOptions = {}) {
     this.train = options.train || PipelineAutoTrainer.TrainThroughEngine;
     this.gate = options.gate ?? new ProductionModelPromotionGate();
-    this.artifactLoader = options.artifactLoader ?? new LocalArtifactLoader();
+    this.artifactLoader = options.artifactLoader ?? new StorageProviderArtifactLoader();
   }
 
   /**
@@ -132,7 +132,7 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
     }
     for (const row of result.Results) {
       const servable = ModelHasTrainedArtifact(row) && ModelReadiness.IsServedByPredict(row);
-      if (servable && row.ArtifactFileID && (await this.artifactLoader.load(row.ArtifactFileID, contextUser))) {
+      if (servable && row.ArtifactFileID && (await this.artifactLoader.load(row.ArtifactFileID, contextUser, provider))) {
         return row.ID;
       }
     }
