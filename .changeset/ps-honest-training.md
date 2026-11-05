@@ -43,7 +43,7 @@ signal), stores that decision with its reason on the run, and renders the trust 
 - `@memberjunction/predictive-studio`: a unit training run refuses a sidecar gate that differs from the TypeScript
   decision (`sidecar-gate-mismatch`), creates the model row from the shipped artifact only (none under `no-signal`),
   and `TrainModelResult.model` is nullable. `IRecordLoader.resolveAlgorithmIDForDriver` and
-  `IArtifactStore.delete` are new required members. `PredictiveStudioBuildOutcome.trustGrade` / `trustOneLiner` are
+  `IArtifactStore.Delete` are new required members. `PredictiveStudioBuildOutcome.trustGrade` / `trustOneLiner` are
   renamed `trustTitle` / `headline`;
   `GenerateMarkdownReport` takes `trustTitle` / `headline`; `SingleModelLeaderboard` takes a `TrustComparison | null`.
   The free functions `ExtractNormalizedScore` / `extractNormalizedScore` are removed; use
@@ -103,8 +103,15 @@ version 1 of each, and the training path without them is removed.
   provider (`StorageProviderArtifactStore`, keys `predictive-studio/model-artifacts/<uuid>/<name>`) and read through
   the provider their `MJ: Files` row names (`StorageProviderArtifactLoader`); `PredictiveStudioStorage` resolves the
   provider for snapshots and models. Model files trained before 6.3 (`MJ: Files.ProviderKey` empty) are still read
-  from `PS_ARTIFACT_DIR`. `IArtifactLoader.load` takes a required `provider`, and `IArtifactStore.AssertWritable` is a new required
-  member the engine calls before a run is written, so an unconfigured provider refuses the run before training. The local-disk model
+  from `PS_ARTIFACT_DIR`. The artifact seams are PascalCase: `IArtifactStore.save` / `delete` are `Save(bytes, name)` /
+  `Delete(fileId)` (no `contextUser`: the store writes as the user of the `PredictiveStudioStorage` it is built over),
+  and `IArtifactLoader.load` is `Load(fileId, contextUser, provider)` with a required `UserInfo` and `provider`.
+  `IArtifactStore.AssertWritable` is a new required member the engine calls before a run is written: it puts and
+  deletes a probe object under `predictive-studio/model-artifacts/`, so a provider that is unconfigured or cannot write
+  (wrong credentials, an unwritable root) refuses the run before training. A run that fails after storing its
+  artifacts deletes its model row and artifacts. `StorageProviderSnapshotFileStore` takes `(entityFactory, storage)`;
+  `StorageProviderSnapshotFileStore.ForProviderName(entityFactory, provider, contextUser, providerName?)` builds one
+  over its own storage. The local-disk model
   artifact store and loader, and their active-provider lookup, are removed.
 - `@memberjunction/server`, `@memberjunction/server-bootstrap`, `@memberjunction/server-bootstrap-lite`,
   `@memberjunction/ng-bootstrap`, `@memberjunction/ng-bootstrap-lite`, `@memberjunction/ng-core-entity-forms`: the

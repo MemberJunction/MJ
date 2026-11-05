@@ -45,6 +45,7 @@ import { UnitYearsWorld } from '../../__tests__/fakes/unit-years-world';
 import { TableDataAccess } from '../../__tests__/fakes/table-data-access';
 import { InMemoryUnitVersions, UnitVersionFactory } from '../../prediction-unit/__tests__/unit-version-fakes';
 import {
+  FakeEntity,
   FakeEntityFactory,
   FakeEvaluationProtocolStore,
   FakeRecordLoader,
@@ -165,13 +166,13 @@ function importanceOf(sourceColumn: string, value: number): SourceColumnImportan
 class FailingArtifactStore extends InMemoryArtifactStore {
   public readonly DeletedIDs: string[] = [];
   constructor(private readonly failingName: string) { super(); }
-  public override async save(bytes: Uint8Array, name: string): Promise<string> {
+  public override async Save(bytes: Uint8Array, name: string): Promise<string> {
     if (name.includes(this.failingName)) throw new Error(`disk full writing ${name}`);
-    return super.save(bytes, name);
+    return super.Save(bytes, name);
   }
-  public override async delete(fileId: string): Promise<void> {
+  public override async Delete(fileId: string): Promise<void> {
     this.DeletedIDs.push(fileId);
-    await super.delete(fileId);
+    await super.Delete(fileId);
   }
 }
 
@@ -804,6 +805,37 @@ describe('TrainingEngine — a unit pipeline trains through the trainer', () => 
     expect(store.Saved.size).toBe(0);
     expect(runs[0].Status).toBe('Failed');
     expect(models).toHaveLength(0);
+  });
+
+  it('deletes every stored artifact when the model row fails to save, and reports the save error', async () => {
+    const store = new FailingArtifactStore('no artifact name fails');
+    const { engine, deps, pipeline, runs } = protocolHarness(cannedFor, TrainingHarness.UnitProtocolRow(), store);
+    const save = FakeEntity.prototype.Save;
+    vi.spyOn(FakeEntity.prototype, 'Save').mockImplementation(async function (this: FakeEntity): Promise<boolean> {
+      if (this instanceof FakeMLModel) { this.LatestResult = { CompleteMessage: 'the ML Models table is locked' }; return false; }
+      return save.call(this);
+    });
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toThrow('TrainingEngine: failed to create ML Model: the ML Models table is locked');
+    expect([store.DeletedIDs.length, store.Saved.size]).toEqual([3, 0]);
+    expect([runs[0].Status, runs[0].ResultingModelID]).toEqual(['Failed', null]);
+    expect(runs[0].Notes).toContain('the ML Models table is locked');
+  });
+
+  it('deletes the model row and every stored artifact when the run fails to complete, and reports the run error', async () => {
+    const store = new FailingArtifactStore('no artifact name fails');
+    const { engine, deps, pipeline, runs, models } = protocolHarness(cannedFor, TrainingHarness.UnitProtocolRow(), store);
+    const save = FakeEntity.prototype.Save;
+    vi.spyOn(FakeEntity.prototype, 'Save').mockImplementation(async function (this: FakeEntity): Promise<boolean> {
+      if (this instanceof FakeMLRun && this.ValidationResults?.includes('"status":"completed"')) {
+        this.LatestResult = { CompleteMessage: 'the ML Training Runs table is locked' };
+        return false;
+      }
+      return save.call(this);
+    });
+    await expect(engine.trainModel({ pipelineId: pipeline.ID }, deps)).rejects.toThrow('TrainingEngine: failed to finalize ML Training Run: the ML Training Runs table is locked');
+    expect(models.map((m) => m.Deleted)).toEqual([true]);
+    expect([store.DeletedIDs.length, store.Saved.size]).toEqual([3, 0]);
+    expect([runs[0].Status, runs[0].ResultingModelID]).toEqual(['Failed', null]);
   });
 
   it('slices by an assembled date-part column, named as the assembler names it, and completes', async () => {

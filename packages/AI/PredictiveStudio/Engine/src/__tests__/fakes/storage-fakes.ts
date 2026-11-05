@@ -20,6 +20,8 @@ export class MemoryStorageAccount {
   public Initializations = 0;
   public RefusePut = false;
   public RefuseDelete = false;
+  /** When set, every put throws this message (a driver whose credentials are set but wrong). */
+  public PutError: string | null = null;
   constructor(public readonly Name: string, private readonly log: string[]) {}
 
   /** Appends an operation to the shared log. */
@@ -34,6 +36,7 @@ export class MemoryStorageAccount {
     this.Initializations = 0;
     this.RefusePut = false;
     this.RefuseDelete = false;
+    this.PutError = null;
   }
 }
 
@@ -48,6 +51,7 @@ export function RegisterMemoryStorage(driverKey: string, account: MemoryStorageA
     }
     public override async PutObject(objectName: string, data: Buffer): Promise<boolean> {
       account.Record(`put ${objectName}`);
+      if (account.PutError !== null) throw new Error(account.PutError);
       if (account.RefusePut) return false;
       account.Objects.set(objectName, new Uint8Array(data));
       return true;
@@ -143,6 +147,8 @@ export class FakeFilesTable implements IEntityFactory {
   public SaveFailure: string | null = null;
   /** When set, every row delete fails with this message. */
   public DeleteFailure: string | null = null;
+  /** The acting user of every `RunView` read through {@link Provider}, in order. */
+  public readonly ReadUsers: (UserInfo | undefined)[] = [];
   constructor(public readonly Log: string[]) {}
 
   public async getEntityObject<T extends BaseEntity>(entityName: string, _contextUser?: UserInfo): Promise<T> {
@@ -158,7 +164,8 @@ export class FakeFilesTable implements IEntityFactory {
   /** A metadata provider whose `RunView` answers `MJ: Files` reads by `ID='…'`. */
   public Provider(): IMetadataProvider {
     return {
-      RunView: async (params: { ExtraFilter?: string }) => {
+      RunView: async (params: { ExtraFilter?: string }, contextUser?: UserInfo) => {
+        this.ReadUsers.push(contextUser);
         const id = /ID='([^']*)'/.exec(params.ExtraFilter || '')?.[1] || '';
         const row = this.Rows.Get(id);
         return { Success: true, Results: row ? [{ ID: row.ID, ProviderID: row.ProviderID, ProviderKey: row.ProviderKey }] : [] };

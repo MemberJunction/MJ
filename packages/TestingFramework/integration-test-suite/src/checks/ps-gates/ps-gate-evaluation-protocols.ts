@@ -93,7 +93,7 @@ export class EvaluationProtocolGates {
     if (!snaps.Success) return `snapshot ${run.TrainingSnapshotID} could not be read: ${snaps.ErrorMessage}`;
     const snap = snaps.Results[0];
     if (!snap) return `snapshot ${run.TrainingSnapshotID} not found`;
-    const manifest = await SnapshotManifest.ReadSnapshotManifest(snap, new StorageProviderSnapshotFileStore(UnitFixtures.EntityFactory(h), h.Provider, h.User));
+    const manifest = await SnapshotManifest.ReadSnapshotManifest(snap, StorageProviderSnapshotFileStore.ForProviderName(UnitFixtures.EntityFactory(h), h.Provider, h.User));
     return { Results: parsed.Value, Snapshot: snap, Manifest: manifest };
   }
 

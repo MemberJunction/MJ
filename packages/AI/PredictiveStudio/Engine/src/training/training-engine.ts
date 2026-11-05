@@ -515,7 +515,7 @@ export class TrainingEngine {
    * the stored result (artifacts as file references, never bytes), the holdout carve's summary, the gate record, the
    * request settings a retrain replays, the leakage note of the single-feature-dominance check over the trainer's
    * importance and, for a shipped finalist whose calibration hides its family, the calibration hold. A failed result is the refusal `trainer-failed` and a result whose code version cannot be recorded is
-   * `lineage-incomplete`; both keep the compute they recorded. The gate stage's refusals are stored before any artifact.
+   * `lineage-incomplete`; both keep the compute they recorded. The gate stage's refusals are stored before any artifact. When a step after the artifacts are stored fails (the model row or the run's completion cannot be saved), the model row and the stored artifacts are deleted best-effort ({@link discardStoredOutput}) and the original error is rethrown.
    *
    * @returns the model row, or null when the decision ships no artifact
    */
@@ -534,10 +534,50 @@ export class TrainingEngine {
     const gate = TrainingEngine.buildGateRecord(x, result);
     const shipped = TrainingEngine.shippedArtifact(gate.decision, result);
     const fileIds = await this.storeTrainerArtifacts(run, result, deps);
-    const outcome = this.trainerOutcome(x, result, candidates, shipped);
-    const model = shipped === null ? null : await this.createTrainerModelRow(x, outcome, shipped, TrainingEngine.storedFileOf(fileIds, shipped.Name));
-    await this.completeTrainerRun(x, request, outcome, gate, fileIds, model);
-    return model;
+    let model: MJMLModelEntity | null = null;
+    try {
+      const outcome = this.trainerOutcome(x, result, candidates, shipped);
+      model = shipped === null ? null : await this.createTrainerModelRow(x, outcome, shipped, TrainingEngine.storedFileOf(fileIds, shipped.Name));
+      await this.completeTrainerRun(x, request, outcome, gate, fileIds, model);
+      return model;
+    } catch (err) {
+      await TrainingEngine.discardStoredOutput(run, model, fileIds, deps);
+      throw err;
+    }
+  }
+
+  /**
+   * Best-effort removal of what a trainer run stored before a later step failed, so the failed run leaves no model row
+   * and no artifact nothing references: the model row (when it was saved) and the run's pointer to it, then every stored
+   * artifact. An artifact a model row that could not be deleted still references is kept. Each failure is logged; the
+   * caller rethrows the original error.
+   */
+  private static async discardStoredOutput(run: MJMLTrainingRunEntity, model: MJMLModelEntity | null, fileIds: ReadonlyMap<string, string>, deps: TrainingDeps): Promise<void> {
+    run.ResultingModelID = null;
+    const stillReferenced = model === null ? null : await TrainingEngine.deleteModelRowOf(run, model);
+    const unreferenced = [...fileIds.values()].filter((id) => stillReferenced === null || !UUIDsEqual(id, stillReferenced));
+    await TrainingEngine.deleteArtifactFiles(run, unreferenced, deps);
+  }
+
+  /** Deletes a failed run's model row; returns the artifact file it references when the row could not be deleted, else null. */
+  private static async deleteModelRowOf(run: MJMLTrainingRunEntity, model: MJMLModelEntity): Promise<string | null> {
+    let reason: string | null;
+    try {
+      reason = (await model.Delete()) ? null : model.LatestResult?.CompleteMessage || 'unknown error';
+    } catch (error) {
+      reason = error instanceof Error ? error.message : String(error);
+    }
+    if (reason === null) return null;
+    LogError(`TrainingEngine: could not delete model ${model.ID} of failed run ${run.ID}, so its artifact file ${model.ArtifactFileID} is kept: ${reason}`);
+    return model.ArtifactFileID;
+  }
+
+  /** Deletes artifact files through the run's store, every one attempted; each failure is logged. */
+  private static async deleteArtifactFiles(run: MJMLTrainingRunEntity, fileIds: readonly string[], deps: TrainingDeps): Promise<void> {
+    const outcomes = await Promise.allSettled(fileIds.map((fileId) => deps.artifactStore.Delete(fileId)));
+    outcomes.forEach((r, k) => {
+      if (r.status === 'rejected') LogError(`TrainingEngine: could not delete artifact file ${fileIds[k]} of failed run ${run.ID}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`);
+    });
   }
 
   /**
@@ -743,16 +783,13 @@ export class TrainingEngine {
    */
   private async storeTrainerArtifacts(run: MJMLTrainingRunEntity, result: TrainerCompleted, deps: TrainingDeps): Promise<ReadonlyMap<string, string>> {
     const outcomes = await Promise.allSettled(result.artifacts.map(async (a): Promise<[string, string]> => {
-      const fileId = await deps.artifactStore.save(decodeArtifact(a.bytesBase64), `trainer-${run.ID}-${a.candidate}.json`, deps.contextUser);
+      const fileId = await deps.artifactStore.Save(decodeArtifact(a.bytesBase64), `trainer-${run.ID}-${a.candidate}.json`);
       return [a.candidate, fileId];
     }));
     const saved = outcomes.flatMap((o) => (o.status === 'fulfilled' ? [o.value] : []));
     const failure = outcomes.find((o): o is PromiseRejectedResult => o.status === 'rejected');
     if (failure === undefined) return new Map(saved);
-    const rollback = await Promise.allSettled(saved.map(([, fileId]) => deps.artifactStore.delete(fileId, deps.contextUser)));
-    rollback.forEach((r, k) => {
-      if (r.status === 'rejected') LogError(`TrainingEngine: could not delete artifact file ${saved[k][1]} of failed run ${run.ID}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`);
-    });
+    await TrainingEngine.deleteArtifactFiles(run, saved.map(([, fileId]) => fileId), deps);
     throw failure.reason instanceof Error ? failure.reason : new Error(String(failure.reason));
   }
 

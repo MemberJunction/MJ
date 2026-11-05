@@ -322,7 +322,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ML Model '${this.modelId}' not found`);
     }
     const artifactFileId = this.assertStatusCanScore(model);
-    const bytes = await this.deps.artifactLoader.load(artifactFileId, context.ContextUser, context.Provider);
+    const bytes = await this.deps.artifactLoader.Load(artifactFileId, context.ContextUser, context.Provider);
     if (!bytes) {
       throw new ModelNeedsTrainingError(`MLModelInferenceProcessor: ${ModelArtifactMissingMessage(this.modelId, artifactFileId)}`);
     }

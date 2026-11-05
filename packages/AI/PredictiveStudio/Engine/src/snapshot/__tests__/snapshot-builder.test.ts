@@ -368,7 +368,7 @@ describe('StorageProviderSnapshotFileStore', () => {
   it('accepts identical bytes under an existing key without writing again, refuses different bytes and an unsafe key, through the inactive provider selected by name', async () => {
     const factory = new FakeEntityFactory();
     const writes = vi.spyOn(LocalFileSystemStorage.prototype, 'PutObject');
-    const store = new StorageProviderSnapshotFileStore(factory, filesMetadata(factory), undefined, 'Local File System');
+    const store = StorageProviderSnapshotFileStore.ForProviderName(factory, filesMetadata(factory), undefined, 'Local File System');
     const stored = await store.Put(key, 'matrix.jsonl', bytes('first\n'), 'application/x-ndjson');
     expect(stored.ProviderID).toBe(providerRow.ID);
     expect(stored.Sha256).toBe(SnapshotHash.Sha256Hex('first\n'));
@@ -385,7 +385,7 @@ describe('StorageProviderSnapshotFileStore', () => {
   it('leaves the stored object in place when its MJ: Files row fails to save, and records the row on the next identical write', async () => {
     const factory = new FakeEntityFactory();
     factory.FileSaveFailures = 1;
-    const store = new StorageProviderSnapshotFileStore(factory, filesMetadata(factory), undefined, 'Local File System');
+    const store = StorageProviderSnapshotFileStore.ForProviderName(factory, filesMetadata(factory), undefined, 'Local File System');
     await expect(store.Put(key, 'matrix.jsonl', bytes('first\n'), 'application/x-ndjson')).rejects.toThrow(/the MJ: Files table is unavailable/);
     expect(readFileSync(join(root, key), 'utf8')).toBe('first\n');
     const retried = await store.Put(key, 'matrix.jsonl', bytes('first\n'), 'application/x-ndjson');
@@ -394,7 +394,7 @@ describe('StorageProviderSnapshotFileStore', () => {
 
   it('reuses the earliest-created MJ: Files row when several record one object', async () => {
     const factory = new FakeEntityFactory();
-    const store = new StorageProviderSnapshotFileStore(factory, filesMetadata(factory), undefined, 'Local File System');
+    const store = StorageProviderSnapshotFileStore.ForProviderName(factory, filesMetadata(factory), undefined, 'Local File System');
     await store.Put(key, 'matrix.jsonl', bytes('first\n'), 'application/x-ndjson');
     // Two more rows recording the same object, listed before the original with the later-created one first.
     const later = new FakeFileEntity('file-later');
@@ -420,7 +420,7 @@ describe('StorageProviderSnapshotFileStore', () => {
     factory.Files.push(archived);
     mkdirSync(join(archiveRoot, 'predictive-studio/training-snapshots/abc'), { recursive: true });
     writeFileSync(join(archiveRoot, key), 'archived\n');
-    const store = new StorageProviderSnapshotFileStore(factory, filesMetadata(factory), undefined, 'Local File System');
+    const store = StorageProviderSnapshotFileStore.ForProviderName(factory, filesMetadata(factory), undefined, 'Local File System');
     expect(new TextDecoder().decode(await store.Get('file-archived'))).toBe('archived\n');
   });
 });

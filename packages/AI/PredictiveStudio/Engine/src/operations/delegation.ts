@@ -98,7 +98,7 @@ export class TrainingDelegation {
       predictionUnits: new RunViewPredictionUnitStore(provider, user),
       assemblyMetadata: new ProviderAssemblyMetadata(provider),
       dataAccess: new RunViewDataAccess(user, provider),
-      snapshotFiles: new StorageProviderSnapshotFileStore(entityFactory, provider, user, storage),
+      snapshotFiles: new StorageProviderSnapshotFileStore(entityFactory, storage),
       snapshots: new RunViewTrainingSnapshotStore(provider, user),
       protocols: new RunViewEvaluationProtocolStore(provider, user),
     };

@@ -242,6 +242,6 @@ export class SnapshotRetrainer {
 
   /** Where the snapshot files are read: `deps.snapshotFiles`, or the storage-provider store on the request's provider. */
   protected FileStore(deps: TrainingDeps): ISnapshotFileStore {
-    return deps.snapshotFiles || new StorageProviderSnapshotFileStore(deps.entityFactory, deps.provider, deps.contextUser);
+    return deps.snapshotFiles || StorageProviderSnapshotFileStore.ForProviderName(deps.entityFactory, deps.provider, deps.contextUser);
   }
 }

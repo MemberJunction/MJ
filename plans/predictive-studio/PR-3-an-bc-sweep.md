@@ -8,7 +8,7 @@ For each contract changed by the an-bc review fixes, this lists every reader cla
 |---|---|---|---|
 | C1 | Entity names | `MJ: Prediction Units`, `MJ: Evaluation Protocols`, `MJ: Training Snapshots` | `MJ: ML Prediction Units`, `MJ: ML Evaluation Protocols`, `MJ: ML Training Snapshots` |
 | C2 | Tables, views, procs, constraints, classes | `PredictionUnit` / `vwPredictionUnits` / `MJPredictionUnitEntity` … | `MLPredictionUnit` / `vwMLPredictionUnits` / `MJMLPredictionUnitEntity` … (FK columns unchanged, R2) |
-| C3 | `IArtifactLoader.load` | `load(fileId, contextUser)` | `load(fileId, contextUser, provider)`, plus `IArtifactStore.AssertWritable` |
+| C3 | `IArtifactLoader.load` | `load(fileId, contextUser)` | `Load(fileId, contextUser, provider)` (PascalCase after the final review, M2; `IArtifactStore` is `Save` / `Delete`), plus `IArtifactStore.AssertWritable` |
 | C4 | Storage setting | `PS_SNAPSHOT_STORAGE_PROVIDER`, model files written to the *active* File Storage Provider (`MJFilesArtifactStore`, `ResolveActiveFileStorageProviderId`), local-disk fallback | `PS_STORAGE_PROVIDER` names the provider for snapshot **and** model files, whatever its `IsActive` flag; `PS_ARTIFACT_DIR` read only for files written before 6.3 |
 | C5 | Migration file | `V2026110…__v6.2.x__PS_Honest_Training_Schema.sql` | `migrations/v6/V202611042040__v6.3.x__PS_Honest_Training_Schema.sql` |
 
@@ -44,7 +44,7 @@ The C4 change made model files go through the provider `PS_STORAGE_PROVIDER` nam
    - the "local-disk artifact fallback" prerequisite in four live rigs (`ps-live-multimodel-lifecycle`, `ps-live-writeback-demo`, `ps-live-modelaction-generation`, `ps-live-recordprocess-scoring`)
    - Engine `operations/__tests__/helpers.ts` and `delegation-retrain.test.ts`, which said the deps builder "resolves the active File Storage Provider via RunView". It reads nothing now, because the storage resolves lazily.
 
-4. **Truth-suite cleanup of model files** (`TruthSuite/src/harness/cleanup.ts`): it deleted a model's artifact `MJ: Files` rows (the model's own and every file a run's trainer result names) as rows only, which was right when the bytes lived under `PS_ARTIFACT_DIR` with no stored object. Now those files are stored objects, so each run left them behind. On this database, after Containment, Prediction Units and Training: 126 files under `predictive-studio/model-artifacts/` and 0 `MJ: Files` rows. Cleanup now deletes these files the way it already deleted snapshot files: the stored object first, then the row, and the row stays when the object cannot be deleted. Two new and two updated unit tests cover this (`cleanup.test.ts`). Rerun after the fix (Prediction Units, 12/12): 0 files left on disk and 0 `MJ: Files` rows.
+4. **Truth-suite cleanup of model files** (`TruthSuite/src/harness/cleanup.ts`): it deleted a model's artifact `MJ: Files` rows (the model's own and every file a run's trainer result names) as rows only, which was right when the bytes lived under `PS_ARTIFACT_DIR` with no stored object. Now those files are stored objects, so each run left them behind. On this database, after Containment, Prediction Units and Training: 126 files under `predictive-studio/model-artifacts/` and 0 `MJ: Files` rows. Cleanup now deletes these files the way it already deleted snapshot files: the stored object first, then the row, and the row stays when the object cannot be deleted. One new and two updated unit tests cover this (`cleanup.test.ts`). Rerun after the fix (Prediction Units, 12/12): 0 files left on disk and 0 `MJ: Files` rows.
 
 The behaviour is proven at runtime: every File Storage Provider on `MJ_PS_PR3_mlrename` is `IsActive = 0`, and the integration tier and truth-suite gates that train and score were run with nothing switched on (see the task report).
 
@@ -98,18 +98,20 @@ E9: removed exports
 $ git grep -nE "(MJFilesArtifactStore|BuildArtifactStore|ResolveActiveFileStorageProviderId|LocalArtifactLoader)" -- ':!plans/**'
 (empty)
 ```
-E10: artifact-loader call sites
+E10: artifact-loader call sites (the member is `Load` since the final-review fixes, M2)
 ```
-$ git grep -nE "(artifactLoader|ArtifactLoader|loader)\??\.load\(" -- 'packages/**/*.ts'
-packages/AI/PredictiveStudio/Engine/src/scoring/__tests__/storage-provider-artifact-loader.test.ts:51,58,66,71,76,81,87  (all pass files.Provider())
-packages/AI/PredictiveStudio/Engine/src/scoring/auto-train.ts:135:  this.artifactLoader.load(row.ArtifactFileID, contextUser, provider)
-packages/AI/PredictiveStudio/Engine/src/scoring/ml-model-inference-processor.ts:325:  this.deps.artifactLoader.load(artifactFileId, context.ContextUser, context.Provider)
+$ git grep -nE "(artifactLoader|ArtifactLoader|loader)\??\.Load\(" -- 'packages/AI/PredictiveStudio/**/*.ts'
+packages/AI/PredictiveStudio/Engine/src/scoring/__tests__/storage-provider-artifact-loader.test.ts:51,58,66,71,76,81,87  (all pass TestUser and files.Provider())
+packages/AI/PredictiveStudio/Engine/src/scoring/auto-train.ts:135:  this.artifactLoader.Load(row.ArtifactFileID, contextUser, provider)
+packages/AI/PredictiveStudio/Engine/src/scoring/ml-model-inference-processor.ts:325:  this.deps.artifactLoader.Load(artifactFileId, context.ContextUser, context.Provider)
 ```
 E11: readers of the old "active provider" rule (after the fix)
 ```
-$ git grep -nE "HarnessFileStorage|RigStorage|FileStorageActivation|local-disk artifact fallback|looks up the active File Storage Provider" -- ':!plans/**'
+$ git grep -nE "HarnessFileStorage|RigStorage|FileStorageActivation|local-disk artifact fallback|looks up the active File Storage Provider" -- ':!plans/**' ':!.changeset/**'
 (empty)
 ```
+The changeset is excluded because it names the removed `HarnessFileStorage` / `RigStorage` on purpose
+(`.changeset/ps-honest-training.md`, the line saying they are removed); without the exclusion that is the one hit.
 E12: old migration filenames
 ```
 $ git grep -nE "V2026110[0-9]{6}__v6\.[0-9]\.x__PS_Honest" -- ':!plans/**' | grep -v V202611042040

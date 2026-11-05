@@ -28,7 +28,7 @@ export class TrainingKeys {
     modelId: string,
     provider: IMetadataProvider,
     user: UserInfo | undefined,
-    files: ISnapshotFileStore = new StorageProviderSnapshotFileStore(new MetadataEntityFactory(provider), provider, user),
+    files: ISnapshotFileStore = StorageProviderSnapshotFileStore.ForProviderName(new MetadataEntityFactory(provider), provider, user),
   ): Promise<ReadonlySet<string>> {
     const snapshotId = await TrainingKeys.snapshotIdOf(modelId, provider, user);
     if (snapshotId === null) return new Set<string>();

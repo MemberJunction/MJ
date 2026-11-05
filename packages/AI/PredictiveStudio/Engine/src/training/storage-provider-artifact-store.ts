@@ -6,17 +6,17 @@
  * under `predictive-studio/model-artifacts/<fresh UUID>/<name>` and an `MJ: Files` row naming its provider and key.
  *
  * Every save gets a fresh key, so no other save shares its object: a save whose `MJ: Files` row fails removes the
- * object it just wrote, and a rollback ({@link StorageProviderArtifactStore.delete}) removes the object, then the row.
+ * object it just wrote, and a rollback ({@link StorageProviderArtifactStore.Delete}) removes the object, then the row.
+ * Rows are written and read as the user of the {@link PredictiveStudioStorage} the store is built over.
  *
  * A model `MJ: Files` row with an empty `ProviderKey` was written before model files went through the storage provider:
  * its bytes are on local disk at `LocalArtifactPath(ResolveLocalArtifactBaseDir(), fileId)` (`PS_ARTIFACT_DIR`), and
- * `delete` removes that file with the row.
+ * `Delete` removes that file with the row.
  */
 import { randomUUID } from 'node:crypto';
 import { rm } from 'node:fs/promises';
 
-import { LogError, type UserInfo } from '@memberjunction/core';
-import type { MJFileEntity } from '@memberjunction/core-entities';
+import { LogError, LogWarning } from '@memberjunction/core';
 import { IsSafeStorageObjectKey } from '@memberjunction/storage';
 
 import { PredictiveStudioStorage, type StorageDriverBinding } from '../storage/ps-storage-provider';
@@ -27,6 +27,8 @@ import type { IArtifactStore, IEntityFactory } from './types';
 export class StorageProviderArtifactStore implements IArtifactStore {
   /** The key prefix every model artifact object is stored under. */
   public static readonly KEY_PREFIX = 'predictive-studio/model-artifacts';
+  /** The object name of the write probe {@link AssertWritable} puts and deletes. */
+  private static readonly PROBE_NAME = '.probe';
 
   /**
    * @param entityFactory creates and loads the `MJ: Files` rows
@@ -35,12 +37,24 @@ export class StorageProviderArtifactStore implements IArtifactStore {
   constructor(private readonly entityFactory: IEntityFactory, private readonly storage: PredictiveStudioStorage) {}
 
   /**
-   * Resolves the configured provider's driver.
+   * Proves the configured provider can write here: resolves its driver, puts a small probe object at
+   * `<KEY_PREFIX>/<fresh UUID>/.probe`, then deletes it. A probe that is written but cannot be deleted does not refuse
+   * (the provider can write); it is logged as a warning naming the object left behind.
    *
-   * @throws Error naming the provider and `PS_STORAGE_PROVIDER` when no provider has that name or its driver is not configured here
+   * @throws Error naming the provider and `PS_STORAGE_PROVIDER` when no provider has that name, its driver is not
+   *   configured here, or the probe write is refused or fails
    */
   public async AssertWritable(): Promise<void> {
-    await this.storage.ConfiguredDriver();
+    const binding = await this.storage.ConfiguredDriver();
+    const probeKey = `${StorageProviderArtifactStore.KEY_PREFIX}/${randomUUID()}/${StorageProviderArtifactStore.PROBE_NAME}`;
+    const failure = await StorageProviderArtifactStore.probeWriteFailure(binding, probeKey);
+    if (failure !== null) {
+      throw new Error(
+        `Predictive Studio storage: storage provider "${binding.Provider.Name}" cannot write here (probe ${probeKey}: ${failure}) ` +
+          `(${PredictiveStudioStorage.ENV_VAR} names the provider Predictive Studio files are written to)`,
+      );
+    }
+    await StorageProviderArtifactStore.removeProbe(binding, probeKey);
   }
 
   /**
@@ -49,7 +63,7 @@ export class StorageProviderArtifactStore implements IArtifactStore {
    * @throws Error when the name is not one safe key segment (before anything is stored), when storage refuses the
    *   object, or when the row cannot be saved (the object is removed first)
    */
-  public async save(bytes: Uint8Array, name: string, _contextUser?: UserInfo): Promise<string> {
+  public async Save(bytes: Uint8Array, name: string): Promise<string> {
     const objectKey = StorageProviderArtifactStore.objectKeyFor(name);
     const contentType = name.toLowerCase().endsWith('.json') ? 'application/json' : 'application/octet-stream';
     const binding = await this.storage.ConfiguredDriver();
@@ -74,10 +88,13 @@ export class StorageProviderArtifactStore implements IArtifactStore {
    *
    * @throws Error when the row is not found, the object cannot be removed (the row is kept), or the row cannot be deleted
    */
-  public async delete(fileId: string, contextUser?: UserInfo): Promise<void> {
-    const file = await this.entityFactory.getEntityObject<MJFileEntity>('MJ: Files', contextUser);
-    if (!(await file.Load(fileId))) throw new Error(`Predictive Studio model artifacts: artifact file ${fileId} not found`);
+  public async Delete(fileId: string): Promise<void> {
+    const file = await this.storage.LoadFileRow(fileId, this.entityFactory);
+    if (!file) throw new Error(`Predictive Studio model artifacts: artifact file ${fileId} not found`);
     const objectKey = file.ProviderKey;
+    if (objectKey && !IsSafeStorageObjectKey(objectKey)) {
+      throw new Error(`Predictive Studio model artifacts: artifact file ${fileId} has an unsafe storage key "${objectKey}"`);
+    }
     if (objectKey) await this.deleteObject(file.ProviderID, objectKey);
     if (!(await file.Delete())) {
       throw new Error(`Predictive Studio model artifacts: deleting artifact file ${fileId} failed: ${file.LatestResult?.CompleteMessage || 'unknown error'}`);
@@ -99,6 +116,29 @@ export class StorageProviderArtifactStore implements IArtifactStore {
       throw new Error(`Predictive Studio model artifacts: "${name}" is not a safe artifact name`);
     }
     return objectKey;
+  }
+
+  /** Why the probe could not be written, or null when it was. */
+  private static async probeWriteFailure(binding: StorageDriverBinding, probeKey: string): Promise<string | null> {
+    try {
+      const written = await binding.Driver.PutObject(probeKey, Buffer.from('predictive-studio write probe'), 'text/plain');
+      return written ? null : 'the provider refused the object';
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  /** Deletes the write probe; a failure is logged as a warning, since the write it proved succeeded. */
+  private static async removeProbe(binding: StorageDriverBinding, probeKey: string): Promise<void> {
+    let reason: string | null;
+    try {
+      reason = (await binding.Driver.DeleteObject(probeKey)) ? null : 'the provider refused the delete';
+    } catch (error) {
+      reason = error instanceof Error ? error.message : String(error);
+    }
+    if (reason !== null) {
+      LogWarning(`Predictive Studio storage: could not delete the write probe ${probeKey} from "${binding.Provider.Name}" (${reason}); the provider can write, so the run goes ahead, but deletes (rollbacks) through it may fail too`);
+    }
   }
 
   /** Removes an object whose row could not be saved; a failure is logged, since the row's error is the one thrown. */

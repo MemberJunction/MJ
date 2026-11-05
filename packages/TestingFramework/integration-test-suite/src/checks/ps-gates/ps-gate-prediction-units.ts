@@ -45,7 +45,7 @@ export class PredictionUnitGates {
 
   /** The snapshot's row manifest, read back from storage, verified against the row's SHA-256 and parsed. */
   private static async manifestOf(h: TruthHarness, snapshot: Pick<SnapshotCounts, 'RowManifestFileID' | 'RowManifestSha256'>): Promise<SnapshotRowKey[]> {
-    const files = new StorageProviderSnapshotFileStore(UnitFixtures.EntityFactory(h), h.Provider, h.User);
+    const files = StorageProviderSnapshotFileStore.ForProviderName(UnitFixtures.EntityFactory(h), h.Provider, h.User);
     return SnapshotManifest.ReadSnapshotManifest(snapshot, files);
   }
 

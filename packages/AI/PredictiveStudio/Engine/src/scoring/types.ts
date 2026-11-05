@@ -69,7 +69,7 @@ export interface IMLModelLoader {
 
 /**
  * Read seam for fetching the serialized model artifact bytes by file id (the
- * read-side counterpart to the training `IArtifactStore.save`). Reads through the
+ * read-side counterpart to the training `IArtifactStore.Save`). Reads through the
  * storage provider the file's `MJ: Files` row names in production
  * (`StorageProviderArtifactLoader`); tests inject an in-memory map.
  */
@@ -78,11 +78,11 @@ export interface IArtifactLoader {
    * Fetch the serialized artifact bytes previously stored under `fileId`.
    *
    * @param fileId the `MLModel.ArtifactFileID` value
-   * @param contextUser request user — required server-side for isolation/audit
+   * @param contextUser the acting user the file row is read as (required: a call site without one is a compile error)
    * @param provider the provider the file row is read through (required: no fallback to the global provider)
    * @returns the artifact bytes, or `null` when not found
    */
-  load(fileId: string, contextUser: UserInfo | undefined, provider: IMetadataProvider): Promise<Uint8Array | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  Load(fileId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<Uint8Array | null>;
 }
 
 /**

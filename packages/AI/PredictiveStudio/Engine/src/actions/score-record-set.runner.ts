@@ -357,7 +357,7 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
    */
   protected missingArtifactLoader(): IArtifactLoader {
     return {
-      async load(): Promise<Uint8Array | null> {
+      async Load(): Promise<Uint8Array | null> {
         throw new Error(
           'Score Record Set: no artifact loader is configured. Supply MLInferenceDeps with a production ' +
             'IArtifactLoader (StorageProviderArtifactLoader) when constructing ProductionScoreRecordSetRunner.',

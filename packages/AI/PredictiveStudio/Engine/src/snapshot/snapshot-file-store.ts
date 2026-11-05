@@ -26,9 +26,8 @@
  * download states how long its URL lives ({@link PreAuthDownloads.LifetimeSecondsOf}): the sidecar refuses an expired
  * URL only when the download states an expiry, so a driver whose URLs do not expire states none.
  */
-import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { EscapeSQLString } from '@memberjunction/global';
-import type { MJFileEntity, MJFileStorageProviderEntity } from '@memberjunction/core-entities';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { MJFileStorageProviderEntity } from '@memberjunction/core-entities';
 import { IsSafeStorageObjectKey } from '@memberjunction/storage';
 import type { PreAuthDownload } from '@memberjunction/predictive-studio-core';
 import { SnapshotHash } from './snapshot-hash';
@@ -177,22 +176,23 @@ export class SnapshotObjectKeys {
 
 /** Snapshot files in an MJ storage provider, each recorded as an `MJ: Files` row. */
 export class StorageProviderSnapshotFileStore implements ISnapshotFileStore {
-  private readonly storage: PredictiveStudioStorage;
-
   /**
    * @param entityFactory creates the `MJ: Files` rows
-   * @param provider the provider the `MJ: Files` reads run on
-   * @param contextUser the acting user
-   * @param storage the provider to write to: a provider name (default: `PS_STORAGE_PROVIDER`, or "Local File System"),
-   *   or the {@link PredictiveStudioStorage} to share with the run's artifact store, so both resolve one provider once
+   * @param storage the storage the files are written to and read through; its provider and user run every `MJ: Files`
+   *   read, so a run's snapshot store and artifact store built over one storage resolve one provider once
    */
-  constructor(
-    private readonly entityFactory: IEntityFactory,
-    private readonly provider: IMetadataProvider,
-    private readonly contextUser: UserInfo | undefined,
-    storage?: string | PredictiveStudioStorage,
-  ) {
-    this.storage = storage instanceof PredictiveStudioStorage ? storage : new PredictiveStudioStorage(provider, contextUser, storage);
+  constructor(private readonly entityFactory: IEntityFactory, private readonly storage: PredictiveStudioStorage) {}
+
+  /**
+   * A store over its own {@link PredictiveStudioStorage}.
+   *
+   * @param entityFactory creates the `MJ: Files` rows
+   * @param provider the provider the `MJ: Files` reads and the storage-provider cache load run on
+   * @param contextUser the acting user
+   * @param providerName the provider to write to (default: `PS_STORAGE_PROVIDER`, or "Local File System" when it is unset or empty)
+   */
+  public static ForProviderName(entityFactory: IEntityFactory, provider: IMetadataProvider, contextUser: UserInfo | undefined, providerName?: string): StorageProviderSnapshotFileStore {
+    return new StorageProviderSnapshotFileStore(entityFactory, new PredictiveStudioStorage(provider, contextUser, providerName));
   }
 
   public async ProviderID(): Promise<string> {
@@ -240,7 +240,8 @@ export class StorageProviderSnapshotFileStore implements ISnapshotFileStore {
   private async acceptExisting(binding: StorageDriverBinding, row: StoredFileRow, bytes: Uint8Array): Promise<string> {
     const stored = new Uint8Array(await binding.Driver.GetObject({ fullPath: row.ObjectKey }));
     SnapshotWriteOnce.AcceptExisting(row.ObjectKey, stored, bytes);
-    const recorded = await this.fileRowIdOf(binding.Provider, row.ObjectKey);
+    // The earliest-created row recording this provider's object, so every writer picks the same one.
+    const recorded = await this.storage.FileRowIDFor(binding.Provider.ID, row.ObjectKey);
     if (recorded !== null) return recorded;
     const file = await this.storage.SaveFileRow(binding, row, this.entityFactory);
     // The object predates this write, so a failed row leaves it in place.
@@ -258,26 +259,6 @@ export class StorageProviderSnapshotFileStore implements ISnapshotFileStore {
     const file = await this.storage.SaveFileRow(binding, row, this.entityFactory);
     if (file.Saved === false) throw new Error(`Training snapshots: saving the MJ: Files row for ${row.ObjectKey} failed: ${file.Error}`);
     return file.ID;
-  }
-
-  /**
-   * The `MJ: Files` row already recording this provider's object, or null (read-only: `'simple'`, one field). When
-   * several rows record one object, the earliest created wins (ties by ID), so every writer picks the same row.
-   */
-  private async fileRowIdOf(provider: MJFileStorageProviderEntity, objectKey: string): Promise<string | null> {
-    const r = await RunView.FromMetadataProvider(this.provider).RunView<Pick<MJFileEntity, 'ID'>>(
-      {
-        EntityName: 'MJ: Files',
-        ExtraFilter: `ProviderID='${EscapeSQLString(provider.ID)}' AND ProviderKey='${EscapeSQLString(objectKey)}'`,
-        OrderBy: '__mj_CreatedAt ASC, ID ASC',
-        Fields: ['ID'],
-        MaxRows: 1,
-        ResultType: 'simple',
-      },
-      this.contextUser,
-    );
-    if (!r.Success) throw new Error(`Training snapshots: looking up the MJ: Files row for ${objectKey} failed: ${r.ErrorMessage}`);
-    return r.Results[0]?.ID || null;
   }
 
   /** Where a snapshot's `MJ: Files` row says its object is: the provider and the stored key, which must be safe. */

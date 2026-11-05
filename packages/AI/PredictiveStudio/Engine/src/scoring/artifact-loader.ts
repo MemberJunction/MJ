@@ -48,7 +48,7 @@ export class InMemoryArtifactLoader implements IArtifactLoader {
   }
 
   /** @inheritdoc */
-  public async load(fileId: string, _contextUser: UserInfo | undefined, _provider: IMetadataProvider): Promise<Uint8Array | null> {
+  public async Load(fileId: string, _contextUser: UserInfo, _provider: IMetadataProvider): Promise<Uint8Array | null> {
     return this.store.get(fileId) ?? null;
   }
 }

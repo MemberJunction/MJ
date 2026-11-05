@@ -261,7 +261,7 @@ describe('GenerateMarkdownReport — measurement copy (M8)', () => {
     expect(md).toContain('| Rank | Algorithm | Score (AUC) | Status |');
   });
   it('says a tournament with no measured candidate has no winner', () => {
-    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', null, 'Not evaluated yet', 'x', false, [], [row(1, null, false), row(2, null, false)], null, false);
+    const md = GenerateMarkdownReport('Renewal', 'g', 'Renewed', 'AUC', null, 'Not evaluated yet', 'x', 'held', [], [row(1, null, false), row(2, null, false)], null, false);
     expect(md).toContain('No candidate was measured, so no winner was picked.');
     expect(md).not.toContain('🏆');
     expect(md).not.toMatch(/inner-fold score/);

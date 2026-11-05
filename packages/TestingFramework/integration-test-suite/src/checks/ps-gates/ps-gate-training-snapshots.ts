@@ -42,7 +42,7 @@ export class TrainingSnapshotGates {
    * the two files' bytes and the row's identity columns, independently of the retrainer.
    */
   private static async checkStoredFiles(h: TruthHarness, s: MJMLTrainingSnapshotEntity): Promise<StoredSnapshotCheck> {
-    const files = new StorageProviderSnapshotFileStore(UnitFixtures.EntityFactory(h), h.Provider, h.User);
+    const files = StorageProviderSnapshotFileStore.ForProviderName(UnitFixtures.EntityFactory(h), h.Provider, h.User);
     const [matrix, manifest] = await Promise.all([files.Get(s.MatrixFileID), files.Get(s.RowManifestFileID)]);
     const dataCutoffDay = UtcDay.UtcDayIso(s.DataCutoff);
     const recomputed = SnapshotFiles.ComputeSnapshotContentHash({

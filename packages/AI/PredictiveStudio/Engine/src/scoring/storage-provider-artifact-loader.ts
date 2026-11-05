@@ -20,10 +20,9 @@ export class StorageProviderArtifactLoader implements IArtifactLoader {
   /**
    * The artifact's bytes, or null when there is no such file row or its bytes are gone.
    *
-   * @throws Error when no user is given, the file's key is not safe, or its provider cannot be read on this server
+   * @throws Error when the file's key is not safe, or its provider cannot be read on this server
    */
-  public async load(fileId: string, contextUser: UserInfo | undefined, provider: IMetadataProvider): Promise<Uint8Array | null> {
-    if (!contextUser) throw new Error(`Predictive Studio model artifacts: loading artifact file ${fileId} needs the acting user`);
+  public async Load(fileId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<Uint8Array | null> {
     const storage = new PredictiveStudioStorage(provider, contextUser);
     const location = await storage.LocationOf(fileId);
     if (!location) return null;

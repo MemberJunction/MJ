@@ -142,29 +142,28 @@ export type TrainerRequestReissue = () => Promise<TrainerRequest>;
 export interface IArtifactStore {
   /**
    * Persist the serialized artifact bytes under a name and return the storage
-   * file id to record on the model.
+   * file id to record on the model. The store writes as the user it was built for.
    *
    * @param bytes the serialized model artifact
    * @param name a human-readable artifact name (e.g. `model-<pipeline>-v<version>.bin`)
-   * @param contextUser request user — required on the server for isolation/audit
    * @returns the file id to store in `MLModel.ArtifactFileID`
    */
-  save(bytes: Uint8Array, name: string, contextUser?: UserInfo): Promise<string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  Save(bytes: Uint8Array, name: string): Promise<string>;
 
   /**
    * Remove an artifact this store saved: its file record and its bytes. Used to roll back the artifacts of a run that
-   * could not store all of them, so none is left unreferenced.
+   * failed after storing them, so none is left unreferenced.
    *
-   * @param fileId the id `save` returned
-   * @param contextUser request user — required on the server for isolation/audit
+   * @param fileId the id `Save` returned
    * @throws Error when the artifact cannot be removed
    */
-  delete(fileId: string, contextUser?: UserInfo): Promise<void>;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
+  Delete(fileId: string): Promise<void>;
 
   /**
-   * Refuse when this store cannot write here (for a storage provider: no provider by the configured name, or its driver
-   * is not configured on this server). The training engine calls it before anything of a run is written and before the
-   * trainer runs, so a run never spends its compute and then fails to store its artifacts.
+   * Refuse when this store cannot write here (for a storage provider: no provider by the configured name, its driver
+   * is not configured on this server, or a probe object cannot be written under the store's key prefix). The training
+   * engine calls it before anything of a run is written and before the trainer runs, so a run never spends its compute
+   * and then fails to store its artifacts.
    *
    * @throws Error naming what is missing
    */

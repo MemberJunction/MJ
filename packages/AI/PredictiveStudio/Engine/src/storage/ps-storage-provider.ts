@@ -123,6 +123,37 @@ export class PredictiveStudioStorage {
     return { Saved: false, Error: file.LatestResult?.CompleteMessage || 'unknown error' };
   }
 
+  /**
+   * The `MJ: Files` row with this ID, loaded for mutation as this storage's user through `entityFactory`, or null when
+   * there is no such row.
+   */
+  public async LoadFileRow(fileId: string, entityFactory: IEntityFactory): Promise<MJFileEntity | null> {
+    const file = await entityFactory.getEntityObject<MJFileEntity>('MJ: Files', this.contextUser);
+    return (await file.Load(fileId)) ? file : null;
+  }
+
+  /**
+   * The `MJ: Files` row already recording this provider's object, or null (read-only: `'simple'`, one field). When
+   * several rows record one object, the earliest created wins (ties by ID), so every writer picks the same row.
+   *
+   * @throws Error when the read fails
+   */
+  public async FileRowIDFor(providerId: string, objectKey: string): Promise<string | null> {
+    const r = await RunView.FromMetadataProvider(this.provider).RunView<Pick<MJFileEntity, 'ID'>>(
+      {
+        EntityName: 'MJ: Files',
+        ExtraFilter: `ProviderID='${EscapeSQLString(providerId)}' AND ProviderKey='${EscapeSQLString(objectKey)}'`,
+        OrderBy: '__mj_CreatedAt ASC, ID ASC',
+        Fields: ['ID'],
+        MaxRows: 1,
+        ResultType: 'simple',
+      },
+      this.contextUser,
+    );
+    if (!r.Success) throw new Error(`Predictive Studio storage: looking up the MJ: Files row for ${objectKey} failed: ${r.ErrorMessage}`);
+    return r.Results[0]?.ID || null;
+  }
+
   private async resolveConfigured(): Promise<StorageDriverBinding> {
     const engine = await this.storageEngine();
     const wanted = this.providerName.trim().toLowerCase();

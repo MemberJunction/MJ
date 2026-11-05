@@ -74,6 +74,14 @@ export class FakeEntity {
     this.LatestResult = { CompleteMessage: '' };
     return true;
   }
+
+  /** True once `Delete()` succeeded. */
+  public Deleted = false;
+
+  public async Delete(): Promise<boolean> {
+    this.Deleted = true;
+    return true;
+  }
 }
 
 export class FakeMLModel extends FakeEntity {

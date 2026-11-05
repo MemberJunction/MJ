@@ -4,7 +4,7 @@
  * The in-memory {@link IArtifactStore} for unit tests, and the local-disk layout model files trained before 6.3 were
  * written to. Those files' `MJ: Files` rows have an empty `ProviderKey`; their bytes are at
  * `<PS_ARTIFACT_DIR>/<fileId>.bin` ({@link ResolveLocalArtifactBaseDir}, {@link LocalArtifactPath}), where
- * `StorageProviderArtifactLoader` reads them and `StorageProviderArtifactStore.delete` removes them. Every model file
+ * `StorageProviderArtifactLoader` reads them and `StorageProviderArtifactStore.Delete` removes them. Every model file
  * trained since is stored through the configured MJ storage provider (`StorageProviderArtifactStore`).
  */
 
@@ -45,7 +45,7 @@ export class InMemoryArtifactStore implements IArtifactStore {
   private seq = 0;
 
   /** @inheritdoc */
-  public async save(bytes: Uint8Array, name: string): Promise<string> {
+  public async Save(bytes: Uint8Array, name: string): Promise<string> {
     const id = `mem-file-${++this.seq}`;
     this.Saved.set(id, { Name: name, Bytes: bytes });
     return id;
@@ -55,7 +55,7 @@ export class InMemoryArtifactStore implements IArtifactStore {
   public async AssertWritable(): Promise<void> {}
 
   /** @inheritdoc */
-  public async delete(fileId: string): Promise<void> {
+  public async Delete(fileId: string): Promise<void> {
     if (!this.Saved.delete(fileId)) throw new Error(`InMemoryArtifactStore: no artifact ${fileId}`);
   }
 }
