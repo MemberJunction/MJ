@@ -206,6 +206,7 @@ import { MJDiagnosticBundleFormComponent } from "./Entities/MJDiagnosticBundle/m
 import { MJDiagnosticSenderRegistrationFormComponent } from "./Entities/MJDiagnosticSenderRegistration/mjdiagnosticsenderregistration.form.component";
 import { MJDiagnosticSessionChunkFormComponent } from "./Entities/MJDiagnosticSessionChunk/mjdiagnosticsessionchunk.form.component";
 import { MJDiagnosticSessionFormComponent } from "./Entities/MJDiagnosticSession/mjdiagnosticsession.form.component";
+import { MJDocumentSequenceCounterFormComponent } from "./Entities/MJDocumentSequenceCounter/mjdocumentsequencecounter.form.component";
 import { MJDuplicateRunDetailFormComponent } from "./Entities/MJDuplicateRunDetail/mjduplicaterundetail.form.component";
 import { MJDuplicateRunDetailMatchFormComponent } from "./Entities/MJDuplicateRunDetailMatch/mjduplicaterundetailmatch.form.component";
 import { MJDuplicateRunFormComponent } from "./Entities/MJDuplicateRun/mjduplicaterun.form.component";
@@ -800,6 +801,7 @@ declarations: [
     MJCompanyIntegrationRunFormComponent,
     MJDashboardUserStateFormComponent,
     MJDataContextItemFormComponent,
+    MJDocumentSequenceCounterFormComponent,
     MJExperimentSessionIterationFormComponent,
     MJListCategoryFormComponent,
     MJQueryFormComponent,

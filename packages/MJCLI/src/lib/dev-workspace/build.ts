@@ -58,6 +58,7 @@ import type {
   OpenAppClientPackage,
   PackageExtension,
   ParentManifestReport,
+  PrebundleExcludeRecord,
   RootPackageJsonResult,
   ShellPeerGap,
   WorkspaceShell,
@@ -1176,12 +1177,17 @@ export const SENTINEL_MARKER = 'mj dev workspace';
 
 /**
  * Builds the `.mj-dev-workspace.json` sentinel manifest: the marker `clean`
- * checks, the files the generator wrote, and the members it wrote them for.
+ * checks, the files the generator wrote, the members it wrote them for, and the
+ * `angular.json` prebundle entries it added (so `clean` can remove exactly those).
  *
  * Both lists are sorted and no timestamp is recorded — regenerating an unchanged
  * workspace must produce a byte-identical sentinel.
  */
-export function BuildSentinel(fileNames: readonly string[], memberNames: readonly string[]): string {
+export function BuildSentinel(
+  fileNames: readonly string[],
+  memberNames: readonly string[],
+  prebundleExcludes: readonly PrebundleExcludeRecord[] = []
+): string {
   if (fileNames.length === 0) {
     throw new Error('BuildSentinel requires at least one generated file name');
   }
@@ -1193,5 +1199,9 @@ export function BuildSentinel(fileNames: readonly string[], memberNames: readonl
     files: [...fileNames].sort(),
     members: [...memberNames].sort(),
   };
+  // Omitted when empty, so a workspace with no Angular edits keeps the sentinel it always had.
+  if (prebundleExcludes.length > 0) {
+    sentinel.prebundleExcludes = prebundleExcludes.map((record) => ({ ...record, entries: [...record.entries] }));
+  }
   return `${JSON.stringify(sentinel, null, 2)}\n`;
 }
