@@ -71,6 +71,56 @@ describe('GetGraphContextAction & GetEntityDetailsAction Canon Section', () => {
         expect(result.ResultCode).toBe('MISSING_SEEDS');
     });
 
+    it('GetGraphContextAction collapses to a Markdown document when CollapseToDocument=true or Mode=DomainDocument', async () => {
+        vi.spyOn(CanonGraphEngine.Instance, 'ResolveCanonGraphName').mockReturnValue('MJ Canon');
+        const fakeSubgraph = {
+            Nodes: [
+                {
+                    Key: 'concept|c1',
+                    EntityName: 'MJ: Graph Concepts',
+                    RecordID: 'c1',
+                    Label: 'Open Accounts Receivable',
+                    Icon: 'fa-solid fa-chart-line',
+                    Description: 'Unpaid invoice balance.',
+                },
+            ],
+            Edges: [],
+        };
+        const canonContextSpy = vi
+            .spyOn(CanonGraphEngine.Instance, 'CanonContext')
+            .mockResolvedValue(fakeSubgraph);
+        const renderSpy = vi
+            .spyOn(CanonGraphEngine.Instance, 'RenderCanonDocument')
+            .mockReturnValue('# Organizational Canon & Domain Knowledge (MJ Canon)\n\n### Open Accounts Receivable');
+
+        const action = new GetGraphContextAction();
+        const params: RunActionParams = {
+            Action: {} as never,
+            ContextUser: mockUser,
+            Filters: [],
+            Params: [
+                { Name: 'Mode', Value: 'DomainDocument', Type: 'Input' },
+                { Name: 'Question', Value: 'What is Open AR?', Type: 'Input' },
+            ],
+        };
+
+        const result = await (action as unknown as {
+            InternalRunAction: (p: RunActionParams) => Promise<Record<string, unknown>>;
+        }).InternalRunAction(params);
+
+        expect(result.Success).toBe(true);
+        expect(canonContextSpy).toHaveBeenCalledOnce();
+        expect(renderSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                GraphName: 'MJ Canon',
+                Question: 'What is Open AR?',
+                Subgraph: fakeSubgraph,
+            }),
+            mockUser,
+        );
+        expect(result.PromptDescription).toContain('# Organizational Canon & Domain Knowledge (MJ Canon)');
+    });
+
     it('GetEntityDetailsAction includes the Canon section when CanonGraphEngine returns a summary', async () => {
         vi.spyOn(CanonGraphEngine.Instance, 'GetEntityCanonSummary').mockResolvedValue({
             EntityName: 'Invoices',

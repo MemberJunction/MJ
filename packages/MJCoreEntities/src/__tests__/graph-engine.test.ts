@@ -1082,5 +1082,49 @@ describe('Semantic Graph Engine & Derived Edge Providers', () => {
             expect(summary?.Queries.some(q => q.Name === 'Open AR by Quarter')).toBe(true);
             expect(summary?.PrecedenceRules).toHaveLength(1);
         });
+
+        it('CanonGraphEngine.RenderCanonDocument collapses full Canon and query/subgraph slices into deterministic Markdown', async () => {
+            const coreMod = await import('@memberjunction/core');
+            (coreMod.Metadata as unknown as { Provider: unknown }).Provider = provider;
+
+            // 1. Full Canon document collapse
+            const fullDoc = CanonGraphEngine.Instance.RenderCanonDocument({}, user);
+            expect(fullDoc).toContain('# Organizational Canon & Domain Knowledge (MJ Canon)');
+            expect(fullDoc).toContain('## 1. Precedence & Deprecation Rules');
+            expect(fullDoc).toContain('**Invoices.BalanceDue** is PREFERRED OVER **Invoices.LegacyBalance**');
+            expect(fullDoc).toContain('## 2. Domain Concepts & Definitions');
+            expect(fullDoc).toContain('### Active Member (Term) — Authority: Bylaws');
+            expect(fullDoc).toContain('### Open Accounts Receivable (Metric) — Authority: Board Policy');
+            expect(fullDoc).toContain('- **Broader Concept:** Accounts Receivable');
+            expect(fullDoc).toContain('## 3. Canonical Entity Subsets (Alternate Base Views)');
+            expect(fullDoc).toContain('`[dbo].[vwActiveMembers]`');
+            expect(fullDoc).toContain('`[dbo].[vwInvoicesOpen]`');
+            expect(fullDoc).toContain('## 4. Governed Ground-Truth Queries');
+            expect(fullDoc).toContain('`Finance/AR/Open AR by Quarter`');
+
+            // 2. Question-sliced collapse (only "Active Member" / Members subgraph)
+            const memberSliceDoc = CanonGraphEngine.Instance.RenderCanonDocument(
+                { Question: 'Who is an active member?' },
+                user,
+            );
+            expect(memberSliceDoc).toContain('### Active Member (Term) — Authority: Bylaws');
+            expect(memberSliceDoc).toContain('`[dbo].[vwActiveMembers]`');
+            expect(memberSliceDoc).not.toContain('### Open Accounts Receivable');
+            expect(memberSliceDoc).not.toContain('`Finance/AR/Base Open Invoice Ledger`');
+
+            // 3. Pre-expanded Subgraph collapse
+            const arSubgraph = await CanonGraphEngine.Instance.CanonContext(
+                'Show me Open AR for Invoices',
+                { Depth: 2, MaxNodes: 30 },
+                user,
+            );
+            const arSubgraphDoc = CanonGraphEngine.Instance.RenderCanonDocument(
+                { Subgraph: arSubgraph },
+                user,
+            );
+            expect(arSubgraphDoc).toContain('### Open Accounts Receivable (Metric)');
+            expect(arSubgraphDoc).toContain('**Invoices.BalanceDue** is PREFERRED OVER **Invoices.LegacyBalance**');
+            expect(arSubgraphDoc).toContain('`Finance/AR/Open AR by Quarter`');
+        });
     });
 });
