@@ -10,9 +10,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@memberjunction/global', async (importOriginal) => ({
-    // Real load gate: Config runs through it.
-    SharedLoad: (await importOriginal<typeof import('@memberjunction/global')>()).SharedLoad,
+vi.mock('@memberjunction/global', () => ({
     BaseSingleton: class BaseSingletonMock<T> {
         protected constructor() {}
         protected static getInstance<U>(this: new () => U): U {
@@ -41,7 +39,10 @@ vi.mock('@memberjunction/core-entities', () => ({
     },
 }));
 
-vi.mock('@memberjunction/core', () => ({
+vi.mock('@memberjunction/core', async () => ({
+    // The real SharedLoad, so Config's load sharing runs as it does in production. Imported from its
+    // own module: the whole of @memberjunction/core would load the @memberjunction/global mocked here.
+    SharedLoad: (await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core/dist/generic/sharedLoad.js')).SharedLoad,
     LogError: vi.fn(),
     Metadata: class { static Provider = {}; },
 }));

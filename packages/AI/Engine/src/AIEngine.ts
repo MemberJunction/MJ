@@ -12,8 +12,8 @@ import { SummarizeResult } from "@memberjunction/ai";
 import { AIModelConfiguration } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
-import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, LogWarning, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup } from "@memberjunction/core";
-import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, ToEpochMs, SharedLoad, UUIDsEqual } from "@memberjunction/global";
+import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, LogWarning, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup, SharedLoad } from "@memberjunction/core";
+import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { createHash } from "crypto";
 import { MJAIActionEntity, MJActionEntity,
          MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
@@ -135,7 +135,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
     // Loading state management
     private _loaded: boolean = false;
-    /** One Config load at a time; a forced reload never joins one already running (#5644). */
+    /** Shares concurrent loads; a forced `Config(true)` always gets a load that starts after it. */
     private readonly _load = new SharedLoad();
     private _contextUser: UserInfo | undefined;
 
@@ -560,9 +560,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
      * Configures the AIEngine by first ensuring AIEngineBase is configured,
      * then loading server-specific capabilities (embeddings, actions, etc.).
      *
-     * This method is safe to call from multiple places concurrently - callers that do not
-     * force a refresh share the load in progress. A forced call waits for that load and then
-     * runs its own, with its own user and provider.
+     * This method is safe to call from multiple places concurrently: callers share the load that
+     * is running, except that a `forceRefresh` call gets one more load after it (see SharedLoad).
      *
      * @param forceRefresh - If true, forces a full reload even if already loaded
      * @param contextUser - User context for server-side operations (required)
@@ -573,8 +572,6 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
         if (this._loaded && !forceRefresh) {
             return;
         }
-
-        // A non-forced call joins a load already running; a forced one waits for it, then runs its own.
         return this._load.Run(forceRefresh === true, () => this.innerLoad(forceRefresh, contextUser, provider));
     }
 

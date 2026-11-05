@@ -98,6 +98,7 @@ import {
     ValidateUserViewProperties,
     ResolveViewPropertyValues,
     BuildViewPropertyFilter,
+    ServerOperationScopeManager,
 } from '@memberjunction/core';
 
 import { BytesToBase64, GroupByUUID, IndexByUUID, IsByteArray, IsValidUUID, MJGlobal, NormalizeUUID, ScanSQLForScreening, SQLExpressionValidator, UUIDsEqual, UUIDSet } from '@memberjunction/global';
@@ -144,6 +145,11 @@ import { CountOnlyBatchCoalescer, CountOnlyRow, IsCoalescibleCountBatch } from '
 import { ClientClauseScreen, type ClientClauseScreeningProvider } from './clientClauseScreen.js';
 import { IsSystemUser } from './systemUser.js';
 import { CreateSnapshots, FieldsLackingStoredValue, RecordChangeSnapshots, WidenDeleteSnapshot, WidenUpdateSnapshots } from './recordChangeSnapshot.js';
+import { NodeAsyncServerOperationScopeTracker } from './NodeAsyncServerOperationScopeTracker.js';
+
+// Install Node AsyncLocalStorage-backed authority scope tracker on server startup so concurrent
+// in-flight requests / remote operations maintain isolated ServerOperationScopeFrame stacks.
+ServerOperationScopeManager.Instance.SetTracker(new NodeAsyncServerOperationScopeTracker());
 import { EncryptionEngine, IsEncryptionKeyUnavailable, ReportEncryptionKeyUnavailable } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
@@ -8912,8 +8918,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      * caller must run on the pool, as if no transaction were open. Subclasses consult this — not merely
      * "is a handle open" — before routing a statement to the transaction handle.
      */
-    protected IsCallerInAmbientTransaction(): boolean {
+    protected override IsCallerInAmbientTransaction(): boolean {
         return this._affinity.IsCallerMember;
+    }
+
+    /** See {@link IEntityDataProvider.RunOutsideAmbientTransaction}: `fn` runs with no membership in this provider's transaction. */
+    public RunOutsideAmbientTransaction<T>(fn: () => Promise<T>): Promise<T> {
+        return this._affinity.RunDetached(fn);
     }
 
     /** Members of the open transaction share RunViews only with each other (see {@link ProviderBase.RunViewDedupScope}). */
@@ -9226,6 +9237,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         }
         await this.endBatchLevelIfOpen(true);
         if (committedTasks) {
+            this.BumpTransactionEpoch();
             await this.runPostCommitTasks(committedTasks);
             await this.AfterPhysicalCommit();
         }
@@ -9235,6 +9247,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         try {
             await this.WithTransactionLock(() => this.rollbackTransactionCore());
         } finally {
+            if (this._transactionDepth === 0) {
+                this.BumpTransactionEpoch();
+            }
             await this.endBatchLevelIfOpen(false);
         }
     }

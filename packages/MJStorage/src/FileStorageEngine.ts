@@ -1,5 +1,5 @@
-import { IMetadataProvider, LogError, Metadata, UserInfo, WellKnownUserSource } from '@memberjunction/core';
-import { BaseSingleton, SharedLoad } from '@memberjunction/global';
+import { IMetadataProvider, LogError, Metadata, SharedLoad, UserInfo, WellKnownUserSource } from '@memberjunction/core';
+import { BaseSingleton } from '@memberjunction/global';
 import {
     FileStorageEngineBase,
     StorageAccountWithProvider,
@@ -119,7 +119,7 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
 
     // Loading state management (mirrors AIEngine pattern)
     private _loaded: boolean = false;
-    /** One Config load at a time; a forced reload never joins one already running (#5644). */
+    /** Shares concurrent loads; a forced `Config(true)` always gets a load that starts after it. */
     private readonly _load = new SharedLoad();
     private _contextUser: UserInfo | undefined;
 
@@ -203,16 +203,13 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
     /**
      * Configures the engine by loading the underlying metadata cache and any
      * server-specific state. Safe to call multiple times — uses cached data
-     * unless `forceRefresh` is true. Concurrent callers that do not force share the
-     * load in progress; a forced call waits for it and then runs its own load with its
-     * own user, so a reload as the system user is never answered by another user's load.
+     * unless `forceRefresh` is true. Concurrent callers share the load that is
+     * running, except that a `forceRefresh` call gets one more load after it (see SharedLoad).
      */
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
         if (this._loaded && !forceRefresh) {
             return;
         }
-
-        // A non-forced call joins a load already running; a forced one waits for it, then runs its own.
         return this._load.Run(forceRefresh === true, () => this.innerLoad(forceRefresh, contextUser, provider));
     }
 

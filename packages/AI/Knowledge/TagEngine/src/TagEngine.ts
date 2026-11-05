@@ -1,5 +1,5 @@
-import { BaseSingleton, Float32VectorToBase64, MJGlobal, UUIDsEqual, NormalizeUUID, SharedLoad } from '@memberjunction/global';
-import { UserInfo, LogError, LogStatus, Metadata } from '@memberjunction/core';
+import { BaseSingleton, Float32VectorToBase64, MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { UserInfo, LogError, LogStatus, Metadata, SharedLoad } from '@memberjunction/core';
 import { MJTagEntity, MJTaggedItemEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
 import { TagEngineBase, TagTreeNode, TagScopeContext } from '@memberjunction/tag-engine-base';
 import { ReadStoredVector, SimpleVectorService, VectorEntry, VectorInputEntry } from '@memberjunction/ai-vectors-memory';
@@ -117,7 +117,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      */
     private _tagEmbeddingModel: EmbeddingModelInfo | null = null;
     private _loaded = false;
-    /** One Config load at a time; a forced reload never joins one already running (#5644). */
+    /** Shares concurrent loads; a forced `Config(true)` always gets a load that starts after it. */
     private readonly _load = new SharedLoad();
     private _contextUser: UserInfo | undefined;
 

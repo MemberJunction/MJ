@@ -42,7 +42,10 @@ export interface FieldSpec {
     Name: string;
     Type: string;
     IsPrimaryKey?: boolean;
-    /** A view-only column, such as a joined display name: in the entity's own view, not its table. */
+    /**
+     * A column in the entity's view but not its table: a view-only column such as a joined display
+     * name, or an IS-A parent's field mirrored on a child.
+     */
     IsVirtual?: boolean;
     Length?: number;
     /** Makes the field a foreign key to this entity's `ID`. */
@@ -169,9 +172,34 @@ const ENTITY_SPECS: EntitySpec[] = [
     },
 ];
 
-/** Fresh EntityInfo objects for the whole fixture hierarchy. */
-export function BuildLoadHintEntities(): EntityInfo[] {
-    return ENTITY_SPECS.map(spec => new EntityInfo(MakeLoadHintEntity(spec)));
+/**
+ * Every non-key field of the IS-A ancestors of `spec`, as the virtual mirror fields a generated
+ * child view carries. `__mj_` timestamps are not mirrored: the child view's are its own table's.
+ */
+function inheritedMirrorFields(spec: EntitySpec, specs: EntitySpec[]): FieldSpec[] {
+    const mirrors: FieldSpec[] = [];
+    let parent = specs.find(s => s.ID === spec.ParentID);
+    for (let depth = 0; parent && depth < specs.length; depth++) {
+        mirrors.push(...parent.Fields.filter(f => !f.IsPrimaryKey && !f.Name.startsWith('__mj_')).map(f => ({ ...f, IsVirtual: true })));
+        parent = specs.find(s => s.ID === parent!.ParentID);
+    }
+    return mirrors;
+}
+
+/**
+ * Fresh EntityInfo objects for the whole fixture hierarchy. With `MirrorParentFields`, every IS-A
+ * child also declares its ancestors' fields as virtual mirror fields, as CodeGen-generated child
+ * entities do; without it, children declare only the shared key and their own columns.
+ * `ExtraFields` appends fields to the named entities (before any mirroring).
+ */
+export function BuildLoadHintEntities(options?: { MirrorParentFields?: boolean; ExtraFields?: Record<string, FieldSpec[]> }): EntityInfo[] {
+    const specs = ENTITY_SPECS.map(spec => ({ ...spec, Fields: [...spec.Fields, ...(options?.ExtraFields?.[spec.Name] ?? [])] }));
+    return specs.map(spec => {
+        if (!options?.MirrorParentFields || !spec.ParentID) {
+            return new EntityInfo(MakeLoadHintEntity(spec));
+        }
+        return new EntityInfo(MakeLoadHintEntity({ ...spec, Fields: [...spec.Fields, ...inheritedMirrorFields(spec, specs)] }));
+    });
 }
 
 export function MakeLoadHintUser(roleID: string): UserInfo {

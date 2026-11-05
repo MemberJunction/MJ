@@ -1,5 +1,5 @@
-import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { BaseSingleton, MJGlobal, SharedLoad } from '@memberjunction/global';
+import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, SharedLoad, UserInfo } from '@memberjunction/core';
+import { BaseSingleton, MJGlobal } from '@memberjunction/global';
 import {
     MJSignatureRequestDocumentEntity,
     MJSignatureRequestEntity,
@@ -93,7 +93,7 @@ export interface DownloadSignedResult {
  */
 export class SignatureEngine extends BaseSingleton<SignatureEngine> {
     private _loaded = false;
-    /** One Config load at a time; a forced reload never joins one already running (#5644). */
+    /** Shares concurrent loads; a forced `Config(true)` always gets a load that starts after it. */
     private readonly _load = new SharedLoad();
     private _contextUser: UserInfo | undefined;
 

@@ -15,9 +15,7 @@ const {
     mockGetEntityObject: vi.fn(),
 }));
 
-vi.mock('@memberjunction/global', async (importOriginal) => ({
-    // Real load gate: TagEngine.Config runs through it.
-    SharedLoad: (await importOriginal<typeof import('@memberjunction/global')>()).SharedLoad,
+vi.mock('@memberjunction/global', () => ({
     BaseSingleton: class BaseSingleton<T> {
         public static getInstance<T>(): T { return new (this as unknown as new () => T)(); }
     },
@@ -34,7 +32,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
     RequiresSubclass: () => (target: unknown) => target,
 }));
 
-vi.mock('@memberjunction/core', () => {
+vi.mock('@memberjunction/core', async () => {
     class MockMetadata {
         GetEntityObject = mockGetEntityObject;
     }
@@ -42,6 +40,9 @@ vi.mock('@memberjunction/core', () => {
         RunView = mockRunView;
     }
     return {
+        // The real SharedLoad, so Config's load sharing runs as it does in production. Imported from its
+        // own module: the whole of @memberjunction/core would load the @memberjunction/global mocked here.
+        SharedLoad: (await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core/dist/generic/sharedLoad.js')).SharedLoad,
         Metadata: MockMetadata,
         RunView: MockRunView,
         UserInfo: class {},

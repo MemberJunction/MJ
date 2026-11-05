@@ -276,6 +276,13 @@ describe('@memberjunction/ai-diagrams — Validator, Renderer, Contract & Viewer
     });
 });
 
+/**
+ * Wall-clock ceiling for the "rejects pathological input quickly" checks. They guard against
+ * quadratic comparison of very long IDs/paths (which takes seconds), not against a slow machine:
+ * a 250 ms bound failed the v6.2.0-edge.8 publish gate at 807 ms on a shared CI runner.
+ */
+const PATHOLOGICAL_INPUT_CEILING_MS = 2000;
+
 describe('@memberjunction/ai-diagrams — limits, layout and keyboard', () => {
     const lane = [{ id: 'l', label: 'L' }];
 
@@ -283,7 +290,7 @@ describe('@memberjunction/ai-diagrams — limits, layout and keyboard', () => {
         const long = 'a'.repeat(8000);
         const start = performance.now();
         const res = ValidateDiagramSpec({ kind: 'workflow', title: 'T', lanes: lane, nodes: [{ id: long, lane: 'l', label: 'x'.repeat(301) }], edges: [{ from: 'b'.repeat(8000), to: long }] });
-        expect(performance.now() - start).toBeLessThan(250);
+        expect(performance.now() - start).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
         expect(res.Valid ? [] : res.Diagnostics.map((d) => d.Code)).toEqual(expect.arrayContaining(['ID_TOO_LONG', 'TEXT_TOO_LONG']));
     });
 
@@ -413,7 +420,7 @@ describe('@memberjunction/ai-diagrams — limits, layout and keyboard', () => {
             edges: [{ from: nodes[0].id, to: nodes[1].id }],
             mainPath,
         });
-        expect(performance.now() - start).toBeLessThan(250);
+        expect(performance.now() - start).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
         expect(res.Success).toBe(false);
         if (!res.Success) {
             expect(res.Diagnostics).toHaveLength(20);
