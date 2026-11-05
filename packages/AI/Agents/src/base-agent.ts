@@ -17860,6 +17860,9 @@ The context is now within limits. Please retry your request with the recovered c
             return {
                 ...subAgentResult,
                 step: subAgentResult.success ? 'Success' : 'Failed',
+                message: shouldTerminate
+                    ? (subAgentResult.agentRun?.Message ?? previousDecision?.message)
+                    : previousDecision?.message,
                 // Capture error message from sub-agent run for proper error propagation
                 errorMessage: subAgentResult.success ? undefined : (subAgentResult.agentRun?.ErrorMessage || 'Sub-agent failed with no error message'),
                 retryReason: subAgentResult.success
@@ -19154,6 +19157,9 @@ The context is now within limits. Please retry your request with the recovered c
             return {
                 ...subAgentResult,
                 step: subAgentResult.success ? 'Success' : 'Failed',
+                message: shouldTerminate
+                    ? (subAgentResult.agentRun?.Message ?? previousDecision?.message)
+                    : previousDecision?.message,
                 // Capture error message from sub-agent run for proper error propagation
                 errorMessage: subAgentResult.success ? undefined : (subAgentResult.agentRun?.ErrorMessage || 'Related sub-agent failed with no error message'),
                 retryReason: subAgentResult.success
