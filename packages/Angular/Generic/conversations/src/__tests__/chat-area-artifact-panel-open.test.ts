@@ -1,12 +1,13 @@
 import '@angular/compiler';
 import { EventEmitter } from '@angular/core';
 import { describe, it, expect, vi } from 'vitest';
+import type { UserInfo } from '@memberjunction/core';
 import { ConversationChatAreaComponent } from '../lib/components/conversation/conversation-chat-area.component';
 import {
   BeforeArtifactPanelOpenEventArgs,
   AfterArtifactPanelOpenEventArgs,
 } from '../lib/events/chat-events';
-import type { LazyArtifactInfo } from '../lib/models/lazy-artifact-info';
+import { LazyArtifactInfo } from '../lib/models/lazy-artifact-info';
 
 interface Harness {
   component: ConversationChatAreaComponent;
@@ -40,9 +41,10 @@ function createHarness(options: { cancel?: boolean } = {}): Harness {
   const loadPermissions = vi.fn().mockResolvedValue(undefined);
   const scrollToMessage = vi.fn();
   const detectChanges = vi.fn();
+  const mockUser = { ID: 'user-1' } as unknown as UserInfo;
 
   open.ConversationId = 'conv-1';
-  open.CurrentUser = { ID: 'user-1' };
+  open.CurrentUser = mockUser;
   open.artifactSelectionEpoch = 0;
   open.SelectedArtifactId = null;
   open.SelectedVersionNumber = undefined;
@@ -54,16 +56,19 @@ function createHarness(options: { cancel?: boolean } = {}): Harness {
     [
       'detail-1',
       [
-        {
-          conversationDetailId: 'detail-1',
-          artifactId: 'art-1',
-          artifactVersionId: 'ver-3',
-          versionNumber: 3,
-          name: 'Q3 Policy Brief',
-          type: 'Document',
-          visibility: 'Always',
-          versionCreatedAt: new Date(),
-        },
+        new LazyArtifactInfo(
+          {
+            ConversationDetailID: 'detail-1',
+            Direction: 'Output',
+            ArtifactID: 'art-1',
+            ArtifactVersionID: 'ver-3',
+            VersionNumber: 3,
+            ArtifactName: 'Q3 Policy Brief',
+            ArtifactType: 'Document',
+            Visibility: 'Always',
+          },
+          mockUser
+        ),
       ],
     ],
   ]);
@@ -129,20 +134,24 @@ describe('ConversationChatAreaComponent — BeforeArtifactPanelOpen / AfterArtif
     it('resolves versionNumber from SystemArtifactsByDetailId using case-insensitive UUID matching', async () => {
       const h = createHarness({ cancel: true });
       const open = h.component as unknown as Record<string, unknown>;
+      const mockUser = { ID: 'user-1' } as unknown as UserInfo;
       open.SystemArtifactsByDetailId = new Map<string, LazyArtifactInfo[]>([
         [
           'detail-sys',
           [
-            {
-              conversationDetailId: 'detail-sys',
-              artifactId: 'art-sys',
-              artifactVersionId: 'AAAA1111-2222-4333-8444-555555555555',
-              versionNumber: 4,
-              name: 'System Report',
-              type: 'Document',
-              visibility: 'System Only',
-              versionCreatedAt: new Date(),
-            },
+            new LazyArtifactInfo(
+              {
+                ConversationDetailID: 'detail-sys',
+                Direction: 'Output',
+                ArtifactID: 'art-sys',
+                ArtifactVersionID: 'AAAA1111-2222-4333-8444-555555555555',
+                VersionNumber: 4,
+                ArtifactName: 'System Report',
+                ArtifactType: 'Document',
+                Visibility: 'System Only',
+              },
+              mockUser
+            ),
           ],
         ],
       ]);
