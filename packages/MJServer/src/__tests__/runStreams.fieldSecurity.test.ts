@@ -1,10 +1,10 @@
 /**
  * Field-level security on the agent-run and test-run streams.
  *
- * Each of these publishes an entity object's `GetAll()` to the caller's session: the agent run on
- * every progress and streaming message and in the final result, the test run on every progress
- * message. The objects come from long-running engines and can have been built for another
- * identity, so the transport projects them for the recipient. The objects here are FULL WIDTH,
+ * Each of these publishes an entity object's values to the caller's session: the agent run on
+ * every progress message and in the final result, its summary on every streaming message, and the
+ * test run on every progress message. The objects come from long-running engines and can have
+ * been built for another identity, so the transport projects them for the recipient. The objects here are FULL WIDTH,
  * and the recipient may not read `Salary`.
  */
 import 'reflect-metadata';
@@ -64,8 +64,8 @@ describe('AgentRunStatusPublisher: the run is projected for the recipient', () =
         expect(messages()).toHaveLength(2);
         for (const message of messages()) {
             expect(message).not.toContain(String(SECRET_SALARY));
-            expect(message).toContain('"Name":"Ada"');
         }
+        expect(messages()[0]).toContain('"Name":"Ada"');
     });
 });
 
