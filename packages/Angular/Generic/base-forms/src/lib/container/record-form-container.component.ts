@@ -719,6 +719,23 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     return this.ChromeActiveGroup?.Title || 'Sections';
   }
 
+  /**
+   * The phone picker's accessible name. An aria-label replaces the button's content for screen
+   * readers, so the indicator spans inside it are never announced: the name carries the active
+   * section's status itself, in the order the indicators appear (unsaved, then error or warning).
+   */
+  get SectionPickerLabel(): string {
+    const parts = [this.ChromeActiveTitle];
+    const group = this.ChromeActiveGroup;
+    if (group) {
+      const { DirtyCount: dirty, ErrorCount: errors, WarningCount: warnings } = this.ChromeGroupIndicators(group);
+      if (dirty > 0) parts.push(`${dirty} unsaved ${dirty === 1 ? 'change' : 'changes'}`);
+      if (errors > 0) parts.push(`${errors} ${errors === 1 ? 'error' : 'errors'}`);
+      else if (warnings > 0) parts.push(`${warnings} ${warnings === 1 ? 'warning' : 'warnings'}`);
+    }
+    return 'Change section — ' + parts.join(', ');
+  }
+
   get ChromeActiveIcon(): string {
     return this.ChromeActiveGroup?.Icon || 'fa-solid fa-list';
   }
