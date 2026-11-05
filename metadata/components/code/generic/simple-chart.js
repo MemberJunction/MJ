@@ -87,9 +87,10 @@ function SimpleChart({
 
   // Load entity metadata
   React.useEffect(() => {
-    if (!entityName || !utilities?.md?.Entities) {
-      if (!entityName) console.error('Entity name not provided');
-      if (!utilities?.md?.Entities) console.error('Entity metadata not loaded.');
+    // entityName is optional: without it the chart formats with basic type detection (query data), which is no error.
+    if (!entityName) return;
+    if (!utilities?.md?.Entities) {
+      console.error('Entity metadata not loaded.');
       return;
     }
     
