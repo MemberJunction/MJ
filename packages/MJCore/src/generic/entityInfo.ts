@@ -5191,27 +5191,23 @@ export class EntityInfo extends BaseInfo {
      *
      * The application-ceiling layer (APIApplicationScope.RowFilterID) is deferred to v2 by
      * design decision; the column ships unused and the term composes here when it lands.
+     *
+     * With a `binder`, the user's values bind as query parameters (#5713): same layers, same
+     * order, same composition, but each token that is a whole quoted literal is replaced by the
+     * placeholder `binder` returns, so the clause text is the same for every user and the
+     * database reuses one plan per query shape. The binder collects the parameters in
+     * placeholder order, and binds nothing when no layer contributes. The binder is an optional
+     * argument of this method rather than a separate one so that every implementation of the
+     * method, test doubles included, keeps answering the call. The RunView cache fingerprint
+     * must call this without a binder: the literal clause is what keeps two users from sharing
+     * a cached result.
      */
-    public GetEffectiveRowFilterWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string): string {
-        const sql = this.effectiveRowFilterClause(user, type, null);
+    public GetEffectiveRowFilterWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string, binder?: RowFilterParameterBinder): string {
+        const sql = this.effectiveRowFilterClause(user, type, binder ?? null);
         if (sql.length === 0) {
             return '';
         }
         return `${returnPrefix && returnPrefix.length > 0 ? returnPrefix + ' ' : ''}${sql}`;
-    }
-
-    /**
-     * {@link GetEffectiveRowFilterWhereClause} with the user's values bound as query parameters
-     * (#5713): same layers, same order, same composition, but each token that is a whole quoted
-     * literal is replaced by the placeholder `binder` returns, so the clause text is the same for
-     * every user and the database reuses one plan per query shape. The binder collects the
-     * parameters in placeholder order. Returns '' (binding nothing) when no layer contributes.
-     *
-     * The RunView cache fingerprint must keep using {@link GetEffectiveRowFilterWhereClause}: the
-     * literal clause is what keeps two users from sharing a cached result.
-     */
-    public GetEffectiveRowFilterParameterized(user: UserInfo, type: EntityPermissionType, binder: RowFilterParameterBinder): string {
-        return this.effectiveRowFilterClause(user, type, binder);
     }
 
     /** The composed row-filter clause without a prefix; literal when `binder` is null. */

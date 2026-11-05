@@ -3269,9 +3269,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             const rlsBinder = countExecutor || logsViewRun
                 ? null
                 : this.CreateRowFilterParameterBinder();
-            const rlsWhereClause = rlsBinder
-                ? entityInfo.GetEffectiveRowFilterParameterized(user, EntityPermissionType.Read, rlsBinder)
-                : entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '');
+            const rlsWhereClause = entityInfo.GetEffectiveRowFilterWhereClause(user, EntityPermissionType.Read, '', rlsBinder ?? undefined);
             const rlsParameters: RowFilterBoundParameter[] = rlsBinder?.Parameters ?? [];
             const boundParameters: RowFilterBoundParameter[] | undefined = rlsParameters.length > 0 ? rlsParameters : undefined;
             if (rlsWhereClause && rlsWhereClause.length > 0) {

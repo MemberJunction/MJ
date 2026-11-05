@@ -144,8 +144,8 @@ function ownedEntity(): EntityInfo {
         EnableFieldLevelSecurity: false,
         AuditViewRuns: false,
         GetUserPermisions: () => ({ CanRead: true }),
-        GetEffectiveRowFilterWhereClause: (u: UserInfo) => `OwnerID = '${u.ID}'`,
-        GetEffectiveRowFilterParameterized: (u: UserInfo, _type: unknown, binder: RowFilterParameterBinder) => `OwnerID = ${binder.Bind('UserID', u.ID) ?? `'${u.ID}'`}`,
+        GetEffectiveRowFilterWhereClause: (u: UserInfo, _type: unknown, _prefix: string, binder?: RowFilterParameterBinder) =>
+            `OwnerID = ${binder?.Bind('UserID', u.ID) ?? `'${u.ID}'`}`,
     } as unknown as EntityInfo;
 }
 
@@ -199,13 +199,16 @@ describe('RunView binds row-filter values as parameters (#5713)', () => {
 
     it('keeps the literal clause on the coalesced count path, whose UNION ALL carries no parameters', async () => {
         const entity = ownedEntity();
-        const parameterized = vi.fn(entity.GetEffectiveRowFilterParameterized.bind(entity));
-        Object.assign(entity, { GetEffectiveRowFilterParameterized: parameterized });
+        const rowFilter = vi.fn(entity.GetEffectiveRowFilterWhereClause.bind(entity));
+        Object.assign(entity, { GetEffectiveRowFilterWhereClause: rowFilter });
         const provider = new RowFilterTestProvider([entity], new SQLServerDialect());
 
         const result = await provider.RunViewWithCountExecutor({ EntityName: 'Notes', ResultType: 'count_only' }, userNamed('user-a'));
 
         expect(result.Success).toBe(true);
-        expect(parameterized).not.toHaveBeenCalled();
+        expect(rowFilter).toHaveBeenCalled();
+        for (const call of rowFilter.mock.calls) {
+            expect(call[3]).toBeUndefined();
+        }
     });
 });

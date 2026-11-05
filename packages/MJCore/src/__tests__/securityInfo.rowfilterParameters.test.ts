@@ -125,7 +125,7 @@ describe('RowLevelSecurityFilterInfo.MarkupFilterParameterized', () => {
     });
 });
 
-describe('EntityInfo.GetEffectiveRowFilterParameterized', () => {
+describe('EntityInfo.GetEffectiveRowFilterWhereClause with a binder', () => {
     const ENTITY_ID = 'E0000000-0000-0000-0000-000000000001';
     const ROLE_A = 'R0000000-0000-0000-0000-00000000000A';
     const ROLE_B = 'R0000000-0000-0000-0000-00000000000B';
@@ -167,7 +167,7 @@ describe('EntityInfo.GetEffectiveRowFilterParameterized', () => {
         const binder = new TestBinder();
         const u = user('user-1', 'one@example.com');
 
-        const bound = entity().GetEffectiveRowFilterParameterized(u, EntityPermissionType.Read, binder);
+        const bound = entity().GetEffectiveRowFilterWhereClause(u, EntityPermissionType.Read, '', binder);
         const literal = entity().GetEffectiveRowFilterWhereClause(u, EntityPermissionType.Read, '');
 
         expect(bound).toBe('(((Contact = @rls0) OR (OwnerID = @rls1)))');
@@ -176,8 +176,8 @@ describe('EntityInfo.GetEffectiveRowFilterParameterized', () => {
     });
 
     it('is identical text for two users, call after call', () => {
-        const first = entity().GetEffectiveRowFilterParameterized(user('user-1', 'one@example.com'), EntityPermissionType.Read, new TestBinder());
-        const second = entity().GetEffectiveRowFilterParameterized(user('user-2', 'two@example.com'), EntityPermissionType.Read, new TestBinder());
+        const first = entity().GetEffectiveRowFilterWhereClause(user('user-1', 'one@example.com'), EntityPermissionType.Read, '', new TestBinder());
+        const second = entity().GetEffectiveRowFilterWhereClause(user('user-2', 'two@example.com'), EntityPermissionType.Read, '', new TestBinder());
 
         expect(first).toBe(second);
     });
@@ -186,7 +186,7 @@ describe('EntityInfo.GetEffectiveRowFilterParameterized', () => {
         const binder = new TestBinder();
         const outsider = new UserInfo(null, { ID: 'u', UserRoles: [] });
 
-        expect(entity().GetEffectiveRowFilterParameterized(outsider, EntityPermissionType.Read, binder)).toBe('');
+        expect(entity().GetEffectiveRowFilterWhereClause(outsider, EntityPermissionType.Read, '', binder)).toBe('');
         expect(binder.Values).toEqual([]);
     });
 });
