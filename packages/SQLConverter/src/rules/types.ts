@@ -134,6 +134,9 @@ export const GAP_MARKER_UNPARSED = '-- Could not parse';
 /** BatchConverter: a batch whose conversion threw; the error text stands in for the SQL. */
 export const GAP_MARKER_BATCH_ERROR = '-- ERROR converting batch';
 
+/** ExecBlockRule: a metadata save it could not convert; the block stands in as comments. */
+export const GAP_MARKER_EXEC_SKIPPED = '-- SKIPPED: EXEC block';
+
 /**
  * Marker comments the converter writes into its own output at the points where it
  * KNOWINGLY could not produce real SQL. Single source of truth: every emitter writes
@@ -146,6 +149,7 @@ export const GAP_MARKER_BATCH_ERROR = '-- ERROR converting batch';
 export const CONVERSION_GAP_MARKERS = [
   GAP_MARKER_UNPARSED,
   GAP_MARKER_BATCH_ERROR,
+  GAP_MARKER_EXEC_SKIPPED,
 ] as const;
 
 /** Conversion statistics tracking */
