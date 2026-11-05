@@ -4,7 +4,7 @@
 #   UUIDCompliance + MultiProviderCompliance
 #     + FieldSecurityEgressCompliance
 #     + PlatformStringCompliance              (packages/MJGlobal; the "Source guards" job)
-#   PrimaryKeyCompliance                      (packages/MJCore; runs in CI only when a PR touches MJCore)
+#   PrimaryKeyCompliance                      (packages/MJCore; the "Source guards" job)
 #   check:manifest-registrations              (an entity subclass missing from the committed manifests)
 #   check-explorer-prebundle-exclude          (a joined workspace's scopes in a committed angular.json)
 #
