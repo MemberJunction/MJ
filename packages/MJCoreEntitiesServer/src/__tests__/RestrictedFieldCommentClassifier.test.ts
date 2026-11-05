@@ -314,16 +314,20 @@ describe('InspectAndStampRestrictedFieldsForComment (Write-Time FLS Detector)', 
 
         // Stage 2 flags any number-shaped guess as Salary: both guesses are refused alike. The classifier
         // sees only the message and field metadata, never the stored value, so it cannot tell them apart.
-        const seenPrompts: string[] = [];
+        const seenPrompts: Array<{ CandidateFields: unknown }> = [];
         RegisterRestrictedFieldLLMClassifier(async (p) => {
-            seenPrompts.push(JSON.stringify(p));
+            seenPrompts.push(p);
             return /\d{4,}/.test(p.MessageText) ? ['Salary'] : [];
         });
         const rightFlagged = await inspect('Could it be 215000?');
         const wrongFlagged = await inspect('Could it be 315000?');
         expect(rightFlagged.Allowed).toBe(false);
         expect(wrongFlagged).toEqual(rightFlagged);
-        expect(seenPrompts[1]).not.toContain('215000');
+        // Both guesses reach Stage 2 with the same candidate fields: a Stage 1 value match on the right guess
+        // would drop Salary from its candidates (or skip Stage 2 entirely) and show up here.
+        expect(seenPrompts).toHaveLength(2);
+        expect(seenPrompts[1].CandidateFields).toEqual(seenPrompts[0].CandidateFields);
+        expect(JSON.stringify(seenPrompts[1])).not.toContain('215000');
     });
 
     it('enforces server-side RLS + FLS read filtering via AnchoredConversationPostRunViewHook on MJ: Conversations and MJ: Conversation Details', async () => {

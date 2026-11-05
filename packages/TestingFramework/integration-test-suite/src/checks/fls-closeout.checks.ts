@@ -933,6 +933,12 @@ export async function CheckCo20AnchoredCommentsProtected(ctx: IntegrationCheckCo
     const priorClassifier = GetRegisteredRestrictedFieldLLMClassifier();
 
     try {
+        // Stage 2 is pinned to "no match" for the whole check, so this deterministic-tier check never calls an
+        // LLM (the writer's Step 1 comment would otherwise reach Stage 2 for the fields Stage 1 did not match)
+        // and Step 3 does not hinge on a model's reading of an address-shaped string. Stage 2 never receives
+        // record values (unit-tested). Restored in finally.
+        RegisterRestrictedFieldLLMClassifier(async () => []);
+
         // 1. Writer creates an anchored comment thread on the restricted Email field and attempts to pass quotedValue
         restrictedConv = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', r.Fx.Writer!);
         restrictedConv.NewRecord();
@@ -1014,9 +1020,6 @@ export async function CheckCo20AnchoredCommentsProtected(ctx: IntegrationCheckCo
         //    Record-level thread. The outcome must not depend on whether the guess matches. Neither message
         //    names the field: a comment that names (or, per Stage 2, discusses) a field the author cannot read
         //    is refused by design, for a right and a wrong guess alike, and that refusal is not an oracle.
-        //    Stage 2 is pinned to "no match" so this deterministic-tier check does not hinge on an LLM's
-        //    reading of an address-shaped string; Stage 2 never receives record values (unit-tested).
-        RegisterRestrictedFieldLLMClassifier(async () => []);
         const right = await postReaderGuess(ctx, r.Fx, flsEntity, 'Right', `Could it be ${r.Markers.Email}?`, guesses);
         const wrong = await postReaderGuess(ctx, r.Fx, flsEntity, 'Wrong', `Could it be ${WrongGuessFor(r.Markers.Email)}?`, guesses);
         AssertEqual(
