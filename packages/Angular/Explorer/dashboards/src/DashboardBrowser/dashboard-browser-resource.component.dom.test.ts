@@ -256,6 +256,7 @@ function fakeNavigation(initialParams: Record<string, string>) {
   const params$ = new BehaviorSubject<Record<string, string>>(initialParams);
   const service = {
     QueryParamChanged$: new Subject<never>(),
+    ResourceReattached$: new Subject<never>(),
     ObserveTabQueryParams: () => params$.asObservable(),
     UpdateTabQueryParams: vi.fn((_tabId: string, update: Record<string, string | null>) => {
       const next: Record<string, string> = { ...params$.value };

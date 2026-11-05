@@ -4731,6 +4731,9 @@ importers:
       '@memberjunction/rubrics-base':
         specifier: 6.2.0
         version: link:../../Rubrics/Base
+      '@memberjunction/tag-engine-base':
+        specifier: 6.2.0
+        version: link:../../AI/Knowledge/TagEngineBase
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -6794,6 +6797,9 @@ importers:
       '@memberjunction/ng-file-storage':
         specifier: 6.2.0
         version: link:../file-storage
+      '@memberjunction/ng-filter-builder':
+        specifier: 6.2.0
+        version: link:../filter-builder
       '@memberjunction/ng-list-management':
         specifier: 6.2.0
         version: link:../list-management
@@ -8652,6 +8658,9 @@ importers:
       '@memberjunction/ng-ui-components':
         specifier: 6.2.0
         version: link:../ui-components
+      '@memberjunction/tag-engine-base':
+        specifier: 6.2.0
+        version: link:../../../AI/Knowledge/TagEngineBase
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2

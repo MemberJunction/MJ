@@ -197,6 +197,8 @@ export class WindowDockService {
                 RestoreCallback: restoreCallback || (() => {}),
                 progress
             });
+            // The dock is a root view; a minimize from another window does not flag it.
+            this.dockComponent.changeDetectorRef.markForCheck();
         }
     }
 
@@ -214,6 +216,8 @@ export class WindowDockService {
                 this.appRef.detachView(this.dockComponent.hostView);
                 this.dockComponent.destroy();
                 this.dockComponent = undefined;
+            } else {
+                this.dockComponent.changeDetectorRef.markForCheck();
             }
         }
     }

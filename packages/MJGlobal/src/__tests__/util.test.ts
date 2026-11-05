@@ -8,6 +8,7 @@ import {
   ConvertCamelCaseToHaveSpaces,
   CreateDisplayName,
   GeneratePluralName,
+  GenerateSingularName,
   GetIrregularPlural,
   StripWhitespace,
   Uuidv4,
@@ -804,3 +805,45 @@ describe('EscapeSQLString', () => {
   });
 });
 
+
+describe('GenerateSingularName', () => {
+  it('singularizes regular plurals and keeps case', () => {
+    expect(GenerateSingularName('Deals')).toBe('Deal');
+    expect(GenerateSingularName('Companies')).toBe('Company');
+    expect(GenerateSingularName('Boxes')).toBe('Box');
+    expect(GenerateSingularName('deals')).toBe('deal');
+    expect(GenerateSingularName('DEALS')).toBe('DEAL');
+  });
+
+  it('singularizes irregular plurals', () => {
+    expect(GenerateSingularName('People')).toBe('Person');
+    expect(GenerateSingularName('Children')).toBe('Child');
+  });
+
+  it('singularizes only the last word of a multi-word name', () => {
+    expect(GenerateSingularName('Contact People')).toBe('Contact Person');
+    expect(GenerateSingularName('MJ: AI Models')).toBe('MJ: AI Model');
+    expect(GenerateSingularName('Sales Accounts')).toBe('Sales Account');
+  });
+
+  it('handles -ses endings', () => {
+    expect(GenerateSingularName('Licenses')).toBe('License');
+    expect(GenerateSingularName('Responses')).toBe('Response');
+    expect(GenerateSingularName('Classes')).toBe('Class');
+    expect(GenerateSingularName('Addresses')).toBe('Address');
+    expect(GenerateSingularName('Statuses')).toBe('Status');
+  });
+
+  it('returns a name that is already singular unchanged', () => {
+    expect(GenerateSingularName('Deal')).toBe('Deal');
+    expect(GenerateSingularName('Status')).toBe('Status');
+    expect(GenerateSingularName('Analysis')).toBe('Analysis');
+    expect(GenerateSingularName('Address')).toBe('Address');
+    expect(GenerateSingularName('Person')).toBe('Person');
+  });
+
+  it('returns an empty or blank input trimmed', () => {
+    expect(GenerateSingularName('')).toBe('');
+    expect(GenerateSingularName('  Deals  ')).toBe('Deal');
+  });
+});

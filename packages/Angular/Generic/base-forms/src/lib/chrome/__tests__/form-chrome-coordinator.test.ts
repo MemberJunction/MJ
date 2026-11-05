@@ -34,3 +34,43 @@ describe('FormChromeCoordinator.Apply', () => {
     expect(c.ActiveGroupKey).toBe('details');
   });
 });
+
+describe('FormChromeCoordinator chrome-rule suppression', () => {
+    it('answers undefined while the rules are pending', () => {
+        const c = new FormChromeCoordinator();
+        expect(c.RulesResolved).toBe(false);
+        expect(c.IsSuppressed('orders')).toBeUndefined();
+        expect(c.Suppression.RulesResolved).toBe(false);
+    });
+
+    it('answers true for a suppressed key and false for any other once resolved', () => {
+        const c = new FormChromeCoordinator();
+        c.SetSuppressed(['orders']);
+        expect(c.IsSuppressed('orders')).toBe(true);
+        expect(c.IsSuppressed('payments')).toBe(false);
+        expect([...c.Suppression.SuppressedSectionKeys]).toEqual(['orders']);
+    });
+
+    it('resolves with nothing suppressed when the entity has no rules', () => {
+        const c = new FormChromeCoordinator();
+        c.SetSuppressed([]);
+        expect(c.RulesResolved).toBe(true);
+        expect(c.IsSuppressed('orders')).toBe(false);
+    });
+
+    it('goes back to pending on reset', () => {
+        const c = new FormChromeCoordinator();
+        c.SetSuppressed(['orders']);
+        c.ResetSuppression();
+        expect(c.IsSuppressed('orders')).toBeUndefined();
+    });
+
+    it('hides a suppressed section in accordion layout too', () => {
+        const c = new FormChromeCoordinator();
+        c.Apply({ Layout: 'accordion', Groups: [], RelatedRoles: new Map(), MoreSectionKeys: [] });
+        expect(c.IsAccordionSectionVisible('orders')).toBe(true);
+        c.SetSuppressed(['orders']);
+        expect(c.IsAccordionSectionVisible('orders')).toBe(false);
+        expect(c.IsAccordionSectionVisible('payments')).toBe(true);
+    });
+});

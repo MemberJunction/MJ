@@ -4,7 +4,7 @@ import { takeUntil } from 'rxjs/operators';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { IsPhoneViewport, WatchPhoneViewport } from '../chrome/phone-viewport';
 import { BaseEntity, EntityInfo, CompositeKey, LogError } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, GenerateSingularName } from '@memberjunction/global';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { RecordCloneService, type CloneCompletedEvent, type CloneNavigationEvent } from '@memberjunction/ng-record-clone';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
@@ -554,7 +554,22 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
       const name = this.Record.Get(info.NameField.Name);
       if (name) return String(name);
     }
-    return this.Record.PrimaryKey.ToConcatenatedString();
+    if (!this.Record.IsSaved) {
+      // A new record has no key the user would recognise yet (an unsaved UUID, or nothing).
+      return info ? `New ${GenerateSingularName(info.DisplayNameOrName)}` : 'New record';
+    }
+    return MjFormToolbarComponent.primaryKeyDisplayValue(this.Record.PrimaryKey);
+  }
+
+  /**
+   * The key values of a record, joined with " · ", without the `Field|` prefixes of
+   * `CompositeKey.ToConcatenatedString()`. Matches how Explorer's tab titles print a key.
+   */
+  private static primaryKeyDisplayValue(key: CompositeKey): string {
+    const values = (key.KeyValuePairs ?? [])
+      .map(kv => (kv?.Value != null ? String(kv.Value).trim() : ''))
+      .filter(v => v.length > 0);
+    return values.length > 0 ? values.join(' · ') : key.ToConcatenatedString();
   }
 
   // ---- Descendant Chain Computation ----
@@ -603,7 +618,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this._chainsLoading = true;
 
     DiscoverISADescendants(this.Record, this.ProviderToUse).then(descendants => {
-      this.DescendantTree = BuildDescendantTree(descendants);
+      this.DescendantTree = this.withDisplayNames(BuildDescendantTree(descendants));
       this._chainsLoading = false;
       this.cdr.markForCheck();
     }).catch(() => {
@@ -611,6 +626,15 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
       this._chainsLoading = false;
       this.cdr.markForCheck();
     });
+  }
+
+  /** Fills each tree item's `DisplayName` from metadata, recursively. */
+  private withDisplayNames(items: IsaRelatedItem[]): IsaRelatedItem[] {
+    for (const item of items) {
+      item.DisplayName = this.ProviderToUse?.EntityByName(item.EntityName)?.DisplayNameOrName ?? item.EntityName;
+      this.withDisplayNames(item.Children);
+    }
+    return items;
   }
 
   /**

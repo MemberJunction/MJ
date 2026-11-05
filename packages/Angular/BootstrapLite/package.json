@@ -55,6 +55,7 @@
     "@memberjunction/ng-file-storage": "6.2.0",
     "@memberjunction/ng-shared": "6.2.0",
     "@memberjunction/rubrics-base": "6.2.0",
+    "@memberjunction/tag-engine-base": "6.2.0",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {

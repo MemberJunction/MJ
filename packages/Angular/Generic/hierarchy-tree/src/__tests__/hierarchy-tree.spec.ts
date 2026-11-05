@@ -147,4 +147,58 @@ describe('HierarchyTreeComponent Unit Tests', () => {
         expect(event.IsCanceled).toBe(true);
         expect(event.CancelReason).toBe('Permission denied');
     });
+
+    describe('parent cycles', () => {
+        const twoRowCycle = [
+            { ID: 'node-A', Name: 'Node A', ParentID: 'node-B' },
+            { ID: 'node-B', Name: 'Node B', ParentID: 'node-A' },
+            { ID: 'node-C', Name: 'Node C', ParentID: null }
+        ];
+
+        it('builds a two-row cycle with an active record set: both rows become roots, and the active root is focused', () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            const comp = new HierarchyTreeComponent();
+            comp.Config = { EntityName: 'TestEntity', ParentField: 'ParentID', AutoRootFocus: true };
+            comp.ActiveRecordID = 'node-A';
+
+            comp.buildTreeFromData(twoRowCycle);
+
+            expect(comp.RootNodes.map(r => r.ID).sort()).toEqual(['node-A', 'node-B', 'node-C']);
+            expect(comp.SelectedNode?.ID).toBe('node-A');
+            expect(comp.FocusedNode?.ID).toBe('node-A');
+            warn.mockRestore();
+        });
+
+        it('returns from expandAncestors on a cyclic chain and warns once per build', () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            const comp = new HierarchyTreeComponent();
+            comp.Config = { EntityName: 'TestEntity', ParentField: 'ParentID' };
+            comp.buildTreeFromData(twoRowCycle);
+            warn.mockClear();
+
+            const nodeA = comp.AllNodes.find(n => n.ID === 'node-A')!;
+            const expand = (comp as unknown as { expandAncestors(n: HierarchyNodeData): void }).expandAncestors.bind(comp);
+            expand(nodeA);
+            expand(nodeA);
+
+            expect(comp.AllNodes.find(n => n.ID === 'node-B')!.IsExpanded).toBe(true);
+            const cycleWarnings = warn.mock.calls.filter(c => String(c[0]).includes('Circular parent chain'));
+            expect(cycleWarnings.length).toBeLessThanOrEqual(1);
+            warn.mockRestore();
+        });
+
+        it('attaches a row whose parent chain leads into a cycle it is not part of', () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            const comp = new HierarchyTreeComponent();
+            comp.Config = { EntityName: 'TestEntity', ParentField: 'ParentID' };
+
+            // node-D -> node-A -> node-B -> node-A: the walk from node-D's parent must stop.
+            comp.buildTreeFromData([...twoRowCycle, { ID: 'node-D', Name: 'Node D', ParentID: 'node-A' }]);
+
+            const nodeA = comp.AllNodes.find(n => n.ID === 'node-A')!;
+            expect(nodeA.Children.map(c => c.ID)).toContain('node-D');
+            warn.mockRestore();
+        });
+    });
 });
+

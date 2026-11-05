@@ -79,6 +79,7 @@ import { WarnIfUnnamed } from '../a11y/unnamed-control-guard';
       [attr.aria-expanded]="IsOpen"
       aria-haspopup="listbox"
       [attr.aria-controls]="IsOpen ? ListboxId : null"
+      [attr.aria-activedescendant]="ActiveDescendantId"
       [attr.aria-disabled]="IsDisabled ? 'true' : null"
       [attr.tabindex]="IsDisabled ? -1 : 0"
       (click)="Toggle()"
@@ -106,10 +107,11 @@ import { WarnIfUnnamed } from '../a11y/unnamed-control-guard';
       (backdropClick)="Close()"
       (detach)="Close()"
       (overlayKeydown)="OnOverlayKeyDown($event)">
-      <div class="mj-dropdown-panel" role="listbox"
-        [attr.id]="ListboxId"
-        [attr.aria-label]="AriaLabel || null"
-        [attr.aria-labelledby]="AriaLabelledBy || null">
+      <!--
+        The panel is a plain wrapper. The listbox inside it holds options only (a listbox may own
+        nothing else), so the filter box sits above it and "No data found" below it as a status.
+      -->
+      <div class="mj-dropdown-panel" #panel>
         @if (Filterable) {
           <div class="mj-dropdown-filter-wrap">
             <!--
@@ -132,39 +134,49 @@ import { WarnIfUnnamed } from '../a11y/unnamed-control-guard';
               placeholder="Filter..."
               [attr.aria-labelledby]="FilterLabelledBy"
               [attr.aria-label]="FilterLabelledBy ? null : FilterLabel"
+              [attr.aria-describedby]="AriaDescribedBy || null"
+              [attr.aria-controls]="ListboxId"
+              [attr.aria-activedescendant]="ActiveDescendantId"
               [value]="filterText"
               (input)="OnFilterInput($event)"
               (keydown)="OnKeyDown($event)" />
           </div>
         }
-        @if (DefaultItem != null) {
-          <div
-            class="mj-dropdown-option mj-dropdown-option--default"
-            [class.mj-dropdown-option--selected]="SelectedValue == null"
-            [class.mj-dropdown-option--highlighted]="HighlightedIndex === -1"
-            role="option"
-            [attr.aria-selected]="SelectedValue == null"
-            (click)="SelectItem(null, $event)">
-            {{ GetItemText(DefaultItem) }}
-          </div>
-        }
-        @for (item of FilteredItems; track TrackByIndex($index)) {
-          <div
-            class="mj-dropdown-option"
-            [class.mj-dropdown-option--selected]="IsItemSelected(item)"
-            [class.mj-dropdown-option--highlighted]="HighlightedIndex === $index"
-            role="option"
-            [attr.aria-selected]="IsItemSelected(item)"
-            (click)="SelectItem(item, $event)">
-            @if (itemTemplate) {
-              <ng-container *ngTemplateOutlet="itemTemplate; context: { $implicit: item }"></ng-container>
-            } @else {
-              {{ GetItemText(item) }}
-            }
-          </div>
-        }
+        <div class="mj-dropdown-list" role="listbox"
+          [attr.id]="ListboxId"
+          [attr.aria-label]="AriaLabel || null"
+          [attr.aria-labelledby]="AriaLabelledBy || null">
+          @if (DefaultItem != null) {
+            <div
+              class="mj-dropdown-option mj-dropdown-option--default"
+              [attr.id]="DefaultOptionId"
+              [class.mj-dropdown-option--selected]="SelectedValue == null"
+              [class.mj-dropdown-option--highlighted]="HighlightedIndex === -1"
+              role="option"
+              [attr.aria-selected]="SelectedValue == null"
+              (click)="SelectItem(null, $event)">
+              {{ GetItemText(DefaultItem) }}
+            </div>
+          }
+          @for (item of FilteredItems; track TrackByIndex($index)) {
+            <div
+              class="mj-dropdown-option"
+              [attr.id]="OptionId($index)"
+              [class.mj-dropdown-option--selected]="IsItemSelected(item)"
+              [class.mj-dropdown-option--highlighted]="HighlightedIndex === $index"
+              role="option"
+              [attr.aria-selected]="IsItemSelected(item)"
+              (click)="SelectItem(item, $event)">
+              @if (itemTemplate) {
+                <ng-container *ngTemplateOutlet="itemTemplate; context: { $implicit: item }"></ng-container>
+              } @else {
+                {{ GetItemText(item) }}
+              }
+            </div>
+          }
+        </div>
         @if (FilteredItems.length === 0) {
-          <div class="mj-dropdown-no-data">No data found</div>
+          <div class="mj-dropdown-no-data" role="status">No data found</div>
         }
       </div>
     </ng-template>
@@ -236,6 +248,7 @@ export class MJDropdownComponent extends MJNamedControlBase implements ControlVa
 
   @ViewChild('trigger') private triggerEl!: ElementRef<HTMLElement>;
   @ViewChild('filterInput') private filterInputEl: ElementRef<HTMLInputElement> | undefined;
+  @ViewChild('panel') private panelEl: ElementRef<HTMLElement> | undefined;
 
   @HostBinding('class.mj-dropdown-host') readonly hostClass = true;
 
@@ -250,6 +263,22 @@ export class MJDropdownComponent extends MJNamedControlBase implements ControlVa
    * find. Generated per instance from the shared named-control counter.
    */
   get ListboxId(): string { return `mj-dropdown-listbox-${this.DropdownId}`; }
+
+  /** Id of the option at `index` in {@link FilteredItems}, for `aria-activedescendant`. */
+  OptionId(index: number): string { return `${this.ListboxId}-option-${index}`; }
+
+  /** Id of the {@link DefaultItem} option. */
+  get DefaultOptionId(): string { return `${this.ListboxId}-option-default`; }
+
+  /**
+   * Id of the highlighted option while the list is open, so a screen reader follows the arrow
+   * keys while focus stays on the field or the filter box. Null when nothing is highlighted.
+   */
+  get ActiveDescendantId(): string | null {
+    if (!this.IsOpen) return null;
+    if (this.HighlightedIndex === -1) return this.DefaultItem != null ? this.DefaultOptionId : null;
+    return this.HighlightedIndex < this.FilteredItems.length ? this.OptionId(this.HighlightedIndex) : null;
+  }
 
   /** Id of the hidden "Filter" word, composed into the filter box's name via an id list. */
   get FilterWordId(): string { return this.SecondaryWordId('filter-word'); }
@@ -343,10 +372,30 @@ export class MJDropdownComponent extends MJNamedControlBase implements ControlVa
     if (this.Filterable) setTimeout(() => this.filterInputEl?.nativeElement.focus(), 0);
   }
 
+  /**
+   * Closes the list. A filter the user typed is cleared, and `FilterChange('')` tells a host that
+   * filters its own data to show everything again. Focus inside the panel (the filter box), or
+   * focus a click in the panel dropped on the page, returns to the field, since the panel goes
+   * away. Focus the user moved to another control stays there.
+   */
   Close(): void {
     if (!this.IsOpen) return;
+    const hadFilter = this.filterText !== '';
+    const restoreFocus = this.shouldRestoreFocus();
     this.resetPanelState();
     this.cdr.detectChanges();
+    if (restoreFocus) this.triggerEl?.nativeElement.focus();
+    if (hadFilter && !this.destroyed) this.FilterChange.emit('');
+  }
+
+  /** Set once the component is destroyed, so closing on destroy does not emit to the host. */
+  private destroyed = false;
+
+  /** True when focus is in the panel or nowhere (on the page body), not on another control. */
+  private shouldRestoreFocus(): boolean {
+    if (typeof document === 'undefined') return false;
+    const active = document.activeElement;
+    return !active || active === document.body || !!this.panelEl?.nativeElement.contains(active);
   }
 
   /**
@@ -446,13 +495,11 @@ export class MJDropdownComponent extends MJNamedControlBase implements ControlVa
   /**
    * Escape with the list open closes the list and nothing else (#5340). The key is cancelled and
    * stopped here, so it never reaches the page, where a host that closes on Escape (a dialog, a
-   * popover) would close as well. Focus goes back to the field, since the filter box that may have
-   * held it goes away with the list.
+   * popover) would close as well. `Close()` returns focus to the field when it was in the panel.
    */
   private closeListOnEscape(event: KeyboardEvent): void {
     event.preventDefault();
     event.stopPropagation();
-    this.triggerEl?.nativeElement.focus();
     this.Close();
   }
 
@@ -479,7 +526,7 @@ export class MJDropdownComponent extends MJNamedControlBase implements ControlVa
   registerOnChange(fn: (value: unknown) => void): void { this.onChange = fn; }
   registerOnTouched(fn: () => void): void { this.onTouched = fn; }
   setDisabledState(isDisabled: boolean): void { this.formDisabled = isDisabled; this.syncDisabled(); }
-  ngOnDestroy(): void { this.Close(); }
+  ngOnDestroy(): void { this.destroyed = true; this.Close(); }
 
   private getSelectedIndex(): number {
     if (this.SelectedValue == null) return -1;

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { AxisTickFormat, CreateTimeScale, DAY_MS, IsDailyBucketSeries, TooltipTimeFormat } from './time-series-axis';
+import { AxisTickFormat, CreateTimeScale, DAY_MS, IsDailyBucketSeries, LeftAxisLabel, LeftAxisTickFormat, TooltipTimeFormat } from './time-series-axis';
 
 /**
  * The time-series chart's axis rules, run in real non-UTC zones. Daily buckets are UTC days, so
@@ -75,5 +75,26 @@ describe('time-series axis', () => {
   it('falls back to the gap between the first two points when no bucket width is given', () => {
     expect(IsDailyBucketSeries(utcDays('2026-09-18T00:00:00Z', 3))).toBe(true);
     expect(IsDailyBucketSeries([new Date('2026-09-24T10:00:00Z'), new Date('2026-09-24T14:00:00Z')])).toBe(false);
+  });
+
+  describe('left axis unit', () => {
+    it('labels ticks in dollars when only Cost is shown', () => {
+      expect(LeftAxisTickFormat(['cost'])(0.5)).toBe('$0.50');
+      expect(LeftAxisTickFormat(['cost'])(12)).toBe('$12.00');
+      expect(LeftAxisLabel(['cost'])).toBe('Cost ($)');
+    });
+
+    it('labels ticks in seconds when only Avg Time is shown, whatever the tick size', () => {
+      expect(LeftAxisTickFormat(['avgTime'])(0.5)).toBe('0.5s');
+      expect(LeftAxisTickFormat(['avgTime'])(12)).toBe('12.0s');
+      expect(LeftAxisLabel(['avgTime'])).toBe('Avg Time (s)');
+    });
+
+    it('uses plain numbers when both share the axis, and names both units in the title', () => {
+      const format = LeftAxisTickFormat(['cost', 'avgTime']);
+      expect(format(12)).toBe('12');
+      expect(format(0.25)).toBe('0.25');
+      expect(LeftAxisLabel(['cost', 'avgTime'])).toBe('Cost ($) / Avg Time (s)');
+    });
   });
 });

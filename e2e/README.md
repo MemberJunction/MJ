@@ -74,6 +74,10 @@ npx playwright test --config e2e/playwright.config.ts --list
   its in-app-notification bell and linked Agent-run record, then delete the
   routine through the UI (cleanup is guaranteed via try/finally). Budget ~8
   minutes for the live test.
+- **`specs/attached-view-refresh.spec.ts`** — attached-view change detection
+  probe: switches a Predictive Studio section with a click, then goes Back and
+  Forward (popstate → `OnQueryParamsChanged`, no template event) and asserts
+  the dashboard's DOM follows each time.
 - **`specs/omnibar.spec.ts`** — Unified Command Palette (omnibar):
   Ctrl/Cmd+K opens the centered palette over the shell; plain text runs the
   cross-source global search (grouped rows + "See all results" opens the

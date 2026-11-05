@@ -74,11 +74,22 @@ import {
 } from 'ag-grid-community';
 // Use the existing HighlightUtil from entity-viewer package
 import { HighlightUtil } from '../utils/highlight.util';
+import { ApplyHostColumnOptions, HostColumnFormat } from './host-column-options';
+import { BuildFilterFields, CollectFilterFieldNames } from '../utils/filter-fields.util';
+import {
+  BuildUserFilterWhereClause,
+  ComposeExtraFilter,
+  RemoveTopLevelCondition,
+  UserFilterChips
+} from '../utils/user-filter.util';
+import { CompositeFilterDescriptor, FilterBuilderConfig, FilterFieldInfo } from '@memberjunction/ng-filter-builder';
+import { MJFilterPopoverComponent, AppliedFilter } from '@memberjunction/ng-ui-components';
 import {
   GridSelectionMode,
   GridEditMode,
   GridLinesMode,
   GridColumnConfig,
+  GridColumnType,
   GridToolbarConfig,
   GridToolbarButton,
   DataGridSortState,
@@ -190,6 +201,13 @@ const ROW_NUMBER_FIELD = '__rowNumber';
  * what it needs (up to its maxWidth) and the filler takes the remainder", rather than a 50/50 split.
  */
 const AUTO_WIDTH_FLEX_WEIGHT = 1000;
+
+/**
+ * `SortChangedEvent.source` values that mean the user sorted: a header click (AG Grid's
+ * `progressSort`) or a column/context menu. Every other source is the grid reacting to data or
+ * state it was given.
+ */
+const USER_SORT_SOURCES: ReadonlySet<string> = new Set(['uiColumnSorted', 'columnMenu', 'contextMenu']);
 
 @Component({
   standalone: false,
@@ -613,6 +631,39 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   get ShowSearch(): boolean {
     return this._showSearch;
   }
+
+  private _showFilterButton: boolean = false;
+  /**
+   * Shows a Filter button next to Search that lets the user narrow the rows with a filter
+   * builder. Off by default; the user's filter is always combined with the host's
+   * `Params.ExtraFilter`, never replacing it. Not shown for grids fed by `[Data]`.
+   */
+  @Input()
+  set ShowFilterButton(value: boolean) {
+    this._showFilterButton = value;
+  }
+  get ShowFilterButton(): boolean {
+    return this._showFilterButton;
+  }
+
+  private _userFilter: CompositeFilterDescriptor | null = null;
+  /**
+   * The user's filter, within the host's scope. Session state: the grid does not persist it.
+   * A host that wants to keep it binds this and {@link UserFilterChange}.
+   */
+  @Input()
+  set UserFilter(value: CompositeFilterDescriptor | null) {
+    const next = value?.filters?.length ? value : null;
+    if (this.sameUserFilter(next)) return;
+    this._userFilter = next;
+    void this.reloadForUserFilter();
+  }
+  get UserFilter(): CompositeFilterDescriptor | null {
+    return this._userFilter;
+  }
+
+  /** Emits when the user applies, edits, removes or clears their filter. */
+  @Output() UserFilterChange = new EventEmitter<CompositeFilterDescriptor | null>();
 
   // ========================================
   // Selection Inputs
@@ -1135,7 +1186,10 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       AddinEnabled: this._excelAddinEnabled,
       SavedViewID: this.effectiveSavedViewID,
       EntityID: this._entityInfo?.ID ?? null,
-      ExtraFilter: this._params?.ExtraFilter ?? null,
+      // A user filter scopes the grid like a host filter does, so the workbook cannot be the whole entity.
+      ExtraFilter: this.userFilterWhereClause
+        ? ComposeExtraFilter(this.hostExtraFilterText(this._params?.ExtraFilter), this.userFilterWhereClause) ?? null
+        : this._params?.ExtraFilter ?? null,
       AlternateBaseView: this._alternateBaseView ?? this._params?.AlternateBaseView ?? null,
     });
   }
@@ -2918,6 +2972,8 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       } else if (this._viewEntity?.WhereClause) {
         extraFilter = this._viewEntity.WhereClause;
       }
+      // Totals cover the same rows the grid shows.
+      extraFilter = ComposeExtraFilter(extraFilter, this.userFilterWhereClause);
 
       const alternateBaseView =
         this._alternateBaseView ||
@@ -3415,8 +3471,15 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         this.registerAutoWidthColumn(colDef);
       }
 
-      // Add type-specific formatters with optional custom format
-      this.applyFieldFormatter(colDef, field, colConfig.format);
+      // Add type-specific formatters with optional custom format. A saved state that carries no
+      // format of its own falls back to the host's declared one, so a resize or sort (which saves
+      // the state) does not turn a host-typed number column back into a name-guessed currency.
+      const format = colConfig.format ?? (declared ? HostColumnFormat(declared) : undefined);
+      this.applyFieldFormatter(colDef, field, format, declared?.type);
+      // The host's formatter, classes and templates outlive a saved state too.
+      if (declared) {
+        ApplyHostColumnOptions(colDef, declared);
+      }
 
       cols.push(colDef);
     }
@@ -3463,9 +3526,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         f.Name.toLowerCase() === col.field.toLowerCase()
       );
       if (field) {
-        this.applyFieldFormatter(colDef, field);
+        this.applyFieldFormatter(colDef, field, HostColumnFormat(col), col.type);
       }
     }
+
+    // Host options last, so they win over the field defaults.
+    ApplyHostColumnOptions(colDef, col);
 
     return colDef;
   }
@@ -3588,7 +3654,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     return parts.join('\n');
   }
 
-  private applyFieldFormatter(colDef: ColDef, field: EntityFieldInfo, customFormat?: ColumnFormat): void {
+  /**
+   * @param declaredType The type a host column declared (`GridColumnConfig.type`). When set, it
+   * replaces the field-name guess for currency, so a `number` column named like `TotalEntries` is
+   * not rendered as money.
+   */
+  private applyFieldFormatter(colDef: ColDef, field: EntityFieldInfo, customFormat?: ColumnFormat, declaredType?: GridColumnType): void {
     // Store type info for use in cell renderer
     const fieldType = field.TSType;
     const fieldNameLower = field.Name.toLowerCase();
@@ -3596,11 +3667,14 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     const vc = this.EffectiveVisualConfig;
 
     // Determine special field types using ExtendedType metadata first, then field name patterns as fallback
-    const isCurrency = customFormat?.type === 'currency' ||
-                       fieldNameLower.includes('amount') ||
-                       fieldNameLower.includes('price') ||
-                       fieldNameLower.includes('cost') ||
-                       fieldNameLower.includes('total');
+    // An explicit format type or host-declared type decides; the name guess runs only without one.
+    const explicitType = customFormat?.type && customFormat.type !== 'auto' ? customFormat.type : declaredType;
+    const isCurrency = explicitType
+      ? explicitType === 'currency'
+      : fieldNameLower.includes('amount') ||
+        fieldNameLower.includes('price') ||
+        fieldNameLower.includes('cost') ||
+        fieldNameLower.includes('total');
     // Use ExtendedType='Email' from metadata, fallback to field name pattern
     const isEmail = extendedType === 'email' ||
                     (!extendedType && fieldNameLower.includes('email'));
@@ -4317,6 +4391,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       params.AlternateBaseView = this._alternateBaseView;
     }
 
+    // The user's filter narrows the host's scope; it never replaces it.
+    const userWhere = this.userFilterWhereClause;
+    if (userWhere) {
+      params.ExtraFilter = ComposeExtraFilter(this.hostExtraFilterText(this._params.ExtraFilter), userWhere);
+    }
+
     // Apply sort state (may be modified by user interactions)
     const orderBy = this.buildOrderByClause();
     if (orderBy) {
@@ -4324,6 +4404,27 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     }
 
     return params;
+  }
+
+  /**
+   * The filter the grid's rows are loaded with: the host's `Params.ExtraFilter` combined with the
+   * user's filter. A host `ExportDataProvider` that re-queries all rows should use this so its
+   * export matches the grid.
+   */
+  public get EffectiveExtraFilter(): string | undefined {
+    return ComposeExtraFilter(this.hostExtraFilterText(this._params?.ExtraFilter), this.userFilterWhereClause);
+  }
+
+  /** The host filter as text. A per-platform filter contributes its `default` clause. */
+  private hostExtraFilterText(extraFilter: RunViewParams['ExtraFilter'] | undefined): string | undefined {
+    if (!extraFilter) return undefined;
+    return typeof extraFilter === 'string' ? extraFilter : extraFilter.default;
+  }
+
+  /** The user's filter compiled to SQL; `''` when there is none or the entity is not resolved. */
+  private get userFilterWhereClause(): string {
+    if (!this._userFilter || !this._entityInfo) return '';
+    return BuildUserFilterWhereClause(this._userFilter, this._entityInfo);
   }
 
   private buildOrderByClause(): string {
@@ -4848,7 +4949,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   }
 
   OnAgSortChanged(event: AgSortChangedEvent): void {
-    if (this.suppressSortEvents) {
+    // Only a sort the user made counts. AG Grid also emits `sortChanged` for its own reasons —
+    // after a data reload, a column-state restore or a grid-option change — and some of those
+    // arrive after `suppressSortEvents` was already cleared (the `Data` setter clears it
+    // synchronously, AG Grid emits later). Treating them as user sorts re-sorted the grid and
+    // saved the raw entity layout as the user's default.
+    if (this.suppressSortEvents || !USER_SORT_SOURCES.has(event.source)) {
       return;
     }
 
@@ -5133,11 +5239,17 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     // so we need to carry them over from the current gridState
     const existingFormatsByName = new Map<string, ColumnFormat | undefined>();
     const existingUserDisplayNames = new Map<string, string | undefined>();
+    // A view's own header text (DisplayName). Rebuilding it from the entity field on every resize
+    // or sort replaced the view's custom headers with the raw field names.
+    const existingDisplayNames = new Map<string, string>();
     if (this._gridState?.columnSettings) {
       for (const col of this._gridState.columnSettings) {
         const keyLower = col.Name.toLowerCase();
         if (col.format) {
           existingFormatsByName.set(keyLower, col.format);
+        }
+        if (col.DisplayName) {
+          existingDisplayNames.set(keyLower, col.DisplayName);
         }
         if (col.userDisplayName) {
           existingUserDisplayNames.set(keyLower, col.userDisplayName);
@@ -5165,7 +5277,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         const colConfig: ViewGridColumnSetting = {
           ID: field.ID,
           Name: field.Name,
-          DisplayName: field.DisplayNameOrName,
+          DisplayName: existingDisplayNames.get(keyLower) ?? field.DisplayNameOrName,
           hidden: col.hide ?? false,
           width: col.width ?? undefined,
           orderIndex: i
@@ -5251,7 +5363,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
           columnSettings.push({
             ID: field.ID,
             Name: field.Name,
-            DisplayName: field.DisplayNameOrName,
+            DisplayName: existingDisplayNames.get(denied) ?? (modelled.title || field.DisplayNameOrName),
             hidden: false,
             orderIndex: columnSettings.length
           });
@@ -5263,10 +5375,9 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
 
     // Sort by sortIndex to maintain correct multi-sort priority order
     sortedColumns.sort((a, b) => a.sortIndex - b.sortIndex);
-    const sortSettings: ViewGridSortSetting[] = sortedColumns.map(s => ({
-      field: s.field,
-      dir: s.dir
-    }));
+    const sortSettings: ViewGridSortSetting[] = sortedColumns.length > 0
+      ? sortedColumns.map(s => ({ field: s.field, dir: s.dir }))
+      : this.unrenderedSortSettings(columnState.map(c => c.colId));
 
     // Include current aggregates config in the state
     return {
@@ -5276,6 +5387,19 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       // view. Without it one column resize makes the wrong numbers durable.
       aggregates: this.capturableAggregatesConfig
     };
+  }
+
+  /**
+   * The current sort keys that have no rendered column — a view sorting by a field the grid does
+   * not show, or by an expression. AG Grid's sort model cannot hold them, so a state captured from
+   * the grid alone would drop the view's sort on the first resize.
+   */
+  private unrenderedSortSettings(renderedColIds: string[]): ViewGridSortSetting[] {
+    const rendered = new Set(renderedColIds.map(id => id.toLowerCase()));
+    return [...this._sortState]
+      .filter(s => !rendered.has(s.field.toLowerCase()))
+      .sort((a, b) => a.index - b.index)
+      .map(s => ({ field: s.field, dir: s.direction }));
   }
 
   private applySortStateToGrid(): void {
@@ -5394,6 +5518,97 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
 
   async Refresh(): Promise<void> {
     await this.loadData(false);
+  }
+
+  // ========================================
+  // User Filter
+  // ========================================
+
+  @ViewChild('userFilterPopover') private userFilterPopover?: MJFilterPopoverComponent;
+
+  /** The Filter button shows only when the host turned it on and the grid loads its own rows. */
+  get CanShowFilterButton(): boolean {
+    return this._showFilterButton && !this._useExternalData && !!this._entityInfo;
+  }
+
+  private _userFilterFieldsCache: { entity: EntityInfo; filter: CompositeFilterDescriptor | null; fields: FilterFieldInfo[]; chips: AppliedFilter[] } | null = null;
+
+  /**
+   * The fields the filter builder offers — the same list the view config panel offers. Cached per
+   * entity and filter so change detection hands the builder the same array.
+   */
+  get UserFilterFields(): FilterFieldInfo[] {
+    return this.userFilterView()?.fields ?? [];
+  }
+
+  /** One chip per top-level condition of the user filter. */
+  get UserFilterChips(): AppliedFilter[] {
+    return this.userFilterView()?.chips ?? [];
+  }
+
+  private userFilterView(): { fields: FilterFieldInfo[]; chips: AppliedFilter[] } | null {
+    const entity = this._entityInfo;
+    if (!entity) return null;
+    const cache = this._userFilterFieldsCache;
+    if (cache && cache.entity === entity && cache.filter === this._userFilter) return cache;
+    const fields = BuildFilterFields(entity, CollectFilterFieldNames(this._userFilter));
+    this._userFilterFieldsCache = { entity, filter: this._userFilter, fields, chips: UserFilterChips(this._userFilter, fields) };
+    return this._userFilterFieldsCache;
+  }
+
+  /** The builder shows its own Apply button; the popover closes on apply. */
+  readonly UserFilterBuilderConfig: Partial<FilterBuilderConfig> = { showApplyButton: true };
+
+  /** Top-level conditions in the user filter, for the Filter button's badge. */
+  get UserFilterCount(): number {
+    return this._userFilter?.filters.length ?? 0;
+  }
+
+  /** The filter builder's Apply: set the filter, close the popover, reload. */
+  OnUserFilterApply(filter: CompositeFilterDescriptor): void {
+    this.userFilterPopover?.Close();
+    this.setUserFilterFromUi(filter);
+  }
+
+  /** A chip's remove button: drop that top-level condition. */
+  OnUserFilterChipRemove(chip: AppliedFilter): void {
+    this.setUserFilterFromUi(RemoveTopLevelCondition(this._userFilter, Number(chip.key)));
+  }
+
+  /** Clear: back to the host's scope. */
+  OnUserFilterClear(): void {
+    this.userFilterPopover?.Close();
+    this.setUserFilterFromUi(null);
+  }
+
+  private setUserFilterFromUi(filter: CompositeFilterDescriptor | null): void {
+    const next = filter?.filters?.length ? filter : null;
+    if (this.sameUserFilter(next)) return;
+    this._userFilter = next;
+    this.UserFilterChange.emit(next);
+    void this.reloadForUserFilter();
+  }
+
+  private sameUserFilter(next: CompositeFilterDescriptor | null): boolean {
+    return JSON.stringify(next) === JSON.stringify(this._userFilter);
+  }
+
+  /**
+   * Reloads rows and totals for a changed user filter. A load already in flight was started with
+   * the old filter, so it is awaited first and then a fresh load runs.
+   */
+  private async reloadForUserFilter(): Promise<void> {
+    this.cdr.markForCheck();
+    if (!this._entityInfo || this._useExternalData) return;
+    if (this._loadDataPromise) {
+      try {
+        await this._loadDataPromise;
+      } catch {
+        // The fresh load below reports its own errors.
+      }
+    }
+    await this.loadData(false);
+    void this.RefreshAggregates();
   }
 
   Clear(): void {

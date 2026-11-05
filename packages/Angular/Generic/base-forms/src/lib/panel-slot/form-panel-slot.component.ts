@@ -21,6 +21,7 @@ import { FormContext } from '../types/form-types';
 import { BaseFormPanel, FormPanelSlot } from './base-form-panel';
 import { FormSlotCoordinator } from './form-slot-coordinator.service';
 import {
+    RegistrationsForRecordState,
     ContributionDrawsInSection,
     FormContributionEntityMatches,
     ResolveFormContributionWinners,
@@ -287,7 +288,9 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
         const provider = this.FormComponent?.ProviderToUse ?? null;
         const all = CollectFormContributionRegistrations(entity, provider, { Preview: this.preview });
         this.warnOnLooseRegistrations(all);
-        return ResolveFormContributionWinners(this.Entity, all).Winners.filter((reg) => {
+        // A contribution whose `visibleWhen` does not match the record's state is not mounted.
+        const applicable = RegistrationsForRecordState(all, this.Record?.IsSaved);
+        return ResolveFormContributionWinners(this.Entity, applicable).Winners.filter((reg) => {
             if (ContributionDrawsInSection(reg.Metadata)) return false;
             const slot = reg.Metadata.slot;
             if (slot === this.Slot) return true;

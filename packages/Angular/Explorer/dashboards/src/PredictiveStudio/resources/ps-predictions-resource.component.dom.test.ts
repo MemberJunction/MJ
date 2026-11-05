@@ -106,6 +106,7 @@ function fakeEngine() {
 function fakeNavigation() {
   return {
     QueryParamChanged$: new Subject<never>(),
+    ResourceReattached$: new Subject<never>(),
     ObserveTabQueryParams: () => of({}),
     UpdateTabQueryParams: vi.fn(),
     SetAgentContext: vi.fn(),

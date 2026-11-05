@@ -23,7 +23,7 @@ import {
 } from '@memberjunction/interactive-component-types/forms';
 import { CountByUUID, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { FormContributionOutranks, type MJEntityFormContributionEntity } from '@memberjunction/core-entities';
-import { FormPanelRegistrationMetadata, FormPanelSlot } from './base-form-panel';
+import { FormPanelRegistrationMetadata, FormPanelSlot, type FormVisibleWhen } from './base-form-panel';
 
 /** Minimum relationship shape the composer reads. Satisfied by EntityRelationshipInfo. */
 export interface FormContributionRelationship {
@@ -87,6 +87,38 @@ export interface FormContributionRegistration {
     ComponentSpec?: ComponentSpec;
 }
 
+/** True when a contribution with this `visibleWhen` applies to a record in this state. */
+export function IsVisibleForRecordState(visibleWhen: FormVisibleWhen | null | undefined, recordIsSaved: boolean): boolean {
+    if (visibleWhen === 'saved') return recordIsSaved;
+    if (visibleWhen === 'new') return !recordIsSaved;
+    return true;
+}
+
+/** Per-list memo for {@link RegistrationsForRecordState}: index 0 = new record, 1 = saved. */
+const recordStateMemo = new WeakMap<readonly FormContributionRegistration[], [FormContributionRegistration[] | null, FormContributionRegistration[] | null]>();
+
+/**
+ * The registrations that apply to a record in this state (`visibleWhen`). Returns the input
+ * list itself when nothing is dropped, and the same filtered list for the same input and
+ * state, so callers that memoize on the list's identity keep working. `undefined` state (no
+ * record) drops nothing.
+ */
+export function RegistrationsForRecordState<T extends FormContributionRegistration>(
+    registrations: T[],
+    recordIsSaved: boolean | undefined,
+): T[] {
+    if (recordIsSaved === undefined) return registrations;
+    if (!registrations.some((reg) => !IsVisibleForRecordState(reg.Metadata?.visibleWhen, recordIsSaved))) return registrations;
+    let memo = recordStateMemo.get(registrations);
+    if (!memo) {
+        memo = [null, null];
+        recordStateMemo.set(registrations, memo);
+    }
+    const index = recordIsSaved ? 1 : 0;
+    if (!memo[index]) memo[index] = registrations.filter((reg) => IsVisibleForRecordState(reg.Metadata?.visibleWhen, recordIsSaved));
+    return memo[index] as T[];
+}
+
 export interface ResolveFormContributionsInput {
     EntityName: string;
     RelatedEntities: readonly FormContributionRelationship[];
@@ -96,6 +128,11 @@ export interface ResolveFormContributionsInput {
     /** SectionKeys already projected as Variant="related-entity" in the form template. */
     BakedSectionKeys: readonly string[];
     ShowRelatedEntities: boolean;
+    /**
+     * Whether the record is saved. When given, registrations whose `visibleWhen` does not match
+     * are dropped before bucketing. Omit to keep every registration.
+     */
+    RecordIsSaved?: boolean;
 }
 
 export type FormContributionKind = 'registered' | 'stock-grid';
@@ -454,7 +491,8 @@ function sortWinners(winners: FormContributionWinner[]): FormContributionWinner[
  */
 export function ResolveFormContributions(input: ResolveFormContributionsInput): ResolveFormContributionsResult {
     const peers = visibleRelationships(input.RelatedEntities, input.IsaChildEntityIDs);
-    const winners = ResolveFormContributionWinners(input.EntityName, input.Registrations).Winners;
+    const registrations = RegistrationsForRecordState([...input.Registrations], input.RecordIsSaved);
+    const winners = ResolveFormContributionWinners(input.EntityName, registrations).Winners;
     const baked = new Set(input.BakedSectionKeys);
     const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(peers);
 

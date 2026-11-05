@@ -403,6 +403,7 @@ function createEngine(dashboards: object[], canEdit: boolean) {
 function createNavigation() {
   return {
     QueryParamChanged$: new Subject<never>(),
+    ResourceReattached$: new Subject<never>(),
     ObserveTabQueryParams: () => of({}),
     OpenDashboard: vi.fn(),
     OpenEntityRecord: vi.fn((_entityName: string, _recordPkey: CompositeKey): string => 'record-tab'),

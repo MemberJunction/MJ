@@ -131,6 +131,7 @@ describe('MjCollapsiblePanelComponent (DOM)', () => {
           Spec: { RelatedRoles: new Map() },
           Changes: new Subject<void>(),
           NotifySectionsChanged: () => undefined,
+          IsSuppressed: () => false,
         },
       }],
       inputs: {
@@ -717,5 +718,39 @@ describe('MjCollapsiblePanelComponent — fields behind a component view boundar
     expect(panel.SectionIndicators.ErrorCount).toBe(2);
     expect(panel.OwnsValidationSource(ParseValidationSource('Stray'))).toBe(false);
     (panel as FormSectionFieldHost).UnregisterField(stray);
+  });
+});
+
+/**
+ * A section ruled `None` by a Form Chrome Rule is shown nowhere (#5000). Its body is not rendered,
+ * so what the panel creates in its own template is never instantiated; a section that is not
+ * suppressed, or whose rules are still pending, keeps its body.
+ */
+describe('MjCollapsiblePanelComponent — a section a chrome rule suppressed', () => {
+  const renderWith = (chrome: FormChromeCoordinator) => renderComponentFixture(MjCollapsiblePanelComponent, {
+    declarations: [MjCollapsiblePanelComponent],
+    imports: [CommonModule],
+    providers: [{ provide: FormChromeCoordinator, useValue: chrome }],
+    inputs: { SectionName: 'Orders', SectionKey: 'orders', Variant: 'related-entity', Form: formStub(true) },
+  });
+
+  it('renders no body for a suppressed section', () => {
+    const chrome = new FormChromeCoordinator();
+    chrome.SetSuppressed(['orders']);
+    const f = renderWith(chrome);
+    expect(f.componentInstance.SuppressedByChrome).toBe(true);
+    expect(query(f, '.mj-forms-panel-body')).toBeNull();
+  });
+
+  it('keeps the body while the rules are pending', () => {
+    const pending = renderWith(new FormChromeCoordinator());
+    expect(query(pending, '.mj-forms-panel-body')).not.toBeNull();
+  });
+
+  it('keeps the body when another section is suppressed', () => {
+    const chrome = new FormChromeCoordinator();
+    chrome.SetSuppressed(['payments']);
+    const other = renderWith(chrome);
+    expect(query(other, '.mj-forms-panel-body')).not.toBeNull();
   });
 });

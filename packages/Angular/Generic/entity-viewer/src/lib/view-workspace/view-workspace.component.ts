@@ -205,6 +205,8 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   }
   set SelectedView(value: MJUserViewEntityExtended | null) {
     this.CurrentViewEntity = value;
+    // Keep the view selector's highlight in step with the view the host passed in.
+    this.SelectedViewId = value?.ID ?? null;
     this.CurrentGridState = value ? this.parseViewGridState(value) : this.loadUserDefaultGridState();
     this.ViewModified = false;
   }
@@ -605,6 +607,9 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
 
   /** A quick-save event held while the shared-view warning is shown. */
   private pendingQuickSaveEvent: QuickSaveEvent | null = null;
+
+  /** A config-panel save of a shared view, held until the user answers the shared-view warning. */
+  private pendingConfigSaveEvent: ViewSaveEvent | null = null;
 
   /** Pre-populated name carried from quick-save dialog into the config panel. */
   public PendingNewViewName: string = '';
@@ -1343,6 +1348,22 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   }
 
   /**
+   * Handle the config panel's Save. Updating a shared view first shows the shared-view warning,
+   * the same as quick save; the save runs from {@link OnSharedViewAction}. The check is here and
+   * not in {@link OnSaveView}, because quick save calls `OnSaveView` after the user has already
+   * answered the warning.
+   */
+  public async OnConfigPanelSave(event: ViewSaveEvent): Promise<void> {
+    if (!event.SaveAsNew && this.CurrentViewEntity?.IsShared) {
+      this.pendingConfigSaveEvent = event;
+      this.ShowSharedViewWarning = true;
+      this.cdr.detectChanges();
+      return;
+    }
+    await this.OnSaveView(event);
+  }
+
+  /**
    * Create and persist a brand-new view from the save event. Fires the cancelable
    * {@link BeforeViewSave} before saving and {@link AfterViewSave} after success.
    */
@@ -1750,6 +1771,18 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   /** Handle the shared-view warning action (update / save-as-copy / cancel). */
   public async OnSharedViewAction(action: SharedViewAction): Promise<void> {
     this.ShowSharedViewWarning = false;
+    const configEvent = this.pendingConfigSaveEvent;
+    this.pendingConfigSaveEvent = null;
+    if (configEvent) {
+      if (action === 'update-shared') {
+        await this.OnSaveView(configEvent);
+      } else if (action === 'save-as-copy') {
+        await this.OnSaveView({ ...configEvent, SaveAsNew: true, IsShared: false });
+      }
+      this.cdr.detectChanges();
+      return;
+    }
+
     const event = this.pendingQuickSaveEvent;
     this.pendingQuickSaveEvent = null;
     if (!event) {
@@ -1773,6 +1806,8 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   public OnSharedViewWarningCancel(): void {
     this.ShowSharedViewWarning = false;
     this.pendingQuickSaveEvent = null;
+    // The config panel stays open with the user's edits.
+    this.pendingConfigSaveEvent = null;
     this.cdr.detectChanges();
   }
 

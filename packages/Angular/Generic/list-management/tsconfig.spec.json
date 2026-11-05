@@ -10,6 +10,7 @@
     "src/lib/components/list-invitations/**/*.ts",
     "src/lib/components/list-audit-log/**/*.ts",
     "src/lib/components/list-management-dialog/**/*.ts",
+    "src/lib/components/tag-chips/**/*.ts",
     "src/lib/services/list-management.service.ts",
     "src/lib/models/list-management.models.ts"
   ],

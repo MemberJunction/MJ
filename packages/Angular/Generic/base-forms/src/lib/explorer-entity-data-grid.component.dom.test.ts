@@ -4,7 +4,9 @@ import { By } from '@angular/platform-browser';
 import { RunViewParams } from '@memberjunction/core';
 import type { EntityInfo } from '@memberjunction/core';
 import type { BaseEntity } from '@memberjunction/core';
-import type { AfterRowClickEventArgs, AfterRowDoubleClickEventArgs, AfterDataLoadEventArgs } from '@memberjunction/ng-entity-viewer';
+import type { AfterRowClickEventArgs, AfterRowDoubleClickEventArgs, AfterDataLoadEventArgs, GridColumnConfig } from '@memberjunction/ng-entity-viewer';
+import type { ViewGridState } from '@memberjunction/core-entities';
+import type { CompositeFilterDescriptor } from '@memberjunction/ng-filter-builder';
 import { renderComponentFixture, capture } from '@memberjunction/ng-test-utils';
 import { ExplorerEntityDataGridComponent } from './explorer-entity-data-grid.component';
 import { RELATED_GRID_HSCROLLBAR_PX, RelatedGridHeightPx } from './related-grid-height';
@@ -21,10 +23,15 @@ import { FormRecordRefreshCoordinator } from './form-record-refresh.coordinator'
 @Component({ standalone: true, selector: 'mj-entity-data-grid', template: '' })
 class StubInnerGrid {
   @Input() Params: RunViewParams | null = null;
+  @Input() Columns: GridColumnConfig[] = [];
+  @Input() GridState: ViewGridState | null = null;
   @Input() NewRecordValues: Record<string, unknown> = {};
   @Input() AllowLoad = false;
   @Input() ShowToolbar = false;
   @Input() ShowSearch = true;
+  @Input() ShowFilterButton = false;
+  @Input() UserFilter: CompositeFilterDescriptor | null = null;
+  @Output() UserFilterChange = new EventEmitter<CompositeFilterDescriptor | null>();
   @Input() ShowNewButton = true;
   @Input() ShowRefreshButton = true;
   @Input() ShowExportButton = true;
@@ -97,6 +104,41 @@ describe('ExplorerEntityDataGridComponent (DOM)', () => {
     expect(g.ShowDuplicateSearchButton).toBe(true);
     expect(g.ShowCommunicationButton).toBe(true);
     expect(g.ShowRecycleBin).toBe(false);
+  });
+
+  it('forwards Columns and GridState so a related panel can choose its columns and their order', () => {
+    const columns: GridColumnConfig[] = [{ field: 'Name' }, { field: 'Status', title: 'State' }];
+    const state: ViewGridState = { columnSettings: [{ ID: 'C1', Name: 'Status', DisplayName: 'State', hidden: false, width: 120, orderIndex: 0 }] } as ViewGridState;
+    const g = inner(render({ Columns: columns, GridState: state }));
+    expect(g.Columns).toEqual(columns);
+    expect(g.GridState).toBe(state);
+  });
+
+  it('keeps the Filter button off by default', () => {
+    expect(inner(render()).ShowFilterButton).toBe(false);
+  });
+
+  it('forwards ShowFilterButton and UserFilter', () => {
+    const filter: CompositeFilterDescriptor = { logic: 'and', filters: [{ field: 'Status', operator: 'eq', value: 'Open' }] };
+    const g = inner(render({ ShowFilterButton: true, UserFilter: filter }));
+    expect(g.ShowFilterButton).toBe(true);
+    expect(g.UserFilter).toBe(filter);
+  });
+
+  it('re-emits the inner grid UserFilterChange', () => {
+    const f = render({ ShowFilterButton: true });
+    const out = capture(f.componentInstance.UserFilterChange);
+    const filter: CompositeFilterDescriptor = { logic: 'and', filters: [{ field: 'Status', operator: 'eq', value: 'Open' }] };
+    inner(f).UserFilterChange.emit(filter);
+    inner(f).UserFilterChange.emit(null);
+    expect(out).toEqual([filter, null]);
+    expect(f.componentInstance.UserFilter).toBeNull();
+  });
+
+  it('passes an empty column list and no state by default', () => {
+    const g = inner(render());
+    expect(g.Columns).toEqual([]);
+    expect(g.GridState).toBeNull();
   });
 
   it('passes EffectiveAllowLoad=true to the inner grid when AllowLoad and not deferring', () => {

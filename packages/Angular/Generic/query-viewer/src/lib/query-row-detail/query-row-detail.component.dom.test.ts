@@ -162,6 +162,27 @@ describe('QueryRowDetailComponent (DOM)', () => {
     expect(links).toEqual<RowDetailEntityLinkEvent[]>([{ entityName: 'Users', recordId: 'u-42', fieldName: 'OwnerID' }]);
   });
 
+  it('opens a name field by its key field, showing the name', () => {
+    const f = render({
+      Visible: true,
+      Columns: [col({ field: 'ContactName', title: 'Contact', isEntityLink: true, targetEntityName: 'Contacts', linkKeyField: 'ContactID' })],
+      RowData: { ContactID: 'c-1', ContactName: 'Sample Person' },
+    });
+    const links = capture(f.componentInstance.EntityLinkClick);
+    expect(text(f, '.field-value.clickable .value-text')).toBe('Sample Person');
+    click(f, '.field-value.clickable');
+    expect(links).toEqual<RowDetailEntityLinkEvent[]>([{ entityName: 'Contacts', recordId: 'c-1', fieldName: 'ContactName' }]);
+  });
+
+  it('shows a name field as plain text when the row has no key', () => {
+    const f = render({
+      Visible: true,
+      Columns: [col({ field: 'ContactName', title: 'Contact', isEntityLink: true, targetEntityName: 'Contacts', linkKeyField: 'ContactID' })],
+      RowData: { ContactID: null, ContactName: 'Sample Person' },
+    });
+    expect(queryAll(f, '.field-value.clickable').length).toBe(0);
+  });
+
   it('hides empty fields by default and shows the hidden-empty count', () => {
     const f = render({
       Visible: true,
