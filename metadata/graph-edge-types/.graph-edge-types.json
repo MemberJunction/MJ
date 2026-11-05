@@ -232,5 +232,117 @@
       "lastModified": "2026-11-03T23:46:01.493Z",
       "checksum": "a1f54084492f1f4706999428d8c9ec39629a87fc65057be11363db1b9ae9cc76"
     }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Subsets",
+      "Description": "Derived edge indicating that an Alternate Base View returns a governed row subset of its owning Entity or parent Alternate Base View.",
+      "IsDirected": true,
+      "InverseName": "Has Subset",
+      "DefaultWeight": 1,
+      "AllowStored": false
+    },
+    "primaryKey": {
+      "ID": "A37EB098-D347-4624-BBC2-E601A77D46B4"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Is A",
+      "Description": "Derived edge indicating that a child Entity inherits from a parent Entity via MJ IS-A inheritance (ParentID).",
+      "IsDirected": true,
+      "InverseName": "Has Subtype",
+      "DefaultWeight": 1,
+      "AllowStored": false
+    },
+    "primaryKey": {
+      "ID": "5F8D6696-6F83-45EB-B6C4-4F1316FDA98D"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "References",
+      "Description": "Derived edge indicating that a source Entity references a target Entity through one or more foreign key fields.",
+      "IsDirected": true,
+      "InverseName": "Referenced By",
+      "DefaultWeight": 0.6,
+      "AllowStored": false
+    },
+    "primaryKey": {
+      "ID": "3BE68BC8-5475-4732-9009-F2C7EB85BE60"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Reads",
+      "Description": "Derived edge indicating that an MJ Query selects from a specific Alternate Base View or Entity.",
+      "IsDirected": true,
+      "InverseName": "Read By",
+      "DefaultWeight": 0.8,
+      "AllowStored": false
+    },
+    "primaryKey": {
+      "ID": "152C62CF-B94A-462E-99AE-294064EB8AF1"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Composes",
+      "Description": "Derived edge indicating that an MJ Query composes another reusable MJ Query via {{query:\"...\"}} syntax.",
+      "IsDirected": true,
+      "InverseName": "Composed Into",
+      "DefaultWeight": 0.9,
+      "AllowStored": false
+    },
+    "primaryKey": {
+      "ID": "CD16C85B-02A6-41D5-B7E3-6CAF900BD325"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Field Of",
+      "Description": "Derived edge linking an Entity Field that participates in a stored graph edge to its owning Entity.",
+      "IsDirected": true,
+      "InverseName": "Has Field",
+      "DefaultWeight": 1,
+      "AllowStored": false
+    },
+    "primaryKey": {
+      "ID": "98DE5F5C-BA6F-443E-B413-C9B8C1E9E463"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Preferred Over",
+      "Description": "Governing precedence edge indicating that the source entity, field, view, or query should be used instead of the target for canonical reporting.",
+      "IsDirected": true,
+      "InverseName": "Superseded By",
+      "DefaultWeight": 0.9,
+      "AllowStored": true
+    },
+    "primaryKey": {
+      "ID": "853EDF46-947C-4114-83D9-B308762281E6"
+    }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Same As",
+      "Description": "Symmetric equivalence edge indicating that two concepts or records represent the same underlying domain concept.",
+      "IsDirected": false,
+      "InverseName": "Same As",
+      "DefaultWeight": 1,
+      "AllowStored": true
+    },
+    "primaryKey": {
+      "ID": "D071764C-F39C-4937-816E-5CD638BE00EF"
+    }
   }
 ]

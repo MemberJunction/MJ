@@ -1,0 +1,32 @@
+{
+  "entity": "MJ: Graphs",
+  "filePattern": "**/.*.json",
+  "defaults": {},
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".graphs.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "Name = 'MJ Canon'",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {
+      "GraphTypeID": {
+        "entity": "MJ: Graph Types",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {
+      "MJ: Graph Edge Providers": {
+        "entity": "MJ: Graph Edge Providers",
+        "foreignKey": "GraphID"
+      }
+    }
+  }
+}
