@@ -1249,7 +1249,7 @@ import {
     QueryRefreshExtractionServerOperation,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (166 classes)
+// @memberjunction/core-actions (168 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1317,6 +1317,7 @@ import {
     GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
+    GetArchitectureDiagramReferenceAction,
     GetDefaultFormScaffoldForEntityAction,
     GetDownloadUrlAction,
     GetEntityDetailsAction,
@@ -1372,6 +1373,7 @@ import {
     ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
+    RenderArchitectureDiagramAction,
     ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
@@ -2504,14 +2506,15 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GenerateVideoAction,
     GeocodeAddressAction,
     GetActiveFormForEntityAction,
+    GetArchitectureDiagramReferenceAction,
     GetDefaultFormScaffoldForEntityAction,
     GetDownloadUrlAction,
     GetEntityDetailsAction,
-    GetEntityListAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    GetEntityListAction,
     GetEntitySchemaForFormAction,
     GetFileContentAction,
     GetFormCompositionForEntityAction,
@@ -2563,6 +2566,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     ReembedLocalVectorsAction,
     RefreshListFromSourceAction,
     RemoveRecordsFromListAction,
+    RenderArchitectureDiagramAction,
     ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
@@ -2664,7 +2668,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1136;
+export const CLASS_REGISTRATIONS_COUNT = 1138;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
