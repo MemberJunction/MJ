@@ -211,6 +211,20 @@ describe('ExecBlockRule — mj-sync create-or-update (IF NOT EXISTS … ELSE …
     it('leaves a batch of comments alone', () => {
       expect(convert('-- End of SQL Logging Session\n-- Duration: 5833ms')).toBe('-- End of SQL Logging Session\n-- Duration: 5833ms');
     });
+
+    it('leaves a block comment alone, with line comments around it or a save after it', () => {
+      const banner = '/*****\n* BEGIN METADATA SYNC\n*****/';
+      expect(convert(`-- before\n${banner}\n-- after`)).toBe(`-- before\n${banner}\n-- after`);
+
+      const out = convert(`${banner}\n\n${upsert}`);
+      expect(out).toContain(banner);
+      expect(out).toMatch(/PERFORM __mj\."spUpdateAIVendor"\(/);
+      expect(out).not.toContain('SKIPPED');
+    });
+
+    it('does not take an unterminated block comment for a comment', () => {
+      expect(convert('/* never closed\nSELECT 1')).toContain('-- SKIPPED: EXEC block');
+    });
   });
 
   describe('a block that is not convertible as a whole (#6337)', () => {

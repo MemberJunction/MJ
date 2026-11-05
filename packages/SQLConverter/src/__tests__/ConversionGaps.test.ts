@@ -199,6 +199,12 @@ describe('Metadata_Sync session footers (#6337)', () => {
     expect(result.Stats.Gaps).toBe(0);
   });
 
+  it('does not count a block comment between saves as a gap', () => {
+    const result = convertSQL(`/*****\n* BEGIN METADATA SYNC\n*****/\n\n${save('a1')}\n\n${save('a2')}`);
+    expect(result.Stats.Gaps).toBe(0);
+    expect(performs(result.OutputSQL)).toBe(8);
+  });
+
   it('counts a save it could not convert as a gap and keeps the saves around it', () => {
     const unconvertible = save('a2', '[ID] = @ID_a2 OR [Name] = @Name_a2');
     const result = convertSQL([save('a1'), unconvertible, save('a3')].join('\n\n'));

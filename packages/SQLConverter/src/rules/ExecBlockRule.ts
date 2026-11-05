@@ -145,8 +145,8 @@ export class ExecBlockRule implements IConversionRule {
 
   /** Convert one DECLARE/SET/EXEC block to a DO $$ block */
   private convertOneBlock(block: string, context: ConversionContext): string {
+    if (this.isCommentOnly(block)) return block;
     const { comments, body } = this.extractLeadingComments(block);
-    if (!body.trim()) return comments;
     const declareVars = this.parseDeclare(body);
 
     // A create-or-update block carries TWO EXECs behind an IF NOT EXISTS guard. Detect it
@@ -202,6 +202,17 @@ export class ExecBlockRule implements IConversionRule {
     }
 
     return this.generateDoBlock(comments, declareVars, assignments, { kind: 'call', exec }, context);
+  }
+
+  /** True when `sql` holds only `--` and closed block comments, so there is nothing to convert. */
+  private isCommentOnly(sql: string): boolean {
+    let rest = sql.trimStart();
+    while (rest) {
+      const end = rest.startsWith('--') ? rest.indexOf('\n') : rest.startsWith('/*') ? rest.indexOf('*/') : -1;
+      if (end < 0) return rest.startsWith('--');
+      rest = rest.slice(end + (rest.startsWith('--') ? 1 : 2)).trimStart();
+    }
+    return true;
   }
 
   /** The gap marker and `block` as comments: what a block the rule cannot convert becomes. */
