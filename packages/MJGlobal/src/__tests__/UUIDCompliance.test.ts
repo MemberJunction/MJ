@@ -20,6 +20,14 @@ import ts from 'typescript';
 /** Directories that should never contain UUID comparison anti-patterns */
 const SCAN_ROOT = path.resolve(__dirname, '..', '..', '..'); // packages/
 
+/**
+ * Floor on how many files the scan must read. `findTsFiles` returns [] for a missing root, and a
+ * test moved one directory deeper resolves SCAN_ROOT to a single package: either way the gate
+ * would pass while scanning almost nothing. The repo has ~7000 scannable files and no single
+ * top-level folder under packages/ has more than ~2600, so this floor sits between the two.
+ */
+const MIN_SCANNED_FILES = 3000;
+
 /** Patterns that indicate direct UUID comparison (anti-patterns) */
 const ANTI_PATTERNS = [
     /\.ID\s*===\s*(?!['"]|true|false|null|undefined|0\b)/,     // .ID === someVar (not string literals or primitives)
@@ -166,6 +174,7 @@ function findFlaggedLines(filePath: string, relativePath: string): Violation[] {
 describe('UUID Comparison Compliance', () => {
     it('should not have direct UUID comparisons (=== / !==) in source files', () => {
         const tsFiles = findTsFiles(SCAN_ROOT);
+        expect(tsFiles.length).toBeGreaterThan(MIN_SCANNED_FILES);
         const allViolations: Violation[] = [];
 
         for (const file of tsFiles) {
