@@ -47,7 +47,10 @@ export async function RunDescriptionPass(request: DescriptionPassRequest): Promi
         const [fields, parameters] = await loadUndescribedRows(request);
         if (fields.length === 0 && parameters.length === 0) return;
         const described = await askForDescriptions(request, fields, parameters);
-        const writes = [...applyDescriptions(fields, described.fields), ...applyDescriptions(parameters, described.parameters)];
+        // A save sends every loaded column, and the LLM takes seconds, so rows read before the call
+        // would put back any value changed during it. Save what is stored now.
+        const [currentFields, currentParameters] = await loadUndescribedRows(request);
+        const writes = [...applyDescriptions(currentFields, described.fields), ...applyDescriptions(currentParameters, described.parameters)];
         const outcomes = await RunMaybeSerial(request.Provider, writes);
         if (outcomes.some(ok => !ok)) throw new Error('some descriptions could not be saved');
     } catch (e) {
