@@ -201,6 +201,13 @@ describe('ExecBlockRule — mj-sync create-or-update (IF NOT EXISTS … ELSE …
       expect(out).not.toMatch(/\bEXEC\b|SKIPPED/);
     });
 
+    it('stays linear on a dashed comment after the END when a statement follows it', () => {
+      const started = performance.now();
+      const out = convert(`${upsert}\n-- ${'-'.repeat(46)}\nSELECT 1`);
+      expect(performance.now() - started).toBeLessThan(2000);
+      expect(out).toContain('-- SKIPPED: EXEC block (unparseable upsert)');
+    });
+
     it('leaves a batch of comments alone', () => {
       expect(convert('-- End of SQL Logging Session\n-- Duration: 5833ms')).toBe('-- End of SQL Logging Session\n-- Duration: 5833ms');
     });

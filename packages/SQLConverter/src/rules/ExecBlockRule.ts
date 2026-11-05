@@ -235,7 +235,9 @@ export class ExecBlockRule implements IConversionRule {
     if (elsePos < 0) return null;
     const elseMatch = branches.slice(elsePos).match(/^END\s+ELSE\s+BEGIN\s*/i)!;
     const updateAndEnd = branches.slice(elsePos + elseMatch[0].length);
-    const endMatch = updateAndEnd.match(/\bEND\s*;?\s*(?:--[^\n]*\s*)*$/i);
+    // At most one comment: splitIntoBlocks already moved whole-line trailing comments out of the
+    // block, and repeating this group backtracks exponentially on a long run of dashes.
+    const endMatch = updateAndEnd.match(/\bEND\s*;?\s*(?:--[^\n]*\s*)?$/i);
     if (!endMatch || endMatch.index === undefined) return null;
 
     const create = this.parseExec(branches.slice(0, elsePos));
