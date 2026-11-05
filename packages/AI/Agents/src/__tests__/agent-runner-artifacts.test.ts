@@ -1255,4 +1255,203 @@ describe('QueryBuilderAgent — single-table vs multi-table payload normalizatio
     });
 });
 
+import { BaseAgent } from '../base-agent';
+import type { BaseAgentNextStep, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
+import type { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+
+describe('AgentRunner.ProcessAgentArtifacts — payloadArtifactTypeID precedence', () => {
+    it('prefers agentResult.payloadArtifactTypeID over parent agent.DefaultArtifactTypeID when creating an artifact header', async () => {
+        engineAgents[0].DefaultArtifactTypeID = 'type-component-parent';
+        const artifact = makeEntity('art-delegated');
+        const version = makeEntity('ver-1');
+        const { provider } = makeProvider((name) => (name === 'MJ: Artifacts' ? artifact : version));
+        const runner = new TestableAgentRunner(provider);
+
+        await runner.ProcessAgentArtifacts(
+            makeResult({
+                payloadArtifactTypeID: 'type-data-child',
+                artifactDirective: {
+                    behavior: 'create-new',
+                    name: 'Top 10 Customers',
+                },
+            }),
+            'detail-1',
+            undefined,
+            contextUser,
+            provider
+        );
+
+        expect(artifact.TypeID).toBe('type-data-child');
+        expect(artifact.Name).toBe('Top 10 Customers');
+    });
+
+    it('falls back to parent agent.DefaultArtifactTypeID when agentResult.payloadArtifactTypeID is undefined', async () => {
+        engineAgents[0].DefaultArtifactTypeID = 'type-component-parent';
+        const artifact = makeEntity('art-parent');
+        const version = makeEntity('ver-1');
+        const { provider } = makeProvider((name) => (name === 'MJ: Artifacts' ? artifact : version));
+        const runner = new TestableAgentRunner(provider);
+
+        await runner.ProcessAgentArtifacts(
+            makeResult(),
+            'detail-1',
+            undefined,
+            contextUser,
+            provider
+        );
+
+        expect(artifact.TypeID).toBe('type-component-parent');
+    });
+});
+
+describe('BaseAgent — delegated sub-agent artifactDirective and payloadArtifactTypeID propagation', () => {
+    class DelegatingTestAgent extends BaseAgent {
+        public SimulatedSubAgentResult!: ExecuteAgentResult<Record<string, unknown>>;
+
+        protected override async createStepEntity(): Promise<never> {
+            return {
+                ID: 'step-sub-1',
+                Save: vi.fn(async () => true),
+            } as unknown as never;
+        }
+
+        protected override async finalizeStepEntity(): Promise<void> {
+            // no-op in unit test
+        }
+
+        public override async ExecuteSubAgent(): Promise<ExecuteAgentResult<Record<string, unknown>>> {
+            return this.SimulatedSubAgentResult;
+        }
+
+        public async runChildSubAgentStep(
+            params: ExecuteAgentParams,
+            previousDecision: BaseAgentNextStep<Record<string, unknown>>,
+            subAgentEntity: MJAIAgentEntityExtended
+        ): Promise<BaseAgentNextStep<Record<string, unknown>>> {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return await (this as any).executeChildSubAgentStep(
+                params,
+                previousDecision,
+                undefined,
+                { rows: [{ id: 1 }] },
+                0,
+                subAgentEntity
+            );
+        }
+    }
+
+    const parentAgentEntity = {
+        ID: 'parent-router-id',
+        Name: 'Skip',
+        DefaultArtifactTypeID: 'type-component',
+        PayloadDownstreamPaths: '*',
+        PayloadUpstreamPaths: '*',
+    } as unknown as MJAIAgentEntityExtended;
+
+    const childAgentEntity = {
+        ID: 'child-specialist-id',
+        Name: 'Data Answerer',
+        Status: 'Active',
+        ParentID: 'parent-router-id',
+        DefaultArtifactTypeID: 'type-json-data',
+        PayloadDownstreamPaths: '*',
+        PayloadUpstreamPaths: '*',
+    } as unknown as MJAIAgentEntityExtended;
+
+    it('propagates child artifactDirective and DefaultArtifactTypeID when terminateAfter is true', async () => {
+        const agent = new DelegatingTestAgent();
+        agent.SimulatedSubAgentResult = {
+            success: true,
+            payload: { rows: [{ id: 1 }] },
+            artifactDirective: {
+                behavior: 'create-new',
+                name: 'Revenue By Region',
+                description: 'Regional breakdown',
+            },
+            agentRun: {
+                ID: 'child-run-1',
+                Status: 'Completed',
+                FinalStep: 'Success',
+                Steps: [],
+            } as unknown as MJAIAgentRunEntityExtended,
+        };
+
+        const params: ExecuteAgentParams = {
+            agent: parentAgentEntity,
+            conversationMessages: [],
+            contextUser,
+        };
+
+        const stepResult = await agent.runChildSubAgentStep(
+            params,
+            {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: {},
+                previousPayload: {},
+                subAgent: {
+                    name: 'Data Answerer',
+                    message: 'Get revenue by region',
+                    terminateAfter: true,
+                },
+            },
+            childAgentEntity
+        );
+
+        expect(stepResult.terminate).toBe(true);
+        expect(stepResult.artifactDirective).toEqual({
+            behavior: 'create-new',
+            name: 'Revenue By Region',
+            description: 'Regional breakdown',
+        });
+        expect(stepResult.payloadArtifactTypeID).toBe('type-json-data');
+    });
+
+    it('drops child artifactDirective and payloadArtifactTypeID when terminateAfter is false so parent retains control', async () => {
+        const agent = new DelegatingTestAgent();
+        agent.SimulatedSubAgentResult = {
+            success: true,
+            payload: { rows: [{ id: 1 }] },
+            artifactDirective: {
+                behavior: 'create-new',
+                name: 'Intermediate Query',
+            },
+            payloadArtifactTypeID: 'type-json-data',
+            agentRun: {
+                ID: 'child-run-2',
+                Status: 'Completed',
+                FinalStep: 'Success',
+                Steps: [],
+            } as unknown as MJAIAgentRunEntityExtended,
+        };
+
+        const params: ExecuteAgentParams = {
+            agent: parentAgentEntity,
+            conversationMessages: [],
+            contextUser,
+        };
+
+        const stepResult = await agent.runChildSubAgentStep(
+            params,
+            {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: {},
+                previousPayload: {},
+                subAgent: {
+                    name: 'Data Answerer',
+                    message: 'Fetch intermediate rows',
+                    terminateAfter: false,
+                },
+            },
+            childAgentEntity
+        );
+
+        expect(stepResult.terminate).toBe(false);
+        expect(stepResult.artifactDirective).toBeUndefined();
+        expect(stepResult.payloadArtifactTypeID).toBeUndefined();
+    });
+});
+
+
 

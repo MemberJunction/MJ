@@ -789,6 +789,14 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * @since 6.1.0
      */
     artifactDirective?: ArtifactDirective;
+    /**
+     * Artifact type ID (`MJ: Artifact Types.ID`) to use when persisting this step's payload as an
+     * artifact. Propagated from a terminating `Sub-Agent` step (`terminateAfter: true`) — preferring
+     * the child's own `payloadArtifactTypeID`, else the child agent's `DefaultArtifactTypeID` — so a
+     * router/orchestrator whose own `DefaultArtifactTypeID` differs from the specialist's does not
+     * overwrite the specialist's artifact type.
+     */
+    payloadArtifactTypeID?: string;
     /** Index of the message to expand when step is 'expand-message' */
     messageIndex?: number;
     /** Reason for expanding the message when step is 'expand-message' */
