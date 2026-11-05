@@ -130,7 +130,7 @@ stubs (`DatabaseProviderStub`, `EntitiesOnlyProvider`, `TestLLM`); `@vitest/cove
 | D25 | Gemini judge | `gemini-4-argon` | Strongest Gemini on the price list; judge cost is negligible |
 | D26 | Gate 1 clean-set labels | The original PR author labels each catch; a reviewer of that PR if the author is gone or silent for a week | Only the author knows the intent; Meta also asks the author |
 | D27 | Nightly start | 07:45 UTC, inside MJ's existing 06:00–08:30 UTC nightly window; at most 2 PRs in parallel | Follows `test.yml`'s 07:00 rebuild of `next` (warm turbo cache); avoids the top of the hour, when GitHub delays scheduled runs |
-| D28 | Sandbox | PR code, its install and build scripts, and generated tests run only in a Docker container: own PID namespace, no network, no secrets, no runner credentials, worktree read-only except the test and scratch folders | Same-user processes can read each other's environment, and the GitHub-hosted runner user has passwordless `sudo`, so code on the runner itself can reach keys and runner credentials |
+| D28 | Sandbox | PR code, its install and build scripts, and generated tests run only in a Docker container: own PID namespace, no network, no secrets, no runner credentials (checkouts use `persist-credentials: false`). No tool on the host reads head as configuration: head's dependencies are fetched from its lockfile alone, and `pnpm install` runs offline inside the container. Head is writable while it is prepared, read-only while tests run; base is never writable from a container that runs head code | Same-user processes can read each other's environment, and the GitHub-hosted runner user has passwordless `sudo`, so code on the runner itself can reach keys and runner credentials. `pnpm install --ignore-scripts` still loads `.pnpmfile.cjs` and switches to the `packageManager` version named by the project, so a host install of head runs PR code |
 | D29 | Caches | No catching job saves a cache; jobs restore caches only and do not use `mj-setup` | Nightly runs execute in the default-branch context, where a saved cache reaches `next` and the release workflows |
 | D30 | On-demand runs | The `jit-catch` label only; no comment command; to run again, remove and re-add the label | Anyone can comment on this public repo; adding a label needs triage access, and label runs are scoped to the PR |
 | D31 | Base build hand-off | Job 1 builds base with read-only remote turbo cache access and passes the outputs and its local turbo cache to job 2 | Job 2 has no `TURBO_TOKEN`; with the hand-off, only the packages a PR changed build cold |
@@ -159,6 +159,10 @@ stubs (`DatabaseProviderStub`, `EntitiesOnlyProvider`, `TestLLM`); `@vitest/cove
 | `jit-catch report` | Gate metrics, cost, judge agreement | Nightly summary, on demand |
 
 Making B a product later means flipping `private` and doing the one-time npm trusted-publisher setup (manual 2FA).
+
+The sandbox (D28) applies to every command, not only to the workflow jobs. `jit-catch run` and `jit-catch backtest`
+hold keys in their own process and run PR code and generated tests, and gate 1 runs before the workflows exist, so both
+need Docker and start the same container the jobs use. The CLI refuses to run tests or builds when Docker is missing.
 
 ### 5.2 Parts
 
@@ -235,8 +239,8 @@ PR selector → Change analyzer → Generator (base only)
 | Job | Does | Secrets | Untrusted code | Checks out tool from |
 |---|---|---|---|---|
 | 1 Generate | Select, analyze; build base; generate | Anthropic key, `TURBO_TOKEN` (orchestrating process only) | Generated tests, in the sandbox only | `next` |
-| 2 Execute | Install head; build head; run tests on base and head; verdicts; coverage | **None**; `contents: read` | PR code, in the sandbox only | `next` |
-| 3 Assess | Rules, judges, store, PR comment | Anthropic, OpenAI and Gemini keys; `contents: write`, `pull-requests: write` | None; reads job 2 output as data | `next` |
+| 2 Execute | Fetch head's dependencies from its lockfile (host); install, rebuild and build head in the sandbox; run tests on base and head; verdicts; coverage | **None**; `contents: read` | PR code, in the sandbox only | `next` |
+| 3 Assess | Rules (with base's types, from a checkout of the base commit), judges, store, PR comment | Anthropic, OpenAI and Gemini keys; `contents: write`, `pull-requests: write` | None; reads job 2 output as data | `next` |
 | Feedback | Record answers; commit promoted tests | App token for commits; `contents: write` | None | `next` |
 
 Jobs pass data as workflow artifacts. Job 3 validates job 2's output against a schema and never executes it.
@@ -244,11 +248,28 @@ Jobs pass data as workflow artifacts. Job 3 validates job 2's output against a s
 **Sandbox (D28).** All untrusted code — PR code, its install and build scripts, and generated tests — runs only inside a
 Docker container that the tool starts. The container has its own PID namespace (it cannot see the runner's processes or
 their `/proc/<pid>/environ`), no network, a non-root user, no `--privileged` flag, no Docker socket, and an empty
-environment (no secrets, no `ACTIONS_*` runtime variables). The worktree is mounted read-only except the generated-test
-folder and a scratch folder. Results leave only as files that the host validates against a schema. A clean environment
-alone is not enough: a child process of the same user can read its parent's environment through `/proc`, and on
-GitHub-hosted runners the runner user has passwordless `sudo`, so code that runs directly on the runner can reach keys and
-the runner's own credentials, including the cache token.
+environment (no secrets, no `ACTIONS_*` runtime variables). Results leave only as files that the host validates against a
+schema. A clean environment alone is not enough: a child process of the same user can read its parent's environment
+through `/proc`, and on GitHub-hosted runners the runner user has passwordless `sudo`, so code that runs directly on the
+runner can reach keys and the runner's own credentials, including the cache token.
+
+**Mount phases.** A worktree is mounted in two phases. While a revision is *prepared* (`pnpm install --offline`,
+`pnpm rebuild`, `turbo run build`), its worktree is mounted read-write, because those steps write `node_modules`, `dist`
+and `.turbo`. While tests *run*, the worktree is mounted read-only except the generated-test folders and a tmpfs for
+vitest's cache. Base is never mounted read-write in a container that runs head code: base is prepared in job 1, before
+any head code exists, and job 2 only reads it.
+
+**No tool on the host reads head as configuration.** `pnpm install --ignore-scripts` skips lifecycle scripts, but it
+still loads the project's `.pnpmfile.cjs` and, because `manage-package-manager-versions` defaults to on, downloads and
+runs the pnpm version named in the project's `packageManager` field. Both are PR-controlled, so neither `pnpm install`
+nor any other tool runs in the head worktree on the host. The host runs `git` to create the worktree, then
+`pnpm fetch` in an empty folder that holds only head's `pnpm-lock.yaml` (no manifest, no `.npmrc`, no `.pnpmfile.cjs`),
+with the pnpm version from the tool's own checkout. Everything else — the install, `pnpm rebuild` and the build — runs
+inside the sandbox from that store, offline. The image pins pnpm and turns `manage-package-manager-versions` off, so a
+PR that changes `packageManager` fails to prepare and is recorded as an infrastructure failure, not run on the host.
+
+**Checkout credentials.** Every checkout whose worktree the sandbox mounts uses `persist-credentials: false`, as
+`test.yml` does, so no token sits in `.git/config` inside the container.
 
 **Cache rule (D29).** No catching job saves a cache. Jobs restore the pnpm store and turbo caches with
 `actions/cache/restore` and do not use `mj-setup`, whose `setup-node` step saves the pnpm cache when the job ends. Nightly
@@ -292,11 +313,17 @@ package, and 49% changed two or more. Tests read their own package from `src/` b
 `dist/` (no `paths` aliases outside MJExplorer and MobileApp). So:
 
 1. **Default path.** Two worktrees, `base/` and `head/`. Base comes from job 1's hand-off (§5.4): job 1 built it with
-   read-only remote turbo cache access. For head, job 2 runs `pnpm install --frozen-lockfile --ignore-scripts` on the host
-   (restored pnpm store, no PR code executed), then, inside the sandbox, `pnpm rebuild` (the allowlisted dependency build
-   scripts in `pnpm-workspace.yaml`) and `turbo run build --filter=<package under test>...` with the local turbo cache
-   seeded from base. Job 2 has no `TURBO_TOKEN` and the sandbox has no network, so packages the PR did not change are
-   local cache hits and the changed packages and their dependents build cold. The spike measures time and disk for this.
+   read-only remote turbo cache access. For head, job 2 runs `pnpm fetch` on the host in an empty folder that holds only
+   head's `pnpm-lock.yaml` (restored pnpm store; the lockfile is data, nothing from head is read as configuration), then,
+   inside the sandbox with the head worktree and the store mounted read-write,
+   `pnpm install --offline --frozen-lockfile --ignore-scripts`, `pnpm rebuild` (the allowlisted dependency build scripts
+   in `pnpm-workspace.yaml`) and `turbo run build --filter=<package under test>...` with the local turbo cache seeded from
+   base. Job 2 has no `TURBO_TOKEN` and the sandbox has no network, so packages the PR did not change are local cache
+   hits and the changed packages and their dependents build cold. The store is a bind mount, so pnpm copies instead of
+   hard-linking (`package-import-method=copy`); the spike measures the time and disk this costs. If `pnpm fetch` cannot
+   serve the workspace lockfile, the fallback is an *install container*: the same image with network access but still no
+   secrets, no runner credentials and its own PID namespace, used only for `pnpm install`; tests still run with
+   `--network none`.
 2. **Fast path.** If the PR changes only `src/` files of one package (no `package.json`, lockfile or config changes), use
    a copy of the base build from job 1 and put head's version of the changed files in it, in the sandbox, for the head
    run. Vitest reads the package's own source directly, so nothing builds cold.
@@ -396,7 +423,7 @@ continues with the list of boosts that fired. Dropped catches stay in the store 
 
 | Rule | Fires when |
 |---|---|
-| `PrivateAccess` | The test reads or calls a member whose declaration in base is `private` or `protected` — by plain access, through a cast, or by index (`obj['_x']`). The TypeScript checker resolves each member against the base program. A cast alone does not fire the rule: 42% of MJ test files use `as unknown as` to build stubs (`IMetadataProvider`, `UserInfo`), and generated tests copy that style. |
+| `PrivateAccess` | The test reads, writes or calls a member whose declaration in base is `private` or `protected` — by plain access, through a cast, or by index (`obj['_x']`). The TypeScript checker, run over the test and base's sources (job 3 checks out the base commit for this), resolves each member against the type of the expression *inside* the cast, not the cast's target: `(svc as unknown as { _cache: Map })._cache` and `(svc as any)._cache` are judged against `svc`'s declared type. A variable whose initializer is a cast is followed to that initializer, so the two-step form `const s = svc as unknown as {...}; s._cache` resolves the same way. A cast alone does not fire the rule: 42% of MJ test files use `as unknown as` to build stubs (`IMetadataProvider`, `UserInfo`), and generated tests copy that style; a stub's members have no base declaration, so they return nothing. |
 | `InternalCallCounting` | `toHaveBeenCalledTimes` / `toHaveBeenCalledWith` on a spy of a non-exported function |
 | `BrokenMock` | The failure starts inside a `vi.mock` factory or in setup (`beforeEach`), not in the code under test |
 | `OrderSensitive` | The assertion compares `JSON.stringify` output, `Object.keys` order, or a stringified object |
@@ -438,7 +465,8 @@ Order by bucket median, then TP Prob, then the number of boosts. Report threshol
 | Trigger | Reported |
 |---|---|
 | Label run | Median ≥ Medium, at most 3 catches |
-| Nightly (after gate 2) | Median = High, or Medium with `AccessChange` or `MatchesRisk` |
+| Nightly (during gate 2, sent to the author directly, no PR comment) | Same as a label run: Median ≥ Medium, at most 3 catches per PR |
+| Nightly (after gate 2, PR comment) | Median = High, or Medium with `AccessChange` or `MatchesRisk` |
 
 **Calibration.** Each human label from gate 1 and gate 2 is compared with each judge's score using `GetAgreement`
 (quadratic kappa, Krippendorff's alpha; ≥ 20 pairs). Results set the thresholds and remove a judge that adds only noise.
@@ -477,8 +505,10 @@ mentions are broken so nobody is notified.
 
 ### 10.2 Answers
 
-- **Checkboxes.** Ticking one edits the comment; a workflow on `issue_comment.edited` records the answer. Only the PR
-  author or a user with write access counts. (GitHub Actions has no reaction event, so reactions cannot be used.)
+- **Checkboxes.** Ticking one edits the comment; a workflow on `issue_comment.edited` records the answer. The comment's
+  author is always the bot, so the workflow checks `github.event.sender` (the user who made the edit): only the PR author
+  or a user with write access counts. This workflow runs no PR code. (GitHub Actions has no reaction event, so reactions
+  cannot be used.)
 - **Answers survive updates.** When the comment is rewritten for a new head, ticked boxes are restored from the store.
 - **"Author changed the PR."** After each push to a labeled PR, `recheck` re-runs earlier catching tests on the new head.
   A test that now passes means the author restored the behavior; this is recorded as a true positive and the comment
@@ -520,8 +550,12 @@ and fails the run.
 **Untrusted code runs only in the sandbox (§5.4, D28).** PR code, its install and build scripts, and generated tests never
 run directly on the runner. Keys exist only in the orchestrating processes of jobs 1 and 3.
 
-- Job 2 holds no secrets and `contents: read`, installs head with `--ignore-scripts`, and runs every build, script and
-  test in the sandbox.
+- Job 2 holds no secrets and `contents: read`. On the host it runs only `git` and `pnpm fetch` against head's lockfile
+  in a folder that holds nothing else; the install, every build, script and test run in the sandbox. No tool on the host
+  reads head as configuration (§5.4): `--ignore-scripts` alone is not enough, because pnpm still loads `.pnpmfile.cjs`
+  and follows `packageManager`.
+- Checkouts that the sandbox mounts use `persist-credentials: false`, so the container holds no token.
+- The same sandbox applies to `jit-catch run` and `backtest` on a developer machine (§5.1).
 - Job 1 holds the Anthropic key and `TURBO_TOKEN` in its orchestrating process. Generated tests come from an agent that
   read untrusted PR text, so they run only in the sandbox, which cannot see that process.
 - Jobs 1 and 3 check out the `jit-catch` tool from `next`, never from the PR head. `next` is the default branch, so the
@@ -640,8 +674,12 @@ gate 2, the nightly limit rises to every eligible PR if the chosen model's measu
 
 Label runs alone cannot reach the volume. At ~3 weak catches a day with ~70% removed by the filters, labeling all ~14
 TypeScript PRs a day would give ~18 reported catches in 20 working days; the 10-a-day label limit and opt-in labels give
-far fewer, before anyone answers. With every eligible PR counted, 8 weeks gives ~36 reported catches, so 15 answers needs
-an answer rate of about 40% or more.
+far fewer, before anyone answers. Nightly runs see only PRs that are open at 07:45 UTC: of the last 383 PRs merged to
+`next`, 220 (57%) were, so a nightly run over open PRs alone gives ~21 reported catches in 8 weeks, and 15 answers would
+need an answer rate near 70%. During gate 2 the nightly run therefore also covers PRs **merged since the previous run**,
+with base `M^1` and head `M` as in gate 1 (D33); their catches go to the author the same way. With both sets counted,
+8 weeks gives ~36 reported catches, so 15 answers needs an answer rate of about 40% or more. The 10-a-night cap (D23)
+does not limit this during gate 2, because the limit then rises to every eligible PR.
 
 | Measure | Definition | Pass |
 |---|---|---|
@@ -672,20 +710,25 @@ Passing gate 2 turns on nightly PR comments (at the nightly threshold) and start
 **Spike questions (phase 0):**
 
 1. For 5 sample PRs, how much time **and disk** does the designed path take? Job 1 builds base with read-only remote
-   cache access; job 2 has **no `TURBO_TOKEN`**, installs head with `--ignore-scripts`, and builds in the sandbox from
-   the seeded local cache. Hosted runners have limited disk and checkout alone can take minutes, so use a blobless
-   checkout as `test.yml` does.
+   cache access; job 2 has **no `TURBO_TOKEN`**, fetches head's dependencies from the lockfile on the host, and installs
+   and builds in the sandbox from the seeded local cache. Hosted runners have limited disk and checkout alone can take
+   minutes, so use a blobless checkout as `test.yml` does.
 2. Can the Claude Agent SDK restrict tools to read/search, enforce the write path, add `run_test`, cap turns and tokens,
    and report token usage?
 3. Does the sandbox hold on `ubuntu-latest`? A test inside it must fail to read the Anthropic key — including through
    `/proc/*/environ` of every process it can see — fail to reach the network, and fail to obtain the runner's cache token
-   or write a cache entry. Checking that the environment is empty is not enough.
+   or write a cache entry. Checking that the environment is empty is not enough. Also from the host side: a head that
+   adds a `.pnpmfile.cjs` and changes `packageManager` must run nothing on the host — the pnpmfile's marker file must
+   not appear and the host's pnpm version must not change — through the whole of job 2's prepare step.
 4. Do MJ's Anthropic, OpenAI (with logprobs) and Gemini provider classes work without a database?
 5. Does `INTEGRATION_LIVE_MODEL_KEYS` include an OpenAI key, or is a new secret needed?
 6. Does vitest's JSON reporter give assertion, expected, actual and stack for each failure?
 7. Does the one-package file-swap path give the same verdicts as the two-worktree path?
-8. Do `pnpm install --ignore-scripts` on the host plus `pnpm rebuild` in the sandbox give a working build, and does turbo
-   `^2.7` give job 1 read-only remote cache access (`--cache=local:rw,remote:r`)?
+8. With MJ's real `pnpm-lock.yaml`: does `pnpm fetch` on the host, in a folder that holds only the lockfile, fill a
+   store from which `pnpm install --offline --frozen-lockfile --ignore-scripts` plus `pnpm rebuild` succeed inside the
+   sandbox (`--network none`, store on a bind mount, so `package-import-method=copy`)? How long does the copy take and
+   how much disk does it use? If fetch cannot serve the workspace lockfile, does the install-container fallback (§7)
+   work? And does turbo `^2.7` give job 1 read-only remote cache access (`--cache=local:rw,remote:r`)?
 
 ---
 
@@ -712,7 +755,8 @@ judges, reporting model and gates carry over.
 | Old PRs in the backtest miss the turbo cache and build slowly, or need older tooling | Measure in the spike; choose corpus PRs from the last 6–12 months |
 | Most generated tests fail on base, so few reach head | Agent loop; prompt includes MJ test examples and stubs; three-model comparison |
 | Noise erodes trust | Two gates; one comment per PR; thresholds as settings; nightly comments only after gate 2 |
-| The sandbox is misconfigured and untrusted code reaches a key or the cache token | Spike question 3 attacks it from inside; restore-only caches (D29); redaction check on every output (D32) |
+| The sandbox is misconfigured and untrusted code reaches a key or the cache token | Spike question 3 attacks it from inside and checks the host side (`.pnpmfile.cjs`, `packageManager`); restore-only caches (D29); redaction check on every output (D32) |
+| `pnpm fetch` cannot serve the workspace lockfile, or the copied store is too slow | Spike question 8 measures it on the real lockfile; fallback is the install container (§7): network for the install only, still no secrets or credentials |
 | Cold head builds are too slow or fill the runner's disk | Base hand-off and seeded local turbo cache; one-package fast path; spike question 1 measures time and disk |
 | Gate 2 does not reach 15 answered catches | Nightly catches count (D34); 8-week limit with a defined outcome |
 | Agent SDK cannot enforce the tool limits | Spike question 2; fall back to a hand-written tool loop with the Anthropic SDK |

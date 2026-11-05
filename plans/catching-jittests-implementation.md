@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript 5.9 (ESM, `tsconfig.server.json`), vitest 4, zod 3.25, `@anthropic-ai/claude-agent-sdk` (generator), `@memberjunction/ai` + `ai-anthropic` / `ai-openai` / `ai-gemini` (judges), `@memberjunction/rubrics` (median, agreement), TypeScript compiler API (rules), Docker (sandbox), `git` and `gh` CLIs via `child_process`.
 
-**Spec:** [`plans/catching-jittests-design.md`](catching-jittests-design.md). Section numbers below (§7, §9.1, …) refer to it. This plan implements §15 phases 0 and 1 only. Phase 2 (gate 1: corpus, `backtest`, `report`) and phase 3 (workflows, PR comment, promotion, data branch) get their own plans after the spike results are in.
+**Spec:** [`plans/catching-jittests-design.md`](catching-jittests-design.md). Section numbers below (§7, §9.1, …) refer to it. This plan implements §15 phases 0 and 1 only. Phase 2 (gate 1: corpus, `backtest`, `report`) and phase 3 (workflows, PR comment, promotion, data branch) get their own plans after the spike results are in. Items from the second design review that belong to those later plans, so they are not lost: every checkout the sandbox mounts uses `persist-credentials: false` (§5.4); job 3 checks out the base commit so `PrivateAccess` has base's types (§5.4); the feedback workflow checks `github.event.sender` (§10.2); during gate 2 the nightly selector also takes PRs merged since the previous run, with base `M^1` and head `M` (§14.2); nightly catches during gate 2 use the label-run threshold (§9.3).
 
 ## Global Constraints
 
@@ -38,7 +38,7 @@ Everything in phase 1 is under `packages/TestingFramework/jit-catching/`. Phase 
 plans/catching-jittests-spike/            # phase 0, throwaway
   RESULTS.md                              # the answers to the 8 questions
   Dockerfile.sandbox                      # node 24 + pnpm, non-root user
-  q1-q8-build-timing.sh                   # Q1 + Q8: host install --ignore-scripts, sandbox rebuild + build, time + disk
+  q1-q8-build-timing.sh                   # Q1 + Q8: host `pnpm fetch` from the lockfile only, sandbox offline install + rebuild + build, time + disk
   q2-agent-sdk.mjs                        # Q2: Agent SDK tool restriction, write path, run_test, turns, usage
   q3-sandbox-attack.sh                    # Q3: try to read a key, reach the network, read /proc, use docker
   q4-providers.mjs                        # Q4: Anthropic/OpenAI(logprobs)/Gemini provider classes with no DB
@@ -130,7 +130,7 @@ Each section answers one question with the command run, the raw numbers, and the
 | 5 | `INTEGRATION_LIVE_MODEL_KEYS` includes an OpenAI key | pending | |
 | 6 | vitest JSON reporter gives assertion, expected, actual, stack | pending | |
 | 7 | File-swap path gives the same verdicts as two worktrees | pending | |
-| 8 | `pnpm install --ignore-scripts` + `pnpm rebuild` in the sandbox builds; turbo `--cache=local:rw,remote:r` works | pending | |
+| 8 | Host `pnpm fetch` (lockfile only) + sandbox `pnpm install --offline` + `pnpm rebuild` builds on the real lockfile; copy-import time and disk; install-container fallback if fetch fails; turbo `--cache=local:rw,remote:r` works | pending | |
 ```
 
 - [ ] **Step 3: Sandbox image**
@@ -146,7 +146,10 @@ RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
 # The runner's uid is passed at `docker run --user`; no user is created here so any uid works.
 WORKDIR /work
-ENV CI=1 TZ=UTC
+# pnpm must not follow a PR's `packageManager` field (no network anyway), and installs read the
+# store the host filled with `pnpm fetch`, mounted at /pnpm-store. Bind mounts cannot hard-link
+# into the worktree, so pnpm copies.
+ENV CI=1 TZ=UTC npm_config_manage_package_manager_versions=false npm_config_store_dir=/pnpm-store npm_config_package_import_method=copy
 ```
 
 Build it locally to prove it builds:
@@ -365,7 +368,7 @@ git add plans/catching-jittests-spike/q2-agent-sdk.mjs plans/catching-jittests-s
 git commit -m "spike(jit-catch): Q2 Agent SDK limits"
 ```
 
-### Task 0.5: Q1, Q3 and Q8 — build path, sandbox attack and ignore-scripts, on `ubuntu-latest`
+### Task 0.5: Q1, Q3 and Q8 — build path, sandbox attack (inside and host side) and offline install, on `ubuntu-latest`
 
 **Files:**
 - Create: `plans/catching-jittests-spike/q1-q8-build-timing.sh`
@@ -380,11 +383,12 @@ git commit -m "spike(jit-catch): Q2 Agent SDK limits"
 #!/usr/bin/env bash
 # Q1 + Q8. Measures the designed path:
 #   job 1: base worktree, host install, host build with read-only remote cache
-#   job 2: head worktree, host install --ignore-scripts, sandbox `pnpm rebuild` + turbo build with no token
+#   job 2: head worktree; host `pnpm fetch` from head's lockfile alone; sandbox offline install + `pnpm rebuild` + turbo build with no token
 set -euo pipefail
 BASE=$1; HEAD=$2; PKG=$3            # e.g. abc123 def456 @memberjunction/core
 ROOT=$(git rev-parse --show-toplevel)
 WORK=${RUNNER_TEMP:-/tmp}/jit-q1; rm -rf "$WORK"; mkdir -p "$WORK"
+STORE=$WORK/pnpm-store              # filled on the host by `pnpm fetch`, mounted into the sandbox at /pnpm-store
 IMG=jit-sandbox:spike
 docker build -q -f "$ROOT/plans/catching-jittests-spike/Dockerfile.sandbox" -t $IMG "$ROOT/plans/catching-jittests-spike"
 t() { date +%s; }
@@ -400,20 +404,23 @@ node -e 'const s=require("fs").readdirSync(process.argv[1]).map(f=>require(proce
 
 echo "== job 2: head $HEAD"
 T3=$(t); git worktree add --detach "$WORK/head" "$HEAD"
-( cd "$WORK/head" && pnpm install --frozen-lockfile --ignore-scripts )
-T4=$(t); echo "head install (host, --ignore-scripts): $((T4-T3))s"
+# Host side: only the lockfile leaves the worktree. No manifest, .npmrc or .pnpmfile.cjs in the fetch folder,
+# so pnpm reads nothing from head as configuration and runs the host's own pnpm version.
+mkdir -p "$WORK/fetch" "$STORE"; cp "$WORK/head/pnpm-lock.yaml" "$WORK/fetch/"
+( cd "$WORK/fetch" && pnpm fetch --store-dir "$STORE" )
+T4=$(t); echo "head fetch (host, lockfile only): $((T4-T3))s, store: $(disk "$STORE")MB"
 cp -r "$WORK/base/.turbo/cache" "$WORK/head/.turbo-seed"
 docker run --rm --network none --pids-limit 1024 --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges \
   -e TURBO_CACHE_DIR=/work/.turbo/cache -e TURBO_TELEMETRY_DISABLED=1 -e HOME=/tmp \
-  -v "$WORK/head:/work" -v "$WORK/head/.turbo-seed:/work/.turbo/cache" $IMG \
-  sh -c "cd /work && pnpm rebuild && npx turbo run build --filter='$PKG...' --cache=local:rw,remote:r --summarize >/dev/null"
-T5=$(t); echo "head rebuild+build (sandbox, no token): $((T5-T4))s, disk head: $(disk "$WORK/head")MB"
+  -v "$WORK/head:/work" -v "$STORE:/pnpm-store" -v "$WORK/head/.turbo-seed:/work/.turbo/cache" $IMG \
+  sh -c "cd /work && pnpm install --offline --frozen-lockfile --ignore-scripts && echo INSTALLED && pnpm rebuild && npx turbo run build --filter='$PKG...' --cache=local:rw,remote:r --summarize >/dev/null"
+T5=$(t); echo "head install+rebuild+build (sandbox, offline, no token): $((T5-T4))s, disk head: $(disk "$WORK/head")MB"
 node -e 'const s=require("fs").readdirSync(process.argv[1]).map(f=>require(process.argv[1]+"/"+f)).at(-1);const c=s.tasks.map(t=>t.cache.status);console.log("head cache statuses:",JSON.stringify(c.reduce((a,x)=>(a[x]=(a[x]||0)+1,a),{})))' "$WORK/head/.turbo/runs"
 echo "total disk: $(disk "$WORK")MB; free: $(df -m "$WORK" | tail -1 | awk '{print $4}')MB"
 git worktree remove --force "$WORK/base"; git worktree remove --force "$WORK/head"
 ```
 
-Note on Q8: `pnpm rebuild` runs the allowlisted dependency build scripts (`onlyBuiltDependencies` in `pnpm-workspace.yaml`) that `--ignore-scripts` skipped, inside the sandbox. If `pnpm rebuild` tries the network, record it; the fallback is to run `pnpm rebuild` on the host for base only (trusted) and copy `node_modules` into the head worktree, with the head's `pnpm install --ignore-scripts --offline` on top.
+Note on Q8: the host never runs pnpm inside the head worktree. `pnpm install --ignore-scripts` still loads the project's `.pnpmfile.cjs` and, with `manage-package-manager-versions` on by default, downloads and runs the pnpm named in the project's `packageManager`, so a host install of head runs PR code (reviewer test on pnpm 10.33.0). `pnpm fetch` reads only the lockfile. The sandbox then installs offline from the mounted store (image sets `store-dir`, `package-import-method=copy` and `manage-package-manager-versions=false`), and `pnpm rebuild` runs the allowlisted dependency build scripts (`onlyBuiltDependencies` in `pnpm-workspace.yaml`) that `--ignore-scripts` skipped. Record: whether `INSTALLED` printed, the copy-import time, and the store size. If fetch or the offline install fails on the workspace lockfile, run the fallback once and record it: the same `docker run` without `--network none` for the install step only (still `--cap-drop ALL`, non-root, empty environment), then the build and tests with `--network none`.
 
 - [ ] **Step 2: The sandbox attack script (Q3)**
 
@@ -446,6 +453,39 @@ rm -rf "$WORK"
 ```
 
 Run it locally first (`bash plans/catching-jittests-spike/q3-sandbox-attack.sh`), then on the runner.
+
+- [ ] **Step 2b: The host-side case (Q3, second half)** — a head that adds `.pnpmfile.cjs` and changes `packageManager` must run nothing on the host.
+
+Append to `q3-sandbox-attack.sh`, before the final `rm -rf`:
+
+```bash
+echo "== 10 host side: pnpmfile + packageManager in head"
+HEADSIM=$(mktemp -d); MARK=$HEADSIM/PNPMFILE_RAN
+cat > "$HEADSIM/package.json" <<'EOF'
+{ "name": "evil-head", "private": true, "packageManager": "pnpm@10.30.0", "dependencies": { "is-odd": "3.0.1" } }
+EOF
+cat > "$HEADSIM/.pnpmfile.cjs" <<EOF
+require('fs').writeFileSync('$MARK', process.env.ANTHROPIC_API_KEY || 'ran');
+module.exports = { hooks: { readPackage: (p) => p } };
+EOF
+( cd "$HEADSIM" && pnpm install --lockfile-only --ignore-pnpmfile >/dev/null 2>&1 )   # a lockfile for the fetch; made here only to set the test up
+rm -f "$MARK"
+HOSTPNPM=$(pnpm --version)
+# The designed host step: lockfile alone, in its own folder.
+FETCH=$(mktemp -d); STORE=$(mktemp -d); cp "$HEADSIM/pnpm-lock.yaml" "$FETCH/"
+( cd "$FETCH" && pnpm fetch --store-dir "$STORE" >/dev/null 2>&1 ) || echo "fetch failed (record; see Q8)"
+[ -e "$MARK" ] && { echo "LEAK host: .pnpmfile.cjs ran during fetch"; LEAK=1; } || echo "pnpmfile did not run on host"
+[ "$(pnpm --version)" = "$HOSTPNPM" ] && echo "host pnpm still $HOSTPNPM" || { echo "LEAK host: pnpm version changed"; LEAK=1; }
+# Control: the rejected design. Expected to run the pnpmfile — proves the test can tell the cases apart.
+( cd "$HEADSIM" && pnpm install --frozen-lockfile --ignore-scripts --store-dir "$STORE" >/dev/null 2>&1 ) || true
+[ -e "$MARK" ] && echo "control: host install ran .pnpmfile.cjs (expected, this is why the host never installs head)" || echo "control: pnpmfile did not run under host install (unexpected on pnpm 10.33 — record)"
+# Then the sandbox half: offline install from the store, pnpmfile allowed to run there, no network, no key.
+out=$(docker run --rm --network none --pids-limit 256 --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges \
+      -e HOME=/tmp -v "$HEADSIM:/work" -v "$STORE:/pnpm-store" $IMG sh -c 'cd /work && rm -f PNPMFILE_RAN && pnpm install --offline --frozen-lockfile --ignore-scripts >/dev/null 2>&1; cat PNPMFILE_RAN 2>/dev/null; pnpm --version')
+echo "$out" | grep -q "$ANTHROPIC_API_KEY" && { echo "LEAK sandbox: pnpmfile saw the key"; LEAK=1; }
+echo "sandbox pnpm: $(echo "$out" | tail -1) (must be 10.33.0, not 10.30.0)"; echo "$out" | tail -1 | grep -q '^10.30' && { echo "LEAK sandbox: packageManager switch worked offline"; LEAK=1; }
+rm -rf "$HEADSIM" "$FETCH" "$STORE"
+```
 
 - [ ] **Step 3: Temporary workflow to run Q1/Q3/Q8 on a hosted runner**
 
@@ -510,7 +550,7 @@ If GitHub refuses to dispatch because the workflow file is not on `next`, add a 
 
 - [ ] **Step 4: Record and commit**
 
-`RESULTS.md` §1 gets a table: PR, packages, base install s, base build s and cache statuses, head install s, head sandbox rebuild+build s and cache statuses, peak disk MB, free disk MB. §8 states whether `pnpm rebuild` worked offline and whether `--cache=local:rw,remote:r` produced remote hits (`cache statuses` shows `HIT` with `source: REMOTE` in the summary). §3 gets the attack output from the runner, verbatim, and whether the host user has sudo. If the sandbox leaked anything, that is a design change: stop and report before phase 1.
+`RESULTS.md` §1 gets a table: PR, packages, base install s, base build s and cache statuses, head fetch s and store MB, head sandbox install+rebuild+build s and cache statuses, peak disk MB, free disk MB. §8 states whether `pnpm fetch` served the workspace lockfile, whether the offline install printed `INSTALLED`, the copy-import time, whether `pnpm rebuild` worked offline, whether the install-container fallback was needed, and whether `--cache=local:rw,remote:r` produced remote hits (`cache statuses` shows `HIT` with `source: REMOTE` in the summary). §3 gets the attack output from the runner, verbatim — both the inside probes and the host-side case (probe 10) — and whether the host user has sudo. If the sandbox leaked anything, or probe 10 ran the pnpmfile on the host during fetch, that is a design change: stop and report before phase 1.
 
 ```bash
 git add plans/catching-jittests-spike/q1-q8-build-timing.sh plans/catching-jittests-spike/q3-sandbox-attack.sh .github/workflows/jit-catch-spike.yml plans/catching-jittests-spike/RESULTS.md
@@ -533,6 +573,8 @@ set -euo pipefail
 BASE=$1; HEAD=$2; PKGDIR=$3        # PKGDIR e.g. packages/MJCore
 ROOT=$(git rev-parse --show-toplevel); WORK=${RUNNER_TEMP:-/tmp}/jit-q7; rm -rf "$WORK"; mkdir -p "$WORK"
 PKGNAME=$(node -p "require('$ROOT/$PKGDIR/package.json').name")
+# Spike only, on your own machine, with merged (trusted) PRs: a plain host install is acceptable here.
+# The tool itself never installs head on the host (Task 1.11 and design §5.4).
 prep() { git worktree add --detach "$1" "$2"; ( cd "$1" && pnpm install --frozen-lockfile --ignore-scripts && pnpm rebuild && npx turbo run build --filter="$PKGNAME..." >/dev/null ); }
 prep "$WORK/base" "$BASE"; prep "$WORK/head" "$HEAD"
 run() { ( cd "$1/$PKGDIR" && TZ=UTC npx vitest run --reporter=json --outputFile="$2" --sequence.seed=1 >/dev/null 2>&1 || true ); }
@@ -1950,12 +1992,15 @@ function safeJson(text: string): unknown { try { return JSON.parse(text); } catc
   }
   ```
 
-The sandbox is used for **every** vitest, tsc, `pnpm rebuild` and `turbo` invocation, on base too (generated tests are untrusted even on base). The host runs only `git` and `pnpm install --frozen-lockfile --ignore-scripts`.
+The sandbox is used for **every** `pnpm install`, `pnpm rebuild`, `turbo`, vitest and tsc invocation, on base too (generated tests are untrusted even on base). The host runs only `git` and `pnpm fetch`, and the fetch runs in a folder that holds nothing but the revision's `pnpm-lock.yaml`: `pnpm install --ignore-scripts` on the host would still load `.pnpmfile.cjs` and follow `packageManager`, both PR-controlled (design §5.4). Two mount phases: `Prepare` and `BuildPackages` mount the worktree read-write (they write `node_modules`, `dist`, `.turbo`); `Run`, `TypeCheck` and `Coverage` mount it read-only plus the jit folders. Base is prepared before any head code exists and is never mounted read-write afterwards.
 
 - [ ] **Step 1: Failing tests** (pure parts: command construction and result assembly; docker and git are injected)
 
 ```ts
 import { describe, it, expect, vi } from 'vitest';
+import { mkdtempSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { VitestCatchTarget } from '../target/VitestCatchTarget';
 import { Sandbox, type SandboxRunOptions } from '../sandbox/Sandbox';
 import { DEFAULT_SETTINGS } from '../settings';
@@ -1992,6 +2037,20 @@ describe('VitestCatchTarget.Run', () => {
   });
 });
 
+describe('VitestCatchTarget.Prepare', () => {
+  it('runs pnpm on the host only as `fetch` in a folder holding just the lockfile, then installs offline in the sandbox with the worktree and store mounted rw', async () => {
+    const host: { File: string; Args: string[]; Cwd: string }[] = [];
+    const { target, calls } = fakeTarget(() => ({ Stdout: '', ExitCode: 0 }));
+    const work = mkdtempSync(join(tmpdir(), 'jit-prep-')); writeFileSync(join(work, 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n'); writeFileSync(join(work, '.pnpmfile.cjs'), 'throw new Error("must not load")');
+    (target as never as { o: { WorkRoot: string; StoreDir: string; HostRunner: (f: string, a: string[], cwd: string) => Promise<void>; Repo: { AddWorktree: () => Promise<void>; RemoveWorktree: () => Promise<void> } } }).o = { ...(target as never as { o: object }).o, WorkRoot: work, StoreDir: join(work, 'store'), HostRunner: async (File, Args, Cwd) => { host.push({ File, Args, Cwd }); }, Repo: { AddWorktree: async () => { mkdirSync(join(work, 'head'), { recursive: true }); writeFileSync(join(work, 'head', 'pnpm-lock.yaml'), 'lockfileVersion: 9.0\n'); writeFileSync(join(work, 'head', '.pnpmfile.cjs'), 'bad'); }, RemoveWorktree: async () => {} } } as never;
+    await target.Prepare({ Kind: 'Head', SHA: 'h' });
+    expect(host).toHaveLength(1); expect(host[0].File).toBe('pnpm'); expect(host[0].Args[0]).toBe('fetch');
+    expect(host[0].Cwd).not.toBe(join(work, 'head')); expect(readdirSync(host[0].Cwd)).toEqual(['pnpm-lock.yaml']);
+    const install = calls[0]; expect(install.Command.join(' ')).toContain('pnpm install --offline --frozen-lockfile --ignore-scripts');
+    expect(install.Mounts.find((m) => m.Container === '/work')?.Mode).toBe('rw'); expect(install.Mounts.find((m) => m.Container === '/pnpm-store')?.Mode).toBe('rw');
+  });
+});
+
 describe('VitestCatchTarget.TypeCheck', () => {
   it('runs tsc --noEmit on the package with the jit file included and reports the error text per test', async () => {
     const { target, calls } = fakeTarget(() => ({ Stdout: `src/__tests__/jit/${ID1}.jit.test.ts(3,5): error TS2339: Property 'x' does not exist`, ExitCode: 2 }));
@@ -2008,7 +2067,7 @@ Run → FAIL.
 
 ```ts
 import { execFile } from 'node:child_process';
-import { mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdirSync, writeFileSync, existsSync, rmSync, copyFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { promisify } from 'node:util';
 import { BaseCatchTarget } from '../contracts/BaseCatchTarget';
@@ -2019,23 +2078,35 @@ import type { PackageMap } from '../analyzer/PackageMap';
 import type { Settings } from '../settings';
 import { ParseVitestReport, RunnerErrorResult } from './VitestJsonReport';
 
-const run = promisify(execFile);
-export interface TargetOptions { Repo: GitRepo; Sandbox: Sandbox; Settings: Settings; WorkRoot: string; PackageMap: PackageMap; }
+const execFileAsync = promisify(execFile);
+/** Runs one trusted command on the host. Injected so tests see the calls; the default is execFile. */
+export type HostRunner = (file: string, args: string[], cwd: string) => Promise<void>;
+const DEFAULT_HOST_RUNNER: HostRunner = async (file, args, cwd) => { await execFileAsync(file, args, { cwd, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, CI: '1' } }); };
+export interface TargetOptions { Repo: GitRepo; Sandbox: Sandbox; Settings: Settings; WorkRoot: string; PackageMap: PackageMap; StoreDir?: string; HostRunner?: HostRunner; }
 const CONTAINER_ROOT = '/work';
+const CONTAINER_STORE = '/pnpm-store';
 
-/** Runs generated vitest tests on one git revision. Every build and test command runs in the sandbox (D28). */
+/** Runs generated vitest tests on one git revision. Every install, build and test command runs in the sandbox (D28). */
 export class VitestCatchTarget extends BaseCatchTarget {
     private readonly sandbox: Sandbox;
     constructor(private readonly o: TargetOptions) { super(); this.sandbox = o.Sandbox; }
 
+    /**
+     * Worktree on the host, then dependencies. The host never runs pnpm inside the worktree:
+     * `pnpm install --ignore-scripts` would still load the revision's `.pnpmfile.cjs` and follow its
+     * `packageManager`. The host fetches from a copy of the lockfile alone; the sandbox installs offline.
+     */
     public async Prepare(revision: RevisionRef): Promise<PreparedRevision> {
         const dir = join(this.o.WorkRoot, revision.Kind.toLowerCase());
         if (existsSync(dir)) await this.o.Repo.RemoveWorktree(dir).catch(() => rmSync(dir, { recursive: true, force: true }));
         await this.o.Repo.AddWorktree(dir, revision.SHA);
-        // Host install never runs package scripts; dependency build scripts run later in the sandbox (`pnpm rebuild`).
-        await run('pnpm', ['install', '--frozen-lockfile', '--ignore-scripts'], { cwd: dir, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, CI: '1' } });
+        const fetchDir = join(this.o.WorkRoot, `${revision.Kind.toLowerCase()}-fetch`);
+        rmSync(fetchDir, { recursive: true, force: true }); mkdirSync(fetchDir, { recursive: true }); mkdirSync(this.storeDir(), { recursive: true });
+        copyFileSync(join(dir, 'pnpm-lock.yaml'), join(fetchDir, 'pnpm-lock.yaml'));
+        await (this.o.HostRunner ?? DEFAULT_HOST_RUNNER)('pnpm', ['fetch', '--store-dir', this.storeDir()], fetchDir);
         const prepared = { Ref: revision, RootDir: dir };
-        await this.inSandbox(prepared, 'rw', ['sh', '-c', 'pnpm rebuild'], 20 * 60_000);
+        const r = await this.inSandbox(prepared, 'rw', ['sh', '-c', 'pnpm install --offline --frozen-lockfile --ignore-scripts && pnpm rebuild'], 30 * 60_000);
+        if (r.ExitCode !== 0) throw new Error(`install failed on ${revision.Ref.Kind}: ${r.Stderr.slice(-4000)}`);
         return prepared;
     }
 
@@ -2094,8 +2165,12 @@ export class VitestCatchTarget extends BaseCatchTarget {
     private byPackage(tests: CandidateTest[]): Map<string, CandidateTest[]> { const m = new Map<string, CandidateTest[]>(); for (const t of tests) (m.get(t.Package) ?? m.set(t.Package, []).get(t.Package)!).push(t); return m; }
     private packageDir(name: string): string { const p = this.o.PackageMap.Get(name); if (!p) throw new Error(`unknown package ${name}`); return p.Dir; }
 
+    private storeDir(): string { return this.o.StoreDir ?? join(this.o.WorkRoot, 'pnpm-store'); }
+
+    /** 'rw' is the prepare phase (install, rebuild, build) and also mounts the store; 'ro' is the test phase. */
     private inSandbox(revision: PreparedRevision, mode: 'ro' | 'rw', command: string[], timeoutMs: number, env: Record<string, string> = {}, tmpfs: string[] = []) {
         const mounts: SandboxMount[] = [{ Host: revision.RootDir, Container: CONTAINER_ROOT, Mode: mode }];
+        if (mode === 'rw') mounts.push({ Host: this.storeDir(), Container: CONTAINER_STORE, Mode: 'rw' });
         if (mode === 'ro') for (const jitDir of this.jitDirs(revision)) mounts.push({ Host: join(revision.RootDir, jitDir), Container: `${CONTAINER_ROOT}/${jitDir}`, Mode: 'rw' });
         for (const t of tmpfs) mkdirSync(join(revision.RootDir, t.slice(CONTAINER_ROOT.length + 1)), { recursive: true });
         return this.sandbox.Run({ Mounts: mounts, Tmpfs: tmpfs, WorkDir: CONTAINER_ROOT, Command: command, TimeoutMs: timeoutMs, Env: { HOME: '/tmp', CI: '1', ...env } });
@@ -2844,7 +2919,7 @@ Writes go through our own `write_test` MCP tool rather than the SDK's `Write` to
   }
   class PrivateAccess extends BaseCatchRule   // Name 'PrivateAccess', Kind 'Drop'
   ```
-  `DeclarationVisibility` resolves the member on the type of the **innermost** receiver (before any cast), so `(x as unknown as Foo).secret` is judged against `x`'s own declared type. A receiver whose type has no such member (a stub built by cast) returns `'none'`.
+  `DeclarationVisibility` resolves the member on the type of the **innermost** receiver (before any cast), so `(x as unknown as Foo).secret` and `(x as any).secret` are judged against `x`'s own declared type; asking the checker about the cast expression itself resolves against the cast's target and finds nothing. `InnermostExpression` also follows a `const`/`let` identifier to its initializer when that initializer is a cast, so the two-step form `const s = svc as unknown as {...}; s.secret` resolves against `svc`. `MemberAccesses` returns reads, writes (`s.secret = 2`) and calls alike — all are property or element accesses. A receiver whose type has no such member (a stub built by cast) returns `'none'`. The program needs base's sources: `Load` reads them from `BaseRootDir`, which is why job 3 checks out the base commit (design §5.4).
 
 - [ ] **Step 1: Failing tests**
 
@@ -2875,6 +2950,12 @@ describe('TestAst.DeclarationVisibility', () => {
     const [a] = ast.MemberAccesses();
     expect(ast.DeclarationVisibility(a.Receiver, a.Name)).toBe('none');
   });
+  it('follows a variable to its cast initializer (two-step form) and treats a write like a read', () => {
+    const ast = load(`import { Svc } from '../../svc'; const svc = new Svc(); const s = svc as unknown as { secret: number }; s.secret = 2; const t = s.secret;`);
+    const [w, r] = ast.MemberAccesses();
+    expect(ast.DeclarationVisibility(w.Receiver, w.Name)).toBe('private');
+    expect(ast.DeclarationVisibility(r.Receiver, r.Name)).toBe('private');
+  });
 });
 
 describe('TestAst helpers', () => {
@@ -2904,6 +2985,10 @@ describe('PrivateAccess', () => {
   it('fires on a private member reached through a cast', () => { expect(rule.Evaluate(ctx(`import { Svc } from '../../svc'; expect((new Svc() as unknown as { secret: number }).secret).toBe(1);`))).toMatchObject({ Fired: true }); });
   it('does not fire on a stub cast or on public members', () => {
     expect(rule.Evaluate(ctx(`import { Svc } from '../../svc'; const stub = { Open: () => 3 } as unknown as Svc; expect(stub.Open()).toBe(3); expect(new Svc().Open()).toBe(3);`)).Fired).toBe(false);
+  });
+  it('fires on the two-step cast form and on a write to a private member', () => {
+    expect(rule.Evaluate(ctx(`import { Svc } from '../../svc'; const svc = new Svc(); const s = svc as unknown as { secret: number }; expect(s.secret).toBe(1);`)).Fired).toBe(true);
+    expect(rule.Evaluate(ctx(`import { Svc } from '../../svc'; const svc = new Svc(); (svc as any).secret = 5; expect(svc.Open()).toBe(3);`)).Fired).toBe(true);
   });
 });
 ```
@@ -2948,9 +3033,18 @@ export class TestAst {
         visit(this.SourceFile); return out;
     }
 
+    /** Strips casts, parentheses and `!`; follows an identifier to its initializer when that initializer is a cast (`const s = svc as unknown as X`). */
     public InnermostExpression(e: ts.Expression): ts.Expression {
         let cur = e;
-        while (ts.isAsExpression(cur) || ts.isTypeAssertionExpression(cur) || ts.isParenthesizedExpression(cur) || ts.isSatisfiesExpression(cur) || ts.isNonNullExpression(cur)) cur = cur.expression;
+        for (let hops = 0; hops < 8; hops++) {
+            while (ts.isAsExpression(cur) || ts.isTypeAssertionExpression(cur) || ts.isParenthesizedExpression(cur) || ts.isSatisfiesExpression(cur) || ts.isNonNullExpression(cur)) cur = cur.expression;
+            if (!ts.isIdentifier(cur)) return cur;
+            const decl = this.Checker.getSymbolAtLocation(cur)?.valueDeclaration;
+            if (!decl || !ts.isVariableDeclaration(decl) || !decl.initializer) return cur;
+            const init = decl.initializer;
+            if (!(ts.isAsExpression(init) || ts.isTypeAssertionExpression(init) || ts.isParenthesizedExpression(init) || ts.isSatisfiesExpression(init))) return cur;
+            cur = init;
+        }
         return cur;
     }
 
@@ -2986,7 +3080,7 @@ export class TestAst {
 import { BaseCatchRule } from '../../contracts/BaseCatchRule';
 import type { CatchContext, RuleKind, RuleOutcome } from '../../types';
 
-/** §9.1: drops a catch whose test reads or calls a member that is private or protected in base, however it reaches it. */
+/** §9.1: drops a catch whose test reads, writes or calls a member that is private or protected in base, however it reaches it. */
 export class PrivateAccess extends BaseCatchRule {
     public get Name(): string { return 'PrivateAccess'; }
     public get Kind(): RuleKind { return 'Drop'; }
