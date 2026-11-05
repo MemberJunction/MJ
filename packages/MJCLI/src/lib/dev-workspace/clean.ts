@@ -23,7 +23,7 @@ import path from 'node:path';
 import chalk from 'chalk';
 import { SENTINEL_MARKER } from './build.js';
 import { AssertParentDirSafe, GENERATED_FILE_NAMES, LEGACY_WORKSPACE_FILE_NAMES, SENTINEL_FILE_NAME, WORKSPACE_FILE_NAMES } from './write.js';
-import type { CleanPlan, CleanResult, CleanTarget, SentinelReadResult, WorkspaceSentinel } from './types.js';
+import type { CleanPlan, CleanResult, CleanTarget, PrebundleExcludeRecord, SentinelReadResult, WorkspaceSentinel } from './types.js';
 
 /** Lockfile `pnpm install` produces at the parent. */
 export const LOCKFILE_NAME = 'pnpm-lock.yaml';
@@ -45,11 +45,22 @@ const RM_MAX_RETRIES = 3;
  */
 export const CLEAN_TARGET_COUNT = WORKSPACE_FILE_NAMES.length + 3;
 
-/** Type guard: parsed JSON carries our marker and both string lists. */
+/** Type guard: parsed JSON carries our marker, both string lists, and a well-formed prebundle list when present. */
 function isSentinelShape(value: unknown): value is WorkspaceSentinel {
   if (typeof value !== 'object' || value === null) return false;
   const record = value as Record<string, unknown>;
-  return record.generatedBy === SENTINEL_MARKER && isStringArray(record.files) && isStringArray(record.members);
+  if (record.generatedBy !== SENTINEL_MARKER || !isStringArray(record.files) || !isStringArray(record.members)) return false;
+  return record.prebundleExcludes === undefined || isPrebundleRecordArray(record.prebundleExcludes);
+}
+
+/** Type guard for the sentinel's optional `prebundleExcludes` list. */
+function isPrebundleRecordArray(value: unknown): value is PrebundleExcludeRecord[] {
+  if (!Array.isArray(value)) return false;
+  return value.every((item: unknown) => {
+    if (typeof item !== 'object' || item === null) return false;
+    const entry = item as Record<string, unknown>;
+    return typeof entry.file === 'string' && typeof entry.project === 'string' && isStringArray(entry.entries);
+  });
 }
 
 /** Type guard for a `string[]` inside parsed JSON. */
@@ -67,7 +78,10 @@ function parseSentinel(raw: string): SentinelReadResult {
     return { Kind: 'invalid', Reason: `unparseable JSON: ${message}` };
   }
   if (!isSentinelShape(parsed)) {
-    return { Kind: 'invalid', Reason: `no "generatedBy": "${SENTINEL_MARKER}" marker with files and members lists` };
+    return {
+      Kind: 'invalid',
+      Reason: `no "generatedBy": "${SENTINEL_MARKER}" marker with files and members lists (or a malformed prebundleExcludes list)`,
+    };
   }
   return { Kind: 'valid', Sentinel: parsed };
 }

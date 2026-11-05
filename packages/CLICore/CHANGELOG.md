@@ -1,5 +1,41 @@
 # @memberjunction/cli-core
 
+## 6.2.0
+
+### Patch Changes
+
+- Updated dependencies [1419ba7]
+- Updated dependencies [709de1a]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [29b16ee]
+- Updated dependencies [81aea34]
+- Updated dependencies [59e32e0]
+- Updated dependencies [4283a82]
+- Updated dependencies [914e6ff]
+- Updated dependencies [2274f42]
+- Updated dependencies [80905a1]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [25f7b82]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [4d647e6]
+- Updated dependencies [17a4137]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [5b41d48]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+  - @memberjunction/global@6.2.0
+
+## 6.2.0-edge.8
+
+### Patch Changes
+
+- Updated dependencies [59e32e0]
+  - @memberjunction/global@6.2.0-edge.8
+
 ## 6.2.0-edge.7
 
 ### Patch Changes
