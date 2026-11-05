@@ -4,7 +4,7 @@
  *
  * - required-queries-not-called: RunQuery reached through a ref, an alias or an optional call.
  * - query-result-field-access-validation: a same-named variable in another function.
- * - noisy-settings-updates: dropdown/checkbox handlers, debounced saves, optional-call saves.
+ * - noisy-settings-updates: dropdown/checkbox handlers, saves on Enter, debounced saves (named or inline), optional-call saves.
  * - component-usage-without-destructuring: `components || {}`, `?? {}`, `props.components`.
  */
 import { describe, it, expect } from 'vitest';
@@ -153,6 +153,38 @@ describe('noisy-settings-updates', () => {
   return <div><input type="text" onChange={handleSearchChange} /><input onChange={handleNameChange} /></div>;
 }`;
     expect(await ruleViolations(RULE, code)).toEqual([]);
+  });
+
+  it('does not flag a save on Enter from a key handler', async () => {
+    const handlers = [
+      `<input onKeyDown={(e) => { if (e.key === 'Enter') onSaveUserSettings?.({ q }); }} />`,
+      `<input onKeyDown={handleKeyDown} />`,
+      `<input onKeyDown={h} />`,
+      `<input onKeyDown={(e) => { if (e.keyCode === 13) onSaveUserSettings?.({ q }); }} />`,
+    ];
+    for (const jsx of handlers) {
+      const code = `function Report({ onSaveUserSettings }) {
+  const [q, setQ] = useState('');
+  const handleKeyDown = (e) => { if (e.key === 'Enter') { onSaveUserSettings?.({ q }); } };
+  const h = (e) => { if (e.key !== 'Enter') return; onSaveUserSettings?.({ q }); };
+  return <div>${jsx}</div>;
+}`;
+      expect(await ruleViolations(RULE, code), jsx).toEqual([]);
+    }
+  });
+
+  it('does not flag a save debounced inline in onChange', async () => {
+    const handlers = [
+      `<input onChange={(e) => { clearTimeout(t.current); t.current = setTimeout(() => onSaveUserSettings?.({ q: e.target.value }), 500); }} />`,
+      `<input onChange={debounce((e) => onSaveUserSettings?.({ q: e.target.value }), 500)} />`,
+    ];
+    for (const jsx of handlers) {
+      const code = `function Report({ onSaveUserSettings }) {
+  const t = useRef(null);
+  return <div>${jsx}</div>;
+}`;
+      expect(await ruleViolations(RULE, code), jsx).toEqual([]);
+    }
   });
 
   it('flags a per-keystroke save from a useCallback handler and from an inline handler', async () => {
