@@ -31,7 +31,7 @@
 import { RunView, FieldSecurityDenialMessage, FieldSecurityWriteDenialMessage } from '@memberjunction/core';
 import type { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual, GetGlobalObjectStore } from '@memberjunction/global';
-import { Assert, AssertEqual, IntegrationCheckRegistry, LoadClientConfig, SkipCheck } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, LoadClientConfig, PreflightMJAPI, SkipCheck } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext, FlsClientFixture } from '@memberjunction/testing-integration';
 import {
     SEEDED_FLS_ENTITY, SEED_FIXTURES_COMMAND,
@@ -170,7 +170,19 @@ async function buildUserKeyProvider(rawKey: string): Promise<IMetadataProvider> 
  * above all) see the rows; the process-global provider is untouched.
  */
 export async function BuildSystemKeyProvider(): Promise<IMetadataProvider> {
-    return buildSecondaryProvider(LoadClientConfig().MJAPIKey, undefined);
+    const client = LoadClientConfig();
+    await PreflightMJAPI(client.Url, client.MJAPIKey);
+    const deadline = Date.now() + 90_000;
+    for (;;) {
+        try {
+            return await buildSecondaryProvider(client.MJAPIKey, undefined);
+        } catch (e) {
+            if (Date.now() > deadline) {
+                throw e;
+            }
+            await new Promise(resolve => setTimeout(resolve, 3_000));
+        }
+    }
 }
 
 /** A separate connection authenticated by exactly one key: the system key or a user API key. */
@@ -187,8 +199,11 @@ async function buildSecondaryProvider(systemKey: string | undefined, userKey: st
         userKey
     );
     const ok = await provider.Config(config, undefined, true /* separateConnection */);
-    if (!ok) {
-        throw new Error('secondary GraphQLDataProvider Config() returned false');
+    if (!ok || provider.Entities.length === 0) {
+        const cause = provider.LastMetadataLoadError;
+        throw cause
+            ? new Error(`secondary GraphQLDataProvider Config() loaded no entity metadata: ${cause.message}`, { cause })
+            : new Error('secondary GraphQLDataProvider Config() loaded no entity metadata');
     }
     return provider as unknown as IMetadataProvider;
 }
