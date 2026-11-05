@@ -100,7 +100,7 @@
             <span class="artifact-badge">{{ artifactCountDisplay }}</span>
           </button>
         }
-        @if (conversation) {
+        @if (AllowRemoteBrowser && conversation) {
           <button mjButton variant="flat" size="sm"
             class="remote-browser-toggle-btn"
             [class.active]="ShowRemoteBrowserPanel"
@@ -648,7 +648,7 @@
     }
 
     <!-- Remote Browser Side Pane -->
-    @if (ShowRemoteBrowserPanel) {
+    @if (AllowRemoteBrowser && ShowRemoteBrowserPanel) {
       @if (!isArtifactPaneMaximized) {
         <div class="resize-handle" (mousedown)="onResizeStart($event)" (touchstart)="onResizeTouchStart($event)"></div>
       }

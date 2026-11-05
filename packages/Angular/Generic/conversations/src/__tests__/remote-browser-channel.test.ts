@@ -1310,9 +1310,11 @@ describe('Remote Browser — inspect, fill, ref/text click + ConversationRemoteB
     expect(MapToolToAction(REMOTE_BROWSER_TOOL_NAMES.Inspect, {})).toEqual({ Kind: 'inspect' });
   });
 
-  it('maps browser_Fill with object map or array values and rejects empty values', () => {
+  it('maps browser_Fill with object map, fields alias, or array values and rejects empty values', () => {
     expect(MapToolToAction(REMOTE_BROWSER_TOOL_NAMES.Fill, { values: { f1: 'Ada Lovelace', f2: true } }))
       .toEqual({ Kind: 'fill', ValuesJson: JSON.stringify({ f1: 'Ada Lovelace', f2: true }) });
+    expect(MapToolToAction(REMOTE_BROWSER_TOOL_NAMES.Fill, { fields: { f1: 'Ada Lovelace' } }))
+      .toEqual({ Kind: 'fill', ValuesJson: JSON.stringify({ f1: 'Ada Lovelace' }) });
     expect(() => MapToolToAction(REMOTE_BROWSER_TOOL_NAMES.Fill, { values: {} })).toThrow(RemoteBrowserToolArgError);
     expect(() => MapToolToAction(REMOTE_BROWSER_TOOL_NAMES.Fill, {})).toThrow(RemoteBrowserToolArgError);
   });
@@ -1368,6 +1370,15 @@ describe('Remote Browser — inspect, fill, ref/text click + ConversationRemoteB
       },
     });
 
+    // Even before the drawer is opened, WithBrowserContext advertises browser_* tools (excluding voice-only AchieveGoal)
+    const initialCtx = controller.WithBrowserContext({ AppName: 'Betty' });
+    const initialTools = (initialCtx['Capabilities'] as { Tools: Array<{ Name: string }> }).Tools;
+    expect(initialTools.some((t) => t.Name === REMOTE_BROWSER_TOOL_NAMES.OpenUrl)).toBe(true);
+    expect(initialTools.some((t) => t.Name === REMOTE_BROWSER_TOOL_NAMES.Inspect)).toBe(true);
+    expect(initialTools.some((t) => t.Name === REMOTE_BROWSER_TOOL_NAMES.Fill)).toBe(true);
+    expect(initialTools.some((t) => t.Name === REMOTE_BROWSER_TOOL_NAMES.AchieveGoal)).toBe(false);
+    expect((initialCtx['remoteBrowser'] as { open: boolean }).open).toBe(false);
+
     const inspectRes = await controller.ExecuteBrowserTool(REMOTE_BROWSER_TOOL_NAMES.Inspect, {});
     expect(inspectRes.Success).toBe(true);
     expect(autoOpened).toBe(true);
@@ -1418,7 +1429,7 @@ describe('Remote Browser — inspect, fill, ref/text click + ConversationRemoteB
     }).not.toThrow();
 
     // Unrelated conversation ID is ignored
-    second.handlePushMessage(JSON.stringify({
+    second.HandlePushMessage(JSON.stringify({
       resolver: 'RemoteBrowserActionResolver',
       type: 'RemoteBrowserScreencastFrame',
       agentSessionID: 'conv-1',
@@ -1428,7 +1439,7 @@ describe('Remote Browser — inspect, fill, ref/text click + ConversationRemoteB
     expect(second.CurrentUrl).toBeNull();
 
     // Matching conversation ID updates currentUrl
-    second.handlePushMessage(JSON.stringify({
+    second.HandlePushMessage(JSON.stringify({
       resolver: 'RemoteBrowserActionResolver',
       type: 'RemoteBrowserScreencastFrame',
       agentSessionID: 'conv-2',
@@ -1440,5 +1451,46 @@ describe('Remote Browser — inspect, fill, ref/text click + ConversationRemoteB
     first.Dispose();
     second.Dispose();
   });
+
+  it('TeardownClientWiring unregisters browser_* tools and allows re-initializing when AllowRemoteBrowser toggles', () => {
+    const registeredOnClient = new Set<string>();
+    const fakeAgentClient = {
+      IsActive: true,
+      SessionId: 'sess-1',
+      RegisterTool: (tool: { Name: string }) => {
+        registeredOnClient.add(tool.Name);
+      },
+      UnregisterTool: (name: string) => {
+        registeredOnClient.delete(name);
+      },
+      StartSession: () => undefined,
+    } as unknown as Parameters<ConversationRemoteBrowserController['InitializeClientWiring']>[0];
+
+    const controller = new ConversationRemoteBrowserController({
+      GetConversationId: () => 'conv-toggle',
+      IsSurfaceOpen: () => false,
+    });
+
+    expect(controller.IsClientWiringActive).toBe(false);
+    expect(registeredOnClient.size).toBe(0);
+
+    controller.InitializeClientWiring(fakeAgentClient, null);
+    expect(controller.IsClientWiringActive).toBe(true);
+    expect(registeredOnClient.has(REMOTE_BROWSER_TOOL_NAMES.OpenUrl)).toBe(true);
+    expect(registeredOnClient.has(REMOTE_BROWSER_TOOL_NAMES.Fill)).toBe(true);
+
+    controller.TeardownClientWiring();
+    expect(controller.IsClientWiringActive).toBe(false);
+    expect(registeredOnClient.size).toBe(0);
+
+    // Re-enabling registers tools again
+    controller.InitializeClientWiring(fakeAgentClient, null);
+    expect(controller.IsClientWiringActive).toBe(true);
+    expect(registeredOnClient.has(REMOTE_BROWSER_TOOL_NAMES.OpenUrl)).toBe(true);
+
+    controller.Dispose();
+    expect(registeredOnClient.size).toBe(0);
+  });
 });
+
 

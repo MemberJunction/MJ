@@ -119,7 +119,7 @@ export function MapToolToAction(toolName: string, args: Record<string, ToolArgVa
     case REMOTE_BROWSER_TOOL_NAMES.Inspect:
       return { Kind: 'inspect' };
     case REMOTE_BROWSER_TOOL_NAMES.Fill: {
-      const rawValues = args['values'] ?? args['valuesJson'];
+      const rawValues = args['values'] ?? args['fields'] ?? args['valuesJson'];
       if (rawValues === undefined || rawValues === null) {
         throw new RemoteBrowserToolArgError('browser_Fill requires a non-empty "values" object or array.');
       }
@@ -195,7 +195,8 @@ export function MapToolToAction(toolName: string, args: Record<string, ToolArgVa
 export const REMOTE_BROWSER_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
   {
     Name: REMOTE_BROWSER_TOOL_NAMES.OpenUrl,
-    Description: 'Navigate the shared browser to a URL. The user watches the live page in the Browser tab.',
+    Description:
+      'Navigate the shared browser to a URL (automatically opens the Browser panel for the user). When the user asks to open a page, link, or form from a previous answer or organization content, check retrieved content for its URL (retrieve content first if the URL is not yet in context), then call browser_OpenUrl with taskComplete: false.',
     ParametersSchema: {
       type: 'object',
       properties: {
@@ -207,13 +208,13 @@ export const REMOTE_BROWSER_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
   {
     Name: REMOTE_BROWSER_TOOL_NAMES.Inspect,
     Description:
-      'Inspect the current page DOM and return structured observations: page title, headings, visible text excerpt, interactive form fields with stable refs (f1, f2, …), buttons/actions with refs (a1, a2, …) and destructive flags, and links (l1, l2, …). Call this before filling forms or clicking elements.',
+      'Inspect the current page DOM and return structured observations: page title, headings, visible text excerpt, interactive form fields with stable refs (f1, f2, …), buttons/actions with refs (a1, a2, …) and destructive flags, and links (l1, l2, …). Always call browser_Inspect after browser_OpenUrl before filling forms or clicking elements.',
     ParametersSchema: { type: 'object', properties: {} },
   },
   {
     Name: REMOTE_BROWSER_TOOL_NAMES.Fill,
     Description:
-      'Fill one or more form fields on the current page by ref, CSS selector, or label, and verify each field value after filling. Protected fields (passwords, credit cards, OTPs, SSNs) are automatically skipped so the user can enter them manually.',
+      'Fill one or more form fields on the current page by ref (e.g. "f1", "f2" from browser_Inspect), CSS selector, or label, and verify each field value after filling. Protected fields (passwords, credit cards, OTPs, SSNs) are automatically skipped so the user can enter them manually. After filling, do NOT click final submit/payment/delete buttons — stop and let the user review and submit.',
     ParametersSchema: {
       type: 'object',
       properties: {

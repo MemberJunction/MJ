@@ -463,4 +463,129 @@ describe('CdpRemoteBrowserSession — structured DOM perception & form filling',
         expect(result.Observation?.ObservationID).toBe('obs-1');
         expect(adapter.CaptureScreencastFrameCount).toBe(1);
     });
+
+    it('inPageFillFields matches multi-checkbox groups by option value/comma-list and matches checkboxes by inspected label with (Value)', async () => {
+        interface FakeControl {
+            id: string;
+            tagName: string;
+            value: string;
+            checked: boolean;
+            disabled: boolean;
+            required: boolean;
+            readOnly: boolean;
+            attrs: Record<string, string>;
+            labelText: string;
+            legendText?: string;
+            getAttribute(name: string): string | null;
+            setAttribute(name: string, val: string): void;
+            closest(selector: string): unknown;
+            click(): void;
+            focus(): void;
+            dispatchEvent(): boolean;
+        }
+
+        const makeCheckbox = (name: string, value: string, labelText: string, legendText?: string): FakeControl => {
+            const attrs: Record<string, string> = { type: 'checkbox', name };
+            const ctrl: FakeControl = {
+                id: '',
+                tagName: 'INPUT',
+                value,
+                checked: false,
+                disabled: false,
+                required: false,
+                readOnly: false,
+                attrs,
+                labelText,
+                legendText,
+                getAttribute: (n: string) => attrs[n] ?? null,
+                setAttribute: (n: string, v: string) => {
+                    attrs[n] = v;
+                },
+                closest: (sel: string) => {
+                    if (sel === 'label') {
+                        return {
+                            cloneNode: () => ({
+                                querySelectorAll: () => [],
+                                textContent: labelText,
+                            }),
+                        };
+                    }
+                    if (sel === 'fieldset' && legendText) {
+                        return {
+                            querySelector: (q: string) => (q === 'legend' ? { textContent: legendText } : null),
+                        };
+                    }
+                    return null;
+                },
+                click: () => {
+                    ctrl.checked = !ctrl.checked;
+                },
+                focus: () => undefined,
+                dispatchEvent: () => true,
+                getBoundingClientRect: () => ({ width: 20, height: 20 }),
+            };
+            return ctrl;
+        };
+
+        const interestsGov = makeCheckbox('interests', 'AI governance', 'AI governance', 'Primary areas of interest');
+        const interestsMember = makeCheckbox('interests', 'Member experience', 'Member experience', 'Primary areas of interest');
+        const interestsProfDev = makeCheckbox('interests', 'Professional development', 'Professional development', 'Primary areas of interest');
+        const interestsKm = makeCheckbox('interests', 'Knowledge management', 'Knowledge management', 'Primary areas of interest');
+        const updatesCheckbox = makeCheckbox('updates', 'Yes', 'Send me AIIA news and event updates.');
+
+        const controls = [interestsGov, interestsMember, interestsProfDev, interestsKm, updatesCheckbox];
+
+        const { session, adapter } = buildSession({});
+        (adapter as unknown as { page: { evaluate: (fn: (arg?: unknown) => unknown, arg?: unknown) => Promise<unknown> } }).page = {
+            evaluate: async (fn, arg) => {
+                const prevDoc = (globalThis as Record<string, unknown>)['document'];
+                const prevWin = (globalThis as Record<string, unknown>)['window'];
+                (globalThis as Record<string, unknown>)['document'] = {
+                    title: 'AIIA Application',
+                    body: { innerText: 'AIIA Application' },
+                    querySelectorAll: (sel: string) => (sel.includes('input') ? controls : []),
+                    querySelector: () => null,
+                    getElementById: () => null,
+                };
+                (globalThis as Record<string, unknown>)['window'] = {
+                    location: { href: 'https://chat.bettybot.ai/aiia-membership-application.html' },
+                    getComputedStyle: () => ({ display: 'block', visibility: 'visible', opacity: '1' }),
+                };
+                try {
+                    return fn(arg);
+                } finally {
+                    (globalThis as Record<string, unknown>)['document'] = prevDoc;
+                    (globalThis as Record<string, unknown>)['window'] = prevWin;
+                }
+            },
+        };
+
+        // 1. Fill single checkbox in group by option value ("Member experience") + updates checkbox by inspected label ("... (Yes)")
+        const res1 = await session.ExecuteAction({
+            Kind: 'fill',
+            Values: [
+                { Target: 'interests', Value: 'Member experience' },
+                { Target: 'Send me AIIA news and event updates. (Yes)', Value: true },
+            ],
+        });
+        expect(res1.Success).toBe(true);
+        expect(interestsGov.checked).toBe(false);
+        expect(interestsMember.checked).toBe(true);
+        expect(interestsProfDev.checked).toBe(false);
+        expect(interestsKm.checked).toBe(false);
+        expect(updatesCheckbox.checked).toBe(true);
+
+        // 2. Fill multiple checkboxes in group via comma-separated list
+        const res2 = await session.ExecuteAction({
+            Kind: 'fill',
+            Values: [
+                { Target: 'Primary areas of interest', Value: 'AI governance, Knowledge management' },
+            ],
+        });
+        expect(res2.Success).toBe(true);
+        expect(interestsGov.checked).toBe(true);
+        expect(interestsKm.checked).toBe(true);
+        expect(interestsProfDev.checked).toBe(false);
+    });
 });
+

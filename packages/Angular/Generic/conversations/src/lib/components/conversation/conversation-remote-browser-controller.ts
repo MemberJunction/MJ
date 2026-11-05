@@ -10,6 +10,17 @@ import { RemoteBrowserSurfaceComponent } from '../realtime/remote-browser/remote
 import { REMOTE_BROWSER_TOOL_DEFINITIONS, REMOTE_BROWSER_TOOL_NAMES } from '../realtime/remote-browser/remote-browser-tools';
 import { RemoteBrowserAudioChunkInput } from '../realtime/remote-browser/remote-browser-audio-player';
 
+const TEXT_BROWSER_TOOL_DEFINITIONS = REMOTE_BROWSER_TOOL_DEFINITIONS.filter(
+  (def) => def.Name !== REMOTE_BROWSER_TOOL_NAMES.AchieveGoal,
+);
+
+const BROWSER_TOOL_METADATA = TEXT_BROWSER_TOOL_DEFINITIONS.map((def) => ({
+  Name: def.Name,
+  Description: def.Description,
+  Category: 'Navigation',
+  InputSchema: (def.ParametersSchema ?? { type: 'object', properties: {} }) as JSONObject,
+}));
+
 /**
  * Snapshot of the conversation's live Remote Browser state, injected into `appContext.remoteBrowser`
  * so turn-based text agents (Sage, Betty, etc.) know whether the browser drawer is open and what page
@@ -99,6 +110,11 @@ export class ConversationRemoteBrowserController {
     return this.lastFilled;
   }
 
+  /** Whether `browser_*` client tools are currently registered with the runtime and agent client. */
+  public get IsClientWiringActive(): boolean {
+    return this.registeredTools;
+  }
+
   /**
    * Connects the controller to the Angular `AgentClientService` and `GraphQLDataProvider`,
    * registering all `browser_*` client tools and subscribing to server-pushed screencast frames.
@@ -108,6 +124,16 @@ export class ConversationRemoteBrowserController {
     this.provider = provider;
     this.registerBrowserTools();
     this.subscribeToPushUpdates();
+  }
+
+  /**
+   * Unregisters all `browser_*` client tools and unsubscribes from server-pushed screencast frames
+   * without destroying the underlying channel (used when `AllowRemoteBrowser` is toggled off).
+   */
+  public TeardownClientWiring(): void {
+    this.unregisterBrowserTools();
+    this.pushSub?.unsubscribe();
+    this.pushSub = null;
   }
 
   /**
@@ -204,6 +230,50 @@ export class ConversationRemoteBrowserController {
     };
   }
 
+  /**
+   * Enriches an `AppContext` object with the conversation's live Remote Browser state and
+   * `browser_*` client tool metadata (`Capabilities.Tools`, `remoteBrowser`, and
+   * `AdditionalContext.remoteBrowser`) so server-side turn-based agents know the browser
+   * tools are available even before the user opens the browser drawer.
+   */
+  public WithBrowserContext(appContext: Record<string, unknown> | null): Record<string, unknown> {
+    const base = appContext ?? {};
+    const existingCaps =
+      base['Capabilities'] && typeof base['Capabilities'] === 'object' && !Array.isArray(base['Capabilities'])
+        ? (base['Capabilities'] as Record<string, unknown>)
+        : {};
+    const existingTools = Array.isArray(existingCaps['Tools'])
+      ? (existingCaps['Tools'] as Array<Record<string, unknown>>)
+      : [];
+    const existingToolNames = new Set(
+      existingTools
+        .map((t) => (typeof t['Name'] === 'string' ? t['Name'] : typeof t['name'] === 'string' ? t['name'] : ''))
+        .filter((n) => n.length > 0),
+    );
+    const mergedTools = [
+      ...existingTools,
+      ...BROWSER_TOOL_METADATA.filter((t) => !existingToolNames.has(t.Name)),
+    ];
+    const existingAdditional =
+      base['AdditionalContext'] && typeof base['AdditionalContext'] === 'object' && !Array.isArray(base['AdditionalContext'])
+        ? (base['AdditionalContext'] as Record<string, unknown>)
+        : {};
+    const snapshot = this.GetAppContextSnapshot();
+    return {
+      ...base,
+      Capabilities: {
+        ...existingCaps,
+        Tools: mergedTools,
+      },
+      remoteBrowser: snapshot,
+      AdditionalContext: {
+        ...existingAdditional,
+        remoteBrowser: snapshot,
+        RemoteBrowser: snapshot,
+      },
+    };
+  }
+
   /** Tears down tool registrations, push subscriptions, and the underlying channel. */
   public Dispose(): void {
     this.unregisterBrowserTools();
@@ -219,7 +289,7 @@ export class ConversationRemoteBrowserController {
     this.registeredTools = true;
     const runtimeTools = ConversationsRuntime.Instance.Tools;
 
-    for (const def of REMOTE_BROWSER_TOOL_DEFINITIONS) {
+    for (const def of TEXT_BROWSER_TOOL_DEFINITIONS) {
       const schema = (def.ParametersSchema ?? { type: 'object', properties: {} }) as JSONObject;
       const handler = async (params: Record<string, unknown>) => this.ExecuteBrowserTool(def.Name, params);
 
@@ -256,7 +326,7 @@ export class ConversationRemoteBrowserController {
     }
     this.registeredTools = false;
     const runtimeTools = ConversationsRuntime.Instance.Tools;
-    for (const def of REMOTE_BROWSER_TOOL_DEFINITIONS) {
+    for (const def of TEXT_BROWSER_TOOL_DEFINITIONS) {
       this.agentClient?.UnregisterTool(def.Name);
       runtimeTools.Unregister(def.Name);
     }
@@ -272,7 +342,7 @@ export class ConversationRemoteBrowserController {
       if (!rawStatus) {
         return;
       }
-      this.handlePushMessage(rawStatus);
+      this.HandlePushMessage(rawStatus);
     });
   }
 
@@ -280,7 +350,7 @@ export class ConversationRemoteBrowserController {
    * Routes a raw `PushStatusUpdates` JSON string for `RemoteBrowserScreencastFrame` or
    * `RemoteBrowserAudioChunk` when its `agentSessionID` matches the active conversation ID.
    */
-  public handlePushMessage(rawMessage: string): void {
+  public HandlePushMessage(rawMessage: string): void {
     const activeConversationId = this.options.GetConversationId();
     if (!activeConversationId) {
       return;
@@ -324,6 +394,11 @@ export class ConversationRemoteBrowserController {
     } catch {
       // Ignore non-JSON or unrelated status updates
     }
+  }
+
+  /** @deprecated Use {@link HandlePushMessage}. */
+  public handlePushMessage(rawMessage: string): void {
+    this.HandlePushMessage(rawMessage);
   }
 
   private createChannelContext(): RealtimeChannelContext {

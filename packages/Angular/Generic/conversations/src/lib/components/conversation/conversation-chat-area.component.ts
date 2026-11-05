@@ -568,6 +568,44 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return this.ShowDateNavigation;
   }
 
+  private allowRemoteBrowserValue = true;
+  private isRemoteBrowserWiringInitialized = false;
+
+  /** Whether the shared Remote Browser workspace and `browser_*` client tools are enabled for this chat area. */
+  @Input()
+  get AllowRemoteBrowser(): boolean {
+    return this.allowRemoteBrowserValue;
+  }
+  set AllowRemoteBrowser(value: boolean) {
+    const next = Boolean(value);
+    if (this.allowRemoteBrowserValue === next) {
+      return;
+    }
+    this.allowRemoteBrowserValue = next;
+    if (!this.isRemoteBrowserWiringInitialized) {
+      return;
+    }
+    if (next) {
+      const p = this.ProviderToUse;
+      this.RemoteBrowserController.InitializeClientWiring(
+        this.agentClientService,
+        p instanceof GraphQLDataProvider ? p : null,
+      );
+    } else {
+      this.CloseRemoteBrowserPanel();
+      this.RemoteBrowserController.TeardownClientWiring();
+    }
+  }
+
+  /** @deprecated Use {@link AllowRemoteBrowser}. */
+  @Input() set allowRemoteBrowser(value: ConversationChatAreaComponent['AllowRemoteBrowser']) {
+    this.AllowRemoteBrowser = value;
+  }
+  /** @deprecated Use {@link AllowRemoteBrowser}. */
+  get allowRemoteBrowser(): ConversationChatAreaComponent['AllowRemoteBrowser'] {
+    return this.AllowRemoteBrowser;
+  }
+
   // --- Assistant identity overrides (both default null = engine-resolved agent
   //     identity, today's behavior). White-label hosts brand the AI side of the
   //     message feed — the persona NAME shown on AI messages and an IMAGE avatar
@@ -3131,10 +3169,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.artifactPermissionService.Provider = p;
     this.attachmentService.Provider = p;
     this.analyzeArtifactService.Provider = p;
-    this.RemoteBrowserController.InitializeClientWiring(
-      this.agentClientService,
-      p instanceof GraphQLDataProvider ? p : null,
-    );
+    this.isRemoteBrowserWiringInitialized = true;
+    if (this.AllowRemoteBrowser) {
+      this.RemoteBrowserController.InitializeClientWiring(
+        this.agentClientService,
+        p instanceof GraphQLDataProvider ? p : null,
+      );
+    }
 
     // Subscribe to actionable commands from UICommandHandlerService so we can
     // intercept and locally handle commands that depend on the conversation
@@ -7352,7 +7393,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   public OpenRemoteBrowserPanel(): void {
-    if (this.ShowRemoteBrowserPanel) {
+    if (!this.AllowRemoteBrowser || this.ShowRemoteBrowserPanel) {
       return;
     }
     this.ShowArtifactPanel = false;
@@ -7387,31 +7428,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
-   * Returns `AppContext` enriched with the conversation's live Remote Browser state when the
-   * browser drawer is open or a browser page has been loaded in this conversation.
+   * Returns `AppContext` enriched with the conversation's live Remote Browser state and
+   * `browser_*` client tool metadata when `AllowRemoteBrowser` is enabled, even before the
+   * user manually opens the browser drawer.
    */
   public get EffectiveAppContext(): Record<string, unknown> | null {
-    const hasBrowserState =
-      this.ShowRemoteBrowserPanel ||
-      Boolean(this.RemoteBrowserController.CurrentUrl) ||
-      Boolean(this.RemoteBrowserController.LastObservation);
-    if (!hasBrowserState) {
+    if (!this.AllowRemoteBrowser) {
       return this.AppContext;
     }
-    const base = this.AppContext ?? {};
-    const existingAdditional =
-      base['AdditionalContext'] && typeof base['AdditionalContext'] === 'object' && !Array.isArray(base['AdditionalContext'])
-        ? (base['AdditionalContext'] as Record<string, unknown>)
-        : {};
-    const snapshot = this.RemoteBrowserController.GetAppContextSnapshot();
-    return {
-      ...base,
-      remoteBrowser: snapshot,
-      AdditionalContext: {
-        ...existingAdditional,
-        remoteBrowser: snapshot,
-      },
-    };
+    return this.RemoteBrowserController.WithBrowserContext(this.AppContext);
   }
 
   /**

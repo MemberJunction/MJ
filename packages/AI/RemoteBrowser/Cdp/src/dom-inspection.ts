@@ -426,6 +426,17 @@ function inPageFillFields(
     if (aria) {
       return aria;
     }
+    const ariaLabelledBy = el.getAttribute('aria-labelledby');
+    if (ariaLabelledBy) {
+      const joined = ariaLabelledBy
+        .split(/\s+/)
+        .map((id) => document.getElementById(id)?.textContent ?? '')
+        .join(' ');
+      const cleaned = cleanText(joined);
+      if (cleaned) {
+        return cleaned;
+      }
+    }
     if (el.id) {
       try {
         const lbl = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
@@ -448,9 +459,29 @@ function inPageFillFields(
     return (
       cleanText(el.getAttribute('placeholder')) ||
       cleanText(el.getAttribute('name')) ||
+      cleanText(el.getAttribute('title')) ||
       cleanText(el.id) ||
       el.tagName.toLowerCase()
     );
+  };
+
+  const resolveInspectedLabel = (el: HTMLElement): string => {
+    let label = resolveFieldLabel(el);
+    const tag = el.tagName.toLowerCase();
+    const inputType = tag === 'input' ? (el.getAttribute('type') || 'text').toLowerCase() : tag;
+    if (inputType === 'radio' || inputType === 'checkbox') {
+      const valAttr = cleanText((el as HTMLInputElement).value);
+      if (valAttr && valAttr.toLowerCase() !== 'on' && !label.toLowerCase().includes(valAttr.toLowerCase())) {
+        label = `${label} (${valAttr})`;
+      }
+    }
+    return label;
+  };
+
+  const resolveGroupLegend = (el: HTMLElement): string => {
+    const fs = el.closest('fieldset');
+    const legend = fs?.querySelector('legend');
+    return legend ? cleanText(legend.textContent) : '';
   };
 
   const allControls = Array.from(
@@ -470,10 +501,13 @@ function inPageFillFields(
     }
   }
 
-  const findControl = (
+  const findControls = (
     targetRaw: string,
     desiredValue: string | boolean,
-  ): HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null => {
+  ): Array<{
+    control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+    matchedByOptionValue: boolean;
+  }> => {
     const target = targetRaw.trim();
     const targetLower = target.toLowerCase();
 
@@ -482,11 +516,15 @@ function inPageFillFields(
       (c) => (c.getAttribute('data-mj-browser-ref') || '').toLowerCase() === targetLower,
     );
     if (byRef) {
-      return byRef;
+      return [{ control: byRef, matchedByOptionValue: false }];
     }
 
-    // 2. Radio group matching when target matches name/label and desiredValue matches radio value/label
+    // 2. Radio or checkbox group matching when target matches group name/legend and desiredValue is an option value/label
     const desiredStr = String(desiredValue).trim().toLowerCase();
+    const isBooleanToggle =
+      typeof desiredValue === 'boolean' ||
+      /^(true|false|1|0|yes|no|on|off|checked|unchecked)$/i.test(desiredStr);
+
     const radioCandidates = allControls.filter(
       (c): c is HTMLInputElement =>
         c.tagName.toLowerCase() === 'input' && (c.getAttribute('type') || '').toLowerCase() === 'radio',
@@ -494,46 +532,119 @@ function inPageFillFields(
     const matchingRadioGroup = radioCandidates.filter((r) => {
       const name = (r.getAttribute('name') || '').toLowerCase();
       const label = resolveFieldLabel(r).toLowerCase();
-      return name === targetLower || label.includes(targetLower);
+      const legend = resolveGroupLegend(r).toLowerCase();
+      return name === targetLower || legend === targetLower || label.includes(targetLower);
     });
-    if (matchingRadioGroup.length > 1 && typeof desiredValue === 'string') {
-      const specificRadio = matchingRadioGroup.find(
-        (r) =>
-          r.value.toLowerCase() === desiredStr ||
-          resolveFieldLabel(r).toLowerCase().includes(desiredStr),
-      );
+    if (matchingRadioGroup.length > 1 && typeof desiredValue === 'string' && !isBooleanToggle) {
+      const specificRadio = matchingRadioGroup.find((r) => {
+        const val = r.value.toLowerCase();
+        const lbl = resolveFieldLabel(r).toLowerCase();
+        const inspectedLbl = resolveInspectedLabel(r).toLowerCase();
+        return (
+          val === desiredStr ||
+          lbl === desiredStr ||
+          inspectedLbl === desiredStr ||
+          lbl.includes(desiredStr)
+        );
+      });
       if (specificRadio) {
-        return specificRadio;
+        return [{ control: specificRadio, matchedByOptionValue: true }];
+      }
+      if (matchingRadioGroup.some((r) => (r.getAttribute('name') || '').toLowerCase() === targetLower)) {
+        return [];
       }
     }
 
-    // 3. Exact id, name, aria-label, placeholder, or resolved label match
+    const checkboxCandidates = allControls.filter(
+      (c): c is HTMLInputElement =>
+        c.tagName.toLowerCase() === 'input' && (c.getAttribute('type') || '').toLowerCase() === 'checkbox',
+    );
+    const matchingCheckboxGroup = checkboxCandidates.filter((c) => {
+      const name = (c.getAttribute('name') || '').toLowerCase();
+      const legend = resolveGroupLegend(c).toLowerCase();
+      return name === targetLower || legend === targetLower || Boolean(legend && legend.includes(targetLower));
+    });
+    if (matchingCheckboxGroup.length > 1 && typeof desiredValue === 'string' && !isBooleanToggle) {
+      const matchesCheckboxOption = (c: HTMLInputElement, token: string): boolean => {
+        const val = c.value.toLowerCase();
+        const lbl = resolveFieldLabel(c).toLowerCase();
+        const inspectedLbl = resolveInspectedLabel(c).toLowerCase();
+        return (
+          val === token ||
+          lbl === token ||
+          inspectedLbl === token ||
+          lbl.includes(token) ||
+          val.includes(token)
+        );
+      };
+      const directMatches = matchingCheckboxGroup.filter((c) => matchesCheckboxOption(c, desiredStr));
+      if (directMatches.length > 0) {
+        return directMatches.map((control) => ({ control, matchedByOptionValue: true }));
+      }
+      const tokens = desiredStr
+        .split(/[,;]/)
+        .map((t) => t.trim())
+        .filter(Boolean);
+      if (tokens.length > 1) {
+        const multiMatches = matchingCheckboxGroup.filter((c) =>
+          tokens.some((tok) => matchesCheckboxOption(c, tok)),
+        );
+        if (multiMatches.length > 0) {
+          return multiMatches.map((control) => ({ control, matchedByOptionValue: true }));
+        }
+      }
+      if (matchingCheckboxGroup.some((c) => (c.getAttribute('name') || '').toLowerCase() === targetLower)) {
+        return [];
+      }
+    }
+
+    // 3. Exact id, name, aria-label, placeholder, or resolved/inspected label match
     for (const c of allControls) {
       const id = (c.id || '').toLowerCase();
       const name = (c.getAttribute('name') || '').toLowerCase();
       const label = resolveFieldLabel(c).toLowerCase();
+      const inspectedLabel = resolveInspectedLabel(c).toLowerCase();
       const placeholder = (c.getAttribute('placeholder') || '').toLowerCase();
-      if (id === targetLower || name === targetLower || label === targetLower || placeholder === targetLower) {
-        return c;
+      if (
+        id === targetLower ||
+        name === targetLower ||
+        label === targetLower ||
+        inspectedLabel === targetLower ||
+        placeholder === targetLower
+      ) {
+        return [{ control: c, matchedByOptionValue: false }];
       }
     }
 
-    // 4. Partial label / name / placeholder match
+    // 4. Partial label / inspectedLabel / name / placeholder match
     for (const c of allControls) {
       const name = (c.getAttribute('name') || '').toLowerCase();
       const label = resolveFieldLabel(c).toLowerCase();
+      const inspectedLabel = resolveInspectedLabel(c).toLowerCase();
       const placeholder = (c.getAttribute('placeholder') || '').toLowerCase();
-      if (label.includes(targetLower) || targetLower.includes(label) || name.includes(targetLower) || placeholder.includes(targetLower)) {
-        return c;
+      if (
+        label.includes(targetLower) ||
+        inspectedLabel.includes(targetLower) ||
+        targetLower.includes(label) ||
+        targetLower.includes(inspectedLabel) ||
+        name.includes(targetLower) ||
+        placeholder.includes(targetLower)
+      ) {
+        return [{ control: c, matchedByOptionValue: false }];
       }
     }
 
-    return null;
+    return [];
   };
 
   const setNativeValue = (el: HTMLInputElement | HTMLTextAreaElement, value: string): void => {
-    const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-    const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
+    const proto =
+      typeof HTMLTextAreaElement !== 'undefined' && el instanceof HTMLTextAreaElement
+        ? HTMLTextAreaElement.prototype
+        : typeof HTMLInputElement !== 'undefined'
+          ? HTMLInputElement.prototype
+          : null;
+    const descriptor = proto ? Object.getOwnPropertyDescriptor(proto, 'value') : undefined;
     if (descriptor && typeof descriptor.set === 'function') {
       descriptor.set.call(el, value);
     } else {
@@ -548,103 +659,106 @@ function inPageFillFields(
   const errors: string[] = [];
 
   for (const item of inputs) {
-    const control = findControl(item.Target, item.Value);
-    if (!control) {
+    const matches = findControls(item.Target, item.Value);
+    if (matches.length === 0) {
       errors.push(`Field "${item.Target}" was not found on the current page.`);
       continue;
     }
 
-    const ref = control.getAttribute('data-mj-browser-ref') || item.Target;
-    const label = resolveFieldLabel(control);
-    const tag = control.tagName.toLowerCase();
-    const inputType = tag === 'input' ? (control.getAttribute('type') || 'text').toLowerCase() : tag;
-    const nameOrId = `${control.getAttribute('name') || ''} ${control.id || ''} ${control.getAttribute('autocomplete') || ''}`;
+    for (const { control, matchedByOptionValue } of matches) {
+      const ref = control.getAttribute('data-mj-browser-ref') || item.Target;
+      const label = resolveFieldLabel(control);
+      const tag = control.tagName.toLowerCase();
+      const inputType = tag === 'input' ? (control.getAttribute('type') || 'text').toLowerCase() : tag;
+      const nameOrId = `${control.getAttribute('name') || ''} ${control.id || ''} ${control.getAttribute('autocomplete') || ''}`;
 
-    if (inputType === 'password' || PROTECTED_PATTERN.test(`${label} ${nameOrId} ${inputType}`)) {
-      errors.push(
-        `Field "${label}" (${ref}) is a protected credential/payment input; ask the user to fill it via Collaborative takeover.`,
-      );
-      continue;
-    }
-
-    if (
-      control.disabled ||
-      control.getAttribute('aria-disabled') === 'true' ||
-      ('readOnly' in control && Boolean((control as HTMLInputElement | HTMLTextAreaElement).readOnly))
-    ) {
-      errors.push(`Field "${label}" (${ref}) is disabled or read-only.`);
-      continue;
-    }
-
-    if (inputType === 'checkbox' || inputType === 'radio') {
-      const inputEl = control as HTMLInputElement;
-      const shouldCheck =
-        typeof item.Value === 'boolean'
-          ? item.Value
-          : !/^(false|0|no|off|unchecked)$/i.test(String(item.Value).trim());
-      if (inputEl.checked !== shouldCheck) {
-        inputEl.click();
-        if (inputEl.checked !== shouldCheck) {
-          inputEl.checked = shouldCheck;
-          inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-          inputEl.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-      }
-      filled.push({
-        Ref: ref,
-        Label: label,
-        Value: String(inputEl.checked),
-      });
-      continue;
-    }
-
-    if (tag === 'select') {
-      const selectEl = control as HTMLSelectElement;
-      const desired = String(item.Value).trim();
-      const desiredLower = desired.toLowerCase();
-      const options = Array.from(selectEl.options);
-      const matched =
-        options.find(
-          (o) =>
-            o.value.toLowerCase() === desiredLower ||
-            cleanText(o.text).toLowerCase() === desiredLower ||
-            cleanText(o.label).toLowerCase() === desiredLower,
-        ) ??
-        options.find(
-          (o) =>
-            cleanText(o.text).toLowerCase().includes(desiredLower) ||
-            o.value.toLowerCase().includes(desiredLower),
-        );
-      if (!matched) {
+      if (inputType === 'password' || PROTECTED_PATTERN.test(`${label} ${nameOrId} ${inputType}`)) {
         errors.push(
-          `Select field "${label}" (${ref}) has no option matching "${desired}". Available options: ${options
-            .map((o) => cleanText(o.text) || o.value)
-            .filter(Boolean)
-            .join(', ')}`,
+          `Field "${label}" (${ref}) is a protected credential/payment input; ask the user to fill it via Collaborative takeover.`,
         );
         continue;
       }
-      selectEl.value = matched.value;
-      selectEl.dispatchEvent(new Event('input', { bubbles: true }));
-      selectEl.dispatchEvent(new Event('change', { bubbles: true }));
-      selectEl.dispatchEvent(new Event('blur', { bubbles: true }));
+
+      if (
+        control.disabled ||
+        control.getAttribute('aria-disabled') === 'true' ||
+        ('readOnly' in control && Boolean((control as HTMLInputElement | HTMLTextAreaElement).readOnly))
+      ) {
+        errors.push(`Field "${label}" (${ref}) is disabled or read-only.`);
+        continue;
+      }
+
+      if (inputType === 'checkbox' || inputType === 'radio') {
+        const inputEl = control as HTMLInputElement;
+        const shouldCheck = matchedByOptionValue
+          ? true
+          : typeof item.Value === 'boolean'
+            ? item.Value
+            : !/^(false|0|no|off|unchecked)$/i.test(String(item.Value).trim());
+        if (inputEl.checked !== shouldCheck) {
+          inputEl.click();
+          if (inputEl.checked !== shouldCheck) {
+            inputEl.checked = shouldCheck;
+            inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+            inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        }
+        filled.push({
+          Ref: ref,
+          Label: label,
+          Value: String(inputEl.checked),
+        });
+        continue;
+      }
+
+      if (tag === 'select') {
+        const selectEl = control as HTMLSelectElement;
+        const desired = String(item.Value).trim();
+        const desiredLower = desired.toLowerCase();
+        const options = Array.from(selectEl.options);
+        const matched =
+          options.find(
+            (o) =>
+              o.value.toLowerCase() === desiredLower ||
+              cleanText(o.text).toLowerCase() === desiredLower ||
+              cleanText(o.label).toLowerCase() === desiredLower,
+          ) ??
+          options.find(
+            (o) =>
+              cleanText(o.text).toLowerCase().includes(desiredLower) ||
+              o.value.toLowerCase().includes(desiredLower),
+          );
+        if (!matched) {
+          errors.push(
+            `Select field "${label}" (${ref}) has no option matching "${desired}". Available options: ${options
+              .map((o) => cleanText(o.text) || o.value)
+              .filter(Boolean)
+              .join(', ')}`,
+          );
+          continue;
+        }
+        selectEl.value = matched.value;
+        selectEl.dispatchEvent(new Event('input', { bubbles: true }));
+        selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+        selectEl.dispatchEvent(new Event('blur', { bubbles: true }));
+        filled.push({
+          Ref: ref,
+          Label: label,
+          Value: cleanText(matched.text) || selectEl.value,
+        });
+        continue;
+      }
+
+      const textEl = control as HTMLInputElement | HTMLTextAreaElement;
+      const strValue = String(item.Value);
+      textEl.focus();
+      setNativeValue(textEl, strValue);
       filled.push({
         Ref: ref,
         Label: label,
-        Value: cleanText(matched.text) || selectEl.value,
+        Value: textEl.value,
       });
-      continue;
     }
-
-    const textEl = control as HTMLInputElement | HTMLTextAreaElement;
-    const strValue = String(item.Value);
-    textEl.focus();
-    setNativeValue(textEl, strValue);
-    filled.push({
-      Ref: ref,
-      Label: label,
-      Value: textEl.value,
-    });
   }
 
   return {
