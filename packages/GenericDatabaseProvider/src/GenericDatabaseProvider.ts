@@ -8919,6 +8919,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         return this._affinity.IsCallerMember;
     }
 
+    /** See {@link IEntityDataProvider.RunOutsideAmbientTransaction}: `fn` runs with no membership in this provider's transaction. */
+    public RunOutsideAmbientTransaction<T>(fn: () => Promise<T>): Promise<T> {
+        return this._affinity.RunDetached(fn);
+    }
+
     /** Members of the open transaction share RunViews only with each other (see {@link ProviderBase.RunViewDedupScope}). */
     protected override get RunViewDedupScope(): string {
         return this.IsCallerInAmbientTransaction() ? `tx:${this._affinity.CurrentEpoch}` : '';

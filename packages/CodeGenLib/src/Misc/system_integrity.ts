@@ -1,5 +1,5 @@
 import { CodeGenConnection, BaseViewExclusionsPermitted } from '../Database/codeGenDatabaseProvider';
-import { logError, logStatus } from "./status_logging";
+import { logError, logStatus, logWarning } from "./status_logging";
 import { configInfo, DbPlatform, MjCoreSchema } from "../Config/config";
 
 
@@ -7,6 +7,11 @@ export type IntegrityCheckResult = {
     Name: string;
     Success: boolean;
     Message: string;
+    /**
+     * Problems reported without failing the check: a condition that is being introduced as a
+     * warning before it becomes a failure. Logged with the results; never affects `Success`.
+     */
+    Warnings?: string[];
 }
 
 export type RunIntegrityCheck = {
@@ -108,6 +113,9 @@ export class SystemIntegrityBase {
                     else {
                         logError(`   Integrity check FAILED: ${result.Name} - ${result.Message}`);
                     }
+                    for (const warning of result.Warnings ?? []) {
+                        logWarning(`   Integrity check WARNING: ${result.Name} - ${warning}`);
+                    }
                 }
             }
             return results;
@@ -178,14 +186,25 @@ export class SystemIntegrityBase {
             const excludedViewFields = SystemIntegrityBase.ExcludedBaseViewFields();
 
             const messages: string[] = [];
+            const warnings: string[] = [];
             for (const fields of byEntity.values()) {
                 const entityMessage = SystemIntegrityBase.CheckSingleEntity(fields, catalog, excludedViewFields);
                 if (entityMessage) {
                     messages.push(entityMessage);
+                    continue;
+                }
+                const widthWarning = SystemIntegrityBase.CheckBaseViewWidth(fields, catalog, excludedViewFields);
+                if (widthWarning) {
+                    warnings.push(widthWarning);
                 }
             }
 
-            return { Success: messages.length === 0, Message: messages.join(''), Name: 'entityFieldsSequenceCheck' };
+            return {
+                Success: messages.length === 0,
+                Message: messages.join(''),
+                Name: 'entityFieldsSequenceCheck',
+                ...(warnings.length > 0 ? { Warnings: warnings } : {}),
+            };
         }
         catch (e) {
             const message = `Error checking entity field sequences: ${e}`;
@@ -305,17 +324,59 @@ export class SystemIntegrityBase {
         if (!columns || columns.length === 0) {
             return `Entity ${entity} has no base view ${qi(schemaName)}.${qi(baseView)} in the database catalog\n`;
         }
-        const entityKey = entity.trim().toLowerCase();
-        const comparable = fields.filter(f => {
-            const name = f.Name.toLowerCase();
-            return !excludedViewFields.bare.has(name) && !excludedViewFields.qualified.has(`${entityKey}.${name}`);
-        });
+        const comparable = SystemIntegrityBase.ComparableFields(fields, excludedViewFields);
         for (let i = 0; i < comparable.length; i++) {
             if (columns[i] !== comparable[i].Name) {
                 return `Entity ${entity} has a mismatch between the metadata sequence and the physical column order in the base view ${qi(schemaName)}.${qi(baseView)} for position ${i + 1}. Expected ${comparable[i].Name} but found ${columns[i]}\n`;
             }
         }
         return '';
+    }
+
+    /** An entity's fields that are expected in its base view: all of them but the configured exclusions. */
+    protected static ComparableFields(
+        fields: EntityFieldSequenceRow[],
+        excludedViewFields: { qualified: Set<string>; bare: Set<string> }
+    ): EntityFieldSequenceRow[] {
+        const entityKey = fields[0].Entity.trim().toLowerCase();
+        return fields.filter(f => {
+            const name = f.Name.toLowerCase();
+            return !excludedViewFields.bare.has(name) && !excludedViewFields.qualified.has(`${entityKey}.${name}`);
+        });
+    }
+
+    /**
+     * Checks that the base view has no more columns than the entity has fields (MJ #3608).
+     *
+     * The position check in {@link CheckSingleEntity} only compares as many columns as there are
+     * fields, so a view with extra trailing columns (say a joined name column with no virtual field)
+     * passes it. Every write to such an entity fails: `spCreate`/`spUpdate` capture the view row
+     * into a table variable shaped by the fields, and the column counts differ. Run only after
+     * {@link CheckSingleEntity} passes.
+     *
+     * Reported as a warning for one release, so databases already in this state can still run
+     * CodeGen and the count of affected entities becomes visible; it is planned to become a failure
+     * after that.
+     * @returns an empty string when the widths match, otherwise the warning text
+     */
+    protected static CheckBaseViewWidth(
+        fields: EntityFieldSequenceRow[],
+        catalog: Map<string, string[]>,
+        excludedViewFields: { qualified: Set<string>; bare: Set<string> }
+    ): string {
+        const schemaName = fields[0].SchemaName;
+        const baseView = fields[0].BaseView;
+        if (!schemaName || !baseView) {
+            return '';
+        }
+        const columns = catalog.get(catalogKey(schemaName, baseView)) ?? [];
+        const comparable = SystemIntegrityBase.ComparableFields(fields, excludedViewFields);
+        if (columns.length <= comparable.length) {
+            return '';
+        }
+        const extra = columns.slice(comparable.length);
+        return `Entity ${fields[0].Entity} has ${extra.length} base view column(s) in ${qi(schemaName)}.${qi(baseView)} with no entity field: ${extra.join(', ')}. ` +
+            `Creates and updates on this entity fail until the fields exist (run CodeGen against the schema) or the columns leave the view.`;
     }
 
     /**
