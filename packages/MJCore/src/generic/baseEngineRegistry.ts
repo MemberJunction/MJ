@@ -674,8 +674,10 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
      * ```
      *
      * Notes:
-     * - Only **loaded** engines are considered (a registered-but-not-yet-loaded
-     *   engine has no data to offer).
+     * - Only **loaded** data is considered (a registered-but-not-yet-loaded
+     *   engine has no data to offer). A `BaseEngine` is asked per property via
+     *   `IsPropertyLoaded`, so a property that failed or was skipped for lack of
+     *   Read permission is never returned, even when the engine is `Loaded`.
      * - The returned `records` is the engine's *live* array — read it, don't
      *   mutate it. For `'simple'` configs the rows are plain objects, not
      *   `BaseEntity` instances (check `config.ResultType` if you need ORM rows).
@@ -705,10 +707,16 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
             const engineObj = engine as Record<string, unknown>;
             const configs = this.readEngineConfigs(engineObj);
             if (!configs) continue;
+            // An engine that tracks per-property load state is the authority on each property, even
+            // once the engine as a whole is Loaded: a config skipped for lack of Read permission (or
+            // one whose load failed) holds `[]`, which must never be served as the full table.
+            const tracksPropertyState = typeof engineObj['IsPropertyLoaded'] === 'function';
 
             for (const cfg of configs) {
-                // Only loaded engines or properties already populated in _dataMap have data to offer.
-                if (!engineLoaded && !this.checkEnginePropertyLoaded(engineObj, cfg.PropertyName)) continue;
+                const hasData = tracksPropertyState
+                    ? this.checkEnginePropertyLoaded(engineObj, cfg.PropertyName)
+                    : engineLoaded;
+                if (!hasData) continue;
 
                 // Only entity configs (Type defaults to 'entity') with a matching EntityName.
                 if ((cfg.Type ?? 'entity') !== 'entity') continue;
