@@ -166,13 +166,13 @@ function importanceOf(sourceColumn: string, value: number): SourceColumnImportan
 class FailingArtifactStore extends InMemoryArtifactStore {
   public readonly DeletedIDs: string[] = [];
   constructor(private readonly failingName: string) { super(); }
-  public override async Save(bytes: Uint8Array, name: string): Promise<string> {
+  public override async save(bytes: Uint8Array, name: string): Promise<string> {
     if (name.includes(this.failingName)) throw new Error(`disk full writing ${name}`);
-    return super.Save(bytes, name);
+    return super.save(bytes, name);
   }
-  public override async Delete(fileId: string): Promise<void> {
+  public override async delete(fileId: string): Promise<void> {
     this.DeletedIDs.push(fileId);
-    await super.Delete(fileId);
+    await super.delete(fileId);
   }
 }
 

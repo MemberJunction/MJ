@@ -36,7 +36,7 @@ describe('StorageProviderArtifactStore', () => {
   });
 
   it('save puts the bytes under predictive-studio/model-artifacts/<uuid>/<name> and records ProviderID, ProviderKey and Status Uploaded', async () => {
-    const fileId = await store.Save(bytes, 'trainer-r1-c1.json');
+    const fileId = await store.save(bytes, 'trainer-r1-c1.json');
     const row = files.Rows.Get(fileId);
     expect(row?.ProviderKey).toMatch(/^predictive-studio\/model-artifacts\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/trainer-r1-c1\.json$/i);
     expect(row?.ProviderID).toBe(localRow.ID);
@@ -45,45 +45,45 @@ describe('StorageProviderArtifactStore', () => {
   });
 
   it('two saves of identical bytes get different keys', async () => {
-    const first = files.Rows.Get(await store.Save(bytes, 'trainer-r1-c1.json'));
-    const second = files.Rows.Get(await store.Save(bytes, 'trainer-r1-c1.json'));
+    const first = files.Rows.Get(await store.save(bytes, 'trainer-r1-c1.json'));
+    const second = files.Rows.Get(await store.save(bytes, 'trainer-r1-c1.json'));
     expect(first?.ProviderKey).not.toBe(second?.ProviderKey);
     expect(local.Objects.size).toBe(2);
   });
 
   it('refuses an unsafe artifact name', async () => {
-    await expect(store.Save(bytes, 'trainer-r-../x.json')).rejects.toThrow(/not a safe/);
-    await expect(store.Save(bytes, 'trainer-r-..\\x.json')).rejects.toThrow(/not a safe/);
+    await expect(store.save(bytes, 'trainer-r-../x.json')).rejects.toThrow(/not a safe/);
+    await expect(store.save(bytes, 'trainer-r-..\\x.json')).rejects.toThrow(/not a safe/);
     expect(log.filter((e) => e.startsWith('local.put'))).toEqual([]);
     expect(files.Rows.Size).toBe(0);
   });
 
   it('a failed row save deletes the object it just wrote and throws with CompleteMessage', async () => {
     files.SaveFailure = 'the MJ: Files table is unavailable';
-    await expect(store.Save(bytes, 'trainer-r1-c1.json')).rejects.toThrow(/the MJ: Files table is unavailable/);
+    await expect(store.save(bytes, 'trainer-r1-c1.json')).rejects.toThrow(/the MJ: Files table is unavailable/);
     expect(log.map((e) => e.split(' ')[0])).toEqual(['local.put', 'local.delete']);
     expect(local.Objects.size).toBe(0);
   });
 
   it('a refused PutObject throws and saves no row', async () => {
     local.RefusePut = true;
-    await expect(store.Save(bytes, 'trainer-r1-c1.json')).rejects.toThrow(/refused/);
+    await expect(store.save(bytes, 'trainer-r1-c1.json')).rejects.toThrow(/refused/);
     expect(files.Rows.Size).toBe(0);
   });
 
   it('rollback deletes object then row', async () => {
-    const fileId = await store.Save(bytes, 'trainer-r1-c1.json');
+    const fileId = await store.save(bytes, 'trainer-r1-c1.json');
     const key = files.Rows.Get(fileId)?.ProviderKey || '';
     log.length = 0;
-    await store.Delete(fileId);
+    await store.delete(fileId);
     expect(log).toEqual([`local.delete ${key}`, `row.delete ${fileId}`]);
     expect(local.Objects.size).toBe(0);
     expect(files.Rows.Size).toBe(0);
 
-    const kept = await store.Save(bytes, 'trainer-r1-c2.json');
+    const kept = await store.save(bytes, 'trainer-r1-c2.json');
     const keptKey = files.Rows.Get(kept)?.ProviderKey || '';
     local.RefuseDelete = true;
-    await expect(store.Delete(kept)).rejects.toThrow(keptKey);
+    await expect(store.delete(kept)).rejects.toThrow(keptKey);
     expect(files.Rows.Get(kept)).toBeDefined();
   });
 
@@ -91,7 +91,7 @@ describe('StorageProviderArtifactStore', () => {
     const legacyId = '8D4C3F5E-6071-4283-9D9E-0F1A2B3C4D5E';
     files.Insert({ ID: legacyId, Name: 'model.bin', ContentType: 'application/octet-stream', ProviderID: localRow.ID, ProviderKey: null, Status: 'Pending', Description: null });
     writeFileSync(LocalArtifactPath(baseDir, legacyId), bytes);
-    await store.Delete(legacyId);
+    await store.delete(legacyId);
     expect(files.Rows.Get(legacyId)).toBeUndefined();
     expect(existsSync(LocalArtifactPath(baseDir, legacyId))).toBe(false);
     expect(log.filter((e) => e.startsWith('local.'))).toEqual([]);
@@ -161,7 +161,7 @@ describe('StorageProviderArtifactStore', () => {
   it('Delete refuses a row whose stored key is unsafe, before the driver is asked and keeping the row', async () => {
     const tamperedId = '9E5D4A6F-0000-4000-8000-0000000000BB';
     files.Insert({ ID: tamperedId, Name: 'x.json', ContentType: 'application/json', ProviderID: localRow.ID, ProviderKey: '../../x', Status: 'Uploaded', Description: null });
-    await expect(store.Delete(tamperedId)).rejects.toThrow(/unsafe storage key "\.\.\/\.\.\/x"/);
+    await expect(store.delete(tamperedId)).rejects.toThrow(/unsafe storage key "\.\.\/\.\.\/x"/);
     expect(log).toEqual([]);
     expect(files.Rows.Get(tamperedId)).toBeDefined();
   });
@@ -170,7 +170,7 @@ describe('StorageProviderArtifactStore', () => {
     files.SaveFailure = 'the MJ: Files table is unavailable';
     local.RefuseDelete = true;
     const errors = ConsoleCapture.Errors();
-    await expect(store.Save(bytes, 'trainer-r1-c1.json')).rejects.toThrow(/the MJ: Files table is unavailable/);
+    await expect(store.save(bytes, 'trainer-r1-c1.json')).rejects.toThrow(/the MJ: Files table is unavailable/);
     expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringMatching(/could not delete .*predictive-studio\/model-artifacts\//)]);
   });
 });

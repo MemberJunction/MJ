@@ -578,7 +578,7 @@ export class TrainingEngine {
 
   /** Deletes artifact files through the run's store, every one attempted; each failure is logged. */
   private static async deleteArtifactFiles(run: MJMLTrainingRunEntity, fileIds: readonly string[], deps: TrainingDeps): Promise<void> {
-    const outcomes = await Promise.allSettled(fileIds.map((fileId) => deps.artifactStore.Delete(fileId)));
+    const outcomes = await Promise.allSettled(fileIds.map((fileId) => deps.artifactStore.delete(fileId)));
     outcomes.forEach((r, k) => {
       if (r.status === 'rejected') LogError(`TrainingEngine: could not delete artifact file ${fileIds[k]} of failed run ${run.ID}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`);
     });
@@ -787,7 +787,7 @@ export class TrainingEngine {
    */
   private async storeTrainerArtifacts(run: MJMLTrainingRunEntity, result: TrainerCompleted, deps: TrainingDeps): Promise<ReadonlyMap<string, string>> {
     const outcomes = await Promise.allSettled(result.artifacts.map(async (a): Promise<[string, string]> => {
-      const fileId = await deps.artifactStore.Save(decodeArtifact(a.bytesBase64), `trainer-${run.ID}-${a.candidate}.json`);
+      const fileId = await deps.artifactStore.save(decodeArtifact(a.bytesBase64), `trainer-${run.ID}-${a.candidate}.json`);
       return [a.candidate, fileId];
     }));
     const saved = outcomes.flatMap((o) => (o.status === 'fulfilled' ? [o.value] : []));

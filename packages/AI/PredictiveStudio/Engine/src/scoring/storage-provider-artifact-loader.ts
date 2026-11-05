@@ -22,7 +22,7 @@ export class StorageProviderArtifactLoader implements IArtifactLoader {
    *
    * @throws Error when the file's key is not safe, or its provider cannot be read on this server
    */
-  public async Load(fileId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<Uint8Array | null> {
+  public async load(fileId: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<Uint8Array | null> {
     const storage = new PredictiveStudioStorage(provider, contextUser);
     const location = await storage.LocationOf(fileId);
     if (!location) return null;

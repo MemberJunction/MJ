@@ -148,16 +148,16 @@ export interface IArtifactStore {
    * @param name a human-readable artifact name (e.g. `model-<pipeline>-v<version>.bin`)
    * @returns the file id to store in `MLModel.ArtifactFileID`
    */
-  Save(bytes: Uint8Array, name: string): Promise<string>;
+  save(bytes: Uint8Array, name: string): Promise<string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Remove an artifact this store saved: its file record and its bytes. Used to roll back the artifacts of a run that
    * failed after storing them, so none is left unreferenced.
    *
-   * @param fileId the id `Save` returned
+   * @param fileId the id `save` returned
    * @throws Error when the artifact cannot be removed
    */
-  Delete(fileId: string): Promise<void>;
+  delete(fileId: string): Promise<void>;  // case-violation-ok-legacy-back-compat: matches the existing interface member casing
 
   /**
    * Refuse when this store cannot write here (for a storage provider: no provider by the configured name, its driver

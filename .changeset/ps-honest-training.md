@@ -103,9 +103,9 @@ version 1 of each, and the training path without them is removed.
   provider (`StorageProviderArtifactStore`, keys `predictive-studio/model-artifacts/<uuid>/<name>`) and read through
   the provider their `MJ: Files` row names (`StorageProviderArtifactLoader`); `PredictiveStudioStorage` resolves the
   provider for snapshots and models. Model files trained before 6.3 (`MJ: Files.ProviderKey` empty) are still read
-  from `PS_ARTIFACT_DIR`. The artifact seams are PascalCase: `IArtifactStore.save` / `delete` are `Save(bytes, name)` /
-  `Delete(fileId)` (no `contextUser`: the store writes as the user of the `PredictiveStudioStorage` it is built over),
-  and `IArtifactLoader.load` is `Load(fileId, contextUser, provider)` with a required `UserInfo` and `provider`.
+  from `PS_ARTIFACT_DIR`. `IArtifactStore.save` / `delete` are `save(bytes, name)` / `delete(fileId)` (no
+  `contextUser`: the store writes as the user of the `PredictiveStudioStorage` it is built over), and
+  `IArtifactLoader.load` is `load(fileId, contextUser, provider)` with a required `UserInfo` and `provider`.
   `IArtifactStore.AssertWritable` is a new required member the engine calls before a run is written: it puts and
   deletes a probe object under `predictive-studio/model-artifacts/`, so a provider that is unconfigured or cannot write
   (wrong credentials, an unwritable root) refuses the run before training. A run that fails after storing its

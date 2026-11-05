@@ -63,7 +63,7 @@ export class StorageProviderArtifactStore implements IArtifactStore {
    * @throws Error when the name is not one safe key segment (before anything is stored), when storage refuses the
    *   object, or when the row cannot be saved (the object is removed first)
    */
-  public async Save(bytes: Uint8Array, name: string): Promise<string> {
+  public async save(bytes: Uint8Array, name: string): Promise<string> {
     const objectKey = StorageProviderArtifactStore.objectKeyFor(name);
     const contentType = name.toLowerCase().endsWith('.json') ? 'application/json' : 'application/octet-stream';
     const binding = await this.storage.ConfiguredDriver();
@@ -88,7 +88,7 @@ export class StorageProviderArtifactStore implements IArtifactStore {
    *
    * @throws Error when the row is not found, the object cannot be removed (the row is kept), or the row cannot be deleted
    */
-  public async Delete(fileId: string): Promise<void> {
+  public async delete(fileId: string): Promise<void> {
     const file = await this.storage.LoadFileRow(fileId, this.entityFactory);
     if (!file) throw new Error(`Predictive Studio model artifacts: artifact file ${fileId} not found`);
     const objectKey = file.ProviderKey;

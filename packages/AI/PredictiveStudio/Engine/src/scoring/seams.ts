@@ -110,7 +110,7 @@ export class MJSidecarPredictor implements ISidecarPredictor {
 // NOTE on `IArtifactLoader`:
 //
 // The read-side artifact loader is the counterpart to the training
-// `StorageProviderArtifactStore.Save`. The production loader is
+// `StorageProviderArtifactStore.save`. The production loader is
 // `StorageProviderArtifactLoader` (`./storage-provider-artifact-loader`), which reads
 // through the storage provider the file's `MJ: Files` row names. Tests inject an
 // in-memory loader; see `./artifact-loader`.

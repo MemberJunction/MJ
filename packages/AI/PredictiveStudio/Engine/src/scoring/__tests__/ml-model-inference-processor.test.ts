@@ -204,7 +204,7 @@ describe('MLModelInferenceProcessor.ProcessRecord — per-record scoring', () =>
     expect(req.feature_schema).toEqual(FROZEN_SCHEMA);
     expect(req.artifact_b64).toBe(Buffer.from('fake-model-bytes').toString('base64'));
     // The artifact loader held the exact bytes the model referenced.
-    expect(await artifacts.Load('file-1', CTX.ContextUser, pipelineRowProvider([], []))).not.toBeNull();
+    expect(await artifacts.load('file-1', CTX.ContextUser, pipelineRowProvider([], []))).not.toBeNull();
   });
 
   it('scores several records and aligns predictions per record', async () => {
@@ -358,7 +358,7 @@ describe('MLModelInferenceProcessor — lifecycle status gate', () => {
       const { deps, sidecar } = buildDeps(model);
       let artifactLoads = 0;
       deps.artifactLoader = {
-        async Load(): Promise<Uint8Array | null> {
+        async load(): Promise<Uint8Array | null> {
           artifactLoads++;
           return new Uint8Array([1, 2, 3]);
         },
@@ -451,7 +451,7 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     return {
       entityFactory: { getEntityObject: unused },
       recordLoader: { loadPipeline: async () => pipeline, nextModelVersion: async () => 1, resolveAlgorithmIDForDriver: async () => null },
-      artifactStore: { Save: unused, Delete: unused, AssertWritable: unused },
+      artifactStore: { save: unused, delete: unused, AssertWritable: unused },
       contextUser: user,
       provider,
       predictionUnits: new FakePredictionUnitStore(UnitYearsWorld.UnitColumns()),
@@ -670,7 +670,7 @@ describe('MLModelInferenceProcessor — a fixed decision date that advances each
     const deps: TrainingDeps = {
       entityFactory: { getEntityObject: unused },
       recordLoader: { loadPipeline: async () => pipeline, nextModelVersion: async () => 1, resolveAlgorithmIDForDriver: async () => null },
-      artifactStore: { Save: unused, Delete: unused, AssertWritable: unused },
+      artifactStore: { save: unused, delete: unused, AssertWritable: unused },
       contextUser: user, provider, predictionUnits: units, assemblyMetadata: metadata, dataAccess,
       now: () => new Date(`${TRAIN_DAY}T09:00:00Z`),
     };

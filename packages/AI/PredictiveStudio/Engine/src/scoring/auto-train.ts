@@ -132,7 +132,7 @@ export class PipelineAutoTrainer implements IModelAutoTrainer {
     }
     for (const row of result.Results) {
       const servable = ModelHasTrainedArtifact(row) && ModelReadiness.IsServedByPredict(row);
-      if (servable && row.ArtifactFileID && (await this.artifactLoader.Load(row.ArtifactFileID, contextUser, provider))) {
+      if (servable && row.ArtifactFileID && (await this.artifactLoader.load(row.ArtifactFileID, contextUser, provider))) {
         return row.ID;
       }
     }

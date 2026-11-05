@@ -8,7 +8,7 @@ For each contract changed by the an-bc review fixes, this lists every reader cla
 |---|---|---|---|
 | C1 | Entity names | `MJ: Prediction Units`, `MJ: Evaluation Protocols`, `MJ: Training Snapshots` | `MJ: ML Prediction Units`, `MJ: ML Evaluation Protocols`, `MJ: ML Training Snapshots` |
 | C2 | Tables, views, procs, constraints, classes | `PredictionUnit` / `vwPredictionUnits` / `MJPredictionUnitEntity` … | `MLPredictionUnit` / `vwMLPredictionUnits` / `MJMLPredictionUnitEntity` … (FK columns unchanged, R2) |
-| C3 | `IArtifactLoader.load` | `load(fileId, contextUser)` | `Load(fileId, contextUser, provider)` (PascalCase after the final review, M2; `IArtifactStore` is `Save` / `Delete`), plus `IArtifactStore.AssertWritable` |
+| C3 | `IArtifactLoader.load` | `load(fileId, contextUser)` | `load(fileId, contextUser, provider)` (casing kept to match the interface already on next), plus `IArtifactStore.AssertWritable` |
 | C4 | Storage setting | `PS_SNAPSHOT_STORAGE_PROVIDER`, model files written to the *active* File Storage Provider (`MJFilesArtifactStore`, `ResolveActiveFileStorageProviderId`), local-disk fallback | `PS_STORAGE_PROVIDER` names the provider for snapshot **and** model files, whatever its `IsActive` flag; `PS_ARTIFACT_DIR` read only for files written before 6.3 |
 | C5 | Migration file | `V2026110…__v6.2.x__PS_Honest_Training_Schema.sql` | `migrations/v6/V202611042040__v6.3.x__PS_Honest_Training_Schema.sql` |
 
@@ -98,9 +98,9 @@ E9: removed exports
 $ git grep -nE "(MJFilesArtifactStore|BuildArtifactStore|ResolveActiveFileStorageProviderId|LocalArtifactLoader)" -- ':!plans/**'
 (empty)
 ```
-E10: artifact-loader call sites (the member is `Load` since the final-review fixes, M2)
+E10: artifact-loader call sites (`load`)
 ```
-$ git grep -nE "(artifactLoader|ArtifactLoader|loader)\??\.Load\(" -- 'packages/AI/PredictiveStudio/**/*.ts'
+$ git grep -nE "(artifactLoader|ArtifactLoader|loader)\??\.load\(" -- 'packages/AI/PredictiveStudio/**/*.ts'
 packages/AI/PredictiveStudio/Engine/src/scoring/__tests__/storage-provider-artifact-loader.test.ts:51,58,66,71,76,81,87  (all pass TestUser and files.Provider())
 packages/AI/PredictiveStudio/Engine/src/scoring/auto-train.ts:135:  this.artifactLoader.Load(row.ArtifactFileID, contextUser, provider)
 packages/AI/PredictiveStudio/Engine/src/scoring/ml-model-inference-processor.ts:325:  this.deps.artifactLoader.Load(artifactFileId, context.ContextUser, context.Provider)

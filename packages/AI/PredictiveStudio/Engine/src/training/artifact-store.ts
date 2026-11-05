@@ -45,7 +45,7 @@ export class InMemoryArtifactStore implements IArtifactStore {
   private seq = 0;
 
   /** @inheritdoc */
-  public async Save(bytes: Uint8Array, name: string): Promise<string> {
+  public async save(bytes: Uint8Array, name: string): Promise<string> {
     const id = `mem-file-${++this.seq}`;
     this.Saved.set(id, { Name: name, Bytes: bytes });
     return id;
@@ -55,7 +55,7 @@ export class InMemoryArtifactStore implements IArtifactStore {
   public async AssertWritable(): Promise<void> {}
 
   /** @inheritdoc */
-  public async Delete(fileId: string): Promise<void> {
+  public async delete(fileId: string): Promise<void> {
     if (!this.Saved.delete(fileId)) throw new Error(`InMemoryArtifactStore: no artifact ${fileId}`);
   }
 }
