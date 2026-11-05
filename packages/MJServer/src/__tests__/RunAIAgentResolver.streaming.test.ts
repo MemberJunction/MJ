@@ -32,12 +32,22 @@ import type { AgentExecutionStreamingCallback } from '@memberjunction/ai-core-pl
 import { AgentRunStatusPublisher } from '../resolvers/AgentRunStatusPublisher.js';
 import type { UserPayload } from '../types.js';
 
-const agentRun = {
+const runFields = {
     ID: 'run-1',
-    GetAll: () => ({ ID: 'run-1', ConversationDetailID: 'detail-1', Agent: 'Betty' }),
+    AgentID: 'agent-1',
+    Agent: 'Betty',
+    ParentRunID: null,
+    Status: 'Running',
+    ConversationID: 'conversation-1',
+    ConversationDetailID: 'detail-1',
 };
 
-function buildHarness() {
+const agentRun = {
+    ...runFields,
+    GetAll: () => ({ ...runFields }),
+};
+
+function buildHarness(run: object = agentRun) {
     const publish = vi.fn().mockResolvedValue(undefined);
     const pubSub = { publish } as unknown as PubSubEngine;
     const userPayload = { sessionId: 'session-1', userRecord: { ID: 'user-1' } } as UserPayload;
@@ -46,7 +56,7 @@ function buildHarness() {
     publisher.OnProgress({
         step: 'initialization',
         message: 'starting',
-        metadata: { agentRun },
+        metadata: { agentRun: run },
     });
     publish.mockClear();
     const callback: AgentExecutionStreamingCallback = publisher.OnStreaming;
@@ -79,6 +89,20 @@ describe('AgentRunStatusPublisher streaming wire shape', () => {
             stepName: 'prompt',
             kind: 'final-response',
         });
+    });
+
+    it('sends the run summary on each chunk, not the steps and payload the run holds', () => {
+        const getAll = vi.fn(() => ({
+            ...runFields,
+            FinalPayload: '{"rows":[1,2,3]}',
+            __runSteps: [{ ID: 'step-1', __promptRun: { Messages: 'the full prompt' } }],
+        }));
+        const { publish, callback } = buildHarness({ ...runFields, GetAll: getAll });
+
+        callback({ content: 'Hel', isComplete: false, stepType: 'prompt', kind: 'final-response' });
+
+        expect(publishedData(publish).agentRun).toEqual(runFields);
+        expect(getAll).not.toHaveBeenCalled();
     });
 
     it('maps isComplete=true to isPartial=false on the final chunk', () => {
