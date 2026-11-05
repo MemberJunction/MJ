@@ -1358,7 +1358,7 @@ describe('BaseAgent — delegated sub-agent artifactDirective and payloadArtifac
         PayloadUpstreamPaths: '*',
     } as unknown as MJAIAgentEntityExtended;
 
-    it('propagates child artifactDirective and DefaultArtifactTypeID when terminateAfter is true', async () => {
+    it('propagates child message, artifactDirective, and DefaultArtifactTypeID when terminateAfter is true', async () => {
         const agent = new DelegatingTestAgent();
         agent.SimulatedSubAgentResult = {
             success: true,
@@ -1372,6 +1372,7 @@ describe('BaseAgent — delegated sub-agent artifactDirective and payloadArtifac
                 ID: 'child-run-1',
                 Status: 'Completed',
                 FinalStep: 'Success',
+                Message: 'Total revenue across 4 regions is $1.2M.',
                 Steps: [],
             } as unknown as MJAIAgentRunEntityExtended,
         };
@@ -1399,6 +1400,7 @@ describe('BaseAgent — delegated sub-agent artifactDirective and payloadArtifac
         );
 
         expect(stepResult.terminate).toBe(true);
+        expect(stepResult.message).toBe('Total revenue across 4 regions is $1.2M.');
         expect(stepResult.artifactDirective).toEqual({
             behavior: 'create-new',
             name: 'Revenue By Region',
@@ -1407,7 +1409,7 @@ describe('BaseAgent — delegated sub-agent artifactDirective and payloadArtifac
         expect(stepResult.payloadArtifactTypeID).toBe('type-json-data');
     });
 
-    it('drops child artifactDirective and payloadArtifactTypeID when terminateAfter is false so parent retains control', async () => {
+    it('drops child message, artifactDirective, and payloadArtifactTypeID when terminateAfter is false so parent retains control', async () => {
         const agent = new DelegatingTestAgent();
         agent.SimulatedSubAgentResult = {
             success: true,
@@ -1421,6 +1423,7 @@ describe('BaseAgent — delegated sub-agent artifactDirective and payloadArtifac
                 ID: 'child-run-2',
                 Status: 'Completed',
                 FinalStep: 'Success',
+                Message: 'Fetched 42 intermediate rows.',
                 Steps: [],
             } as unknown as MJAIAgentRunEntityExtended,
         };
@@ -1448,6 +1451,7 @@ describe('BaseAgent — delegated sub-agent artifactDirective and payloadArtifac
         );
 
         expect(stepResult.terminate).toBe(false);
+        expect(stepResult.message).toBeUndefined();
         expect(stepResult.artifactDirective).toBeUndefined();
         expect(stepResult.payloadArtifactTypeID).toBeUndefined();
     });
