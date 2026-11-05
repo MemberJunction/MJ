@@ -32,7 +32,7 @@ vi.mock('@memberjunction/global', () => ({
     RequiresSubclass: () => (target: unknown) => target,
 }));
 
-vi.mock('@memberjunction/core', () => {
+vi.mock('@memberjunction/core', async () => {
     class MockMetadata {
         GetEntityObject = mockGetEntityObject;
     }
@@ -40,6 +40,9 @@ vi.mock('@memberjunction/core', () => {
         RunView = mockRunView;
     }
     return {
+        // The real SharedLoad, so Config's load sharing runs as it does in production. Imported from its
+        // own module: the whole of @memberjunction/core would load the @memberjunction/global mocked here.
+        SharedLoad: (await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core/dist/generic/sharedLoad.js')).SharedLoad,
         Metadata: MockMetadata,
         RunView: MockRunView,
         UserInfo: class {},
