@@ -24,7 +24,7 @@ import { AIAgentRunCostService, AgentRunCostMetrics } from './ai-agent-run-cost.
 import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { SectionPickerItem } from '@memberjunction/ng-ui-components';
-import { IsPhoneViewport } from '../../shared/phone-viewport';
+import { IsPhoneViewport, WatchPhoneViewport } from '../../shared/phone-viewport';
 
 /**
  * Task statuses that mean the step is finished with. Anything else means the workflow is still
@@ -88,12 +88,24 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   }
 
   /**
-   * Phone defaults, applied once at init: a run that lands on Visualization or Analytics opens
+   * Phone defaults, applied at init and whenever the breakpoint is crossed: a run on Visualization or Analytics opens
    * on the timeline instead, since those are desktop views (pan, zoom, charts).
    */
   ApplyPhoneDefaults(isPhone: boolean): void {
     this.IsPhone = isPhone;
     if (isPhone && !this.SectionPickerItems.some((i) => i.Key === this.ActiveTab)) this.ActiveTab = 'timeline';
+  }
+
+  /** Stops following the breakpoint; set at init, called from ngOnDestroy. */
+  private stopPhoneWatch: () => void = () => undefined;
+
+  /**
+   * Re-reads the breakpoint and re-applies the phone defaults, so rotating a tablet or resizing
+   * below 768px on Visualization or Analytics lands on the timeline the picker names.
+   */
+  SyncPhoneViewport(): void {
+    this.ApplyPhoneDefaults(IsPhoneViewport());
+    this.cdr.markForCheck();
   }
 
   /** Copies this run's URL so it can be opened on a desktop. */
@@ -373,6 +385,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   async ngOnInit() {
     await super.ngOnInit();
     this.ApplyPhoneDefaults(IsPhoneViewport());
+    this.stopPhoneWatch = WatchPhoneViewport(() => this.SyncPhoneViewport());
     
     if (this.record && this.record.ID) {
       await Promise.all([
@@ -398,6 +411,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
 
   ngOnDestroy() {
     super.ngOnDestroy();
+    this.stopPhoneWatch();
     this.destroy$.next();
     this.destroy$.complete();
     this.clearWorkflowPoll();

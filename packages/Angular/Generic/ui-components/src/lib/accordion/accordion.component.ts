@@ -109,7 +109,7 @@ export class MJAccordionBodyDirective {
   standalone: true,
   imports: [NgTemplateOutlet],
   template: `
-    <div class="mj-accordion-panel" [class.mj-accordion-panel--expanded]="Expanded || FlatMode !== null" [class.mj-accordion-panel--disabled]="Disabled"
+    <div class="mj-accordion-panel" [class.mj-accordion-panel--expanded]="Expanded || IsOpenFlat" [class.mj-accordion-panel--disabled]="Disabled"
       [class.mj-accordion-panel--flat-section]="FlatMode === 'section'"
       [class.mj-accordion-panel--flat-block]="FlatMode === 'block'"
       [class.mj-accordion-panel--muted-icon]="TitleIconMuted"
@@ -150,14 +150,14 @@ export class MJAccordionBodyDirective {
           </button>
         }
       </div>
-      <div class="mj-accordion-body-outer" [attr.inert]="Expanded || FlatMode !== null ? null : ''">
+      <div class="mj-accordion-body-outer" [attr.inert]="Expanded || IsOpenFlat ? null : ''">
         <div class="mj-accordion-body-clip">
           <div class="mj-accordion-body" role="region" [id]="BodyId" [attr.aria-labelledby]="HeaderId">
             <!-- Legacy: content placed directly in the panel (eager). -->
             <ng-content></ng-content>
             <!-- Preferred: [mjAccordionBody] template — instantiated lazily on first
                  expand, then kept alive so later toggles still animate. -->
-            @if (bodyTemplate && (Expanded || hasBeenExpanded || FlatMode !== null)) {
+            @if (bodyTemplate && (Expanded || hasBeenExpanded || IsOpenFlat)) {
               <ng-container [ngTemplateOutlet]="bodyTemplate.templateRef"></ng-container>
             }
           </div>
@@ -349,6 +349,15 @@ export class MJAccordionPanelComponent implements OnInit, OnDestroy {
   get IsShownFlat(): boolean {
     if (this.sectionMode) return !this.sectionHidden;
     return this.parentFlat ? this.parentShown : true;
+  }
+
+  /**
+   * Open because it is flat and on screen. A hidden section (or a block inside one) is not, so its
+   * lazy body is not built until that section is picked; once picked it stays built (it was
+   * expanded then), so switching away and back keeps its state.
+   */
+  get IsOpenFlat(): boolean {
+    return this.FlatMode !== null && this.IsShownFlat;
   }
 
   /** The name the section picker shows for this panel. */

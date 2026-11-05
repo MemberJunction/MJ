@@ -30,7 +30,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { RecordOpenedEvent } from '@memberjunction/ng-entity-viewer';
 import { MJEntityFormComponent } from '../../generated/Entities/MJEntity/mjentity.form.component';
 import { SectionPickerItem } from '@memberjunction/ng-ui-components';
-import { IsPhoneViewport } from '../../shared/phone-viewport';
+import { IsPhoneViewport, WatchPhoneViewport } from '../../shared/phone-viewport';
 
 export type ExplorerSection =
     | 'overview'
@@ -542,12 +542,13 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     override async ngOnInit(): Promise<void> {
         await super.ngOnInit();
         this.ApplyPhoneDefaults(IsPhoneViewport());
+        this.stopPhoneWatch = WatchPhoneViewport(() => this.SyncPhoneViewport());
         this.setupStateManagement();
         this.loadExplorerData();
     }
 
     /**
-     * Phone-width defaults, applied once at init: Relations opens as the list, since the ERD is a
+     * Phone-width defaults, applied at init and whenever the breakpoint is crossed into phone width: Relations opens as the list, since the ERD is a
      * desktop experience (pan, zoom, depth) that a 375px canvas cannot carry. The user can still
      * switch to the diagram from the section header.
      */
@@ -555,8 +556,18 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         if (isPhone) this.RelationshipViewMode = 'list';
     }
 
+    /** Stops following the breakpoint; set at init, called from ngOnDestroy. */
+    private stopPhoneWatch: () => void = () => undefined;
+
+    /** Re-reads the breakpoint and re-applies the phone defaults (rotation, resize). */
+    public SyncPhoneViewport(): void {
+        this.ApplyPhoneDefaults(IsPhoneViewport());
+        this.cdr.markForCheck();
+    }
+
     ngOnDestroy(): void {
         super.ngOnDestroy();
+        this.stopPhoneWatch();
         this.destroy$.next();
         this.destroy$.complete();
     }

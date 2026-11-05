@@ -3059,8 +3059,8 @@ button:focus-visible {
 }
 
 /* Phone (375px): the action row wraps instead of running past the edge, the SHOW
-   toggle takes its own line, the breadcrumb wraps, and the tab strip keeps a visible
-   scrollbar so the clipped tab reads as "more to the right". */
+   toggle takes its own line, and the breadcrumb wraps. (The tab strip is
+   hidden on phones; the section picker replaces it.) */
 @media (max-width: 768px) {
   .header-actions {
     flex-wrap: wrap;
@@ -3076,9 +3076,5 @@ button:focus-visible {
 
   .breadcrumb li {
     min-width: 0;
-  }
-
-  .tabs {
-    scrollbar-width: thin;
   }
 }

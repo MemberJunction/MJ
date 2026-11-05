@@ -102,6 +102,10 @@
     height: 100dvh !important;
     max-width: 100vw !important;
     max-height: 100dvh !important;
+    /* The template sets MinWidth / MinHeight inline too (the AI test harness asks for 800 x 600),
+       and a minimum beats both width and max-width, so it has to give way as well. */
+    min-width: 0 !important;
+    min-height: 0 !important;
     border: 0;
     border-radius: 0 !important;
   }

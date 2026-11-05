@@ -125,6 +125,24 @@ export class MJSectionPickerComponent {
     return item.Key === this.ActiveKey;
   }
 
+  /**
+   * The button's accessible name. An aria-label replaces the button's content for screen readers,
+   * so the indicator spans inside it are never announced: the name has to carry their status itself,
+   * in the order they appear (unsaved, then error or warning).
+   */
+  public get TriggerLabel(): string {
+    const active = this.ActiveItem;
+    if (!active) return 'Change section';
+    const parts = [active.Title];
+    const dirty = active.DirtyCount ?? 0;
+    const errors = active.ErrorCount ?? 0;
+    const warnings = active.WarningCount ?? 0;
+    if (dirty > 0) parts.push(`${dirty} unsaved ${dirty === 1 ? 'change' : 'changes'}`);
+    if (errors > 0) parts.push(`${errors} ${errors === 1 ? 'error' : 'errors'}`);
+    else if (warnings > 0) parts.push(`${warnings} ${warnings === 1 ? 'warning' : 'warnings'}`);
+    return 'Change section — ' + parts.join(', ');
+  }
+
   public ErrorLabel(item: SectionPickerItem): string {
     const n = item.ErrorCount ?? 0;
     return `${n} ${n === 1 ? 'error' : 'errors'} in ${item.Title}`;

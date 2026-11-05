@@ -100,6 +100,13 @@ describe('MJAccordionSectionsComponent (DOM)', () => {
         expect(host().Log).toContain('messages:true');
     });
 
+    it('does not build a hidden section\'s lazy body until that section is picked', async () => {
+        await enable();
+        expect(hidden('.p-result')).toBe(true);
+        expect(q('.p-result .lazy')).toBeNull();
+        expect(host().Log).not.toContain('result:true');
+    });
+
     it('picking a section shows it, emits ActiveKeyChange, opens its lazy body and emits ExpandedChange(true)', async () => {
         await enable();
         picker()!.Select('result');

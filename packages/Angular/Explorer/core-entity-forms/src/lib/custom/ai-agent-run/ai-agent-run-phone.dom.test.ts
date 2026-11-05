@@ -4,7 +4,7 @@
  * views: a phone that lands on one is sent back to the timeline, and the timeline's detail pane
  * stacks under the list instead of beside it.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { MJAIAgentRunFormComponentExtended } from './ai-agent-run.component';
 
 function form(over: object = {}): MJAIAgentRunFormComponentExtended {
@@ -43,5 +43,26 @@ describe('MJAIAgentRunFormComponentExtended on a phone', () => {
         const f = form({ ActiveTab: 'details' });
         f.ApplyPhoneDefaults(true);
         expect(f.ActiveTab).toBe('details');
+    });
+
+    describe('following the breakpoint', () => {
+        const setMatchMedia = (matches: boolean | undefined): void => {
+            const fn = matches === undefined ? undefined : () => ({ matches, addEventListener: () => undefined, removeEventListener: () => undefined });
+            Object.defineProperty(window, 'matchMedia', { value: fn, configurable: true, writable: true });
+        };
+        afterEach(() => setMatchMedia(undefined));
+
+        it('re-applies the phone defaults when the viewport crosses into phone width', () => {
+            const f = form({ ActiveTab: 'visualization' });
+            setMatchMedia(true);
+            f.SyncPhoneViewport();
+            expect(f.IsPhone).toBe(true);
+            expect(f.ActiveTab).toBe('timeline');
+            expect(f.TimelineSplitDirection).toBe('vertical');
+            setMatchMedia(false);
+            f.SyncPhoneViewport();
+            expect(f.IsPhone).toBe(false);
+            expect(f.TimelineSplitDirection).toBe('horizontal');
+        });
     });
 });

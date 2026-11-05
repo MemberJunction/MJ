@@ -51,4 +51,19 @@ describe('MJEntityFormComponentExtended phone section picker', () => {
         desktop.ApplyPhoneDefaults(false);
         expect(desktop.RelationshipViewMode).toBe('diagram');
     });
+
+    it('opens Relations as the list when the viewport crosses into phone width', () => {
+        const setMatchMedia = (matches: boolean | undefined): void => {
+            const fn = matches === undefined ? undefined : () => ({ matches, addEventListener: () => undefined, removeEventListener: () => undefined });
+            Object.defineProperty(window, 'matchMedia', { value: fn, configurable: true, writable: true });
+        };
+        try {
+            const f = form();
+            setMatchMedia(true);
+            f.SyncPhoneViewport();
+            expect(f.RelationshipViewMode).toBe('list');
+        } finally {
+            setMatchMedia(undefined);
+        }
+    });
 });

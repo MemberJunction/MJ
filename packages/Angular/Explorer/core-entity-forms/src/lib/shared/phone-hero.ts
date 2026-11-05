@@ -16,3 +16,17 @@ export function JoinHeroSummary(parts: ReadonlyArray<string | null | undefined |
 export function CountLabel(count: number, singular: string): string {
     return `${count} ${count === 1 ? singular : singular + 's'}`;
 }
+
+/** The status a run's phone chip shows; each maps to a `--mj-status-*` token pair in `phone-hero.css`. */
+export type RunStatusKindValue = 'running' | 'success' | 'error' | 'info';
+
+/**
+ * A run is running until it has completed (the completion time is the authority, not the success
+ * flag); a completed run is a success, an error, or plain info when it carries no success flag.
+ */
+export function RunStatusKind(completed: boolean, success: boolean | null | undefined): RunStatusKindValue {
+    if (!completed) return 'running';
+    if (success === true) return 'success';
+    if (success === false) return 'error';
+    return 'info';
+}

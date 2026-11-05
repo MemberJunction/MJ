@@ -22,7 +22,7 @@
                                 @if (record.ID) {
                                     <span class="run-id">#{{ record.ID.substring(0, 8) }}</span>
                                 }
-                                <span class="phone-hero-only phone-hero-status" [style.color]="getStatusColor()">
+                                <span class="phone-hero-only phone-hero-status" [attr.data-status]="StatusKind">
                                     <i [class]="'fa-solid ' + getStatusIcon()" aria-hidden="true"></i>
                                     {{ getStatusText() }}
                                 </span>

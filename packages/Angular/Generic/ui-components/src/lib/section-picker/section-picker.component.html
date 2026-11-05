@@ -3,7 +3,7 @@
         class="mj-section-picker"
         aria-haspopup="dialog"
         [attr.aria-expanded]="SheetOpen"
-        [attr.aria-label]="'Change section — ' + (active?.Title ?? '')"
+        [attr.aria-label]="TriggerLabel"
         (click)="OpenSheet()">
   @if (active?.Icon) {
     <i [class]="active!.Icon" aria-hidden="true"></i>
@@ -62,13 +62,13 @@
         <i [class]="item.Icon" aria-hidden="true"></i>
       }
       <span class="mj-section-sheet-label">{{ item.Title }}</span>
+      @if ((item.DirtyCount ?? 0) > 0) {
+        <span class="mj-section-picker-dirty" role="img" [attr.aria-label]="DirtyLabel(item)"></span>
+      }
       @if ((item.ErrorCount ?? 0) > 0) {
         <span class="mj-section-picker-error" role="img" [attr.aria-label]="ErrorLabel(item)">{{ item.ErrorCount }}</span>
       } @else if ((item.WarningCount ?? 0) > 0) {
         <span class="mj-section-picker-warning" role="img" [attr.aria-label]="WarningLabel(item)">{{ item.WarningCount }}</span>
-      }
-      @if ((item.DirtyCount ?? 0) > 0) {
-        <span class="mj-section-picker-dirty" role="img" [attr.aria-label]="DirtyLabel(item)"></span>
       }
       @if (item.Count != null && item.Count > 0) {
         <span class="mj-section-picker-count">{{ item.Count }}</span>

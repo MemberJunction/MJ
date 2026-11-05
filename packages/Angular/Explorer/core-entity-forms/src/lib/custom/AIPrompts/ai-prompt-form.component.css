@@ -228,13 +228,6 @@ mj-empty-state.invalid-template-state {
     }
 }
 
-/* Phone (375px): the two related grids stack. */
-@media (max-width: 768px) {
-    .related-grid-pair {
-        grid-template-columns: 1fr;
-    }
-}
-
 /* Phone (375px): side-by-side grids stack. */
 @media (max-width: 768px) {
     .related-grid-pair {

@@ -56,6 +56,20 @@ describe('MJSectionPickerComponent (DOM)', () => {
     expect(attr(f, 'button.mj-section-picker', 'aria-label')).toBe('Change section — Fields');
   });
 
+  it('names the active section\'s status in the button\'s accessible name, which replaces its content', () => {
+    expect(attr(render({ ActiveKey: 'security' }), 'button.mj-section-picker', 'aria-label')).toBe('Change section — Security, 1 error');
+    expect(attr(render({ ActiveKey: 'history' }), 'button.mj-section-picker', 'aria-label')).toBe('Change section — History, 2 unsaved changes');
+  });
+
+  it('orders a sheet row\'s indicators like the button: unsaved dot, then error or warning, then count', () => {
+    const f = render({ Groups: [{ Title: 'More', Items: [{ Key: 'x', Title: 'X', Count: 4, ErrorCount: 1, DirtyCount: 1 }] }] });
+    openSheet(f);
+    const row = query(f, '.mj-section-sheet-item[data-key="x"]') as HTMLElement;
+    expect(Array.from(row.children).map((c) => c.className.split(' ')[0])).toEqual([
+      'mj-section-sheet-label', 'mj-section-picker-dirty', 'mj-section-picker-error', 'mj-section-picker-count',
+    ]);
+  });
+
   it('shows the active section error and dirty indicators on the button', () => {
     const f = render({ ActiveKey: 'security' });
     expect(text(f, '.mj-section-picker .mj-section-picker-error')).toBe('1');

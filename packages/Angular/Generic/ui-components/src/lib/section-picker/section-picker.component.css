@@ -92,10 +92,10 @@
 
 .mj-section-picker-dirty {
   flex-shrink: 0;
-  width: 8px;
-  height: 8px;
+  width: var(--mj-space-1-5);
+  height: var(--mj-space-1-5);
   border-radius: var(--mj-radius-full, 999px);
-  background: var(--mj-brand-primary);
+  background: var(--mj-status-warning);
 }
 
 /* ============================================

@@ -45,12 +45,19 @@
         margin-left: 8px;
         padding: 2px 8px;
         border-radius: var(--mj-radius-full, 999px);
-        background: color-mix(in srgb, currentColor 14%, transparent);
+        color: var(--mj-text-secondary);
+        background: var(--mj-bg-surface-sunken);
         font-size: var(--mj-text-xs);
         font-weight: var(--mj-font-semibold);
         vertical-align: middle;
         white-space: nowrap;
     }
+
+    /* data-status comes from RunStatusKind(); the -text / -bg pairs keep contrast in both themes */
+    .phone-hero-status[data-status="running"] { color: var(--mj-status-warning-text); background: var(--mj-status-warning-bg); }
+    .phone-hero-status[data-status="success"] { color: var(--mj-status-success-text); background: var(--mj-status-success-bg); }
+    .phone-hero-status[data-status="error"]   { color: var(--mj-status-error-text);   background: var(--mj-status-error-bg); }
+    .phone-hero-status[data-status="info"]    { color: var(--mj-status-info-text);    background: var(--mj-status-info-bg); }
 
     .phone-hero-top {
         flex-direction: column;

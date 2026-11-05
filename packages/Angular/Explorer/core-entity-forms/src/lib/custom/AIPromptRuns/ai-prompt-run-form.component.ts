@@ -9,7 +9,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { ChatMessage } from '@memberjunction/ai';
 import { TestHarnessWindowManagerService } from '@memberjunction/ng-ai-test-harness';
 import { ParseJSONOptions, ParseJSONRecursive } from '@memberjunction/global';
-import { JoinHeroSummary } from '../../shared/phone-hero';
+import { JoinHeroSummary, RunStatusKind, type RunStatusKindValue } from '../../shared/phone-hero';
 import { PhoneSectionsState } from '../../shared/phone-sections-state';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Prompt Runs')
@@ -645,6 +645,11 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         } else {
             return '#17a2b8'; // Blue (completed but no success flag)
         }
+    }
+
+    /** The phone status chip's kind, which picks its `--mj-status-*` tokens. */
+    get StatusKind(): RunStatusKindValue {
+        return RunStatusKind(!!this.record?.CompletedAt, this.record?.Success);
     }
 
     /** @deprecated Use {@link GetStatusColor}. */
