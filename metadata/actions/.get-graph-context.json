@@ -1,0 +1,226 @@
+[
+  {
+    "fields": {
+      "Name": "Get Graph Context",
+      "Description": "Expands a governed semantic subgraph around a natural-language question, concept names, or explicit entity/record seed nodes. Defaults to 'MJ Canon' to retrieve authoritative concept definitions, canonical Alternate Base Views, governed Queries, and Preferred Over precedence rules.",
+      "DriverClass": "Get Graph Context",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-diagram-project",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "GraphName",
+            "DefaultValue": "MJ Canon",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the semantic graph partition to query (defaults to 'MJ Canon').",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "12B88BDB-14D6-49D7-A63E-8BFE5F56CB77"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Question",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Natural-language question or topic used to automatically resolve seed concepts, entities, alternate base views, and queries.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A5EE4DB7-2C04-47F2-A53E-5D7E30D85094"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConceptNames",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional comma-separated list or JSON array of concept names or synonyms to expand around.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CC49037E-E2A6-411F-BFCA-35E31E4EB338"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional MJ Entity name to seed the subgraph (paired with RecordID for a data record, or alone for the entity metadata node).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0B14C719-EF07-486C-A949-EE5F5EE8AED0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecordID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional primary key RecordID when seeding from a specific record of EntityName.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0B4CBC9F-9E70-4B13-901F-0C1100782A8F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SeedNodes",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": true,
+            "Description": "Optional array of { EntityName, RecordID } seed node references.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "18B55DC6-080D-4CAC-BF1B-876B56136F8F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Depth",
+            "DefaultValue": "2",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum hop depth from seed nodes (default 2, max 4).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "789A4ECF-E467-4920-AD5B-0A10ED5A36E7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxNodes",
+            "DefaultValue": "50",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of nodes in the returned subgraph (default 50).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2B7451F1-38F4-4209-8750-022BFD1F6049"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Subgraph",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Expanded subgraph object containing { Nodes, Edges }.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FA238D3F-8B53-43B9-853A-69C06CDA17F3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PromptDescription",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Formatted Markdown summary of the subgraph ready for prompt injection.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4B0B6D73-F2D1-4C21-9C98-8FEAED6354F3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NodeCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of visible nodes in the returned subgraph.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E15EC8FE-6A62-4318-A1CF-A3B1B86B8691"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EdgeCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of visible edges in the returned subgraph.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "170F4715-B171-4F9D-8B53-2C8E06063664"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Subgraph expanded and formatted successfully."
+          },
+          "primaryKey": {
+            "ID": "306274D0-64DA-4F79-86E1-AC37984F7E05"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_SEEDS",
+            "IsSuccess": false,
+            "Description": "No Question, ConceptNames, EntityName, or SeedNodes were provided or matched."
+          },
+          "primaryKey": {
+            "ID": "0D68E559-FB40-4D74-B8EF-6BF943422BC9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "GRAPH_CONTEXT_FAILED",
+            "IsSuccess": false,
+            "Description": "An error occurred while expanding the semantic graph."
+          },
+          "primaryKey": {
+            "ID": "54B184A3-5015-49B0-8554-F70F07A1A134"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "9A48855C-67FC-4100-A581-2B1676B5F6C2"
+    }
+  }
+]
