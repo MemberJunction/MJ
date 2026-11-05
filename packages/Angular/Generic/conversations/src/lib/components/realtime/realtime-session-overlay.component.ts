@@ -234,6 +234,9 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   @Input() ShowPerceptionChip = false;
 
+  /** Whether inline markdown links in the session thread open in a new browser tab. Default true. */
+  @Input() OpenLinksInNewTab = true;
+
   // ── Declarative UI configuration (host controls every aspect of the surface) ──
   //
   // Each input is a thin, PascalCase setter over a private slot in {@link _uiInputs}.
@@ -1882,7 +1885,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     const typedChar = event.key;
     this.OnComposerOpenChanged(true);
     // The dock may have just been created — seed the typed character + focus after this CD pass.
-    setTimeout(() => this.composer?.AppendAndFocus(typedChar));
+    setTimeout(() => {
+      this.composer?.AppendAndFocus(typedChar);
+      this.cdr.markForCheck();
+    });
   }
 
   /**
