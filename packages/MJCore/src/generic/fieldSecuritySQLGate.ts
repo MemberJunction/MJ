@@ -936,9 +936,8 @@ export class FieldSecuritySQLGate {
      * starting with `@` (always a T-SQL variable); on PostgreSQL `@` is the unary absolute-value
      * operator (`@salary` evaluates `abs(salary)`), so an adjacent `'@'` symbol + word token is
      * treated as a parameter placeholder only when `analysis.Context.ParameterNames` contains that
-     * parameter name and its surrounding characters match a standalone `@paramName` word token in
-     * `SqlTokens.Lex` (not preceded by `#`, `[`, `@`, `$` or identifier characters, and not
-     * followed by `#` or `@`).
+     * parameter name, it is not bracketed as `[@name]`, and its surrounding characters match a
+     * standalone `@paramName` word token in `SqlTokens.Lex`.
      */
     private static isParameterToken(analysis: SQLReadAnalysis, i: number): boolean {
         const tokens = analysis.Tokens;
@@ -948,9 +947,15 @@ export class FieldSecuritySQLGate {
         if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(token.Text)) return false;
         if (!analysis.Context.ParameterNames?.has(token.Text)) return false;
         const prev = tokens[i - 1];
+        const prev2 = tokens[i - 2];
+        const next = tokens[i + 1];
         if (!FieldSecuritySQLGate.isSymbol(prev, '@') || prev.End !== token.Start) return false;
+        // BindExtraFilterParameters skips `[@name]`, so it never becomes a bound parameter.
+        const bracketed = FieldSecuritySQLGate.isSymbol(prev2, '[') && prev2.End === prev.Start
+            && FieldSecuritySQLGate.isSymbol(next, ']') && token.End === next.Start;
+        if (bracketed || (FieldSecuritySQLGate.isSymbol(prev2, '@') && prev2.End === prev.Start)) return false;
         const charBeforeAt = prev.Start > 0 ? analysis.SQL[prev.Start - 1] : '';
-        if (/[A-Za-z0-9_$\u0080-\uffff@#[]/.test(charBeforeAt)) return false;
+        if (/[A-Za-z0-9_$\u0080-\uffff@#]/.test(charBeforeAt)) return false;
         const charAfterWord = token.End < analysis.SQL.length ? analysis.SQL[token.End] : '';
         if (/[A-Za-z0-9_$\u0080-\uffff@#]/.test(charAfterWord)) return false;
         return true;

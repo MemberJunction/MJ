@@ -398,7 +398,7 @@ describe('GenericDatabaseProvider parameterized RunView (BindExtraFilterParamete
         expect(rawDollarResult.ErrorMessage).toMatch(/dollar/);
     });
 
-    it('enforces field-level security on PostgreSQL in both InternalRunView and GetRunViewsDatabaseStatus against #@col and [@col]', async () => {
+    it('enforces field-level security on PostgreSQL across InternalRunView and cache-check paths', async () => {
         const base = makeMembersEntity();
         const restrictedEntity: EntityInfo = Object.assign(Object.create(Object.getPrototypeOf(base)), base, {
             EnableFieldLevelSecurity: true,
@@ -407,12 +407,18 @@ describe('GenericDatabaseProvider parameterized RunView (BindExtraFilterParamete
         });
         const provider = new ParameterizedRunViewTestProvider([restrictedEntity], GetDialect('postgresql'));
 
-        for (const hostileFilter of ['0#@Score > 100', '[@Score] > 100', '@Score#1 > 100']) {
+        for (const filter of [
+            "ARRAY[@Score] > '{100}'::numeric[]",
+            'Name[@Score] IS NULL',
+            '[@Score] > 100',
+            '0#@Score > 100',
+            '@Score#1 > 100',
+        ]) {
             await expect(
                 provider.Run(
                     {
                         EntityName: 'Members',
-                        ExtraFilter: hostileFilter,
+                        ExtraFilter: filter,
                         Parameters: { Score: 1 },
                     },
                     ADA,
@@ -423,7 +429,7 @@ describe('GenericDatabaseProvider parameterized RunView (BindExtraFilterParamete
                 [
                     {
                         EntityName: 'Members',
-                        ExtraFilter: hostileFilter,
+                        ExtraFilter: filter,
                         Parameters: { Score: 1 },
                     },
                 ],
@@ -437,7 +443,7 @@ describe('GenericDatabaseProvider parameterized RunView (BindExtraFilterParamete
                     {
                         params: {
                             EntityName: 'Members',
-                            ExtraFilter: hostileFilter,
+                            ExtraFilter: filter,
                             Parameters: { Score: 1 },
                         },
                         cacheStatus: { maxUpdatedAt: '2026-01-01T00:00:00.000Z', rowCount: 5 },
@@ -449,6 +455,29 @@ describe('GenericDatabaseProvider parameterized RunView (BindExtraFilterParamete
             expect(cacheCheckRes.results[0].errorMessage).toMatch(/Score/i);
         }
         expect(provider.ExecutedCalls).toHaveLength(0);
+
+        // A valid parameterized filter on an allowed field passes on both paths
+        const allowedViewRes = await provider.Run(
+            {
+                EntityName: 'Members',
+                ExtraFilter: 'Name = @n',
+                Parameters: { n: 'Alice' },
+            },
+            ADA,
+        );
+        expect(allowedViewRes.Success).toBe(true);
+
+        const allowedCacheStatuses = await provider.GetRunViewsDatabaseStatus(
+            [
+                {
+                    EntityName: 'Members',
+                    ExtraFilter: 'Name = @n',
+                    Parameters: { n: 'Alice' },
+                },
+            ],
+            ADA,
+        );
+        expect(allowedCacheStatuses[0].Success).toBe(true);
     });
 
     it('excludes parameterized count_only requests from IsCoalescibleCountBatch', () => {

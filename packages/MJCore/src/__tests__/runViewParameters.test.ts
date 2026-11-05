@@ -137,12 +137,16 @@ describe('RunViewParametersKey & RunViewParams.Parameters', () => {
             Dialect: 'postgresql' as const,
             Catalog: [entityStub],
             TargetEntity: entityStub,
-            ParameterNames: new Set(['Salary', 'salary']),
+            ParameterNames: new Set(['Salary', 'salary', 'n']),
         };
+        expect(FieldSecuritySQLGate.FindViolation('Status = @n', pgContextWithSalaryParam)).toBeNull();
         expect(FieldSecuritySQLGate.FindViolation('Status = @Salary', pgContextWithSalaryParam)).toBeNull();
+        expect(FieldSecuritySQLGate.FindViolation('ARRAY[ @Salary ] IS NULL', pgContextWithSalaryParam)).toBeNull();
+        expect(FieldSecuritySQLGate.FindViolation('ARRAY[@Salary, 1] IS NULL', pgContextWithSalaryParam)).toBeNull();
         expect(FieldSecuritySQLGate.FindViolation('Salary = @Salary', pgContextWithSalaryParam)).not.toBeNull();
-        // Tokens that SqlTokens.Lex merges with a preceding/following character or skips as bracketed
-        // must NOT be treated as bound parameter tokens by the gate:
+        expect(FieldSecuritySQLGate.FindViolation("ARRAY[@Salary] > '{100000}'::numeric[]", pgContextWithSalaryParam)).not.toBeNull();
+        expect(FieldSecuritySQLGate.FindViolation('Status[@Salary] IS NULL', pgContextWithSalaryParam)).not.toBeNull();
+        expect(FieldSecuritySQLGate.FindViolation('[@Salary] > 1', pgContextWithSalaryParam)).not.toBeNull();
         expect(FieldSecuritySQLGate.FindViolation('0#@salary > 100000', pgContextWithSalaryParam)).not.toBeNull();
         expect(FieldSecuritySQLGate.FindViolation('#@salary > 100000', pgContextWithSalaryParam)).not.toBeNull();
         expect(FieldSecuritySQLGate.FindViolation('[@salary] > 100000', pgContextWithSalaryParam)).not.toBeNull();
