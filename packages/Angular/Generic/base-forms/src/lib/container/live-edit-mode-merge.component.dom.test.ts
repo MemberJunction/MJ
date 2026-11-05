@@ -12,6 +12,7 @@ import {
 } from '../toolbar/base-form-toolbar-action';
 import { MjRecordLinksComponent } from '../links/record-links.component';
 import { FormRecordRefreshCoordinator, type FormRemoteUpdateEvent } from '../form-record-refresh.coordinator';
+import { type FormModeSwitch } from '../types/form-types';
 
 @Component({ standalone: true, selector: 'mj-form-toolbar', template: '' })
 class ToolbarStub {
@@ -27,6 +28,8 @@ class ToolbarStub {
     @Input() TagCount = 0;
     @Input() LinksOpen = false;
     @Input() LinkCount = 0;
+    @Input() CommentsOpen = false;
+    @Input() CommentCount = 0;
     @Input() ConflictCount = 0;
     @Input() AttachmentCount = 0;
     @Input() AttachmentsAvailable = false;
@@ -45,6 +48,7 @@ class ToolbarStub {
     @Input() HasCustomSectionOrder = false;
     @Input() Variants: unknown;
     @Input() CurrentVariantID: unknown;
+    @Input() FormModeSwitch: FormModeSwitch | null = null;
     @Input() RegisteredItems: unknown;
     @Input() ItemOverrides: unknown;
     @Input() FormComponent: unknown;
@@ -106,6 +110,15 @@ class RecordLinksStub {
     @Input() Mode = 'drawer';
     @Input() IsOpen = false;
 }
+@Component({ standalone: true, selector: 'mj-record-comments', template: '' })
+class RecordCommentsStub {
+    @Input() Provider: unknown;
+    @Input() Record: unknown;
+    @Input() Mode = 'drawer';
+    @Input() IsOpen = false;
+    @Input() Coordinator: unknown;
+    @Input() WidthPx = 0;
+}
 @Component({ standalone: true, selector: 'mj-record-attachments', template: '' })
 class RecordAttachmentsStub {
     @Input() Record: unknown;
@@ -135,6 +148,7 @@ const CONTAINER_CHILD_STUBS = [
     RecordChangesStub,
     RecordTagsStub,
     RecordLinksStub,
+    RecordCommentsStub,
     RecordAttachmentsStub,
     ListMgmtStub,
     FormContributionsStub

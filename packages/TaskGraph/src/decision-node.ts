@@ -43,8 +43,14 @@ export type TaskDecisionStepConfiguration = TaskGraphNodeConfigMap['Decision'] &
  * generated type unchanged.
  */
 export type TaskStepConfiguration = MJTaskEntity_ITaskStepConfiguration & {
+    /** Pre-resolved ActionIDs by action name for multi-step loop bodies (`steps[]`), stamped at submit time. */
+    stepActionIds?: Record<string, string>;
     /** Settings for a Decision step. The decision prompt itself is `Task.PromptID`. */
     decision?: TaskDecisionStepConfiguration;
+    /** Settings for an Agent step, extended with optional configuration preset name. */
+    agent?: NonNullable<MJTaskEntity_ITaskStepConfiguration['agent']> & {
+        presetName?: string;
+    };
 };
 
 /** The Task columns the decision readers use. Structural, so `MJTaskEntity` satisfies it as-is. */

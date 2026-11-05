@@ -234,6 +234,45 @@ describe('BaseModelRunner.ExecuteWithFailover', () => {
     expect(rawRun.FailoverAttempts).toBe(2);
   });
 
+  it("reports the provider's message when a driver wraps the SDK error in the result's exception", async () => {
+    const runner = new TestModelRunner();
+    const c1 = createCandidate('m-1', 'Model 1', 'Driver1', 'v-1', 'Vendor 1', 10);
+    runner.availableDrivers.add('Driver1');
+    const promptRun = new FakePromptRun() as unknown as MJAIPromptRunEntityExtended;
+    const sdkError = new Error('529 {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}');
+
+    // The Anthropic driver's shape: the SDK error wrapped together with the result it was building.
+    const executeOnCandidate = vi.fn(async (): Promise<TestResult> => {
+      const failed = new TestResult(false, undefined, { canFailover: true, errorType: 'ServiceUnavailable', severity: 'Retriable' }, sdkError.message);
+      failed.exception = { exception: sdkError, llmResult: {} };
+      return failed;
+    });
+    const createErrorResult = vi.fn((lastError: Error | null): TestResult => new TestResult(false, undefined, undefined, lastError?.message));
+
+    const result = await runner.invokeExecuteWithFailover(createPrompt(), params, [c1], failoverConfig, executeOnCandidate, createErrorResult, promptRun);
+
+    expect(createErrorResult.mock.calls[0][0]).toBe(sdkError);
+    expect(result.errorMessage).toBe(sdkError.message);
+    const stored = JSON.parse((promptRun as unknown as FakePromptRun).FailoverErrors ?? '[]') as Array<{ error: string }>;
+    expect(stored.map((e) => e.error)).toEqual([sdkError.message]);
+  });
+
+  it("falls back to the result's message when its exception is neither an Error nor a wrapped one", async () => {
+    const runner = new TestModelRunner();
+    const c1 = createCandidate('m-1', 'Model 1', 'Driver1', 'v-1', 'Vendor 1', 10);
+    runner.availableDrivers.add('Driver1');
+    const executeOnCandidate = vi.fn(async (): Promise<TestResult> => {
+      const failed = new TestResult(false, undefined, { canFailover: true, errorType: 'NetworkError', severity: 'Retriable' }, 'socket hang up');
+      failed.exception = { code: 'ECONNRESET' };
+      return failed;
+    });
+    const createErrorResult = vi.fn((lastError: Error | null): TestResult => new TestResult(false, undefined, undefined, lastError?.message));
+
+    const result = await runner.invokeExecuteWithFailover(createPrompt(), params, [c1], failoverConfig, executeOnCandidate, createErrorResult);
+
+    expect(result.errorMessage).toBe('socket hang up');
+  });
+
   it('3. Every candidate lacks credentials. executeOnCandidate is never called, and createErrorResult receives an error whose message starts with No API credentials configured', async () => {
     const runner = new TestModelRunner();
     const c1 = createCandidate('m-1', 'Model 1', 'Driver1', 'v-1', 'Vendor 1', 10);

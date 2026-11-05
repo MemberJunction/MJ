@@ -27,7 +27,7 @@ import type {
 import type { SourceSchemaInfo, SourceObjectInfo, SourceFieldInfo } from './types';
 import { ReadFieldSyncDirective, WriteFieldSyncDirective } from './SyncDirectives.js';
 import { CatalogWriter, PerConnectionCatalogWriter, SharedCatalogWriter } from './CatalogWriter.js';
-import { ActionMetadataGenerator, type IntegrationObjectInfo } from './ActionMetadataGenerator';
+import { ActionMetadataGenerator, type IntegrationObjectInfo } from './ActionMetadataGenerator.js';
 
 export interface PersistSchemaOptions {
   IntegrationID: string;
@@ -1450,6 +1450,7 @@ export class IntegrationSchemaSync {
           EntityName: 'MJ: Actions',
           ExtraFilter: `Name='${actionName.replace(/'/g, "''")}'`,
           MaxRows: 1,
+          SkipTotalRowCount: true,
           ResultType: 'simple',
           Fields: ['ID'],
         },
@@ -1536,6 +1537,7 @@ export class IntegrationSchemaSync {
         EntityName: 'MJ: Action Categories',
         ExtraFilter: `Name='${integrationName.replace(/'/g, "''")}'`,
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'entity_object',
       },
       contextUser,

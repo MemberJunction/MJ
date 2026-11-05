@@ -10,10 +10,27 @@
  */
 
 import { BaseSingleton } from '@memberjunction/global';
-import { LogStatusEx } from '@memberjunction/core';
+import { LogStatusEx, LogWarning } from '@memberjunction/core';
 import { createPrivateKey, createPublicKey, generateKeyPairSync, createHash, type KeyObject } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import type { MagicLinkJWTClaims } from './types.js';
+
+/**
+ * True when the process is NOT running with `NODE_ENV=production`. This is the same
+ * production/local-dev line MJServer already uses to forbid local dev auth in production.
+ */
+export function IsMagicLinkLocalDevEnvironment(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.NODE_ENV?.trim().toLowerCase() !== 'production';
+}
+
+/** Warning logged when a non-local-dev server falls back to an ephemeral keypair. */
+export const EPHEMERAL_MAGIC_LINK_KEY_WARNING =
+  '[MagicLink] No rsaPrivateKey configured and NODE_ENV=production — generated an EPHEMERAL RS256 keypair. ' +
+  'Magic-link session tokens signed with it will stop validating when this process restarts, and they will not ' +
+  'validate on any other MJAPI instance behind the same load balancer, because each process generates its own key. ' +
+  'To fix, generate one RSA private key (e.g. `openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048`) and set it ' +
+  'as magicLink.rsaPrivateKey in mj.config.cjs or as MJ_MAGIC_LINK_PRIVATE_KEY (raw or base64-encoded PEM), ' +
+  'using the same key on every instance.';
 
 /** A single JSON Web Key plus the metadata jwks-rsa needs to match it. */
 interface PublishedJWK extends JsonWebKey {
@@ -34,6 +51,7 @@ export class MagicLinkKeyManager extends BaseSingleton<MagicLinkKeyManager> {
   private publicKey?: KeyObject;
   private _kid = '';
   private _initialized = false;
+  private _isEphemeral = false;
 
   // Public to satisfy BaseSingleton.getInstance's `this: new () => T` constraint
   // (matches the AuthProviderFactory singleton pattern).
@@ -49,6 +67,15 @@ export class MagicLinkKeyManager extends BaseSingleton<MagicLinkKeyManager> {
     return this._initialized;
   }
 
+  /**
+   * True when no private key was configured and the keypair was generated for this process
+   * only. Tokens signed with an ephemeral key do not survive a restart and do not validate on
+   * other instances. Downstream code should ask this rather than reading the raw config value.
+   */
+  public get IsEphemeral(): boolean {
+    return this._isEphemeral;
+  }
+
   public get Kid(): string {
     return this._kid;
   }
@@ -56,8 +83,11 @@ export class MagicLinkKeyManager extends BaseSingleton<MagicLinkKeyManager> {
   /**
    * Initializes the keypair from a provided PEM (raw or base64-encoded) or, if
    * none is supplied, generates an ephemeral 2048-bit RSA keypair. Idempotent.
+   *
+   * @param env - process environment used to decide whether the ephemeral fallback is a local-dev
+   *   default (verbose-only notice) or a production misconfiguration (warning). Defaults to `process.env`.
    */
-  public Initialize(privateKeyPem?: string): void {
+  public Initialize(privateKeyPem?: string, env: NodeJS.ProcessEnv = process.env): void {
     if (this._initialized) {
       return;
     }
@@ -69,17 +99,8 @@ export class MagicLinkKeyManager extends BaseSingleton<MagicLinkKeyManager> {
     } else {
       const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
       priv = privateKey;
-      // Verbose-only: on dev boxes with no configured key this fires on EVERY boot, and the
-      // ephemeral fallback is the designed behavior there — not a condition worth a log line in
-      // the default startup output. Deployments that care set the key; operators diagnosing
-      // magic-link session loss can re-run with verbose logging.
-      LogStatusEx({
-        message:
-          '[MagicLink] No rsaPrivateKey configured — generated an EPHEMERAL RS256 keypair. ' +
-          'Outstanding magic-link sessions will be invalidated on restart. Set magicLink.rsaPrivateKey ' +
-          '(or MJ_MAGIC_LINK_PRIVATE_KEY) for stable production keys.',
-        verboseOnly: true
-      });
+      this._isEphemeral = true;
+      this.reportEphemeralKey(env);
     }
 
     this.privateKeyPem = priv.export({ type: 'pkcs8', format: 'pem' }) as string;
@@ -92,9 +113,101 @@ export class MagicLinkKeyManager extends BaseSingleton<MagicLinkKeyManager> {
    * Signs a set of magic-link (or local-dev) claims and returns the compact JWT.
    * `iat`/`exp` are expected to already be set on the claims.
    */
-  public Sign(claims: MagicLinkJWTClaims | Record<string, unknown>): string {
+  public Sign<T extends object>(claims: T): string {
     this.ensureInitialized();
     return jwt.sign(claims, this.privateKeyPem, { algorithm: 'RS256', keyid: this._kid });
+  }
+
+  /**
+   * Verifies a magic-link session JWT signed by this key manager (`RS256`, `mj_magic_link === true`).
+   * Returns `null` if invalid, expired, or forged.
+   */
+  public VerifySessionToken(
+    token: string,
+    options?: { issuer?: string; audience?: string },
+  ): MagicLinkJWTClaims | null {
+    this.ensureInitialized();
+    try {
+      const publicPem = this.publicKey!.export({ type: 'spki', format: 'pem' }) as string;
+      const verifyOptions: jwt.VerifyOptions = { algorithms: ['RS256'] };
+      if (options?.issuer) {
+        verifyOptions.issuer = options.issuer;
+      }
+      if (options?.audience) {
+        verifyOptions.audience = options.audience;
+      }
+      const decoded = jwt.verify(token, publicPem, verifyOptions);
+      if (!decoded || typeof decoded !== 'object') {
+        return null;
+      }
+      const claims = decoded as MagicLinkJWTClaims;
+      if (claims.mj_magic_link !== true || typeof claims.sub !== 'string') {
+        return null;
+      }
+      return claims;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Signs a redirect binding JWT (`mj_purpose = 'magic-link-redirect'`) that cryptographically
+   * binds a validated `redirectUrl` to a specific invite's `tokenHash`.
+   *
+   * Note: Expiration is intentionally omitted from the redirect binding JWT because the database
+   * invite row's `ExpiresAt` (enforced atomically during `RedeemInvite`) is the authoritative,
+   * mutable expiration — allowing `UpdateInviteExpiry()` to extend an invite without invalidating
+   * an already-delivered `&rt=` parameter.
+   */
+  public SignRedirectBinding(tokenHash: string, redirectUrl: string, _expiresAtEpochSeconds?: number): string {
+    this.ensureInitialized();
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    return jwt.sign(
+      {
+        mj_purpose: 'magic-link-redirect',
+        mj_th: tokenHash,
+        mj_redirect: redirectUrl,
+        iat: nowSeconds,
+      },
+      this.privateKeyPem,
+      { algorithm: 'RS256', keyid: this._kid },
+    );
+  }
+
+  /**
+   * Verifies a redirect binding JWT produced by {@link SignRedirectBinding} and ensures it matches
+   * `expectedTokenHash` (preventing cross-invite substitution) and carries a valid `http(s)` URL.
+   * Ignores JWT `exp` so bindings minted before an `UpdateInviteExpiry()` extension remain valid
+   * while the underlying invite row is valid. Returns the bound URL or `null`.
+   */
+  public VerifyRedirectBinding(bindingToken: string, expectedTokenHash: string): string | null {
+    this.ensureInitialized();
+    try {
+      const publicPem = this.publicKey!.export({ type: 'spki', format: 'pem' }) as string;
+      const decoded = jwt.verify(bindingToken, publicPem, {
+        algorithms: ['RS256'],
+        ignoreExpiration: true,
+      });
+      if (!decoded || typeof decoded !== 'object') {
+        return null;
+      }
+      const record = decoded as { mj_purpose?: string; mj_th?: string; mj_redirect?: string };
+      if (
+        record.mj_purpose !== 'magic-link-redirect' ||
+        record.mj_th !== expectedTokenHash ||
+        typeof record.mj_redirect !== 'string' ||
+        !record.mj_redirect
+      ) {
+        return null;
+      }
+      const parsed = new URL(record.mj_redirect);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return null;
+      }
+      return record.mj_redirect;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -104,6 +217,25 @@ export class MagicLinkKeyManager extends BaseSingleton<MagicLinkKeyManager> {
     this.ensureInitialized();
     const jwk = this.publicKey!.export({ format: 'jwk' });
     return { keys: [{ ...jwk, kid: this._kid, use: 'sig', alg: 'RS256' }] };
+  }
+
+  /**
+   * Local dev (NODE_ENV not 'production'): the ephemeral fallback is the designed behavior and
+   * fires on every boot, so the notice stays verbose-only. Otherwise it is a data-loss-on-restart
+   * misconfiguration, so it is a warning in the default output.
+   */
+  private reportEphemeralKey(env: NodeJS.ProcessEnv): void {
+    if (!IsMagicLinkLocalDevEnvironment(env)) {
+      LogWarning(EPHEMERAL_MAGIC_LINK_KEY_WARNING);
+      return;
+    }
+    LogStatusEx({
+      message:
+        '[MagicLink] No rsaPrivateKey configured — generated an EPHEMERAL RS256 keypair. ' +
+        'Outstanding magic-link sessions will be invalidated on restart. Set magicLink.rsaPrivateKey ' +
+        '(or MJ_MAGIC_LINK_PRIVATE_KEY) for stable production keys.',
+      verboseOnly: true
+    });
   }
 
   private ensureInitialized(): void {

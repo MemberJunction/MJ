@@ -159,9 +159,22 @@ function newSecondaryGraphQLProvider(): GraphQLDataProvider {
     }
 }
 
+/**
+ * Throws when a secondary provider holds no metadata. Config() reports success even when its
+ * metadata load failed, so without this a check gets `null` from GetEntityObject and fails on
+ * the next line with nothing that points at the load (#6361).
+ */
+export function AssertProviderHasMetadata(provider: Pick<IMetadataProvider, 'Entities'>, label: string): void {
+    if (provider.Entities.length === 0) {
+        throw new Error(`${label} connected to MJAPI but loaded no metadata; MJAPI's log has why the load failed.`);
+    }
+}
+
 /** Build a SECONDARY GraphQL provider authenticated by a user API key (separate connection). */
 async function buildUserKeyProvider(rawKey: string): Promise<IMetadataProvider> {
-    return buildSecondaryProvider(undefined, rawKey);
+    const provider = await buildSecondaryProvider(undefined, rawKey);
+    AssertProviderHasMetadata(provider, 'the user key provider');
+    return provider;
 }
 
 /**
@@ -470,16 +483,22 @@ export async function SetupFlsClientFixture(ctx: IntegrationCheckContext): Promi
 
     try {
         await enableOverWire(ctx, entity.ID);
+        if (multiId) {
+            // Write the denier's Phone rule BEFORE tightenReaderEmail so that when
+            // WaitForWirePropagation observes the reader's Email rule enforced on MJAPI,
+            // MJAPI's metadata refresh is guaranteed to have loaded this Phone rule too.
+            fx.DenierEfpRowID = await SetFieldRuleOverWire(
+                ctx, FLS_UPDATE_DENY_FIELD, FLS_DENIER_ROLE, { Read: 'Allow', Update: 'Deny', Create: 'Deny' });
+        }
         fx.ReaderEfpRowID = await tightenReaderEmail(ctx);
         const readerKey = await MintFullAccessUserKey(ctx, fx, readerId, 'IT92 FLS reader (mj-integration-test)');
         const writerKey = await MintFullAccessUserKey(ctx, fx, writerId, 'IT92 FLS writer (mj-integration-test)');
+        const multiKey = multiId
+            ? await MintFullAccessUserKey(ctx, fx, multiId, 'IT92 FLS multi (mj-integration-test)')
+            : undefined;
         fx.ReaderProvider = await BuildUserKeyProviderWithRetry(readerKey);
         fx.WriterProvider = await BuildUserKeyProviderWithRetry(writerKey);
-        if (multiId) {
-            // Readable, but neither updatable nor creatable — the write-denial shape.
-            fx.DenierEfpRowID = await SetFieldRuleOverWire(
-                ctx, FLS_UPDATE_DENY_FIELD, FLS_DENIER_ROLE, { Read: 'Allow', Update: 'Deny', Create: 'Deny' });
-            const multiKey = await MintFullAccessUserKey(ctx, fx, multiId, 'IT92 FLS multi (mj-integration-test)');
+        if (multiKey) {
             fx.MultiProvider = await BuildUserKeyProviderWithRetry(multiKey);
         }
 
@@ -513,6 +532,9 @@ export async function SetupFlsClientFixture(ctx: IntegrationCheckContext): Promi
             fx.ReaderProvider,
             rows => rows.length > 0 && rows.every(r => !(FLS_READER_DENIED_FIELD in r)),
             'denied column stripped from reader list results');
+        if (fx.MultiProvider) {
+            await fx.MultiProvider.Refresh();
+        }
 
         fx.Usable = true;
     } catch (e) {

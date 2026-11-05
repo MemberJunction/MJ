@@ -20,10 +20,13 @@
  *     PERFORM schema."spProcName"(p_Param1 := p_Name, p_Param2 := p_ID);
  *   END $$;
  */
-import type { IConversionRule, ConversionContext, StatementType } from './types.js';
+import { GAP_MARKER_EXEC_SKIPPED, type IConversionRule, type ConversionContext, type StatementType } from './types.js';
 import { ResolveType } from './TypeResolver.js';
-import { RemoveNPrefix } from './ExpressionHelpers.js';
+import { ConvertIdentifiers, RemoveNPrefix } from './ExpressionHelpers.js';
 import { POSTGRESQL_PROCEDURE_PARAM_LIMIT } from './ProcedureToFunctionRule.js';
+
+/** The opening of a create-or-update block's guard, for {@link ExecBlockRule.findOutsideStrings}. */
+const UPSERT_GUARD = /IF\s+NOT\s+EXISTS\s*\(/iy;
 
 interface DeclaredVar {
   name: string;
@@ -104,15 +107,7 @@ export class ExecBlockRule implements IConversionRule {
 
       if (!inString && (/^DECLARE\s+@/i.test(trimmed) || startsNewExec) && current.length > 0) {
         // Move trailing blank/comment lines from current block to new block
-        const trailingComments: string[] = [];
-        while (current.length > 0) {
-          const last = current[current.length - 1].trim();
-          if (last === '' || last.startsWith('--')) {
-            trailingComments.unshift(current.pop()!);
-          } else {
-            break;
-          }
-        }
+        const trailingComments = this.takeTrailingComments(current);
         const block = current.join('\n').trim();
         if (block) blocks.push(block);
         current = [...trailingComments, line];
@@ -124,25 +119,40 @@ export class ExecBlockRule implements IConversionRule {
       inString = this.updateStringState(line, inString);
     }
 
-    if (current.length > 0) {
-      const block = current.join('\n').trim();
+    // With no next block to move them to, trailing comments (a session's closing footer) stand
+    // alone, so a block always ends at its own last statement.
+    const footer = inString ? [] : this.takeTrailingComments(current);
+    for (const lines of [current, footer]) {
+      const block = lines.join('\n').trim();
       if (block) blocks.push(block);
     }
 
     return blocks.length > 0 ? blocks : [sql];
   }
 
+  /** Removes the trailing blank and comment lines from `lines` and returns them, in order. */
+  private takeTrailingComments(lines: string[]): string[] {
+    const trailing: string[] = [];
+    while (lines.length > 0) {
+      const last = lines[lines.length - 1].trim();
+      if (last !== '' && !last.startsWith('--')) break;
+      trailing.unshift(lines.pop()!);
+    }
+    return trailing;
+  }
+
   // ─── Single block conversion ──────────────────────────────────────
 
   /** Convert one DECLARE/SET/EXEC block to a DO $$ block */
   private convertOneBlock(block: string, context: ConversionContext): string {
+    if (this.isCommentOnly(block)) return block;
     const { comments, body } = this.extractLeadingComments(block);
     const declareVars = this.parseDeclare(body);
 
     // A create-or-update block carries TWO EXECs behind an IF NOT EXISTS guard. Detect it
     // first: the single-EXEC path below would cut at the first EXEC and fold the guard into
-    // the last SET value, emitting raw T-SQL. A block that looks like an upsert but does not
-    // parse cleanly returns null here and falls through to that path, which SKIPs it visibly.
+    // the last SET value, emitting raw T-SQL. A guarded block that does not convert as a whole
+    // must never reach that path, so it is skipped here, where a reader and the gap scan see it.
     const upsert = this.parseUpsert(body);
     if (upsert) {
       const declared = new Set(declareVars.map(v => v.name));
@@ -154,6 +164,9 @@ export class ExecBlockRule implements IConversionRule {
       if (!usesUndeclared) {
         return this.generateDoBlock(comments, declareVars, upsert.assignments, { kind: 'upsert', call: upsert.call }, context);
       }
+    }
+    if (this.findOutsideStrings(body.slice(this.findDeclareEnd(body)), UPSERT_GUARD) >= 0) {
+      return this.skippedBlock(block, 'unparseable upsert');
     }
 
     const { setSection, execSection } = this.findSetsAndExec(body);
@@ -185,10 +198,26 @@ export class ExecBlockRule implements IConversionRule {
         return /^p_\w+$/.test(v) && !declaredNames.has(v);
       }) ?? false);
     if (!exec || usesUndeclaredVar) {
-      return `-- SKIPPED: EXEC block (auto-conversion not supported)\n${block.split('\n').map(l => `-- ${l}`).join('\n')}\n`;
+      return this.skippedBlock(block, 'auto-conversion not supported');
     }
 
     return this.generateDoBlock(comments, declareVars, assignments, { kind: 'call', exec }, context);
+  }
+
+  /** True when `sql` holds only `--` and closed block comments, so there is nothing to convert. */
+  private isCommentOnly(sql: string): boolean {
+    let rest = sql.trimStart();
+    while (rest) {
+      const end = rest.startsWith('--') ? rest.indexOf('\n') : rest.startsWith('/*') ? rest.indexOf('*/') : -1;
+      if (end < 0) return rest.startsWith('--');
+      rest = rest.slice(end + (rest.startsWith('--') ? 1 : 2)).trimStart();
+    }
+    return true;
+  }
+
+  /** The gap marker and `block` as comments: what a block the rule cannot convert becomes. */
+  private skippedBlock(block: string, reason: string): string {
+    return `${GAP_MARKER_EXEC_SKIPPED} (${reason})\n${block.split('\n').map(l => `-- ${l}`).join('\n')}\n`;
   }
 
   // ─── Create-or-update (IF NOT EXISTS … ELSE …) ─────────────────────
@@ -200,7 +229,7 @@ export class ExecBlockRule implements IConversionRule {
    */
   private parseUpsert(body: string): { assignments: SetAssignment[]; call: UpsertCall } | null {
     const afterDeclare = body.slice(this.findDeclareEnd(body));
-    const ifPos = this.findOutsideStrings(afterDeclare, /IF\s+NOT\s+EXISTS\s*\(/iy);
+    const ifPos = this.findOutsideStrings(afterDeclare, UPSERT_GUARD);
     if (ifPos < 0) return null;
 
     const openParen = afterDeclare.indexOf('(', ifPos);
@@ -217,7 +246,9 @@ export class ExecBlockRule implements IConversionRule {
     if (elsePos < 0) return null;
     const elseMatch = branches.slice(elsePos).match(/^END\s+ELSE\s+BEGIN\s*/i)!;
     const updateAndEnd = branches.slice(elsePos + elseMatch[0].length);
-    const endMatch = updateAndEnd.match(/\bEND\s*;?\s*$/i);
+    // At most one comment: splitIntoBlocks already moved whole-line trailing comments out of the
+    // block, and repeating this group backtracks exponentially on a long run of dashes.
+    const endMatch = updateAndEnd.match(/\bEND\s*;?\s*(?:--[^\n]*\s*)?$/i);
     if (!endMatch || endMatch.index === undefined) return null;
 
     const create = this.parseExec(branches.slice(0, elsePos));
@@ -563,12 +594,15 @@ export class ExecBlockRule implements IConversionRule {
 
   /**
    * Convert a SET value expression from T-SQL to PostgreSQL.
-   * Handles: N-prefix removal, CAST type conversion, string concatenation.
+   * Handles: bracket identifiers (a subquery value such as `(SELECT [ID] FROM [__mj].[Entity] …)`,
+   * which the PostProcessor's bracket pass never reaches inside the `DO $mj$` block, #6074),
+   * N-prefix removal, CAST type conversion, string concatenation.
    * IMPORTANT: Only converts SQL syntax outside string literals — string content
    * (like stored SQL queries) is preserved as-is.
    */
   private convertValue(value: string): string {
-    let result = value;
+    // Convert bracket identifiers: [schema].[table] → schema."table" (string literals untouched)
+    let result = ConvertIdentifiers(value);
 
     // Remove N prefix from string literals
     result = RemoveNPrefix(result);

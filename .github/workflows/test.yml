@@ -136,6 +136,9 @@ jobs:
             # Same again for the exact-pins guard: it runs in ci-exact-pins.yml, not here, but its
             # vitest suite lives in __tests__ — so an edit to the guard script alone must run it too.
             .github/scripts/check-exact-pins.mjs
+            # Same again for the hardcoded-colour gate: it runs in ci-ui-tokens.yml, not here, but
+            # its vitest suite lives in __tests__ — so an edit to the gate script alone must run it too.
+            .github/scripts/check-css-hex-tokens.sh
             # The browser-manifest server-leakage gate runs in this workflow (see that step).
             # The two guarded manifests are listed too: a PR that edits ONLY a generated manifest
             # is exactly the shape that can introduce a leak, and neither path is under packages/**
@@ -169,11 +172,20 @@ jobs:
             # The MJExplorer @angular/compiler guard (guards job). The manifest it reads is already
             # under packages/**; the script is not, so a PR weakening only the guard must still run it.
             .github/scripts/check-explorer-angular-compiler.mjs
+            # The angular.json prebundle exclude guard (guards job): same reason.
+            .github/scripts/check-explorer-prebundle-exclude.mjs
             # The AI model rank-lineage guard (guards job) reads metadata/ai-models, which is outside
             # packages/**. Without these entries a PR that edits only the catalog — the one change
             # that can introduce an inversion — never runs the guard.
             .github/scripts/check-ai-model-ranks.mjs
             metadata/ai-models/**
+            # Same for the prompt-model route guard (guards job): it reads the prompt-model rows in
+            # metadata/prompts, the routes in metadata/ai-models (above) and metadata/ai-vendors, and
+            # its baseline sits next to the script. A PR that edits only a prompt must run it.
+            .github/scripts/check-prompt-model-routes.mjs
+            .github/scripts/prompt-model-routes-baseline.json
+            metadata/prompts/**
+            metadata/ai-vendors/**
             # The remote-cache preflight runs as a step in this workflow (see "Verify turbo
             # remote-cache configuration"), and its own suite lives in __tests__ above.
             .github/scripts/check-turbo-cache-env.mjs
@@ -317,12 +329,30 @@ jobs:
           node .github/scripts/check-explorer-angular-compiler.mjs --self-test
           node .github/scripts/check-explorer-angular-compiler.mjs
 
+      # A committed angular.json prebundle exclude holds only "@memberjunction/*" (issue #3875).
+      # `mj dev workspace` adds a joined workspace's linked scopes there on join and `clean` takes
+      # them out; this keeps a developer's scopes from riding a PR. Self-test first.
+      - name: Angular prebundle exclude guard
+        if: ${{ !cancelled() }}
+        run: |
+          node .github/scripts/check-explorer-prebundle-exclude.mjs --self-test
+          node .github/scripts/check-explorer-prebundle-exclude.mjs
+
       # Within a model's version lineage (AIModel.PriorVersionID) a later model must not rank
       # below the model it succeeds, or rank-based model selection keeps preferring the older
       # one (MJ#4912). Reads metadata/ai-models only — no DB, no build.
       - name: AI model rank-lineage guard
         if: ${{ !cancelled() }}
         run: node .github/scripts/check-ai-model-ranks.mjs
+
+      # Every active AI Prompt Model row must point at an active model with an active Inference
+      # Provider route for its vendor, or the prompt silently falls back to another candidate
+      # (MJ#4915). Rows failing when the guard landed are listed in
+      # prompt-model-routes-baseline.json; a new failure, or a baseline entry that no longer
+      # fails, fails the step. Reads metadata/ only — no DB, no build.
+      - name: AI prompt-model route guard
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/check-prompt-model-routes.mjs
 
       # Repo-wide compliance scanners. They live in packages/MJGlobal/src/__tests__ for historical
       # reasons but scan `packages/**` off disk and assert about every package, so they belong here
@@ -337,7 +367,7 @@ jobs:
       # (that is the other half of this fix), so pointing at it here would match nothing. And
       # `--passWithNoTests=false` overrides the shared default, so if these paths are ever renamed
       # this step fails loudly instead of quietly passing with zero tests and disabling the gate.
-      - name: Repo-wide compliance scans (UUID + multi-provider + field-security egress)
+      - name: Repo-wide compliance scans (UUID + multi-provider + field-security egress + platform strings)
         if: ${{ !cancelled() }}
         run: >-
           pnpm --filter @memberjunction/global exec vitest run
@@ -346,6 +376,7 @@ jobs:
           src/__tests__/UUIDCompliance.test.ts
           src/__tests__/MultiProviderCompliance.test.ts
           src/__tests__/FieldSecurityEgressCompliance.test.ts
+          src/__tests__/PlatformStringCompliance.test.ts
 
       # The primary-key scanner is the same kind of repo-wide scan, hosted in MJCore. In MJCore's
       # per-package `test` task it ran only when a PR touched MJCore (core sits at the bottom of the
@@ -886,7 +917,9 @@ jobs:
           # PR #3231, twice. Sharding reduces but does not remove the risk: the planner spreads
           # the heavy DOM packages across shards, yet a shard can still draw several.
           # Tee into a log so the digest step below can read the vitest counters on failure.
-          # The job's shell already runs with `-o pipefail`, so teeing does not mask the exit code.
+          # A step with no `shell:` runs as `bash -e {0}`, without pipefail, so the pipeline would
+          # exit with tee's status and a failed test task would leave the shard green.
+          set -o pipefail
           npx turbo run test --concurrency=4 "${FILTER_ARGS[@]}" 2>&1 | tee /tmp/shard-test.log
 
       # A red shard hands you a job log tens of thousands of lines long in which the decisive

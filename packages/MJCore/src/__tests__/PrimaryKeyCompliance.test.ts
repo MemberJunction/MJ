@@ -165,6 +165,10 @@ interface ScanResult {
     indexAccess: Violation[];
     singleKey: Violation[];
     idPredicates: Violation[];
+}
+
+/** Aggregate over every scanned file, plus the file count the scan-root floor checks. */
+interface ScanTotals extends ScanResult {
     scannedFiles: number;
 }
 
@@ -229,9 +233,9 @@ function report(violations: Violation[], max = 60): string {
     return shown + more;
 }
 
-function scanAll(): ScanResult {
+function scanAll(): ScanTotals {
     const files = findTsFiles(SCAN_ROOT);
-    const all: ScanResult = { literalIdKeys: [], indexAccess: [], singleKey: [], idPredicates: [], scannedFiles: files.length };
+    const all: ScanTotals = { literalIdKeys: [], indexAccess: [], singleKey: [], idPredicates: [], scannedFiles: files.length };
     for (const file of files) {
         const r = scanFile(file);
         all.literalIdKeys.push(...r.literalIdKeys);

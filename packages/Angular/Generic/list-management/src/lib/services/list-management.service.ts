@@ -266,7 +266,7 @@ export class ListManagementService {
       ResultType: 'count_only'
     });
 
-    return result.Success ? result.TotalRowCount : 0;
+    return result.Success ? result.TotalRowCount ?? 0 : 0;
   }
 
   /** @deprecated Use {@link GetListItemCount}. */
@@ -296,7 +296,7 @@ export class ListManagementService {
         ResultType: 'count_only' as const
       })));
       countResults.forEach((res, idx) => {
-        countMap.set(lists[idx].ID, res.Success ? res.TotalRowCount : 0);
+        countMap.set(lists[idx].ID, res.Success ? res.TotalRowCount ?? 0 : 0);
       });
     }
 
