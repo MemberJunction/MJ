@@ -294,13 +294,11 @@ $$ LANGUAGE plpgsql;
         /@(\w+)\s+([\w(),\s]+?)(?:\s*=\s*(.+?))?(?:\s+OUTPUT|\s+OUT)?\s*$/i
       );
       if (m) {
-        // Only match OUTPUT/OUT as a trailing keyword, not as part of the param name
-        const isOutput = /\s+(?:OUTPUT|OUT)\s*$/i.test(param);
         parsedParams.push({
           Name: m[1],
           Type: m[2].trim(),
           Default: m[3] ?? null,
-          IsOutput: isOutput,
+          IsOutput: isOutputParam(param),
         });
       }
     }
@@ -852,7 +850,13 @@ function convertQualifiedBooleanComparisons(sql: string, tableColumns: Map<strin
 
 /** True when any parameter in a T-SQL parameter list is declared OUTPUT. */
 function hasOutputParams(paramsBlock: string): boolean {
-  return splitParams(paramsBlock).some(p => /\s+(?:OUTPUT|OUT)\s*$/i.test(p.trim()));
+  return splitParams(paramsBlock).some(isOutputParam);
+}
+
+/** True when a T-SQL parameter declaration ends with the OUTPUT or OUT keyword. */
+function isOutputParam(param: string): boolean {
+  const words = param.trim().split(/\s+/);
+  return words.length > 1 && /^(?:OUTPUT|OUT)$/i.test(words[words.length - 1]);
 }
 
 // -----------------------------------------------------------------------------
