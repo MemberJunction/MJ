@@ -55,13 +55,13 @@ export interface RowTypeHintParams {
   ResultType?: string;
 }
 
-/** A RunView result as it crosses to the page, possibly carrying hints. */
 /** The page-side functions the harness exposes for RunView / RunViews (see `exposeMJUtilities`). */
 export interface RunViewBridge {
-  __mjRunView: (params: RowTypeHintParams) => Promise<HintedRunViewResult>;
-  __mjRunViews: (params: RowTypeHintParams[]) => Promise<HintedRunViewResult[]>;
+  __mjRunView: (params: RowTypeHintParams) => Promise<HintedRunViewResult>;  // case-violation-ok-legacy-back-compat: the window global the page script calls by this name
+  __mjRunViews: (params: RowTypeHintParams[]) => Promise<HintedRunViewResult[]>;  // case-violation-ok-legacy-back-compat: the window global the page script calls by this name
 }
 
+/** A RunView result as it crosses to the page, possibly carrying hints. */
 export interface HintedRunViewResult {
   Success?: boolean;
   Results?: Array<Record<string, unknown>>;
