@@ -540,6 +540,18 @@ jobs:
             "
           docker exec -u 0 sql rm -f /var/opt/mssql/worker_seed.bak
 
+      # Entity Vector Sync - Daily is seeded with RunImmediatelyIfNeverRun, and a CI database has
+      # never run it, so MJAPI started it on every boot. It embeds ~1,500 records on MJAPI's own
+      # event loop with the in-process model for about 170 s, the same minutes all four shards
+      # start: /healthcheck stopped answering, the pool timed out on the first client requests,
+      # and a provider that connected then had no metadata (#6361). Jobs keep their cron schedule;
+      # none starts just because this database is new.
+      - name: Keep first-run scheduled jobs from starting with MJAPI
+        run: |
+          docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -d test -b -I \
+            -Q "UPDATE [__mj].[ScheduledJob] SET [RunImmediatelyIfNeverRun] = 0 WHERE [RunImmediatelyIfNeverRun] = 1;"
+
       # Boot MJAPI against the provisioned DB so the client-transport members execute
       # instead of skipping. MJ_API_KEY is a throwaway per-run system key: MJServer
       # accepts it via the x-mj-api-key header, and the test process presents the same
