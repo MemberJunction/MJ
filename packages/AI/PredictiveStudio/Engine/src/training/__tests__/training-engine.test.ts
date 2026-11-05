@@ -836,6 +836,8 @@ describe('TrainingEngine — a unit pipeline trains through the trainer', () => 
     expect(models.map((m) => m.Deleted)).toEqual([true]);
     expect([store.DeletedIDs.length, store.Saved.size]).toEqual([3, 0]);
     expect([runs[0].Status, runs[0].ResultingModelID]).toEqual(['Failed', null]);
+    // The failed run keeps no 'completed' result pointing at the artifact files that were just deleted.
+    expect([runs[0].ValidationResults, runs[0].FeaturesUsed, runs[0].Hyperparameters]).toEqual([null, null, null]);
   });
 
   it('slices by an assembled date-part column, named as the assembler names it, and completes', async () => {

@@ -549,11 +549,15 @@ export class TrainingEngine {
   /**
    * Best-effort removal of what a trainer run stored before a later step failed, so the failed run leaves no model row
    * and no artifact nothing references: the model row (when it was saved) and the run's pointer to it, then every stored
-   * artifact. An artifact a model row that could not be deleted still references is kept. Each failure is logged; the
-   * caller rethrows the original error.
+   * artifact. An artifact a model row that could not be deleted still references is kept. The run's completed result,
+   * features and hyperparameters are cleared too, so the Failed run never records a 'completed' result whose artifact
+   * file references were just deleted. Each failure is logged; the caller rethrows the original error.
    */
   private static async discardStoredOutput(run: MJMLTrainingRunEntity, model: MJMLModelEntity | null, fileIds: ReadonlyMap<string, string>, deps: TrainingDeps): Promise<void> {
     run.ResultingModelID = null;
+    run.ValidationResults = null;
+    run.FeaturesUsed = null;
+    run.Hyperparameters = null;
     const stillReferenced = model === null ? null : await TrainingEngine.deleteModelRowOf(run, model);
     const unreferenced = [...fileIds.values()].filter((id) => stillReferenced === null || !UUIDsEqual(id, stillReferenced));
     await TrainingEngine.deleteArtifactFiles(run, unreferenced, deps);
