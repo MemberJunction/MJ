@@ -72,6 +72,15 @@ export function FormatBacklog(output: WorkQueueGetBacklogOutput): string {
     return output.capped ? `${line} (capped at 1000 — the real backlog is at least this large)` : line;
 }
 
+/** One line per sweeper step; -1 marks a step that failed, and an empty pass means another instance held the lock. */
+export function FormatSweep(counts: Record<string, number>): string {
+    const steps: Array<[string, string]> = [['ExpireLeases', 'expired leases'], ['PurgeRetention', 'purged retention'], ['PurgeDeduplications', 'purged deduplications']];
+    if (Object.keys(counts).length === 0) {
+        return 'Skipped: another instance holds the sweep lock.';
+    }
+    return steps.map(([key, label]) => `${label} ${counts[key] === -1 ? 'failed' : counts[key] ?? 0}`).join(' · ');
+}
+
 export function FormatBindingIssues(issues: WorkQueueBindingIssueRow[]): string {
     if (issues.length === 0) {
         return 'No binding issues.';

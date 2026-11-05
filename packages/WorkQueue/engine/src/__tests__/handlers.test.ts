@@ -4,8 +4,8 @@ import { MJGlobal } from '@memberjunction/global';
 import { Outcome } from '@memberjunction/work-queue-core';
 import type { WorkContext, WorkMessage, WorkOutcome } from '@memberjunction/work-queue-core';
 import { BaseWorkHandler } from '../handlers/BaseWorkHandler';
-import { BoundWorkHandler, SharedProviderSource } from '../handlers/BoundWorkHandler';
-import type { WorkQueueProviderSource } from '../handlers/BoundWorkHandler';
+import { BoundWorkHandler, IndependentProviderSource, SharedProviderSource } from '../handlers/BoundWorkHandler';
+import type { IndependentInstanceRoot, WorkQueueProviderSource } from '../handlers/BoundWorkHandler';
 import { ResolveWorkHandler } from '../handlers/ResolveWorkHandler';
 import { MakeContext, MakeMessage, TEST_PROVIDER, TEST_USER } from './runtimeFakes';
 
@@ -69,6 +69,32 @@ describe('BoundWorkHandler', () => {
         expect(source.Calls).toBe(0);
     });
 
+    it('releases the minted provider after the handler settles (#6273)', async () => {
+        const released: IMetadataProvider[] = [];
+        const source: WorkQueueProviderSource = {
+            CreateProvider: async () => TEST_PROVIDER,
+            ReleaseProvider: async provider => { released.push(provider); },
+        };
+        const bound = new BoundWorkHandler('test.echo-handler', TEST_USER, source, ResolveWorkHandler);
+        await bound.Handle(MakeMessage(), MakeContext());
+        expect(released).toEqual([TEST_PROVIDER]);
+    });
+
+    it('releases the minted provider even when the handler throws (#6273)', async () => {
+        const released: IMetadataProvider[] = [];
+        const source: WorkQueueProviderSource = {
+            CreateProvider: async () => TEST_PROVIDER,
+            ReleaseProvider: async provider => { released.push(provider); },
+        };
+        const bound = new BoundWorkHandler('test.echo-handler', TEST_USER, source, () => {
+            const handler = ResolveWorkHandler('test.echo-handler') as EchoHandler;
+            handler.Handle = async () => { throw new Error('handler blew up'); };
+            return handler;
+        });
+        await expect(bound.Handle(MakeMessage(), MakeContext())).rejects.toThrow('handler blew up');
+        expect(released).toEqual([TEST_PROVIDER]);
+    });
+
     it('lets a provider failure propagate so the runtime retries the delivery', async () => {
         const failing: WorkQueueProviderSource = { CreateProvider: vi.fn(async () => { throw new Error('pool exhausted'); }) };
         const bound = new BoundWorkHandler('test.echo-handler', TEST_USER, failing, ResolveWorkHandler);
@@ -81,5 +107,38 @@ describe('SharedProviderSource', () => {
         const source = new SharedProviderSource(TEST_PROVIDER);
         expect(await source.CreateProvider()).toBe(TEST_PROVIDER);
         expect(await source.CreateProvider()).toBe(TEST_PROVIDER);
+    });
+});
+
+describe('IndependentProviderSource', () => {
+    function root() {
+        const minted: Array<{ Name: string; Released: number; ReleaseIndependentInstance(): Promise<void> }> = [];
+        const provider = {
+            Name: 'root',
+            CreateIndependentInstance: async () => {
+                const child = { Name: `child-${minted.length + 1}`, Released: 0, ReleaseIndependentInstance: async (): Promise<void> => { child.Released++; } };
+                minted.push(child);
+                return child;
+            },
+        };
+        return { provider, minted };
+    }
+
+    it('mints a new instance for every delivery instead of sharing the root provider (#6273)', async () => {
+        const { provider, minted } = root();
+        const source = new IndependentProviderSource(provider as unknown as IndependentInstanceRoot);
+        const first = await source.CreateProvider();
+        const second = await source.CreateProvider();
+        expect(first).not.toBe(second);
+        expect(first).not.toBe(provider);
+        expect(minted).toHaveLength(2);
+    });
+
+    it('releases the instance it minted', async () => {
+        const { provider, minted } = root();
+        const source = new IndependentProviderSource(provider as unknown as IndependentInstanceRoot);
+        const child = await source.CreateProvider();
+        await source.ReleaseProvider(child);
+        expect(minted[0].Released).toBe(1);
     });
 });
