@@ -26,6 +26,11 @@ export class GetGraphContextAction extends BaseAction {
         try {
             const rawGraphName = this.getStringParam(params, 'graphname');
             const graphName = CanonGraphEngine.Instance.ResolveCanonGraphName(rawGraphName);
+            const mode = (this.getStringParam(params, 'mode') ?? 'Subgraph').toLowerCase();
+            const collapseToDoc =
+                this.getBooleanParam(params, 'collapsetodocument', false) ||
+                mode === 'domaindocument' ||
+                mode === 'document';
             const question = this.getStringParam(params, 'question');
             const entityName = this.getStringParam(params, 'entityname');
             const recordID = this.getStringParam(params, 'recordid');
@@ -49,6 +54,65 @@ export class GetGraphContextAction extends BaseAction {
                 graphName,
                 params,
             );
+
+            if (collapseToDoc) {
+                let scopedSubgraph: GraphSubgraphResult | undefined;
+                if (question && explicitSeeds.length === 0) {
+                    scopedSubgraph = await CanonGraphEngine.Instance.CanonContext(
+                        question,
+                        traversalOptions,
+                        params.ContextUser,
+                        graphName,
+                    );
+                } else if (explicitSeeds.length > 0 && (recordID || conceptNamesRaw || seedNodesRaw || question)) {
+                    const combined = [...explicitSeeds];
+                    if (question) {
+                        for (const c of CanonGraphEngine.Instance.FindConcepts(question, params.ContextUser, graphName)) {
+                            combined.push({ EntityName: 'MJ: Graph Concepts', RecordID: c.RecordID });
+                        }
+                    }
+                    scopedSubgraph = await GraphEngine.Instance.Subgraph(
+                        graphName,
+                        combined,
+                        traversalOptions,
+                        params.ContextUser,
+                    );
+                }
+
+                const entityNames = this.parseStringList(
+                    this.getParamValue(params, 'entitynames') ?? (!recordID ? entityName : undefined),
+                );
+                const conceptTypes = this.parseStringList(
+                    this.getParamValue(params, 'concepttypes'),
+                );
+                const doc = CanonGraphEngine.Instance.RenderCanonDocument(
+                    {
+                        GraphName: graphName,
+                        Question: question,
+                        Subgraph: scopedSubgraph,
+                        EntityNames: entityNames,
+                        ConceptTypes: conceptTypes,
+                        IncludeProposed: this.getBooleanParam(params, 'includeproposed', false),
+                        IncludeSpecifications: this.getBooleanParam(params, 'includespecifications', true),
+                        MaxChars: this.getOptionalNumericParam(params, 'maxchars'),
+                    },
+                    params.ContextUser,
+                );
+                if (scopedSubgraph) {
+                    this.setOutputParam(params, 'Subgraph', scopedSubgraph);
+                    this.setOutputParam(params, 'NodeCount', scopedSubgraph.Nodes.length);
+                    this.setOutputParam(params, 'EdgeCount', scopedSubgraph.Edges.length);
+                }
+                this.setOutputParam(params, 'PromptDescription', doc);
+                return {
+                    Success: true,
+                    ResultCode: 'SUCCESS',
+                    Message: doc,
+                    GraphName: graphName,
+                    Subgraph: scopedSubgraph,
+                    PromptDescription: doc,
+                } as ActionResultSimple;
+            }
 
             let subgraph: GraphSubgraphResult;
             if (question && explicitSeeds.length === 0) {
