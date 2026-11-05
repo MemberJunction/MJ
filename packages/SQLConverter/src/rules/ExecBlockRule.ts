@@ -24,6 +24,7 @@ import { GAP_MARKER_EXEC_SKIPPED, type IConversionRule, type ConversionContext, 
 import { ResolveType } from './TypeResolver.js';
 import { ConvertIdentifiers, RemoveNPrefix } from './ExpressionHelpers.js';
 import { POSTGRESQL_PROCEDURE_PARAM_LIMIT } from './ProcedureToFunctionRule.js';
+import { CrudCallPerformLines, type CrudCallArg } from './CrudCallEmitter.js';
 
 /** The opening of a create-or-update block's guard, for {@link ExecBlockRule.findOutsideStrings}. */
 const UPSERT_GUARD = /IF\s+NOT\s+EXISTS\s*\(/iy;
@@ -40,7 +41,7 @@ interface SetAssignment {
 
 interface ExecCall {
   procRef: string;
-  params: Array<{ paramName: string; valueExpr: string }>;
+  params: CrudCallArg[];
 }
 
 /**
@@ -160,7 +161,7 @@ export class ExecBlockRule implements IConversionRule {
         upsert.assignments.some(a => !declared.has(a.varName)) ||
         upsert.call.guardVars.some(v => !declared.has(v)) ||
         [upsert.call.create, upsert.call.update].some(e =>
-          e.params.some(p => /^p_\w+$/.test(p.valueExpr.trim()) && !declared.has(p.valueExpr.trim())));
+          e.params.some(p => /^p_\w+$/.test(p.ValueExpr.trim()) && !declared.has(p.ValueExpr.trim())));
       if (!usesUndeclared) {
         return this.generateDoBlock(comments, declareVars, upsert.assignments, { kind: 'upsert', call: upsert.call }, context);
       }
@@ -194,7 +195,7 @@ export class ExecBlockRule implements IConversionRule {
     const usesUndeclaredVar =
       assignments.some(a => !declaredNames.has(a.varName)) ||
       (exec?.params.some(p => {
-        const v = p.valueExpr.trim();
+        const v = p.ValueExpr.trim();
         return /^p_\w+$/.test(v) && !declaredNames.has(v);
       }) ?? false);
     if (!exec || usesUndeclaredVar) {
@@ -554,21 +555,9 @@ export class ExecBlockRule implements IConversionRule {
     return `${schema}."${m[4]}"`;
   }
 
-  /**
-   * The text to place inside `n.nspname = '...'` for a schema reference as it will appear in
-   * the emitted SQL. PostgreSQL folds an unquoted schema to lower case, so the catalogue holds
-   * `__mj_bizappssales` for `__mj_BizAppsSales."spX"`; a quoted schema is stored exactly as
-   * written and must not be lower-cased.
-   */
-  private schemaCatalogueName(schemaRef: string): string {
-    const quoted = schemaRef.match(/^"(.*)"$/);
-    const name = quoted ? quoted[1].replace(/""/g, '"') : schemaRef.toLowerCase();
-    return name.replace(/'/g, "''");
-  }
-
   /** Parse @Param = @Var, @Param2 = @Var2 parameter list */
-  private parseExecParams(paramsStr: string): Array<{ paramName: string; valueExpr: string }> {
-    const params: Array<{ paramName: string; valueExpr: string }> = [];
+  private parseExecParams(paramsStr: string): CrudCallArg[] {
+    const params: CrudCallArg[] = [];
     // Split on comma, but respect parentheses and strings
     const parts = this.splitTopLevel(paramsStr, ',');
 
@@ -581,8 +570,8 @@ export class ExecBlockRule implements IConversionRule {
         // If value is a @variable reference, convert to p_ prefix
         const varMatch = valueExpr.match(/^@(\w+)$/);
         params.push({
-          paramName: `p_${m[1]}`,
-          valueExpr: varMatch ? `p_${varMatch[1]}` : this.convertValue(valueExpr),
+          ParamName: `p_${m[1]}`,
+          ValueExpr: varMatch ? `p_${varMatch[1]}` : this.convertValue(valueExpr),
         });
       }
     }
@@ -676,73 +665,6 @@ export class ExecBlockRule implements IConversionRule {
 
   // ─── DO $$ block generation ───────────────────────────────────────
 
-  /**
-   * Resolve the boolean columns relevant to a CRUD sproc call. The procRef looks
-   * like `__mj."spCreateAuditLogType"`; we derive the entity's base table name
-   * (strip the spCreate/spUpdate/spDelete prefix) and look it up in the accumulated
-   * column-type map (which includes the seeded baseline catalog plus any tables the
-   * current migration created). Returns an empty set when the table is unknown.
-   */
-  private boolColumnsForProc(
-    procRef: string,
-    tableColumns: Map<string, Map<string, string>>,
-  ): Set<string> {
-    const m = procRef.match(/"?sp(?:Create|Update|Delete)([A-Za-z0-9_]+)"?\s*$/i);
-    if (!m) return new Set();
-    const cols = tableColumns.get(m[1].toLowerCase());
-    if (!cols) return new Set();
-    const out = new Set<string>();
-    for (const [name, type] of cols) {
-      if (type.toUpperCase() === 'BOOLEAN') out.add(name);
-    }
-    return out;
-  }
-
-  /**
-   * Coerce a `1`/`0` named-argument literal to `TRUE`/`FALSE` when the parameter is
-   * boolean. A param is boolean if its column name is a known boolean column OR it is
-   * one of CodeGen's synthetic `<Col>_Clear` flags (always BIT/boolean). Non-boolean
-   * integer params (e.g. Priority) and non-literal values pass through unchanged.
-   */
-  private coerceBooleanArg(paramName: string, valueExpr: string, boolCols: Set<string>): string {
-    const v = valueExpr.trim();
-    if (v !== '0' && v !== '1') return valueExpr;
-    const colName = paramName.replace(/^p_/, '');
-    const isClearFlag = /_Clear$/i.test(colName);
-    const isBoolColumn = boolCols.has(colName.toLowerCase());
-    if (!isClearFlag && !isBoolColumn) return valueExpr;
-    return v === '1' ? 'TRUE' : 'FALSE';
-  }
-
-  /**
-   * Build the `jsonb_build_object('Col', value, ...)` argument for a wide-entity
-   * CRUD sproc call. Column names come from the parameter names (drop the `p_`
-   * prefix); the synthetic `<Col>_Clear` flags are omitted. Boolean values are
-   * coerced from 1/0 to TRUE/FALSE just like the individual-param path.
-   */
-  private buildJsonArg(params: ExecCall['params'], boolCols: Set<string>): string {
-    const pairs = params
-      .filter(p => !/_Clear$/i.test(p.paramName.replace(/^p_/, '')))
-      .map(p => {
-        const col = p.paramName.replace(/^p_/, '');
-        const val = this.coerceBooleanArg(p.paramName, p.valueExpr, boolCols);
-        return `'${col}', ${val}`;
-      });
-
-    // PostgreSQL caps any function call at 100 arguments, so a single
-    // jsonb_build_object() can hold at most 50 key/value pairs. Wide entities can
-    // exceed that, so chunk the pairs into multiple jsonb_build_object() calls and
-    // concatenate them with `||` (jsonb concat — later keys win, but keys are unique
-    // here so order is irrelevant).
-    const CHUNK = 50;
-    const chunks: string[] = [];
-    for (let i = 0; i < pairs.length; i += CHUNK) {
-      const slice = pairs.slice(i, i + CHUNK);
-      chunks.push(`jsonb_build_object(\n    ${slice.join(',\n    ')}\n  )`);
-    }
-    return chunks.join(' ||\n  ');
-  }
-
   private generateDoBlock(
     comments: string,
     vars: DeclaredVar[],
@@ -813,64 +735,10 @@ export class ExecBlockRule implements IConversionRule {
 
   /** The PERFORM for one EXEC, at `indent`. */
   private performLines(exec: ExecCall, context: ConversionContext, indent: string): string[] {
-    const out: string[] = [];
-    // Generate PERFORM call. CodeGen's wide CRUD sprocs take BIT/boolean params —
-    // both real boolean columns and the synthetic `<Col>_Clear` flags. A literal
-    // `1`/`0` passed positionally-by-name would make PG fail to resolve the function
-    // overload ("function ... does not exist"), so coerce those to TRUE/FALSE.
-    const boolCols = this.boolColumnsForProc(exec.procRef, context.TableColumns);
-
-    const paramList = exec.params
-      .map(p => `${p.paramName} := ${this.coerceBooleanArg(p.paramName, p.valueExpr, boolCols)}`)
-      .join(', ');
-
-    if (exec.params.length > POSTGRESQL_PROCEDURE_PARAM_LIMIT) {
-      // Definitely wide: this CALL alone exceeds the limit, so a typed-arg function with
-      // at least this many parameters cannot exist on PostgreSQL. Only the JSON-arg shape
-      // is possible, so emit it unconditionally.
-      out.push(`${indent}PERFORM ${exec.procRef}(p_data := ${this.buildJsonArg(exec.params, boolCols)});`);
-    } else {
-      // The call count does NOT settle the shape, so resolve it at APPLY time.
-      //
-      // The shape is a property of the FUNCTION, not of the call. A T-SQL EXEC may omit
-      // parameters that have defaults, so a call can be narrower than the procedure it
-      // targets — and CodeGen decides JSON-arg from the entity's projected parameter count,
-      // which includes `_Clear` companions no call has to pass.
-      //
-      // That gap is not hypothetical. On v6.1.0-edge.3, `Entity.Configuration` pushed
-      // `MJ: Entities` over the threshold: CodeGen projects 90 and emits
-      // spUpdateEntity(p_data JSONB) — dropping every typed-arg overload as it does so —
-      // while __mj.spUpdateEntity on SQL Server has 93 parameters and the single EXEC in
-      // that release's metadata sync passes 89. Deciding from 89 emitted a typed-arg call
-      // against a function that now only accepts JSONB, and `mj migrate` died on
-      // `function __mj.spUpdateEntity(...) does not exist` — with nothing in the converted
-      // output looking wrong.
-      //
-      // The converter cannot close that gap by counting: it has no procedure definition in
-      // a metadata-sync file (only EXECs), and ConversionContext carries neither procedure
-      // arities nor column nullability, so CodeGen's projection is not reproducible here.
-      // Any threshold we pick is a guess that drifts the next time an entity gains a column.
-      //
-      // So don't guess — ask the catalogue. Emitting both branches under a pg_proc lookup
-      // is correct against either shape and stays correct as entities widen. Only the taken
-      // branch is ever planned: PL/pgSQL plans a statement on first execution, not when the
-      // DO block is compiled, so the untaken branch's call need not resolve.
-      const procName = exec.procRef.replace(/^.*\./, '').replace(/"/g, '');
-      const schemaRef = this.schemaCatalogueName(
-        exec.procRef.includes('.') ? exec.procRef.replace(/\.[^.]*$/, '') : context.Schema,
-      );
-      out.push(`${indent}IF EXISTS (`);
-      out.push(`${indent}  SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace`);
-      out.push(`${indent}   WHERE n.nspname = '${schemaRef}' AND p.proname = '${procName}'`);
-      out.push(`${indent}     AND p.pronargs = 1 AND p.proargtypes[0] = 'jsonb'::regtype`);
-      out.push(`${indent}) THEN`);
-      out.push(`${indent}  PERFORM ${exec.procRef}(p_data := ${this.buildJsonArg(exec.params, boolCols)});`);
-      out.push(`${indent}ELSE`);
-      out.push(`${indent}  PERFORM ${exec.procRef}(${paramList});`);
-      out.push(`${indent}END IF;`);
-    }
-
-    return out;
+    return CrudCallPerformLines(exec.procRef, exec.params, context, indent, {
+      ParamLimit: POSTGRESQL_PROCEDURE_PARAM_LIMIT,
+      NamedArgOperator: ':=',
+    });
   }
 
   // ─── Utility methods ──────────────────────────────────────────────
