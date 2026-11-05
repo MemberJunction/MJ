@@ -185,7 +185,7 @@ END`;
       expect(result).toContain('p_Name VARCHAR(100) DEFAULT NULL');
     });
 
-    it('should convert OUTPUT params to IN', () => {
+    it('keeps OUTPUT params as IN when the procedure returns rows', () => {
       const input = `CREATE PROCEDURE [__mj].[spTest]
     @ID uniqueidentifier OUTPUT
 AS
@@ -822,6 +822,65 @@ END`;
       expect(jsonArg).not.toBeNull();
       expect(jsonArg![1]).toContain(`'SourceConversationDetailID', p_Notes_SourceConversationDetailID`);
       expect(jsonArg![1]).not.toContain('_Clear');
+    });
+  });
+
+  describe('OUTPUT parameters set by SELECT assignment', () => {
+    const outputInput = `CREATE PROC [__mj].[spGetAuthenticationDataByExternalSystemID]
+	@IntegrationName NVARCHAR(100),
+	@ExternalSystemID NVARCHAR(100),
+	@AccessToken NVARCHAR(255)=NULL OUTPUT,
+	@RefreshToken NVARCHAR(255)=NULL OUTPUT,
+	@TokenExpirationDate DATETIME=NULL OUTPUT,
+	@APIKey NVARCHAR(255)=NULL OUTPUT
+AS
+
+SET @IntegrationName = TRIM(@IntegrationName)
+SET @ExternalSystemID = TRIM(@ExternalSystemID)
+
+SELECT
+	@AccessToken = ci.AccessToken,
+	@RefreshToken = ci.RefreshToken,
+	@TokenExpirationDate = ci.TokenExpirationDate,
+	@APIKey = ci.APIKey
+FROM
+	__mj.CompanyIntegration ci
+JOIN __mj.Integration i
+	ON i.ID = ci.IntegrationID
+WHERE
+	i.Name = @IntegrationName
+	AND ci.ExternalSystemID = @ExternalSystemID
+	AND ci.IsActive = 1`;
+
+    it('returns OUTPUT params as INOUT when the procedure returns no rows', () => {
+      const result = convert(outputInput);
+      expect(result).toContain('INOUT p_AccessToken VARCHAR(255) DEFAULT NULL');
+      expect(result).toContain('INOUT p_APIKey VARCHAR(255) DEFAULT NULL');
+      expect(result).not.toContain('RETURNS VOID');
+    });
+
+    it('assigns the selected values with SELECT ... INTO', () => {
+      const result = convert(outputInput);
+      expect(result).toContain('INTO p_AccessToken, p_RefreshToken, p_TokenExpirationDate, p_APIKey');
+      expect(result).not.toMatch(/p_AccessToken\s*=\s*ci\./);
+    });
+
+    it('compares a known boolean column with TRUE, not 1', () => {
+      const result = convert(outputInput);
+      expect(result).toContain('ci."IsActive" = TRUE');
+    });
+
+    it('assigns a single variable on one line with SELECT ... INTO', () => {
+      const result = convert(`CREATE PROCEDURE [__mj].[spCountOpenTasks]
+    @UserID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @Count INT;
+    SELECT @Count = COUNT(*) FROM [__mj].[Task] WHERE [UserID] = @UserID;
+    UPDATE [__mj].[User] SET [Title] = CAST(@Count AS NVARCHAR(10)) WHERE [ID] = @UserID;
+END`);
+      expect(result).toContain('SELECT COUNT(*) INTO p_Count FROM __mj."Task"');
     });
   });
 });
