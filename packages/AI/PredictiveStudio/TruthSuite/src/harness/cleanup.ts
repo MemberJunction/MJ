@@ -195,7 +195,7 @@ interface RecordedRows extends ScoringRows {
   readonly Runs: CleanupTrainingRunRow[];
   readonly Snapshots: CleanupSnapshotRow[];
   readonly TrainerFiles: ReadonlyArray<{ readonly FileIDs: readonly string[]; readonly Failure: string | null }>;
-  readonly Files: CleanupRow[];
+  readonly Files: CleanupFileRow[];
   readonly Pipelines: CleanupRow[];
 }
 
@@ -221,9 +221,9 @@ export class HarnessCleanup {
    * pipelines of recorded models), children first: scoring bindings; the models' scoring Record Processes with their
    * runs, run details and watermarks; training runs; then models, the Training Snapshots the runs trained on and the
    * recorded pipelines' snapshots, each deleted snapshot's three files (stored object, then `MJ: Files` row), the models'
-   * artifact files and every artifact file a run's stored trainer result names, pipelines, the recorded Evaluation
-   * Protocol versions (pipelines, runs and snapshots reference them), and last the recorded Prediction Unit versions
-   * (pipelines and snapshots reference them).
+   * artifact files and every artifact file a run's stored trainer result names (stored object, then row), pipelines,
+   * the recorded Evaluation Protocol versions (pipelines, runs and snapshots reference them), and last the recorded
+   * Prediction Unit versions (pipelines and snapshots reference them).
    * Every row is attempted; deleted IDs leave `records`. Returns one line per row whose `Delete()` failed and per stored
    * object that could not be deleted.
    */
@@ -239,7 +239,7 @@ export class HarnessCleanup {
       ...(await HarnessCleanup.deleteAll('MJ: ML Training Runs', r.Runs)),
       ...(await HarnessCleanup.deleteAll('MJ: ML Models', r.Models, (id) => records.ModelIDs.Delete(id))),
       ...(await HarnessCleanup.deleteSnapshots(store, r.Snapshots)),
-      ...(await HarnessCleanup.deleteAll('MJ: Files', r.Files)),
+      ...(await HarnessCleanup.deleteStoredFiles(store, r.Files)),
       ...(await HarnessCleanup.deleteAll('MJ: ML Training Pipelines', r.Pipelines, (id) => records.PipelineIDs.Delete(id))),
       ...(await HarnessCleanup.deleteEvaluationProtocols(store, records)),
       ...(await HarnessCleanup.deletePredictionUnits(store, records)),
@@ -262,7 +262,7 @@ export class HarnessCleanup {
     const trainerFiles = runs.map((r) => HarnessCleanup.trainerArtifactFileIds(r));
     const modelFileIds = models.flatMap((m) => (m.ArtifactFileID ? [m.ArtifactFileID] : []));
     const fileFilter = HarnessCleanup.anyIn([['ID', new RecordIDSet([...modelFileIds, ...trainerFiles.flatMap((t) => t.FileIDs)])]]);
-    const files = fileFilter ? await store.Rows('MJ: Files', fileFilter) : [];
+    const files = fileFilter ? await store.Files(fileFilter) : [];
     const pipelines = pipelineFilter ? await store.Rows('MJ: ML Training Pipelines', pipelineFilter) : [];
     return { ...scoring, Models: models, Runs: runs, Snapshots: snapshots, TrainerFiles: trainerFiles, Files: files, Pipelines: pipelines };
   }
@@ -296,10 +296,17 @@ export class HarnessCleanup {
     });
     const fileFilter = HarnessCleanup.anyIn([['ID', deletedFileIds]]);
     const files = fileFilter ? await store.Files(fileFilter) : [];
+    return [...failures, ...(await HarnessCleanup.deleteStoredFiles(store, files))];
+  }
+
+  /**
+   * Delete each file's stored object, then the `MJ: Files` rows of the objects that were deleted: a file whose object
+   * could not be deleted keeps its row, so the object stays findable. Returns one line per failure.
+   */
+  private static async deleteStoredFiles(store: CleanupStore, files: CleanupFileRow[]): Promise<string[]> {
     const objectFailures = await Promise.all(files.map(async (f) => ({ File: f, Failure: await HarnessCleanup.tryDeleteStoredObject(store, f) })));
     const objectsDeleted = objectFailures.filter((o) => o.Failure === null).map((o) => o.File);
     return [
-      ...failures,
       ...objectFailures.flatMap((o) => (o.Failure === null ? [] : [`stored object of MJ: Files ${o.File.ID} (${o.File.ProviderKey || '(no key)'}): ${o.Failure}`])),
       ...(await HarnessCleanup.deleteAll('MJ: Files', objectsDeleted)),
     ];

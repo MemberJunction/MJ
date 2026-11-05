@@ -44,6 +44,8 @@ The C4 change made model files go through the provider `PS_STORAGE_PROVIDER` nam
    - the "local-disk artifact fallback" prerequisite in four live rigs (`ps-live-multimodel-lifecycle`, `ps-live-writeback-demo`, `ps-live-modelaction-generation`, `ps-live-recordprocess-scoring`)
    - Engine `operations/__tests__/helpers.ts` and `delegation-retrain.test.ts`, which said the deps builder "resolves the active File Storage Provider via RunView". It reads nothing now, because the storage resolves lazily.
 
+4. **Truth-suite cleanup of model files** (`TruthSuite/src/harness/cleanup.ts`): it deleted a model's artifact `MJ: Files` rows (the model's own and every file a run's trainer result names) as rows only, which was right when the bytes lived under `PS_ARTIFACT_DIR` with no stored object. Now those files are stored objects, so each run left them behind. On this database, after Containment, Prediction Units and Training: 126 files under `predictive-studio/model-artifacts/` and 0 `MJ: Files` rows. Cleanup now deletes these files the way it already deleted snapshot files: the stored object first, then the row, and the row stays when the object cannot be deleted. Two new and two updated unit tests cover this (`cleanup.test.ts`). Rerun after the fix (Prediction Units, 12/12): 0 files left on disk and 0 `MJ: Files` rows.
+
 The behaviour is proven at runtime: every File Storage Provider on `MJ_PS_PR3_mlrename` is `IsActive = 0`, and the integration tier and truth-suite gates that train and score were run with nothing switched on (see the task report).
 
 ## Evidence

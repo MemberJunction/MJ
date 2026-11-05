@@ -171,7 +171,7 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     expect(store.Deleted).toEqual([
       'MJ: ML Model Scoring Bindings:BINDING-1', 'MJ: Process Run Details:DETAIL-1', `MJ: Process Runs:${PR1}`,
       `MJ: Record Processes:${RP1}`, 'MJ: ML Training Runs:RUN-1',
-      `MJ: ML Models:${M1}`, `MJ: ML Models:${M2}`, `MJ: Files:${F1}`, `MJ: ML Training Pipelines:${P1}`, `MJ: ML Training Pipelines:${AGENT_P}`,
+      `MJ: ML Models:${M1}`, `MJ: ML Models:${M2}`, `object:key/${F1}`, `MJ: Files:${F1}`, `MJ: ML Training Pipelines:${P1}`, `MJ: ML Training Pipelines:${AGENT_P}`,
     ]);
     expect(store.Deleted.join(' ')).not.toContain(RP_OTHER);
     expect(records.ModelIDs.Size + records.PipelineIDs.Size).toBe(0);
@@ -236,8 +236,24 @@ describe('HarnessCleanup.DeleteRecorded', () => {
     const store = new FakeStore(new Set(), { RunValidationResults: trainerResults() });
     expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([]);
     expect(store.Filters).toContain(`MJ: Files | ID IN ('${F1}','${TF_GLM}')`);
-    expect(store.Deleted).toContain(`MJ: Files:${TF_GLM}`);
+    for (const f of [F1, TF_GLM]) {
+      expect(store.Deleted.indexOf(`MJ: ML Models:${M1}`)).toBeLessThan(store.Deleted.indexOf(`object:key/${f}`));
+      expect(store.Deleted.indexOf(`object:key/${f}`)).toBeLessThan(store.Deleted.indexOf(`MJ: Files:${f}`));
+    }
     expect(store.Deleted.indexOf('MJ: ML Training Runs:RUN-1')).toBeLessThan(store.Deleted.indexOf(`MJ: Files:${TF_GLM}`));
+  });
+
+  it("keeps an artifact file's row when its stored object survives, reporting it, and still deletes the rest", async () => {
+    const records = new RunRecords();
+    records.RecordPipeline(P1);
+    records.RecordModel(M1);
+    const store = new FakeStore(new Set(), { RunValidationResults: trainerResults(), FailObjects: new Set([TF_GLM]) });
+    expect(await HarnessCleanup.DeleteRecorded(store, records)).toEqual([
+      `stored object of MJ: Files ${TF_GLM} (key/${TF_GLM}): the storage root is not writable`,
+    ]);
+    expect(store.Deleted).not.toContain(`MJ: Files:${TF_GLM}`);
+    expect(store.Deleted).toContain(`MJ: Files:${F1}`);
+    expect(store.Deleted).toContain(`MJ: ML Training Pipelines:${P1}`);
   });
 
   it('reports a run whose results envelope does not parse, naming the run, and still deletes the rest', async () => {
