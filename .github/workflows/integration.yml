@@ -540,18 +540,6 @@ jobs:
             "
           docker exec -u 0 sql rm -f /var/opt/mssql/worker_seed.bak
 
-      # Entity Vector Sync - Daily is seeded with RunImmediatelyIfNeverRun, and a CI database has
-      # never run it, so MJAPI started it on every boot. It embeds ~1,500 records on MJAPI's own
-      # event loop with the in-process model for about 170 s, the same minutes all four shards
-      # start: /healthcheck stopped answering, the pool timed out on the first client requests,
-      # and a provider that connected then had no metadata (#6361). Jobs keep their cron schedule;
-      # none starts just because this database is new.
-      - name: Keep first-run scheduled jobs from starting with MJAPI
-        run: |
-          docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
-            /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -d test -b -I \
-            -Q "UPDATE [__mj].[ScheduledJob] SET [RunImmediatelyIfNeverRun] = 0 WHERE [RunImmediatelyIfNeverRun] = 1;"
-
       # Boot MJAPI against the provisioned DB so the client-transport members execute
       # instead of skipping. MJ_API_KEY is a throwaway per-run system key: MJServer
       # accepts it via the x-mj-api-key header, and the test process presents the same
@@ -645,13 +633,37 @@ jobs:
             return 0
           }
 
+          # Entity Vector Sync - Daily is seeded with RunImmediatelyIfNeverRun and a CI database has
+          # never run it, so MJAPI starts it on every boot: about 170 s of in-process embedding that
+          # stops /healthcheck answering and times out requests waiting for a pooled connection.
+          # A client shard started alongside it got a provider with no metadata (#6361). The job
+          # has to run, because binary-fields.BF2/BF3 read the rows it writes. So the client shard
+          # waits for it; the server shards don't use MJAPI and start now. After the limit the
+          # client shard starts anyway, and a job that never finished fails the checks that need it.
+          wait_for_first_run_jobs() {
+            local pending=""
+            for _ in $(seq 1 84); do
+              pending=$(docker exec sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U SA -P 'VeryStr0ngP@ssw0rd' \
+                -d test -h -1 -W -I -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM [__mj].[ScheduledJob] j
+                  WHERE j.[Status] = 'Active' AND j.[RunImmediatelyIfNeverRun] = 1
+                    AND NOT EXISTS (SELECT 1 FROM [__mj].[ScheduledJobRun] r
+                                    WHERE r.[ScheduledJobID] = j.[ID] AND r.[CompletedAt] IS NOT NULL);" | tr -d '[:space:]')
+              if [ "${pending}" = "0" ]; then
+                echo "[shard:client] First-run scheduled jobs finished after ${SECONDS}s."
+                return 0
+              fi
+              sleep 5
+            done
+            echo "::warning::First-run scheduled jobs still pending (${pending}) after 420 s; starting the client shard anyway."
+          }
+
           run_shard "server-1" "test_s1" --transport=server --shard=1/3 &
           PID_S1=$!
           run_shard "server-2" "test_s2" --transport=server --shard=2/3 &
           PID_S2=$!
           run_shard "server-3" "test_s3" --transport=server --shard=3/3 &
           PID_S3=$!
-          run_shard "client"   "test"    --transport=client &
+          { wait_for_first_run_jobs; run_shard "client" "test" --transport=client; } &
           PID_CLIENT=$!
 
           wait "${PID_S1}" "${PID_S2}" "${PID_S3}" "${PID_CLIENT}"
