@@ -198,28 +198,6 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "ResultCode": "PERMISSION_DENIED",
-            "IsSuccess": false,
-            "Description": "The caller lacks permission on the list."
-          },
-          "primaryKey": {
-            "ID": "3236841E-E2D1-43E4-A4BA-30EA8A506483"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "TARGET_NOT_FOUND",
-            "IsSuccess": false,
-            "Description": "The list was not found."
-          },
-          "primaryKey": {
-            "ID": "2B095222-F88B-41CB-BC54-C1F77C49AB75"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
             "ResultCode": "PARTIAL_SUCCESS",
             "IsSuccess": false,
             "Description": "Some records were applied and some failed; see Failed."
@@ -357,23 +335,23 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "ResultCode": "PERMISSION_DENIED",
+            "ResultCode": "STALE_DELTA",
             "IsSuccess": false,
-            "Description": "The caller lacks permission on the list."
+            "Description": "The list changed while the operation ran; recompute and retry."
           },
           "primaryKey": {
-            "ID": "A17455EE-9169-447E-B107-BE5285E054BA"
+            "ID": "440473B2-A943-4555-A426-FF0D1D9C0329"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "ResultCode": "TARGET_NOT_FOUND",
+            "ResultCode": "INVALID_TOKEN",
             "IsSuccess": false,
-            "Description": "The list was not found."
+            "Description": "The change-set token was invalid or expired."
           },
           "primaryKey": {
-            "ID": "6770FC9C-6B5D-4BAC-8E15-5910A9A2AEEA"
+            "ID": "E205D9E6-D9A1-4899-8F9B-321D98BF20ED"
           }
         },
         {
@@ -554,12 +532,23 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "ResultCode": "PERMISSION_DENIED",
+            "ResultCode": "STALE_DELTA",
             "IsSuccess": false,
-            "Description": "The caller lacks permission on the list."
+            "Description": "The list changed while the operation ran; recompute and retry."
           },
           "primaryKey": {
-            "ID": "231247C5-7771-457B-AB53-EBFC00F63DE7"
+            "ID": "1EA2771A-AF26-45D8-8758-604844E6A3A2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_TOKEN",
+            "IsSuccess": false,
+            "Description": "The change-set token was invalid or expired."
+          },
+          "primaryKey": {
+            "ID": "571911C6-2B99-437B-A82A-3F7F063E17E8"
           }
         },
         {
@@ -856,17 +845,6 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "ResultCode": "PERMISSION_DENIED",
-            "IsSuccess": false,
-            "Description": "The caller lacks permission on the list."
-          },
-          "primaryKey": {
-            "ID": "12B655E0-4A5F-4B85-904E-7438870AC9E5"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
             "ResultCode": "TARGET_NOT_FOUND",
             "IsSuccess": false,
             "Description": "The list was not found."
@@ -1022,17 +1000,6 @@
           },
           "primaryKey": {
             "ID": "81A23972-06FE-4E06-AD94-B26D1DC9189C"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "LIST_NOT_FOUND",
-            "IsSuccess": false,
-            "Description": "The list was not found."
-          },
-          "primaryKey": {
-            "ID": "B2424CC2-CAAA-420C-9C6B-7ED8EB5E6CD6"
           }
         },
         {
@@ -1205,34 +1172,12 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "ResultCode": "LIST_NOT_FOUND",
-            "IsSuccess": false,
-            "Description": "The list was not found."
-          },
-          "primaryKey": {
-            "ID": "FA5598C7-92F8-442C-BF08-0D1440DF35EA"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
             "ResultCode": "UNEXPECTED_ERROR",
             "IsSuccess": false,
             "Description": "An unexpected error occurred."
           },
           "primaryKey": {
             "ID": "82C093FD-D44A-4C5F-B62D-3FFEB228CB0A"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "EMAIL_RECIPIENT_NOT_FOUND",
-            "IsSuccess": false,
-            "Description": "No recipient could be resolved for the email address."
-          },
-          "primaryKey": {
-            "ID": "34B371CB-76DF-4EC1-B5C7-6C69477FA088"
           }
         }
       ]
@@ -1395,28 +1340,6 @@
           },
           "primaryKey": {
             "ID": "16F9004B-956D-4F07-A02A-841C315CB40A"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "INVITATION_REVOKED",
-            "IsSuccess": false,
-            "Description": "The invitation was already revoked."
-          },
-          "primaryKey": {
-            "ID": "D088C0BB-7B1E-4293-BF5C-D95D911BEF50"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "INVITATION_EXPIRED",
-            "IsSuccess": false,
-            "Description": "The invitation has expired."
-          },
-          "primaryKey": {
-            "ID": "C172C7CC-15DD-40DD-A1E7-DB7AEAC9BE09"
           }
         },
         {
@@ -2059,10 +1982,10 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "PreviewOnly",
-            "Type": "Both",
+            "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "When true, resolve the audience and count recipients without sending. Echoed back as an output.",
+            "Description": "When true, resolve the audience and count recipients without sending.",
             "IsRequired": false,
             "DefaultValue": "false"
           },
