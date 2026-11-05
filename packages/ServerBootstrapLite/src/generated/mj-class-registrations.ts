@@ -223,7 +223,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (476 classes)
+// @memberjunction/core-entities (477 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -433,6 +433,7 @@ import {
     MJDiagnosticSenderRegistrationEntity,
     MJDiagnosticSessionChunkEntity,
     MJDiagnosticSessionEntity,
+    MJDocumentSequenceCounterEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -1770,6 +1771,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJDiagnosticSenderRegistrationEntity,
     MJDiagnosticSessionChunkEntity,
     MJDiagnosticSessionEntity,
+    MJDocumentSequenceCounterEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -1897,11 +1899,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
     MJPhoneNumberEntity,
-    MJProcessRunDetailEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
     MJProjectEntityExtended,
@@ -2101,11 +2103,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MergeContactsAction,
     CreateJotFormAction,
     CreateSurveyMonkeyAction,
-    CreateTypeformAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    CreateTypeformAction,
     ExportGoogleFormsCSVAction,
     ExportJotFormCSVAction,
     ExportSurveyMonkeyCSVAction,
@@ -2305,11 +2307,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ClaudeCodeCliAdapter,
     CodexAdapter,
     GeminiCliAdapter,
-    HarnessAgentBase,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    HarnessAgentBase,
     HarnessAgentType,
     OpenCodeAdapter,
     PiAdapter,
