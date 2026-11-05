@@ -36,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (477 classes)
+// @memberjunction/core-entities (478 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -1362,11 +1362,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ListCategoryHierarchyPanel,
     MJAIAgentChannelFormComponentExtended,
     MJAIAgentFormComponentExtended,
-    MJAIAgentRubricFormComponentExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MJAIAgentRubricFormComponentExtended,
     MJAIAgentRunFormComponentExtended,
     MJAIAgentSessionFormComponentExtended,
     MJAIPromptFormComponentExtended,
@@ -1434,7 +1434,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 653;
+export const CLASS_REGISTRATIONS_COUNT = 654;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

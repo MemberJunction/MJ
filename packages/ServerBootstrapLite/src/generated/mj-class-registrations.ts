@@ -223,7 +223,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (477 classes)
+// @memberjunction/core-entities (478 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -2103,11 +2103,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     LogActivityAction,
     MergeContactsAction,
     CreateJotFormAction,
-    CreateSurveyMonkeyAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    CreateSurveyMonkeyAction,
     CreateTypeformAction,
     ExportGoogleFormsCSVAction,
     ExportJotFormCSVAction,
@@ -2307,11 +2307,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     WhiteboardChannelServer,
     ClaudeCodeCliAdapter,
     CodexAdapter,
-    GeminiCliAdapter,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    GeminiCliAdapter,
     HarnessAgentBase,
     HarnessAgentType,
     OpenCodeAdapter,
@@ -2511,11 +2511,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GetArchitectureDiagramReferenceAction,
     GetDefaultFormScaffoldForEntityAction,
     GetDownloadUrlAction,
-    GetEntityDetailsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    GetEntityDetailsAction,
     GetEntityListAction,
     GetEntitySchemaForFormAction,
     GetFileContentAction,
@@ -2670,7 +2670,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1138;
+export const CLASS_REGISTRATIONS_COUNT = 1139;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
