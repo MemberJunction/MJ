@@ -302,7 +302,7 @@ Focus inputs, each on by default:
 `Open(settings): MJDialogRef` with `{ title, content: string | Type, actions: [{ text, primary?, themeColor? }], width, … }`. `ref.Result` (Observable) emits the clicked action or `undefined` on dismiss; `ref.Content.instance` exposes a mounted content component; `ref.Close(result?)`.
 
 ### `mj-confirm-dialog` — MJConfirmDialogComponent
-Purpose-built confirmation on top of `mj-dialog`. Inputs: `[(Visible)]` (two-way), `Type: 'default'|'danger'|'warning'|'info'`, `Title`, `Message`, `DetailMessage`, `ConfirmText`, `CancelText`, `Icon`, `Processing` (spinner + blocks dismissal for async work). Outputs: `Confirmed` (**stays open — you close it when the work finishes**), `Cancelled` (auto-closes). Confirm button is leftmost, per MJ dialog convention.
+Purpose-built confirmation on top of `mj-dialog`. Inputs: `[(Visible)]` (two-way), `Type: 'default'|'danger'|'warning'|'info'`, `Title`, `Message`, `DetailMessage`, `ConfirmText`, `CancelText`, `Icon`, `Processing` (spinner + blocks dismissal for async work). Outputs: `Confirmed` (**stays open — you close it when the work finishes**), `Cancelled` (auto-closes). Confirm button is leftmost, per MJ dialog convention. Initial focus goes to the confirm button, except for `Type="danger"`, which opens on Cancel (the least destructive action, per the WAI-ARIA alert dialog pattern), so an Enter pressed as it opens does not delete or discard. `MJConfirmService.ConfirmDelete` gets this too.
 
 ### `MJConfirmService` — promise-based confirms
 `await Confirm({ message, title?, detail?, type?, … })` → `boolean`, and `ConfirmDelete(...)` which forces danger styling and "Delete". Mounts above `mj-window` (z-index 20000).
