@@ -7,6 +7,7 @@ import {
   getLatestReport,
   getGitDiff,
   getGitStatusPorcelain,
+  toCreateOrAlter,
 } from '../codegen-idempotency-check.mjs';
 
 describe('CodeGen Idempotency Harness Unit Tests (§7.1)', () => {
@@ -117,6 +118,25 @@ describe('CodeGen Idempotency Harness Unit Tests (§7.1)', () => {
         expect(report).toHaveProperty('counters');
         expect(typeof report.counters).toBe('object');
       }
+    });
+  });
+
+  describe('toCreateOrAlter', () => {
+    it('turns the first CREATE PROCEDURE into CREATE OR ALTER', () => {
+      expect(toCreateOrAlter('CREATE PROCEDURE [__mj].[spX] AS SELECT 1')).toBe('CREATE OR ALTER PROCEDURE [__mj].[spX] AS SELECT 1');
+      expect(toCreateOrAlter('-- note\n/* a */ CREATE PROC p AS SELECT 1')).toBe('-- note\n/* a */ CREATE OR ALTER PROC p AS SELECT 1');
+    });
+
+    it('leaves a definition that already says CREATE OR ALTER after leading comments', () => {
+      const text = '/* header */\n-- line\n  create or alter procedure p as select 1';
+      expect(toCreateOrAlter(text)).toBe(text);
+    });
+
+    it('returns quickly on a long run of comments', () => {
+      const started = Date.now();
+      toCreateOrAlter('/*' + '*//*'.repeat(50000));
+      toCreateOrAlter('/* x */'.repeat(50000) + 'CREATE PROCEDURE p AS SELECT 1');
+      expect(Date.now() - started).toBeLessThan(2000);
     });
   });
 });
