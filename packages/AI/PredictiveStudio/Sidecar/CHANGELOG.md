@@ -1,5 +1,59 @@
 # @memberjunction/predictive-studio-sidecar
 
+## 6.2.0
+
+### Minor Changes
+
+- ff73341: Add the Predictive Studio planted-truth test suite (`packages/AI/PredictiveStudio/TruthSuite`: the datasets and the harness that loads and scores them) and Phase-0 containment safeguards. The containment gates are MJ Tests run with `mj test suite "Predictive Studio Gates — Containment"`. Containment fixes: uncapped default row reads for training and filter-scoped scoring, lifecycle status gates and dry-run isolation for model scoring, typed refusal codes the gates assert on, a feature-importance kind that decides which model drivers may be shown, polarity-aware risk bands and non-causal driver copy across UI and prompt templates, seeded, reproducible training (a fixed random state; the truth-suite sidecar also pins one thread for its determinism gate) and honest out-of-sample validation metrics (`kfold`/`holdout`), refusal of no-effect `AsOfStrategy` configurations, withholding of non-origin-split time-series forecasts, majority-class baseline enforcement on imbalanced classifiers, disabling the Run Experiment Session action, and keeping the maintenance job disabled, since nothing runs either yet.
+
+  Note: Pre-existing models trained with locked holdout explicitly disabled (`LockedHoldoutFraction = 0`) or graded on accuracy alone (without `AUC` or a recorded `BaselineAccuracy`) will display as unmeasured until retrained. Existing models' global driver lists stay hidden until retrained, because a model with no stored feature-importance kind has its drivers hidden.
+
+### Patch Changes
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- Updated dependencies [80905a1]
+- Updated dependencies [a17a228]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [ff73341]
+  - @memberjunction/predictive-studio-core@6.2.0
+
 ## 6.2.0-edge.8
 
 ### Patch Changes
