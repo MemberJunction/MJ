@@ -18814,6 +18814,44 @@ export const MJDiagnosticSessionSchema = z.object({
 export type MJDiagnosticSessionEntityType = z.infer<typeof MJDiagnosticSessionSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Document Sequence Counters
+ */
+export const MJDocumentSequenceCounterSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SequenceKey: z.string().describe(`
+        * * Field Name: SequenceKey
+        * * Display Name: Sequence Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Globally unique logical sequence identifier (for example Orders.OrderNumber or Accounting.JournalEntry.EntryNumber).`),
+    ScopeKey: z.string().describe(`
+        * * Field Name: ScopeKey
+        * * Display Name: Scope Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Deterministic partition key combining tenant, scope fields, and reset period (or __GLOBAL__ for unpartitioned sequences).`),
+    CurrentValue: z.number().describe(`
+        * * Field Name: CurrentValue
+        * * Display Name: Current Value
+        * * SQL Data Type: bigint
+        * * Description: Most recently allocated integer value for this (SequenceKey, ScopeKey) partition.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJDocumentSequenceCounterEntityType = z.infer<typeof MJDocumentSequenceCounterSchema>;
+
+/**
  * zod schema definition for the entity MJ: Duplicate Run Detail Matches
  */
 export const MJDuplicateRunDetailMatchSchema = z.object({
@@ -96065,6 +96103,125 @@ export class MJDiagnosticSessionEntity extends BaseEntity<MJDiagnosticSessionEnt
 
 
 /**
+ * MJ: Document Sequence Counters - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: DocumentSequenceCounter
+ * * Base View: vwDocumentSequenceCounters
+ * * @description Atomic sequence counter storage for DocumentNumberingEngine, partitioned by (SequenceKey, ScopeKey).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Document Sequence Counters')
+export class MJDocumentSequenceCounterEntity extends BaseEntity<MJDocumentSequenceCounterEntityType> {
+    /**
+    * Loads the MJ: Document Sequence Counters record from the database
+    * @param ID: string - primary key value to load the MJ: Document Sequence Counters record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJDocumentSequenceCounterEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Document Sequence Counters - AllowCreateAPI and AllowUpdateAPI are both set to 0 in the database.  Save is not allowed, so this method is generated to override the base class method and throw an error. To enable save for this entity, set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJDocumentSequenceCounterEntity
+    * @throws {Error} - Save is not allowed for MJ: Document Sequence Counters, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
+    */
+    public override async Save(options?: EntitySaveOptions) : Promise<boolean> {
+        throw new Error('Save is not allowed for MJ: Document Sequence Counters, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
+    }
+
+    /**
+    * MJ: Document Sequence Counters - AllowDeleteAPI is set to 0 in the database.  Delete is not allowed, so this method is generated to override the base class method and throw an error. To enable delete for this entity, set AllowDeleteAPI to 1 in the database.
+    * @public
+    * @method
+    * @override
+    * @memberof MJDocumentSequenceCounterEntity
+    * @throws {Error} - Delete is not allowed for MJ: Document Sequence Counters, to enable it set AllowDeleteAPI to 1 in the database.
+    */
+    public override async Delete(): Promise<boolean> {
+        throw new Error('Delete is not allowed for MJ: Document Sequence Counters, to enable it set AllowDeleteAPI to 1 in the database.');
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SequenceKey
+    * * Display Name: Sequence Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Globally unique logical sequence identifier (for example Orders.OrderNumber or Accounting.JournalEntry.EntryNumber).
+    */
+    get SequenceKey(): string {
+        return this.Get('SequenceKey');
+    }
+
+    /**
+    * * Field Name: ScopeKey
+    * * Display Name: Scope Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Deterministic partition key combining tenant, scope fields, and reset period (or __GLOBAL__ for unpartitioned sequences).
+    */
+    get ScopeKey(): string {
+        return this.Get('ScopeKey');
+    }
+
+    /**
+    * * Field Name: CurrentValue
+    * * Display Name: Current Value
+    * * SQL Data Type: bigint
+    * * Description: Most recently allocated integer value for this (SequenceKey, ScopeKey) partition.
+    */
+    get CurrentValue(): number {
+        return this.Get('CurrentValue');
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: Duplicate Run Detail Matches - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: DuplicateRunDetailMatch
@@ -98183,6 +98340,22 @@ export interface MJEntityEntity_IEntityConfiguration {
      *   directly from `<BaseTable>`, preserving in-memory field values on the saved entity.
      */
     SaveReturnMode?: MJEntityEntity_EntitySaveReturnMode;
+
+    /**
+     * Optional declarative lifecycle configuration (state machine transitions, field-freeze rules,
+     * post-create immutability, and `WriteAuthority`: `'Standard' | 'AppendOnly' | 'ServerOperationOnly'`).
+     */
+    Lifecycle?: MJEntityEntity_IEntityLifecycleConfiguration;
+
+    /**
+     * Optional declarative document auto-numbering policy (or array of policies for multi-sequence entities).
+     */
+    AutoNumber?: MJEntityEntity_IDocumentNumberPolicyConfiguration | MJEntityEntity_IDocumentNumberPolicyConfiguration[];
+
+    /**
+     * Optional declarative cross-entity parent-state lock policies evaluated with transaction/batch memoization.
+     */
+    CrossEntityPolicies?: MJEntityEntity_IDeclarativeParentStateLockConfiguration[];
 }
 
 /**
@@ -98510,6 +98683,85 @@ export interface MJEntityEntity_IClonePreset {
      * copied to someone else, which does not apply to a record built to be copied.
      */
     TemplateSourceField?: string;
+}
+
+/**
+ * Declarative entity lifecycle policy stored in `MJ: Entities.Configuration.Lifecycle`.
+ */
+export interface MJEntityEntity_IEntityLifecycleConfiguration {
+    stateMachine?: MJEntityEntity_IEntityStateMachineConfiguration;
+    writeAuthority?: MJEntityEntity_IEntityWriteAuthorityConfiguration;
+}
+
+export interface MJEntityEntity_IStateTransitionRuleConfiguration {
+    from: string | '*';
+    to: string;
+    allowedRoles?: string[];
+    requireServerOperation?: boolean;
+    allowedOperations?: string[];
+    requiredFieldsOnEnter?: string[];
+    clearedFieldsOnTransition?: string[];
+    errorMessage?: string;
+}
+
+export interface MJEntityEntity_IEntityStateMachineConfiguration {
+    statusField: string;
+    initialStates?: string[];
+    transitions: MJEntityEntity_IStateTransitionRuleConfiguration[];
+    terminalStates?: string[];
+    freezeAllFieldsInTerminalStates?: boolean;
+    immutableAfterCreateFields?: string[];
+    editableFieldsByState?: Record<string, string[]>;
+    frozenFieldsByState?: Record<string, string[]>;
+    deletableInStates?: string[];
+    nonDeletableStates?: string[];
+    fieldFreezeExemptOperations?: string[];
+}
+
+export interface MJEntityEntity_IEntityWriteAuthorityConfiguration {
+    mode: 'Standard' | 'AppendOnly' | 'ServerOperationOnly';
+    perOperationMode?: Partial<Record<'Create' | 'Update' | 'Delete', 'Standard' | 'AppendOnly' | 'ServerOperationOnly'>>;
+    allowedOperations?: string[];
+    errorMessage?: string;
+}
+
+/**
+ * Declarative document auto-numbering policy stored in `MJ: Entities.Configuration.AutoNumber`.
+ */
+export interface MJEntityEntity_IDocumentNumberPolicyConfiguration {
+    targetField: string;
+    sequenceKey?: string;
+    pattern: string;
+    prefix?: string;
+    scopeFields?: string[];
+    scopeFieldFallbacks?: Record<string, string>;
+    scopeByTenant?: boolean;
+    resetPeriod?: 'Never' | 'CalendarYear' | 'CalendarMonth' | 'FiscalYear';
+    dateSourceField?: string;
+    fiscalYearStartMonth?: number;
+    startAt?: number;
+    incrementBy?: number;
+    manualValueMode?: 'AllowNonColliding' | 'AllowAny' | 'Forbid';
+    immutableAfterCreate?: boolean;
+    gapFreeTransactional?: boolean;
+}
+
+/**
+ * Declarative cross-entity parent-state lock policy stored in `MJ: Entities.Configuration.CrossEntityPolicies`.
+ */
+export interface MJEntityEntity_IDeclarativeParentStateLockConfiguration {
+    kind?: 'ParentStateLock';
+    policyKey?: string;
+    foreignKeyField: string;
+    parentEntityName: string;
+    parentKeyField?: string;
+    parentStatusField: string;
+    allowedParentStates?: string[];
+    forbiddenParentStates?: string[];
+    operations?: Array<'Create' | 'Update' | 'Delete'>;
+    allowOrphanWhenForeignKeyNull?: boolean;
+    exemptOperations?: string[];
+    errorMessage?: string;
 }
 
 /**
