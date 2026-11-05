@@ -159,9 +159,22 @@ function newSecondaryGraphQLProvider(): GraphQLDataProvider {
     }
 }
 
+/**
+ * Throws when a secondary provider holds no metadata. Config() reports success even when its
+ * metadata load failed, so without this a check gets `null` from GetEntityObject and fails on
+ * the next line with nothing that points at the load (#6361).
+ */
+export function AssertProviderHasMetadata(provider: Pick<IMetadataProvider, 'Entities'>, label: string): void {
+    if (provider.Entities.length === 0) {
+        throw new Error(`${label} connected to MJAPI but loaded no metadata; MJAPI's log has why the load failed.`);
+    }
+}
+
 /** Build a SECONDARY GraphQL provider authenticated by a user API key (separate connection). */
 async function buildUserKeyProvider(rawKey: string): Promise<IMetadataProvider> {
-    return buildSecondaryProvider(undefined, rawKey);
+    const provider = await buildSecondaryProvider(undefined, rawKey);
+    AssertProviderHasMetadata(provider, 'the user key provider');
+    return provider;
 }
 
 /**
