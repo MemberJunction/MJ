@@ -49,7 +49,7 @@
  * a seed that is present but could not be provisioned fails every check.
  */
 import { RunView, FieldSecurityDenialMessage, FieldSecurityWholeRowMessage, CompositeKey } from '@memberjunction/core';
-import type { BaseEntity, DatasetResultType, IMetadataProvider, UserInfo, RunViewParams } from '@memberjunction/core';
+import type { BaseEntity, DatasetResultType, EntityInfo, IMetadataProvider, UserInfo, RunViewParams } from '@memberjunction/core';
 import { UUIDsEqual, ordinalCompare } from '@memberjunction/global';
 import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext, FlsFixture } from '@memberjunction/testing-integration';
@@ -62,7 +62,9 @@ import {
     MJDatasetEntity, MJDatasetItemEntity, MJAIAgentDataSourceEntity,
     MJConversationEntity, MJConversationDetailEntity
 } from '@memberjunction/core-entities';
-import { EnsureAnchoredConversationReadHookRegistered } from '@memberjunction/core-entities-server';
+import {
+    EnsureAnchoredConversationReadHookRegistered, GetRegisteredRestrictedFieldLLMClassifier, RegisterRestrictedFieldLLMClassifier
+} from '@memberjunction/core-entities-server';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentDataPreloader } from '@memberjunction/ai-agents';
 import { SearchEngine } from '@memberjunction/search-engine';
@@ -863,6 +865,57 @@ export async function CheckCo18SearchResultsProjected(ctx: IntegrationCheckConte
     Assert(forWriter[0].Snippet.includes(r.Markers.Email), 'CO18: the writer\'s snippet must be untouched (control)');
 }
 
+/** A same-length wrong guess for `value`: every digit changed, or the first letter when it has no digits. */
+function WrongGuessFor(value: string): string {
+    const wrong = /\d/.test(value) ? value.replace(/\d/g, (d) => String((Number(d) + 1) % 10)) : `x${value.slice(1)}`;
+    Assert(wrong !== value, 'CO20: the wrong guess must differ from the stored value');
+    return wrong;
+}
+
+/**
+ * Posts `message` as the reader on a new Record-level thread on the fixture row, pushing what it saved onto
+ * `created` for cleanup. Returns everything the reader can observe about how the comment was classified: the
+ * save's outcome and message, the restricted fields stamped on the thread, and whether the reader still sees it.
+ */
+async function postReaderGuess(
+    ctx: IntegrationCheckContext, fx: FlsFixture, flsEntity: EntityInfo, label: string, message: string, created: BaseEntity[]
+): Promise<{ Saved: boolean; Message: string; RestrictedFields: string[]; VisibleToReader: number }> {
+    const conv = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', fx.Reader!);
+    conv.NewRecord();
+    conv.Name = `CO20 Reader Guess ${label} ${FIXTURE_TAG}`;
+    conv.UserID = fx.Reader!.ID;
+    conv.LinkedEntityID = flsEntity.ID;
+    conv.LinkedRecordID = fx.FixtureEmployeeID!;
+    conv.AnchorType = 'Record';
+    const convSaved = await conv.Save();
+    Assert(convSaved, `CO20: reader must be able to create a Record-level comment thread: ${conv.LatestResult?.CompleteMessage ?? ''}`);
+    created.push(conv);
+
+    const detail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', fx.Reader!);
+    detail.NewRecord();
+    detail.ConversationID = conv.ID;
+    detail.UserID = fx.Reader!.ID;
+    detail.Role = 'User';
+    detail.Message = message;
+    const saved = await detail.Save();
+    if (saved) created.push(detail);
+
+    const stored = await Q<{ AnchorMetadata: string | null }>(ctx, `SELECT AnchorMetadata FROM [${SchemaOf(ctx)}].Conversation WHERE ID = '${conv.ID}'`);
+    Assert(stored.length === 1, `CO20: the ${label} guess thread must exist`);
+    const meta = JSON.parse(stored[0].AnchorMetadata ?? '{}') as { restrictedFields?: string[] };
+    const visible = await RunView.FromMetadataProvider(ctx.Provider).RunView(
+        { EntityName: 'MJ: Conversations', ExtraFilter: `ID='${conv.ID}'`, ResultType: 'simple', BypassCache: true },
+        fx.Reader!
+    );
+    Assert(visible.Success, `CO20: reader RunView of the ${label} guess thread must succeed: ${visible.ErrorMessage}`);
+    return {
+        Saved: saved,
+        Message: saved ? '' : (detail.LatestResult?.CompleteMessage ?? ''),
+        RestrictedFields: [...(meta.restrictedFields ?? [])].sort(),
+        VisibleToReader: visible.Results.length
+    };
+}
+
 /**
  * CO20 — anchored record comments enforce FLS on server RunView reads (MJ: Conversations + MJ: Conversation Details),
  * strip quotedValue snapshots on restricted fields, and do not leak hidden values via refusal oracle when a denied
@@ -876,10 +929,16 @@ export async function CheckCo20AnchoredCommentsProtected(ctx: IntegrationCheckCo
 
     let restrictedConv: MJConversationEntity | null = null;
     let restrictedDetail: MJConversationDetailEntity | null = null;
-    let guessConv: MJConversationEntity | null = null;
-    let guessDetail: MJConversationDetailEntity | null = null;
+    const guesses: BaseEntity[] = [];
+    const priorClassifier = GetRegisteredRestrictedFieldLLMClassifier();
 
     try {
+        // Stage 2 is pinned to "no match" for the whole check, so this deterministic-tier check never calls an
+        // LLM (the writer's Step 1 comment would otherwise reach Stage 2 for the fields Stage 1 did not match)
+        // and Step 3 does not hinge on a model's reading of an address-shaped string. Stage 2 never receives
+        // record values (unit-tested). Restored in finally.
+        RegisterRestrictedFieldLLMClassifier(async () => []);
+
         // 1. Writer creates an anchored comment thread on the restricted Email field and attempts to pass quotedValue
         restrictedConv = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', r.Fx.Writer!);
         restrictedConv.NewRecord();
@@ -957,32 +1016,23 @@ export async function CheckCo20AnchoredCommentsProtected(ctx: IntegrationCheckCo
         );
         AssertEqual(writerConvRun.Results.length, 1, 'CO20: writer must see the anchored thread (control)');
 
-        // 3. Refusal-oracle check: Reader posts a Record-level comment containing the exact restricted Email value.
-        //    The save must SUCCEED without refusing or stamping FLS_READER_DENIED_FIELD.
-        guessConv = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', r.Fx.Reader!);
-        guessConv.NewRecord();
-        guessConv.Name = `CO20 Reader Guess ${FIXTURE_TAG}`;
-        guessConv.UserID = r.Fx.Reader!.ID;
-        guessConv.LinkedEntityID = flsEntity.ID;
-        guessConv.LinkedRecordID = r.Fx.FixtureEmployeeID!;
-        guessConv.AnchorType = 'Record';
-        const guessConvSaved = await guessConv.Save();
-        Assert(guessConvSaved, `CO20: reader must be able to create a Record-level comment thread: ${guessConv.LatestResult?.CompleteMessage ?? ''}`);
-
-        guessDetail = await ctx.Provider.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', r.Fx.Reader!);
-        guessDetail.NewRecord();
-        guessDetail.ConversationID = guessConv.ID;
-        guessDetail.UserID = r.Fx.Reader!.ID;
-        guessDetail.Role = 'User';
-        guessDetail.Message = `Could their address be ${r.Markers.Email}?`;
-        const guessDetailSaved = await guessDetail.Save();
-        Assert(
-            guessDetailSaved,
-            `LEAK: CO20: refusing a denied reader's comment when it contains the hidden value creates a guessing oracle (${guessDetail.LatestResult?.CompleteMessage ?? ''})`
+        // 3. Refusal-oracle check: the reader posts the stored Email value and a wrong one, each on its own
+        //    Record-level thread. The outcome must not depend on whether the guess matches. Neither message
+        //    names the field: a comment that names (or, per Stage 2, discusses) a field the author cannot read
+        //    is refused by design, for a right and a wrong guess alike, and that refusal is not an oracle.
+        const right = await postReaderGuess(ctx, r.Fx, flsEntity, 'Right', `Could it be ${r.Markers.Email}?`, guesses);
+        const wrong = await postReaderGuess(ctx, r.Fx, flsEntity, 'Wrong', `Could it be ${WrongGuessFor(r.Markers.Email)}?`, guesses);
+        AssertEqual(
+            JSON.stringify(right),
+            JSON.stringify(wrong),
+            'LEAK: CO20: a denied reader\'s comment gets a different outcome when it contains the hidden value than when it contains a wrong one (guessing oracle)'
         );
+        Assert(right.Saved, `CO20: a denied reader's comment that names no restricted field must save (${right.Message})`);
     } finally {
-        if (guessDetail?.IsSaved) await guessDetail.Delete();
-        if (guessConv?.IsSaved) await guessConv.Delete();
+        RegisterRestrictedFieldLLMClassifier(priorClassifier);
+        for (const g of guesses.reverse()) {
+            if (g.IsSaved) await g.Delete();
+        }
         if (restrictedDetail?.IsSaved) await restrictedDetail.Delete();
         if (restrictedConv?.IsSaved) await restrictedConv.Delete();
     }
