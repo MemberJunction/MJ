@@ -24,9 +24,9 @@ function entity(id: string, name: string, fields: FieldShape[]): EntityInfo {
 }
 
 const CONTACTS = entity('e-contacts', 'Contacts', [
-    { Name: 'ID', IsPrimaryKey: true, IsNameField: false, RelatedEntity: null },
-    { Name: 'FullName', IsPrimaryKey: false, IsNameField: true, RelatedEntity: null },
-    { Name: 'Email', IsPrimaryKey: false, IsNameField: false, RelatedEntity: null }
+    { Name: 'ID', IsPrimaryKey: true, IsNameField: false, RelatedEntity: '' },
+    { Name: 'FullName', IsPrimaryKey: false, IsNameField: true, RelatedEntity: '' },
+    { Name: 'Email', IsPrimaryKey: false, IsNameField: false, RelatedEntity: '' }
 ]);
 
 const provider = {

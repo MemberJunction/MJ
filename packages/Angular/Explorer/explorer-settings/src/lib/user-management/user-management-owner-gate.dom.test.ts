@@ -6,20 +6,83 @@
  * their own. The screen must not offer those controls to a non-Owner, must say why, and must keep
  * the list on screen when a row action fails (a toast, not the page-level error that replaces it).
  *
- * The template tests render the real component with NO_ERRORS_SCHEMA, so the page chrome and child
- * widgets stay inert, and stub `initDashboard`/`loadData` so nothing loads from a server; the rows
- * are set directly. The rollback tests exercise the methods through the prototype, like the sibling
+ * The template tests render the real component with inert stubs for the page chrome and child
+ * widgets, and stub `initDashboard`/`loadData` so nothing loads from a server; the rows are set
+ * directly. The rollback tests exercise the methods through the prototype, like the sibling
  * `user-management-toggle-status.dom.test.ts`.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { createFakeProvider, query, queryAll } from '@memberjunction/ng-test-utils';
+import { createFakeProvider, query, queryAll, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import type { BaseEntityResult } from '@memberjunction/core';
 import type { MJUserEntity } from '@memberjunction/core-entities';
 import { UserManagementComponent } from './user-management.component';
 import { CanChangeUser, IsOwnerType, OWNER_ONLY_NOTE } from './owner-gate';
+
+/** Inert stand-ins for the chrome and child widgets; each mirrors the inputs/outputs the template binds. */
+@Component({ standalone: true, selector: 'mj-page-header-interior', template: '<ng-content></ng-content>' })
+class PageHeaderInteriorStub {}
+
+@Component({ standalone: true, selector: 'mj-page-body-interior', template: '<ng-content></ng-content>' })
+class PageBodyInteriorStub {}
+
+@Component({ standalone: true, selector: 'mj-stat-badge', template: '' })
+class StatBadgeStub {
+  @Input() Count = 0;
+  @Input() Total = 0;
+}
+
+@Component({ standalone: true, selector: 'mj-page-search', template: '' })
+class PageSearchStub {
+  @Input() Value = '';
+  @Output() ValueChange = new EventEmitter<string>();
+}
+
+@Component({ standalone: true, selector: 'mj-filter-popover', template: '<ng-content></ng-content>' })
+class FilterPopoverStub {
+  @Input() ActiveCount = 0;
+  @Input() ShowClearAll = false;
+  @Output() ClearAllRequested = new EventEmitter<void>();
+}
+
+@Component({ standalone: true, selector: 'mj-filter-panel', template: '' })
+class FilterPanelStub {
+  @Input() Fields: readonly unknown[] = [];
+  @Input() Values: Record<string, unknown> = {};
+  @Output() ValuesChange = new EventEmitter<Record<string, unknown>>();
+  @Output() Reset = new EventEmitter<void>();
+}
+
+@Component({ standalone: true, selector: 'mj-refresh-button', template: '' })
+class RefreshButtonStub {
+  @Input() Loading = false;
+  @Output() Clicked = new EventEmitter<void>();
+}
+
+@Component({ standalone: true, selector: 'mj-user-dialog', template: '' })
+class UserDialogStub {
+  @Input() data: unknown = null;
+  @Input() visible = false;
+  @Output() result = new EventEmitter<unknown>();
+}
+
+const CHILD_STUBS = [
+  MJButtonDirective,
+  StubLoadingComponent,
+  StubEmptyStateComponent,
+  PageHeaderInteriorStub,
+  PageBodyInteriorStub,
+  StatBadgeStub,
+  PageSearchStub,
+  FilterPopoverStub,
+  FilterPanelStub,
+  RefreshButtonStub,
+  UserDialogStub,
+];
 
 const SELF_ID = 'aaaaaaaa-0000-0000-0000-000000000001';
 const OTHER_ID = 'aaaaaaaa-0000-0000-0000-000000000002';
@@ -37,9 +100,8 @@ interface DashboardHooks {
 
 function render(callerType: string): ComponentFixture<UserManagementComponent> {
   TestBed.configureTestingModule({
-    imports: [CommonModule, FormsModule],
+    imports: [CommonModule, FormsModule, ...CHILD_STUBS],
     declarations: [UserManagementComponent],
-    schemas: [NO_ERRORS_SCHEMA],
   });
   const fixture = TestBed.createComponent(UserManagementComponent);
   const hooks = fixture.componentInstance as unknown as DashboardHooks;
@@ -112,9 +174,9 @@ describe('UserManagementComponent — Owner gate (DOM)', () => {
 
   it('a refused status change shows a toast and leaves the list on screen', async () => {
     const f = render('Owner');
-    const other = f.componentInstance.Users[1] as MJUserEntity & { Save: () => Promise<boolean>; LatestResult: { Message: string } };
+    const other = f.componentInstance.Users[1] as MJUserEntity & { Save: () => Promise<boolean>; LatestResult: BaseEntityResult };
     other.Save = vi.fn().mockResolvedValue(false);
-    other.LatestResult = { Message: 'You may only modify your own user record.' };
+    other.LatestResult = { Message: 'You may only modify your own user record.' } as BaseEntityResult;
 
     await f.componentInstance.ToggleUserStatus(other);
     f.detectChanges(false);
