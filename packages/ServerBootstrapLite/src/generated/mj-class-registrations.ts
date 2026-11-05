@@ -433,6 +433,7 @@ import {
     MJDiagnosticSenderRegistrationEntity,
     MJDiagnosticSessionChunkEntity,
     MJDiagnosticSessionEntity,
+    MJDocumentSequenceCounterEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -1770,6 +1771,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJDiagnosticSenderRegistrationEntity,
     MJDiagnosticSessionChunkEntity,
     MJDiagnosticSessionEntity,
+    MJDocumentSequenceCounterEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -1897,11 +1899,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
     MJPhoneNumberEntity,
-    MJProcessRunDetailEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
     MJProjectEntityExtended,

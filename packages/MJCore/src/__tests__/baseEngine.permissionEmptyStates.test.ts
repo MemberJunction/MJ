@@ -129,6 +129,26 @@ describe('BaseEngine loaded-empty permission states', () => {
             expect(engine.Read('_beta')).toEqual([]);
         });
 
+        it('does not report a config skipped for another entity\'s missing schema as loaded', () => {
+            // Alpha is installed but was never read: its [] is not the table, so FindCachedEntity
+            // (gated on IsPropertyLoaded) must not serve it as "Alpha has no rows".
+            const providerWithMissingSchema = {
+                CurrentUser: USER,
+                Entities: [{ Name: 'Alpha' }],
+                EntityByName: vi.fn((name: string) =>
+                    name === 'Alpha'
+                        ? { GetUserPermisions: () => ({ CanRead: true }) }
+                        : undefined
+                ),
+            } as unknown as IMetadataProvider;
+            engine.Prepare(providerWithMissingSchema, [ALPHA, BETA]);
+
+            engine.SkipAllForTest([ALPHA, BETA]);
+
+            expect(engine.IsPropertyLoaded('_alpha')).toBe(false);
+            expect(engine.IsPropertyLoaded('_beta')).toBe(false);
+        });
+
     });
 
     describe('HandleSingleViewResult on a failed load', () => {
