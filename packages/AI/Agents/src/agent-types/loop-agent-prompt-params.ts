@@ -606,6 +606,26 @@ export interface LoopAgentTypePromptParams {
     maxActionsInPrompt?: number;
 
     /**
+     * Dedicated catalog limit for skills injected into the system prompt.
+     * - When omitted (`undefined`), falls back to `maxActionsInPrompt`.
+     * - When set to `-1` or `0`, disables skill narrowing even when `maxActionsInPrompt > 0`.
+     * - When set to a positive integer `N` and the agent has more than `N` available skills,
+     *   runs two-stage hybrid skill prioritization (Stage 1 hybrid query-fit + agent frequency +
+     *   recency pre-filter followed by Stage 2 `AgentDecisionService` narrowing when `decisionsEnabled`
+     *   is true, or direct top-N hybrid selection when `decisionsEnabled` is false).
+     * Explicitly assigned agent skills (`MJ: AI Agent Skills`) are always pinned.
+     */
+    maxSkillsInPrompt?: number;
+
+    /**
+     * Maximum number of unpinned skill candidates sent to `AgentDecisionService` after Stage 1
+     * hybrid pre-ranking (`RankSkillsByHybridRelevance`). Prevents prompt bloat when an agent
+     * has access to hundreds or thousands of auto-activatable skills.
+     * @default 30
+     */
+    maxSkillDecisionCandidates?: number;
+
+    /**
      * Character cap for one client tool result in the conversation. -1 (the default) or 0 keeps
      * the whole result. A positive N keeps the first N characters and adds a note saying how much
      * was cut. Compaction and expiration still apply either way.

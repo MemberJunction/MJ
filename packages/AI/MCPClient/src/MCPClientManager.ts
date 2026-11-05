@@ -8,7 +8,9 @@
  * @module @memberjunction/ai-mcp-client/MCPClientManager
  */
 
+import * as crypto from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -1805,11 +1807,86 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
                 subsystem: 'MCPClient'
             });
 
-            return resolved.values as MCPCredentialData;
+            const rawValues = resolved.values as Record<string, string | undefined>;
+            if (rawValues.appId && rawValues.installationId && rawValues.privateKey) {
+                const mintedToken = await this.mintGitHubAppInstallationToken(
+                    rawValues.appId,
+                    rawValues.installationId,
+                    rawValues.privateKey,
+                    rawValues.apiBaseUrl
+                );
+                return {
+                    ...rawValues,
+                    apiKey: mintedToken,
+                } as MCPCredentialData;
+            }
+
+            if (!rawValues.apiKey && (rawValues.token || rawValues.accessToken || rawValues.personalAccessToken)) {
+                return {
+                    ...rawValues,
+                    apiKey: rawValues.token || rawValues.accessToken || rawValues.personalAccessToken,
+                } as MCPCredentialData;
+            }
+
+            return rawValues as MCPCredentialData;
         } catch (error) {
             LogError(`[MCPClient] Failed to get credentials: ${error}`);
             throw error;
         }
+    }
+
+    /**
+     * Mints a short-lived 1-hour GitHub App installation access token for MCP server authentication.
+     */
+    private async mintGitHubAppInstallationToken(
+        appId: string,
+        installationId: string,
+        privateKey: string,
+        apiBaseUrl?: string
+    ): Promise<string> {
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+        const payload = Buffer.from(
+            JSON.stringify({
+                iat: nowSeconds - 60,
+                exp: nowSeconds + 600,
+                iss: appId.trim(),
+            })
+        ).toString('base64url');
+
+        const normalizedPem = privateKey.includes('\\n')
+            ? privateKey.replace(/\\n/g, '\n').trim()
+            : privateKey.trim();
+
+        const signer = crypto.createSign('RSA-SHA256');
+        signer.update(`${header}.${payload}`);
+        signer.end();
+        const signature = signer.sign(normalizedPem, 'base64url');
+        const jwt = `${header}.${payload}.${signature}`;
+
+        const base = (apiBaseUrl ?? 'https://api.github.com').replace(/\/+$/, '');
+        const response = await fetch(
+            `${base}/app/installations/${encodeURIComponent(installationId.trim())}/access_tokens`,
+            {
+                method: 'POST',
+                headers: {
+                    Accept: 'application/vnd.github+json',
+                    Authorization: `Bearer ${jwt}`,
+                    'X-GitHub-Api-Version': '2022-11-28',
+                    'User-Agent': 'MemberJunction-MCPClient/1.0',
+                },
+            }
+        );
+
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(`Failed to mint GitHub App installation token for MCP (${response.status}): ${text}`);
+        }
+        const body = (await response.json()) as { token?: string };
+        if (!body.token) {
+            throw new Error('GitHub App installation token response for MCP did not include a token.');
+        }
+        return body.token;
     }
 
     /**
@@ -1971,7 +2048,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
                 return this.createSSETransport(serverConfig, connectionConfig, authType, credentials);
 
             case 'Stdio':
-                return this.createStdioTransport(serverConfig, connectionConfig);
+                return this.createStdioTransport(serverConfig, connectionConfig, credentials);
 
             case 'WebSocket':
                 return this.createWebSocketTransport(serverConfig, connectionConfig, authType, credentials);
@@ -2026,7 +2103,8 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      */
     private createStdioTransport(
         serverConfig: MCPServerConfig,
-        connectionConfig: MCPConnectionConfig
+        connectionConfig: MCPConnectionConfig,
+        credentials?: MCPCredentialData
     ): Transport {
         if (!serverConfig.Command) {
             throw new Error('Command is required for Stdio transport');
@@ -2048,6 +2126,21 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
                 env = { ...env, ...customEnv };
             } catch {
                 LogError('[MCPClient] Failed to parse environment vars');
+            }
+        }
+
+        if (credentials?.apiKey) {
+            const isGitHubServer =
+                /github/i.test(serverConfig.Name) ||
+                /github/i.test(serverConfig.Command ?? '') ||
+                /github/i.test(serverConfig.CommandArgs ?? '');
+            if (isGitHubServer) {
+                if (!env.GITHUB_PERSONAL_ACCESS_TOKEN) {
+                    env.GITHUB_PERSONAL_ACCESS_TOKEN = credentials.apiKey;
+                }
+                if (!env.GITHUB_TOKEN) {
+                    env.GITHUB_TOKEN = credentials.apiKey;
+                }
             }
         }
 
