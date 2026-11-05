@@ -1,5 +1,12 @@
 # @memberjunction/ai-inworld
 
+## 6.2.1
+
+### Patch Changes
+
+- @memberjunction/ai@6.2.1
+- @memberjunction/global@6.2.1
+
 ## 6.2.0
 
 ### Patch Changes

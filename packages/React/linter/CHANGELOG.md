@@ -1,5 +1,18 @@
 # @memberjunction/react-linter
 
+## 6.2.1
+
+### Patch Changes
+
+- Updated dependencies [41142bd]
+  - @memberjunction/core@6.2.1
+  - @memberjunction/interactive-component-types@6.2.1
+  - @memberjunction/core-entities@6.2.1
+  - @memberjunction/react-runtime@6.2.1
+  - @memberjunction/global@6.2.1
+  - @memberjunction/sql-dialect@6.2.1
+  - @memberjunction/sql-parser@6.2.1
+
 ## 6.2.0
 
 ### Minor Changes

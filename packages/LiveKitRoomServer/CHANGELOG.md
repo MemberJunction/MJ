@@ -1,5 +1,23 @@
 # @memberjunction/livekit-room-server
 
+## 6.2.1
+
+### Patch Changes
+
+- Updated dependencies [41142bd]
+  - @memberjunction/core@6.2.1
+  - @memberjunction/aiengine@6.2.1
+  - @memberjunction/ai-prompts@6.2.1
+  - @memberjunction/ai-bridge-base@6.2.1
+  - @memberjunction/ai-bridge-livekit@6.2.1
+  - @memberjunction/ai-bridge-livekit-native@6.2.1
+  - @memberjunction/ai-bridge-server@6.2.1
+  - @memberjunction/core-entities@6.2.1
+  - @memberjunction/storage@6.2.1
+  - @memberjunction/ai@6.2.1
+  - @memberjunction/global@6.2.1
+  - @memberjunction/network-utils@6.2.1
+
 ## 6.2.0
 
 ### Minor Changes

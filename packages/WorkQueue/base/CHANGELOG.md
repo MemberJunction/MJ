@@ -1,5 +1,15 @@
 # @memberjunction/work-queue-base
 
+## 6.2.1
+
+### Patch Changes
+
+- Updated dependencies [41142bd]
+  - @memberjunction/core@6.2.1
+  - @memberjunction/core-entities@6.2.1
+  - @memberjunction/global@6.2.1
+  - @memberjunction/work-queue-core@6.2.1
+
 ## 6.2.0
 
 ### Minor Changes

@@ -1,5 +1,7 @@
 # @memberjunction/export-engine
 
+## 6.2.1
+
 ## 6.2.0
 
 ### Patch Changes

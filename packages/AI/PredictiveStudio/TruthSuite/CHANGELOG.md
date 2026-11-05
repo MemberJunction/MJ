@@ -1,5 +1,20 @@
 # @memberjunction/predictive-studio-truth-suite
 
+## 6.2.1
+
+### Patch Changes
+
+- Updated dependencies [41142bd]
+  - @memberjunction/core@6.2.1
+  - @memberjunction/ai-core-plus@6.2.1
+  - @memberjunction/predictive-studio@6.2.1
+  - @memberjunction/graphql-dataprovider@6.2.1
+  - @memberjunction/core-entities@6.2.1
+  - @memberjunction/testing-integration@6.2.1
+  - @memberjunction/predictive-studio-core@6.2.1
+  - @memberjunction/predictive-studio-sidecar@6.2.1
+  - @memberjunction/global@6.2.1
+
 ## 6.2.0
 
 ### Patch Changes

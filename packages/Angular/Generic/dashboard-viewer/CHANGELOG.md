@@ -1,5 +1,24 @@
 # @memberjunction/ng-dashboard-viewer
 
+## 6.2.1
+
+### Patch Changes
+
+- Updated dependencies [41142bd]
+  - @memberjunction/core@6.2.1
+  - @memberjunction/ng-artifacts@6.2.1
+  - @memberjunction/ng-base-types@6.2.1
+  - @memberjunction/ng-entity-viewer@6.2.1
+  - @memberjunction/ng-map-view@6.2.1
+  - @memberjunction/ng-query-viewer@6.2.1
+  - @memberjunction/ng-react@6.2.1
+  - @memberjunction/ng-shared-generic@6.2.1
+  - @memberjunction/ng-trees@6.2.1
+  - @memberjunction/interactive-component-types@6.2.1
+  - @memberjunction/core-entities@6.2.1
+  - @memberjunction/ng-ui-components@6.2.1
+  - @memberjunction/global@6.2.1
+
 ## 6.2.0
 
 ### Minor Changes

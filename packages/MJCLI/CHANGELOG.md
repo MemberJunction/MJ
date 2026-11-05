@@ -1,5 +1,38 @@
 # Change Log - @memberjunction/cli
 
+## 6.2.1
+
+### Patch Changes
+
+- Updated dependencies [41142bd]
+  - @memberjunction/core@6.2.1
+  - @memberjunction/generic-database-provider@6.2.1
+  - @memberjunction/sqlserver-dataprovider@6.2.1
+  - @memberjunction/ai-cli@6.2.1
+  - @memberjunction/aiengine@6.2.1
+  - @memberjunction/codegen-lib@6.2.1
+  - @memberjunction/db-auto-doc@6.2.1
+  - @memberjunction/core-entities@6.2.1
+  - @memberjunction/core-entities-server@6.2.1
+  - @memberjunction/metadata-sync@6.2.1
+  - @memberjunction/open-app-engine@6.2.1
+  - @memberjunction/query-gen@6.2.1
+  - @memberjunction/record-cloning@6.2.1
+  - @memberjunction/redis-provider@6.2.1
+  - @memberjunction/server-bootstrap-lite@6.2.1
+  - @memberjunction/testing-cli@6.2.1
+  - @memberjunction/work-queue-engine@6.2.1
+  - @memberjunction/cli-core@6.2.1
+  - @memberjunction/config@6.2.1
+  - @memberjunction/diagnostics@6.2.1
+  - @memberjunction/dynamic-packages@6.2.1
+  - @memberjunction/global@6.2.1
+  - @memberjunction/installer@6.2.1
+  - @memberjunction/sql-converter@6.2.1
+  - @memberjunction/sqlglot-ts@6.2.1
+  - @memberjunction/standards@6.2.1
+  - @memberjunction/work-queue-core@6.2.1
+
 ## 6.2.0
 
 ### Minor Changes

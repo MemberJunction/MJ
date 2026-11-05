@@ -1,5 +1,91 @@
 # @memberjunction/integration-test-suite
 
+## 6.2.1
+
+### Patch Changes
+
+- Updated dependencies [41142bd]
+  - @memberjunction/core@6.2.1
+  - @memberjunction/generic-database-provider@6.2.1
+  - @memberjunction/actions@6.2.1
+  - @memberjunction/sqlserver-dataprovider@6.2.1
+  - @memberjunction/ai-agent-harness@6.2.1
+  - @memberjunction/ai-agents@6.2.1
+  - @memberjunction/ai-engine-base@6.2.1
+  - @memberjunction/ai-core-plus@6.2.1
+  - @memberjunction/aiengine@6.2.1
+  - @memberjunction/feature-pipelines@6.2.1
+  - @memberjunction/feature-pipelines-engine@6.2.1
+  - @memberjunction/predictive-studio@6.2.1
+  - @memberjunction/predictive-studio-truth-suite@6.2.1
+  - @memberjunction/ai-prompts@6.2.1
+  - @memberjunction/ai-bridge-base@6.2.1
+  - @memberjunction/ai-bridge-server@6.2.1
+  - @memberjunction/ai-vectordb@6.2.1
+  - @memberjunction/ai-vector-dupe@6.2.1
+  - @memberjunction/video-studio@6.2.1
+  - @memberjunction/api-keys@6.2.1
+  - @memberjunction/actions-base@6.2.1
+  - @memberjunction/auth-providers@6.2.1
+  - @memberjunction/codegen-lib@6.2.1
+  - @memberjunction/communication-types@6.2.1
+  - @memberjunction/communication-engine@6.2.1
+  - @memberjunction/notifications@6.2.1
+  - @memberjunction/communication-ms-graph@6.2.1
+  - @memberjunction/communication-expo-push@6.2.1
+  - @memberjunction/communication-gmail@6.2.1
+  - @memberjunction/communication-sendgrid@6.2.1
+  - @memberjunction/communication-twilio@6.2.1
+  - @memberjunction/content-autotagging@6.2.1
+  - @memberjunction/content-pipeline-base@6.2.1
+  - @memberjunction/content-pipeline@6.2.1
+  - @memberjunction/conversations-runtime@6.2.1
+  - @memberjunction/credentials@6.2.1
+  - @memberjunction/diagnostics-server@6.2.1
+  - @memberjunction/encryption@6.2.1
+  - @memberjunction/external-data-sources@6.2.1
+  - @memberjunction/graphql-dataprovider@6.2.1
+  - @memberjunction/livekit-room-server@6.2.1
+  - @memberjunction/core-entities@6.2.1
+  - @memberjunction/core-entities-server@6.2.1
+  - @memberjunction/queue@6.2.1
+  - @memberjunction/storage@6.2.1
+  - @memberjunction/metadata-sync@6.2.1
+  - @memberjunction/open-app-engine@6.2.1
+  - @memberjunction/postgresql-dataprovider@6.2.1
+  - @memberjunction/query-processor@6.2.1
+  - @memberjunction/record-set-processor-base@6.2.1
+  - @memberjunction/record-set-processor@6.2.1
+  - @memberjunction/redis-provider@6.2.1
+  - @memberjunction/rubrics-base@6.2.1
+  - @memberjunction/rubrics@6.2.1
+  - @memberjunction/scheduling-engine@6.2.1
+  - @memberjunction/search-engine@6.2.1
+  - @memberjunction/server-bootstrap-lite@6.2.1
+  - @memberjunction/task-graph@6.2.1
+  - @memberjunction/telephony-adapters@6.2.1
+  - @memberjunction/templates-base-types@6.2.1
+  - @memberjunction/templates@6.2.1
+  - @memberjunction/testing-engine@6.2.1
+  - @memberjunction/testing-engine-base@6.2.1
+  - @memberjunction/testing-integration@6.2.1
+  - @memberjunction/unit-testing@6.2.1
+  - @memberjunction/work-queue-engine@6.2.1
+  - @memberjunction/work-queue-server@6.2.1
+  - @memberjunction/ai-anthropic@6.2.1
+  - @memberjunction/ai-gemini@6.2.1
+  - @memberjunction/ai-openai@6.2.1
+  - @memberjunction/ai-openrouter@6.2.1
+  - @memberjunction/ai@6.2.1
+  - @memberjunction/predictive-studio-core@6.2.1
+  - @memberjunction/ai-cloudflare@6.2.1
+  - @memberjunction/ai-inception@6.2.1
+  - @memberjunction/ai-systemone@6.2.1
+  - @memberjunction/video-studio-core@6.2.1
+  - @memberjunction/diagnostics@6.2.1
+  - @memberjunction/global@6.2.1
+  - @memberjunction/work-queue-core@6.2.1
+
 ## 6.2.0
 
 ### Minor Changes

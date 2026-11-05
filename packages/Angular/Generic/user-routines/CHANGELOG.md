@@ -1,5 +1,24 @@
 # @memberjunction/ng-user-routines
 
+## 6.2.1
+
+### Patch Changes
+
+- Updated dependencies [41142bd]
+  - @memberjunction/core@6.2.1
+  - @memberjunction/ai-engine-base@6.2.1
+  - @memberjunction/actions-base@6.2.1
+  - @memberjunction/ng-base-types@6.2.1
+  - @memberjunction/ng-code-editor@6.2.1
+  - @memberjunction/ng-composer@6.2.1
+  - @memberjunction/ng-container-directives@6.2.1
+  - @memberjunction/ng-notifications@6.2.1
+  - @memberjunction/ng-shared-generic@6.2.1
+  - @memberjunction/ng-trees@6.2.1
+  - @memberjunction/core-entities@6.2.1
+  - @memberjunction/ng-ui-components@6.2.1
+  - @memberjunction/global@6.2.1
+
 ## 6.2.0
 
 ### Minor Changes

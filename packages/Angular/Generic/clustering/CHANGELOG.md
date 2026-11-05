@@ -1,5 +1,21 @@
 # @memberjunction/ng-clustering
 
+## 6.2.1
+
+### Patch Changes
+
+- Updated dependencies [41142bd]
+  - @memberjunction/core@6.2.1
+  - @memberjunction/ai-engine-base@6.2.1
+  - @memberjunction/ai-vectors-memory@6.2.1
+  - @memberjunction/ng-base-types@6.2.1
+  - @memberjunction/ng-entity-card@6.2.1
+  - @memberjunction/ng-entity-viewer@6.2.1
+  - @memberjunction/graphql-dataprovider@6.2.1
+  - @memberjunction/core-entities@6.2.1
+  - @memberjunction/ng-ui-components@6.2.1
+  - @memberjunction/global@6.2.1
+
 ## 6.2.0
 
 ### Minor Changes

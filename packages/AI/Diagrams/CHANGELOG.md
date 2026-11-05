@@ -1,5 +1,7 @@
 # @memberjunction/ai-diagrams
 
+## 6.2.1
+
 ## 6.2.0
 
 ### Minor Changes

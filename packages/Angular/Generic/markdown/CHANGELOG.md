@@ -1,5 +1,12 @@
 # @memberjunction/ng-markdown
 
+## 6.2.1
+
+### Patch Changes
+
+- @memberjunction/ai-diagrams@6.2.1
+- @memberjunction/markdown-core@6.2.1
+
 ## 6.2.0
 
 ### Minor Changes

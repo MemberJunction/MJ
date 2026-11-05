@@ -1,5 +1,17 @@
 # @memberjunction/ng-export-service
 
+## 6.2.1
+
+### Patch Changes
+
+- Updated dependencies [41142bd]
+  - @memberjunction/core@6.2.1
+  - @memberjunction/ng-base-types@6.2.1
+  - @memberjunction/ng-shared-generic@6.2.1
+  - @memberjunction/excel-addin@6.2.1
+  - @memberjunction/ng-ui-components@6.2.1
+  - @memberjunction/export-engine@6.2.1
+
 ## 6.2.0
 
 ### Patch Changes

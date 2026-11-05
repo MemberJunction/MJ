@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/ng-timeline
 
+## 6.2.1
+
+### Patch Changes
+
+- Updated dependencies [41142bd]
+  - @memberjunction/core@6.2.1
+  - @memberjunction/ng-base-types@6.2.1
+  - @memberjunction/ng-ui-components@6.2.1
+
 ## 6.2.0
 
 ### Patch Changes

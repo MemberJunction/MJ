@@ -1,5 +1,18 @@
 # @memberjunction/work-queue-server
 
+## 6.2.1
+
+### Patch Changes
+
+- Updated dependencies [41142bd]
+  - @memberjunction/core@6.2.1
+  - @memberjunction/generic-database-provider@6.2.1
+  - @memberjunction/api-keys@6.2.1
+  - @memberjunction/server-extensions-core@6.2.1
+  - @memberjunction/work-queue-engine@6.2.1
+  - @memberjunction/global@6.2.1
+  - @memberjunction/work-queue-core@6.2.1
+
 ## 6.2.0
 
 ### Minor Changes

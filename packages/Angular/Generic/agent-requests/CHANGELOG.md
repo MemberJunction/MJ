@@ -1,5 +1,19 @@
 # @memberjunction/ng-agent-requests
 
+## 6.2.1
+
+### Patch Changes
+
+- Updated dependencies [41142bd]
+  - @memberjunction/core@6.2.1
+  - @memberjunction/ai-core-plus@6.2.1
+  - @memberjunction/ng-base-types@6.2.1
+  - @memberjunction/ng-notifications@6.2.1
+  - @memberjunction/ng-shared-generic@6.2.1
+  - @memberjunction/core-entities@6.2.1
+  - @memberjunction/ng-forms@6.2.1
+  - @memberjunction/global@6.2.1
+
 ## 6.2.0
 
 ### Patch Changes
