@@ -7873,6 +7873,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
         return `$${index + 1}`;
     }
 
+    /** An ItemFilter that is exactly `1=0` (spacing aside): the caller wants no rows from the item. */
+    private static readonly _noRowItemFilter = /^\s*1\s*=\s*0\s*$/;
+
+    /** Whether a dataset ItemFilter asks for no rows at all, so the item needs no read. */
+    private static isNoRowItemFilter(filter: string | undefined): boolean {
+        return !!filter && GenericDatabaseProvider._noRowItemFilter.test(filter);
+    }
+
     /**
      * Resolves how one dataset item reads for the caller. A caller's ItemFilter must pass the same
      * denylist as a RunView ExtraFilter. With a context user, the item's entity must be readable by
@@ -7999,7 +8007,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
      *
      * An ItemFilter that fails the denylist refuses its item. With a context user, each item needs
      * CanRead on its entity and gets the user's read row filter (MJ_Metadata excepted). A refused
-     * item runs no SQL and fails the dataset.
+     * item runs no SQL and fails the dataset. An item whose ItemFilter is exactly `1=0` runs no SQL
+     * either: it returns an empty, successful result.
      */
     public async GetDatasetByName(
         datasetName: string,
@@ -8045,6 +8054,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
 
         const errorResults: DatasetItemResultType[] = [];
         const cachedResults: DatasetItemResultType[] = [];
+        // Items the caller asked for with a no-row ItemFilter: answered without a read.
+        const noRowResults: DatasetItemResultType[] = [];
         const uncachedQueries: string[] = [];
         const uncachedItems: Record<string, unknown>[] = [];
         // Track fingerprints for uncached items so we can write-through after SQL
@@ -8108,6 +8119,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
                     LatestUpdateDate: undefined,
                     Status: scope.Refusal,
                     Success: false,
+                });
+                continue;
+            }
+            // An ItemFilter of exactly `1=0` asks for no rows, whatever the stored WhereClause or the
+            // caller's row filter add to it, so the item is answered without a read. The scoped
+            // metadata reload (ProviderBase.TryPartialMetadataReload) sends it for every item it does
+            // not reload; each used to run its own empty SELECT, one pool connection apiece.
+            if (GenericDatabaseProvider.isNoRowItemFilter(itemFilters?.find(f => f?.ItemCode === code)?.Filter)) {
+                noRowResults.push({
+                    EntityID: entityID,
+                    EntityName: entityName,
+                    Code: code,
+                    Results: [],
+                    LatestUpdateDate: this.computeLatestUpdateDate([], String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt'), item),
+                    Success: true,
                 });
                 continue;
             }
@@ -8380,11 +8406,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase imple
             });
         }
 
-        // Merge results: errors + cached + SQL (maintain original item order via code matching)
+        // Merge results: errors + no-row + cached + SQL (maintain original item order via code matching)
         const results: DatasetItemResultType[] = [];
         for (const item of items) {
             const code = String(item['Code']);
             const found = errorResults.find(r => r.Code === code)
+                ?? noRowResults.find(r => r.Code === code)
                 ?? cachedResults.find(r => r.Code === code)
                 ?? sqlResults.find(r => r.Code === code);
             if (found) results.push(found);

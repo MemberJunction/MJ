@@ -12,24 +12,38 @@
  * provider reloads just those items (the rest of the dataset is requested with a `1=0`
  * filter, so the dataset definition — columns, where clauses, post-processing — is reused
  * verbatim and nothing else is read), swaps them in, and leaves every other metadata array
- * untouched. Anything else stale, an explicit Refresh(), or a failed scoped read still takes
- * the full path.
+ * untouched. A change only to items the metadata build never reads (Dashboards) reloads
+ * nothing. Anything else stale, or an explicit Refresh(), still takes the full path.
+ *
+ * They also pin the retry policy: a failed timestamp read, scoped reload or full reload keeps
+ * the metadata already loaded and is retried on a backoff, instead of escalating to a full
+ * reload at the moment the server is least able to afford one. Only the
+ * `MetadataScopedReloadAttempts`-th scoped failure in a row falls back to the full reload.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ProviderBase } from '../generic/providerBase';
 import {
     DatasetItemFilterType,
     DatasetResultType,
     DatasetStatusResultType,
+    ILocalStorageProvider,
     IMetadataProvider,
     ProviderConfigDataBase,
 } from '../generic/interfaces';
 import { UserInfo } from '../generic/securityInfo';
 import { TestMetadataProvider } from './mocks/TestMetadataProvider';
+import { MockCacheStorageProvider } from './mocks/MockCacheStorageProvider';
 
 type Row = Record<string, unknown>;
 
-/** The MJ_Metadata items exactly as the shared mock declares them (Code → entity name). */
+/** The retry ladder a failed refresh climbs; the last delay repeats. */
+const RETRY_DELAYS_MS = [15_000, 30_000, 60_000, 120_000, 300_000];
+
+/**
+ * The MJ_Metadata items as the shared mock declares them (Code → entity name), plus the two
+ * Dashboards items the shipped MJ_Metadata dataset carries (metadata/datasets/.datasets.json)
+ * that GetAllMetadata never reads.
+ */
 const ITEMS: ReadonlyArray<{ Code: string; EntityName: string; EntityID: string }> = [
     { Code: 'Applications', EntityName: 'MJ: Applications', EntityID: '1' },
     { Code: 'Entities', EntityName: 'MJ: Entities', EntityID: '2' },
@@ -55,6 +69,8 @@ const ITEMS: ReadonlyArray<{ Code: string; EntityName: string; EntityID: string 
     { Code: 'ExplorerNavigationItems', EntityName: 'MJ: Explorer Navigation Items', EntityID: '22' },
     { Code: 'EntityOrganicKeys', EntityName: 'MJ: Entity Organic Keys', EntityID: '23' },
     { Code: 'EntityOrganicKeyRelatedEntities', EntityName: 'MJ: Entity Organic Key Related Entities', EntityID: '24' },
+    { Code: 'Dashboards', EntityName: 'MJ: Dashboards', EntityID: '25' },
+    { Code: 'Dashboard_Categories', EntityName: 'MJ: Dashboard Categories', EntityID: '26' },
 ];
 
 const T0 = new Date('2026-01-01T00:00:00.000Z');
@@ -85,13 +101,23 @@ class PartialRefreshProvider extends TestMetadataProvider {
     public refreshChecks = 0;
     /** When set, a scoped read (one carrying `1=0` filters) reports this item as failed. */
     public failScopedItem: string | null = null;
+    /** When set, a full read (no `1=0` filters) fails — the shape a dropped connection gives. */
+    public failFullRead = false;
+    /** When set, the status query answers unsuccessfully — what an exhausted pool gives. */
+    public failStatus = false;
+    /** How many status queries ran. */
+    public statusReads = 0;
 
-    constructor() {
+    constructor(private readonly store?: ILocalStorageProvider) {
         super();
         this.setMockDelay(0);
         for (const item of ITEMS) {
             this.stamps[item.Code] = { UpdatedAt: T0, RowCount: (this.rows[item.Code] ?? []).length };
         }
+    }
+
+    public override get LocalStorageProvider(): ILocalStorageProvider {
+        return this.store ?? super.LocalStorageProvider;
     }
 
     /** Moves one item's stamp forward and grows its row count — what a saved write does. */
@@ -114,6 +140,9 @@ class PartialRefreshProvider extends TestMetadataProvider {
         this.readsJoinedTransaction.push(this.MetadataReadsJoinTransaction);
         const suppressed = new Set((itemFilters ?? []).filter(f => f.Filter === '1=0').map(f => f.ItemCode));
         const scoped = suppressed.size > 0;
+        if (!scoped && this.failFullRead) {
+            return { DatasetID: 'md', DatasetName: datasetName, Success: false, Status: 'scripted full-read failure', LatestUpdateDate: new Date(0), Results: [] };
+        }
         return {
             DatasetID: 'md',
             DatasetName: datasetName,
@@ -136,6 +165,10 @@ class PartialRefreshProvider extends TestMetadataProvider {
     }
 
     public override async GetDatasetStatusByName(datasetName: string): Promise<DatasetStatusResultType> {
+        this.statusReads++;
+        if (this.failStatus) {
+            return { DatasetID: 'md', DatasetName: datasetName, Success: false, Status: 'No update dates found', LatestUpdateDate: new Date(0), EntityUpdateDates: [] };
+        }
         const dates = ITEMS.map(item => ({
             EntityName: item.EntityName,
             EntityID: item.EntityID,
@@ -261,13 +294,72 @@ describe('ProviderBase — partial refresh of the saved-query family', () => {
         expect(provider.Queries).toHaveLength(2);
     });
 
-    it('the write-event path stays a hard, full reload when the change cannot be attributed', async () => {
-        // Nothing moved according to the status query — a writer with positive evidence must not
-        // trust that answer, so the base policy (a HARD Refresh) still applies.
+    it('the write-event path reloads nothing when the authoritative timestamps show nothing changed', async () => {
+        // The status query is read from SQL on every call, never from a cache layer, and a full
+        // reload would stamp the very same timestamps on a snapshot identical to the one held. A
+        // write the status cannot see (rolled back, or not committed yet) is invisible to the full
+        // reload's pool read too, so reloading anyway bought nothing but the cost.
+        const entitiesBefore = provider.Entities;
+
+        expect(await provider['RefreshAfterMetadataMemberChange']()).toBe(true);
+
+        expect(provider.datasetReads).toHaveLength(1); // only the boot load
+        expect(provider.Entities).toBe(entitiesBefore);
+    });
+
+    it('a write only to items the metadata build never reads (Dashboards) reloads nothing, and stamps the snapshot current', async () => {
+        const entitiesBefore = provider.Entities;
+        const queriesBefore = provider.Queries;
+        provider.touch('Dashboards', { ID: 'd1', Name: 'Sales' });
+
+        expect(await provider.RefreshIfNeeded(undefined, true)).toBe(true);
+
+        expect(provider.datasetReads).toHaveLength(1);
+        expect(provider.Entities).toBe(entitiesBefore);
+        expect(provider.Queries).toBe(queriesBefore);
+        // Stamped current: the next check does not see the Dashboards change again.
+        expect(await provider.CheckToSeeIfRefreshNeeded(undefined, true)).toBe(false);
+    });
+
+    it('the write-event path reloads nothing for a Dashboards-only change either', async () => {
+        provider.touch('Dashboard_Categories', { ID: 'dc1', Name: 'Finance' });
+
         await provider['RefreshAfterMetadataMemberChange']();
 
+        expect(provider.datasetReads).toHaveLength(1);
+        expect(await provider.CheckToSeeIfRefreshNeeded(undefined, true)).toBe(false);
+    });
+
+    it('a Dashboards change beside a saved-query change does not widen the scoped reload', async () => {
+        const entitiesBefore = provider.Entities;
+        provider.touch('Dashboards', { ID: 'd1', Name: 'Sales' });
+        provider.touch('Queries', { ID: 'q2', Name: 'Second Query', Status: 'Pending', CategoryID: null });
+
+        await provider.RefreshIfNeeded(undefined, true);
+
         expect(provider.datasetReads).toHaveLength(2);
-        expect(provider.suppressedCodes(provider.lastRead())).toEqual([]);
+        expect(provider.suppressedCodes(provider.lastRead())).toEqual(EVERYTHING_ELSE);
+        expect(provider.Entities).toBe(entitiesBefore);
+        expect(provider.Queries).toHaveLength(2);
+    });
+
+    it('MetadataRefreshScope answers none, scoped or full, and names the reason for a full reload', async () => {
+        await provider.RefreshRemoteMetadataTimestamps();
+        expect(provider['MetadataRefreshScope']()).toEqual({ Kind: 'none' });
+
+        provider.touch('Dashboards');
+        await provider.RefreshRemoteMetadataTimestamps();
+        expect(provider['MetadataRefreshScope']()).toEqual({ Kind: 'none' });
+
+        provider.touch('QueryFields');
+        await provider.RefreshRemoteMetadataTimestamps();
+        const scoped = provider['MetadataRefreshScope']();
+        expect(scoped.Kind).toBe('scoped');
+        expect(scoped.Kind === 'scoped' ? [...scoped.Codes].sort() : []).toEqual(QUERY_FAMILY.slice().sort());
+
+        provider.touch('EntityFields');
+        await provider.RefreshRemoteMetadataTimestamps();
+        expect(provider['MetadataRefreshScope']()).toEqual({ Kind: 'full', Reason: expect.stringContaining('MJ: Entity Fields') });
     });
 
     it("Config()'s periodic staleness check scopes the reload too", async () => {
@@ -316,15 +408,245 @@ describe('ProviderBase — partial refresh of the saved-query family', () => {
         expect(provider.refreshChecks).toBe(checksAfterScoped + 1);
     });
 
-    it('a failed scoped read falls back to the full reload instead of leaving stale queries', async () => {
-        provider.touch('Queries', { ID: 'q2', Name: 'Second Query', Status: 'Pending', CategoryID: null });
+});
+
+/**
+ * A store that declares itself in-process, so the metadata snapshot is never serialized. The
+ * snapshot's gzip runs on the libuv threadpool, which fake timers cannot advance; without it, a
+ * retry fired by a fake timer settles entirely inside `advanceTimersByTimeAsync`.
+ */
+class InProcessStore extends MockCacheStorageProvider {
+    public readonly SupportsCrossProcessPersistence = false;
+}
+
+describe('ProviderBase — a failed metadata refresh is retried, not escalated', () => {
+    let provider: PartialRefreshProvider;
+    let entitiesBefore: PartialRefreshProvider['Entities'];
+
+    beforeEach(async () => {
+        provider = new PartialRefreshProvider(new InProcessStore());
+        await provider.Config(new ProviderConfigDataBase({}, '__mj', [], [], true));
+        expect(provider.datasetReads).toHaveLength(1);
+        entitiesBefore = provider.Entities;
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    });
+
+    afterEach(() => {
+        provider['CancelPendingMetadataMemberRefresh']();
+        vi.useRealTimers();
+    });
+
+    const touchQueries = () => provider.touch('Queries', { ID: 'q2', Name: 'Second Query', Status: 'Pending', CategoryID: null });
+
+    it('climbs the published retry ladder', () => {
+        expect([...ProviderBase.MetadataRefreshRetryDelaysMs]).toEqual(RETRY_DELAYS_MS);
+        expect(ProviderBase.MetadataScopedReloadAttempts).toBe(3);
+    });
+
+    it('a write-event refresh that cannot read the timestamps keeps the metadata and retries later, with no full reload', async () => {
+        touchQueries();
+        provider.failStatus = true;
+
+        expect(await provider['RefreshAfterMetadataMemberChange']()).toBe(true);
+
+        expect(provider.datasetReads).toHaveLength(1); // no full reload
+        expect(provider.Entities).toBe(entitiesBefore);
+        expect(provider.Queries).toHaveLength(1);
+
+        // The retry waits out the first delay, then re-reads the timestamps and reloads only the
+        // saved-query family.
+        const statusBefore = provider.statusReads;
+        await vi.advanceTimersByTimeAsync(RETRY_DELAYS_MS[0] - 1);
+        expect(provider.statusReads).toBe(statusBefore);
+        provider.failStatus = false;
+        await vi.advanceTimersByTimeAsync(1);
+        expect(provider.statusReads).toBeGreaterThan(statusBefore);
+        expect(provider.datasetReads).toHaveLength(2);
+        expect(provider.suppressedCodes(provider.lastRead())).toEqual(EVERYTHING_ELSE);
+        expect(provider.Queries).toHaveLength(2);
+        expect(provider.Entities).toBe(entitiesBefore);
+    });
+
+    it('a timestamp read that keeps failing backs off 15 s, 30 s, 60 s, 120 s, then every 5 min, and never reloads in full', async () => {
+        provider.failStatus = true;
+        await provider['RefreshAfterMetadataMemberChange']();
+
+        let reads = provider.statusReads;
+        for (const delay of [...RETRY_DELAYS_MS, RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]]) {
+            await vi.advanceTimersByTimeAsync(delay - 1);
+            expect(provider.statusReads).toBe(reads);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(provider.statusReads).toBe(reads + 1);
+            reads = provider.statusReads;
+        }
+        expect(provider.datasetReads).toHaveLength(1);
+        expect(provider.Entities).toBe(entitiesBefore);
+    });
+
+    it('a failed scoped reload is retried; only the third failure in a row takes the full reload', async () => {
+        touchQueries();
         provider.failScopedItem = 'Queries';
 
         await provider.RefreshIfNeeded(undefined, true);
-
-        expect(provider.datasetReads).toHaveLength(3); // scoped attempt, then the full reload
+        expect(provider.datasetReads).toHaveLength(2); // the scoped attempt, no full reload
         expect(provider.suppressedCodes(provider.datasetReads[1])).toEqual(EVERYTHING_ELSE);
-        expect(provider.suppressedCodes(provider.datasetReads[2])).toEqual([]);
+        expect(provider.Queries).toHaveLength(1); // kept, not torn down
+
+        await vi.advanceTimersByTimeAsync(RETRY_DELAYS_MS[0]);
+        expect(provider.datasetReads).toHaveLength(3); // the second scoped attempt
+        expect(provider.suppressedCodes(provider.datasetReads[2])).toEqual(EVERYTHING_ELSE);
+        expect(provider.Entities).toBe(entitiesBefore);
+
+        await vi.advanceTimersByTimeAsync(RETRY_DELAYS_MS[1]);
+        expect(provider.datasetReads).toHaveLength(5); // the third scoped attempt, then the full reload
+        expect(provider.suppressedCodes(provider.datasetReads[3])).toEqual(EVERYTHING_ELSE);
+        expect(provider.suppressedCodes(provider.datasetReads[4])).toEqual([]);
         expect(provider.Queries).toHaveLength(2);
+
+        // Current again: nothing is left pending.
+        await vi.advanceTimersByTimeAsync(RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1] * 2);
+        expect(provider.datasetReads).toHaveLength(5);
+    });
+
+    it('a scoped reload that recovers resets the failure count and the backoff', async () => {
+        touchQueries();
+        provider.failScopedItem = 'Queries';
+        await provider.RefreshIfNeeded(undefined, true); // failure 1 of 3
+        provider.failScopedItem = null;
+        await vi.advanceTimersByTimeAsync(RETRY_DELAYS_MS[0]);
+        expect(provider.Queries).toHaveLength(2);
+        expect(provider.datasetReads).toHaveLength(3);
+
+        // A later failure starts over: first retry after the first delay, and scoped, not full.
+        provider.touch('Queries', { ID: 'q3', Name: 'Third Query', Status: 'Pending', CategoryID: null });
+        provider.failScopedItem = 'Queries';
+        await provider.RefreshIfNeeded(undefined, true); // failure 1 of 3 again
+        expect(provider.datasetReads).toHaveLength(4);
+        await vi.advanceTimersByTimeAsync(RETRY_DELAYS_MS[0]);
+        expect(provider.datasetReads).toHaveLength(5);
+        expect(provider.suppressedCodes(provider.lastRead())).toEqual(EVERYTHING_ELSE);
+        expect(provider.Entities).toBe(entitiesBefore);
+    });
+
+    it('a failed full reload keeps the metadata loaded and is retried', async () => {
+        provider.touch('Entities');
+        provider.failFullRead = true;
+
+        await provider.RefreshIfNeeded(undefined, true);
+        expect(provider.datasetReads).toHaveLength(2); // the failed full read
+        expect(provider.Entities).toBe(entitiesBefore);
+
+        provider.failFullRead = false;
+        await vi.advanceTimersByTimeAsync(RETRY_DELAYS_MS[0]);
+        expect(provider.datasetReads).toHaveLength(3);
+        expect(provider.suppressedCodes(provider.lastRead())).toEqual([]);
+        expect(provider.Entities).not.toBe(entitiesBefore);
+        expect(await provider.CheckToSeeIfRefreshNeeded(undefined, true)).toBe(false);
+    });
+
+    it('a pending member-change refresh covers the retry: one timer, one refresh', async () => {
+        provider.failStatus = true;
+        provider['scheduleMetadataMemberRefresh']();
+        await vi.advanceTimersByTimeAsync(ProviderBase.MetadataDatasetRefreshDebounceMs); // fails, arms a retry
+        const reads = provider.statusReads;
+
+        // A new write arrives while the retry is armed: the debounce replaces it rather than adding a second timer.
+        provider.failStatus = false;
+        provider['scheduleMetadataMemberRefresh']();
+        await vi.advanceTimersByTimeAsync(ProviderBase.MetadataDatasetRefreshDebounceMs);
+        expect(provider.statusReads).toBe(reads + 1);
+        await vi.advanceTimersByTimeAsync(RETRY_DELAYS_MS[0] * 2);
+        expect(provider.statusReads).toBe(reads + 1);
+    });
+
+    it('teardown cancels a pending retry', async () => {
+        provider.failStatus = true;
+        await provider['RefreshAfterMetadataMemberChange']();
+        const reads = provider.statusReads;
+
+        provider['CancelPendingMetadataMemberRefresh']();
+        await vi.advanceTimersByTimeAsync(RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1] * 2);
+
+        expect(provider.statusReads).toBe(reads);
+    });
+});
+
+describe('ProviderBase — a process that started from the stored snapshot reloads only what changed', () => {
+    let store: MockCacheStorageProvider;
+    let warm: PartialRefreshProvider;
+    const config = () => new ProviderConfigDataBase({}, '__mj', [], [], true);
+
+    beforeEach(async () => {
+        store = new MockCacheStorageProvider();
+        const writer = new PartialRefreshProvider(store);
+        await writer.Config(config()); // a cold boot: loads from the server, saves the snapshot
+        expect(writer.datasetReads).toHaveLength(1);
+
+        warm = new PartialRefreshProvider(store);
+        await warm.Config(config()); // the stale-while-revalidate fast start: served from the snapshot
+        expect(warm.datasetReads).toHaveLength(0);
+        expect(warm.Entities).toHaveLength(1);
+    });
+
+    afterEach(() => warm['CancelPendingMetadataMemberRefresh']());
+
+    const touchQueries = () => warm.touch('Queries', { ID: 'q2', Name: 'Second Query', Status: 'Pending', CategoryID: null });
+
+    it('a saved-query write reloads only the query family, not everything', async () => {
+        const entitiesBefore = warm.Entities;
+        touchQueries();
+
+        await warm.RefreshIfNeeded(undefined, true);
+
+        expect(warm.datasetReads).toHaveLength(1);
+        expect(warm.suppressedCodes(warm.lastRead())).toEqual(EVERYTHING_ELSE);
+        expect(warm.Entities).toBe(entitiesBefore);
+        expect(warm.Queries).toHaveLength(2);
+    });
+
+    it('background revalidation reloads only the query family, and refreshes the current user', async () => {
+        const entitiesBefore = warm.Entities;
+        const getCurrentUser = vi.spyOn(warm as never, 'GetCurrentUser' as never);
+        touchQueries();
+
+        await warm.backgroundValidateAndRefresh();
+
+        expect(warm.datasetReads).toHaveLength(1);
+        expect(warm.suppressedCodes(warm.lastRead())).toEqual(EVERYTHING_ELSE);
+        expect(warm.Entities).toBe(entitiesBefore);
+        expect(warm.Queries).toHaveLength(2);
+        expect(getCurrentUser).toHaveBeenCalledTimes(1);
+    });
+
+    it('pre-validation reloads only the query family', async () => {
+        const entitiesBefore = warm.Entities;
+        touchQueries();
+
+        await warm.preValidateAndRefresh();
+
+        expect(warm.datasetReads).toHaveLength(1);
+        expect(warm.suppressedCodes(warm.lastRead())).toEqual(EVERYTHING_ELSE);
+        expect(warm.Entities).toBe(entitiesBefore);
+        expect(warm.Queries).toHaveLength(2);
+    });
+
+    it('background revalidation reloads nothing for a Dashboards-only change', async () => {
+        warm.touch('Dashboards', { ID: 'd1', Name: 'Sales' });
+
+        await warm.backgroundValidateAndRefresh();
+
+        expect(warm.datasetReads).toHaveLength(0);
+        expect(await warm.CheckToSeeIfRefreshNeeded(undefined, true)).toBe(false);
+    });
+
+    it('a change outside the query family still reloads everything', async () => {
+        const entitiesBefore = warm.Entities;
+        warm.touch('Entities');
+
+        await warm.backgroundValidateAndRefresh();
+
+        expect(warm.datasetReads).toHaveLength(1);
+        expect(warm.suppressedCodes(warm.lastRead())).toEqual([]);
+        expect(warm.Entities).not.toBe(entitiesBefore);
     });
 });
