@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { By } from '@angular/platform-browser';
@@ -96,6 +97,51 @@ describe('ActionTestHarnessDialogComponent (DOM)', () => {
     const dialog = fixture.debugElement.query(By.directive(MJDialogComponent)).componentInstance as MJDialogComponent;
     expect(dialog.ResolvedWidth).toBe('700px');
     expect(dialog.PhoneMode).toBe('full');
+  });
+
+  describe('harness lifetime', () => {
+    /** Stands in for the data-bound harness: same selector and inputs, counts its instances. */
+    @Component({ standalone: false, selector: 'mj-action-test-harness', template: '' })
+    class HarnessStub {
+      static Created = 0;
+      @Input() Action: unknown;
+      @Input() ActionParams: unknown;
+      @Input() ShowActionButtons = true;
+      @Input() ShowTitle = true;
+      @Output() StateChange = new EventEmitter<void>();
+      @Output() ExecutionComplete = new EventEmitter<unknown>();
+      constructor() { HarnessStub.Created++; }
+    }
+
+    const render = (isOpen: boolean) => {
+      HarnessStub.Created = 0;
+      return renderComponentFixture(ActionTestHarnessDialogComponent, {
+        imports: baseImports,
+        declarations: [...baseDeclarations, HarnessStub],
+        inputs: { IsOpen: isOpen, Action: { Name: 'Send Email', Status: 'Active' } },
+      });
+    };
+
+    it('does not build the harness while the dialog is closed', () => {
+      render(false);
+      expect(HarnessStub.Created).toBe(0);
+    });
+
+    it('builds a fresh harness each time the dialog opens, so a reopen starts clean', () => {
+      const fixture = render(true);
+      expect(HarnessStub.Created).toBe(1);
+      fixture.componentRef.setInput('IsOpen', false);
+      fixture.detectChanges();
+      fixture.componentRef.setInput('IsOpen', true);
+      fixture.detectChanges();
+      expect(HarnessStub.Created).toBe(2);
+    });
+
+    it('hides the harness heading, since the dialog title already names the action', () => {
+      const fixture = render(true);
+      const stub = fixture.debugElement.query(By.directive(HarnessStub)).componentInstance as HarnessStub;
+      expect(stub.ShowTitle).toBe(false);
+    });
   });
 
   it('emits Close when the header close button is clicked', () => {

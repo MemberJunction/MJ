@@ -389,12 +389,17 @@ export class MJDialogComponent implements OnDestroy {
     return container;
   }
 
-  /** First element that can take focus. The ✕ is skipped only for the button fallback. */
+  /**
+   * First element that can take focus. The ✕ is skipped only for the button fallback. A hidden or
+   * inert element is skipped too: `.focus()` on one is a silent no-op, which would leave focus
+   * outside the dialog.
+   */
   private firstEnabled(nodes: NodeListOf<HTMLElement>, skipClose = false): HTMLElement | null {
     for (const el of Array.from(nodes)) {
       if (skipClose && el.classList.contains('mj-dialog-close')) continue;
       if (this.isDisabled(el)) continue;
       if (el instanceof HTMLInputElement && el.type === 'hidden') continue;
+      if (!this.isVisibleStop(el)) continue;
       return el;
     }
     return null;
@@ -444,14 +449,15 @@ export class MJDialogComponent implements OnDestroy {
   }
 
   /**
-   * display:none and [hidden] hide the whole subtree. visibility is inherited, and a child
-   * can set visible again, so that check is only on the element itself.
+   * display:none, [hidden] and [inert] (a collapsed accordion body) take the whole subtree out of
+   * focus. visibility is inherited, and a child can set visible again, so that check is only on the
+   * element itself.
    */
   private isVisibleStop(el: HTMLElement): boolean {
     if (getComputedStyle(el).visibility === 'hidden') return false;
     let current: HTMLElement | null = el;
     while (current) {
-      if (current.hasAttribute('hidden')) return false;
+      if (current.hasAttribute('hidden') || current.hasAttribute('inert')) return false;
       if (getComputedStyle(current).display === 'none') return false;
       current = current.parentElement;
     }

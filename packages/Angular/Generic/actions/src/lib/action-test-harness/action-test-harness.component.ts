@@ -70,6 +70,12 @@ export class ActionTestHarnessComponent extends BaseAngularComponent implements 
      */
     @Input() ShowActionButtons = true;
 
+    /**
+     * Show the "Test Harness for …" heading. A host whose own title already names the action (the
+     * test harness dialog) turns this off; the Skip Action Log switch stays.
+     */
+    @Input() ShowTitle = true;
+
     @Output() VisibilityChange = new EventEmitter<boolean>();
     @Output() ExecutionComplete = new EventEmitter<ActionResult>();
     /** Emitted when IsExecuting or the results change, so a host rendering the actions can refresh. */
@@ -83,6 +89,10 @@ export class ActionTestHarnessComponent extends BaseAngularComponent implements 
     public ExecutionTime = 0;
     public ShowRawResult = false;
     public SkipActionLog = false;
+
+    private static nextInstance = 0;
+    /** Ties the Skip Action Log label to its switch; unique per harness on the page. */
+    public readonly SkipLogSwitchId = `mj-action-harness-skip-log-${++ActionTestHarnessComponent.nextInstance}`;
     public InputsCollapsed = false;
 
     constructor(

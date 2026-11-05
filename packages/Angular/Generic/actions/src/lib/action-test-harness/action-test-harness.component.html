@@ -1,17 +1,15 @@
 <div class="action-test-harness">
     <div class="harness-header">
-        <h3>
-            <i class="fa-solid fa-flask"></i>
-            Test Harness for {{ Action.Name }}
-        </h3>
+        @if (ShowTitle) {
+            <h3>
+                <i class="fa-solid fa-flask" aria-hidden="true"></i>
+                Test Harness for {{ Action.Name }}
+            </h3>
+        }
         <div class="header-actions">
-            <label class="toggle-label">
-                <input type="checkbox"
-                    [(ngModel)]="SkipActionLog"
-                    class="toggle-checkbox">
-                <span class="toggle-slider"></span>
-                Skip Action Log
-            </label>
+            <!-- The shared switch: a real button in the tab order, named by the label. -->
+            <mj-switch [InputId]="SkipLogSwitchId" [(ngModel)]="SkipActionLog"></mj-switch>
+            <label class="toggle-label" [for]="SkipLogSwitchId">Skip Action Log</label>
         </div>
     </div>
 
