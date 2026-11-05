@@ -256,10 +256,16 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * impossible). The queue is self-bounding (in-flight tasks only), so it needs no flush on this
     * long-lived singleton.
     *
-    * `detachFromTransaction`: nobody awaits these saves, so a log row written from inside a save's
-    * transaction (a durable submission) would otherwise reach SQL behind its COMMIT and be lost
-    * (#6251 EA6). Detaching is safe here because every FK on the row points at committed metadata
-    * (Action, User, Entity Action), never at a row the open transaction wrote.
+    * `detachFromTransaction`: nothing awaits these saves inside a transaction today, so a log row written
+    * from inside a save's transaction (a durable submission) would otherwise reach SQL behind its COMMIT
+    * and be lost (#6251 EA6). Detaching is safe here because every FK on the row points at metadata
+    * (Action, User, Entity Action, Entity Action Invocation Type, Entity), never at a row the open
+    * transaction created.
+    *
+    * The one way to wait on these saves is `result.LogEntryPersisted`, which RecordSetProcessor awaits
+    * outside any transaction. Awaiting it inside a transaction that changed one of those metadata rows
+    * would wait on itself: the detached INSERT blocks on that row's lock until the COMMIT, and the COMMIT
+    * waits for the INSERT.
     */
    private readonly _logQueue = new BaseEntitySaveQueue({ saveReturnMode: 'datestamps_only', detachFromTransaction: true });
    /** Per-run cache of resolved BaseAction instances so CheckAudience, ValidateInputs, and RunClassBasedAction share one instance. */
