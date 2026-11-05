@@ -29,8 +29,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { RecordOpenedEvent } from '@memberjunction/ng-entity-viewer';
 import { MJEntityFormComponent } from '../../generated/Entities/MJEntity/mjentity.form.component';
-import { SectionPickerItem } from '@memberjunction/ng-ui-components';
-import { IsPhoneViewport, WatchPhoneViewport } from '../../shared/phone-viewport';
+import { SectionPickerItem, IsPhoneViewport, WatchPhoneViewport } from '@memberjunction/ng-ui-components';
 
 export type ExplorerSection =
     | 'overview'

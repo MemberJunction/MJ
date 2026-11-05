@@ -1,5 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, Output, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, Output, ViewChild, inject } from '@angular/core';
 import { MJBottomSheetComponent } from '../bottom-sheet/bottom-sheet.component';
 
 /** One selectable section in an {@link MJSectionPickerComponent}. */
@@ -50,7 +50,12 @@ export interface SectionPickerGroup {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class MJSectionPickerComponent {
+  private static nextInstance = 0;
   private readonly cdr = inject(ChangeDetectorRef);
+  @ViewChild('searchInput') private searchInput?: ElementRef<HTMLInputElement>;
+
+  /** Id of the search box's hidden description, which says what Enter does. */
+  public readonly SearchHintId = `mj-section-picker-hint-${++MJSectionPickerComponent.nextInstance}`;
 
   /** First-class sections, in display order. */
   @Input() Items: SectionPickerItem[] = [];
@@ -93,6 +98,32 @@ export class MJSectionPickerComponent {
     return this.FilteredItems.length > 0 || this.FilteredGroups.length > 0;
   }
 
+  /**
+   * The row Enter opens: the first match in display order, once a search is typed. Null with an
+   * empty search (the list is not narrowed, so the first row is not a choice) or no matches.
+   */
+  public get FirstMatch(): SectionPickerItem | null {
+    if (this.Query.trim() === '') return null;
+    return this.FilteredItems[0] ?? this.FilteredGroups[0]?.Items[0] ?? null;
+  }
+
+  public IsFirstMatch(item: SectionPickerItem): boolean {
+    return this.FirstMatch?.Key === item.Key;
+  }
+
+  /**
+   * Enter in the search box opens the first match. Its default is always blocked: the sheet renders
+   * in place, so inside a host `<form>` Enter would click the form's first submit button (implicit
+   * submission), even a hidden one such as Run or Regenerate.
+   */
+  public OnSearchKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    if (event.isComposing) return; // Enter confirming an IME composition, not a pick
+    const match = this.FirstMatch;
+    if (match) this.Select(match.Key);
+  }
+
   public OpenSheet(): void {
     this.SheetOpen = true;
     this.cdr.markForCheck();
@@ -100,7 +131,7 @@ export class MJSectionPickerComponent {
 
   public OnSheetVisibleChange(visible: boolean): void {
     this.SheetOpen = visible;
-    if (!visible) this.Query = '';
+    if (!visible) this.clearSearch();
     this.cdr.markForCheck();
   }
 
@@ -116,9 +147,20 @@ export class MJSectionPickerComponent {
 
   public Select(key: string): void {
     this.SheetOpen = false;
-    this.Query = '';
+    this.clearSearch();
     this.ActiveKeyChange.emit(key);
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Empties the search, in the box as well as in Query. The box's [value] binding only writes when
+   * Query differs from what it last rendered, and Enter can land before the typed query was ever
+   * rendered (a fast typist, a paste, a hardware keyboard): Query goes '' to '' and the old text
+   * would stay in the box for the next open.
+   */
+  private clearSearch(): void {
+    this.Query = '';
+    if (this.searchInput) this.searchInput.nativeElement.value = '';
   }
 
   public IsActive(item: SectionPickerItem): boolean {

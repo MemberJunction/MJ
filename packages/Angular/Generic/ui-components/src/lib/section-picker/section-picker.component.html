@@ -28,12 +28,15 @@
 <mj-bottom-sheet [Visible]="SheetOpen" (VisibleChange)="OnSheetVisibleChange($event)" [Title]="SheetTitle">
   <div class="mj-section-sheet">
     @if (Searchable) {
-      <input type="text"
+      <input #searchInput type="text"
              class="mj-input mj-section-sheet-search"
              [value]="Query"
              (input)="OnSearchInput($event)"
+             (keydown)="OnSearchKeydown($event)"
              [placeholder]="SearchPlaceholder"
-             aria-label="Search sections">
+             aria-label="Search sections"
+             [attr.aria-describedby]="SearchHintId">
+      <span class="mj-section-sheet-sr-only" [attr.id]="SearchHintId">Enter opens the first match.</span>
     }
     <div class="mj-section-sheet-list" role="list">
       @for (item of FilteredItems; track item.Key) {
@@ -56,6 +59,7 @@
             role="listitem"
             [attr.data-key]="item.Key"
             [class.is-active]="IsActive(item)"
+            [class.is-first-match]="IsFirstMatch(item)"
             [attr.aria-current]="IsActive(item) ? 'page' : null"
             (click)="Select(item.Key)">
       @if (item.Icon) {

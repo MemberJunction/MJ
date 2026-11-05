@@ -918,4 +918,17 @@
     .query-header.phone-hero .query-description-text {
         color: var(--mj-text-secondary);
     }
+
+    /* The desktop rule above styles this button for the brand bar (inverse text); on the card
+       surface that text vanishes, so it takes the standard secondary-on-surface pair. Size="sm"
+       is 34px tall; a touch target is 44px, like the hero's Run. */
+    .query-header.phone-hero button.refresh-metadata-btn {
+        min-height: 44px;
+        color: var(--mj-text-secondary);
+        border-color: var(--mj-border-default);
+    }
+
+    .query-header.phone-hero button.refresh-metadata-btn:hover {
+        background: var(--mj-bg-surface-hover);
+    }
 }

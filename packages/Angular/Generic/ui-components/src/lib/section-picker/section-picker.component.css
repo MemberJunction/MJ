@@ -172,6 +172,13 @@
   font-weight: var(--mj-font-semibold);
 }
 
+/* The row Enter opens while a search is typed, so the Go key's target is visible. An outline, not a
+   box-shadow, so it never replaces the focus ring; a focused row drops it (focus-visible sets none). */
+.mj-section-sheet-item.is-first-match {
+  outline: 1px solid color-mix(in srgb, var(--mj-brand-primary) 55%, transparent);
+  outline-offset: -1px;
+}
+
 .mj-section-sheet-item.is-active > i {
   color: inherit;
 }
@@ -189,4 +196,17 @@
   color: var(--mj-text-muted);
   font-size: var(--mj-text-sm);
   text-align: center;
+}
+
+/* The search box's description; read by screen readers, never shown. */
+.mj-section-sheet-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

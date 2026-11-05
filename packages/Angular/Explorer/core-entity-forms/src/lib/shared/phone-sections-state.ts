@@ -1,4 +1,4 @@
-import { IsPhoneViewport, WatchPhoneViewport } from './phone-viewport';
+import { IsPhoneViewport, WatchPhoneViewport } from '@memberjunction/ng-ui-components';
 
 /**
  * A form's phone-sections state (design call 7A): whether the viewport is phone width, and

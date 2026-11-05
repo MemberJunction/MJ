@@ -389,6 +389,14 @@
     padding: 16px;
 }
 
+/* The panels sit inside mj-accordion-sections (the phone section picker's host). Keep them in a flex
+   column on desktop too, as they were as direct flex children of .form-content: in a plain block their
+   margins collapse and the gap between panels halves. */
+.form-content mj-accordion-sections {
+    display: flex;
+    flex-direction: column;
+}
+
 .panel-title {
     display: flex;
     align-items: center;

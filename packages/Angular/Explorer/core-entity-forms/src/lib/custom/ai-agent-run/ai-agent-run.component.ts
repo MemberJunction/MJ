@@ -23,8 +23,7 @@ import { AIAgentRunAnalyticsComponent } from './ai-agent-run-analytics.component
 import { AIAgentRunCostService, AgentRunCostMetrics } from './ai-agent-run-cost.service';
 import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
-import { SectionPickerItem } from '@memberjunction/ng-ui-components';
-import { IsPhoneViewport, WatchPhoneViewport } from '../../shared/phone-viewport';
+import { SectionPickerItem, IsPhoneViewport, WatchPhoneViewport } from '@memberjunction/ng-ui-components';
 
 /**
  * Task statuses that mean the step is finished with. Anything else means the workflow is still

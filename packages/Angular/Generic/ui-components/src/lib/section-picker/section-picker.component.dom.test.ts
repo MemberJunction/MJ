@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import { Component } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { renderComponentFixture, query, queryAll, text, attr, hasClass, click } from '@memberjunction/ng-test-utils';
 import { MJSectionPickerComponent, SectionPickerItem, SectionPickerGroup } from './section-picker.component';
@@ -38,6 +40,15 @@ describe('MJSectionPickerComponent (DOM)', () => {
     const sheet = f.debugElement.query(By.directive(MJBottomSheetComponent)).componentInstance as MJBottomSheetComponent;
     sheet.IsRendered = true;
     f.detectChanges();
+  };
+
+  /** Press a key in the sheet's search box; returns the dispatched event so its default can be checked. */
+  const pressInSearch = (f: Fix, key: string, init: KeyboardEventInit = {}): KeyboardEvent => {
+    const input = query(f, '.mj-section-sheet-search') as HTMLInputElement;
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
+    input.dispatchEvent(event);
+    f.detectChanges();
+    return event;
   };
 
   const rows = (f: Fix): HTMLElement[] => queryAll(f, '.mj-section-sheet-item') as HTMLElement[];
@@ -139,5 +150,162 @@ describe('MJSectionPickerComponent (DOM)', () => {
     f.componentInstance.OnSheetVisibleChange(false);
     expect(f.componentInstance.SheetOpen).toBe(false);
     expect(emitted).toEqual([]);
+  });
+  describe('Enter in the search box', () => {
+    it('opens the first match once a search is typed', () => {
+      const f = render();
+      const emitted: string[] = [];
+      f.componentInstance.ActiveKeyChange.subscribe((k) => emitted.push(k));
+      openSheet(f);
+      f.componentInstance.OnSearch('s');
+      f.detectChanges();
+      const event = pressInSearch(f, 'Enter');
+      expect(event.defaultPrevented).toBe(true);
+      expect(emitted).toEqual(['details']);
+      expect(f.componentInstance.SheetOpen).toBe(false);
+    });
+
+    it('reaches a group item when no first-class item matches', () => {
+      const f = render();
+      const emitted: string[] = [];
+      f.componentInstance.ActiveKeyChange.subscribe((k) => emitted.push(k));
+      openSheet(f);
+      f.componentInstance.OnSearch('hist');
+      f.detectChanges();
+      pressInSearch(f, 'Enter');
+      expect(emitted).toEqual(['history']);
+    });
+
+    it('highlights the row Enter will open, only while a search is typed', () => {
+      const f = render();
+      openSheet(f);
+      expect(queryAll(f, '.mj-section-sheet-item.is-first-match').length).toBe(0);
+      f.componentInstance.OnSearch('lin');
+      f.detectChanges();
+      const marked = queryAll(f, '.mj-section-sheet-item.is-first-match') as HTMLElement[];
+      expect(marked.map((r) => r.getAttribute('data-key'))).toEqual(['lineage']);
+    });
+
+    it('tells screen readers what Enter does', () => {
+      const f = render();
+      openSheet(f);
+      const id = attr(f, '.mj-section-sheet-search', 'aria-describedby');
+      expect(id).toBeTruthy();
+      expect(f.nativeElement.querySelector(`[id="${id}"]`)?.textContent?.trim()).toBe('Enter opens the first match.');
+    });
+
+    it('does nothing with an empty search or no matches, and still blocks the default', () => {
+      const f = render();
+      const emitted: string[] = [];
+      f.componentInstance.ActiveKeyChange.subscribe((k) => emitted.push(k));
+      openSheet(f);
+      expect(pressInSearch(f, 'Enter').defaultPrevented).toBe(true);
+      f.componentInstance.OnSearch('zzz');
+      f.detectChanges();
+      expect(pressInSearch(f, 'Enter').defaultPrevented).toBe(true);
+      expect(emitted).toEqual([]);
+      expect(f.componentInstance.SheetOpen).toBe(true);
+    });
+
+    it('empties the search box after a pick, even when Enter lands before a render', () => {
+      // A fast typist, a paste or a hardware keyboard can press Enter before change detection has
+      // rendered the typed query, so the [value] binding never saw it and resetting Query to ''
+      // alone would leave the old text in the box for the next open.
+      const f = render();
+      openSheet(f);
+      const input = query(f, '.mj-section-sheet-search') as HTMLInputElement;
+      input.value = 'hist';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      pressInSearch(f, 'Enter');
+      expect(f.componentInstance.Query).toBe('');
+      expect(input.value).toBe('');
+    });
+
+    it('empties the search box when the sheet is dismissed before a render', () => {
+      const f = render();
+      openSheet(f);
+      const input = query(f, '.mj-section-sheet-search') as HTMLInputElement;
+      input.value = 'lin';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      f.componentInstance.OnSheetVisibleChange(false);
+      f.detectChanges();
+      expect(input.value).toBe('');
+    });
+
+    it('ignores Enter that confirms an IME composition', () => {
+      const f = render();
+      const emitted: string[] = [];
+      f.componentInstance.ActiveKeyChange.subscribe((k) => emitted.push(k));
+      openSheet(f);
+      f.componentInstance.OnSearch('s');
+      f.detectChanges();
+      pressInSearch(f, 'Enter', { isComposing: true });
+      expect(emitted).toEqual([]);
+    });
+  });
+});
+
+/**
+ * The sheet renders in place, so inside a host form the search box sits in that `<form>`. Enter in a
+ * text box clicks the form's first submit button (implicit submission), even a hidden one. The
+ * picker must never let that happen: on Actions it was Regenerate, which saves with no confirm.
+ */
+@Component({
+  standalone: true,
+  imports: [MJSectionPickerComponent],
+  template: `
+    <form (submit)="Submitted = Submitted + 1; $event.preventDefault()">
+      <button class="form-first-button" (click)="Clicked = Clicked + 1">Regenerate</button>
+      <mj-section-picker [Items]="Items" ActiveKey="details"></mj-section-picker>
+    </form>
+  `,
+})
+class PickerInFormHostComponent {
+  public Items: SectionPickerItem[] = [
+    { Key: 'details', Title: 'Details' },
+    { Key: 'params', Title: 'Params' },
+  ];
+  public Clicked = 0;
+  public Submitted = 0;
+}
+
+describe('MJSectionPickerComponent inside a <form>', () => {
+  const setup = () => {
+    const f = TestBed.createComponent(PickerInFormHostComponent);
+    f.detectChanges();
+    const picker = f.debugElement.query(By.directive(MJSectionPickerComponent)).componentInstance as MJSectionPickerComponent;
+    picker.OpenSheet();
+    const sheet = f.debugElement.query(By.directive(MJBottomSheetComponent)).componentInstance as MJBottomSheetComponent;
+    sheet.IsRendered = true;
+    f.detectChanges();
+    const input = f.nativeElement.querySelector('.mj-section-sheet-search') as HTMLInputElement;
+    return { f, picker, input };
+  };
+
+  const pressEnter = (input: HTMLInputElement): KeyboardEvent => {
+    const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    input.dispatchEvent(event);
+    return event;
+  };
+
+  it('Enter in the search box with no search does not click or submit the host form', () => {
+    const { f, input } = setup();
+    expect(input.closest('form')).not.toBeNull();
+    expect(pressEnter(input).defaultPrevented).toBe(true);
+    f.detectChanges();
+    expect(f.componentInstance.Clicked).toBe(0);
+    expect(f.componentInstance.Submitted).toBe(0);
+  });
+
+  it('Enter with a search picks the section instead of clicking the form button', () => {
+    const { f, picker, input } = setup();
+    const emitted: string[] = [];
+    picker.ActiveKeyChange.subscribe((k) => emitted.push(k));
+    picker.OnSearch('par');
+    f.detectChanges();
+    expect(pressEnter(input).defaultPrevented).toBe(true);
+    expect(emitted).toEqual(['params']);
+    expect(f.componentInstance.Clicked).toBe(0);
+    expect(f.componentInstance.Submitted).toBe(0);
   });
 });

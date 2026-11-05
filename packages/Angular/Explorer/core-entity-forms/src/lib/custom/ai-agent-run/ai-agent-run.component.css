@@ -941,6 +941,11 @@
   .header-stats {
     flex-wrap: wrap;
   }
+
+  /* With Plan Mode and "Workflow still running" both showing, the badges push Refresh off the edge */
+  .header-right {
+    flex-wrap: wrap;
+  }
   
   .json-detail-pane {
     width: 100%;
