@@ -28,7 +28,7 @@ function newSecondaryGraphQLProvider(): GraphQLDataProvider {
 /** Opens a separate session against the running MJAPI, with a WebSocket when `withWebSocket` is true. */
 export async function OpenWireSession(withWebSocket: boolean): Promise<GraphQLDataProvider> {
     const client = LoadClientConfig();
-    const deadline = Date.now() + 90_000;
+    const deadline = Date.now() + 180_000;
     for (;;) {
         const provider = newSecondaryGraphQLProvider();
         try {

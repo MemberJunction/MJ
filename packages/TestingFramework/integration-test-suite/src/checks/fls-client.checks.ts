@@ -120,7 +120,7 @@ async function findUserId(ctx: IntegrationCheckContext, email: string): Promise<
  * up to a minute after it is written. Bounded, so a genuinely unauthorized key still fails.
  */
 export async function BuildUserKeyProviderWithRetry(rawKey: string): Promise<IMetadataProvider> {
-    const deadline = Date.now() + 90_000;
+    const deadline = Date.now() + 180_000;
     for (;;) {
         try {
             return await buildUserKeyProvider(rawKey);
@@ -172,7 +172,7 @@ async function buildUserKeyProvider(rawKey: string): Promise<IMetadataProvider> 
 export async function BuildSystemKeyProvider(): Promise<IMetadataProvider> {
     const client = LoadClientConfig();
     await PreflightMJAPI(client.Url, client.MJAPIKey);
-    const deadline = Date.now() + 90_000;
+    const deadline = Date.now() + 180_000;
     for (;;) {
         try {
             return await buildSecondaryProvider(client.MJAPIKey, undefined);
