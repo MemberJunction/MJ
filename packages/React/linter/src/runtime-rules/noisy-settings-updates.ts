@@ -75,8 +75,37 @@ function bodyHasDebounce(funcPath: NodePath): boolean {
   return found;
 }
 
-/** Events that fire on every keystroke whatever the element. */
-const KEYSTROKE_EVENTS = new Set(['onInput', 'onKeyDown', 'onKeyUp', 'onKeyPress']);
+/** True for `setTimeout(...)`, `window.setTimeout(...)`, `debounce(...)`, `_.debounce(...)` and other `*debounce*` calls. */
+function isDeferringCall(call: t.Node | null | undefined): call is t.CallExpression | t.OptionalCallExpression {
+  if (!t.isCallExpression(call) && !t.isOptionalCallExpression(call)) return false;
+  const callee = call.callee;
+  const name = t.isIdentifier(callee)
+    ? callee.name
+    : (t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)) && !callee.computed && t.isIdentifier(callee.property)
+      ? callee.property.name
+      : '';
+  return name === 'setTimeout' || name.toLowerCase().includes('debounce');
+}
+
+/**
+ * True when the save's function, or a function around it, is the callback of a `setTimeout`
+ * or `debounce` call: `onChange={(e) => { t.current = setTimeout(() => save(...), 500); }}` or
+ * `onChange={debounce((e) => save(...), 500)}`. The save then runs once the typing stops.
+ */
+function isDeferredCallback(funcPath: NodePath): boolean {
+  for (let current: NodePath | null = funcPath; current; current = current.parentPath?.getFunctionParent() ?? null) {
+    const call = current.parent;
+    const node = current.node;
+    if (isDeferringCall(call) && call.arguments.some((arg) => arg === node)) return true;
+  }
+  return false;
+}
+
+/**
+ * Events that fire on every keystroke whatever the element. Key events are left out: a key
+ * handler that saves almost always checks for Enter first, which is a submit, not a keystroke save.
+ */
+const KEYSTROKE_EVENTS = new Set(['onInput']);
 /** Text-entry components whose onChange fires per keystroke (antd/MUI-style names, matched on the last segment). */
 const TEXT_ENTRY_COMPONENTS = new Set(['Input', 'TextArea', 'Textarea', 'Search', 'Password', 'TextField', 'InputNumber']);
 /** `<input type=...>` values that take typed text. */
@@ -186,12 +215,12 @@ export class NoisySettingsUpdatesRule extends BaseLintRule {
     const violations: Violation[] = [];
 
     // A save is flagged only when the function making it is wired to a per-keystroke event
-    // (onInput/onKey*, or onChange on a text input, textarea or Input-like component) and does
-    // not debounce. A dropdown's or checkbox's onChange fires once per choice, which is fine.
+    // (onInput, or onChange on a text input, textarea or Input-like component) and does not
+    // debounce. A dropdown's or checkbox's onChange fires once per choice, which is fine.
     const visitCall = (path: NodePath<t.CallExpression | t.OptionalCallExpression>) => {
       if (!isSaveSettingsCallee(path.node.callee)) return;
       const parent = path.getFunctionParent();
-      if (!parent) return;
+      if (!parent || isDeferredCallback(parent)) return;
       if (!runsPerKeystroke(parent, getFunctionName(parent)) || bodyHasDebounce(parent)) return;
       violations.push(noisySaveViolation(path.node));
     };
