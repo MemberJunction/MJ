@@ -1,0 +1,208 @@
+[
+  {
+    "fields": {
+      "Name": "GitHub Engineering",
+      "Description": "Read repositories, search source code, commit multi-file changes atomically via the Git Data API, raise and review Pull Requests, triage Issues, and diagnose GitHub Actions CI failures.",
+      "Instructions": "@file:templates/github-engineering.skill.md",
+      "Status": "Active",
+      "ActivationMode": "Auto",
+      "Category": "Engineering",
+      "IconClass": "fa-brands fa-github",
+      "Color": "#24292F",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    },
+    "relatedEntities": {
+      "MJ: AI Skill Actions": [
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - Get Repository Context"
+          },
+          "primaryKey": {
+            "ID": "3DB17FCF-BBDD-40CA-8414-F5DCDDB34C63"
+          },
+          "sync": {
+            "lastModified": "2026-11-05T14:00:00.000Z",
+            "checksum": "1d6e84a3ed44718eb55ac15a1cab949199ecaefc8aac6c63ce02a4e6dcfbb0c0"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - Read Repository File"
+          },
+          "primaryKey": {
+            "ID": "929D6BEA-3CBF-475F-810B-967AF3956E9A"
+          },
+          "sync": {
+            "lastModified": "2026-11-05T14:00:00.000Z",
+            "checksum": "0a65ea6292080d5e842e750fc4ebe50bbde6bb278197d9342848db84322c6e63"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - List Repository Tree"
+          },
+          "primaryKey": {
+            "ID": "59579FE8-E36E-4256-841C-7793316FC263"
+          },
+          "sync": {
+            "lastModified": "2026-11-05T14:00:00.000Z",
+            "checksum": "1e3b64bed4aac45cead2c79e07e7c5f39448b1a876fde9fabe58e843682d6727"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - Search Code"
+          },
+          "primaryKey": {
+            "ID": "3A9E89C6-4034-41E6-8531-74F1CF73CE36"
+          },
+          "sync": {
+            "lastModified": "2026-11-05T14:00:00.000Z",
+            "checksum": "9d491f8a799a5a9244e42936cb77184b3514664daa7ad419e81a3db268975010"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - Commit Files and Create PR"
+          },
+          "primaryKey": {
+            "ID": "C00DA916-4311-4B56-8B08-B58BEC5EDC14"
+          },
+          "sync": {
+            "lastModified": "2026-11-05T14:00:00.000Z",
+            "checksum": "d2da17ec56139347692935fceb244392bfe7134f95698f88b8951ca269e4e65f"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - Commit Files to Branch"
+          },
+          "primaryKey": {
+            "ID": "93ECCDA2-D321-4D5B-8FB9-1F6FBA9AE85F"
+          },
+          "sync": {
+            "lastModified": "2026-11-05T14:00:00.000Z",
+            "checksum": "d7c0b9bed53e819182644645c4c944eaca014e86db2978707bcfea2e6ba1d15b"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - Get Pull Request Context"
+          },
+          "primaryKey": {
+            "ID": "F57E04E5-0EC7-44F4-86AC-03546409C118"
+          },
+          "sync": {
+            "lastModified": "2026-11-05T14:00:00.000Z",
+            "checksum": "b4cb8de63a14f50654efd0be0972a5de98925108183c241ecd2ed875a6a8e78c"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - Create Pull Request"
+          },
+          "primaryKey": {
+            "ID": "38B8FC9C-E1A6-425E-8635-C20BA948E332"
+          },
+          "sync": {
+            "lastModified": "2026-11-05T14:00:00.000Z",
+            "checksum": "1055ba2236b9da9fb38775ee3f46c205dd45f7e7cd0e729fabda9280d9c278f0"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - Submit Pull Request Review"
+          },
+          "primaryKey": {
+            "ID": "F1FDF5E3-E455-4F3A-8FFB-83387B3CCBE0"
+          },
+          "sync": {
+            "lastModified": "2026-11-05T14:00:00.000Z",
+            "checksum": "5711abce07f99147c31db406c162ed34eea6a347d4f7a47aff4641643b823485"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - Merge Pull Request"
+          },
+          "primaryKey": {
+            "ID": "63309C4F-50FF-4637-87F6-A30364AB3A9E"
+          },
+          "sync": {
+            "lastModified": "2026-11-05T14:00:00.000Z",
+            "checksum": "15ba39f9fbbbe4fcffd56f77df876140ea96133adb1f9a3bfa041d596e4fc012"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - Search Issues and PRs"
+          },
+          "primaryKey": {
+            "ID": "E4AE5EFE-11DB-4D1C-886C-46D63C6A9D1A"
+          },
+          "sync": {
+            "lastModified": "2026-11-05T14:00:00.000Z",
+            "checksum": "55893906cfe6183d454d6b1ec6cf3093506add142d2ab652e32eecf0b7abeb6e"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - Create or Update Issue"
+          },
+          "primaryKey": {
+            "ID": "1FAD527D-D366-4C0C-8C91-E8BF78CD74EE"
+          },
+          "sync": {
+            "lastModified": "2026-11-05T14:00:00.000Z",
+            "checksum": "79979d4b0625764f690ce86e44952aaa4e9f932b1782cdb686139f515df70759"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - Add Issue or PR Comment"
+          },
+          "primaryKey": {
+            "ID": "55AFF621-8957-42D2-8349-6161E0D2C6AF"
+          },
+          "sync": {
+            "lastModified": "2026-11-05T14:00:00.000Z",
+            "checksum": "78ff2524281cf21df8815494dc91dc07f55c1f99486f7c2c3d7bdd09f8928671"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - Get Workflow Run and Logs"
+          },
+          "primaryKey": {
+            "ID": "946B2BDF-9ABA-4494-8BA2-E9CA172C8DBE"
+          },
+          "sync": {
+            "lastModified": "2026-11-05T14:00:00.000Z",
+            "checksum": "964041b4a51549a5a4b02e3e74cc8f1b29320d92db9d49c80ac61c4923dffafb"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "BB81AE61-9815-4972-8137-F506FDDDF4E0"
+    },
+    "sync": {
+      "lastModified": "2026-11-05T14:00:00.000Z",
+      "checksum": "70fe97d605559d576bf2052e545e0ebb658c54cbd2bc1c06fd073fcc8862b1f7"
+    }
+  }
+]

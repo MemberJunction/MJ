@@ -564,7 +564,11 @@ export class HarnessAgentBase extends BaseAgent {
                     // inject generically.
                     continue;
                 }
-                const secret = await this.loadCredentialValue(grant.CredentialID, contextUser);
+                const secret = await this.loadCredentialValue(
+                    grant.CredentialID,
+                    contextUser,
+                    grant.EnvVariableName,
+                );
                 if (secret) {
                     environment[grant.EnvVariableName] = secret;
                     continue;
@@ -582,10 +586,67 @@ export class HarnessAgentBase extends BaseAgent {
             if (Object.keys(environment).length === 0) {
                 this.applyVendorKeyFallback(environment);
             }
+
+            // If no explicit GitHub credential grant resolved, check if the calling user has an active
+            // personal 3LO GitHub credential (UserOAuth3LO:GitHub:<userId>) scoped strictly to them.
+            let isUserDelegatedGitHub = false;
+            if (!environment.GH_TOKEN && !environment.GITHUB_TOKEN && contextUser?.ID) {
+                const delegatedToken = await this.resolveUserDelegatedGitHubToken(rv, contextUser);
+                if (delegatedToken) {
+                    environment.GH_TOKEN = delegatedToken;
+                    isUserDelegatedGitHub = true;
+                }
+            }
+
+            ApplyGitHubEnvironmentConventions(
+                environment,
+                this.AgentRun?.Agent ?? undefined,
+                contextUser
+                    ? {
+                          IsUserDelegated: isUserDelegatedGitHub,
+                          UserName: contextUser.Name,
+                          UserEmail: contextUser.Email,
+                      }
+                    : undefined,
+            );
         } catch (e) {
             LogError(`Failed to resolve harness environment: ${describeError(e)}`);
         }
         return environment;
+    }
+
+    /**
+     * Resolves the calling user's personal 3LO GitHub token (`UserOAuth3LO:GitHub:<userId>`)
+     * when present and active, enforcing strict `ownerUserId === contextUser.ID` isolation.
+     */
+    private async resolveUserDelegatedGitHubToken(
+        rv: RunView,
+        contextUser: UserInfo,
+    ): Promise<string | null> {
+        if (!contextUser?.ID || !/^[0-9a-fA-F-]{36}$/.test(contextUser.ID.trim())) {
+            return null;
+        }
+        const credName = `UserOAuth3LO:GitHub:${contextUser.ID.trim().toLowerCase()}`;
+        const res = await rv.RunView<MJCredentialEntity>(
+            {
+                EntityName: 'MJ: Credentials',
+                ExtraFilter: `Name='${credName}' AND IsActive=1`,
+                MaxRows: 1,
+                ResultType: 'entity_object',
+            },
+            contextUser,
+        );
+        const cred = res.Success ? res.Results?.[0] : undefined;
+        if (!cred) {
+            return null;
+        }
+        if (cred.ExpiresAt && new Date(cred.ExpiresAt).getTime() <= Date.now()) {
+            return null;
+        }
+        return ExtractHarnessCredentialSecret(cred.Values, {
+            EnvVariableName: 'GH_TOKEN',
+            ContextUserId: contextUser.ID,
+        });
     }
 
     /**
@@ -623,19 +684,35 @@ export class HarnessAgentBase extends BaseAgent {
     }
 
     /**
-     * Reads a credential's value.
+     * Reads a credential's value, extracts scalar secrets from JSON `Values`, or mints a short-lived
+     * GitHub App installation token when the credential is a `GitHub App`.
      *
      * Custody stays in `MJ: Credentials` — this only reads what the agent was granted, and does not
      * cache it beyond the session.
      */
-    private async loadCredentialValue(credentialId: string, contextUser?: UserInfo): Promise<string | null> {
+    private async loadCredentialValue(
+        credentialId: string,
+        contextUser?: UserInfo,
+        envVariableName?: string,
+    ): Promise<string | null> {
         try {
             const md = this.ProviderToUse;
             const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
             if (!(await credential.Load(credentialId))) {
                 return null;
             }
-            return credential.Values ?? null;
+            if (credential.IsActive === false) {
+                LogStatus(`Harness credential ${credentialId} is inactive; skipping.`);
+                return null;
+            }
+            if (credential.ExpiresAt && new Date(credential.ExpiresAt).getTime() <= Date.now()) {
+                LogStatus(`Harness credential ${credentialId} has expired; skipping.`);
+                return null;
+            }
+            return await ExtractHarnessCredentialSecret(credential.Values, {
+                EnvVariableName: envVariableName,
+                ContextUserId: contextUser?.ID,
+            });
         } catch (e) {
             LogError(`Failed to load credential ${credentialId}: ${describeError(e)}`);
             return null;
