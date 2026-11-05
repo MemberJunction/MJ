@@ -1,5 +1,186 @@
 # Change Log - @memberjunction/ai-anthropic
 
+## 6.2.0
+
+### Minor Changes
+
+- 1d43161: Move the Loop agent's volatile runtime state out of the system prompt so provider prompt caches survive across iterations. Until now the Loop agent system prompt rendered the current date/time, Scratchpad State and Payload at its tail, and because those blocks change every iteration the provider's prefix cache broke before it reached the conversation history; measured on Sage the cached share of input was 37% and the entire history was re-read on every step. The template no longer renders those blocks. Instead `BaseAgent.preparePromptParams` builds the same content into a `<mj-runtime-state>` fragment appended as the final `user` message of each request, and the system prompt carries a static pointer telling the model where to find it. At send time the fragment tag literal is escaped in every history message so no tool result or user text can pose as framework state. This is framework behaviour, not a per-agent setting: there is no placement parameter. The fragment is emitted only when the system prompt template carries the `<mj-runtime-state>` pointer. A template that still embeds the state blocks (a database whose template has not yet synced, or the Flow template) gets no fragment, so the transition cannot produce duplicated state; a template with neither (the Harness system prompt, or a custom prompt run without the Loop system prompt) gets none either, so no agent receives an unexplained block. Only a failed template lookup fails open. `specializationPlacement` (`auto`, `systemPrompt`, `trailingMessage`) relocates the agent's own child prompt into the fragment when it contains volatile placeholders, so a per-iteration date in a child prompt cannot silently reintroduce the cache break. `AIPromptRunner` exposes `RenderChildPromptTemplates` publicly for the relocation path, and `AgentChatMessageMetadata` gains a `volatileState` flag so provider adapters can recognise the fragment.
+
+  Two boundaries keep the fragment where it belongs. `prepareSubAgentMessages` drops `volatileState` messages before any message mode slices the parent history, so a sub-agent never sees the parent's payload, scratchpad or specialization and its `MaxMessages` window is spent on real turns. Under append-only retention, context recovery now frees retained fragments first — oldest first, all but the newest — before it touches tool results, and `TrimLastUserMessage` skips them, so a long run cannot overflow on state the next request re-sends anyway; the fragment carries `turnAdded` for the lifecycle. All placeholder names, tag literals and headings live in one `constants.ts`, and the unsync guard's markers are overridable through the protected `volatileTemplateMarkers` getter. The fragment is carried across iterations in a provider-aware way. Providers with block-level or sliding prefix caches (Anthropic, Gemini, Cerebras) get replace-in-place: only the latest fragment is attached, keeping the history compact. OpenAI and xAI (Grok) automatic caches reuse a prior request only when its entire prompt is a byte prefix of the new one, so for OpenAI and xAI prior fragments are retained and the new one appended, making each request an exact prefix extension of the last. The mode is chosen once per run by the new Loop agent prompt param `trailingStateMode` (`auto`, `appendOnly`, `replace`). Which providers need which is metadata, not code: `auto` reads the new `PrefixPromptCache` boolean from the model catalog's `ModelConfiguration` cascade through `BaseAgent.resolvePrefixPromptCache` and `AIEngine.GetEffectiveModelConfiguration`, for the model of the runtime override or of the first iteration's selection, then freezes that answer so a mid-run failover cannot flip the layout; `true` means append-only, anything else replace-in-place. The cascade gains a vendor layer for this: a migration adds a `Configuration` bag to `AIVendor` (JSONType `IAIVendorConfiguration`, a general-purpose vendor bag whose `ModelDefaults` key is a model-configuration bag), and the engine now resolves Model Types < Models < Vendors' `Configuration.ModelDefaults` < Model Vendors: the vendor default is the host-wide default for every model it serves and beats the model's own bag, merged per key, with the model-vendor row as the tie-breaker. `metadata/ai-vendors` sets `PrefixPromptCache: true` under `Configuration.ModelDefaults` on the OpenAI and x.ai vendor rows; every model they serve inherits it, and a model-vendor row can override it for one model on a host that diverges. `@memberjunction/ai` gains `AIVendorConfiguration` and `ParseVendorConfiguration` alongside. There is no vendor-name or driver-class matching. Turn 1, before any selection is known, uses replace-in-place; if turn 2 resolves to append-only, turn 1's fragment is spliced back at the turn-1 boundary, which reproduces the bytes an append-only turn 1 would have sent, so nothing is lost by deferring. The explicit values exist for a serving path whose catalog rows carry no strategy yet. `@memberjunction/ai` gains the framework-generic half of that: the `LLMConfigurationSettings.PrefixPromptCache` field and `IsPrefixPromptCache` in `modelConfiguration.ts`, and on `BaseLLM` the protected `isVolatileStateMessage` (the `volatileState` metadata flag), `trailingVolatileStateIndex` and `splitTrailingVolatileState` seam, with `VolatileStateMessageMetadata` and `TrailingVolatileStateSplit` as the shared shapes. The Anthropic adapter (`@memberjunction/ai-anthropic`) overrides `isVolatileStateMessage` to keep its tag-literal fallback and uses the split to recognise a trailing fragment, whether it is the last message or is followed by an assistant prefill, placing its ephemeral cache breakpoint on the last real history message instead and inserting an `OK` assistant turn when needed to preserve role alternation, so the stable history caches and only the fragment (and any prefill) is re-processed. Measured live on Sage on iterations 3 and later: Claude Sonnet 4.6, Opus 5, and Opus 5.5 from 0% to 78–90% cached, Grok 4.7 from 21% to 91%, GPT 5.6 from 0% to 78%, Gemini 2.5/3.8 Flash from 30–37% to 66–75%, Cerebras GPT-OSS-120B from 65% to 96%; prompt cost per million tokens fell 37–80% depending on provider.
+
+  Action execution gains a run-scoped circuit breaker in `BaseAgent.ExecuteSingleAction`, prompted by a bug this work exposed: `executeActionsStep` reported an action whose `ActionResult.Success` was `false` as successful, so agents retried unconfigured tools indefinitely. The step result now carries the action's real outcome, and the circuit breaker's three rules, checked fatal → identical-arguments → budget, bound retries. A fatal configuration error (API key missing or invalid, "not configured", credentials missing, "authentication failed") disables the action for the rest of the run; HTTP 401/403, "unauthorized" and "forbidden" are deliberately not fatal because they are usually per-resource or transient, and neither is a failure the model can fix itself: a message that names a parameter, or a call whose own arguments carried a credential (password, API key, token), falls through to the attempt budget instead. The identical-arguments rule: two failures with identical arguments (`IDENTICAL_FAILURE_THRESHOLD`) block further calls with those arguments, while different arguments still dispatch; argument identity is `normalizeActionParams`, keys sorted at every depth, in three protected layers a subclass can override. The attempt budget: five consecutive failures across any arguments (`ACTION_FAILURE_BUDGET`) disable the action for the run. A success resets both counters. Blocked calls return a `CircuitBreakerActionResult` in 0ms that names the rule that fired, and a `user`-role guidance message (`[CRITICAL/ACTION_UNAVAILABLE]`, `[CRITICAL/REPEATED_IDENTICAL_CALL]`, `[CRITICAL/ATTEMPTS_EXHAUSTED]` or `[WARNING/ACTION_FAILURE]`) is appended to the history so the model pivots instead of looping; the budget rule is reported ahead of the identical-arguments rule, since once the budget is spent no change of arguments can help. Calls made by the pipeline executor and by ForEach / While iterations bypass the breaker via a new optional `ExecuteSingleActionOptions.skipCircuitBreaker`, since those loops already account for failures per element, expect elements to be independent, and have no model in the loop to act on the guidance. Flow agents are exempt the same way through `BaseAgentType.UsesActionCircuitBreaker` (default true, false on `FlowAgentType`): their action nodes are chosen by the graph, whose failure paths may legitimately re-run a node with the same inputs, and no model reads a directive there, so the main loop passes the exemption and suppresses the directive for such steps. Metadata: the Loop agent type's `PromptParamsSchema` gains `specializationPlacement` and `trailingStateMode` and loses `volatileStatePlacement`; the system prompt template drops its volatile tail.
+
+### Patch Changes
+
+- 54f6563: Always-On Agent Harness plan, wave 1 (Lessons 6, 4 and the small Lesson 1 fixes):
+  - Action failures keep their own result code and `AIDirectives` instead of a bare `ERROR` (the execution log keeps it too), and a refusal by the user's agent policy gets a policy directive rather than "adjust your parameters and retry", even when the call is repeated.
+  - `Run Ad-hoc Query` and `Run Stored Query` no longer repeat the rows in `Message`, and render `FormattedResults` only when a `DataFormat` / `OutputFormat` is asked for; with no format the rows travel once, in `Results`.
+  - Every action result is tagged `messageType: 'action-result'`, so context recovery and post-run compaction can see it.
+  - `_HAS_CONVERSATION_CONTEXT` and `_CONVERSATION_LENGTH` count as volatile child-prompt placeholders; native tool declarations, their parameters and sub-agent tools are emitted in a fixed name order.
+  - OpenAI streaming requests ask for the trailing usage chunk (`stream_options.include_usage`), so streamed calls record prompt tokens, cache reads and cost.
+  - Anthropic requests place a cache breakpoint on the last tool declaration when one of the four breakpoints is spare.
+
+- 35012c0: Anthropic driver: stop sending request shapes the API rejects when thinking is enabled or on models that reject sampling parameters outright.
+  - **Assistant prefill is withheld when thinking is on.** Anthropic returns `This model does not support assistant message prefill` whenever extended thinking is enabled, and on every model from Claude 4.6 onward (adaptive-thinking models) regardless of thinking. Both the non-streaming and streaming paths now resolve thinking first and append the prefill message only when neither condition holds. Known limit: `SupportsPrefill` still reports true, so `AIPromptRunner` keeps its prefill-paired stop sequences; a follow-up should expose prefill support as a function of model and thinking state.
+  - **Sampling parameters (`temperature`, `top_p`, `top_k`) are sent only where Anthropic accepts them**, through one shared `ResolveSamplingParams` helper used by both paths. Two rules with two different model sets:
+    - On Claude Opus 4.7, Opus 4.8, every Claude 5 model and Mythos Preview, a non-default `temperature`, `top_p` or `top_k` is a 400 on every request, with or without a `thinking` block. The driver now drops all three there, keeping only `temperature: 1`; `top_p` is never sent to these models because the docs also reject `temperature` plus `top_p` together even at their defaults.
+    - On older models the restriction applies only while thinking is on: `temperature` and `top_k` are dropped, `top_p` is kept only within 0.95 to 1, and `temperature: 1` survives.
+    - **Claude Opus 4.6 and Sonnet 4.6 are deliberately not in the always-reject set.** They take adaptive thinking but, per the docs, thinking is off there until requested and they still accept sampling parameters while it is off. The always-reject cutoff therefore lives in its own predicate, `RejectsSamplingParams` (4.7+ plus Mythos Preview), separate from `UsesAdaptiveThinking` (4.6+), and both are pinned per model in unit tests.
+  - **Streaming `max_tokens` defaults** to 32000 when the caller omits it, matching the non-streaming path. Models with a lower output ceiling (Claude 3 family) should pass an explicit value.
+
+  Keeping `temperature: 1` relies on the SDK's pinned `anthropic-version: 2023-06-01`; from API version `2026-10-21` any sampling parameter at any value is rejected on every model, so a version bump must revisit this.
+
+  Reference: Anthropic's thinking documentation, "Limits and feature compatibility" (https://platform.claude.com/docs/en/build-with-claude/thinking#limits-and-feature-compatibility): "Response prefill and forced tool use" and "Sampling parameters".
+
+- 29b6ec3: fix: native tool calling — object action params, a one-turn `complete_task` finish, an implicit-mode Loop prompt, and Gemini thought signatures across failover
+
+  Found running Skip's Query Writer on Gemini 3 Flash with native implicit control flow. `Simple Object` action params are declared as `object` and a JSON-string argument is decoded before the Action runs (`Other` stays `string`). A new `complete_task` control tool applies the final payload change and completes in one turn; its `payloadChangeRequest` is a JSON string because the forced final turn is schema-constrained and an open object decodes as `{}`, and the final permitted turn now forces `complete_task` instead of `'none'` (downgraded to `'none'` for hybrid models). The Loop system prompt's implicit mode no longer tells the model to answer in a JSON envelope, and unreadable JSON text is a Retry rather than a final answer that drops its payload. The Gemini driver records where a thought signature was minted and replays it only there, so a failover between Google AI Studio and Vertex AI no longer fails with a 400 "Corrupted thought signature." A model that rejects a forced tool choice gets `'auto'` instead: Claude Opus 5.5 and Sonnet 5.5 through a new catalog flag, `LLM.SupportsForcedToolChoice: false`, and any Claude request using budget thinking in the Anthropic driver. Envelope and hybrid prompts render byte-identically.
+
+- 1141164: Native tool calling: run the Loop agent as a provider-native tool loop.
+  - **History ordering.** A generic Retry on a native tool-call turn answers each call with an `is_error` tool result carrying the reason instead of a "Retrying due to" user message, and `reconcileUnansweredToolCalls` inserts its synthetic results directly after the call turn. Anthropic and OpenAI rejected the old call → user message → result order with a 400.
+  - **Replayed thinking stays valid on Claude 5.x.** A native run on a driver whose replayed reasoning needs the history before it unchanged (`BaseLLM.ReplayedReasoningRequiresStablePrefix`, true for Anthropic) keeps its runtime-state fragments (append-only), so a thinking block is never replayed behind a history that dropped the fragment it was made with. When an earlier message is rewritten anyway (expiry, compaction, message expansion, context recovery), the reasoning of every call turn after it is dropped instead of replayed; when the system prompt or tools change (a skill activating mid-run), the prompt runner sends the request without replayed reasoning (`AIPromptParams.ReplayedReasoningPrefix`, `GetSentPrefixFingerprint`). A compacted message is not compacted again on later turns. An expired native tool turn is compacted in its action's own mode, AI summary included.
+  - **Thinking across tool turns.** `ChatMessage.reasoning` / `ChatCompletionMessage.reasoning` carry provider reasoning blocks. Anthropic captures every `thinking` (with signature) and `redacted_thinking` block, replays them ahead of the `tool_use` blocks, and sends the interleaved-thinking beta for budget-form thinking with tools. Gemini keeps thought parts and signed text parts and replays them in order. The Loop agent carries reasoning onto the replayed call turn.
+  - **Per-agent native control** in `TypeConfiguration.NativeControl`: turn off `payload_change_request` or `ask_user`, end the run in plain text (`Terminal: 'text'`, final turn `toolChoice: 'none'`), declare `complete_task.payloadChangeRequest` as an object, opt into the tools-only prompt (`NativeOnly`) and into compaction of older tool-call arguments (`CompactToolArguments`).
+  - **Agent-local tools.** `BaseAgent.GetAgentTools` declares tools that read and write the agent's own state. Calls run in order as `Tool` run steps, their `PayloadChange` is applied through PayloadManager under `PayloadSelfWritePaths`, and errors return as `is_error` results.
+  - **One control plane (opt-in).** Under `NativeOnly` the Loop system prompt teaches tools only, and the scratchpad, durable memory, artifact tools, conversation-history tools and decisions are native tools answered on the same turn. Envelope and hybrid prompts render byte-identically to before.
+  - **Turn shapes.** By default each control call is alone on its turn, as before; the agent's own tools ride along with Actions or a delegation. `NativeControl.RelaxedTurnShapes` opts in to mixed turns: several `payload_change_request` calls apply in order, writes then `ask_user` or `complete_task` finish on that turn (a failed write declines them), and a delegation, `ask_user` or `complete_task` beside Actions is answered as not run, to be made again once the Actions' results are read. A `complete_task` refused by validation, unmet minimum executions or a self-check is answered with the feedback, as an error. A Retry never answers a call twice, and every result for a call turn travels in the one tool turn after it. `parallelToolCalls` is left to each provider's default. A failed Action's guidance rides in its own `is_error` result, and `uncrushedActions` exempts named Actions from result crushing.
+  - **Corrective retries match the agent.** The unknown-tool, unreadable-JSON and rejected-call retries name `complete_task` only when it is declared, the envelope only when the agent has one, and only the tools the turn's request carried. Framework tools do not dispatch on a hybrid turn, and the loop reads a turn's tool-calling mode from the chat result.
+  - **Prompt runs record their tool-calling path reliably.** `AIPromptRun.ToolCallingMode` is set inside the run's finalize step, so a model call that returns before the run's initial INSERT completes no longer loses it to the INSERT's reload (it was persisted as NULL, on the prompt run and on the agent run step that copies it).
+  - **Fallback and providers.** The native-to-envelope fallback triggers on a 400/422 or any error not clearly about something else (rate limit, authentication, cancellation, context length) whose text names the tools payload; tool turns encoded as text keep their calls; failover re-renders the prompt and its child prompts when it changes the tool-calling path, on the parallel path too, keeps the original text if the re-render fails, and records what was sent on the prompt run; the tools-stripped retry is sent the envelope prompt; a Strict validation retry never discards a tool-call turn. Gemini `UNEXPECTED_TOOL_CALL` and unparseable OpenAI-compatible arguments are reported as rejected calls with what the model sent, except on a request that declared no tools, and a signature on an empty text part is kept. Gemini now returns every visible text part of a reply, not only the first. OpenAI-compatible `null` arguments read as an empty argument set. Anthropic folds a user message that follows tool results into their turn instead of adding an assistant "OK" (which ended the tool loop and dropped its thinking), turns budget-form thinking off, with a warning, for a request whose open tool loop has no thinking to replay, honours `enableCaching: false`, and puts a cache breakpoint on a request ending in a tool turn.
+
+- 4e4c82d: A cancelled model call now stops where it is: it is never failed over or retried, a call cancelled in flight is reported as `Cancelled` (a non-chat call cancelled before it starts is refused before a run row exists), and the cancellation reaches the vendor's SDK so the request is torn down rather than abandoned (#5548, #3132).
+
+  **Prompts and agents (#5548)**
+  - **No failover walk after a cancel.** `ExecuteWithFailover` stops before each candidate once the caller's token is aborted, and after any attempt that fails while it is aborted or that reports a cancellation. Before, one abort walked every model candidate (113 real driver calls in a live test) and logged an `[ERROR] [ModelExecution]` with a stack trace for each. Real failures before the cancel are still recorded as failover attempts. A timeout is not a cancellation and still fails over.
+  - **Logged once, recorded as cancelled.** One info line instead of an error per candidate. The prompt run is saved `Cancelled` / `user_requested`, and the `AIPromptRunResult` carries `status: 'Cancelled'` and `cancelled: true`.
+  - **Agent runs end Cancelled.** `BaseAgent` checks the token before treating a failed prompt as a failure, and before counting a failed step toward the consecutive-failure limit, so a run cancelled mid-prompt no longer ends `Failed`. A final answer that had already finished when Stop landed still completes the run.
+  - **Failover fields persist.** A prompt run's `FailoverAttempts`, `FailoverErrors`, `FailoverDurations`, `TotalFailoverDuration` and failed-over `ModelID` / `VendorID` were written while its `Running` INSERT could still be in flight, and the INSERT's reload reset them, so a run that failed over could be saved with `FailoverAttempts = 0`. They are now set again in the queued finalize update, after the reload. This affected every runner, not only cancellation.
+
+  **Cancellation in `@memberjunction/ai` (#3132)**
+  - **`AIErrorType` has `'Cancelled'`**: Fatal and never failed over. `ErrorAnalyzer` on its own classifies an error named `AbortError`, `APIUserAbortError` or `RequestAbortedError` as `Cancelled`. The signal-aware helpers that `BaseLLM`, `BaseDecision` and every runner use (`BuildCancellationErrorInfo`) decide by why the signal was aborted, so an abort caused by a timeout stays a retriable `NetworkError`. A timeout is recognized by the abort reason's type — a `TimeoutError`, or a reason flagged `IsTimeout` (new `TimeoutAbortReason`; `AIPromptTimeoutError` sets it) — never by the words of a caller's reason.
+  - **Shared helpers** (exported): `IsAbortError`, `IsTimeoutAbort`, `IsRequestAborted`, `BuildCancellationErrorInfo`, `IsCancellationErrorInfo`, `DescribeCancellation`, `CreateCancellationError`, `ThrowIfAborted`, `AbortableDelay`, and the `REQUEST_CANCELLED_CODE` / `REQUEST_TIMEOUT_CODE` codes.
+  - **`BaseLLM` owns chat cancellation, per request.** It answers an already-aborted request without calling the driver, turns an abort (thrown, or a failed result while the signal is aborted) into one cancelled result, and decides a streaming cancellation from the request's own signal, so drivers no longer keep cancellation state on a shared instance. New protected `BuildCancelledChatResult`, `IsCancellationError` and the `IsProviderAbortError` hook. A pre-aborted streaming request now resolves cancelled on every driver instead of rejecting with a generic error.
+  - **Every chat driver uses it.** The duplicated cancelled-result builders, predicates and stream-cancel flags are gone from Anthropic, Azure, Bedrock, Betty, BettyBot, Cerebras, Fireworks, Gemini (and Vertex), Groq, Inception, LMStudio, Mistral, Ollama and OpenAI (and its subclasses). Anthropic, Bedrock, Gemini, Mistral and Ollama used to report a cancel as a retriable `Unknown` error. Cancel messages now read "Request was cancelled[: reason]".
+  - **Bedrock streaming** iterated the response envelope instead of its body, so every streaming call failed with "stream is not async iterable". Fixed.
+  - `BaseDecision` and the decision runner classify an aborted decision by its signal, so a timeout fails over and a cancel does not.
+
+  **Non-chat models**
+  - **Media** (text-to-speech, speech-to-text, video): the driver params carry `CancellationToken`, the runner passes the call's bound signal, and the OpenAI, Groq, ElevenLabs and HeyGen drivers forward it. `MediaOperation.Invoke` takes the signal as a third argument.
+  - **Embeddings, rerank and image generation** gain timeout and cancellation: `TimeoutMS` / `CancellationToken` on their run options, a pre-aborted run refused before a run row exists, a cancelled run recorded `Cancelled` and not failed over, and a timeout failed over. The param types gain `CancellationToken`, and the OpenAI, Azure, Bedrock, Cohere, Gemini, Mistral, Ollama and local embedding drivers, the Cohere, LLM and decision rerankers, and the OpenAI, Gemini and FLUX image drivers forward it. A cancelled `BaseEmbeddings.EmbedTexts` now throws a cancellation error instead of returning an empty result. The local embedding model can only stop between texts or batches.
+
+  **Testing**
+  - `TestLLM` gains a `hangUntilAborted` outcome. The LLM conformance suite drops `PreAbortedStreamingBehavior`: every driver must resolve a pre-aborted request as `Cancelled`.
+  - New integration bundle **IT122 - Agent Prompt Cancellation**: a real agent run cancelled mid-call stops at that call and is recorded cancelled throughout.
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [1419ba7]
+- Updated dependencies [d17de94]
+- Updated dependencies [7ada797]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [a50948e]
+- Updated dependencies [2552b1e]
+- Updated dependencies [25bb295]
+- Updated dependencies [432cb73]
+- Updated dependencies [3080e83]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [293c316]
+- Updated dependencies [b518dfa]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [709de1a]
+- Updated dependencies [155aa45]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [15a4333]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [1da00cb]
+- Updated dependencies [b699a37]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [961d529]
+- Updated dependencies [10c2311]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [8f370b3]
+- Updated dependencies [81aea34]
+- Updated dependencies [e1dd673]
+- Updated dependencies [f3c6161]
+- Updated dependencies [5148534]
+- Updated dependencies [c261eb8]
+- Updated dependencies [59e32e0]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [4283a82]
+- Updated dependencies [914e6ff]
+- Updated dependencies [4889fb2]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [b2441c3]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [2274f42]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [1d43161]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [1141164]
+- Updated dependencies [230cdad]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [575bfae]
+- Updated dependencies [c018cb9]
+- Updated dependencies [80905a1]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [22c9074]
+- Updated dependencies [6b0de38]
+- Updated dependencies [aee2d53]
+- Updated dependencies [279b93e]
+- Updated dependencies [5dc3752]
+- Updated dependencies [6c8798b]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [72dd65c]
+- Updated dependencies [25f7b82]
+- Updated dependencies [8b90b41]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [4d647e6]
+- Updated dependencies [bea2386]
+- Updated dependencies [17a4137]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [cbddadb]
+- Updated dependencies [c4645bc]
+- Updated dependencies [5b41d48]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [e962151]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [6b487b8]
+- Updated dependencies [b0b2cc9]
+- Updated dependencies [fc3da91]
+  - @memberjunction/ai@6.2.0
+  - @memberjunction/global@6.2.0
+
 ## 6.2.0-edge.8
 
 ### Patch Changes

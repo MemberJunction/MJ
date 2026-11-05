@@ -1,5 +1,904 @@
 # @memberjunction/ai-core-plus
 
+## 6.2.0
+
+### Minor Changes
+
+- 043f418: Support Decision steps in Agent Manager: update architect and planning prompt templates, add example JSON output with Decision step and Choice fork paths, and support Decision step round-tripping with configuration normalization and custom prompt IDs. The Architect validates a Flow agent's steps and paths, and those of each Flow child sub-agent, by compiling and validating them with the runtime's own `CompileFlowToTaskGraph` and `ValidateTaskGraphSpec`, and checks that a Decision step's prompt is a Decision prompt. `AgentStep.Configuration` accepts an object as well as JSON text.
+- 39b35f1: Real-time task graph workflow UX, continuation synthesis with step outputs and artifacts, single-step delegation folding, per-user runnable agent directory & task graph validation, and a redesigned AI Agent Workflows & Tasks Command Center (#5878).
+  - **Single-step task graph folding (`@memberjunction/ai-agents`).** `LoopAgentType.DetermineNextStep` automatically folds single-node `Tasks` emissions with no dependencies into an in-turn `Sub-Agent` step (`terminateAfter: false`) so single-agent delegations complete in a single conversation turn without spawning a background task graph, while preserving durable `Tasks` execution for multi-step (`2+` node) workflows. When an orchestrator with `ArtifactCreationMode = 'Never'` or `'System Only'` delegates a folded step to a specialist agent that produces artifacts, `AgentRunner.ProcessAgentArtifacts` resolves the specialist's `DefaultArtifactTypeID` and creation mode so deliverables are persisted and attached to the conversation message.
+  - **Per-user runnable agent directory, pre-submission task graph validation, and sub-agent workflow propagation (`@memberjunction/ai-engine-base`, `@memberjunction/aiengine`, `@memberjunction/ai-core-plus`, `@memberjunction/ai-agents`, `@memberjunction/task-graph`, `@memberjunction/server`).** `AIEngineBase.GetUserRunnableAgentDirectory(user)` caches a per-user directory of active top-level agents permitted by `CanUserRunAgent`, invalidated on agent and permission changes. `BaseAgent` preloads `availableAgentCount` / `availableAgentDetails` into prompt templates, validates `Tasks` step targets before submission (converting unknown or restricted agent/action references into a self-correcting `Retry` step with the user's permitted agent list), propagates `conversationDetailId` and `Paused` workflow-awaiting state from sub-agents (`Workflow Planner`) to parent runs (`Sage`), includes `agentRun.Message` in sub-agent result markdown, and settles/reinvokes ancestor runs along `ParentRunID` in `TaskGraphDispatcher` and `TaskGraphContinuationDeliverer`.
+  - **Live task graph telemetry, isolated step artifact persistence, and adaptive continuation delivery (`@memberjunction/server`, `@memberjunction/ai-agents`, `@memberjunction/conversations-runtime`).** `TaskGraphAgentRunner` resolves the originating `ConversationDetailID`, passes `inputArtifacts: []` to isolate task-graph step runs from earlier conversation turn artifacts, and forces `behavior: 'create-new'` when persisting step deliverables so sibling/prior artifacts are never overwritten as `v2`. `AgentRunner.ProcessAgentArtifacts` infers `Research Content` (`report.html`) and extracts `report.name` / `report.description` / `synthesis.executiveSummary` for report-producing specialist steps. `TaskGraphContinuationDeliverer` strips inherited upstream keys from merged `OutputPayload`s, updates the originating workflow message in-place when no intervening messages were sent (`origin.IsLatest`), or posts a bottom continuation reply linked via `ConversationDetail.ParentID` when intervening messages were sent while the workflow ran.
+  - **First-class inline Workflow Execution Card, Workflow Context Header, & real-time chat reconciliation (`@memberjunction/ng-conversations`).** `ConversationChatAreaComponent` and `MessageItemComponent` reconcile live `TaskGraphProgress` frames in place, deduplicate parent container tasks from executable step rows, strip inherited upstream payload keys from step summaries, and render a relational `.workflow-continuation-banner` (`Completed workflow · <Name> · View workflow ↑`) on bottom continuation replies that scrolls to and highlights the originating workflow turn.
+  - **AI Agent Workflows & Tasks Command Center (`@memberjunction/ng-conversations`, `@memberjunction/ng-tasks`, `@memberjunction/ng-explorer-core`).** Redesigned `TasksFullViewComponent` with a 5-metric KPI telemetry ribbon, instant search and status/agent filters, a **Workflow Cards** DAG view, a second-resolution **Execution Timeline & DAG** waterfall view, and a slide-over **Step Inspector Drawer** with one-click navigation back to the originating conversation.
+
+- 0eeb89d: **AI usage analytics: a trustworthy cost basis, and the dimensions to slice it by (#4396)**
+
+  Cost reporting was wrong in both directions and could not be sliced by the dimensions anyone
+  actually asks about. This settles the basis, gives runs the keys they were missing, and rebuilds
+  the reporting layer on top.
+  - **Cost doctrine.** `guides/AI_USAGE_AND_COST_ANALYTICS_GUIDE.md` states the rules every consumer
+    now follows: the additive basis is own cost at the prompt-run grain, `Cost IS NULL` means
+    unpriced and is never coalesced to zero, rollups are derived from the hierarchy at query time and
+    never summed from stored inclusive columns, and coverage ships beside every cost figure.
+  - **Attribution.** `AIPromptRun` gains `UserID`, written when the run is created. The agent run a
+    prompt run belongs to is not stored on it: the agent layer owns that link as
+    `AIAgentRunStep.TargetLogID`, now indexed, and the fact view resolves it at query time. Cost
+    precision is aligned on `decimal(19,8)` across both run tables, and six analytics indexes are
+    added. Sub-agent runs now inherit `CompanyID`.
+  - **Parallel execution accounting.** The consolidated parent is created before its arms run, so the
+    arms persist as `ParallelChild` rows with their own cost and the parent carries none — previously
+    the losing arms were never recorded at all.
+  - **Semantic layer.** `vwAIUsageFacts` gives one row per prompt run over the base tables, with
+    time buckets, every dimension, and the flags that carry semantics no column expresses
+    (`IsPriced`, `IsParallelParent`, `IsUnmeasured`, `SourceKind`).
+  - **Aggregates.** Eight saved queries in the `AI` category, every cost figure grouped by currency
+    and carried with its priced/unpriced counts. They run live; materializing the hourly and daily
+    grains is a follow-up.
+  - **Honest dashboards.** The seven analytics surfaces read the aggregates instead of pulling
+    unbounded raw rows, unpriced cost renders as an em dash rather than `$0.00`, and coverage is
+    shown beside every total.
+  - **`mj-query-pivot`.** A generic pivot over any saved Query in `@memberjunction/ng-query-viewer`;
+    the AI Usage Explorer is a thin configuration of it. `ColumnLabels` titles columns, and
+    `HiddenColumns` lets a host group by an ID it does not display (so two records that share a name
+    stay apart while only the name shows).
+
+- b14c72f: Add the personal Chief of Staff (`Chief of Staff`) AI agent, per-user narrowed governance (`MJ: AI Agent User Policies` + `AgentUserPolicyEngine`), 3-Tier Wake Gate on `MJ: User Routines` (`RoutineType = 'AgentWake'`), user-scoped calendar/email/availability actions (`EnterpriseMailboxSecurityGate`), and Communication Dashboard enterprise governance cards.
+- 7384dd6: Conversation forks: a conversation is Main (the messages with no branch) plus forks (`MJ: Conversation Branches`). A fork starts at a message and shows as a chip under it (kind icon, up to three avatars, message count, name, last activity); it opens as a full view where the inherited history sits faded behind a dashed rail, up to a fork marker, and the fork's own messages behind a solid rail. "Fork from here" on one of your own messages opens a new fork that replaces that message at once (it starts from the message before it, the composer starts with the message's text, the fork is created on the first send and named from that message, and leaving without sending creates nothing), Edit ("Save as fork"; the original message stays) and Regenerate (the first answer stays) each start a fork. A Forks button lists every fork, nested under its parent, with All and Mine filters. Everyone who can see a conversation sees its forks and who started each one. What a person is looking at is per person and in memory; nothing about the view is stored on the conversation, and changing the view ends an active voice session.
+  - New entity `MJ: Conversation Branches` with `Kind` (Fork, Edit, Regenerate; default Fork), `SourceDetailID` and `UserID`; new columns `ConversationDetail.BranchID` and `ConversationDetail.ReplacedAt` (migration, so `minor`).
+  - New authorization `Conversations: Fork`, granted to the UI role. The server refuses to create a fork for a person without it; deny it to a role to turn forking off for that role's members. Each person can also switch forking off in My Profile ("Fork when I edit or regenerate"; user setting `mj.conversations.forking.v1`).
+  - When forking is off for a person, Edit and Regenerate change the latest turn in place: Regenerate (latest answer) and "Save and resend" (latest user message) hide the current answer and run the agent again; earlier user messages can still be edited ("Save", shown as edited). A replaced answer keeps its row (`ReplacedAt` and `HiddenToUser` set) and is left out of the chat, export, pins, the mobile transcript, rubric subjects, the returning-visitor recap and every agent context read (`ConversationEngine.LiveRowsFilter` and `IsReplacedRow`). A turn a fork depends on is not changed in place.
+  - Every writer sets `BranchID` itself (null is Main): the composer and its agent turns, `AgentRunner`, the task-graph deliverer, an agent request resumed from the Agent Requests dashboard or API (the fork of the message that started the run) and realtime transcripts (a voice session's fork is fixed when it starts). The server no longer stamps it and refuses a `BranchID` that names a fork of another conversation.
+  - A fork that still has its own messages or child forks cannot be deleted on its own (its messages would move into Main); deleting the conversation deletes its forks and messages.
+  - `ConversationEngine` gains `CreateFork`, `ForkPointFrom`, `EditForkPoint`, `RegenerateForkPoint`, `SourceRowsFilter`, `BuildForkSummaries`, `LoadForkSummaries`, `ForkDisplayName`, `LiveRowsFilter` and `IsReplacedRow`.
+  - **Removed public Angular API** (the ParentID-based thread panel; a host app that binds any of these must drop the binding): `ConversationChatAreaComponent`'s `ThreadId` input and `ThreadOpened`/`ThreadClosed` outputs; the `ThreadPanelComponent` export; `ConversationWorkspaceComponent`'s `OpenThread`, `CloseThread` and `SelectedThreadId`; `ChatConversationsResource`'s `SelectedThreadId`, `OnThreadOpened` and `OnThreadClosed`; `MessageListComponent`'s `ReplyInThread` and `ViewThread` outputs. Their deprecated camelCase aliases (`threadId`, `threadOpened`, `threadClosed`, `openThread`, `closeThread`, `selectedThreadId`, `onThreadOpened`, `onThreadClosed`, `replyInThread`, `viewThread`) are removed with them.
+
+  Message-anchored scope: every reader of one conversation reads one path through `ConversationScope` (`LoadScope`, `TrunkScope`, `ScopeFilter`, `ScopeSubquery`, `IsInScope`, `FilterToScope`, `ArtifactVersionScopeFilter`): the open view in the chat (window, pins, artifacts, agent polling, export, voice start), and Main for the mobile app, the realtime widget, meeting transcripts, the conversation overview, rubric subjects and the returning-visitor recap. Artifact history is path-aware: the viewer takes a `Scope` input and lists only the versions a message on the path links (any direction) or that no message links, labels a gap as `v4 · from v2`, and falls back to the newest visible version with a notice. Search results carry the fork of each hit; opening one opens that fork, or Main. Skip requests carry `conversationBranchID` from the reply's fork, so Skip Brain keeps one mirror record per path.
+
+- 28fdf22: Add a `Decision Eval` test type that measures typed decisions against labels inside MJ's test harness, with a suite generator and a scorecard for agreement, repeatability and calibration. The conversation-routing decision's builders (and `IsAgentAllowed`) move from `@memberjunction/ng-conversations` to `@memberjunction/ai-core-plus`, so the chat and the harness build the decision with the same code; import them from there.
+- 26c0178: Flow agents gain a Decision step: one typed decision call whose outgoing paths route on its answers through the `decisions` condition root (`decisions.<key>.<question>`), both when the flow is dispatched as a task graph and when it runs in-run. An answer that fell below its question's `minConfidence`, or was never given, holds every condition that reads it, so a flow never guesses a branch; a failed decision call is a failed step, whose recovery path is taken whatever its rank. A state that is missing or empty, `{}` included, fails the step the same way in both modes, before any model is asked. A flow with a Decision step is validated the same way in both modes before its first step. Saving a task graph as a workflow now keeps its Decision nodes as Decision steps. Saving a workflow through Agent Manager now resolves the actions and prompts its steps name, so a saved Action step keeps its action and a Decision step keeps its prompt, and an action it cannot resolve is reported.
+- 9ce7cf4: PR 1 (6.2-safe fixes) for the Always-On Agent Harness & Core Primitives plan:
+  - **MessagingAdapters**: Messages on one Slack/Teams thread are handled one at a time, in arrival order (`inFlightThreadPromises`), so a rapid burst reuses the conversation the first message created instead of starting one conversation and one agent run per message.
+  - **Primitive 2 v1 (Metadata-Driven Trust & Taint Tracking)**:
+    - Add `IActionConfiguration` (`JSONType` on `MJ: Actions.Config`, exposed as `MJActionEntity.Config_Object`) with `outputTrustLevel?: 'Trusted' | 'SemiTrusted' | 'Untrusted'`, and mark external-content ingestion actions (`Web Search`, `Web Page Content`, `Brave Search`, `Perplexity Search`, `Tavily Search`, `Google Custom Search`, `Manage My Email Inbox and Drafts`, `HTTP Request`, `URL Metadata Extractor`, `Read RSS Feed`, `Execute MCP Tool`) with `outputTrustLevel: "Untrusted"` in `/metadata/actions/`.
+    - Add `ActionOutputTrustLevel` (`'Trusted' | 'SemiTrusted' | 'Untrusted'`) to `ActionResultSummary`, `ClientToolMetadata`, and `ClientToolResultSummary`, resolved in `BaseAgent.resolveActionTrustLevel` from `Action.Config_Object?.outputTrustLevel` with optional per-agent/per-run overrides in `LoopAgentTypePromptParams` (`actionTrustLevels`, `trustedActionNames`, `untrustedActionNames`).
+    - Escape closing `</untrusted_external_data>` tags and wrap `Untrusted`/`SemiTrusted` action and client-tool outputs in the `<untrusted_external_data source="..." trust="..." warning="...">` envelope in `BaseAgent.formatActionResultsAsMarkdown` and `FormatClientToolResults`.
+    - Strip `AIDirectives` from `Untrusted` action outputs and track `_taintedSources` / `IsRunTainted` on `BaseAgent`; a parent run absorbs its sub-agents' sources (`ExecuteAgentResult.taintedSources`), and client-tool trust comes from the same `ResolveClientTools` list the prompt offered.
+    - Land memory notes written during tainted runs with `Status = 'Pending'` and taint provenance in `Comments` (`MemoryWriteManager`).
+  - **Lesson 6 Remainder (Structured Error Recovery & Fuzzy Matching)**:
+    - Add `ActionErrorRecovery` (`Retryable`, `RecoverySuggestion`, `SuggestedValues`, `InvalidParams`, `ValidParameterExample`, `SuggestedNextActions`) to `ActionResultSimple` and `ActionResult`, propagate to `ActionResultSummary`, and render in `BaseAgent.formatActionResultsAsMarkdown`.
+    - Classify `PERMISSION_DENIED`, `RUN_SCOPE_UNSUPPORTED`, and `ErrorRecovery.Retryable === false` as `'non-retryable'` (`[CRITICAL/NON_RETRYABLE_FAILURE]`) in `BaseAgent.classifyActionFailure` and `formatActionFailureDirective`.
+    - Add fuzzy entity and field suggestions (`SuggestedValues` and `ErrorRecovery`) to `BaseRecordMutationAction` on `ENTITY_NOT_FOUND`, `INVALID_FIELD_NAMES`, and `PERMISSION_DENIED`.
+  - **Lesson 1 Vectors 2 & 5 (Prompt Cache Stability)**:
+    - Gate mid-loop `CompactAnsweredToolCallArguments` and `pruneAndCompactExpiredMessages` on the configured compaction trigger (`CompactionTriggerPercent`, resolved to `TriggerTokens`) instead of rewriting earlier turns, and the cached prompt prefix with them, on every step.
+    - Stage Phase 2 parallel injections (`InjectContextMemory`, `InjectPreExecutionRAG`, `InjectDecisionDiscovery`) into isolated arrays and unshift into `conversationMessages` in a fixed deterministic order after `Promise.all` settles (the ordering half of vector 5; follow-up turns still place new retrieved context ahead of turn 1).
+
+- 0fb3649: Follow-ups to host-assigned search scopes (#6234), from review:
+  - **Scoped Search's `ScopeID` description** (the text the model reads) now states the host rule: in a run whose host assigned search scopes, only those can be searched, the host's first is used when no ScopeID is given, and any other scope is refused.
+  - **A host-assigned Global scope in a tenant-scoped run** is still refused, now with a message that says the host assigned it, instead of advising a ScopeID that would be refused too.
+  - **`ExecuteAgentParams.SearchScopeIDs`** documents that an empty list means not assigned; to forbid search, remove Scoped Search with `actionChanges`.
+  - **`ActionRunScope.SearchScopeIDs`** is typed `string[]`, which is what BaseAgent produces (the key is absent when nothing was assigned).
+
+- 5fed75a: Agent runs no longer write `AIAgentRun.Result`; use `FinalPayload`, which holds the same value. The `Result` column remains, deprecated, for existing rows.
+
+  New column `AIAgentRunStep.PayloadAtStartSourceStepID`. When a step starts from the same payload an earlier step in the run ended with, `PayloadAtStart` is stored as NULL and this column points at that step. Readers resolve the value with `ResolvePayloadAtStart` / `ApplyResolvedPayloadAtStart` from `@memberjunction/ai-core-plus`. External API clients that read `PayloadAtStart` directly must follow the pointer.
+
+- 96daca8: Loop agents can ask typed decision questions (Likelihood, Choice, Score) through a new `decisions` field in their response. A fast decision model answers them inline on the same turn, at no LLM-turn cost, and the answers arrive on the next turn, as artifact tool results do. A request can target literal text, a payload path, or each item of a payload array. **Opt-in per agent:** set `includeDecisionsDocs: true` in the agent's `AgentTypePromptParams` (the default is `false`). That adds the decisions docs to its loop system prompt and the `decisions` field to its response type. Setting `includeResponseTypeDefinition.decisions: true` on its own adds the field without the docs. A `decisions` field from an agent that has neither is skipped. **Data flow:** each request sends its state (literal text, or the payload values it names) to the `Default Decision` prompt's model: Jev, via OpenRouter, first, and LLM Decision on failover. Set `decisionPromptName` to route them to a different prompt.
+
+  Each decision call is linked to its Decision step, so it counts toward the run's cost and token totals and their `MaxCostPerRun` / `MaxTokensPerRun` limits. At most 8 requests run per turn (`decisionsMaxRequests`), a malformed request fails on its own without losing the turn, and decisions sent with a step that ends the run (a passing `finishIf`, a sub-agent's `terminateAfter`, or client tools with `taskComplete`) are skipped rather than paid for and never read.
+
+- aa912ca: Loop agents can attach conditional completion gates (`finishIf`) to `Actions` steps and to a single `Sub-Agent` (not parallel `subAgents`). When the step completes successfully, a dedicated fast decision model evaluates the specified Likelihood questions against the step outputs. If all criteria meet or exceed the threshold (default 0.90), the agent completes immediately with the specified message, saving an entire turn of LLM latency and cost. The gate is skipped when an action returns `AIDirectives`, so the agent still reads them.
+
+  **Off by default: gates are opt-in per agent**, through the new `finishIfMode` prompt param in the agent's `AgentTypePromptParams`:
+  - `off` (the default): the model is not taught `finishIf`, and a gate it writes anyway is never evaluated.
+  - `shadow`: the model writes gates, and each one is evaluated and recorded as a `Finish check` step, but it never ends the run. Use it to measure an agent's gates on real traffic, at the cost of one decision call per gate.
+  - `on`: a passing gate ends the run with the model's pre-written message.
+
+  A replay of recorded action rounds found that a gate at the 0.90 threshold would have ended 22% of the rounds where the agent went on to act, so turn an agent `on` only after its shadow results look right. In `on` mode a gate can only end a run early, and only when every action succeeded and every answer clears the threshold; every gate is logged as a `Finish check` step. **Data flow** (in `shadow` and `on`): each gate sends the step's results (action outputs, or the sub-agent's result) to the `Default Decision` prompt's model: Jev, via OpenRouter, first, and LLM Decision on failover.
+
+- 1d43161: Move the Loop agent's volatile runtime state out of the system prompt so provider prompt caches survive across iterations. Until now the Loop agent system prompt rendered the current date/time, Scratchpad State and Payload at its tail, and because those blocks change every iteration the provider's prefix cache broke before it reached the conversation history; measured on Sage the cached share of input was 37% and the entire history was re-read on every step. The template no longer renders those blocks. Instead `BaseAgent.preparePromptParams` builds the same content into a `<mj-runtime-state>` fragment appended as the final `user` message of each request, and the system prompt carries a static pointer telling the model where to find it. At send time the fragment tag literal is escaped in every history message so no tool result or user text can pose as framework state. This is framework behaviour, not a per-agent setting: there is no placement parameter. The fragment is emitted only when the system prompt template carries the `<mj-runtime-state>` pointer. A template that still embeds the state blocks (a database whose template has not yet synced, or the Flow template) gets no fragment, so the transition cannot produce duplicated state; a template with neither (the Harness system prompt, or a custom prompt run without the Loop system prompt) gets none either, so no agent receives an unexplained block. Only a failed template lookup fails open. `specializationPlacement` (`auto`, `systemPrompt`, `trailingMessage`) relocates the agent's own child prompt into the fragment when it contains volatile placeholders, so a per-iteration date in a child prompt cannot silently reintroduce the cache break. `AIPromptRunner` exposes `RenderChildPromptTemplates` publicly for the relocation path, and `AgentChatMessageMetadata` gains a `volatileState` flag so provider adapters can recognise the fragment.
+
+  Two boundaries keep the fragment where it belongs. `prepareSubAgentMessages` drops `volatileState` messages before any message mode slices the parent history, so a sub-agent never sees the parent's payload, scratchpad or specialization and its `MaxMessages` window is spent on real turns. Under append-only retention, context recovery now frees retained fragments first — oldest first, all but the newest — before it touches tool results, and `TrimLastUserMessage` skips them, so a long run cannot overflow on state the next request re-sends anyway; the fragment carries `turnAdded` for the lifecycle. All placeholder names, tag literals and headings live in one `constants.ts`, and the unsync guard's markers are overridable through the protected `volatileTemplateMarkers` getter. The fragment is carried across iterations in a provider-aware way. Providers with block-level or sliding prefix caches (Anthropic, Gemini, Cerebras) get replace-in-place: only the latest fragment is attached, keeping the history compact. OpenAI and xAI (Grok) automatic caches reuse a prior request only when its entire prompt is a byte prefix of the new one, so for OpenAI and xAI prior fragments are retained and the new one appended, making each request an exact prefix extension of the last. The mode is chosen once per run by the new Loop agent prompt param `trailingStateMode` (`auto`, `appendOnly`, `replace`). Which providers need which is metadata, not code: `auto` reads the new `PrefixPromptCache` boolean from the model catalog's `ModelConfiguration` cascade through `BaseAgent.resolvePrefixPromptCache` and `AIEngine.GetEffectiveModelConfiguration`, for the model of the runtime override or of the first iteration's selection, then freezes that answer so a mid-run failover cannot flip the layout; `true` means append-only, anything else replace-in-place. The cascade gains a vendor layer for this: a migration adds a `Configuration` bag to `AIVendor` (JSONType `IAIVendorConfiguration`, a general-purpose vendor bag whose `ModelDefaults` key is a model-configuration bag), and the engine now resolves Model Types < Models < Vendors' `Configuration.ModelDefaults` < Model Vendors: the vendor default is the host-wide default for every model it serves and beats the model's own bag, merged per key, with the model-vendor row as the tie-breaker. `metadata/ai-vendors` sets `PrefixPromptCache: true` under `Configuration.ModelDefaults` on the OpenAI and x.ai vendor rows; every model they serve inherits it, and a model-vendor row can override it for one model on a host that diverges. `@memberjunction/ai` gains `AIVendorConfiguration` and `ParseVendorConfiguration` alongside. There is no vendor-name or driver-class matching. Turn 1, before any selection is known, uses replace-in-place; if turn 2 resolves to append-only, turn 1's fragment is spliced back at the turn-1 boundary, which reproduces the bytes an append-only turn 1 would have sent, so nothing is lost by deferring. The explicit values exist for a serving path whose catalog rows carry no strategy yet. `@memberjunction/ai` gains the framework-generic half of that: the `LLMConfigurationSettings.PrefixPromptCache` field and `IsPrefixPromptCache` in `modelConfiguration.ts`, and on `BaseLLM` the protected `isVolatileStateMessage` (the `volatileState` metadata flag), `trailingVolatileStateIndex` and `splitTrailingVolatileState` seam, with `VolatileStateMessageMetadata` and `TrailingVolatileStateSplit` as the shared shapes. The Anthropic adapter (`@memberjunction/ai-anthropic`) overrides `isVolatileStateMessage` to keep its tag-literal fallback and uses the split to recognise a trailing fragment, whether it is the last message or is followed by an assistant prefill, placing its ephemeral cache breakpoint on the last real history message instead and inserting an `OK` assistant turn when needed to preserve role alternation, so the stable history caches and only the fragment (and any prefill) is re-processed. Measured live on Sage on iterations 3 and later: Claude Sonnet 4.6, Opus 5, and Opus 5.5 from 0% to 78–90% cached, Grok 4.7 from 21% to 91%, GPT 5.6 from 0% to 78%, Gemini 2.5/3.8 Flash from 30–37% to 66–75%, Cerebras GPT-OSS-120B from 65% to 96%; prompt cost per million tokens fell 37–80% depending on provider.
+
+  Action execution gains a run-scoped circuit breaker in `BaseAgent.ExecuteSingleAction`, prompted by a bug this work exposed: `executeActionsStep` reported an action whose `ActionResult.Success` was `false` as successful, so agents retried unconfigured tools indefinitely. The step result now carries the action's real outcome, and the circuit breaker's three rules, checked fatal → identical-arguments → budget, bound retries. A fatal configuration error (API key missing or invalid, "not configured", credentials missing, "authentication failed") disables the action for the rest of the run; HTTP 401/403, "unauthorized" and "forbidden" are deliberately not fatal because they are usually per-resource or transient, and neither is a failure the model can fix itself: a message that names a parameter, or a call whose own arguments carried a credential (password, API key, token), falls through to the attempt budget instead. The identical-arguments rule: two failures with identical arguments (`IDENTICAL_FAILURE_THRESHOLD`) block further calls with those arguments, while different arguments still dispatch; argument identity is `normalizeActionParams`, keys sorted at every depth, in three protected layers a subclass can override. The attempt budget: five consecutive failures across any arguments (`ACTION_FAILURE_BUDGET`) disable the action for the run. A success resets both counters. Blocked calls return a `CircuitBreakerActionResult` in 0ms that names the rule that fired, and a `user`-role guidance message (`[CRITICAL/ACTION_UNAVAILABLE]`, `[CRITICAL/REPEATED_IDENTICAL_CALL]`, `[CRITICAL/ATTEMPTS_EXHAUSTED]` or `[WARNING/ACTION_FAILURE]`) is appended to the history so the model pivots instead of looping; the budget rule is reported ahead of the identical-arguments rule, since once the budget is spent no change of arguments can help. Calls made by the pipeline executor and by ForEach / While iterations bypass the breaker via a new optional `ExecuteSingleActionOptions.skipCircuitBreaker`, since those loops already account for failures per element, expect elements to be independent, and have no model in the loop to act on the guidance. Flow agents are exempt the same way through `BaseAgentType.UsesActionCircuitBreaker` (default true, false on `FlowAgentType`): their action nodes are chosen by the graph, whose failure paths may legitimately re-run a node with the same inputs, and no model reads a directive there, so the main loop passes the exemption and suppresses the directive for such steps. Metadata: the Loop agent type's `PromptParamsSchema` gains `specializationPlacement` and `trailingStateMode` and loses `volatileStatePlacement`; the system prompt template drops its volatile tail.
+
+- 5fed75a: Prompt runs store less template data in `AIPromptRun.Messages` (#5526). `Messages` always holds the messages the model received. The template inputs (`data`, `templateData`) are stored per a capture mode: `None` (default: top-level keys and byte sizes only), `Referenced` (only keys the prompt's templates read) or `Full`. Set it per prompt with the new `AIPrompt.TemplateDataCapture` column, per call with `AIPromptParams.TemplateDataCapture`, or per server with `aiPromptRuns.templateDataCapture` in mj.config.cjs. `_CURRENT_PAYLOAD` is never stored; agent-run steps hold the payload. New `TemplateEngineServer.GetReferencedVariables()` lists the variables a template reads.
+
+  **API note:** clients that read `data` or `templateData` out of `AIPromptRun.Messages` get less than before.
+  - The capture mode comes from the call, then the prompt, then the server default. The most specific prompt wins: the run's child prompts come before its main prompt. So for a Loop or Harness agent, a value on the agent's own prompt beats a value on the agent-type system prompt.
+  - In `None` mode (the default), `Messages` holds no `data` or `templateData`, only the `dataShape` sizes. `ParseMessagesData().inputData` and `GetDataContext()` return null.
+  - In `Referenced` mode, clients find only the keys that the templates read.
+  - `data` never holds `_CURRENT_PAYLOAD`, in any mode, `Full` included.
+  - `ParseMessagesData()` now also returns `dataCapture`, `dataShape` and `dataCaptureNote`.
+  - If the capture step fails, the run still saves, with `dataCapture: 'None'`, a fixed `dataCaptureNote` and no template data.
+  - The `GetReferencedVariables()` result has `ParseFailed: true` when a template does not parse.
+
+- ce758af: Feature Pipelines: keyed, versioned Feature Values and honest runs (migration `V202610201100__v6.2.x__Feature_Value_Key_And_Versions.sql`).
+  - Feature Values upsert on a key (record, feature, pipeline version, prompt version, primary model, parameters, input); a value a person entered (`Source='Human'`) is never overwritten unless the run sets `overwriteHumanValues`. Child write-back can `reconcile` rows on a key.
+  - `MJ: Feature Pipeline Versions` registers each pipeline pin; a gated pipeline runs only under a version whose golden-set result meets its threshold. The `Steward Feature Pipeline Version` Action (`StewardFeaturePipelineVersionAction`) and `Feature Pipeline Version Steward` Record Process (`WorkType='Action'`, scheduled via `RecordProcessScheduledJobDriver`) evaluate and backfill changed versions; golden sets carry a label-quality record, `Required` and `ExpectAbstain` cases.
+  - New `@memberjunction/feature-pipelines-engine` package houses server-side Feature Pipeline execution (`InferProcessor`, `BaseFeaturePipelineDriver`, `LLMFeaturePipelineDriver`, `DecisionFeaturePipelineDriver`, `FeaturePipelineEscalation`, `FeaturePipelineHumanValueGuard`, `FeaturePipelineErrors`), golden-set testing (`FeaturePipelineGoldenSetDriver`, `golden-set-scoring`, `golden-label-quality`), and version stewardship (`FeaturePipelineVersionSteward`, `StewardFeaturePipelineVersionAction`, `RegisterInferRecordProcessor`), keeping `@memberjunction/record-set-processor-base`, `@memberjunction/record-set-processor`, `@memberjunction/scheduling-engine`, and `@memberjunction/testing-engine` free of Feature Pipeline dependencies.
+  - Outputs are checked against `lookup` constraints (per item with `ItemRef`); an output below its `MinConfidence` is withheld (`OnLowConfidence: 'null'`); `Context.RecordAsUserMessage` sends the record as a JSON user turn.
+  - Dry runs write nothing, preview only what the real write would change, cap at 25 records and report `WouldRefuse`; a Feature Pipeline run with a failed record ends `Failed` with a `FeaturePipelineRunResult` summary; the breaker counts attempted records.
+  - An output may omit its write target (builder target mode `Feature value only (no write-back)`): the answer is stored in `MJ: Feature Values` only, typed by its constraint (`numeric`/`money`, `boolean`, `date`), and no entity field is written. The Bulk Operations dry-run dialog shows each as a `<Feature> (feature value)` row with the previous and proposed value, and loads only the non-skipped details so a large scope counts every changed record.
+  - A Feature Values panel on every record form shows the latest answer per pipeline and feature (Source, Confidence, version, Computed, Reasoning) and expands to its history; a latest answer that withheld its value reads "no value". `@memberjunction/ng-base-forms` re-resolves the form chrome when a panel mounts after first render, so a late panel gets its left-nav entry.
+  - The Version Steward beats on a timer while its backfill runs, defers a backfill while a run is Running, marks only a clean run as backfilled, and ignores a Running Process Run not checkpointed for 30 minutes. A Feature Value insert that loses the race on its key to an equal value is `Unchanged`.
+  - Bedrock sends a configured temperature of 0 as 0 (F-FP-13).
+  - `AIPromptParams.templateAutoescape` (set by the Feature Pipeline drivers) renders a prompt template without HTML escaping; a Feature Pipeline run reads its prompt's template from the database at run start, so a template edit takes effect on the next run.
+  - API moves & PascalCase standardization: `WriteBackResult`, `TagWriteBackPreview`, `FieldRulesResultPayload`, and `MetadataProviderCapabilities` live in `@memberjunction/record-set-processor-base`; `FeaturePipelineRunResults` lives in `@memberjunction/feature-pipelines`; `RunRecordProcessOptions`, `RecordProcessorContext`, `RecordSetProcessOptions`, `ProcessRunSummary`, and `WriteBackValuePreview` use `PascalCase` properties across `@memberjunction/record-set-processor-base` and `@memberjunction/record-set-processor`.
+
+- 975948b: Realtime Channels v2, third phase: verb-level exposure policy, an Angular adapter that wraps an existing component as a channel, an opt-in DOM rasterizer, a sample game channel, and the channels guide. Existing channels, tool names and hosts are unchanged.
+
+  `minor` because this branch edits `metadata/` earlier (see the first two phases) and adds two new packages. There is no migration and no new entity column.
+  - **Verb results obey exposure** (`@memberjunction/ai-core-plus`, `@memberjunction/realtime-runtime`, `@memberjunction/ng-conversations`). A verb whose result carries what the channel holds declares `ReturnsChannelData: 'state' | 'pixels'` on its descriptor entry. When the channel's effective exposure is below that level the dispatcher, and the native-tool route for a channel mounted at start, refuse the whole call with `exposure_restricted` (policy, not redaction: the verb is refused whole and its result is never filtered); the check comes after `InvokableBy` and before parameter validation, so a malformed call cannot probe a withheld verb. The catalog note and the `exposure_changed` note list the verbs that are unavailable and why. New pure helpers `IsVerbWithheld`, `WithheldVerbs` and `DescribeWithheldVerb`; `BuildToolBackedVerbs` accepts a per-verb flag map. Remote Browser flags `GetPageText` and `AchieveGoal` (`'state'`) and `DescribePage` and `LocateElement` (`'pixels'`); the Interactive Component channel flags `GetDataState`, `Validate`, `IsDirty` and custom methods with a non-void return type (merged verb offers are withheld only when every offer is flagged). This replaces the earlier statement that exposure is not a redaction layer over verb results.
+  - **`AngularComponentChannel<TComponent>`** (new package `@memberjunction/ng-realtime-channels`). Wraps an existing Angular component as a channel surface without rewriting it: a descriptor plus `ReadSurfaceState`, `ApplySurfaceVerb` and `SurfaceEvents`, and optional `OnSurfaceOpen`, `SurfaceCompletion`, `OnSurfaceBound` and `SurfaceElement`. It owns binding and unbinding, change-driven perception (an event emitted while the agent's verb runs is attributed to the agent), verb resolution, validation and serialization, completion, state of record, and pictures. A verb that arrives before the surface exists waits, bounded (5 s), for the real component and otherwise fails with `surface_unavailable`; it neither runs against a hidden instance nor is acknowledged and applied later.
+  - **Opt-in DOM rasterizer** (`@memberjunction/ng-realtime-channels`). `EnableChannelFrameCapture()` registers a bounded `html-to-image` based capturer (3000 nodes, 4 s, one capture at a time, 1024 px longest edge, no web fonts) that fails soft and turns itself off after repeated or unrecoverable failures, logging one reason. Core ships none by default; Explorer opts in (`@memberjunction/ng-explorer-app`), and the Interactive Component channel sources pictures only while the user allows pixels and a video track is up. `InteractiveComponentFrameCapture` is now `ChannelFrameCapture` in the new package, and `html-to-image` moved with it.
+  - **Sample channel** (new package `@memberjunction/ng-realtime-channel-examples`). A tic-tac-toe channel built only through the adapter, not a dependency of anything and loaded only when a host imports it, with tests that play whole games (user win, agent win, draw) against the real component with interleaved user clicks and agent verbs, plus collapse and re-expand, resume, exposure and pictures.
+  - **Guide.** `guides/REALTIME_CHANNELS_GUIDE.md` (indexed in `guides/README.md`): the contract, writing a channel from scratch, wrapping a component, scoping, opening on demand, visual perception, the Interactive Component channel, publishing from an Open App, and testing.
+  - **Per-verb timeout in the adapter** (`@memberjunction/ng-realtime-channels`). `AngularComponentChannel.VerbTimeoutMs` (15 s, overridable) bounds `ApplySurfaceVerb`. On timeout the call fails with `verb_timeout` and a message the agent can act on, the serialized queue is released and the timeout is logged once with the channel and verb. A late result is never delivered, a late failure is logged, and a late success is recorded as a change so the next perception note shows the real state; nothing is rolled back.
+  - **Generic `ClientOnlyChannelServer`** (`@memberjunction/ai-agents`, loaded by `@memberjunction/server`). `MJ: AI Agent Channels.ServerPluginClass` is required, so a channel that runs entirely in the browser sets it to `ClientOnlyChannelServer` instead of writing an empty plugin. It takes its channel name from the registry row, contributes no server tools and does not rewrite saves. `InteractiveComponentChannelServer` and `IdentityVerificationChannelServer` are now thin subclasses of it that keep their existing registry keys and behavior.
+
+- 22c9074: Realtime Channels v2, second phase: an Interactive Component channel, several video sources with one arbiter, and exposure policy. Existing channels, tool names and hosts are unchanged.
+
+  `minor` because the branch edits `metadata/` (a new `MJ: AI Agent Channels` row, and `Privacy.ZeroDataRetention` and `RequireZeroDataRetentionFor` in the `IAIConfiguration` / `IAgentSettings` JSON types). There is no migration and no new entity column.
+  - **Interactive Component channel** (`@memberjunction/ng-conversations`, `@memberjunction/ai-agents`, `@memberjunction/ng-react`). Shows any component artifact next to the call and lets the agent operate it. Multi-instance, opt-in, on-demand. Its contract is derived from the component's spec: custom methods and the standard methods it supports become verbs with parameter schemas, `getCurrentDataState` becomes the instance's data, spec events become channel events, spec properties become the schema of the opening inputs. Built-ins: `open`, `show_version` (swaps an open instance to another version of its own artifact in place, keeping its id), `close`. Artifacts load through the signed-in user's own access. Delegated component artifacts can open automatically (`channels.config.InteractiveComponent.autoOpenDelegatedComponents`, off by default), and a newer version of an open component replaces it in place. `MJReactComponent` gains a public `Refresh()`. New `InteractiveComponentChannelServer` and a `MJ: AI Agent Channels` row.
+  - **Multi-instance and delegated-artifact hooks** (`@memberjunction/realtime-runtime`). `OnOpen` can name the instance it created; `Complete` and `EmitChannelEvent` take an optional instance. A channel can ask to be offered the artifacts of a delegated run (`AcceptsDelegationArtifacts` / `OnDelegationArtifacts`); the runtime mounts it if needed and reveals its tab.
+  - **Several video sources** (`@memberjunction/ai`, `@memberjunction/ai-gemini`, `@memberjunction/ai-realtime-client`). Tracks carry a `SourceID` and `Label`; model profiles declare `MaxInboundVideoStreams` (1 for Gemini 3.8 Live and Extended Thinking, 0 without video input) and negotiation caps the streams to it. `SendVideoFrame(data, mime, sourceId?)`. `VideoSourceArbiter` is the single writer of inbound video: it passes every enabled source through on a multi-stream model; on a one-stream model it picks by a policy that is data (user pick, most recent capture, focused surface, newest), tells the model `[The agent is now viewing: <label>]` on every switch, and paces to the negotiated rate. The channel video bridge now registers with the arbiter; its exports are unchanged.
+  - **"Agent can see" and exposure policy** (`@memberjunction/ai-core-plus`, `@memberjunction/ai-agents`, `@memberjunction/realtime-runtime`, `@memberjunction/ng-conversations`). The realtime overlay shows which sources the agent can see, with a switch per source, remembered per user per channel. A channel's exposure is the lowest of its own ceiling, the agent's `channels.config.<Key>.maxExposure`, a zero-data-retention requirement and the user's choice; the server decides all but the last and returns it in the session policy. `requireZeroDataRetentionFor: ['state' | 'pixels']` lowers exposure when the session model's configuration does not declare `Privacy.ZeroDataRetention: true`, and the agent is told why. Exposure gates what is volunteered to the model (state notes and frames), and, for a verb that declares `ReturnsChannelData`, what the agent may ask for (the verb is refused whole below its level; see the third phase).
+  - **Session tuning.** `realtime.session.unverifiedMaxSeconds` and `verifiedMaxSeconds` (positive integers) pass through the configuration cascade; `channels.config.<Key>` reaches a channel intact.
+
+- 88b85fc: Realtime Channels v2, first phase: a self-describing channel contract, per-agent/app/host channel scoping, a validated `ContextTool` proxy, and a lifted visual-perception pump. Existing channels, tool names and hosts are unchanged.
+
+  `minor` because the branch edits `metadata/entities/JSONType-interfaces/IAgentSettings.ts` (the new `Realtime.Channels` block); there is no migration, and no new entity column.
+  - **Channel descriptors** (`@memberjunction/ai-core-plus`, `@memberjunction/realtime-runtime`). `RealtimeChannelDescriptor` (nouns, verbs with parameter schemas and `InvokableBy`, events, inputs/output, display policy, default availability, exposure ceiling) and the new `BaseRealtimeChannelClient` members `GetDescriptor`, `GetState`, `ApplyVerb`, `Events$`, `Output$`, `Open`, `Complete`, `InstanceId`. A channel that implements only the original members is synthesized a descriptor, so nothing changes for it. The Whiteboard, Remote Browser, Media and Client Context channels ship authored descriptors; their native tool names are unchanged. Perception notes are structured and debounced (`[channel:<Key>#<instance>] state_changed {…}`, a snapshot first and then deltas).
+  - **Channel scoping.** Code default, then agent (`realtime.channels` in the configuration cascade), then app (`Application.AgentSettings.Realtime.Channels`), then host-declared channels (`StartRealtimeSession(…, { HostChannels })`, which work on connect-only providers with no registry rows). `IsActive = false` on a registry row remains a master kill switch. At mint the browser reports its candidates (`channelCandidatesJson`) and the server returns the resolved policy (`ClientPolicyJson`), narrows the declared tools to match, persists the in-scope channel keys on the session, and drops the excluded channels' server plugins. A client with no server policy resolves the same scope locally, and a client against an older server falls back to the original mint mutation.
+  - **`ContextTool` proxy.** Accepts `target: { channel, instance? }`; a targeted call is validated against the addressed verb's parameter schema and returns a structured, model-recoverable error on failure. `on-demand` channels are opened mid-session with `action: "open"`. A catalog note rendered from the descriptors tells the model which channels exist.
+  - **App client tools.** `Application.AgentSettings.ClientTools` is now read by the realtime path and resolved through `ResolveClientTools`. `RegisterAppClientTools(tools, owner?)` is owner-keyed (new `UnregisterAppClientTools` / `ClearAppClientTools`); Explorer registers its globals and the active surface under separate owners and clears the previous app's surface tools on an app switch (previously they lingered). `FormatClientToolsForPrompt` is removed: it never had a caller.
+  - **Visual perception.** The Whiteboard's change-driven frame pump now lives in the base channel (`EnableVisualPerception`); frames are tagged with the change id of the state they describe. The Whiteboard's behavior is unchanged.
+  - **Session config rewrites no longer drop fields.** `RealtimeClientSessionResolver` rebuilt the persisted session config field by field on the run-id and pending-feedback rewrites, dropping `mediaCollectionID` and `directActions`; it now carries the existing config forward.
+
+- 8420f36: Client-direct realtime recordings no longer depend on the browser surviving the end of the call (#5294).
+  - **Opus shards during the call.** The browser captures at 48 kHz into one continuous Opus encoder (WebCodecs, or libopus WebAssembly in a Worker where WebCodecs cannot encode Opus) and uploads a 5 s `MJOPUS1` shard as raw bytes to `POST /realtime/recording/:agentSessionId/shard/:index`. Each shard is kept in IndexedDB until the server acknowledges it, so shards survive network drops and reloads and are uploaded on the next page load.
+  - **Keepalive terminal.** End, `pagehide` and `visibilitychange`→hidden send `POST /realtime/recording/:agentSessionId/end` with the last partial window as a `keepalive` request, then re-send every unacknowledged shard with `keepalive`. A hidden tab's terminal carries `final=false`: the server stamps the counts but assembles only after the grace period, so switching tabs does not rewrite the recording. `EndRealtimeSession()` waits for the terminal's acknowledgement for at most 3 s. The whole-call `UploadRealtimeRecording` upload and the `beforeunload` prompt are gone from new clients. The mutations remain for older clients.
+  - **Server ledger and assembly.** Migration `V202610151535` adds `RecordingStatus`, `RecordingExpectedShards`, `RecordingCapturedSamples`, `RecordingGaps` and `RecordingAssemblyVersion` to `AIAgentSession`, and the new `MJ: AI Agent Session Recording Shards` entity, written through guarded stored procedures. MJAPI assembles `recording.wav` and `peaks.json` within seconds of the terminal. A recording with missing shards is assembled as `Partial` after `realtime.recordingAssemblyGraceSeconds` (default 90): each gap is silence and is listed in `RecordingGaps`. The session janitor assembles sessions that never sent a terminal. Recovery of legacy `seg-*.pcm` storage shards is unchanged.
+  - **Breaking for custom hosts:** `IRealtimeSessionRecorder` now returns Opus packets (`TakeEncodedPackets()`, `Stop(): Promise<number>`) instead of base64 audio. `BrowserRecordingUnloadGuard` is removed. A host that wires its own page-lifecycle events calls `SendRecordingTerminal({ Final: false })` when the page is hidden and `SendRecordingTerminal()` on `pagehide`.
+
+- f0c78c3: Realtime session events and mid-session identity verification (server side), with a typed client.
+  - **Session events** (`@memberjunction/ai-core-plus`, `@memberjunction/server`). A framework-neutral event contract (`RealtimeSessionEvent`, an extensible payload map whose first type is `identity.verified`, and a validating `ParseRealtimeSessionEvent`), a `RealtimeSessionEventService` apps publish through, and a `RealtimeSessionEvents(agentSessionId)` GraphQL subscription. It is authorized twice: when it opens and for every event. The session's `UserID` must be the caller's; an anonymous widget guest must also present a signed per-session scope matching the session's conversation. A refusal reads "not found" whether the session is missing or simply not the caller's.
+  - **Identity verification** (`@memberjunction/server`). A person proves they control an email address without leaving the conversation: `RequestRealtimeSessionVerification`, `SubmitRealtimeSessionVerificationCode` and `RealtimeSessionVerificationStatus`, plus the public `GET/POST /realtime/verify` link routes (GET only renders a confirm button, so mail scanners cannot consume the link). Single use, expiring, constant-time compared. Policy: `requireBusinessDomain`, `consumerDomains`, `blockedDomains`, `linkTtlMinutes`, `maxSendsPerSession`, `maxCodeAttempts`, `unverifiedMaxSeconds`, `verifiedMaxSeconds`, plus per-IP, per-domain, per-address and per-session limits. On success the session is marked verified, its deadline extended, `identity.verified` published and an audit entry written. It never creates an MJ user or changes the session's principal. Off by default; needs `realtime.identityVerification.enabled`, a `communicationProvider` and an `hmacSecret` (at least 16 characters). `deliveryMode: 'dry-run'` builds and logs the email without delivering it, for rehearsal and integration environments. See `packages/MJServer/src/realtimeSessions/README.md`.
+  - **The typed code is keyed.** The six-digit code is stored as an HMAC under a server-only secret, because the session's owner can read their own session row and an unkeyed hash of a six-digit code can be reversed offline.
+  - **Server-decided session state is protected** (`@memberjunction/core-entities-server`). `MJAIAgentSessionEntityServer` refuses any write to `Config.identityVerification` or `Config.maxSessionDeadlineIso` that does not come from trusted server code, including from the session's own owner. Without it the owner could forge a verified identity or move their own deadline.
+  - **`StartRealtimeClientSession`** stamps the verification policy snapshot and the unverified duration cap on any principal, and carries a verified identity forward from `lastSessionId` when the caller is authorized on it. It also stops dropping `Config` keys (`directActions`, `mediaCollectionID`) when it records the run ids.
+  - **`AppContext.ClientIp`** (`@memberjunction/server`) carries `req.ip` for abuse limits.
+  - **`GraphQLRealtimeSessionClient`** (`@memberjunction/graphql-dataprovider`). The typed transport for the three operations and the subscription: `RequestVerification`, `SubmitVerificationCode`, `GetVerificationStatus`, `SubscribeToSessionEvents` and `SubscribeToSessionEventsOfType`. It never throws, never logs the email address or code, parses `PayloadJson` with `ParseRealtimeSessionEvent` and passes unknown event types through so a newer server cannot break an older client. It reuses `GraphQLDataProvider.Subscribe`.
+  - **Metadata.** Adds the audit log type "Realtime Identity Verified".
+  - **Integration tests** (`@memberjunction/integration-test-suite`). IT111 (server transport) proves the session guard in process and seeds the server-decided fixtures; IT112 (client transport) drives verification end to end over the GraphQL wire and a real HTTP GET and POST of `/realtime/verify`.
+
+- 02bb563: `<mj-realtime-widget>`, the `IdentityVerification` channel, session events in the runtime, and a session-launcher seam.
+  - **Session launcher** (`@memberjunction/realtime-runtime`). `IRealtimeSessionLauncher` is the one place a session is minted. `DefaultRealtimeSessionLauncher` is the stock `StartRealtimeClientSession` mutation with the channel candidates and client policy, unchanged, including the fallback for servers that predate channel scoping. Set `RealtimeSessionRuntime.Launcher` to mint through your own endpoint without wrapping the provider in a Proxy; set it to `null` to restore the default.
+  - **Session events in the runtime** (`@memberjunction/realtime-runtime`). The runtime subscribes for the life of the session (tolerating a provider with no subscriptions), exposes `SessionEvents$`, and routes events to per-type handlers. `identity.verified` sends the agent a context note (JSON-framed so user-entered text cannot break out), optionally asks it to speak (`IdentityVerifiedSpokenResponse`), and moves the client deadline from the payload; the server stays authoritative and the deadline only ever moves later. On a reconnect it re-subscribes and reads `GetVerificationStatus` once, so a verification that completed while offline is still announced, flagged `Recovered`. Channels receive `SessionEvents$` on their context. Also adds `OpenChannel(key, inputs)`.
+  - **`IdentityVerification` channel** (`@memberjunction/ng-conversations`, `@memberjunction/ai-agents`, `@memberjunction/server`). An opt-in v2 channel with nouns name, email and status and verbs `fill` (agent or user), `confirm` (**the user only**, refused for the agent in the channel itself, not just the surface), `submit`, `resend` and `enter_code`. A value the agent fills is marked as a suggestion until the user confirms it. The code is never stored and never reaches the agent. The surface is a small accessible Angular component using only design tokens and `mjButton`. A thin server plugin keeps no PII on the channel row. Ships with its `metadata/ai-agent-channels` row.
+  - **`@memberjunction/ng-realtime-widget`** (new package). `<mj-realtime-widget>` as an Angular component and as a one-script custom element (`dist/element/mj-realtime-widget.js`: Angular linker, no `unsafe-eval`, CSP nonce, guarded define). Auth modes `widget-key`, `invite-token`, `token` and a JS-only `launcher`; a consent gate before the microphone; resume and tab-close cleanup; `--mj-*` theming; attributes, properties, methods (`start`, `end`, `openChannel`, `sendContextNote`, `requestSpokenResponse`, `registerChannel`) and bubbling, composed DOM events (`mj-ready`, `mj-session-started`, `mj-session-ended`, `mj-phase-changed`, `mj-verified`, `mj-session-event`, `mj-channel-opened`, `mj-channel-event`, `mj-channel-output`, `mj-error`). It hosts the existing realtime overlay by deep import, so the heavy `ConversationsModule` barrel stays out of the bundle. A static sample page and an embed guide ship in the package.
+  - **A small shell and a lazily loaded call** (`@memberjunction/ng-realtime-widget`). The one-script embed is now a classic-script **shell** (about 8 KB gzipped, no Angular) that defines the element, exposes the whole contract and draws the start button, the consent notice and the status screens, plus the **call** (Angular, the realtime overlay, runtime, drivers, built-in channels) as split ES modules fetched relative to the shell's own URL on `start()`, `auto-start`, or a `preload` hint (`none|hover|idle|eager`, default `hover`, a `modulepreload` link that downloads without running). Declining consent downloads nothing. Calls made before the call code loads are specified and tested: `openChannel` and `sendContextNote` queue (notes are capped and never replayed into the next call), `requestSpokenResponse` is never queued, `end()` abandons a pending start. The Interactive Component channel is its own lazily loaded chunk, loaded only when it could be in the session. New attributes: `perception` (`on|off|ask`, default `ask`; pre-sets the person's exposure choice and is reported by a new `mj-perception-changed` event), `frame-capture` (a marked hook for Phase 2's rasterizer), `preload`, `session-url`. The build fails if the shell exceeds its size budget or a heavy dependency leaks into it. The bundle test boots the shell under a no-eval window, calls `start()`, and proves the call chunk loads.
+  - **`frame-capture` loads the DOM rasterizer lazily** (`@memberjunction/ng-realtime-widget`). The attribute calls `EnableChannelFrameCapture()` from `@memberjunction/ng-realtime-channels` (now a dependency), as its own chunk (16 KB raw / 6.6 KB gzipped, `html-to-image` included) loaded before the session is minted, so neither the shell nor a call that does not want frames pays for it. If it cannot be loaded the widget warns once and channels stay state-only; a capturer the page registered itself is respected.
+  - **Runtime hooks** (`@memberjunction/realtime-runtime`). `ChannelClassLoader` lets a host load channel code on demand (called with the `ClientPluginClass` keys of every channel about to be resolved; a failure is logged, never fatal), and `ExposurePreferences` exposes the current store so a host can layer over it.
+  - **Event payload** (`@memberjunction/ai-core-plus`). `IdentityVerifiedEventPayload` gains an optional `Recovered` flag, validated by `IsIdentityVerifiedEventPayload`.
+
+- 539dfe3: Add Semantic Graph substrate (`MJ: Graph Types`, `MJ: Graph Concept Types`, `MJ: Graph Authority Tiers`, `MJ: Graphs`, `MJ: Graph Concepts`, `MJ: Graph Edge Types`, `MJ: Graph Edge Type Endpoints`, `MJ: Graph Edge Providers`, `MJ: Graph Edges`, and `ContentSource.GraphID`), Content Pipeline `GraphStage` with `EntityGraphOverlayStore` and `DeterministicConceptSynthesizer`, deterministic `TaskGraph` DAG similarity & workflow health telemetry in `@memberjunction/ai-core-plus`, and Semantic Graph & Canon Explorer UI in `@memberjunction/ng-graph-view` and `@memberjunction/ng-dashboards`.
+- 5b41d48: fix: the SQL a prompt is asked to write, and the connection its result is re-executed on, are both chosen from `provider.PlatformKey`
+
+  MemberJunction assumed SQL Server wherever an agent touched SQL. Two faces of the same problem, fixed together.
+
+  **The prompts taught T-SQL unconditionally.** `sql-query-writer` opened with "you are the world's greatest expert in Microsoft SQL Server and T-SQL"; the shipped query-generation prompts taught `ISNULL`, `DATEADD`, `GETDATE` and `[bracketed]` identifiers with no dialect token anywhere under `metadata/prompts`. A PostgreSQL tenant's agent burned LLM turns writing T-SQL, failing, retrying and failing again.
+
+  The dialect now reaches templates as a **system placeholder**, not a registry of TemplateIDs: `_SQL_DIALECT`, `_SQL_DIALECT_NAME` and `_SQL_DIALECT_RULES` resolve on every prompt render from the request's own provider (falling back to `Metadata.Provider`, then to SQL Server). Any template that references them is parameterised — nothing has to be registered, so a template added later cannot be left off a list. `_SQL_DIALECT_RULES` is composed by `SQLDialect.PromptGuidance` from the dialect's own primitives (`QuoteIdentifier`, `LimitClause`, `IsNull`, `DateAddExpression`, `NewUUID`, …), so implementing a dialect is sufficient to get correct guidance — there is no second per-dialect prose table to maintain.
+
+  **The ad-hoc read-only path reached for an mssql pool.** `AdhocQueryResolver.ExecuteAdhocQuery` required a SQL Server `ConnectionPool` from `context.dataSources` before it would run anything. A PostgreSQL provider never populates one, so every ad-hoc query on PG returned "No read-only data source available for ad-hoc query execution" — rendered downstream as "Showing cached data" — even though the `GetReadOnlyProvider` call directly beneath it already knew the tenant was PostgreSQL. Both questions (which dialect to render, and what to execute on) now come from the same read-only provider, and execution goes through `provider.ExecuteSQL`, which every platform implements.
+
+  Also fixed: `Run Ad-hoc Query` resolved `{{query:"..."}}` composition macros against a hardcoded `'sqlserver'`, and `QueryBuilderAgent` re-formatted every tenant's SQL with `sql-formatter`'s `tsql` language.
+
+  **The SQL safety allowlists were T-SQL vocabularies.** `ALLOWED_SQL_FUNCTIONS` (`@memberjunction/global`) and `ALLOWED_SQL_KEYWORDS` (`@memberjunction/core`) listed only SQL Server's read-only names, so an ordinary PostgreSQL expression was refused before it ever reached a database that would have run it: `DATE_TRUNC('month', CreatedAt)` came back as "Function 'DATE_TRUNC' is not allowed", and `ARRAY_AGG(Name)` failed both the function allowlist and the "an aggregate context must contain an aggregate" rule. Both lists now carry the UNION of the supported dialects' read-only vocabulary — deliberately, and documented in the code: these are deny-by-default SAFETY screens, not dialect grammars, and a PostgreSQL name that reaches a SQL Server tenant is rejected by the SQL Server parser on its own. Nothing that writes, escalates, or reaches outside the statement was added, and `DANGEROUS_SQL_KEYWORDS` is still checked first, so a name on the allowlist can never unblock one that is denied.
+
+  **The row cap's safety net still emitted `TOP`.** `ensureRowLimit`'s AST path (`QueryPagingEngine.WrapWithMaxRows`) was already dialect-aware, but the `catch` arm beneath it rewrote `SELECT` to `SELECT TOP n` unconditionally. That arm is reached precisely when the AST path could not understand the SQL — so on a PostgreSQL tenant a query that merely confused the parser came back as SQL that could not parse at all. The fallback now asks the same `resolvePlatform()` seam as the rest of the action, appends `LIMIT n` on PostgreSQL, and treats an existing `LIMIT` as already capped.
+
+  New in `@memberjunction/core`: `ResolvePlatformKey`, `DEFAULT_DATABASE_PLATFORM`, `DescribeSQLDialectForPrompt`, `DescribeSQLDialectName`, `ResolveSQLFormatterLanguage`. New in `@memberjunction/sql-dialect`: `SQLDialect.DisplayName`, `SQLDialect.FormatterLanguage`, `SQLDialect.PromptGuidance`, `IsSupportedPlatform`, `SupportedPlatforms`.
+
+  Behaviour on SQL Server tenants is unchanged: every fallback resolves to `sqlserver`, the historical default.
+
+- d13cf6b: A task-graph node can be a typed `Decision`: `MJ: Tasks.StepType` gains the `Decision` value.
+  A Decision node answers its questions in one call, edges route on the answers through the new `decisions` condition root, a fork on a Choice must cover every option at submit, and an answer below its `minConfidence` or from a failed call holds the edge instead of reading as false.
+  At submit, a condition may read only a decision certain to have answered by the time its edge is decided, only through the `decisions` root, and only a Choice value the question offers. A below-threshold answer never appears in the step's output, and `Retry` asks a Decision step that is holding one only the questions it is holding, keeping the answers the graph has already acted on.
+- aca4317: Add multi-step action loop bodies (`steps?: LoopBodyActionStep[]`) to `ForEach` and `While` operations across `@memberjunction/ai-core-plus`, `@memberjunction/task-graph`, `@memberjunction/ai-agents`, and `@memberjunction/server`, together with sanitized native tool-name resolution, structured JSON action-message projection in `Pipeline`, and an updated Loop Agent system prompt covering the full execution primitive hierarchy and single-channel native tool-calling JSON envelope bridge.
+  - **`@memberjunction/ai-core-plus`**: Extend `ForEachOperation` and `WhileOperation` with `steps?: LoopBodyActionStep[]` (`id`, `name`, `params`, optional `condition` over `steps.<id>.*` and loop bindings, optional `outputMapping`), add `ResolveLoopBodyParams` and shared `BuildActionOutputObject` / `LoopStepFold` in `payload-mapping.ts` (blocking prototype-chain lookups across all path resolvers), export `ValidateLoopOperationStructure` in `task-graph-validator.ts` (enforcing `steps.<prevId>` ordering across `step.condition` and `step.params`), and preserve multi-step loop bodies losslessly across `ConvertTaskGraphToAgentSpec` ↔ `CompileFlowToTaskGraph`.
+  - **`@memberjunction/task-graph`**: Pre-resolve per-step `ActionID`s into `TaskStepConfiguration.stepActionIds` in `TaskGraphService` via shared `ResolveRecordsByNameOrToolName` (using `EscapeSQLString` and `SanitizeToolName` fallback with surfaced `RunView` error handling), unify durable single-arm and `steps[]` loop parameter resolution on `ResolveLoopBodyParams` (supporting both `<itemVar>.*` / `{{...}}` and legacy `payload.<itemVar>.*` / `static:*` mappings while preserving unresolved paths and downstream `{{template}}` tokens as literals; note that exact bare binding variable names like `"index"` resolve to the loop binding unless escaped with `"static:index"`), and execute multi-step `ForEach` and `While` loop bodies in `TaskGraphDispatcher` with deterministic ascending-index parallel output folding.
+  - **`@memberjunction/ai-agents`, `@memberjunction/server`, & `metadata/prompts`**: Support `steps[]` and single-arm `action.outputMapping` in in-turn `BaseAgent.executeForEachLoop` and `BaseAgent.executeWhileLoop` as well as `FlowAgentType` in-run execution, resolve sanitized native tool names (`calculate_expression` → `"Calculate Expression"`, `delegate_to_<slug>` → sub-agent name) without mutating caller inputs in validators, include `'Both'` parameters and unambiguous JSON container `ActionResult.Message` payloads in `StructureActionResult` and `TaskGraphActionRunner` via `BuildActionOutputObject`, and update `loop-agent-type-system-prompt.template.md` with comprehensive guidance on `Pipeline`, multi-step `ForEach`/`While`, all 7 runnable `TaskGraphSpec` node kinds, `inputMapping`/`outputMapping`, XOR `exclusiveGroup` forks, `failureSemantics`, `Execute Code` transform nodes, `continuation: 'reinvoke'` sleep/wake, and native tool-calling JSON bridging.
+
+- b0b2cc9: Add Video Studio (`@memberjunction/video-studio-core`, `@memberjunction/video-studio`, `@memberjunction/video-studio-render-worker`), including the Video Studio orchestrator agent and its Pre-Production, Render, Critic, and Repair stages, deterministic G1–G6 quality gates and rubric scoring, optional spoken voiceover narration (`VideoNarrationSpec.Enabled`) with automatic `<audio>` track injection in `BuildRenderBundle`, the isolated HyperFrames render worker and `LocalWorker`, `Remote`, and `Docker` render drivers, the Video Studio application (`Productions`, `Brand Kits`, `Archetypes`) with a built-in `ng-conversations` right-side slide-in copilot pinned to the Video Studio agent, the `Video Production` artifact type and viewer plugin, the `Produce Video` action, and the `VideoStudio.SetupHealth` remote operation and setup health card. Add general `MJ: Brand Kits` (`@memberjunction/ng-brand-kits`) for shared palette, typography, logo, voice, and generation policy management. The Video Studio pages share one right-side slide-in (chat from the first open, the brief above the composer, Iterate on the same conversation), pages can hide the floating chat bubble with `SuppressChatOverlay` in their agent context, and `@memberjunction/ng-brand-kits` adds a brand kit creator with a live preview. Add video generation (`BaseVideoGenerator`, `AIVideoRunner`, the Black Forest Labs FLUX 3 video driver, the `Generate Video` action, and `Per Second` pricing unit support), pre-call generation spend-cap enforcement, and FLUX.2 Pro endpoint, polling, and reported-cost recording fixes. Generated assets are always disclosed in the viewer, inline preview, review notes, and manifest provenance, never stand in for data or `NeverInvent` items, and any integrity criterion failure or synthetic person violation blocks delivery even when repair rounds are exhausted.
+
+  Add the `Consult` sub-agent chat-handling channel (`AIAgent.ChatHandlingOption`, `AIAgent.MaxSubAgentConsultRounds`, `AIAgentRelationship.ChatHandlingOption`), caller-chosen sub-agent configuration presets (`AIAgentRelationship.ConfigurationPresetID`), sub-agent consultation and `resumeRunId` resumption across child, related, parallel, and native sub-agent paths, and root escalation to `MJ: AI Agent Requests` when consult rounds are exhausted. Add peer-to-peer Sage transfers (`Handoff` step type, inline `mj-agent-handoff-card`, conversation ownership chrome, and `FollowHandoffs` messaging-adapter support). `SaveAgentRunMedia` now persists `FileID` on `MJ: AI Agent Run Medias` rows, the artifact viewer registers dedicated Video and Audio plugins, and `AgentScheduledJobDriver` forwards `ConfigurationID` when starting scheduled agent runs.
+
+  Task graphs opted in through agent metadata (`enableTaskGraphs`) now run through `LoopAgentType` with merged prompt parameters and parent hierarchy cycle guards. Explicit `@Sage` mentions or clicking Return to Sage ends specialist agent continuity in every conversation. Follow-up messages to a continued specialist agent resolve that agent's own configuration preset rather than forwarding the conversation manager's preset. Typing a reply in the conversation thread resumes an open sub-agent consult escalated to the user, matching the requests dashboard flow. `ChatHandlingOption = 'Retry'` re-prompts the loop and returns a sub-agent's question to the parent as a result rather than ending the run, capped by the unproductive-retry limit. Claude Opus 5.5, Claude Fable 5.1, Claude Sonnet 5.5, and Gemini 3.8 Flash now declare Image and File (and Gemini also Audio and Video) input modalities; Computer Use auto-select now picks Claude Opus 5.5 or Claude Fable 5.1 instead of the text-only fallback, which can change that feature's cost, and chat file attachments turn on for agents using these models. Also harden regex parsing in `@memberjunction/ai-form-builder` and `@memberjunction/database-designer-core` against polynomial backtracking (ReDoS).
+
+  The Video Studio render worker requires Node >= 22 and system `ffmpeg` on `PATH`; the `Docker` render driver is recommended for production deployments.
+
+### Patch Changes
+
+- 622f166: An agent run can fix some of an action's input parameters so the model can neither see nor change them (`ExecuteAgentParams.boundActionParams`, A16 of #4789).
+  - **`boundActionParams`** is `Record<actionID, Record<parameterName, value>>`. A bound parameter is left out of the action's description in the prompt catalog (including a narrowed catalog), out of its native tool schema, out of the result echoed to the model, out of the model-facing invocation record, and out of what Find Candidate Actions / Find Best Action report (they read the bindings from the action `Context` as `BoundActionParams`). At dispatch the bound value replaces whatever the model (or a Flow step's input mapping) sent under that name; the override is logged with the run and step IDs, and the model's value is never passed on. Bindings reach every sub-agent run and the realtime delegation target, as `actionChanges` do.
+  - **Refusals.** A required parameter bound to `null`/`undefined`, or a binding that names no input parameter of the action, refuses the call before it reaches the engine: the reason is logged for the operator, the model is told only that the action is unavailable, and the action is locked out for the rest of the run like a fatal configuration failure (the circuit breaker short-circuits later calls). A binding keyed by anything other than a known Action ID fails the run at its start. An optional parameter bound to nothing is hidden and the action receives no value for it.
+  - **Fail closed.** A run with bindings has task graphs withheld (`enableTaskGraphs` is ignored and a graph the model emits anyway fails the step), because a graph's action nodes are dispatched outside the agent's binding gate.
+  - **Audit.** `ActionParam` gains an optional `Bound` marker that the action execution log's `Params` keeps (through redaction too), and the agent run step's `InputData` lists the bound names.
+  - **Nothing changes without bindings:** the catalog, the tool schema, the dispatched parameters and the action context are byte-for-byte what they were. `ExecuteSingleActionOptions.StepID` is new and optional.
+  - **Limits, documented on the field:** a run stores its bindings on `MJ: AI Agent Runs.BoundActionParams`, and a run that continues another (`lastRunId`, including a resume from a stored request) applies them when its caller passes none (`actionChanges` are not persisted, so a resumed run starts without them); the realtime client-direct action path and the `Execute Agent` action (along with Loop, Conditional, Retry and Parallel Execute when run without a `RunScope` that refuses them) dispatch without forwarding `boundActionParams`; an action's own message text may mention a bound value.
+  - Two deterministic integration checks (`agent-loop-standin` ALS12, ALS13) cover the dispatched bound value with its `Bound` log marker and the refusal lockout.
+
+  New exports from `@memberjunction/ai-agents`: `BindingsForAction`, `UnboundParams`, `IsBoundParamName`, `ApplyBoundActionParams`, `BoundParamsApplication`, `ActionBindings`. New type in `@memberjunction/ai-core-plus`: `BoundActionParams`.
+
+- f555162: Add a `compose:email` actionable command so an agent can hand the user a pre-filled email draft.
+
+  The agent drafts; the user sends. Nothing in this path transmits mail — the host opens the user's
+  own compose window via a `mailto:` URL and the user decides whether to send.
+  - **ai-core-plus** — `ComposeEmailCommand` joins the `ActionableCommand` union, with `BuildMailtoURL`,
+    `MAILTO_MAX_URL_LENGTH` and `IsMailtoURLWithinLimit`. The command carries no target field: which
+    compose surface opens is the host's decision, so retargeting later is a one-handler change rather
+    than a migration across every agent that emits one.
+  - **ng-conversations** — the handler opens the mail client via a synthesized anchor click (not
+    `window.open`, which strands an `about:blank` tab on a non-http scheme). Past the length limit it
+    refuses to open, copies the body best-effort, and emits for the host to open the draft artifact
+    instead: a mail client handed an over-long URL does not error, it opens a draft with the body
+    **silently truncated**. The emitted request carries `DraftCopiedToClipboard`, so the host can say
+    the clipboard changed without ever claiming a copy that failed. compose:email is logged by type
+    only, never with its body or recipients.
+  - **ng-explorer-core** — handles the over-length fallback by opening the draft artifact (by
+    `artifactId`, else the conversation's most recent) and showing one notification that says why
+    the mail client did not open, names the artifact that opened, and says whether the text is on the
+    clipboard. A stated `artifactId` that is not loaded opens nothing rather than a different
+    artifact, and "nothing to open" is a notification rather than a console warning.
+  - **messaging-adapters** — Slack and Teams degrade to a note naming the draft, because a `mailto:`
+    URL fails both platforms' button-URL checks and the command would otherwise render as nothing.
+    The note carries the label and the route back to Explorer only — never the recipient or subject:
+    a channel is a shared, retained surface, and what is safe beside the composing user's own button
+    is not safe for every participant.
+
+  The button shows the draft's recipients next to it: it otherwise renders only the agent-authored
+  label, so an agent influenced by injected content could pair a benign label with an unexpected
+  address and the user would not see it until their own mail client was already populated. The line
+  wraps rather than truncating, so a Bcc (listed last) is never cut off.
+
+- 1419ba7: Host-assigned search scopes for agent runs, and `actionChanges` that remove every action are now honored.
+  - **`ExecuteAgentParams.SearchScopeIDs`:** the search scopes a host (for example a collaboration space) assigns to a run. They are stamped on every action dispatch as `RunActionParams.RunScope.SearchScopeIDs` and passed to every agent the run starts: sub-agents, `Execute Agent`, realtime delegation and runtime actions. Scoped Search then searches only those scopes (the first when the model names none). The host's assignment stands in for the calling agent's own `SearchScopeAccess` and assigned-scope list, so any agent a host runs can search what the host allows. It never grants: the user's own permission on the scope (`SearchScopePermissionResolver`, new `HostAssigned` input), skill rules, the scope's dimension rules and row-level security still apply. It is read only from the parameter, never from `data`. In such a run the plain Search action refuses (it would search past the host's scopes) and task graphs are withheld (their nodes run without the scopes).
+  - **Remove-all `actionChanges`:** `BaseAgent` treated an empty effective action (or sub-agent) list as "not computed" and fell back to the agent's configured set, so a host that limited an agent to zero actions gave all of them back. A computed empty list is now authoritative; a non-empty or uncomputed one behaves as before.
+
+- 0cc6b08: Review fixes for agent run audiences and run scope. No migration, no metadata change.
+  - **Audience validation.** A `Mode` naming something `Object.prototype` carries (`'toString'`, `'constructor'`, `'__proto__'`...) passed validation and added no reader, so every gate was skipped. It now fails the run like any unknown mode.
+  - **Task graphs in a tenant-scoped run.** A graph's action and agent nodes run with no `RunScope` and no run context, so a Scoped Search node searched outside the run's tenant. Graphs are now withheld, and a model-written graph refused, when the audience adds a reader or the run's validated scope carries a tenant or a secondary dimension. The predicate is `ActionRunScopeIsBounded`, new in actions-base.
+  - **The Search action in a tenant-scoped run** is refused (`RUN_SCOPE_UNSUPPORTED`) and the model is pointed at Scoped Search. Search takes no tenant, so it would search across tenants.
+  - **One scope for the whole run.** Notes and examples, pre-execution RAG, scoped prompt parts and scoped prompt configs read the scope `initializeAgentRun` validated. That is the scope on the run row and on every action dispatch: trimmed, with `ScopeConfig` defaults applied. A `SecondaryScopes` value that is not a plain object is logged and ignored, not cast.
+  - **More paths under an audience.** Client tools are not offered and a client-tools step is refused. The caller's app context is not injected. Memory writes are not saved. Scoped Search's streamed `ProgressEvents`, and the RAG streaming trace, carry no provider counts. No `MJ: AI Agent Requests` row is raised for a Chat or Plan step: answered on the dashboard or the API, it would resume the run without the audience, and no existing field can carry the audience without misusing one the UI shows. The room still answers in the conversation.
+  - **Lockout wording.** An action refused for the audience (`AUDIENCE_UNSUPPORTED`) is locked out under a new `'audience'` circuit-breaker reason. The model is told it is unavailable in a shared conversation, not that it hit a configuration or credential error.
+  - **Malformed audiences on actions.** `ActionEngine.CheckAudience` refuses every action under a malformed audience. Search and Scoped Search test `!== undefined`, so a `null` audience no longer runs an unbounded search or returns `SourceCounts`.
+  - **Execute Agent** passes the calling run's `RunScope` and audience to the nested run as first-class fields. It still does not declare `SupportsAudience`, so it is refused under an audience.
+  - **Sub-agent template parameters** also lose the host-only browser, conversation and realtime keys (`HOST_ONLY_AGENT_RUN_DATA_KEYS`, `WithoutHostOnlyAgentRunDataKeys` in ai-core-plus): `clientTools`, `sessionID`, `appContext`, `applicationId`, `conversationId`, `targetAgentID`, `agentSessionId`, `recording` and `realtime*`.
+  - **Smaller fixes.**
+    - Hydrated readers are cleared when the run ends.
+    - Dispatch readers exclude the user the action actually runs as.
+    - Inactive users are documented as accepted readers.
+    - `Forbidden` rows for a refused reader name the reader's ID and the verdict `Source` only.
+    - The `ActionRunScopeValue` drift-guard TSDoc is corrected.
+    - Scoped Search's `INVALID_PARAM` messages say exactly what to pass.
+  - **Tests.** Unit tests in each package, and `agent-run-audience` (IT119) gains AU8 (prototype-name mode) and AU9 (Search refused in a tenant-scoped run).
+
+  Follow-up: the Scoped Search parameter descriptions in `metadata/actions/.scoped-search.json` are stale. They describe the tenant as supplied per call and say malformed `SecondaryScopes` are skipped. Update them in a metadata PR (a `minor` changeset).
+
+- 0cc6b08: Agent runs bounded by an audience (A6, run level). `ExecuteAgentParams.Audience` (`{ Mode: 'Caller' | 'Intersection', UserIDs }`) names everyone besides the caller who will see a run's output — a shared conversation's other participants — and the run then shows only what the caller **and** every reader may see. It is server-only: a typed field, never read from `data`, so no GraphQL, MCP or A2A client can set it.
+  - **Validation and hydration.** `BaseAgent` validates the audience and loads each reader from the server's `UserCache` right after the permission check, refreshing the cache once for an unknown ID. A malformed audience, or an ID no user has, fails the run before any prompt, as a refused permission does. An `'Intersection'` whose only reader is the caller behaves exactly as `'Caller'`. Sub-agents and realtime delegation targets inherit the audience and hydrate it again. `ResolveAudienceUsers` is the override point. Adds a dependency on `@memberjunction/generic-database-provider` (for `UserCache`).
+  - **Pre-execution RAG** runs the scope-permission gate for every reader (the reader as `User`, the caller as `ContextUser`); a refused reader skips the scope and writes a `Forbidden` search-log row naming them. Both `Search` and `streamSearch` carry `SearchParams.Audience`.
+  - **Notes and examples**: under an audience only shared ones (`UserID` empty) are injected, via a new `SharedOnly` option on `AgentContextInjector` that filters `UserID == null` explicitly on the cache and semantic paths (an undefined `userId` does not mean "shared only" to `AIEngine`'s base filter).
+  - **Skipped or refused**: agent data-source preloading and the previous turn's tool-result carry-forward are skipped; task graphs are withheld (a copy of the cached prompt params) and a model-written graph is refused; session-driven (realtime / voice / bridge) runs are refused.
+  - **Actions**: `RunActionParams.Audience` is set per dispatch (never on the shared `Context`). `ActionEngineServer.RunAction` refuses, with result code `AUDIENCE_UNSUPPORTED` and without running the action or writing an execution log row, every action whose class does not declare `BaseAction.SupportsAudience` (new, default `false`) and every runtime-defined or deferred action, and normalizes the audience for an action it lets through. `BaseAgent` locks a refused action out for the run. The Search and Scoped Search actions declare support: they pass the audience to the search, Scoped Search runs the per-reader scope gate, and both withhold `SourceCounts`. New in `@memberjunction/actions-base`: `ActionRunAudience`, `ActionAudienceReaders`, `ActionAudienceAddsReader`, `AUDIENCE_UNSUPPORTED_RESULT_CODE`, and `ActionResult.ResultCode` (the raw result code, set whether or not it matches a metadata result code).
+
+  Deferred and documented (TSDoc, `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md`): per-reader scope expansion queries (`ScopeDimensionResolver` binds one `UserID`); `Union`, anchor and narrowing modes (use `PrimaryScope*` / `SecondaryScopes`); a resumed run (`MJAIAgentRequestEntityServer.resumeAgent`) runs as the responder with no audience, because persisting the audience needs a column — an open design point shared with bound action parameters; conversation history and artifacts remain the host's to choose. Agents whose work needs actions other than the two search actions are refused those actions in shared rooms, by design.
+
+  Tests: unit suites for each package, and a new deterministic integration bundle `agent-run-audience` (IT119, AU1–AU6). No migration.
+
+- 0cc6b08: Behaviour change: an agent run now reads its scope and agent-type parameters from `data` only when the server says it may, whatever started the run. The reserved keys are `PrimaryScopeEntityName`, `PrimaryScopeEntityID`, `PrimaryScopeRecordID`, `SecondaryScopes` and `__agentTypePromptParams`. `BaseAgent.Execute` removes them from every run's `data` unless the params set the new server-only `ExecuteAgentParams.TrustReservedRunData`. It logs the removed key names, never the values. The GraphQL resolvers used to strip these keys themselves; the Execute Agent action, MCP (`Run_Agent`, `Execute_*_Agent`), A2A and the Runtime Action bridge (`utilities.agents.Run`) passed them through. That let any user, or a model calling Execute Agent inside a run, choose a run's tenant or turn on task graphs. Now:
+  - **Who loses a scope in `data`.** A browser, an Execute Agent action call (from `RunAction`, a user routine or a model), an MCP or A2A request, and a Runtime Action script. Their other `data` keys are unchanged.
+  - **Who keeps it.** MJServer's agent-run resolvers set `TrustReservedRunData` for the system user and for API keys holding the `agent:trusted` scope, never for a browser or a widget guest; they now forward `data` as sent. A sub-agent and a realtime delegation target inherit their parent's marker. The model-authored template parameters merged into a sub-agent's `data` still lose the reserved keys either way.
+  - **What server code does instead.** It sets the first-class `PrimaryScopeEntityName` / `PrimaryScopeRecordID` / `SecondaryScopes` fields, or sets `TrustReservedRunData` when `data` comes from a caller it trusts.
+  - **Shared rule.** `WithAgentRunDataTrustApplied` in ai-core-plus is the one implementation. `AgentRunner`'s returning-visitor scope and `ExecuteSingleAction` called outside a run use it too, so an untrusted data scope no longer suppresses a widget guest's derived visitor scope.
+  - **Tests.** Tests that pass `__agentTypePromptParams` as a per-run override now set the marker. The agent memory scoping doc states the rule.
+
+- 96d6ec2: A Stop button on an in-progress agent reply now actually stops the run, the stop keeps the work, and the next turn continues from it instead of starting over.
+  - **Stop reaches the running agent.** The run's row is the control channel: the chat marks the run `Cancelled` with reason `User Request`, and the agent-run watchdog on the process that owns the run polls for that (every 3 seconds, `cancellationPollIntervalMs`) and aborts the run's own cancellation token. `BaseAgent` already honors that token throughout its loop and forwards it into prompts and actions, so the in-flight step ends and the run finalizes as Cancelled. Because the row is the channel, this works whichever MJAPI replica owns the run. `AgentRunWatchdog.Track` takes the run's `AbortController`; `RequestCancel` and `IsStoppable` cover in-process callers; `AgentRunWatchdog.UserCancelAbortReason` is the reason the agent sees. The watchdog's reads (this poll and the tracked-set prune) go through `RunView` over the entity, with the fields named and the cache bypassed; only its batched writes remain stored-proc calls.
+  - **The stopped run records the reason and the payload.** The cancelled result sets `CancellationReason` from the abort reason (`User Request`, `Timeout`, or `System`) rather than overwriting the UI's write with null, and promotes the last completed step's `PayloadAtEnd` to `FinalPayload` so the next turn, chained by `LastRunID`, starts from where the stopped one left off.
+  - **The reply reads as stopped, not failed.** `AgentRunner.ResolveFinalDetailState` marks a user-stopped reply `Complete` with "Stopped by user" instead of `Error` with the cancellation text.
+  - **The button.** `mj-conversation-message-item` shows a Stop control beside the time pill while the reply is in progress (hidden for read-only viewers, and when the host sets `AllowStopRun` false on the chat area), reads "Stopping…" until the message leaves In-Progress, and offers itself again after 15 s if the stop did not take. It follows the package's Before/After pair: a click fires the cancelable `BeforeStopClicked` (`BeforeStopClickedEventArgs`, with the reply's detail id and the run id when known); if no listener cancels, the request is relayed to the chat area, which stops the run and fires `AfterStopClicked` (`AfterStopClickedEventArgs`, with whether the run's row was marked Cancelled). The list relays it as `StopMessage`; the chat area resolves the run (mapped, or by the reply's detail id) and calls `AgentStateService.CancelAgent`, which now loads the row fresh, refuses a run that already finished, and records the reason. New: `AgentStateService.CancelAgentForDetail`.
+  - **The next turn continues the stopped work.** Observed before: a stopped Sage run had five weather lookups and fifteen searches done, and "keep going" redid every one, because the settled-run carry-forward skips a Cancelled run and only ever carried inline Tool steps. Now, when the agent's newest root run in the conversation is one the user stopped, `BaseAgent.injectStoppedRunResults` carries that run's completed Actions and Tool step results into the new run's context with a note to continue rather than restart (`BuildStoppedRunResultsMessage`, same gates and size budget as the settled path), and `RunAIAgentFromConversationDetail` chains the new run to it by `LastRunID`, rolling the stopped run's `FinalPayload` in when the caller supplied no payload. A caller-supplied `lastRunId` still wins, and a run that arrives chained (`lastRunId` set, by the resolver or a client) checks that one row instead of searching the conversation again, so the predecessor is resolved once per turn. Both lookups read the database (`BypassCache`), since the row they look for was written by the Stop button moments before. New type `StoppedRunStepRecord`.
+  - **The next turn resumes the stopped run's own stack by default.** `ExecuteAgentParams.stopContinuationMode` (`StopContinuationMode`: `'full_stack'` | `'summary'`, default `BaseAgent.DefaultStopContinuationMode = 'full_stack'`) picks how a user-stopped predecessor carries forward. Full stack: the stopped run's turns come back in the shape the loop wrote them while running. Its last prompt step recorded the run's message stack, its first prompt step recorded where the run started, and the difference is the run's own turns. The last decision and the actions that finished after it are rebuilt with the loop's own builders, now shared as `buildActionInvocationMessage` and `buildActionResultsMessage`. An action the stop cut off is listed as not executed, native tool calls are answered, and runtime-state fragments are left for the new run to add. The turns are spliced in ahead of the stopped run's reply and the user's new message, followed by `BaseAgent.StoppedRunResumeNotice`. The steps load in the pre-execution parallel phase and the splice happens once that phase settles, so it never races the memory and RAG injections. When the stack cannot be resumed, or resuming throws, the run falls back to the summary. `'summary'` keeps the earlier behavior. An empirical A/B across Sage, Query Builder and Research Agent favored the full stack on speed, tokens and cost.
+  - **A stopped run is resumed only on its own branch path.** With conversation branching, a run stopped on a sibling branch is not the next turn's history. `MJAIAgentRunEntityExtended.BuildReplyOnBranchPathFilter` is the one predicate for "this run replied on this turn's branch path and no rerun replaced its answer"; `BuildStoppedPredecessorFilter` applies it (so it now takes the branch and the conversation's branch rows), `BaseAgent.BuildPriorTurnRunFilter` is built on it too, and `RunAIAgentFromConversationDetail` loads the branch rows for a reply on a branch before it looks for a stopped predecessor.
+  - **The composer's send slot can be a stop control.** `mj-message-input-box` gains `SendSlotMode` (`'send' | 'stop' | 'stopping'`), `StopCount`, `StopLabel`, `StatusText` and `StatusElapsed`, and emits `StopClicked`. In `stop` mode the same button is red with a stop icon and is always live; above a count of one it widens to "Stop all" with the count; `stopping` disables it with a spinner. A status line renders bottom-left inside the box as a polite live region, with the elapsed time in an `aria-hidden` child so its ticking is never announced; the elapsed time is dropped at 768px and the line truncates at 480px. The box decides none of this: `mj-ai-composer` and `mj-conversation-message-input` pass the inputs and the output straight through, and the chat area decides what they mean.
+  - **Stop lives in the composer.** While one reply is in flight the chat area makes the composer's send slot the stop control, labelled "Stop {agent}", with a status line "{agent} is working" and the elapsed time beside it; the per-reply pill is hidden (`InFlightCount` on the message item and list gates it to more than one run). With several replies in flight the slot reads "Stop all N runs", the status line counts agents, and each reply keeps its own pill. A click stops every in-flight run through the same path as the pill (`BeforeStopClicked`, then `OnStopMessage`, then `AfterStopClicked`; a vetoed run stays in flight), the slot reads as stopping until the reply leaves In-Progress, and after the retry window a warning toast says "{agent} did not stop. Try again." After a reply the user stopped, the composer placeholder reads "Continue, or tell {agent} what to do differently". New on the chat area: `InFlightCount`, `SendSlotMode`, `StopCount`, `StopLabel`, `StatusText`, `StatusElapsed`, `StoppingDetailIds`, `OnComposerStopClicked`, `FormatElapsed`.
+  - **A stopped reply looks stopped, and offers Continue.** The reply's time pill takes a neutral `stopped` state (never the blue `complete`) reading "Stopped · {elapsed}" with a stop icon; a "{n} steps kept" line shows what the run kept; and on the last message of a conversation the viewer may write to, a Continue control sends "Continue where you left off" through the existing `SuggestedResponseSelected` path, which the chat area sends as the next message and the run chain resumes. The stopped reply text from `AgentRunner.ResolveFinalDetailState` drops its emoji ("Stopped by user", "Stopped: {reason}"). New on the message item: `IsStoppedRun`, `WasStoppedByUser`, `StoppedLineText`, `CanContinueStoppedRun`, `OnContinueClick`, static `ContinueMessage`.
+  - **The run-state vocabulary lives on the entity.** `MJAIAgentRunEntityExtended` gains `SettledStatuses`, `CancelledStatus`, `UserRequestCancellationReason`, static `IsUserStopped` with instance `WasStoppedByUser`, and static `BuildStoppedPredecessorFilter`, typed from the entity unions; BaseAgent, the watchdog and the run resolver all use them. The abort-signal reasons are statics on the classes that raise them: `AgentRunWatchdog.UserCancelAbortReason` and `ExternalCancelAbortReason`, `BaseAgent.AgentTimeoutAbortReason`.
+
+  Known limit: the previous `CancelAgent` only wrote the row, which the running agent then overwrote on finish. That path is what this replaces.
+
+- 37891d3: Move the conversation-attachment blob seam (`IAttachmentBlobStore`, `AttachmentBlobUploadInput`,
+  `AttachmentBlobUploadResult`, `AttachmentBlobStoreUnavailableError`) from `@memberjunction/aiengine`
+  to `@memberjunction/ai-core-plus`, next to the placement policy in `ConversationUtility`. `aiengine`
+  re-exports it, so existing consumers are unaffected.
+
+  `ng-conversations` implements this seam for the browser and imported the types with `import type`,
+  on the reasoning that an erased import costs nothing. It costs nothing at _runtime_ — but the
+  class-registration manifest generator walks **package.json**, not imports, so the declared
+  dependency was a live edge regardless. When `aiengine` gained a `@memberjunction/storage`
+  dependency, that edge carried seven storage-driver classes into the browser manifest and broke the
+  MJExplorer bundle on `node:net` / `node:stream` / `node-fetch`.
+
+  The rule this encodes: a browser-reachable package must not _declare_ a server-only dependency,
+  even for a type. `ng-conversations` no longer declares `aiengine` at all.
+
+- 81aea34: Enable full-conversation artifact manifest visibility (`artifactId`, `versionId`, `versionNumber`, `description`, `title`, and table/row summaries), `artifactDirective` forwarding across `LoopAgentResponse`/`LoopAgentType`/`BaseAgent` (including alpha-ID resolution to UUIDs and clean base payloads for `create-new`), `Data` artifact extract rules and payload title/description fallback on `MJ: Artifacts` and `MJ: Artifact Versions`, `QueryBuilderAgent` single-table vs. multi-table normalization on `Chat` and `Success` steps, and conversation artifact panel auto-opening on active branch paths.
+- eb3a8d3: feat(conversations): host rules for chats with several people
+
+  `mj-conversation-chat-area` gains opt-in inputs, one reworked event, a hook and a slot, so a host can run a chat between several people without forking the chat area. Every default keeps today's behavior.
+
+  **Inputs — `ng-conversations`.** Set on `mj-conversation-chat-area` (and on `mj-message-input` directly):
+  - `AgentReplyMode` — `'Always'` (default) answers every message; `'MentionOnly'` answers only a message that tags an agent and posts any other message with no turn at all: no reply row, no placeholder, no turn events.
+  - `AllowedAgentIDs` — the agents that may answer. Narrows the composer's `@` list, every route (tagged agent, continuity, pinned and host default agents, the conversation manager), the manager's delegation — including each agent step of a workflow it plans — and the pin and voice pickers. Null allows every agent; an empty list allows none.
+  - `MentionPeople` — the people the `@` list offers (today it offers only the current user). Each composer keeps its own list: two composers on one page never see each other's.
+  - `AgentHistoryFrom` — the first moment of the conversation an agent turn may read (see below).
+  - `AgentTurnHandler` — an async hook that runs the turn on the host's server instead of MJ's path, once per turn, before any reply row exists. The chat area shows the rows it reports.
+  - `AutoNameConversation` — turns MJ's auto-naming of a new conversation off (text and voice).
+
+  **Behavior change: `BeforeAgentTurn`.** It now fires once per turn on every route, before any row exists, and carries the resolved `AgentId`, `AgentName`, `Route` and `UserMessageId`. A listener can cancel the turn or send it to another allowed agent with `RedirectAgentId`. Canceling now leaves nothing behind. Previously the event fired only on the conversation manager's route, after that route's placeholder row was saved, and a cancel left the row behind, marked "Turn canceled before agent invocation". `AfterAgentTurn` now fires on every route too.
+
+  **Slot.** `composerExtra` renders host UI directly above the composer, wherever the chat area shows one, with an `IMJChatComposerExtraContext`.
+
+  **History floor — `server`, `core-entities`, `ai-core-plus`, `ai-agents`, clients.** `RunAIAgentFromConversationDetail` takes a new nullable `agentHistoryFrom` argument (ISO-8601). The server loads the agent's history from that moment and uses no summary of earlier messages; an unreadable value fails the request. The run carries it as `ExecuteAgentParams.ConversationHistoryFrom`, so the conversation-history tools, the conversation's artifacts, cross-turn compaction (skipped) and the carried-forward tool results of the previous turn (not carried) hold it too. `ConversationEngine.LoadWindowRowsFresh` and `AssembleContextWindow` accept the floor, and `ConversationEngine.HistoryFromFilter` writes it. The GraphQL client names the argument only when a floor is set, so a client that sets none keeps working against an older MJAPI.
+
+  **Runtime — `conversations-runtime`.** `MentionAutocomplete.GetSuggestions` takes an optional per-call `MentionSuggestionScope`; `ConversationAgentRunner.processMessage` takes `AllowedAgentIDs` (narrows the manager's `ALL_AVAILABLE_AGENTS`) and `AgentHistoryFrom`.
+
+- 953086f: Chief of Staff cockpit: the Priorities & OKRs tab failed with `Invalid column name 'PersonID'` as soon as the signed-in user had a linked `MJ_BizApps_Common: People` record. `ResolvePersonTaskScope` now matches `MJ_BizApps_Tasks: Task Assignments` on the polymorphic assignee pair (`AssigneeEntityID` = the People entity, `AssigneeRecordID` = the person) and takes the People entity ID as a parameter; the cockpit resolves it through its provider and reports no linked person when the BizApps Common app is not installed.
+
+  The cockpit also falls back to an exact, case-insensitive match on the user's email when no People record is linked to their user, so an administrator-entered person works without a manual link.
+
+  The task scope now covers the whole tree of every root objective the person owns: milestones added under their objective by an administrator, a teammate or the agent load with it, whoever created them. Children of a task the person is only assigned to are not pulled in.
+
+  Chief of Staff prompt (metadata): the agent resolves the user's People record (`LinkedUserID`, then email) before reading or writing tasks, sets `CreatedByPersonID` on every task or issue it creates so the cockpit can show them, and, when no person exists, says so and offers to create one, deferring to an administrator on `PERMISSION_DENIED`. The built-in agents guide documents the People record as a setup step. The prompt also tells the user that a scheduled wake reports in the routine's own conversation and a notification rather than in the chat it was asked from, and no longer creates new recurring routines on its own at the end of a wake; the guide documents where wake output lands.
+
+  Chat area: a reply whose row had already settled could stay in the in-flight list, so the composer kept showing "<agent> is working" with a running timer and a Stop button long after the run finished (seen in the overlay after Regenerate-as-fork). Every reconcile path scanned the rows for `In-Progress`, so nothing ever looked at that ID again. The chat area now drops any in-flight ID whose row has settled: after a completion is handled, whatever the context check said after the row was loaded; when a settled row arrives through `OnMessageSent`; and before the reconnect scan.
+
+  A routine run's output is now reachable by click. The dispatcher's in-app notification carries the routine's `conversationId`; clicking it opens that conversation in the Chat app (a notification written before the field existed reads it off the routine, and a routine with no conversation opens in the Routines app). The Routines app's "Conversation" button, which Explorer never handled, deep-links into the Chat app the same way. The Chat app's Conversations resource loads a selected conversation the sidebar does not list (an application-scoped one, such as a wake thread) through the engine, so the title and pinned agent show.
+
+  Chief of Staff cockpit: every wake routine card has "Read Briefing", which opens the routine's conversation in a slide-in reader inside the cockpit (read-only, the embedded chat area), and "Open in Chat", which deep-links into the Chat app. Both are disabled until the routine has run once, since the conversation is created on the first run. The Overview tab's routine list gets the same "Read" button.
+
+  Chief of Staff cockpit: reloads itself when something it shows changes. MJAPI broadcasts every entity save and delete to browsers (a wake run creating an approval request included) as a `remote-invalidate` event; the cockpit now listens for its own entities, reloads once per burst, and defers the reload while its tab is detached.
+
+  Chief of Staff cockpit: a person assigned to a milestone now sees the objective it belongs to. The task scope adds the root above every assigned milestone (read off `RootParentID`), so the assignee's Priorities tab shows the objective card. The objective is shared context, the milestone list is not: the objective's owner (its creator, or a person assigned to the objective itself) sees every milestone, while anyone else sees only the milestones assigned to them, with a "Yours: n of m" note; progress always counts all milestones. Each objective card names its owner (the creator, from the Tasks view's `CreatedByPerson`) beside the people assigned to it. Objective cards and milestone rows show who is assigned, from `MJ_BizApps_Tasks: Task Assignments`, with the signed-in person's own rows highlighted.
+
+  Chief of Staff: to-dos and reminders. The prompt turns a request like "remind me to call Mom on Wednesday" into a General task with a due date (no objective fields) plus a one-shot wake at that time whose reply is the reminder itself. The cockpit Overview gets a "To-dos & Reminders" panel listing open root tasks of to-do types (General, Action Item, Follow-up, Reminder) soonest due first, with overdue and due-today marking and a tick control that marks the task Completed through the `Update Record` action.
+
+  Chief of Staff for regular users: a user with only the `UI` role could not complete onboarding because that role was read-only on `MJ: AI Agent User Policies`, so Configure Agent User Policy failed and the agent claimed to have kept the preferences "in durable memory", which nothing did. The same role could not create `MJ: AI Agent Requests`, so no approval could be raised for such a user. New metadata grants the UI role Create + Update on both entities (`metadata/entity-permissions/.chief-of-staff-permissions.json`). Two server-side entity subclasses keep the rows private: `MJAIAgentUserPolicyEntityServer` (new, in core-entities-server) lets a non-Owner user save only their own policy and defaults `UserID` to the context user on first save; `MJAIAgentRequestEntityServer` now lets a non-Owner user create requests only for themselves and update only requests that were already theirs, judged by the pre-save `RequestForUserID`. Owner-type users and the scheduler's system user are exempt. The prompt tells the agent to report a failed policy save plainly and never to claim the preferences were stored elsewhere.
+
+  Wake routines: "Wake Now" no longer spends a one-shot. It used to set `NextRunAt` to now, which made the dispatcher claim the routine on its next sweep, and a claimed one-shot is Disabled after it runs, so a reminder wanted tomorrow fired today and never again. The scheduling engine gains `UserRoutineDispatcherDriver.RunRoutineNow`, a manual-run path that skips the claim and the wake gate, and a `Run User Routine Now` action (metadata in `metadata/actions/.user-routine-actions.json`) that the cockpit's Wake Now now calls; the caller must own the routine, bookkeeping runs as the scheduler's system user and the target as the owner. The cockpit shows a spent one-shot as "Fired" with the time it ran instead of "Disabled", sorts it below the live schedule, hides Pause/Resume on it, and keeps fired wakes behind a "Show fired" toggle.
+
+  Chief of Staff email: a new outbound email could never become an approval. `Manage My Email Inbox and Drafts` had no send operation (only draft, reply and forward), the prompt named operations the action did not recognise, and the approval request was queued only after a mail provider and the mailbox gate had passed, so a blocked mailbox silently prevented the approval and the agent pasted a draft into the chat instead. The action gains `Send`, accepts the older operation names, and for any sending operation under a sending mode with `RequireApprovalForExternalComms` queues the approval before touching a provider (`APPROVAL_REQUIRED`); on the approved request it is called again with `ConfirmedApprovalRequestID` and only then resolves the provider, failing honestly (`NO_EMAIL_PROVIDER`) when none can act. Metadata declares `Send`, `ConfirmedApprovalRequestID`, `ApprovalRequestID` and the two result codes. The prompt tells the agent to send through the action rather than pre-empt it with a draft when the mailbox preflight looks blocked, and how to act on the approved request.
+
+  Chief of Staff cockpit: an approval request that carries an outbound email can be opened on its card. "View draft" shows To, CC, From, Subject and the body inline, read from the request's `Comments` JSON, and "Copy" puts the draft on the clipboard as plain text (headers, a blank line, the body) for pasting into a mail client. Requests that are not emails are unchanged.
+
+  Chief of Staff email: the provider chooser took the first Active provider named Gmail or Microsoft Graph and gave up when that provider's class was not loaded in the server, so a database with Gmail Active but only Graph and SendGrid installed could never draft or send ("No active communication provider is configured"). Active providers are now tried in preference order, skipping those this server cannot load, and the failure message names what was tried.
+
+  Agent user policies: the `AgentUserPolicyEngine` cache now follows the entity layer. A policy saved anywhere in the process (the cockpit's Governance tab through GraphQL, a script) replaces the cached copy, a delete evicts it, and a remote invalidation from another server clears the cache. Before this the agent kept running on the policy it first loaded until the API restarted, so a Governance edit (DraftOnly to Send on Behalf of User, say) showed on the page but never reached the agent.
+
+  User routines: a one-shot routine created through the entity layer with an explicit `NextRunAt` lost it when a schedule field had been written twice before the first save (for example a default cron cleared to null). After `NewRecord()` a field's first write also becomes its old value, so the cron read dirty while `NextRunAt` did not; the entity server recomputed the time, which for a one-shot with no cron is null, and the dispatcher then disabled the routine after its next run. On an unsaved record a non-null `NextRunAt` now counts as explicit. Found by the new IT22 check. `Run User Routine Now` also returns `ROUTINE_NOT_FOUND` instead of throwing when the caller cannot read the routine.
+
+  Review follow-ups: `Manage My Email Inbox and Drafts` returns `INVALID_OPERATION` for an operation it does not recognise instead of silently listing messages. In the cockpit the to-do done control is an `mjButton` icon button and the "Show fired" toggle is an `mj-filter-chip`.
+
+- bb3028a: A Config dashboard's tab has an AI assistant: a resizable side pane that chats, in text or in a Gemini 3.8 Live voice session, with the new **Dashboards Expert** agent, which the Dashboards application pins through its `AgentSettings`.
+  - **Client tools.** The tab gives the agent client tools: `GetDashboardState`, `GetDashboardScreenshot` and `SearchSources` read the dashboard and find views, queries, entities and artifacts; `AddPanel`, `RemovePanel`, `MovePanel`, `ResizePanel` and `UpdatePanelSettings` make in-memory edits, one at a time, that put the tab in edit mode and that Cancel discards; and `RequestSaveDashboard` and `RequestPinToHome` ask the user in a confirm dialog, so a save or a Home pin happens only when the user confirms it. The edit and request tools take the `dashboardId` that `GetDashboardState` returns and refuse a call for a dashboard that is no longer open.
+  - **`DashboardResource`** (`@memberjunction/ng-explorer-core`, the dashboard tab) adds the AI pane's members: the pane state `ChatOpen`, `CopilotExpanded`, `MainSizePct`, `CopilotSizePct`, `CopilotMinPct`, `CopilotMaxPct` and `ShowCloseChatConfirm`; the chat state `ChatAgentId`, `ChatAgentName`, `ChatAgentError`, `ChatConversation`, `ChatConversationId`, `ChatIsNewConversation`, `ChatPendingMessage`, `ChatPendingAttachments`, `ChatAppContext`, `ChatApplicationId` and `ChatEnvironmentId`; the open save or pin confirm, `AgentConfirm`, with `OnAgentConfirm()`; and the methods `ToggleChat()`, `CloseChat()`, `OnCloseChatConfirmed()`, `OnCloseChatCancelled()`, `ToggleCopilotExpanded()`, `OnCopilotSplitDragEnd()`, `OnChatConversationCreated()`, `OnChatRealtimeConversationReady()`, `OnChatPendingMessageConsumed()`, `OnChatNavigationRequest()` and `OnChatOpenEntityRecord()`.
+  - **Layout editor** (`@memberjunction/ng-dashboard-viewer`). The package exports the pure layout editor behind the tab's edit tools (`InsertPanel`, `MovePanel`, `ResizePanel`, `RemovePanelFromLayout`, `SimplifyLayout`, `FindPanelPath`, `DescribePath`, `LayoutEditError`, `PANEL_PLACEMENTS`) and its types `PanelPlacement`, `PanelPosition`, `LayoutPathStep` and `SimplifiedLayoutNode`. `DashboardViewerComponent` adds `ApplyLayout()`, which shows a layout that these functions built, and `GetPanelPath()`, which gives a panel's address in the layout. The viewer's `AddPanel` returns the new panel's ID and honours its position: its optional `location` argument is now a `PanelPosition`, not a `LayoutLocation`, so a caller that passes a `LayoutLocation` must change, and a position that is not valid throws `LayoutEditError`. `UpdatePanelConfig()` now returns a `Promise` that settles when the layout is rebuilt (it rejects when the rebuild fails). A subclass that overrides `AddPanel()` or `addPanel()` must take a `PanelPosition` and return `Promise<string | null>`, and one that overrides `UpdatePanelConfig()` or `updatePanelConfig()` must return `Promise<void>`. Each panel's content element has a `data-panel-id` attribute.
+  - **Screenshots** (`@memberjunction/ng-shared`). The package adds `CaptureElementJpeg`, with the types `ElementCaptureOptions` and `ElementCapture`, the defaults `ELEMENT_CAPTURE_DEFAULTS`, and the helpers `ComputePixelRatio()` and `StripDataUrlPrefix()`.
+  - **Client tool results.** A client tool result now reaches the model in full: the results of one `ClientTools` step go into one message that expires after 3 turns, and the optional Loop prompt parameter `clientToolResultMaxChars` truncates them with a visible note. In `@memberjunction/ai-agents` it is `LoopAgentTypePromptParams.clientToolResultMaxChars`, and `DEFAULT_LOOP_AGENT_PROMPT_PARAMS` sets it to `-1` (no cap); code that builds its own `Required<LoopAgentTypePromptParams>` must add it.
+  - **Images in tool results.** A result can also carry images (`Media`: JPEG, PNG or WebP, at most 4 items of at most 2,000,000 decoded bytes each), which `ParseClientToolMedia` (`@memberjunction/ai-core-plus`) checks in `RespondToClientToolRequest`, a bad item giving a failed tool result; the agent client sends them, and the agent and prompt runner pass them to the model as image blocks that expire after 2 turns, while the step output keeps only their metadata. `@memberjunction/ai-core-plus` adds `ClientToolMediaItem` (`MimeType`, `Base64`, optional `Width` and `Height`), `ClientToolMediaParse` and `CLIENT_TOOL_MEDIA_LIMITS`, and an optional `Media` on `ClientToolResponse` and `ClientToolResultSummary`; `@memberjunction/ai-agent-client` adds an optional `Media` on `ClientToolResult`.
+  - **`RespondToClientToolRequest`** (`@memberjunction/server`) takes a new optional GraphQL argument, `media`: a string that holds the images as a JSON array. In TypeScript, `ClientToolRequestResolver.RespondToClientToolRequest()` has the new parameter before the context, so a direct caller that passes the context by position, or a subclass that overrides the method, must change. The agent client's mutation always names the `media` argument, so it needs a server from this release: an older server rejects every client tool response (`Unknown argument "media"`), and each client tool call then fails when it times out. A `result` that is not valid JSON now also gives a failed tool result, so the agent no longer waits for the request to time out.
+  - **Media in the agent and prompt runner.** `BaseAgent`'s protected `contentToString()` now turns an image, audio, video or file block into a short stub (for example `[image omitted]`), not its base64 text, and its protected `estimateTokens()` counts each such block as 1,600 tokens. The prompt runner keeps the content blocks that a user message already has when it adds file blocks, and it no longer changes the caller's message objects when it replaces media that the model cannot read.
+  - **Voice.** Voice tool results stay text, since the Explorer shell strips `Media` before a realtime session sees them (`WithoutMedia()`, `@memberjunction/ng-explorer-app`). A voice session's delegated run (`invoke-target-agent`) receives the browser session ID and the app context from the session start (`ExecuteRelayedToolInput.BrowserSessionID` and `AppContext`, `@memberjunction/ai-agents`), so the delegated agent can call the page's client tools; a scoped anonymous caller's run, which executes as the system user, gets no app context. The server does not store an app context whose JSON is longer than 256,000 characters, and the delegated runs then get none. A voice session also keeps its direct actions when a delegated run pauses for the user's answer. In `@memberjunction/realtime-runtime`, a surface client tool whose handler returns `Success: false` gives the voice model a failed result, and `RealtimeSessionRuntime.SendVideoFrame` returns whether the frame was sent; a subclass that overrides it must return a `boolean`.
+  - **Agent context.** The sub-agent catalog lists only Active relationship targets. The Explorer shell keeps the page's additional context when it rebuilds the app-context snapshot while the page's tab is attached, clears it when the tab is detached, and restores it when the tab is reattached. The client tools a page registered now follow the same rule: only the detach of that page's own tab clears them, so the detach of another tab no longer takes the open dashboard's tools away from the agent. In `@memberjunction/ng-shared`, `AgentContextUpdate` gains `Lifecycle` (`'Detached'` or `'Reattached'`), which `NavigationService.NotifyResourceDetached()` and `NotifyResourceReattached()` set; the detach of another tab now sends an update with only `Caller` and `Lifecycle`, not an empty `AgentClientTools` list.
+  - **Chat area** (`@memberjunction/ng-conversations`). The chat area's empty-state composer now receives the host's default agent, application and app context, so a voice call can start before the first message, and the dashboard tab adopts the conversation that call created when it ends.
+
+- f3c6161: Conversation routing acts on calibrated probabilities (plan Task 2.4). `ApplyPlattCalibration` and `PlattCalibration` in `@memberjunction/ai` map a decision model's raw probability to a calibrated one. Routing calibrates the thread Likelihood only for the exact model each fit was made on (`ROUTING_CONTINUES_CALIBRATION`: Jev at `typesafe/jev-1.13-20260917`, and LLM Decision when GPT-OSS-120B answered, fitted by the Phase 2 Decision Eval), and treats any other model's answer as unsure. `FindDecisionCalibration` in `@memberjunction/ai-core-plus` looks a calibration up by the decision model and the model behind it, for any consumer that calibrates. The `RunDecision` mutation and `GraphQLAIClient.RunDecision` return that model as `resolvedModel` / `ResolvedModel`. Routing waits 350 ms instead of 250 ms, which covers about 95% of Jev's answers in-process. The Decision Eval records production's routing verdict with the model that answered and the policy it was reached under, and its scorecard scores that verdict end to end, per run.
+- 42df19d: Explorer surfaces stop reporting state the server never sent:
+  - A client holding a metadata snapshot keeps serving it when the metadata status check cannot reach the server (connection refused, DNS failure, offline, or a gateway/timeout status), instead of failing with "System Error". Only a transport failure degrades this way (`IsTransportError` in `@memberjunction/core`; `SafeGraphQLError.IsTransportFailure` carries the verdict past the GraphQL error sanitizer); a server that answered — an access denial, a validation rejection — propagates as before.
+  - A run the server force-failed no longer keeps spinning, and an agent run that ended by asking the user a question (AwaitingFeedback) or is parked on a workflow (Paused) is no longer painted as a failure.
+  - A dashboard no longer reports 0% for a run of successes, and global search reports incomplete results through `EntitySearchProvider.OnIncompleteResults` and the log instead of dropping them silently (no UI shows the report yet).
+  - An app with more than 1000 entities shows all of them, and an unwarmed template cache no longer crashes the form that fixes it.
+  - Opening a record works on entities whose primary key is not called `ID`.
+  - List membership filters run on PostgreSQL for uuid and integer keys (`ListMembershipFilter` in `@memberjunction/core`).
+  - List sources resolve every match as the acting user, not the entity's UserViewMaxRows page.
+- 4283a82: `SafeExpressionEvaluator` now allowlists identifiers instead of denying a fixed list, and field-rule / integration formulas go through the same screen before they compile (#5569, CodeQL #183, #184, #185).
+  - **Identifiers.** A free name must be an evaluation-context key, an arrow-function parameter in scope, `undefined`/`NaN`/`Infinity`, or an approved global (`APPROVED_EXPRESSION_GLOBALS`) used as a call. `fetch`, `setTimeout` and every other host global are refused, as are approved globals used as values or callbacks (`Math.PI`, `items.map(Number)`, `Object.assign`).
+  - **Callbacks.** `.some()`, `.every()`, `.find()`, `.filter()`, `.map()` and `.reduce()` take only an inline arrow function. Arrow functions are not allowed anywhere else. `JSON.parse`/`JSON.stringify` take only a literal or array literal as the reviver/replacer.
+  - **Context keys** must match `/^[A-Za-z_$][\w$]*$/`; any other key fails the evaluation. Function-valued properties of class instances are dropped from the cloned context.
+  - **New API.** `SafeExpressionEvaluator.ScreenExpression(expression, allowedIdentifiers)` screens without compiling. `ValidateSyntax` takes optional `contextKeys`.
+  - **Formulas.** `FieldTransformEngine` screens `formula` and `custom` expressions with `value` and `fields` as the only names. A rejected expression throws `Expression rejected: ...` and is handled by the step's `OnError` policy like a compile error.
+  - **Methods.** Added pure string/array/number methods to the safe-method list: `split`, `slice`, `substring`, `join`, `concat`, `charAt`, `at`, `padStart`, `padEnd`, `toFixed`, `toPrecision`.
+  - Unbalanced-parenthesis errors are reported only when the expression fails to parse, so a parenthesis inside a string literal no longer rejects it.
+  - Tests in `ai-core-plus` and `integration-engine` updated for the new rules (approved namespace methods are no longer readable as values; a malformed custom expression is now refused by the screen before `Function` is reached).
+
+- a65dfb8: `FailoverMaxAttempts` was read into `failoverConfig.maxAttempts` and then consulted by nobody — its only readers have no callers — so `executeModelWithFailover` walked the FULL priority-ordered candidate list, which for a prompt without `RequireSpecificModels` is every active model of the prompt's type crossed with every active inference vendor (317 entries on a stock tenant), with `executeWithValidationRetries` wrapping the whole walk in `MaxRetries + 1` passes. The cap is now applied where calls are issued: it counts only requests a provider actually saw, so a keyless tail costs nothing, and a non-positive configured value is treated as unconfigured rather than as "no calls allowed".
+
+  The failover budget bounds what a prompt SPENDS, not who it asks. A priority-ordered candidate list is usually the same driver class repeated across vendors and models, so three attempts are three requests to one upstream having one bad minute, and the prompt fails without any other provider being asked. That is the ordinary shape on a tenant fronted by a single metered provider, not an edge case.
+
+  When every attempt so far went to ONE driver class, the walk now continues **without spending** — same-class candidates are skipped, not called — until the first credentialed candidate on a different class, and allows exactly one call there. The extra call adds its own class to the attempted set, so `size === 1` is false at every later candidate: the ceiling is `FailoverMaxAttempts + 1` and never more, the scan issues no requests of its own, the credential skip still applies (a keyless provider is never called to satisfy the rule), and `lastError` semantics are unchanged. A walk that already spread across several providers is unaffected.
+
+  The "no suitable model found" message now names the distinct driver classes behind the candidate list and which of them hold credentials, so a failure reads `101 candidates over 1 driver class (OpenRouterLLM); credentialed: none` instead of a bare candidate count that reads like a misconfigured chain. Candidates the short-circuit never probed are reported as such, so `credentialed: none` is not over-read. `AIModelSelectionInfo.modelsConsidered[]` gains an optional `driverClass`, also persisted in `AIPromptRun.ModelSelection`; the message is unchanged for callers that record none.
+
+  The message builder moved out of `AIPromptRunner` into `no-model-found-message.ts`. As a private method its only coverage was a re-implementation of it inside the test file, which asserted against its own copy — those tests now import the production function.
+
+- 594f2e0: Flow Agent Editor now supports Decision steps: palette entry with scale icon and teal color, visual node subtitles and warning banners, dedicated properties panel editor for Decision key, prompt picker filtered to Decision model type, state expression, and questions list (Likelihood, Choice, Score) with full CRUD and reordering. Supports "Route on Answer" outgoing path condition builder with live Choice coverage hints. Renaming a Decision step key, a question or an option rewrites the path conditions that read it, once, on commit. The editor checks the flow with the runtime's own compiler and validator as it is edited, and flags each problem on the step or path it is about. ai-core-plus adds writers and rewriters for `decisions` conditions (`DecisionReferenceText`, `DecisionConditionLiteral`, `RewriteDecisionQuestionReferences`, `RewriteDecisionChoiceValues`) and exports the Decision key check (`FlowDecisionKeyProblem`).
+- 7110019: Extract `BaseModelRunner` and shared model-run types. A behaviour-neutral move (typed-decision plan, #4660, Phase 0 Task 0.3).
+  - Move shared parameter/result types to `@memberjunction/ai-core-plus`
+  - Introduce `BaseModelRunner` abstract base in `@memberjunction/ai-prompts`. It declares `RequiredModelType`, a model-type name that a later change in this series enforces; nothing reads it yet. Its protected API is still settling across that series.
+  - Reparent `AIPromptRunner` onto `BaseModelRunner` (behavior-neutral). `AIPromptRunner` still logs uncategorized errors under `AIPromptRunner`; a runner that does not override `DefaultLogCategory` logs them under `BaseModelRunner`.
+- 6779eed: Extend conversation context assembly and Jev decision routing for multi-party, multi-agent conversations (`MentionOnly` / `MentionPeople`). `ConversationEngine.AssembleContextWindow` and `GetAgentContextWindow` now include author/agent/reply fields (`UserID`, `User`, `AgentID`, `Agent`, `ParentID`) and support `speakerAttribution` (`'off' | 'auto' | 'always'`) plus `speakerLabels` so agents can distinguish human and AI speakers without altering single-user/single-agent transcripts. `BuildRoutingQuestions` and `InterpretRoutingAnswers` support `AllowNoAgentOption` (`ROUTING_NO_AGENT = 'no_agent'`) and host-allowed restricted agents (`AllowedAgentIDs`), while `ResolveAgentTurn`, `ShouldRunRoutingDecision`, and `MessageInputComponent` short-circuit human `@Person` mentions and `ParentID` thread replies (`Route: 'ThreadReply'`) and route subsequent untagged turns in active `MentionOnly` chats via Jev decision routing (`Route: 'DecisionRouted'`) while keeping cold conversations silent until an agent is `@`-mentioned.
+- 1141164: Native tool calling: run the Loop agent as a provider-native tool loop.
+  - **History ordering.** A generic Retry on a native tool-call turn answers each call with an `is_error` tool result carrying the reason instead of a "Retrying due to" user message, and `reconcileUnansweredToolCalls` inserts its synthetic results directly after the call turn. Anthropic and OpenAI rejected the old call → user message → result order with a 400.
+  - **Replayed thinking stays valid on Claude 5.x.** A native run on a driver whose replayed reasoning needs the history before it unchanged (`BaseLLM.ReplayedReasoningRequiresStablePrefix`, true for Anthropic) keeps its runtime-state fragments (append-only), so a thinking block is never replayed behind a history that dropped the fragment it was made with. When an earlier message is rewritten anyway (expiry, compaction, message expansion, context recovery), the reasoning of every call turn after it is dropped instead of replayed; when the system prompt or tools change (a skill activating mid-run), the prompt runner sends the request without replayed reasoning (`AIPromptParams.ReplayedReasoningPrefix`, `GetSentPrefixFingerprint`). A compacted message is not compacted again on later turns. An expired native tool turn is compacted in its action's own mode, AI summary included.
+  - **Thinking across tool turns.** `ChatMessage.reasoning` / `ChatCompletionMessage.reasoning` carry provider reasoning blocks. Anthropic captures every `thinking` (with signature) and `redacted_thinking` block, replays them ahead of the `tool_use` blocks, and sends the interleaved-thinking beta for budget-form thinking with tools. Gemini keeps thought parts and signed text parts and replays them in order. The Loop agent carries reasoning onto the replayed call turn.
+  - **Per-agent native control** in `TypeConfiguration.NativeControl`: turn off `payload_change_request` or `ask_user`, end the run in plain text (`Terminal: 'text'`, final turn `toolChoice: 'none'`), declare `complete_task.payloadChangeRequest` as an object, opt into the tools-only prompt (`NativeOnly`) and into compaction of older tool-call arguments (`CompactToolArguments`).
+  - **Agent-local tools.** `BaseAgent.GetAgentTools` declares tools that read and write the agent's own state. Calls run in order as `Tool` run steps, their `PayloadChange` is applied through PayloadManager under `PayloadSelfWritePaths`, and errors return as `is_error` results.
+  - **One control plane (opt-in).** Under `NativeOnly` the Loop system prompt teaches tools only, and the scratchpad, durable memory, artifact tools, conversation-history tools and decisions are native tools answered on the same turn. Envelope and hybrid prompts render byte-identically to before.
+  - **Turn shapes.** By default each control call is alone on its turn, as before; the agent's own tools ride along with Actions or a delegation. `NativeControl.RelaxedTurnShapes` opts in to mixed turns: several `payload_change_request` calls apply in order, writes then `ask_user` or `complete_task` finish on that turn (a failed write declines them), and a delegation, `ask_user` or `complete_task` beside Actions is answered as not run, to be made again once the Actions' results are read. A `complete_task` refused by validation, unmet minimum executions or a self-check is answered with the feedback, as an error. A Retry never answers a call twice, and every result for a call turn travels in the one tool turn after it. `parallelToolCalls` is left to each provider's default. A failed Action's guidance rides in its own `is_error` result, and `uncrushedActions` exempts named Actions from result crushing.
+  - **Corrective retries match the agent.** The unknown-tool, unreadable-JSON and rejected-call retries name `complete_task` only when it is declared, the envelope only when the agent has one, and only the tools the turn's request carried. Framework tools do not dispatch on a hybrid turn, and the loop reads a turn's tool-calling mode from the chat result.
+  - **Prompt runs record their tool-calling path reliably.** `AIPromptRun.ToolCallingMode` is set inside the run's finalize step, so a model call that returns before the run's initial INSERT completes no longer loses it to the INSERT's reload (it was persisted as NULL, on the prompt run and on the agent run step that copies it).
+  - **Fallback and providers.** The native-to-envelope fallback triggers on a 400/422 or any error not clearly about something else (rate limit, authentication, cancellation, context length) whose text names the tools payload; tool turns encoded as text keep their calls; failover re-renders the prompt and its child prompts when it changes the tool-calling path, on the parallel path too, keeps the original text if the re-render fails, and records what was sent on the prompt run; the tools-stripped retry is sent the envelope prompt; a Strict validation retry never discards a tool-call turn. Gemini `UNEXPECTED_TOOL_CALL` and unparseable OpenAI-compatible arguments are reported as rejected calls with what the model sent, except on a request that declared no tools, and a signature on an empty text part is kept. Gemini now returns every visible text part of a reply, not only the first. OpenAI-compatible `null` arguments read as an empty argument set. Anthropic folds a user message that follows tool results into their turn instead of adding an assistant "OK" (which ended the tool loop and dropped its thinking), turns budget-form thinking off, with a warning, for a request whose open tool loop has no thinking to replay, honours `enableCaching: false`, and puts a cache breakpoint on a request ending in a tool turn.
+
+- 80905a1: Rename public class members and exported functions to PascalCase, per MJ's naming convention,
+  **without breaking a single consumer**.
+
+  Every renamed symbol keeps its old name beside the new one as a `@deprecated` stub that forwards to
+  it — a delegating method or function, a getter/setter pair for a property, and for Angular a
+  readable accessor pair for an `@Input` and a second `@Output` sharing the same `EventEmitter`, so a
+  template still binding the old name keeps receiving events. Old names still compile, still resolve,
+  and still behave identically; the deprecation tag rides through to the published `.d.ts`, so editors
+  point callers at the replacement. Where a package re-exports through an explicit `export { … }`
+  list, the new name is added alongside the old, so the correct name is actually on the public surface
+  rather than merely declared.
+
+  The rename is deliberately refused wherever a mechanical stub would not be equivalent, because
+  several of those shapes change a type contract while still compiling in the package that declares
+  them:
+  - an **optional** property or parameter property — TypeScript has no optional accessor, so a stub
+    would promote `foo?` to a required member and break every object literal that omits it;
+  - a class that is a **data shape** (no methods, or `@ObjectType`/`@InputType`) — object literals are
+    assigned to it, and an accessor stub changes what they must supply;
+  - a property whose **subclass redeclares it**, since TypeScript forbids a property overriding an
+    accessor (TS2610);
+  - a name whose PascalCase form is **already bound** in that file or class;
+  - decorated members, `get`/`set` pairs behind a decorator, generators, destructured parameters,
+    overload sets and abstract members.
+
+  **One wire-visible consequence, for version skew only.** `BaseInfo.toJSON` walks `_`-prefixed
+  backing fields and emits them through their public getter, preferring the PascalCase one. Renaming
+  the 23 field aliases in `MJCore/src/generic` therefore changes what `AllMetadata` carries:
+  `EntityInfo.spCreate` and friends now serialize as `SpCreate`. A same-version client is unaffected —
+  `copyInitData` accepts a value through a settable accessor, so either spelling lands on the right
+  field. An OLDER client against a newer server has no such path in its `copyInitData` and drops those
+  fields silently. Same-version deployments, which is the supported configuration, see no change.
+
+  Each package was verified against its own pre-change baseline rather than against zero, because
+  several packages in this repo do not typecheck cleanly to begin with. Angular packages were verified
+  with `ngc`, not `tsc`: a plain typecheck does not compile templates, and an earlier write-only
+  `@Input` alias passed `tsc` while breaking six template reads.
+
+- 7e72c86: Phase 2 fresh efficiency and quality audit across Core Data Primitives, Task Graph Engine, AI Agent Runtime & PayloadManager, High-Volume Telemetry SaveReturnMode, and Angular Chat / Step Inspector UI:
+  - **Core Data Primitives (`@memberjunction/core`, `@memberjunction/generic-database-provider`, `@memberjunction/sqlserver-dataprovider`, `@memberjunction/server`, `@memberjunction/templates-base-types`)**:
+    - Restore lazy `_raw` `BaseEntity` hydration on `GetEntityObject()` + `LoadFromData()` (`20.87x` faster, `-100%` `EntityField` allocations on read-only `entity_object` views) while guarding subsequent `LoadFromData()` calls on already-loaded instances.
+    - Support runtime `options.SaveReturnMode === 'datestamps_only'` projection in `SQLServerDataProvider.WrapSaveCallForResult`.
+    - Eliminate duplicate `DiffObjects()` and `CreateUserDescriptionOfChanges()` calls in `GenericDatabaseProvider.Save()`.
+    - Add precomputed `FieldMappingPlan` in `ResolverBase.ArrayMapFieldNamesToCodeNames` and `O(1)` `EntityInfo.FieldByCodeName()` lookup.
+    - Deduplicate `entity.GetAll()` across `DatabaseProviderBase.Save()` and `BaseEntity.finalizeSave()` via `__mj_preMerged`, mark unpopulated virtual fields `NotLoaded = true` on new `datestamps_only` inserts, compute `ProviderBase.prepareSmartCacheCheckParams` fingerprint before widening `param.Fields`, and avoid double property reads in `NunjucksSandbox.guardMemberLookup`.
+  - **Task Graph Engine (`@memberjunction/task-graph`)**:
+    - Collapse `TaskGraphDispatcher.pollOnce` from `6 + 13G` to `3 + 2G` DB queries via a single `loadGraphState` per active graph per poll, gate `checkHumanTaskCompletion` with an in-memory `pendingHumanTasks` set, pass pre-hydrated `ClaimedTaskCandidate` into `executeClaimed` (`0` re-queries), parallelize `TaskGraphService.Submit` and `persistComputedLayout`, and complete `AgentSpecSync.LoadFromDatabase` round-trip hydration.
+  - **AI Agent Runtime, Prompts & PayloadManager (`@memberjunction/ai-agents`, `@memberjunction/ai-prompts`)**:
+    - Gate `BaseAgent.runPostRunCompaction` on `!IsVolatileResultMessage(msg)` and `!msg.toolCalls?.length`, reuse `_promptRunner`, queue compaction steps via `_stepSaveQueue`, and account for compaction steps in `_treeBudget`.
+    - Remove synchronous `stepEntity.Save()` queue bypasses in `checkExecutionGuardrails` and `validateSuccessNextStep`, and route `AIPromptRunner.executePromptInParallel` parent completion save through `queuePromptRunCompletionUpdate`.
+    - Fix `PayloadManager.mergeAllowedPaths` `arguments[2]` warning bug and cache compiled glob/wildcard `RegExp` and parsed path specs statically (`49,150x` fewer regex compilations).
+    - Add `O(1)` reference + metadata snapshot fast path to `BaseAgent.capturePromptStepMessages` (`16.2x` faster) and memoize child template placeholder analysis.
+  - **High-Volume Telemetry `SaveReturnMode: 'datestamps_only'` (`@memberjunction/ai-core-plus`, `@memberjunction/ai-agents`, `@memberjunction/ai-prompts`, `@memberjunction/actions`)**:
+    - Pass `{ SaveReturnMode: 'datestamps_only' }` in `AgentRunStepSaveQueue`, `BaseAgent._agentRun.Save`, `BaseModelRunner._promptRunQueue`, and `ActionEngineServer._logQueue`.
+  - **Angular Chat, Task Graph & Step Inspector (`@memberjunction/ng-conversations`, `@memberjunction/ng-ai-test-harness`, `@memberjunction/ng-core-entity-forms`)**:
+    - Memoize `DisplayArtifacts`, `SupportingArtifacts`, and single-pass `buildWorkflowStepSummaries` in `MessageItemComponent`, memoize JSON parsing and graph layout positions in `AIAgentRunStepDetailComponent` and `MJAIAgentRunFormComponentExtended`, add `ShouldReplaceDetailAgentRun` guard and `RefreshRenderedMessage` in `ConversationMessageListComponent`, migrate `artifactPaneWidth` from `localStorage` to `UserInfoEngine`, and remove redundant `MJ: AI Agent Runs` query in `AIAgentRunDataHelper`.
+
+- 1d29837: System placeholders now resolve in scoped prompt parts. After `BaseAgent.InjectScopedPromptParts` adds the parts (including from a subclass override), the agent passes the added messages to the new `SystemPlaceholderManager.ReplaceAvailablePlaceholders`, which replaces each bare token such as `{{ _CURRENT_DATE }}` with its value. Part text is not rendered as a template: every other character, including other `{{ ... }}` text, filters and tags, is sent as written, and so is a token that cannot be resolved before the prompt runs (prompt and Execution Context placeholders, or a user one without a context user). System placeholders declare what they need with the new optional `requires` field; one without it resolves only through `ResolveAllPlaceholders`, as before. Code that assembles parts itself with `PromptComponentResolver.AssembleMessages` can pass the result to `ReplaceAvailablePlaceholders` to get the same behavior.
+- bea2386: A run can now be restricted to the credentials its caller supplied, so a customer's work never silently runs on the platform's AI keys.
+
+  Key resolution matched per driver class and fell back to the platform for any class the run did not key. A host running work on a customer's own key had no way to say "only these keys": when the customer's Google key was rejected, failover moved to Vertex, found no customer key, and finished the run on the platform's account — reporting success. Internal prompts that dropped `apiKeys` (AI JSON repair, the parallel result selector) reached the platform key the same way with no failover at all.
+  - **`CredentialScope: 'Any' | 'RuntimeOnly'`** (`AICredentialScope` in `@memberjunction/ai`) on `ExecuteAgentParams` and `AIModelRunParams` (so `AIPromptParams`). Omitting the parameter means `'Any'`, which resolves keys as before (the fixes below change some defaults regardless). `'RuntimeOnly'` allows only `apiKeys` and a prompt's per-request `credentialId`: every platform source — `AICredentialBinding`s, the vendor's default credential and `AI_VENDOR_API_KEY__*` — is skipped.
+  - Every scope decision goes through `CredentialScopeAllows(scope, source)` in `@memberjunction/ai`, where `source` is an `AICredentialSource` — `'Runtime'`, `'PlatformCredential'` or `'Environment'`. Its exhaustive switch makes a new scope value a compile error until it is answered, and an unknown value at runtime throws rather than falling back to the platform.
+  - Enforced in `BaseModelRunner.HasCredentialsAvailable` and `ResolveCredentialForExecution`, which every runner shares. Because candidate selection uses the first, failover stays on vendors the caller keyed; a run they do not cover fails with "No suitable model found … credential scope is RuntimeOnly" instead of running on the platform's key.
+  - `BaseAgent` carries the scope to every prompt, sub-agent, action, realtime delegate and realtime session in the run. `GetAIAPIKey` and `MakeAIAPIKeyResolver` take an optional `scope`; `RealtimeClientSessionService` drops its `getAPIKeyForDriver` seam under `'RuntimeOnly'`; image and media runner params gain `CredentialScope`.
+  - `@memberjunction/actions-base`: `RunActionParams.CredentialScope` (`RuntimeCredentialScope`). Under `'RuntimeOnly'` the `RuntimeAPIKeyResolver`'s answer is final. `Generate Image` honours it, and Summarize Content, Run Ad-hoc Query, Execute AI Prompt and Execute Agent forward it to the prompt or agent they run — they are not handed the run's keys, so under `'RuntimeOnly'` they fail rather than spend the platform's.
+  - Decision calls (FinishIf, decision requests, discovery, catalog narrowing, the payload change check) carry the run's execution scope through `AgentDecisionService` (`AgentDecisionAskParams.ExecutionScope`) to `AIDecisionRunner`, and `LLMDecision`'s own chat prompt runs under it (`LLMDecision.ExecutionScope`). Self-check rubrics do too: `ProviderRubricEngine`, `ProviderPromptService` and `ProviderDecisionService` take an optional execution scope, and the rubric evaluation agent runs under it.
+  - A model driver is never constructed without a key under a scope that rules out environment keys: the OpenAI and Anthropic SDKs read `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` themselves when handed none, which parallel prompt tasks could reach.
+  - Not covered by the scope: retrieval reranking and embeddings outside a prompt run (platform infrastructure), and agent-harness credential grants.
+  - **Prompts started on a run's behalf now run under its scope** — user, provider, configuration, `apiKeys`, `credentialId`, `CredentialScope` — via the new `PickPromptExecutionScope` / `AIPromptExecutionScope`: AI JSON repair, the parallel `PromptSelector` judge, `BaseAgent`'s summarize-range and message-compaction sub-calls, conversation compaction (`CompactIfNeededInput.ExecutionScope`) and conversation naming. Each forwarded `contextUser` at most, so each ran on platform keys and the default configuration inside a customer's run. This applies whatever the scope.
+  - `ErrorAnalyzer` classifies Google's invalid-key and expired-key responses ("API key not valid" / `API_KEY_INVALID`, "API key expired" / `API_KEY_EXPIRED`, HTTP 400) as `Authentication`. It fell through to `VendorValidationError`, so an invalid key failed over to another vendor instead of failing.
+  - **A failed streaming call keeps its driver's classification.** `BaseLLM` rejects a failed stream with its `ChatResult`, not an `Error`. The prompt runner analyzed that object afresh, so an invalid key the driver classified `Authentication`/`Fatal` became `Unknown`/`Transient` with no message: failover continued onto the same dead key, agents retried the step up to their consecutive-failure limit, and every run recorded "Unknown error". `ErrorAnalyzer` now returns an `errorInfo` the value already carries, and the runner records a rejected `ChatResult` as an `Error` with its real message; any other rejected value is classified as itself before it is wrapped. Affects any streamed prompt with a non-retryable error, whatever the credential scope.
+
+- 9a2d7cc: RunView's `TotalRowCount` contract is now explicit: a number is always a real total, and `undefined` means the caller passed `SkipTotalRowCount: true`.
+
+  **Contract change.** `RunViewResult.TotalRowCount` is now optional (`TotalRowCount?: number`). With `SkipTotalRowCount: true` it is always `undefined`, including on a page that was not full, where it used to be the number of rows returned. A caller that needs a total must not pass the flag. Strict TypeScript consumers that read the field will see a compile error; a call without the flag always gets a number, so `?? 0` is safe there. `ResultType: 'count_only'` ignores the flag and always counts.
+
+  `MaxRows: 1` is no longer special-cased: a full page of one row now runs the same count as any other full page and reports the real total. Callers that only read `Results` should pass `SkipTotalRowCount: true` to avoid that second query; about 270 such reads in this repo now do. `SkipTotalRowCount` is now sent over GraphQL, so browser callers can use it too.
+
+- 0cc6b08: The Scoped Search action takes its tenant from the agent run, not from the model (A12.14).
+
+  **Behaviour change.** Inside an agent run, the run's scope is authoritative for Scoped Search. A `PrimaryScopeRecordID` the run does not carry (a different tenant, or any tenant when the run has none) is refused with `INVALID_PARAM` and a `Forbidden` search-log row; with no `PrimaryScopeRecordID` the action searches the run's tenant. `SecondaryScopes` may restate a dimension the run sets only with an equal value; a dimension the run does not set is still added. The host sets the run's scope (`ExecuteAgentParams.PrimaryScopeEntityName` / `PrimaryScopeRecordID` / `SecondaryScopes`), never the model. The resolved tenant goes into both the permission decision and the search, so omitting it no longer drops tenant-scoped deny rows from the decision. A single agent run can no longer search several tenants by passing different values; run one run per tenant. Direct action calls outside an agent run are unaffected.
+
+  **Malformed `SecondaryScopes` now refuses.** Input that is not valid JSON, is not an object, or holds a value other than a string, number, boolean or string array is refused with `INVALID_PARAM`, inside and outside a run. Before, it was logged and dropped, so the search ran without those dimensions. An object value is now accepted as well as a JSON string.
+  - **`@memberjunction/actions-base`**: new `RunActionParams.RunScope` (`ActionRunScope`, `ActionRunScopeValue`). It is the run's tenant and secondary dimensions, set per dispatch beside `Audience`, never on the shared `Context`. Fields are `null` when the run is unscoped; the field is absent outside an agent run.
+  - **`@memberjunction/ai-agents`**: `ExecuteSingleAction` always stamps `RunScope`. Inside `Execute` it uses the scope `initializeAgentRun` validated and wrote to the run row, with the agent's `ScopeConfig` defaults applied; called directly, it resolves the scope from its params the same way. `ExecuteSubAgent` strips the reserved run-data keys from the model-authored `templateParameters` before merging them into the child's `data`, and logs the key names once. The reserved keys are the scope family and `__agentTypePromptParams`. Without this a model could set a sub-agent's tenant whenever the parent's scope arrived through `data`. The parent's own `data` is passed on unchanged.
+  - **`@memberjunction/ai-core-plus`**: new `RESERVED_AGENT_RUN_DATA_KEYS` and `WithoutReservedAgentRunDataKeys`. `@memberjunction/server`'s agent-run `data` guard now uses this shared list instead of its own copy.
+  - **`@memberjunction/core-actions`**: Scoped Search resolves the tenant (`resolveTenant`). Forbidden rows now record the tenant they were judged under. TSDoc and `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md` updated.
+
+  Tests: unit tests in each package, and a new check in the deterministic `agent-run-audience` bundle (IT119, AU7). No migration.
+
+- 5931f0d: Only the server writes an agent's reply (A19, second half). In `MJ: Conversation Details`, a reply (`Role` `AI` or
+  `Error`, compared trimmed and in any case) is created, and what it says changed (`Message`, `Status`, `Error`, the
+  response form and commands, `AgentID`, attachments and the other authored fields), only on an entity instance server
+  code has marked with `MJConversationDetailEntityExtended.MarkServerAuthoredReply()`. The marker is not a field, so no
+  GraphQL input, `OldValues___` or transaction variable can set it; a person's save of a reply is refused, and so is an
+  unmarked save as the system user. A marked write still needs its user to own the conversation or hold a grant on it.
+  The owner's rating, pinning, hiding and other bookkeeping keep the conversation-level rules.
+
+  **Breaking API changes:**
+  - `RunAIAgentFromConversationDetail` takes `userMessageId` (the person's saved message) in place of
+    `conversationDetailId` (a reply row the caller created). The server creates the reply row (`ParentID` the user's
+    message) before the run and names it in the fire-and-forget acknowledgement, `result` =
+    `{ accepted, fireAndForget, conversationDetailId, createdAt }`; every progress, streaming and partial-result message
+    now carries `conversationDetailId` too. Three optional arguments say where the reply sits: `replyParentId` (a message
+    of the same conversation the caller can read; checked by the server), `announcedByAgentId` (an active agent whose
+    fixed line "Continuing with **{agent}** for refinement..." the server posts first; the ack then names it as
+    `announcementDetailId`), and `replyBranchId` (a fork of the conversation whose path contains the user's message, used
+    when Regenerate or a forked turn runs on a newly created branch while the user's message remains on its original
+    branch). `GraphQLAIClient.RunAIAgentFromConversationDetail` takes `userMessageId`, `onAccepted`, and optional
+    `replyParentId` / `announcedByAgentId` / `replyBranchId`; `AgentClientSession.RunAgentFromConversationDetail` takes
+    `UserMessageId`, `OnAccepted`, and optional `ReplyParentId` / `AnnouncedByAgentId` / `ReplyBranchId`
+    (`RunAgentParams.ConversationDetailId` is now `UserMessageId`); `ConversationAgentRunner.ProcessMessage` drops
+    `conversationDetailId` for `onReplyAccepted` and optional `ReplyBranchID`. `AgentRunner.CreateAgentReplyDetail()`
+    creates a reply row and `RunAgentInConversation` takes it as `agentResponseDetail`. `FireAndForgetHelper` gains an
+    opt-in `deferMessagesUntilAck`.
+  - `RunAIAgent` and `RunAIAgentSystemUser` with a caller-supplied `conversationDetailId` no longer write progress or
+    results into that row: `AgentRunner` only marks reply rows it creates itself, so a write into a caller-named detail ID
+    is refused by the gate with `"Only the server writes an agent's reply."` Callers that want a server-written
+    conversation reply must use `RunAIAgentFromConversationDetail` with `userMessageId` (or, in server code, pass a
+    server-created row via `AgentRunner.CreateAgentReplyDetail()` / `agentResponseDetail`).
+  - `TaskContinuationParams.SubmittedByUserID` (`string | null`) in `@memberjunction/task-graph` is now a **required**
+    member on `TaskContinuationParams`, carrying the user who submitted the task graph so continuation delivery writes as
+    the submitter rather than the conversation's owner.
+
+  MJ's chat no longer creates or saves reply rows: it shows an unsaved "Starting…" placeholder until the
+  acknowledgement, keys the turn's task and completion by the acknowledged ID, starts the reply's timer at the row's
+  server creation time, and reloads the reply the server wrote. A delegate's reply still threads under the manager's
+  reply, and the manager's "Continuing with X for refinement..." line still shows, both now written by the server; a
+  failed reply is shown with the chat's usual `❌ **{agent}** failed` header, formatted when it renders. A delegate's
+  failed first attempt is hidden when its retry takes over. `TaskGraph.Submit` takes an optional `postStatusMessage`:
+  the server then writes the workflow's status bubble under the given reply (only facts it knows: the task count and
+  whether the submission was accepted, never the spec's name or reasoning), binds the graph to it, and returns its ID as
+  `statusConversationDetailID`; MJ's chat uses it in place of its own status row. The realtime
+  session's transcript, tool and anchor rows, the task-graph outcome (now written as the **submitter**, `SubmittedByUserID`,
+  because `TaskGraph.Submit` accepts any conversation detail ID and writing as the conversation owner would let an Edit
+  grantee or non-owner post as the owner; a graph with no resolvable submitter is refused by the conversation gate and
+  logged), the orphaned-reply reconciler, bridge transcripts and realtime agent transcripts all write as marked server
+  code. The web widget and the mobile app stop creating reply rows.
+
+  ### Migration Guide
+  1. **Client conversation turns (`RunAIAgentFromConversationDetail` / `RunAgentFromConversationDetail`):** Stop
+     pre-creating `Role = 'AI'` / `'Error'` `MJ: Conversation Details` rows (which `Validate()` now refuses unless
+     authored on the server with `MarkServerAuthoredReply()`) and pass the saved `Role = 'User'` message ID instead:
+
+  ```ts
+  // Before
+  const aiReply = await md.GetEntityObject<MJConversationDetailEntity>(
+    "MJ: Conversation Details",
+  );
+  aiReply.ConversationID = conversationId;
+  aiReply.ParentID = userMessage.ID;
+  aiReply.Role = "AI";
+  aiReply.Status = "In-Progress";
+  await aiReply.Save();
+
+  const result = await session.RunAgentFromConversationDetail({
+    ConversationDetailId: aiReply.ID,
+    AgentId: agentId,
+  });
+
+  // After
+  const result = await session.RunAgentFromConversationDetail({
+    UserMessageId: userMessage.ID,
+    AgentId: agentId,
+    OnAccepted: ({ ConversationDetailId, CreatedAt }) => {
+      // Key streaming progress and completion tracking by ConversationDetailId
+    },
+  });
+  ```
+
+  2. **`RunAIAgent` / `RunAIAgentSystemUser` callers passing `conversationDetailId`:** Passing a caller-supplied
+     `conversationDetailId` to `RunAIAgent` or `RunAIAgentSystemUser` no longer writes progress or results into that row
+     (refused with `"Only the server writes an agent's reply."`). Use `RunAIAgentFromConversationDetail` with
+     `userMessageId` for client-initiated conversation replies, or in server-side code create the reply with
+     `AgentRunner.CreateAgentReplyDetail()` and pass it as `agentResponseDetail` to `RunAgentInConversation`.
+  3. **Custom `ITaskContinuationDeliverer` / `TaskContinuationParams` callers (`@memberjunction/task-graph`):** Include the
+     required `SubmittedByUserID: string | null` field when constructing `TaskContinuationParams`:
+
+  ```ts
+  const continuationParams: TaskContinuationParams = {
+    // ...existing fields
+    SubmittedByUserID: currentUser.ID,
+  };
+  ```
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [abf8778]
+- Updated dependencies [622f166]
+- Updated dependencies [1419ba7]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [a709bb6]
+- Updated dependencies [39b35f1]
+- Updated dependencies [d17de94]
+- Updated dependencies [7ada797]
+- Updated dependencies [e97d95c]
+- Updated dependencies [ff3097d]
+- Updated dependencies [79279f2]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [a50948e]
+- Updated dependencies [2552b1e]
+- Updated dependencies [25bb295]
+- Updated dependencies [432cb73]
+- Updated dependencies [3080e83]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [6c36fb6]
+- Updated dependencies [293c316]
+- Updated dependencies [b518dfa]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [cc36de5]
+- Updated dependencies [9cb815b]
+- Updated dependencies [709de1a]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [155aa45]
+- Updated dependencies [6cd23e1]
+- Updated dependencies [51634e7]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [de2dc2f]
+- Updated dependencies [15a4333]
+- Updated dependencies [d2db108]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [1da00cb]
+- Updated dependencies [d43d86e]
+- Updated dependencies [b699a37]
+- Updated dependencies [a3539d2]
+- Updated dependencies [db39145]
+- Updated dependencies [41274aa]
+- Updated dependencies [a4b23b7]
+- Updated dependencies [91cba84]
+- Updated dependencies [b14c72f]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c671f85]
+- Updated dependencies [49f26d9]
+- Updated dependencies [961d529]
+- Updated dependencies [5e4205c]
+- Updated dependencies [10c2311]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [8f370b3]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [7be1684]
+- Updated dependencies [21f9e15]
+- Updated dependencies [1090caa]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [f2248d5]
+- Updated dependencies [81aea34]
+- Updated dependencies [7384dd6]
+- Updated dependencies [6849b00]
+- Updated dependencies [67f6c85]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [5465489]
+- Updated dependencies [3bace5a]
+- Updated dependencies [88e6902]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [4248fb3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [f3c6161]
+- Updated dependencies [5148534]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [c261eb8]
+- Updated dependencies [59e32e0]
+- Updated dependencies [d122a41]
+- Updated dependencies [0a7c255]
+- Updated dependencies [0adaf76]
+- Updated dependencies [0ff7523]
+- Updated dependencies [520bd09]
+- Updated dependencies [ce1a5c3]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [307da67]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [f65fec7]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [cb205de]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [0ab85d7]
+- Updated dependencies [0c634ba]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [223669e]
+- Updated dependencies [683f652]
+- Updated dependencies [914e6ff]
+- Updated dependencies [4889fb2]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [b2441c3]
+- Updated dependencies [69e19c5]
+- Updated dependencies [7316ac3]
+- Updated dependencies [8ef5e86]
+- Updated dependencies [596855c]
+- Updated dependencies [fdf6669]
+- Updated dependencies [4c682c1]
+- Updated dependencies [f325baa]
+- Updated dependencies [2274f42]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [0fb3649]
+- Updated dependencies [131f3c4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [705ab4e]
+- Updated dependencies [a7da50b]
+- Updated dependencies [0f04590]
+- Updated dependencies [5fed75a]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [1d43161]
+- Updated dependencies [f26084f]
+- Updated dependencies [08a4cfc]
+- Updated dependencies [b09fe34]
+- Updated dependencies [db39145]
+- Updated dependencies [f48dffc]
+- Updated dependencies [41c2c08]
+- Updated dependencies [630bb88]
+- Updated dependencies [e69634e]
+- Updated dependencies [6779eed]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [1141164]
+- Updated dependencies [44faf83]
+- Updated dependencies [230cdad]
+- Updated dependencies [17cc774]
+- Updated dependencies [dae1d31]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [8bac4d6]
+- Updated dependencies [575bfae]
+- Updated dependencies [c018cb9]
+- Updated dependencies [80905a1]
+- Updated dependencies [4c97994]
+- Updated dependencies [397ae9a]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [7e72c86]
+- Updated dependencies [a17a228]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [ce758af]
+- Updated dependencies [89a5b59]
+- Updated dependencies [5a3de97]
+- Updated dependencies [0d0ba18]
+- Updated dependencies [b6fcb30]
+- Updated dependencies [f73e192]
+- Updated dependencies [8704df6]
+- Updated dependencies [5345e3d]
+- Updated dependencies [1ea4085]
+- Updated dependencies [22c9074]
+- Updated dependencies [6b0de38]
+- Updated dependencies [aee2d53]
+- Updated dependencies [279b93e]
+- Updated dependencies [5dc3752]
+- Updated dependencies [8420f36]
+- Updated dependencies [6c8798b]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [72dd65c]
+- Updated dependencies [25f7b82]
+- Updated dependencies [8b90b41]
+- Updated dependencies [35ed7b5]
+- Updated dependencies [d853bf8]
+- Updated dependencies [e293b68]
+- Updated dependencies [104125c]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [d296edd]
+- Updated dependencies [66fd011]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [509d2aa]
+- Updated dependencies [68f5c01]
+- Updated dependencies [196160a]
+- Updated dependencies [afe9eb4]
+- Updated dependencies [5513c2a]
+- Updated dependencies [90829e3]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [8c120db]
+- Updated dependencies [bea2386]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [aac148b]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [539dfe3]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [d2cb42e]
+- Updated dependencies [cbddadb]
+- Updated dependencies [60bd774]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [ac18db8]
+- Updated dependencies [35da130]
+- Updated dependencies [c4645bc]
+- Updated dependencies [5b41d48]
+- Updated dependencies [4b9542c]
+- Updated dependencies [28c92e0]
+- Updated dependencies [5f707d1]
+- Updated dependencies [369e229]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [aca4317]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [e962151]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [718b01c]
+- Updated dependencies [57fea6a]
+- Updated dependencies [374b1a4]
+- Updated dependencies [2c590b0]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [2854a2e]
+- Updated dependencies [6b487b8]
+- Updated dependencies [b0b2cc9]
+- Updated dependencies [dc38250]
+- Updated dependencies [fc3da91]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/core-entities@6.2.0
+  - @memberjunction/ai@6.2.0
+  - @memberjunction/actions-base@6.2.0
+  - @memberjunction/global@6.2.0
+  - @memberjunction/core@6.2.0
+  - @memberjunction/templates-base-types@6.2.0
+
 ## 6.2.0-edge.8
 
 ### Minor Changes

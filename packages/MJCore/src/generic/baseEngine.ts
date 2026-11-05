@@ -6,7 +6,7 @@ import { buffer, debounceTime, filter } from "rxjs/operators";
 import { UserInfo } from "./securityInfo";
 import { RunView, RunViewParams } from "../views/runView";
 import { LogError, LogStatus, LogStatusEx, LogWarning } from "./logging";
-import { EntityInfo } from "./entityInfo";
+import { EntityFieldInfo, EntityInfo } from "./entityInfo";
 import { Metadata } from "./metadata";
 import { DatasetItemFilterType, DatasetResultType, IMetadataProvider, IRunViewProvider, ProviderType, RunViewDatabaseStatus, RunViewResult } from "./interfaces";
 import { BaseInfo } from "./baseInfo";
@@ -19,6 +19,183 @@ import { ProviderBase } from "./providerBase";
 import { DatabaseProviderBase } from "./databaseProviderBase";
 import { TransformSimpleObjectToEntityObject, CanonicalPrimaryKeyValue } from "./util";
 import { WellKnownUserSource } from "./wellKnownUserSource";
+
+/** The primary-key columns a key index is built for. */
+type PrimaryKeyColumn = Pick<EntityFieldInfo, 'Name' | 'IsUniqueIdentifier'>;
+
+/**
+ * Primary-key index of one cached array. `map` holds each key's first position, or is null when a
+ * row has a key value that cannot be turned into a string with the same equality as the scan.
+ * `length` and `last` are the array's length and last row when the index was last brought up to date.
+ */
+interface PrimaryKeyIndex {
+    map: Map<string, number> | null;
+    pks: PrimaryKeyColumn[];
+    /** The key columns the index was built for, from {@link primaryKeySignature}. */
+    signature: string;
+    /** True when two rows share a key; `map` then holds only the first position. */
+    duplicates: boolean;
+    length: number;
+    last: BaseEntity | undefined;
+}
+
+/** Key indexes by cached array. The index of a replaced array is collected with it. */
+const primaryKeyIndexes = new WeakMap<BaseEntity[], PrimaryKeyIndex>();
+
+/**
+ * One key column as a string with the same equality as {@link BaseEngine.findEntityIndexByPrimaryKeys}:
+ * `UUIDsEqual` for UUID columns, `===` otherwise. Returns undefined for a value it cannot represent.
+ */
+function primaryKeyPart(value: unknown, isUuid: boolean): string | undefined {
+    if (isUuid) {
+        if (value == null) return 'n';
+        return typeof value === 'string' ? 'u' + value.trim().toLowerCase() : undefined;
+    }
+    switch (typeof value) {
+        case 'string': return 's' + value;
+        case 'number': return Number.isNaN(value) ? undefined : 'd' + value;
+        case 'boolean': return 'b' + value;
+        case 'bigint': return 'g' + value;
+        case 'undefined': return 'U';
+        default: return value === null ? 'N' : undefined;
+    }
+}
+
+/** The index key of a row: its key columns in order, or undefined when a column cannot be represented. */
+function primaryKeyOfRow(row: BaseEntity | undefined, pks: PrimaryKeyColumn[]): string | undefined {
+    if (row == null) return undefined;
+    const record = row as unknown as Record<string, unknown>;
+    if (pks.length === 1) return primaryKeyPart(record[pks[0].Name], pks[0].IsUniqueIdentifier);
+    let key = '';
+    for (const pk of pks) {
+        const part = primaryKeyPart(record[pk.Name], pk.IsUniqueIdentifier);
+        if (part === undefined) return undefined;
+        key += part.length + ':' + part;
+    }
+    return key;
+}
+
+/** A string naming the key columns and their comparison, so an index is reused only for the same key. */
+function primaryKeySignature(pks: PrimaryKeyColumn[]): string {
+    return pks.map(pk => (pk.IsUniqueIdentifier ? 'u:' : 's:') + pk.Name).join('|');
+}
+
+/** Builds and stores the key index of an array. Returns null when the rows cannot be read. */
+function buildPrimaryKeyIndex(dataArray: BaseEntity[], pks: PrimaryKeyColumn[], signature: string): PrimaryKeyIndex | null {
+    try {
+        let map: Map<string, number> | null = new Map();
+        let duplicates = false;
+        for (let i = 0; i < dataArray.length; i++) {
+            const key = primaryKeyOfRow(dataArray[i], pks);
+            if (key === undefined) {
+                map = null;
+                break;
+            }
+            if (map.has(key)) duplicates = true;
+            else map.set(key, i);
+        }
+        const index: PrimaryKeyIndex = { map, pks, signature, duplicates, length: dataArray.length, last: dataArray[dataArray.length - 1] };
+        primaryKeyIndexes.set(dataArray, index);
+        return index;
+    }
+    catch {
+        primaryKeyIndexes.delete(dataArray);
+        return null;
+    }
+}
+
+/** True when the row at `pos` has the index key `key`. */
+function rowHasPrimaryKey(dataArray: BaseEntity[], pos: number, pks: PrimaryKeyColumn[], key: string): boolean {
+    try {
+        return pos < dataArray.length && primaryKeyOfRow(dataArray[pos], pks) === key;
+    }
+    catch {
+        return false;
+    }
+}
+
+/** Adds a row just appended to `dataArray` to its key index, when the index was current before the append; drops the index otherwise. */
+function primaryKeyIndexAppended(dataArray: BaseEntity[], row: BaseEntity): void {
+    const index = primaryKeyIndexes.get(dataArray);
+    if (!index) return;
+    try {
+        const n = dataArray.length;
+        if (index.length !== n - 1 || index.last !== dataArray[n - 2] || dataArray[n - 1] !== row) {
+            primaryKeyIndexes.delete(dataArray);
+            return;
+        }
+        if (index.map) {
+            const key = primaryKeyOfRow(row, index.pks);
+            if (key === undefined) {
+                primaryKeyIndexes.delete(dataArray);
+                return;
+            }
+            if (index.map.has(key)) index.duplicates = true;
+            else index.map.set(key, n - 1);
+        }
+        index.length = n;
+        index.last = row;
+    }
+    catch {
+        primaryKeyIndexes.delete(dataArray);
+    }
+}
+
+/** Keeps the key index of `dataArray` after a row was written in place at `pos`; drops it when the row's key is not indexed at `pos`. */
+function primaryKeyIndexReplaced(dataArray: BaseEntity[], pos: number, row: BaseEntity): void {
+    const index = primaryKeyIndexes.get(dataArray);
+    if (!index) return;
+    try {
+        const n = dataArray.length;
+        const current = index.length === n && (pos === n - 1 || index.last === dataArray[n - 1]);
+        if (!current || (index.map && index.map.get(primaryKeyOfRow(row, index.pks) ?? '') !== pos)) {
+            primaryKeyIndexes.delete(dataArray);
+            return;
+        }
+        if (pos === n - 1) index.last = row;
+    }
+    catch {
+        primaryKeyIndexes.delete(dataArray);
+    }
+}
+
+/**
+ * Updates the key index of `dataArray` after `removed` was spliced out at `pos`: removes its key and
+ * moves later positions down by one. Drops the index when it was not current before the splice,
+ * holds duplicate keys, or does not have `removed` at `pos`.
+ */
+function primaryKeyIndexRemoved(dataArray: BaseEntity[], pos: number, removed: BaseEntity): void {
+    const index = primaryKeyIndexes.get(dataArray);
+    if (!index) return;
+    try {
+        const n = dataArray.length;
+        const lastBefore = pos === n ? removed : dataArray[n - 1];
+        if (!index.map || index.duplicates || index.length !== n + 1 || index.last !== lastBefore) {
+            primaryKeyIndexes.delete(dataArray);
+            return;
+        }
+        const key = primaryKeyOfRow(removed, index.pks);
+        if (key === undefined || index.map.get(key) !== pos) {
+            primaryKeyIndexes.delete(dataArray);
+            return;
+        }
+        index.map.delete(key);
+        for (const [k, p] of index.map) {
+            if (p > pos) index.map.set(k, p - 1);
+        }
+        index.length = n;
+        index.last = dataArray[n - 1];
+    }
+    catch {
+        primaryKeyIndexes.delete(dataArray);
+    }
+}
+
+/** Drops the key index of an array; the next lookup rebuilds it. */
+function primaryKeyIndexDropped(dataArray: BaseEntity[]): void {
+    primaryKeyIndexes.delete(dataArray);
+}
+
 /**
  * Property configuration for the BaseEngine class to automatically load/set properties on the class.
  */
@@ -1297,10 +1474,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
                 if (index >= 0) {
                     currentData[index] = entity;
+                    primaryKeyIndexReplaced(currentData, index, entity);
                     this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'update', entity);
                 } else {
                     currentData.push(entity);
+                    primaryKeyIndexAppended(currentData, entity);
                     this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'add', entity);
                 }
@@ -1345,6 +1524,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 if (index >= 0) {
                     const removed = currentData[index];
                     currentData.splice(index, 1);
+                    primaryKeyIndexRemoved(currentData, index, removed);
                     this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'delete', removed);
                     this.emitPropertyChange(config.PropertyName);
@@ -1654,6 +1834,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (!currentData) {
             return;
         }
+        if (changeType !== 'update') {
+            primaryKeyIndexDropped(currentData);
+        }
         this.NotifyDataChange(config, currentData, changeType, entity);
         this.emitPropertyChange(config.PropertyName);
     }
@@ -1850,11 +2033,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     if (indexByKey >= 0) {
                         // Already exists by key, treat as update
                         currentData[indexByKey] = cached;
+                        primaryKeyIndexReplaced(currentData, indexByKey, cached);
                         this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                         this.NotifyDataChange(config, currentData, 'update', cached);
                     } else {
                         // Add the new entity to the array
                         currentData.push(cached);
+                        primaryKeyIndexAppended(currentData, cached);
                         this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                         this.NotifyDataChange(config, currentData, 'add', cached);
                     }
@@ -1862,6 +2047,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     // Already in the array by reference (engine code pushed it manually after
                     // Save) — the array is current, but DataChange$ subscribers still need to
                     // hear about the change. Pass the in-array instance, not the clone.
+                    primaryKeyIndexDropped(currentData);
                     this.NotifyDataChange(config, currentData, 'add', entity);
                 }
             } else {
@@ -1872,12 +2058,14 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
                     if (index >= 0) {
                         currentData[index] = cached;
+                        primaryKeyIndexReplaced(currentData, index, cached);
                         this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                         this.NotifyDataChange(config, currentData, 'update', cached);
                     } else {
                         // Entity not found in array - this shouldn't happen normally,
                         // but if it does, add it (might have been created before we started listening)
                         currentData.push(cached);
+                        primaryKeyIndexAppended(currentData, cached);
                         this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                         this.NotifyDataChange(config, currentData, 'add', cached);
                     }
@@ -1894,7 +2082,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             const index = this.indexOfEntityByRefOrKey(currentData, entity, oldValues);
 
             if (index >= 0) {
+                const removed = currentData[index];
                 currentData.splice(index, 1);
+                primaryKeyIndexRemoved(currentData, index, removed);
                 this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                 this.NotifyDataChange(config, currentData, 'delete', entity);
             }
@@ -2016,11 +2206,51 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Finds an entity in the array by matching all primary key columns.
      * Supports composite primary keys by comparing all PrimaryKey fields from EntityInfo.
      *
+     * Uses a key index per array, built on first use. A hit is checked against the row at the
+     * indexed position, and the index is rebuilt when that check fails or when the array's length
+     * or last row differ from what the index was built for. A miss on a current index reads no row.
+     *
      * @param dataArray - The array of entities to search
      * @param targetEntity - The entity to find (using its primary key values)
      * @returns The index of the matching entity, or -1 if not found
      */
     protected findEntityIndexByPrimaryKeys(dataArray: BaseEntity[], targetEntity: BaseEntity): number {
+        const pks: PrimaryKeyColumn[] | undefined = targetEntity?.EntityInfo?.PrimaryKeys;
+        if (!pks || pks.length === 0 || !Array.isArray(dataArray)) {
+            return this.scanForPrimaryKeys(dataArray, targetEntity);
+        }
+        const key = primaryKeyOfRow(targetEntity, pks);
+        if (key === undefined) {
+            return this.scanForPrimaryKeys(dataArray, targetEntity);
+        }
+
+        const signature = primaryKeySignature(pks);
+        let index: PrimaryKeyIndex | null | undefined = primaryKeyIndexes.get(dataArray);
+        if (!index || index.signature !== signature || index.length !== dataArray.length || index.last !== dataArray[dataArray.length - 1]) {
+            index = buildPrimaryKeyIndex(dataArray, pks, signature);
+        }
+        for (let attempt = 0; attempt < 2; attempt++) {
+            if (!index || !index.map) {
+                return this.scanForPrimaryKeys(dataArray, targetEntity);
+            }
+            const pos = index.map.get(key);
+            if (pos === undefined) {
+                return -1;
+            }
+            if (rowHasPrimaryKey(dataArray, pos, pks, key)) {
+                return pos;
+            }
+            index = attempt === 0 ? buildPrimaryKeyIndex(dataArray, pks, signature) : null;
+        }
+        return this.scanForPrimaryKeys(dataArray, targetEntity);
+    }
+
+    /**
+     * Finds an entity by comparing primary key values row by row. Used for entities without
+     * PrimaryKeys metadata, when the key index cannot represent a key value, and when a hit fails
+     * its check again after a rebuild.
+     */
+    private scanForPrimaryKeys(dataArray: BaseEntity[], targetEntity: BaseEntity): number {
         const primaryKeys = targetEntity.EntityInfo.PrimaryKeys;
         if (!primaryKeys || primaryKeys.length === 0) {
             // Fallback to single PrimaryKey property if no PrimaryKeys defined
@@ -2050,7 +2280,6 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             });
         });
     }
-    
 
 
     /**
@@ -2634,8 +2863,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
                     if (index >= 0) {
                         currentData[index] = cached;
+                        primaryKeyIndexReplaced(currentData, index, cached);
                     } else {
                         currentData.push(cached);
+                        primaryKeyIndexAppended(currentData, cached);
                     }
                 }
                 mutated = true;
@@ -2644,7 +2875,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 const oldValues = (event.payload as { OldValues?: Record<string, unknown> } | undefined)?.OldValues;
                 const index = this.indexOfEntityByRefOrKey(currentData, entity, oldValues);
                 if (index >= 0) {
+                    const removed = currentData[index];
                     currentData.splice(index, 1);
+                    primaryKeyIndexRemoved(currentData, index, removed);
                     mutated = true;
                     notifiedProperties.add(mapping.config.PropertyName);
                 }
