@@ -78,7 +78,15 @@ export function FormatSweep(counts: Record<string, number>): string {
     if (Object.keys(counts).length === 0) {
         return 'Skipped: another instance holds the sweep lock.';
     }
+    if (counts.Pass === -1) {
+        return 'Sweeper pass failed; see the log.';
+    }
     return steps.map(([key, label]) => `${label} ${counts[key] === -1 ? 'failed' : counts[key] ?? 0}`).join(' · ');
+}
+
+/** True when the pass threw or any step reported -1; a held lock ({}) is not a failure. */
+export function SweepFailed(counts: Record<string, number>): boolean {
+    return Object.values(counts).some(value => value < 0);
 }
 
 export function FormatBindingIssues(issues: WorkQueueBindingIssueRow[]): string {

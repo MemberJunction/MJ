@@ -78,7 +78,16 @@ export class BoundWorkHandler implements WorkHandler {
             handler.BindExecutionContext({ ContextUser: this.contextUser, Provider: provider });
             return await handler.Handle(message, context);
         } finally {
+            await this.releaseQuietly(provider, context);
+        }
+    }
+
+    /** A release failure is logged, never thrown: the handler's outcome must reach the runtime. */
+    private async releaseQuietly(provider: IMetadataProvider, context: WorkContext): Promise<void> {
+        try {
             await this.providers.ReleaseProvider?.(provider);
+        } catch (error) {
+            context.Log.Error('Releasing the delivery provider failed', error instanceof Error ? error : new Error(String(error)));
         }
     }
 }

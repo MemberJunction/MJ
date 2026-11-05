@@ -161,7 +161,7 @@ imported by the application. A key that resolves to nothing plans as `HandlerNot
 | Backlog for an autoscaler | `mj queue backlog --subscription s` | `WorkQueue.GetBacklog` |
 | Check bindings | `mj queue validate-bindings [--transport t]` | `WorkQueue.ValidateBindings` |
 | Run work in a container job | `mj queue work --subscription s --once` | — |
-| One sweeper pass from a cron | `mj queue sweep [--json]` | — |
+| One sweeper pass from a cron (exit 1 when the pass or a step fails; a held lock exits 0) | `mj queue sweep [--json]` | — |
 
 **Who may call the operations.** Every caller needs entity permissions: **Read** on `MJ: Work Queue Deliveries` for
 the read operations (stats, dead letters, partitions, backlog, validate-bindings) and **Update** on

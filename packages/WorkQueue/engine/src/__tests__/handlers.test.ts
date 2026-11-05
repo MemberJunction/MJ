@@ -7,7 +7,7 @@ import { BaseWorkHandler } from '../handlers/BaseWorkHandler';
 import { BoundWorkHandler, IndependentProviderSource, SharedProviderSource } from '../handlers/BoundWorkHandler';
 import type { IndependentInstanceRoot, WorkQueueProviderSource } from '../handlers/BoundWorkHandler';
 import { ResolveWorkHandler } from '../handlers/ResolveWorkHandler';
-import { MakeContext, MakeMessage, TEST_PROVIDER, TEST_USER } from './runtimeFakes';
+import { MakeContext, MakeMessage, SilentLogger, TEST_PROVIDER, TEST_USER } from './runtimeFakes';
 
 class EchoHandler extends BaseWorkHandler {
     public static LastBound: { UserID: string; Provider: IMetadataProvider } | null = null;
@@ -93,6 +93,17 @@ describe('BoundWorkHandler', () => {
         });
         await expect(bound.Handle(MakeMessage(), MakeContext())).rejects.toThrow('handler blew up');
         expect(released).toEqual([TEST_PROVIDER]);
+    });
+
+    it("keeps the handler's outcome and logs when ReleaseProvider throws", async () => {
+        const source: WorkQueueProviderSource = {
+            CreateProvider: async () => TEST_PROVIDER,
+            ReleaseProvider: async () => { throw new Error('rollback failed'); },
+        };
+        const log = new SilentLogger();
+        const bound = new BoundWorkHandler('test.echo-handler', TEST_USER, source, ResolveWorkHandler);
+        expect(await bound.Handle(MakeMessage(), MakeContext({ Log: log }))).toEqual({ Kind: 'Complete' });
+        expect(log.Lines.some(line => line.includes('rollback failed'))).toBe(true);
     });
 
     it('lets a provider failure propagate so the runtime retries the delivery', async () => {

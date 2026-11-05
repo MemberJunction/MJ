@@ -1,11 +1,11 @@
 import { Command, Flags } from '@oclif/core';
 import { IndependentProviderSource, MJWorkLogger, WorkQueueEngine, WorkQueueHost } from '@memberjunction/work-queue-engine';
-import { FormatSweep } from '../../lib/work-queue/queue-format.js';
+import { FormatSweep, SweepFailed } from '../../lib/work-queue/queue-format.js';
 import { OpenWorkQueueSession } from '../../lib/work-queue/queue-session.js';
 
 /** One sweeper pass from a host that runs no subscriptions, for a cron where no MJAPI host sweeps. */
 export default class QueueSweep extends Command {
-  static description = 'Run one sweeper pass: expire leases, purge retention and the deduplication ledger, then exit';
+  static description = 'Run one sweeper pass: expire leases, purge retention and the deduplication ledger, then exit (exit code 1 when a step fails)';
 
   static examples = ['<%= config.bin %> <%= command.id %>', '<%= config.bin %> <%= command.id %> --json'];
 
@@ -26,6 +26,9 @@ export default class QueueSweep extends Command {
       );
       const counts = await host.RunSweeperOnce();
       this.log(flags.json ? JSON.stringify(counts, null, 2) : FormatSweep(counts));
+      if (SweepFailed(counts)) {
+        failure = 'Sweeper pass failed; see the log above.';
+      }
     } catch (error) {
       failure = error instanceof Error ? error.message : String(error);
     } finally {
