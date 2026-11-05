@@ -15,8 +15,21 @@ import { DetectCandidates, LoadRepo } from '../../../lib/dev-workspace/detect.js
 import { WORKSPACE_DIR_ENV_VAR } from '../../../lib/dev-workspace/dir-flag.js';
 import { FindMemberInstallTrees, IsInsideDirectory, RemoveMemberInstallTrees } from '../../../lib/dev-workspace/member-installs.js';
 import { RunPnpmInstall } from '../../../lib/dev-workspace/pnpm.js';
+import {
+  ApplyPrebundleEdits,
+  DescribePrebundleRecords,
+  PlanPrebundleExcludes,
+  PrebundleRecordsOf,
+  type PrebundlePlan,
+} from '../../../lib/dev-workspace/prebundle.js';
 import { AssertParentDirSafe, SENTINEL_FILE_NAME, WriteWorkspaceFiles } from '../../../lib/dev-workspace/write.js';
-import type { CandidateRepo, DevDepConflict, GeneratedFile, ParentManifestReport } from '../../../lib/dev-workspace/types.js';
+import type {
+  CandidateRepo,
+  DevDepConflict,
+  GeneratedFile,
+  ParentManifestReport,
+  PrebundleExcludeRecord,
+} from '../../../lib/dev-workspace/types.js';
 
 /** Renders one conflict's decision for a warn line. */
 function describeConflict(conflict: DevDepConflict): string {
@@ -61,6 +74,7 @@ export default class DevWorkspace extends Command {
   static description =
     'Join sibling repo clones into one pnpm workspace: writes pnpm-workspace.yaml, .npmrc, package.json ' +
     '(with a `build` script for every member) and the .mj-dev-workspace.json sentinel at their common parent, then runs pnpm install there. ' +
+    'Also adds the linked repos\' npm scopes to each app shell\'s angular.json prebundle exclude (recorded in the sentinel; clean removes them). ' +
     'Members are the parent\'s immediate subdirectories carrying an mj-app.json, a @mj-biz-apps package, or the ' +
     'MJ monorepo root name. Existing files are never overwritten without --force (which keeps a .bak of each). ' +
     'Generated files are ephemeral — never commit them; tear them down with `dev workspace clean`.';
@@ -121,8 +135,9 @@ export default class DevWorkspace extends Command {
       const admittedApps = AssertAppPackageNamesUnique(members);
       if (admittedApps.length > 0) this.log(chalk.green('apps admitted') + ` ${admittedApps.join(', ')}`);
       await this.handleStandaloneInstalls(parentDir, members, flags['clean-members']);
-      const files = this.buildFiles(parentDir, members, flags.verbose);
       const previousSentinel = ReadSentinel(parentDir);
+      const prebundle = PlanPrebundleExcludes(parentDir, members, PrebundleRecordsOf(previousSentinel));
+      const files = this.buildFiles(parentDir, members, flags.verbose, prebundle.Records);
       const result = WriteWorkspaceFiles(parentDir, files, flags.force);
       for (const backup of result.BackedUp) {
         this.log(chalk.yellow(`Backed up existing file to ${backup}`));
@@ -131,6 +146,7 @@ export default class DevWorkspace extends Command {
         this.log(chalk.yellow(`Moved ${name} from an earlier generator version to ${name}.bak — it is no longer generated`));
       }
       this.log(chalk.green(`Wrote ${result.Written.join(', ')} at ${parentDir}`));
+      this.applyPrebundle(parentDir, prebundle);
       for (const line of BuildShellPeerGuidance()) {
         this.log(chalk.dim(line));
       }
@@ -201,7 +217,12 @@ export default class DevWorkspace extends Command {
    * The sentinel comes last and records the names of the files alongside it, so its
    * inventory is true by construction rather than by a constant kept in step.
    */
-  private buildFiles(parentDir: string, members: CandidateRepo[], verbose: boolean): GeneratedFile[] {
+  private buildFiles(
+    parentDir: string,
+    members: CandidateRepo[],
+    verbose: boolean,
+    prebundleRecords: readonly PrebundleExcludeRecord[]
+  ): GeneratedFile[] {
     const memberNames = members.map((m) => m.Name);
     const rootPkg = BuildRootPackageJson(path.basename(parentDir), members);
     for (const conflict of rootPkg.Conflicts) {
@@ -218,7 +239,30 @@ export default class DevWorkspace extends Command {
       { Name: 'package.json', Content: rootPkg.Content },
     ];
     const written = [...workspaceFiles.map((f) => f.Name), SENTINEL_FILE_NAME];
-    return [...workspaceFiles, { Name: SENTINEL_FILE_NAME, Content: BuildSentinel(written, memberNames) }];
+    return [...workspaceFiles, { Name: SENTINEL_FILE_NAME, Content: BuildSentinel(written, memberNames, prebundleRecords) }];
+  }
+
+  /**
+   * Writes the planned `angular.json` prebundle-exclude edits (#3875) and says what changed. Runs
+   * only after the sentinel recording them is on disk, so `clean` can always undo what was written.
+   */
+  private applyPrebundle(parentDir: string, plan: PrebundlePlan): void {
+    for (const skip of plan.Skipped) {
+      this.warn(`prebundle exclude: left ${skip.File} alone — ${skip.Reason}`);
+    }
+    ApplyPrebundleEdits(parentDir, plan.Edits);
+    for (const line of DescribePrebundleRecords(plan.Records)) {
+      this.log(chalk.green('prebundle exclude') + ` added ${line}`);
+    }
+    if (plan.Records.length > 0) {
+      this.log(
+        chalk.dim(
+          '  so the dev server reads rebuilt linked packages fresh. Do not commit it; `dev workspace clean` removes exactly these entries.'
+        )
+      );
+    } else if (plan.Edits.length > 0) {
+      this.log(chalk.dim(`prebundle exclude: removed entries an earlier run added in ${plan.Edits.map((e) => e.File).join(', ')}`));
+    }
   }
 
   /**
