@@ -127,6 +127,15 @@ export class SaveEntityGraphOperation extends BaseRemotableOperation<SaveEntityG
     public override readonly RequiredScope = 'entity:update';
 
     /**
+     * Generic client entity-graph CRUD MUST NOT grant `ServerOperationOnly` write authority —
+     * otherwise a client could bypass `WriteAuthority: 'ServerOperationOnly'` by sending direct
+     * entity mutations through `MJ.SaveEntityGraph`.
+     */
+    public override get GrantsServerWriteAuthority(): boolean {
+        return false;
+    }
+
+    /**
      * Validates the shape of the incoming payload.
      *
      * Deliberately **not** where entity permissions are checked. Two other layers already own that,
