@@ -41,7 +41,10 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
     RequiresSubclass: () => (target: unknown) => target,
 }));
 
-vi.mock('@memberjunction/core', () => ({
+vi.mock('@memberjunction/core', async () => ({
+    // The real SharedLoad, so Config's load sharing runs as it does in production. Imported from its
+    // own module: the whole of @memberjunction/core would load the @memberjunction/global mocked here.
+    SharedLoad: (await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core/dist/generic/sharedLoad.js')).SharedLoad,
     UserInfo: class {},
     LogError: vi.fn(),
     LogStatus: vi.fn(),
@@ -199,7 +202,6 @@ describe('TagEngine', () => {
         engine = TagEngine.Instance;
         // Reset internal state for each test
         (engine as unknown as { _loaded: boolean })._loaded = false;
-        (engine as unknown as { _loading: boolean })._loading = false;
         (engine as unknown as { _tagVectorService: null })._tagVectorService = null;
 
         // Set up embedding instance creation
