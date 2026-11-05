@@ -6,7 +6,7 @@ import { buffer, debounceTime, filter } from "rxjs/operators";
 import { UserInfo } from "./securityInfo";
 import { RunView, RunViewParams } from "../views/runView";
 import { LogError, LogStatus, LogStatusEx, LogWarning } from "./logging";
-import { EntityInfo } from "./entityInfo";
+import { EntityFieldInfo, EntityInfo } from "./entityInfo";
 import { Metadata } from "./metadata";
 import { DatasetItemFilterType, DatasetResultType, IMetadataProvider, IRunViewProvider, ProviderType, RunViewDatabaseStatus, RunViewResult } from "./interfaces";
 import { BaseInfo } from "./baseInfo";
@@ -19,6 +19,183 @@ import { ProviderBase } from "./providerBase";
 import { DatabaseProviderBase } from "./databaseProviderBase";
 import { TransformSimpleObjectToEntityObject, CanonicalPrimaryKeyValue } from "./util";
 import { WellKnownUserSource } from "./wellKnownUserSource";
+
+/** The primary-key columns a key index is built for. */
+type PrimaryKeyColumn = Pick<EntityFieldInfo, 'Name' | 'IsUniqueIdentifier'>;
+
+/**
+ * Primary-key index of one cached array. `map` holds each key's first position, or is null when a
+ * row has a key value that cannot be turned into a string with the same equality as the scan.
+ * `length` and `last` are the array's length and last row when the index was last brought up to date.
+ */
+interface PrimaryKeyIndex {
+    map: Map<string, number> | null;
+    pks: PrimaryKeyColumn[];
+    /** The key columns the index was built for, from {@link primaryKeySignature}. */
+    signature: string;
+    /** True when two rows share a key; `map` then holds only the first position. */
+    duplicates: boolean;
+    length: number;
+    last: BaseEntity | undefined;
+}
+
+/** Key indexes by cached array. The index of a replaced array is collected with it. */
+const primaryKeyIndexes = new WeakMap<BaseEntity[], PrimaryKeyIndex>();
+
+/**
+ * One key column as a string with the same equality as {@link BaseEngine.findEntityIndexByPrimaryKeys}:
+ * `UUIDsEqual` for UUID columns, `===` otherwise. Returns undefined for a value it cannot represent.
+ */
+function primaryKeyPart(value: unknown, isUuid: boolean): string | undefined {
+    if (isUuid) {
+        if (value == null) return 'n';
+        return typeof value === 'string' ? 'u' + value.trim().toLowerCase() : undefined;
+    }
+    switch (typeof value) {
+        case 'string': return 's' + value;
+        case 'number': return Number.isNaN(value) ? undefined : 'd' + value;
+        case 'boolean': return 'b' + value;
+        case 'bigint': return 'g' + value;
+        case 'undefined': return 'U';
+        default: return value === null ? 'N' : undefined;
+    }
+}
+
+/** The index key of a row: its key columns in order, or undefined when a column cannot be represented. */
+function primaryKeyOfRow(row: BaseEntity | undefined, pks: PrimaryKeyColumn[]): string | undefined {
+    if (row == null) return undefined;
+    const record = row as unknown as Record<string, unknown>;
+    if (pks.length === 1) return primaryKeyPart(record[pks[0].Name], pks[0].IsUniqueIdentifier);
+    let key = '';
+    for (const pk of pks) {
+        const part = primaryKeyPart(record[pk.Name], pk.IsUniqueIdentifier);
+        if (part === undefined) return undefined;
+        key += part.length + ':' + part;
+    }
+    return key;
+}
+
+/** A string naming the key columns and their comparison, so an index is reused only for the same key. */
+function primaryKeySignature(pks: PrimaryKeyColumn[]): string {
+    return pks.map(pk => (pk.IsUniqueIdentifier ? 'u:' : 's:') + pk.Name).join('|');
+}
+
+/** Builds and stores the key index of an array. Returns null when the rows cannot be read. */
+function buildPrimaryKeyIndex(dataArray: BaseEntity[], pks: PrimaryKeyColumn[], signature: string): PrimaryKeyIndex | null {
+    try {
+        let map: Map<string, number> | null = new Map();
+        let duplicates = false;
+        for (let i = 0; i < dataArray.length; i++) {
+            const key = primaryKeyOfRow(dataArray[i], pks);
+            if (key === undefined) {
+                map = null;
+                break;
+            }
+            if (map.has(key)) duplicates = true;
+            else map.set(key, i);
+        }
+        const index: PrimaryKeyIndex = { map, pks, signature, duplicates, length: dataArray.length, last: dataArray[dataArray.length - 1] };
+        primaryKeyIndexes.set(dataArray, index);
+        return index;
+    }
+    catch {
+        primaryKeyIndexes.delete(dataArray);
+        return null;
+    }
+}
+
+/** True when the row at `pos` has the index key `key`. */
+function rowHasPrimaryKey(dataArray: BaseEntity[], pos: number, pks: PrimaryKeyColumn[], key: string): boolean {
+    try {
+        return pos < dataArray.length && primaryKeyOfRow(dataArray[pos], pks) === key;
+    }
+    catch {
+        return false;
+    }
+}
+
+/** Adds a row just appended to `dataArray` to its key index, when the index was current before the append; drops the index otherwise. */
+function primaryKeyIndexAppended(dataArray: BaseEntity[], row: BaseEntity): void {
+    const index = primaryKeyIndexes.get(dataArray);
+    if (!index) return;
+    try {
+        const n = dataArray.length;
+        if (index.length !== n - 1 || index.last !== dataArray[n - 2] || dataArray[n - 1] !== row) {
+            primaryKeyIndexes.delete(dataArray);
+            return;
+        }
+        if (index.map) {
+            const key = primaryKeyOfRow(row, index.pks);
+            if (key === undefined) {
+                primaryKeyIndexes.delete(dataArray);
+                return;
+            }
+            if (index.map.has(key)) index.duplicates = true;
+            else index.map.set(key, n - 1);
+        }
+        index.length = n;
+        index.last = row;
+    }
+    catch {
+        primaryKeyIndexes.delete(dataArray);
+    }
+}
+
+/** Keeps the key index of `dataArray` after a row was written in place at `pos`; drops it when the row's key is not indexed at `pos`. */
+function primaryKeyIndexReplaced(dataArray: BaseEntity[], pos: number, row: BaseEntity): void {
+    const index = primaryKeyIndexes.get(dataArray);
+    if (!index) return;
+    try {
+        const n = dataArray.length;
+        const current = index.length === n && (pos === n - 1 || index.last === dataArray[n - 1]);
+        if (!current || (index.map && index.map.get(primaryKeyOfRow(row, index.pks) ?? '') !== pos)) {
+            primaryKeyIndexes.delete(dataArray);
+            return;
+        }
+        if (pos === n - 1) index.last = row;
+    }
+    catch {
+        primaryKeyIndexes.delete(dataArray);
+    }
+}
+
+/**
+ * Updates the key index of `dataArray` after `removed` was spliced out at `pos`: removes its key and
+ * moves later positions down by one. Drops the index when it was not current before the splice,
+ * holds duplicate keys, or does not have `removed` at `pos`.
+ */
+function primaryKeyIndexRemoved(dataArray: BaseEntity[], pos: number, removed: BaseEntity): void {
+    const index = primaryKeyIndexes.get(dataArray);
+    if (!index) return;
+    try {
+        const n = dataArray.length;
+        const lastBefore = pos === n ? removed : dataArray[n - 1];
+        if (!index.map || index.duplicates || index.length !== n + 1 || index.last !== lastBefore) {
+            primaryKeyIndexes.delete(dataArray);
+            return;
+        }
+        const key = primaryKeyOfRow(removed, index.pks);
+        if (key === undefined || index.map.get(key) !== pos) {
+            primaryKeyIndexes.delete(dataArray);
+            return;
+        }
+        index.map.delete(key);
+        for (const [k, p] of index.map) {
+            if (p > pos) index.map.set(k, p - 1);
+        }
+        index.length = n;
+        index.last = dataArray[n - 1];
+    }
+    catch {
+        primaryKeyIndexes.delete(dataArray);
+    }
+}
+
+/** Drops the key index of an array; the next lookup rebuilds it. */
+function primaryKeyIndexDropped(dataArray: BaseEntity[]): void {
+    primaryKeyIndexes.delete(dataArray);
+}
+
 /**
  * Property configuration for the BaseEngine class to automatically load/set properties on the class.
  */
@@ -251,8 +428,9 @@ export interface EngineDataMapEntry {
     permissionDenied?: boolean;
     /**
      * True when a load of this config failed and the permission classifier said the user cannot
-     * read the entity, so the config was loaded empty. Cache events never fill it; `Config(true)`
-     * re-evaluates it.
+     * read the entity, or when the config was skipped because an entity the engine caches is not
+     * installed in metadata, so the config was loaded empty. Cache events never fill it;
+     * `Config(true)` re-evaluates it.
      */
     readDenied?: boolean;
 }
@@ -376,6 +554,11 @@ interface ExternalChangeReload {
 export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartupSink {
     private _loaded: boolean = false;
     private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
+    /**
+     * The forced reload queued behind the load that is running, shared by every `Load(…, true)`
+     * call that arrives before it starts. Null when none is queued. See {@link Load}.
+     */
+    private _forcedReloadAfterCurrent: Promise<void> | null = null;
     private _contextUser: UserInfo;
     /**
      * True once {@link ResolveContextUser} has put this engine on the MJ system user. Makes the
@@ -437,12 +620,21 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * against overlapping full refreshes clobbering each other: when several full-refresh
      * RunViews for the same property are in flight at once (e.g. a burst of saves each
      * landing in its own debounce window because the round-trip exceeds the DebounceTime),
-     * only the latest-INITIATED refresh may commit its results. Without this, whichever
+     * an earlier-INITIATED refresh may never commit over a later one. Without this, whichever
      * RunView happens to RESOLVE last wins — which can be an earlier-initiated request that
      * read a staler snapshot, leaving the cache "one operation behind" until a full reload
-     * reconciles it. Keyed by config PropertyName. See {@link beginConfigRefresh}.
+     * reconciles it. Keyed by config PropertyName. See {@link beginConfigRefresh} and
+     * {@link mayCommitConfigRefresh}.
      */
     private _configRefreshGeneration: Map<string, number> = new Map();
+
+    /**
+     * Per-property generation of the newest full refresh that has committed rows. A failed read
+     * commits none, so it never counts. A refresh that is no longer the latest started may still
+     * commit while nothing newer has, so a caller awaiting it never gets back rows older than its
+     * own read. See {@link mayCommitConfigRefresh}.
+     */
+    private _configCommittedGeneration: Map<string, number> = new Map();
 
     /**
      * Reloads started by {@link OnExternalCacheChange} and by the no-row fallback of
@@ -758,6 +950,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     /**
      * This method should be called by sub-classes to load up their specific metadata requirements. For more complex metadata
      * loading or for post-processing of metadata loading done here, overide the AdditionalLoading method to add your logic.
+     *
+     * When a load is already running, a call without `forceRefresh` waits for it and returns. A call
+     * with `forceRefresh` waits for it and then reads again, because the running load may have read
+     * before the caller's own writes. Forced calls that arrive while that reload is still queued share
+     * it, so a burst of `Config(true)` calls costs at most one extra read.
      * @param configs
      * @param contextUser
      * @returns
@@ -766,14 +963,14 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (this.ProviderToUse?.ProviderType === ProviderType.Database && !contextUser)
             throw new Error('For server-side use of all engine classes, you must provide the contextUser parameter')
         if (this._loadingSubject.value) {
-            return new Promise<void>((resolve) => {
-                const subscription = this._loadingSubject.subscribe((loading) => {
-                    if (!loading) {
-                        subscription.unsubscribe();
-                        resolve();
-                    }
-                });
+            if (!forceRefresh) {
+                return this.waitForCurrentLoad();
+            }
+            this._forcedReloadAfterCurrent ??= this.waitForCurrentLoad().then(() => {
+                this._forcedReloadAfterCurrent = null;
+                return this.Load(configs, provider, true, contextUser);
             });
+            return this._forcedReloadAfterCurrent;
         }
 
         if (!this._loaded || forceRefresh) {
@@ -840,6 +1037,18 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 TelemetryManager.Instance.EndEvent(eventId);
             }
         }
+    }
+
+    /** Resolves when the load that is running finishes. */
+    private waitForCurrentLoad(): Promise<void> {
+        return new Promise<void>((resolve) => {
+            const subscription = this._loadingSubject.subscribe((loading) => {
+                if (!loading) {
+                    subscription.unsubscribe();
+                    resolve();
+                }
+            });
+        });
     }
 
     /**
@@ -1265,10 +1474,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
                 if (index >= 0) {
                     currentData[index] = entity;
+                    primaryKeyIndexReplaced(currentData, index, entity);
                     this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'update', entity);
                 } else {
                     currentData.push(entity);
+                    primaryKeyIndexAppended(currentData, entity);
                     this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'add', entity);
                 }
@@ -1313,6 +1524,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 if (index >= 0) {
                     const removed = currentData[index];
                     currentData.splice(index, 1);
+                    primaryKeyIndexRemoved(currentData, index, removed);
                     this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'delete', removed);
                     this.emitPropertyChange(config.PropertyName);
@@ -1622,6 +1834,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (!currentData) {
             return;
         }
+        if (changeType !== 'update') {
+            primaryKeyIndexDropped(currentData);
+        }
         this.NotifyDataChange(config, currentData, changeType, entity);
         this.emitPropertyChange(config.PropertyName);
     }
@@ -1818,11 +2033,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     if (indexByKey >= 0) {
                         // Already exists by key, treat as update
                         currentData[indexByKey] = cached;
+                        primaryKeyIndexReplaced(currentData, indexByKey, cached);
                         this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                         this.NotifyDataChange(config, currentData, 'update', cached);
                     } else {
                         // Add the new entity to the array
                         currentData.push(cached);
+                        primaryKeyIndexAppended(currentData, cached);
                         this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                         this.NotifyDataChange(config, currentData, 'add', cached);
                     }
@@ -1830,6 +2047,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     // Already in the array by reference (engine code pushed it manually after
                     // Save) — the array is current, but DataChange$ subscribers still need to
                     // hear about the change. Pass the in-array instance, not the clone.
+                    primaryKeyIndexDropped(currentData);
                     this.NotifyDataChange(config, currentData, 'add', entity);
                 }
             } else {
@@ -1840,12 +2058,14 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
                     if (index >= 0) {
                         currentData[index] = cached;
+                        primaryKeyIndexReplaced(currentData, index, cached);
                         this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                         this.NotifyDataChange(config, currentData, 'update', cached);
                     } else {
                         // Entity not found in array - this shouldn't happen normally,
                         // but if it does, add it (might have been created before we started listening)
                         currentData.push(cached);
+                        primaryKeyIndexAppended(currentData, cached);
                         this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                         this.NotifyDataChange(config, currentData, 'add', cached);
                     }
@@ -1862,7 +2082,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             const index = this.indexOfEntityByRefOrKey(currentData, entity, oldValues);
 
             if (index >= 0) {
+                const removed = currentData[index];
                 currentData.splice(index, 1);
+                primaryKeyIndexRemoved(currentData, index, removed);
                 this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                 this.NotifyDataChange(config, currentData, 'delete', entity);
             }
@@ -1984,11 +2206,51 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Finds an entity in the array by matching all primary key columns.
      * Supports composite primary keys by comparing all PrimaryKey fields from EntityInfo.
      *
+     * Uses a key index per array, built on first use. A hit is checked against the row at the
+     * indexed position, and the index is rebuilt when that check fails or when the array's length
+     * or last row differ from what the index was built for. A miss on a current index reads no row.
+     *
      * @param dataArray - The array of entities to search
      * @param targetEntity - The entity to find (using its primary key values)
      * @returns The index of the matching entity, or -1 if not found
      */
     protected findEntityIndexByPrimaryKeys(dataArray: BaseEntity[], targetEntity: BaseEntity): number {
+        const pks: PrimaryKeyColumn[] | undefined = targetEntity?.EntityInfo?.PrimaryKeys;
+        if (!pks || pks.length === 0 || !Array.isArray(dataArray)) {
+            return this.scanForPrimaryKeys(dataArray, targetEntity);
+        }
+        const key = primaryKeyOfRow(targetEntity, pks);
+        if (key === undefined) {
+            return this.scanForPrimaryKeys(dataArray, targetEntity);
+        }
+
+        const signature = primaryKeySignature(pks);
+        let index: PrimaryKeyIndex | null | undefined = primaryKeyIndexes.get(dataArray);
+        if (!index || index.signature !== signature || index.length !== dataArray.length || index.last !== dataArray[dataArray.length - 1]) {
+            index = buildPrimaryKeyIndex(dataArray, pks, signature);
+        }
+        for (let attempt = 0; attempt < 2; attempt++) {
+            if (!index || !index.map) {
+                return this.scanForPrimaryKeys(dataArray, targetEntity);
+            }
+            const pos = index.map.get(key);
+            if (pos === undefined) {
+                return -1;
+            }
+            if (rowHasPrimaryKey(dataArray, pos, pks, key)) {
+                return pos;
+            }
+            index = attempt === 0 ? buildPrimaryKeyIndex(dataArray, pks, signature) : null;
+        }
+        return this.scanForPrimaryKeys(dataArray, targetEntity);
+    }
+
+    /**
+     * Finds an entity by comparing primary key values row by row. Used for entities without
+     * PrimaryKeys metadata, when the key index cannot represent a key value, and when a hit fails
+     * its check again after a rebuild.
+     */
+    private scanForPrimaryKeys(dataArray: BaseEntity[], targetEntity: BaseEntity): number {
         const primaryKeys = targetEntity.EntityInfo.PrimaryKeys;
         if (!primaryKeys || primaryKeys.length === 0) {
             // Fallback to single PrimaryKey property if no PrimaryKeys defined
@@ -2018,7 +2280,6 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             });
         });
     }
-    
 
 
     /**
@@ -2118,12 +2379,16 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 category: 'Cache',
             });
 
+            // Loaded (so EnsureLoaded doesn't retry-loop) but readDenied: the installed entities'
+            // configs were skipped too, and their [] is not their table. IsPropertyLoaded (and so
+            // BaseEngineRegistry.FindCachedEntity) must not serve it as one.
             for (const config of configs) {
                 this.initializeSkippedConfigProperty(config);
                 this._dataMap.set(config.PropertyName, {
                     ...(config.Type === 'dataset' ? { datasetName: config.DatasetName } : { entityName: config.EntityName }),
                     data: [],
                     loadedSuccessfully: true,
+                    readDenied: true,
                 });
             }
 
@@ -2271,6 +2536,31 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
+     * True when a refresh holding `generation` may apply its result: it is the latest started, or
+     * its read succeeded and nothing newer has committed rows yet. A superseded refresh that
+     * commits first is overwritten when the newer one lands, so the property never goes
+     * backwards, and the superseded refresh's caller (a forced `Load`, `RefreshItem`) still
+     * returns with rows at least as new as its read. Dropping them instead would leave the
+     * property on its previous rows until the newer refresh landed, which can be after that
+     * caller has returned, or never when that refresh fails. A superseded refresh whose read
+     * failed applies nothing: the newer one owns the property's load state.
+     */
+    protected mayCommitConfigRefresh(propertyName: string, generation: number, succeeded: boolean): boolean {
+        return this.isLatestConfigRefresh(propertyName, generation)
+            || (succeeded && (this._configCommittedGeneration.get(propertyName) ?? 0) < generation);
+    }
+
+    /**
+     * Records that the refresh holding `generation` committed `propertyName`'s rows. Call it only
+     * for a successful read: a failed one leaves the held rows as they were.
+     */
+    protected markConfigRefreshCommitted(propertyName: string, generation: number): void {
+        if ((this._configCommittedGeneration.get(propertyName) ?? 0) < generation) {
+            this._configCommittedGeneration.set(propertyName, generation);
+        }
+    }
+
+    /**
      * Resolves {@link BaseEnginePropertyConfig.IncludeBinaryFields} for this engine's provider:
      * `'DatabaseProviderOnly'` becomes true on a database provider and false on any other.
      */
@@ -2333,15 +2623,19 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             this.decrementInFlightFullRefresh(config.PropertyName);
         }
 
-        // A newer full refresh superseded us while we awaited — drop this (staler) snapshot
-        // rather than clobber the newer one. The newer refresh owns the assignment, the
-        // observer notification, and (on failure) the retry, so bailing here leaves no
-        // observer un-notified. The single-refresh path is unaffected: its generation is
-        // still the latest when its RunView returns.
-        if (!this.isLatestConfigRefresh(config.PropertyName, generation)) {
+        // A newer full refresh superseded us while we awaited. When it has already committed rows,
+        // or our read failed, drop this result rather than clobber the newer one: the newer
+        // refresh owns the assignment, the observer notification, and (on failure) the retry, so
+        // bailing here leaves no observer un-notified. When our read succeeded and the newer one
+        // hasn't committed yet, ours commits and the newer one overwrites it when it lands (see
+        // mayCommitConfigRefresh).
+        if (!this.mayCommitConfigRefresh(config.PropertyName, generation, result.Success)) {
             return;
         }
 
+        if (result.Success) {
+            this.markConfigRefreshCommitted(config.PropertyName, generation);
+        }
         this.HandleSingleViewResult(config, result, contextUser);
         if (!suppressEmit) {
             // A caller that rebuilds derived state afterwards emits itself, once, AFTER the
@@ -2509,8 +2803,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             // Process results and record entity loads for redundancy detection
             const entityNames: string[] = [];
             for (let i = 0; i < configs.length; i++) {
-                if (!this.isLatestConfigRefresh(configs[i].PropertyName, generations[i])) {
-                    continue; // a newer refresh of this property owns the assignment
+                if (!this.mayCommitConfigRefresh(configs[i].PropertyName, generations[i], results[i]?.Success === true)) {
+                    continue; // a newer refresh of this property owns it
+                }
+                if (results[i]?.Success === true) {
+                    this.markConfigRefreshCommitted(configs[i].PropertyName, generations[i]);
                 }
                 this.HandleSingleViewResult(configs[i], results[i], contextUser);
                 this.emitPropertyChange(configs[i].PropertyName);
@@ -2566,8 +2863,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
                     if (index >= 0) {
                         currentData[index] = cached;
+                        primaryKeyIndexReplaced(currentData, index, cached);
                     } else {
                         currentData.push(cached);
+                        primaryKeyIndexAppended(currentData, cached);
                     }
                 }
                 mutated = true;
@@ -2576,7 +2875,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 const oldValues = (event.payload as { OldValues?: Record<string, unknown> } | undefined)?.OldValues;
                 const index = this.indexOfEntityByRefOrKey(currentData, entity, oldValues);
                 if (index >= 0) {
+                    const removed = currentData[index];
                     currentData.splice(index, 1);
+                    primaryKeyIndexRemoved(currentData, index, removed);
                     mutated = true;
                     notifiedProperties.add(mapping.config.PropertyName);
                 }
@@ -2809,6 +3110,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                         return; // superseded while materializing — the newer refresh owns the property
                     }
                     if (rows) {
+                        this.markConfigRefreshCommitted(config.PropertyName, generation);
                         this.HandleSingleViewResult(config, {
                             Success: true,
                             Results: rows,
