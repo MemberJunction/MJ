@@ -37,7 +37,9 @@ import { QueryEngine } from '../engines/QueryEngine';
 import {
     BaseGraphEdgeProvider,
     FormatGraphNodeKey,
+    IsGraphDataProvider,
     MatchesEdgeTypeFilter,
+    type GraphDataProvider,
     type GraphEdgeRequest,
     type GraphEdgeView,
     type GraphNodeRef,
@@ -463,14 +465,12 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
 
     // ----- Internal helpers ----------------------------------------------------
 
-    private getMetadataProvider(): IMetadataProvider & IRunViewProvider & Partial<IRunQueryProvider> {
-        const p = this.ProviderToUse as unknown as
-            | (IMetadataProvider & IRunViewProvider & Partial<IRunQueryProvider>)
-            | undefined;
-        if (p && Array.isArray(p.Entities)) {
+    private getMetadataProvider(): GraphDataProvider {
+        const p = this.ProviderToUse;
+        if (IsGraphDataProvider(p)) {
             return p;
         }
-        return Metadata.Provider as unknown as IMetadataProvider & IRunViewProvider & Partial<IRunQueryProvider>; // global-provider-ok: fallback when BaseEngine has not been bound to an explicit provider
+        throw new Error('GraphEngine: the bound provider does not implement metadata, RunView and RunQuery.');
     }
 
     private normalizeNodeRef(node: GraphNodeRef, provider: IMetadataProvider): GraphNodeRef {

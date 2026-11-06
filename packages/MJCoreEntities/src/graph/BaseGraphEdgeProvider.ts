@@ -94,13 +94,39 @@ export interface GraphEdgeRequest {
 }
 
 /**
+ * A provider that can answer metadata lookups, `RunView` and `RunQuery` — what graph traversal and
+ * every edge provider read through. `ProviderBase` implements all three; the interfaces are separate
+ * in `@memberjunction/core`, so {@link IsGraphDataProvider} narrows to this without a cast.
+ */
+export type GraphDataProvider = IMetadataProvider & IRunViewProvider & IRunQueryProvider;
+
+/**
+ * True when `candidate` implements {@link GraphDataProvider}. Used instead of an `as unknown as`
+ * cast wherever a provider arrives typed as only one of the three interfaces.
+ */
+export function IsGraphDataProvider(candidate: object | null | undefined): candidate is GraphDataProvider {
+    return (
+        candidate != null &&
+        'Entities' in candidate &&
+        'EntityByName' in candidate &&
+        typeof candidate.EntityByName === 'function' &&
+        'RunView' in candidate &&
+        typeof candidate.RunView === 'function' &&
+        'RunViews' in candidate &&
+        typeof candidate.RunViews === 'function' &&
+        'RunQuery' in candidate &&
+        typeof candidate.RunQuery === 'function'
+    );
+}
+
+/**
  * Execution context passed to {@link BaseGraphEdgeProvider.GetEdges}.
  */
 export interface GraphProviderContext<TConfig = Record<string, unknown>> {
     Graph: MJGraphEntity;
     Config: TConfig;
     User: UserInfo;
-    Provider: IMetadataProvider & IRunViewProvider & Partial<IRunQueryProvider>;
+    Provider: GraphDataProvider;
 }
 
 /**

@@ -1,4 +1,4 @@
-import { RunQuery, type IRunQueryProvider } from '@memberjunction/core';
+import { RunQuery } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { QueryEngine } from '../../engines/QueryEngine';
 import {
@@ -50,10 +50,7 @@ export class QueryEdgeProvider extends BaseGraphEdgeProvider<QueryEdgeProviderCo
             return [];
         }
 
-        const rq =
-            typeof ctx.Provider.RunQuery === 'function'
-                ? new RunQuery(ctx.Provider as unknown as IRunQueryProvider)
-                : new RunQuery();
+        const rq = new RunQuery(ctx.Provider);
 
         const queryResult = await rq.RunQuery(
             {

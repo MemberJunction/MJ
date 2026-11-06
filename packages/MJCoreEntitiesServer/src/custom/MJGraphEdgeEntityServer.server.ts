@@ -2,7 +2,6 @@ import {
     AuthorizationInfo,
     BaseEntity,
     IMetadataProvider,
-    IRunViewProvider,
     RunView,
     RunViewParams,
     UserInfo,
@@ -10,19 +9,21 @@ import {
     ValidationErrorType,
     ValidationResult,
 } from '@memberjunction/core';
-import { EscapeSQLString, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     EvaluateAuthorizationChecks,
     FormatGraphNodeKey,
     GraphEngine,
+    IsGraphDataProvider,
     MJGraphEdgeEntity,
     MJGraphEdgeTypeEntity,
+    type GraphDataProvider,
 } from '@memberjunction/core-entities';
 
 /** Maximum character length permitted for `SourceRecordID` and `TargetRecordID`. */
 export const MAX_GRAPH_EDGE_RECORD_ID_LENGTH = 400;
 
-/** Named authorization governing promotion/rejection of `Proposed` edges. */
+/** Named authorization required for every approval decision on `MJ: Graph Edges` (see {@link EvaluateGraphEdgeApproval}). */
 export const GRAPH_APPROVE_EDGES_AUTHORIZATION = 'Graph: Approve Edges';
 
 /**
@@ -225,64 +226,102 @@ export function ValidateGraphEdgeInvariants(
 }
 
 /**
- * Pure check + review metadata calculation when a `Proposed` edge transitions to `Approved` or `Rejected`.
+ * Inputs to {@link EvaluateGraphEdgeApproval}: what is being saved, by whom, and the authorizations
+ * the caller's provider holds.
  */
-export function EvaluateGraphEdgeReviewTransition(params: {
-    readonly PreviousStatus: MJGraphEdgeEntity['Status'] | null | undefined;
-    readonly NextStatus: MJGraphEdgeEntity['Status'] | null | undefined;
+export interface GraphEdgeApprovalInput {
+    /** `true` for an update of an existing row, `false` for a create. */
     readonly IsSaved: boolean;
+    /** The stored `Status` before this save (the field's `OldValue`); ignored for a create. */
+    readonly PreviousStatus: MJGraphEdgeEntity['Status'] | null | undefined;
+    /** The `Status` being saved. */
+    readonly NextStatus: MJGraphEdgeEntity['Status'] | null | undefined;
+    /**
+     * `true` when an update changes what the edge connects or means: `GraphID`, `EdgeTypeID`, or any
+     * `Source*` / `Target*` column. Re-pointing an approved edge approves a different edge.
+     */
+    readonly IdentityChanged: boolean;
     readonly User: UserInfo | undefined;
     readonly Authorizations: AuthorizationInfo[] | undefined;
-}): {
-    readonly Error: ValidationErrorInfo | null;
-    readonly ShouldStampReview: boolean;
-} {
-    const isPromotionOrRejection =
-        params.IsSaved &&
-        params.PreviousStatus === 'Proposed' &&
-        (params.NextStatus === 'Approved' || params.NextStatus === 'Rejected');
-
-    if (!isPromotionOrRejection) {
-        return { Error: null, ShouldStampReview: false };
-    }
-
-    if (!params.User) {
-        return {
-            Error: new ValidationErrorInfo(
-                'Status',
-                `Approving or rejecting a Proposed graph edge requires an authenticated caller with "${GRAPH_APPROVE_EDGES_AUTHORIZATION}".`,
-                params.NextStatus,
-                ValidationErrorType.Failure,
-            ),
-            ShouldStampReview: false,
-        };
-    }
-
-    const isOwner = params.User.Type && params.User.Type.trim().toLowerCase() === 'owner';
-    if (!isOwner && params.Authorizations && params.Authorizations.length > 0) {
-        const [check] = EvaluateAuthorizationChecks(
-            [GRAPH_APPROVE_EDGES_AUTHORIZATION],
-            params.User,
-            params.Authorizations,
-        );
-        if (check && !check.Unknown && !check.Allowed) {
-            return {
-                Error: new ValidationErrorInfo(
-                    'Status',
-                    `Caller lacks "${GRAPH_APPROVE_EDGES_AUTHORIZATION}" authorization required to transition a Proposed edge to "${params.NextStatus}".`,
-                    params.NextStatus,
-                    ValidationErrorType.Failure,
-                ),
-                ShouldStampReview: false,
-            };
-        }
-    }
-
-    return { Error: null, ShouldStampReview: true };
 }
 
 /**
- * Batched `RunViews` (`ResultType: 'count_only'`) existence check for `Source` and `Target` endpoint records.
+ * Result of {@link EvaluateGraphEdgeApproval}.
+ */
+export interface GraphEdgeApprovalVerdict {
+    readonly Error: ValidationErrorInfo | null;
+    /** `true` when the save is an approval decision that passed, so the reviewer is stamped. */
+    readonly ShouldStampReview: boolean;
+}
+
+/**
+ * True when saving these values is an approval decision that `Graph: Approve Edges` must authorize:
+ * - creating an edge that starts out `Approved` (a pre-approved `Declared` edge);
+ * - changing `Status` to `Approved` or `Rejected` (a review decision, from any prior status);
+ * - changing what an `Approved` edge connects (`IdentityChanged`).
+ */
+export function GraphEdgeSaveNeedsApproval(input: GraphEdgeApprovalInput): boolean {
+    if (!input.IsSaved) {
+        return input.NextStatus === 'Approved';
+    }
+    const statusChanged = input.PreviousStatus !== input.NextStatus;
+    if (statusChanged && (input.NextStatus === 'Approved' || input.NextStatus === 'Rejected')) {
+        return true;
+    }
+    return input.NextStatus === 'Approved' && input.IdentityChanged;
+}
+
+/**
+ * Pure fail-closed gate for approval decisions on `MJ: Graph Edges` (see {@link GraphEdgeSaveNeedsApproval}).
+ *
+ * The caller must hold `Graph: Approve Edges` (or an ancestor) through `EvaluateAuthorizationChecks`,
+ * MJ's role-based evaluation. There is no bypass for any user type: an authorization that is not
+ * seeded, an empty authorization list, or a missing caller all deny, because each of them means
+ * nobody has been granted the right.
+ */
+export function EvaluateGraphEdgeApproval(input: GraphEdgeApprovalInput): GraphEdgeApprovalVerdict {
+    if (!GraphEdgeSaveNeedsApproval(input)) {
+        return { Error: null, ShouldStampReview: false };
+    }
+    if (!input.User) {
+        return {
+            Error: approvalError(`requires an authenticated caller with "${GRAPH_APPROVE_EDGES_AUTHORIZATION}"`, input.NextStatus),
+            ShouldStampReview: false,
+        };
+    }
+    const [check] = EvaluateAuthorizationChecks([GRAPH_APPROVE_EDGES_AUTHORIZATION], input.User, input.Authorizations ?? []);
+    if (!check || check.Unknown) {
+        return {
+            Error: approvalError(`requires "${GRAPH_APPROVE_EDGES_AUTHORIZATION}", which is not configured in this system`, input.NextStatus),
+            ShouldStampReview: false,
+        };
+    }
+    if (!check.Allowed) {
+        return {
+            Error: approvalError(`requires "${GRAPH_APPROVE_EDGES_AUTHORIZATION}", which the caller does not hold`, input.NextStatus),
+            ShouldStampReview: false,
+        };
+    }
+    return { Error: null, ShouldStampReview: true };
+}
+
+function approvalError(reason: string, nextStatus: MJGraphEdgeEntity['Status'] | null | undefined): ValidationErrorInfo {
+    return new ValidationErrorInfo(
+        'Status',
+        `Saving this graph edge as "${nextStatus ?? ''}" is an approval decision and ${reason}. ` +
+            'Save it as "Proposed" for a reviewer instead.',
+        nextStatus,
+        ValidationErrorType.Failure,
+    );
+}
+
+/**
+ * Batched `RunViews` (`ResultType: 'count_only'`) existence check for `Source` and `Target` endpoint
+ * records, run as `user` so an endpoint the caller cannot read (entity permission or row-level
+ * security) is refused exactly like one that does not exist.
+ *
+ * Fails closed: an endpoint entity missing from metadata, a failed read, or an exception is a
+ * validation error, never a silent pass.
  */
 export async function CheckGraphEdgeEndpointsExist(
     input: {
@@ -291,28 +330,26 @@ export async function CheckGraphEdgeEndpointsExist(
         readonly TargetEntityID: string | null | undefined;
         readonly TargetRecordID: string | null | undefined;
     },
-    provider: (IMetadataProvider & IRunViewProvider) | undefined,
+    provider: IMetadataProvider,
     user: UserInfo | undefined,
 ): Promise<ValidationErrorInfo[]> {
-    if (!provider || !user || !Array.isArray(provider.Entities) || provider.Entities.length === 0) {
-        return [];
+    if (!user) {
+        return [endpointError('SourceRecordID', 'Graph edge endpoints can only be checked for an authenticated caller.', input.SourceRecordID)];
     }
 
-    const checks: Array<{ Field: 'SourceRecordID' | 'TargetRecordID'; EntityName: string; RecordID: string; Param: RunViewParams }> = [];
-    const buildEndpointParam = (
-        field: 'SourceRecordID' | 'TargetRecordID',
-        entityId: string | null | undefined,
-        recordId: string | null | undefined,
-    ): void => {
+    const errors: ValidationErrorInfo[] = [];
+    const checks: Array<{ Field: EndpointField; EntityName: string; RecordID: string; Param: RunViewParams }> = [];
+    const addCheck = (field: EndpointField, entityId: string | null | undefined, recordId: string | null | undefined): void => {
         const trimmedId = recordId?.trim();
         if (!entityId || !trimmedId) {
+            return; // emptiness is reported by ValidateGraphEdgeInvariants
+        }
+        const entityInfo = provider.EntityByID(entityId);
+        const pkName = entityInfo?.FirstPrimaryKey?.Name; // first-pk-ok: Graph edge endpoint record existence check uses FirstPrimaryKey
+        if (!entityInfo || !pkName) {
+            errors.push(endpointError(field, `Endpoint entity "${entityId}" is not a known entity.`, entityId));
             return;
         }
-        const entityInfo = provider.Entities.find((e) => UUIDsEqual(e.ID, entityId));
-        if (!entityInfo || !entityInfo.FirstPrimaryKey?.Name) { // first-pk-ok: Graph edge endpoint record existence check uses FirstPrimaryKey
-            return;
-        }
-        const pkName = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: Graph edge endpoint record existence check uses FirstPrimaryKey
         checks.push({
             Field: field,
             EntityName: entityInfo.Name,
@@ -325,50 +362,67 @@ export async function CheckGraphEdgeEndpointsExist(
         });
     };
 
-    buildEndpointParam('SourceRecordID', input.SourceEntityID, input.SourceRecordID);
-    buildEndpointParam('TargetRecordID', input.TargetEntityID, input.TargetRecordID);
-
+    addCheck('SourceRecordID', input.SourceEntityID, input.SourceRecordID);
+    addCheck('TargetRecordID', input.TargetEntityID, input.TargetRecordID);
     if (checks.length === 0) {
-        return [];
+        return errors;
     }
 
     try {
-        const rv = RunView.FromMetadataProvider(provider);
-        const results = await rv.RunViews(
+        const results = await RunView.FromMetadataProvider(provider).RunViews(
             checks.map((c) => c.Param),
             user,
         );
-        const errors: ValidationErrorInfo[] = [];
         for (let i = 0; i < checks.length; i++) {
             const check = checks[i];
             const res = results[i];
-            if (res && res.Success && res.TotalRowCount === 0) {
+            if (!res?.Success) {
                 errors.push(
-                    new ValidationErrorInfo(
+                    endpointError(
+                        check.Field,
+                        `Could not verify endpoint record "${check.RecordID}" in entity "${check.EntityName}": ${res?.ErrorMessage ?? 'no result'}.`,
+                        check.RecordID,
+                    ),
+                );
+            } else if (res.TotalRowCount === 0) {
+                errors.push(
+                    endpointError(
                         check.Field,
                         `Endpoint record "${check.RecordID}" in entity "${check.EntityName}" does not exist or is not readable by the caller.`,
                         check.RecordID,
-                        ValidationErrorType.Failure,
                     ),
                 );
             }
         }
-        return errors;
-    } catch {
-        return [];
+    } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push(endpointError('SourceRecordID', `Could not verify graph edge endpoints: ${msg}`, input.SourceRecordID));
     }
+    return errors;
 }
+
+type EndpointField = 'SourceRecordID' | 'TargetRecordID';
+
+function endpointError(field: string, message: string, value: unknown): ValidationErrorInfo {
+    return new ValidationErrorInfo(field, message, value, ValidationErrorType.Failure);
+}
+
+/** Columns whose change on an `Approved` edge re-approves a different edge. */
+const IDENTITY_FIELDS = ['GraphID', 'EdgeTypeID', 'SourceEntityID', 'SourceRecordID', 'TargetEntityID', 'TargetRecordID'] as const;
 
 /**
  * Server-side `MJ: Graph Edges` entity enforcing Phase G1.3 write-time invariants:
  * - No self-loops
  * - Record ID length <= 400 chars
- * - Refuses storing edges of provider-only (`AllowStored = false`) edge types or edge types scoped to another graph
+ * - Refuses an `EdgeTypeID` that is unknown, provider-only (`AllowStored = false`) or scoped to another graph
  * - Enforces `MJ: Graph Edge Type Endpoints` source/target entity constraints via `GraphEngine.Instance.ValidateEdgeEndpoint`
  * - Canonicalizes undirected (`IsDirected = false`) edge endpoint orientation (lower `<entityID>|<recordID>` key first)
  * - Requires new `Inferred` edges to start with `Status = 'Proposed'`
- * - Gates `Proposed -> Approved / Rejected` transitions on `Graph: Approve Edges` authorization and stamps `ReviewedByUserID` / `ReviewedAt`
- * - Verifies `Source` and `Target` endpoint records exist via batched `RunViews` (`count_only`)
+ * - Requires `Graph: Approve Edges` for every approval decision ({@link EvaluateGraphEdgeApproval}) and stamps
+ *   `ReviewedByUserID` / `ReviewedAt` into `Attributes`
+ * - Verifies `Source` and `Target` endpoint records exist, as the caller, via batched `RunViews` (`count_only`)
+ *
+ * Every check fails closed: graph metadata that cannot be loaded is a validation error, not a pass.
  */
 @RegisterClass(BaseEntity, 'MJ: Graph Edges')
 export class MJGraphEdgeEntityServer extends MJGraphEdgeEntity {
@@ -382,38 +436,17 @@ export class MJGraphEdgeEntityServer extends MJGraphEdgeEntity {
             return result;
         }
 
-        const provider = this.ProviderToUse as unknown as (IMetadataProvider & IRunViewProvider) | undefined;
-        if (GraphEngine.Instance.EdgeTypes.length === 0 && this.ContextCurrentUser && provider) {
-            try {
-                await GraphEngine.Instance.Config(false, this.ContextCurrentUser, provider);
-            } catch {
-                // Continue with currently cached metadata if Config cannot run in test harness
-            }
+        const provider = this.ProviderToUse;
+        if (!IsGraphDataProvider(provider)) {
+            return this.fail(result, new ValidationErrorInfo('EdgeTypeID', 'Graph edges can only be validated against a metadata provider.', this.EdgeTypeID, ValidationErrorType.Failure));
+        }
+        const engineError = await this.ensureGraphEngine(provider);
+        if (engineError) {
+            return this.fail(result, engineError);
         }
 
         const edgeType = this.resolveEdgeType(this.EdgeTypeID);
-
-        if (
-            edgeType &&
-            !edgeType.IsDirected &&
-            this.SourceEntityID &&
-            this.TargetEntityID &&
-            this.SourceRecordID &&
-            this.TargetRecordID
-        ) {
-            const canonical = CanonicalizeUndirectedEdgeEndpoints(
-                this.SourceEntityID,
-                this.SourceRecordID,
-                this.TargetEntityID,
-                this.TargetRecordID,
-            );
-            if (canonical.Swapped) {
-                this.SourceEntityID = canonical.SourceEntityID;
-                this.SourceRecordID = canonical.SourceRecordID;
-                this.TargetEntityID = canonical.TargetEntityID;
-                this.TargetRecordID = canonical.TargetRecordID;
-            }
-        }
+        this.canonicalizeUndirectedEndpoints(edgeType);
 
         const errors = ValidateGraphEdgeInvariants(
             {
@@ -429,65 +462,109 @@ export class MJGraphEdgeEntityServer extends MJGraphEdgeEntity {
             },
             edgeType,
         );
-
-        const statusField = this.GetFieldByName('Status');
-        const previousStatus = (statusField?.OldValue as MJGraphEdgeEntity['Status'] | null | undefined) ?? this.Status;
-        const reviewTransition = EvaluateGraphEdgeReviewTransition({
-            PreviousStatus: previousStatus,
-            NextStatus: this.Status,
-            IsSaved: this.IsSaved,
-            User: this.ContextCurrentUser,
-            Authorizations: provider?.Authorizations,
-        });
-        if (reviewTransition.Error) {
-            errors.push(reviewTransition.Error);
-        } else if (reviewTransition.ShouldStampReview && this.ContextCurrentUser?.ID) {
-            let attrObj: Record<string, unknown> = {};
-            if (this.Attributes && this.Attributes.trim().length > 0) {
-                try {
-                    const parsed: unknown = JSON.parse(this.Attributes);
-                    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-                        attrObj = { ...(parsed as Record<string, unknown>) };
-                    }
-                } catch {
-                    attrObj = {};
-                }
-            }
-            if (!attrObj['ReviewedByUserID']) {
-                attrObj['ReviewedByUserID'] = this.ContextCurrentUser.ID;
-            }
-            if (!attrObj['ReviewedAt']) {
-                attrObj['ReviewedAt'] = new Date().toISOString();
-            }
-            this.Attributes = JSON.stringify(attrObj);
+        if (this.EdgeTypeID && !edgeType) {
+            errors.push(new ValidationErrorInfo('EdgeTypeID', `Edge type "${this.EdgeTypeID}" is not a known graph edge type.`, this.EdgeTypeID, ValidationErrorType.Failure));
         }
 
-        const endpointsDirty =
-            !this.IsSaved ||
-            Boolean(this.GetFieldByName('SourceEntityID')?.Dirty) ||
-            Boolean(this.GetFieldByName('SourceRecordID')?.Dirty) ||
-            Boolean(this.GetFieldByName('TargetEntityID')?.Dirty) ||
-            Boolean(this.GetFieldByName('TargetRecordID')?.Dirty);
+        const approval = EvaluateGraphEdgeApproval({
+            IsSaved: this.IsSaved,
+            PreviousStatus: this.previousStatus(),
+            NextStatus: this.Status,
+            IdentityChanged: this.IsSaved && IDENTITY_FIELDS.some((f) => this.GetFieldByName(f)?.Dirty === true),
+            User: this.ContextCurrentUser,
+            Authorizations: provider.Authorizations,
+        });
+        if (approval.Error) {
+            errors.push(approval.Error);
+        } else if (approval.ShouldStampReview && this.ContextCurrentUser?.ID) {
+            this.stampReview(this.ContextCurrentUser.ID);
+        }
 
-        if (errors.length === 0 && endpointsDirty) {
-            const existenceErrors = await CheckGraphEdgeEndpointsExist(
-                {
-                    SourceEntityID: this.SourceEntityID,
-                    SourceRecordID: this.SourceRecordID,
-                    TargetEntityID: this.TargetEntityID,
-                    TargetRecordID: this.TargetRecordID,
-                },
-                provider,
-                this.ContextCurrentUser,
+        if (errors.length === 0 && this.endpointsDirty()) {
+            errors.push(
+                ...(await CheckGraphEdgeEndpointsExist(
+                    {
+                        SourceEntityID: this.SourceEntityID,
+                        SourceRecordID: this.SourceRecordID,
+                        TargetEntityID: this.TargetEntityID,
+                        TargetRecordID: this.TargetRecordID,
+                    },
+                    provider,
+                    this.ContextCurrentUser,
+                )),
             );
-            errors.push(...existenceErrors);
         }
 
         if (errors.length > 0) {
             result.Errors.push(...errors);
             result.Success = false;
         }
+        return result;
+    }
 
+    /**
+     * Makes sure `GraphEngine` has its edge types and endpoint constraints. `Config` is a no-op once
+     * loaded; on a server `BaseEngine` loads it as the system user, so the shared cache never takes
+     * this caller's scope. A failure is returned as an error: validating against an empty cache
+     * would skip the edge-type checks.
+     */
+    private async ensureGraphEngine(provider: GraphDataProvider): Promise<ValidationErrorInfo | null> {
+        try {
+            await GraphEngine.Instance.Config(false, this.ContextCurrentUser, provider);
+            return GraphEngine.Instance.Loaded
+                ? null
+                : new ValidationErrorInfo('EdgeTypeID', 'Graph metadata could not be loaded to validate this edge.', this.EdgeTypeID, ValidationErrorType.Failure);
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return new ValidationErrorInfo('EdgeTypeID', `Graph metadata could not be loaded to validate this edge: ${msg}`, this.EdgeTypeID, ValidationErrorType.Failure);
+        }
+    }
+
+    private canonicalizeUndirectedEndpoints(edgeType: MJGraphEdgeTypeEntity | undefined): void {
+        if (!edgeType || edgeType.IsDirected || !this.SourceEntityID || !this.TargetEntityID || !this.SourceRecordID || !this.TargetRecordID) {
+            return;
+        }
+        const canonical = CanonicalizeUndirectedEdgeEndpoints(this.SourceEntityID, this.SourceRecordID, this.TargetEntityID, this.TargetRecordID);
+        if (canonical.Swapped) {
+            this.SourceEntityID = canonical.SourceEntityID;
+            this.SourceRecordID = canonical.SourceRecordID;
+            this.TargetEntityID = canonical.TargetEntityID;
+            this.TargetRecordID = canonical.TargetRecordID;
+        }
+    }
+
+    private previousStatus(): MJGraphEdgeEntity['Status'] | null {
+        const oldValue: unknown = this.GetFieldByName('Status')?.OldValue;
+        return oldValue === 'Approved' || oldValue === 'Proposed' || oldValue === 'Rejected' ? oldValue : null;
+    }
+
+    private stampReview(userId: string): void {
+        let attrObj: Record<string, unknown> = {};
+        if (this.Attributes && this.Attributes.trim().length > 0) {
+            try {
+                const parsed: unknown = JSON.parse(this.Attributes);
+                if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+                    attrObj = { ...(parsed as Record<string, unknown>) };
+                }
+            } catch {
+                attrObj = {};
+            }
+        }
+        attrObj['ReviewedByUserID'] = userId;
+        attrObj['ReviewedAt'] = new Date().toISOString();
+        this.Attributes = JSON.stringify(attrObj);
+    }
+
+    private endpointsDirty(): boolean {
+        return (
+            !this.IsSaved ||
+            ['SourceEntityID', 'SourceRecordID', 'TargetEntityID', 'TargetRecordID'].some((f) => this.GetFieldByName(f)?.Dirty === true)
+        );
+    }
+
+    private fail(result: ValidationResult, error: ValidationErrorInfo): ValidationResult {
+        result.Errors.push(error);
+        result.Success = false;
         return result;
     }
 
@@ -495,13 +572,6 @@ export class MJGraphEdgeEntityServer extends MJGraphEdgeEntity {
         if (!edgeTypeId) {
             return undefined;
         }
-        const targetNorm = NormalizeUUID(edgeTypeId);
-        for (const et of GraphEngine.Instance.EdgeTypes) {
-            if (NormalizeUUID(et.ID) === targetNorm) {
-                return et;
-            }
-        }
-        return undefined;
+        return GraphEngine.Instance.EdgeTypes.find((et) => UUIDsEqual(et.ID, edgeTypeId));
     }
 }
-

@@ -1,12 +1,11 @@
 import {
     BaseEntity,
-    type IMetadataProvider,
     ValidationErrorInfo,
     ValidationErrorType,
     ValidationResult,
 } from '@memberjunction/core';
 import { NormalizeUUID, RegisterClass } from '@memberjunction/global';
-import { GraphEngine, MJGraphEdgeTypeEntity } from '@memberjunction/core-entities';
+import { GraphEngine, IsGraphDataProvider, MJGraphEdgeTypeEntity } from '@memberjunction/core-entities';
 
 /**
  * Pure invariant check for `MJ: Graph Edge Types` `(GraphID, Name)` uniqueness,
@@ -67,13 +66,21 @@ export class MJGraphEdgeTypeEntityServer extends MJGraphEdgeTypeEntity {
             return result;
         }
 
-        const provider = this.ProviderToUse as unknown as IMetadataProvider | undefined;
-        if (GraphEngine.Instance.EdgeTypes.length === 0 && this.ContextCurrentUser && provider) {
-            try {
-                await GraphEngine.Instance.Config(false, this.ContextCurrentUser, provider);
-            } catch {
-                // Continue with in-memory EdgeTypes when Config cannot run in test harness
-            }
+        // Uniqueness is judged against GraphEngine's cached edge types, so they must be loaded. Config is a
+        // no-op once loaded, and on a server BaseEngine loads it as the system user (never this caller's
+        // scope). A load failure is an error: an empty cache would pass every duplicate.
+        const provider = this.ProviderToUse;
+        if (!IsGraphDataProvider(provider)) {
+            return this.fail(result, 'Graph edge types can only be validated against a metadata provider.');
+        }
+        try {
+            await GraphEngine.Instance.Config(false, this.ContextCurrentUser, provider);
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            return this.fail(result, `Graph metadata could not be loaded to validate this edge type: ${msg}`);
+        }
+        if (!GraphEngine.Instance.Loaded) {
+            return this.fail(result, 'Graph metadata could not be loaded to validate this edge type.');
         }
 
         const dupError = ValidateGraphEdgeTypeUniqueness(
@@ -90,6 +97,12 @@ export class MJGraphEdgeTypeEntityServer extends MJGraphEdgeTypeEntity {
             result.Success = false;
         }
 
+        return result;
+    }
+
+    private fail(result: ValidationResult, message: string): ValidationResult {
+        result.Errors.push(new ValidationErrorInfo('Name', message, this.Name, ValidationErrorType.Failure));
+        result.Success = false;
         return result;
     }
 }
