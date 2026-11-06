@@ -21,6 +21,13 @@ import type { BoundActionParams, SecondaryScopeValue } from '../agent-types';
 export const TASK_SECURITY_ENVELOPE_VERSION = 1;
 
 /**
+ * The result code of an action a tainted task-graph node may not run (its configuration says
+ * `disallowWhenTainted`), refused by the action runner before the action executes. Never retried: the
+ * node's taint does not change between attempts.
+ */
+export const TAINTED_EGRESS_BLOCKED = 'TAINTED_EGRESS_BLOCKED';
+
+/**
  * The run's validated scope, exactly as `BaseAgent` hands it to each action dispatch
  * (`ActionRunScope` in `@memberjunction/actions-base`, which the action runner passes on as `RunScope`).
  */

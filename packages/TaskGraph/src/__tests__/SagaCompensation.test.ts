@@ -1,586 +1,478 @@
-import { describe, it, expect, vi } from 'vitest';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type {
-    MJAIAgentRequestEntity,
-    MJTaskDependencyEntity,
-    MJTaskEntity,
-} from '@memberjunction/core-entities';
+/**
+ * Saga compensation (WS-4.3): the pure rules in `saga-compensation.ts` and the dispatcher's saga
+ * coordinator, driven against a fake database that enforces `CompensatesTaskID`'s unique index.
+ */
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { RunView, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
+import type { MJTaskEntity } from '@memberjunction/core-entities';
+import { UUIDMap } from '@memberjunction/global';
+import { SerializeTaskSecurityEnvelope, TASK_SECURITY_ENVELOPE_VERSION, type TaskGraphSpecNode } from '@memberjunction/ai-core-plus';
 import {
-    BuildCompensationEscalationSummary,
     BuildCompensationInputPayload,
-    IsCompensationTask,
     MergeActionCompensationSpecs,
+    NextSagaStep,
     ReadActionCompensationMetadata,
-    ReadTaskCompensationMetadata,
+    RetryBackoffMs,
     SelectTasksToCompensate,
+    type CompensatableActionRow,
+    type SagaTaskRow,
+    type TaskCompensationStepMetadata,
 } from '../saga-compensation';
 import { TaskGraphDispatcher, type ClaimedTaskCandidate } from '../TaskGraphDispatcher';
-import { BuildTaskGraphParentInputPayload, ParseTaskGraphParentMetadata } from '../TaskGraphService';
+import { BuildStepConfiguration, BuildTaskGraphParentInputPayload, ParseTaskGraphParentMetadata } from '../TaskGraphService';
 import type { TaskActionRunner } from '../types';
 
-const TEST_USER = { ID: '00000000-0000-0000-0000-000000000001', Name: 'Saga Tester', IsActive: true } as UserInfo;
-const COMP_ACTION_1_ID = '11111111-1111-4111-8111-111111111111';
-const COMP_ACTION_2_ID = '22222222-2222-4222-8222-222222222222';
-const FORWARD_ACTION_1_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-const FORWARD_ACTION_2_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
-const FORWARD_ACTION_3_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const TEST_USER = { ID: '00000000-0000-4000-8000-000000000001', Name: 'Saga Tester', IsActive: true } as UserInfo;
+/** The dispatcher's own (system) user, which must never be the one saga reads run as. */
+const SYSTEM_USER = { ID: '00000000-0000-4000-8000-0000000000ff', Name: 'Dispatcher', IsActive: true } as UserInfo;
+const globalRef = globalThis as typeof globalThis & {
+    ___SINGLETON__UserCache?: { Users: UserInfo[]; FindUser(criteria: { ID?: string }): Promise<UserInfo | undefined> };
+};
+const PARENT_ID = '00000000-0000-4000-8000-000000000100';
 const WORKFLOW_TYPE_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
-const OWNING_AGENT_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+const RESERVE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const INVOICE = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const CHARGE = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const RELEASE = '11111111-1111-4111-8111-111111111111';
+const VOID_INVOICE = '22222222-2222-4222-8222-222222222222';
 
-function createMockTask(fields: {
-    ID: string;
-    ParentID: string | null;
-    Name: string;
-    Status?: MJTaskEntity['Status'];
-    StepType?: MJTaskEntity['StepType'];
-    ActionID?: string | null;
-    AgentID?: string | null;
-    UserID?: string | null;
-    InputPayload?: string | null;
-    OutputPayload?: string | null;
-    Configuration?: string | null;
-    ErrorMessage?: string | null;
-    CompletedAt?: Date | null;
-}): MJTaskEntity {
-    const task: Record<string, unknown> = {
-        ID: fields.ID,
-        ParentID: fields.ParentID,
-        TypeID: WORKFLOW_TYPE_ID,
-        Name: fields.Name,
-        Description: '',
-        Status: fields.Status ?? 'Pending',
-        StepType: fields.StepType ?? 'Action',
-        ActionID: fields.ActionID ?? null,
-        AgentID: fields.AgentID ?? null,
-        PromptID: null,
-        UserID: fields.UserID ?? null,
-        AgentRunID: 'run-saga-1',
-        ClaimedBy: null,
-        ClaimExpiresAt: null,
-        StartedAt: fields.Status === 'Complete' || fields.Status === 'Failed' ? new Date('2026-11-02T10:00:00Z') : null,
-        CompletedAt: fields.CompletedAt ?? (fields.Status === 'Complete' || fields.Status === 'Failed' ? new Date('2026-11-02T10:01:00Z') : null),
-        PercentComplete: fields.Status === 'Complete' ? 100 : 0,
-        ErrorMessage: fields.ErrorMessage ?? null,
-        InputPayload: fields.InputPayload ?? JSON.stringify({}),
-        OutputPayload: fields.OutputPayload ?? null,
-        Configuration: fields.Configuration ?? null,
-        get ConfigurationObject(): Record<string, unknown> | null {
-            if (!task.Configuration || typeof task.Configuration !== 'string') return null;
-            try {
-                return JSON.parse(task.Configuration) as Record<string, unknown>;
-            } catch {
-                return null;
+// ───────────────────────────── fake database ─────────────────────────────
+
+type Row = SagaTaskRow & Pick<MJTaskEntity, 'ParentID' | 'TypeID' | 'Description' | 'InputPayload' | 'OutputPayload' | 'ErrorMessage'
+    | 'AgentRunID' | 'SecurityEnvelope' | 'PercentComplete'>;
+
+class SagaDb {
+    public Rows = new Map<string, Row>();
+    public Deps: Array<{ TaskID: string; DependsOnTaskID: string }> = [];
+    public Actions: CompensatableActionRow[] = [];
+    public Logs: Array<{ ID: string; StartedAt: Date; EndedAt: Date; UserID: string }> = [];
+    public RunViewCalls: Array<{ Params: RunViewParams; User?: UserInfo }> = [];
+    public SavedExisting: string[] = [];
+    private next = 0;
+
+    public Add(row: Partial<Row> & Pick<Row, 'ID' | 'Name'>): Row {
+        const full: Row = {
+            Status: 'Pending', StepType: 'Action', UserID: null, ActionID: null, CompletedAt: null, Configuration: null,
+            CompensatesTaskID: null, ParentID: PARENT_ID, TypeID: WORKFLOW_TYPE_ID, Description: null, InputPayload: '{}',
+            OutputPayload: null, ErrorMessage: null, AgentRunID: null, SecurityEnvelope: null, PercentComplete: 0, ...row,
+        };
+        this.Rows.set(full.ID, full);
+        return full;
+    }
+
+    /** A `MJ: Tasks` entity over this database; a new row's insert honours the unique CompensatesTaskID. */
+    public Entity(): MJTaskEntity {
+        const db = this;
+        const state: Partial<Row> & { IsNew?: boolean } = {};
+        const entity = {
+            LatestResult: { CompleteMessage: '' },
+            NewRecord() { state.IsNew = true; state.ID = `00000000-0000-4000-9000-${String(++db.next).padStart(12, '0')}`; },
+            async Load(id: string) { const r = db.Rows.get(id); if (!r) return false; Object.assign(state, r); return true; },
+            async Save() {
+                if (state.IsNew && state.CompensatesTaskID && [...db.Rows.values()].some((r) => r.CompensatesTaskID === state.CompensatesTaskID)) {
+                    entity.LatestResult.CompleteMessage = "Violation of UNIQUE KEY constraint 'UQ_Task_CompensatesTaskID'";
+                    return false;
+                }
+                if (!state.IsNew) db.SavedExisting.push(state.ID!);
+                const { IsNew: _isNew, ...row } = state;
+                db.Add(row as Row);
+                state.IsNew = false;
+                return true;
+            },
+        };
+        return new Proxy(entity, {
+            get: (target, key: string) => (key in target ? target[key as keyof typeof target] : state[key as keyof Row]),
+            set: (_target, key: string, value) => { (state as Record<string, unknown>)[key] = value; return true; },
+        }) as unknown as MJTaskEntity;
+    }
+
+    public RunView(params: RunViewParams, user?: UserInfo): { Success: boolean; Results: unknown[] } {
+        this.RunViewCalls.push({ Params: params, User: user });
+        const filter = params.ExtraFilter ?? '';
+        switch (params.EntityName) {
+            case 'MJ: Actions':
+                return { Success: true, Results: this.Actions.filter((a) => filter.includes(a.ID)) };
+            case 'MJ: Tasks': {
+                const id = /CompensatesTaskID='([^']+)'/.exec(filter)?.[1];
+                return { Success: true, Results: [...this.Rows.values()].filter((r) => r.CompensatesTaskID === id).map((r) => ({ ID: r.ID })) };
             }
-        },
-        NewRecord: vi.fn(),
-        Save: vi.fn().mockResolvedValue(true),
-        Load: vi.fn().mockResolvedValue(true),
-    };
-    return task as unknown as MJTaskEntity;
+            case 'MJ: Action Execution Logs':
+                return { Success: true, Results: this.Logs.filter((l) => filter.includes(l.ID)) };
+            case 'MJ: Record Changes':
+                return { Success: true, Results: [{ ID: 'rc-1', Entity: 'Orders', RecordID: 'O-1', Type: 'Update', ChangesJSON: '{}' }] };
+            case 'MJ: Task Types':
+                return { Success: true, Results: [{ ID: WORKFLOW_TYPE_ID }] };
+            default:
+                return { Success: true, Results: [] };
+        }
+    }
+
+    public Children(): Row[] {
+        return [...this.Rows.values()].filter((r) => r.ParentID === PARENT_ID);
+    }
 }
 
-describe('Saga Compensation & Idempotent Action Metadata (WS-4.3)', () => {
-    describe('ReadActionCompensationMetadata & MergeActionCompensationSpecs', () => {
-        it('should read compensation metadata from direct fields and MJ: Actions Config JSON', () => {
-            const fromDirect = ReadActionCompensationMetadata({
-                CompensationActionID: COMP_ACTION_1_ID,
-                CompensationInputMapping: { ChargeID: 'output.chargeId' },
-                IsIdempotent: true,
-            });
-            expect(fromDirect).toEqual({
-                compensationActionId: COMP_ACTION_1_ID,
-                inputMapping: { ChargeID: 'output.chargeId' },
-                compensationInputMapping: { ChargeID: 'output.chargeId' },
-                isIdempotent: true,
-            });
+function parentRow(): MJTaskEntity {
+    return {
+        ID: PARENT_ID,
+        Name: 'Checkout',
+        UserID: TEST_USER.ID,
+        AgentRunID: 'run-1',
+        SecurityEnvelope: null,
+        InputPayload: JSON.stringify(BuildTaskGraphParentInputPayload({
+            continuation: 'none', reinvokeDepth: 0, failureSemantics: 'block', failurePolicy: 'CompensateCompleted',
+            submittedByAgentRunID: 'run-1', submittedByUserID: TEST_USER.ID,
+        })),
+    } as unknown as MJTaskEntity;
+}
 
-            const fromConfigJson = ReadActionCompensationMetadata({
-                Config_: JSON.stringify({
-                    compensation: {
-                        compensationActionId: COMP_ACTION_2_ID,
-                        compensationActionName: 'Refund Payment',
-                        compensationInputMapping: { PaymentID: 'output.paymentId', Reason: 'input.reason' },
-                        isIdempotent: true,
-                        onCompensationFailure: 'EscalateToHumanTask',
-                        retryCount: 2,
-                    },
-                }),
-            });
-            expect(fromConfigJson).toEqual({
-                compensationActionId: COMP_ACTION_2_ID,
-                compensationActionName: 'Refund Payment',
-                inputMapping: { PaymentID: 'output.paymentId', Reason: 'input.reason' },
-                compensationInputMapping: { PaymentID: 'output.paymentId', Reason: 'input.reason' },
-                isIdempotent: true,
-                onCompensationFailure: 'EscalateToHumanTask',
-                retryCount: 2,
-            });
+/** The graph state the coordinator reads, rebuilt from the database each time. */
+function graphOf(db: SagaDb, parent: MJTaskEntity) {
+    const children = db.Children().map((r) => ({ ...r }) as unknown as MJTaskEntity);
+    return {
+        parentTaskID: PARENT_ID,
+        parent,
+        parentMetadata: ParseTaskGraphParentMetadata(parent.InputPayload),
+        rawDependencies: db.Deps,
+        nodes: children.map((c) => ({ id: c.ID, status: c.Status })),
+        edges: [],
+        entityById: new Map(children.map((c) => [c.ID, c])),
+        unreachableTaskIDs: new Set<string>(),
+        cascadeSkipTaskIDs: new Set<string>(),
+        skipSeedTaskIDs: new Set<string>(),
+        holdTaskIDs: new Set<string>(),
+        handledFailureIDs: new Set<string>(),
+    };
+}
 
-            const merged = MergeActionCompensationSpecs(fromDirect, {
-                onCompensationFailure: 'ContinueCompensation',
-                retryCount: 3,
-            });
-            expect(merged).toEqual({
-                compensationActionId: COMP_ACTION_1_ID,
-                inputMapping: { ChargeID: 'output.chargeId' },
-                compensationInputMapping: { ChargeID: 'output.chargeId' },
-                isIdempotent: true,
-                onCompensationFailure: 'ContinueCompensation',
-                retryCount: 3,
-            });
+type Coordinator = { pass: () => Promise<void>; skips: string[]; sagaStates: string[] };
+
+function coordinator(db: SagaDb, parent: MJTaskEntity = parentRow()): Coordinator {
+    const provider = { GetEntityObject: vi.fn(async () => db.Entity()) } as unknown as IMetadataProvider;
+    const dispatcher = new TaskGraphDispatcher(
+        { CreateProvider: vi.fn().mockResolvedValue(provider) },
+        { RunAgentForTask: vi.fn() },
+        SYSTEM_USER,
+        { InstanceID: 'inst-saga' },
+    );
+    const skips: string[] = [];
+    const sagaStates: string[] = [];
+    const internals = dispatcher as unknown as {
+        claims: { TrySkipPending: unknown; TryWriteDebugFields: unknown };
+        loadGraphState: unknown;
+        coordinateSagaCompensation: (p: IMetadataProvider, id: string, g: ReturnType<typeof graphOf>) => Promise<unknown>;
+    };
+    internals.claims.TrySkipPending = vi.fn(async (_p: IMetadataProvider, id: string) => {
+        const row = db.Rows.get(id);
+        if (row?.Status !== 'Pending') return false;
+        row.Status = 'Skipped';
+        skips.push(id);
+        return true;
+    });
+    internals.claims.TryWriteDebugFields = vi.fn(async (_p: IMetadataProvider, _id: string, fields: Array<{ Value: { Value: string } }>) => {
+        sagaStates.push(fields[0].Value.Value);
+        return true;
+    });
+    internals.loadGraphState = vi.fn(async () => graphOf(db, parent));
+    return {
+        skips,
+        sagaStates,
+        pass: async () => { await internals.coordinateSagaCompensation(provider, PARENT_ID, graphOf(db, parent)); },
+    };
+}
+
+/** reserve (A) → invoice (B) → charge (C, failed); plus an independent pending step. */
+function checkoutGraph(db: SagaDb, opts: { invoiceConfig?: TaskCompensationStepMetadata } = {}): void {
+    db.Add({ ID: 'T-A', Name: 'Reserve', Status: 'Complete', ActionID: RESERVE, OutputPayload: JSON.stringify({ reservationId: 'R-1' }),
+        CompletedAt: new Date('2026-11-02T10:00:00Z'), Configuration: JSON.stringify({ runtime: { actionLogID: 'log-A', isOutputTainted: false } }) });
+    db.Add({ ID: 'T-B', Name: 'Invoice', Status: 'Complete', ActionID: INVOICE, OutputPayload: JSON.stringify({ invoiceId: 'I-1' }),
+        CompletedAt: new Date('2026-11-02T10:01:00Z'),
+        Configuration: JSON.stringify({ runtime: { actionLogID: 'log-B', isOutputTainted: true }, ...(opts.invoiceConfig ? { compensation: opts.invoiceConfig } : {}) }) });
+    db.Add({ ID: 'T-C', Name: 'Charge', Status: 'Failed', ActionID: CHARGE, ErrorMessage: 'card declined' });
+    db.Add({ ID: 'T-D', Name: 'Notify', Status: 'Pending', ActionID: CHARGE });
+    db.Deps.push({ TaskID: 'T-B', DependsOnTaskID: 'T-A' }, { TaskID: 'T-C', DependsOnTaskID: 'T-B' });
+    db.Actions.push(
+        { ID: RESERVE, CompensationActionID: RELEASE, CompensationInputMapping: JSON.stringify({ ReservationID: 'output.reservationId' }), IsIdempotent: true },
+        { ID: INVOICE, CompensationActionID: VOID_INVOICE, CompensationInputMapping: null, IsIdempotent: false },
+        { ID: CHARGE, CompensationActionID: null, CompensationInputMapping: null, IsIdempotent: false },
+    );
+    db.Logs.push({ ID: 'log-B', StartedAt: new Date('2026-11-02T10:00:30Z'), EndedAt: new Date('2026-11-02T10:00:59Z'), UserID: TEST_USER.ID });
+}
+
+function compensationOf(db: SagaDb, forwardID: string): Row | undefined {
+    return [...db.Rows.values()].find((r) => r.CompensatesTaskID === forwardID && r.StepType !== 'Human');
+}
+
+// ───────────────────────────── tests ─────────────────────────────
+
+describe('saga-compensation rules', () => {
+    it('reads compensation from the typed MJ: Actions columns, the stored mapping parsed from JSON (B4b)', () => {
+        const row: CompensatableActionRow = { ID: RESERVE, CompensationActionID: RELEASE, CompensationInputMapping: '{"ReservationID":"output.reservationId"}', IsIdempotent: true };
+        expect(ReadActionCompensationMetadata(row)).toEqual({
+            compensationActionId: RELEASE,
+            inputMapping: { ReservationID: 'output.reservationId' },
+            isIdempotent: true,
+        });
+        expect(ReadActionCompensationMetadata({ ...row, CompensationActionID: null })).toBeNull();
+    });
+
+    it("lets a node's settings win over its action's", () => {
+        const merged = MergeActionCompensationSpecs(
+            { compensationActionId: RELEASE, inputMapping: { A: 'input.a' } },
+            { onCompensationFailure: 'HaltSaga', retryCount: 3 },
+        );
+        expect(merged).toEqual({ compensationActionId: RELEASE, inputMapping: { A: 'input.a' }, onCompensationFailure: 'HaltSaga', retryCount: 3 });
+    });
+
+    it('keeps a spec node\'s retryCount and compensationInputMapping (B4c)', () => {
+        const node: TaskGraphSpecNode = {
+            tempId: 'n1', name: 'Reserve', kind: 'Action',
+            configuration: { actionName: 'Reserve', compensation: { compensationActionId: RELEASE, compensationInputMapping: { ID: 'output.id' }, retryCount: 2, isIdempotent: true } },
+        };
+        expect(BuildStepConfiguration(node)?.compensation).toEqual({
+            compensationActionId: RELEASE, inputMapping: { ID: 'output.id' }, retryCount: 2, isIdempotent: true,
         });
     });
 
-    describe('SelectTasksToCompensate & BuildCompensationInputPayload', () => {
-        it('should order completed compensatable forward tasks in reverse topological order', () => {
-            const step1 = createMockTask({
-                ID: '00000000-0000-4000-8000-000000000011',
-                ParentID: 'parent-1',
-                Name: 'Step 1: Reserve Inventory',
-                Status: 'Complete',
-                ActionID: FORWARD_ACTION_1_ID,
-                CompletedAt: new Date('2026-11-02T10:01:00Z'),
-                Configuration: JSON.stringify({
-                    compensation: { compensationActionId: COMP_ACTION_1_ID },
-                }),
-            });
-            const step2 = createMockTask({
-                ID: '00000000-0000-4000-8000-000000000022',
-                ParentID: 'parent-1',
-                Name: 'Step 2: Capture Payment',
-                Status: 'Complete',
-                ActionID: FORWARD_ACTION_2_ID,
-                CompletedAt: new Date('2026-11-02T10:02:00Z'),
-                Configuration: JSON.stringify({
-                    compensation: { compensationActionId: COMP_ACTION_2_ID },
-                }),
-            });
-            const step3Failed = createMockTask({
-                ID: '00000000-0000-4000-8000-000000000033',
-                ParentID: 'parent-1',
-                Name: 'Step 3: Provision Shipment',
-                Status: 'Failed',
-                ActionID: FORWARD_ACTION_3_ID,
-                Configuration: JSON.stringify({
-                    compensation: { compensationActionId: COMP_ACTION_1_ID },
-                }),
-            });
-
-            const ordered = SelectTasksToCompensate(
-                [step1, step2, step3Failed],
-                [
-                    { TaskID: step2.ID, DependsOnTaskID: step1.ID },
-                    { TaskID: step3Failed.ID, DependsOnTaskID: step2.ID },
-                ],
-            );
-
-            // Step 2 depends on Step 1, so reverse topological order must compensate Step 2 before Step 1
-            expect(ordered.map((entry) => entry.task.ID)).toEqual([step2.ID, step1.ID]);
-        });
-
-        it('should map forward input, output, actionLogId, and recordChanges into compensation input payload', () => {
-            const mapped = BuildCompensationInputPayload({
-                ForwardInput: { OrderID: 'ORD-100', Amount: 250 },
-                ForwardOutput: { TransactionID: 'TX-999', ReceiptURL: 'https://example.com/r/999' },
-                ActionLogID: 'log-abc',
-                RecordChanges: [{ ID: 'rc-1', EntityID: 'ent-1', RecordID: 'rec-1', Type: 'Create' }],
-                InputMapping: {
-                    RefundTransactionID: 'output.TransactionID',
-                    OriginalOrderID: 'input.OrderID',
-                    AuditLogID: 'actionLogId',
-                    CreatedRecordID: 'recordChanges.0.RecordID',
-                },
-            });
-
-            expect(mapped).toEqual({
-                RefundTransactionID: 'TX-999',
-                OriginalOrderID: 'ORD-100',
-                AuditLogID: 'log-abc',
-                CreatedRecordID: 'rec-1',
-            });
-        });
-
-        it('should build a structured HITL escalation summary when compensation fails', () => {
-            const summary = BuildCompensationEscalationSummary({
-                WorkflowName: 'Order Fulfillment Saga',
-                ForwardTask: {
-                    ID: 'task-2',
-                    Name: 'Capture Payment',
-                    InputPayload: JSON.stringify({ Amount: 250 }),
-                    OutputPayload: JSON.stringify({ TransactionID: 'TX-999' }),
-                },
-                CompensationTask: {
-                    ID: 'comp-task-2',
-                    Name: 'Compensate: Capture Payment',
-                    InputPayload: JSON.stringify({ TransactionID: 'TX-999' }),
-                    ErrorMessage: 'Payment gateway refund endpoint timed out',
-                },
-            });
-
-            expect(summary.RequestText).toContain('Order Fulfillment Saga');
-            expect(summary.RequestText).toContain('Capture Payment');
-            expect(summary.RequestText).toContain('Payment gateway refund endpoint timed out');
-            expect(summary.ContextData).toMatchObject({
-                workflowName: 'Order Fulfillment Saga',
-                forwardTaskID: 'task-2',
-                compensationTaskID: 'comp-task-2',
-                compensationError: 'Payment gateway refund endpoint timed out',
-            });
-        });
+    it('orders completed compensatable steps in reverse topological order, leaving out compensation rows', () => {
+        const db = new SagaDb();
+        checkoutGraph(db);
+        db.Add({ ID: 'T-X', Name: 'Compensate: Reserve', Status: 'Complete', ActionID: RELEASE, CompensatesTaskID: 'T-A' });
+        const defaults = new UUIDMap<TaskCompensationStepMetadata>();
+        for (const a of db.Actions) {
+            const meta = ReadActionCompensationMetadata(a);
+            if (meta) defaults.Set(a.ID, meta);
+        }
+        const plan = SelectTasksToCompensate(db.Children(), defaults, db.Deps);
+        expect(plan.map((p) => p.Task.ID)).toEqual(['T-B', 'T-A']);
     });
 
-    describe('TaskGraphDispatcher idempotent action retry and saga execution', () => {
-        it('should automatically retry transient action failures when compensation.isIdempotent is true', async () => {
-            const parentMeta = ParseTaskGraphParentMetadata(
-                JSON.stringify(
-                    BuildTaskGraphParentInputPayload({
-                        continuation: 'none',
-                        reinvokeDepth: 0,
-                        failureSemantics: 'block',
-                        submittedByAgentRunID: 'run-idem-1',
-                        submittedByUserID: TEST_USER.ID,
-                    }),
-                ),
-            );
+    it('maps forward input and output into the compensation input', () => {
+        expect(BuildCompensationInputPayload({
+            ForwardInput: { reason: 'r' }, ForwardOutput: { reservationId: 'R-1' }, InputMapping: '{"ReservationID":"output.reservationId","Why":"input.reason"}',
+        })).toEqual({ ReservationID: 'R-1', Why: 'r' });
+    });
 
-            const runActionMock = vi
-                .fn()
-                .mockResolvedValueOnce({
-                    Success: false,
-                    ErrorMessage: 'Transient 502 Bad Gateway',
-                    ActionLogID: 'log-attempt-1',
-                })
-                .mockResolvedValueOnce({
-                    Success: true,
-                    Output: { ReservedID: 'RES-777' },
-                    ActionLogID: 'log-attempt-2',
-                });
+    it('backs off exponentially, capped', () => {
+        expect([1, 2, 3, 10].map((a) => RetryBackoffMs(a, 100))).toEqual([100, 200, 400, 3000]);
+    });
 
-            const actionRunner: TaskActionRunner = {
-                EnforcesSecurityEnvelope: true,
-                RunActionForTask: runActionMock,
-            };
-            const dispatcher = new TaskGraphDispatcher(
-                { CreateProvider: vi.fn().mockResolvedValue({} as IMetadataProvider) },
-                { RunAgentForTask: vi.fn() },
-                TEST_USER,
-                { InstanceID: 'inst-idem-1' },
-                undefined,
-                undefined,
-                actionRunner,
-            );
-
-            const completeClaimedMock = vi.fn().mockResolvedValue(true);
-            (dispatcher as unknown as { claims: { CompleteClaimed: ReturnType<typeof vi.fn> } }).claims.CompleteClaimed =
-                completeClaimedMock;
-
-            const idempotentTask = createMockTask({
-                ID: 'task-idem-1',
-                ParentID: 'parent-idem-1',
-                Name: 'Reserve Inventory Idempotent',
-                StepType: 'Action',
-                ActionID: FORWARD_ACTION_1_ID,
-                InputPayload: JSON.stringify({ SKU: 'ITEM-1', Quantity: 2 }),
-                Configuration: JSON.stringify({
-                    compensation: {
-                        isIdempotent: true,
-                        retryCount: 2,
-                    },
-                }),
-            });
-
-            const execClaimed = (dispatcher as unknown as {
-                executeClaimed: (c: ClaimedTaskCandidate) => Promise<void>;
-            }).executeClaimed.bind(dispatcher);
-
-            await execClaimed({
-                ID: idempotentTask.ID,
-                ParentID: 'parent-idem-1',
-                taskEntity: idempotentTask,
-                parentMetadata: parentMeta,
-                dependencyOutputs: new Map(),
-            });
-
-            expect(runActionMock).toHaveBeenCalledTimes(2);
-            expect(completeClaimedMock).toHaveBeenCalledTimes(1);
-            const outcome = completeClaimedMock.mock.calls[0][2] as { Status: string; OutputPayload: string };
-            expect(outcome.Status).toBe('Complete');
-            expect(JSON.parse(outcome.OutputPayload)).toEqual({
-                SKU: 'ITEM-1',
-                Quantity: 2,
-                ReservedID: 'RES-777',
-            });
+    describe('NextSagaStep', () => {
+        const forward = (id: string): SagaTaskRow => ({ ID: id, Name: id, Status: 'Complete', StepType: 'Action', UserID: null, ActionID: RESERVE, CompletedAt: null, Configuration: null, CompensatesTaskID: null });
+        const comp = (status: MJTaskEntity['Status'], onFailure?: string): SagaTaskRow => ({
+            ...forward('C'), Status: status, CompensatesTaskID: 'F1',
+            Configuration: onFailure ? JSON.stringify({ compensation: { onCompensationFailure: onFailure } }) : null,
         });
+        const human = (status: MJTaskEntity['Status']): SagaTaskRow => ({ ...forward('H'), StepType: 'Human', Status: status, CompensatesTaskID: 'C' });
+        const plan = [{ Task: forward('F1'), Compensation: { compensationActionId: RELEASE } }, { Task: forward('F2'), Compensation: { compensationActionId: RELEASE } }];
+        const step = (c?: SagaTaskRow, h?: SagaTaskRow) => NextSagaStep({ Plan: plan, CompensationFor: (id) => (id === 'F1' ? c : undefined), EscalationFor: () => h });
 
-        it('should materialize reverse-topological compensation tasks when Node 3 fails after Nodes 1 and 2 complete, and escalate on compensation failure', async () => {
-            const parentInput = BuildTaskGraphParentInputPayload({
-                continuation: 'none',
-                reinvokeDepth: 0,
-                failureSemantics: 'block',
-                failurePolicy: 'CompensateCompleted',
-                submittedByAgentRunID: 'run-saga-main',
-                submittedByUserID: TEST_USER.ID,
-            });
-            const parentTask = createMockTask({
-                ID: '00000000-0000-4000-8000-000000000100',
-                ParentID: null,
-                Name: 'Order Checkout Saga',
-                Status: 'In Progress',
-                AgentID: OWNING_AGENT_ID,
-                InputPayload: JSON.stringify(parentInput),
-            });
-
-            const node1 = createMockTask({
-                ID: '00000000-0000-4000-8000-000000000101',
-                ParentID: parentTask.ID,
-                Name: 'Step 1: Reserve Inventory',
-                Status: 'Complete',
-                StepType: 'Action',
-                ActionID: FORWARD_ACTION_1_ID,
-                InputPayload: JSON.stringify({ SKU: 'LAPTOP-1' }),
-                OutputPayload: JSON.stringify({ ReservationID: 'RES-101' }),
-                CompletedAt: new Date('2026-11-02T10:01:00Z'),
-                Configuration: JSON.stringify({
-                    runtime: { actionLogID: 'act-log-101' },
-                    compensation: {
-                        compensationActionId: COMP_ACTION_1_ID,
-                        compensationInputMapping: {
-                            ReservationID: 'output.ReservationID',
-                            OriginalSKU: 'input.SKU',
-                        },
-                        onCompensationFailure: 'EscalateToHumanTask',
-                    },
-                }),
-            });
-
-            const node2 = createMockTask({
-                ID: '00000000-0000-4000-8000-000000000102',
-                ParentID: parentTask.ID,
-                Name: 'Step 2: Charge Card',
-                Status: 'Complete',
-                StepType: 'Action',
-                ActionID: FORWARD_ACTION_2_ID,
-                InputPayload: JSON.stringify({ Amount: 1999 }),
-                OutputPayload: JSON.stringify({ ChargeID: 'CHG-202' }),
-                CompletedAt: new Date('2026-11-02T10:02:00Z'),
-                Configuration: JSON.stringify({
-                    runtime: { actionLogID: 'act-log-202' },
-                    compensation: {
-                        compensationActionId: COMP_ACTION_2_ID,
-                        compensationInputMapping: {
-                            ChargeID: 'output.ChargeID',
-                            RefundAmount: 'input.Amount',
-                        },
-                        onCompensationFailure: 'ContinueCompensation',
-                    },
-                }),
-            });
-
-            const node3 = createMockTask({
-                ID: '00000000-0000-4000-8000-000000000103',
-                ParentID: parentTask.ID,
-                Name: 'Step 3: Create Shipment',
-                Status: 'Failed',
-                StepType: 'Action',
-                ActionID: FORWARD_ACTION_3_ID,
-                ErrorMessage: 'Warehouse API unavailable',
-                CompletedAt: new Date('2026-11-02T10:03:00Z'),
-            });
-
-            const tasksInDB: MJTaskEntity[] = [node1, node2, node3];
-            const depsInDB: MJTaskDependencyEntity[] = [
-                {
-                    ID: 'dep-1-2',
-                    TaskID: node2.ID,
-                    DependsOnTaskID: node1.ID,
-                    DependencyType: 'Prerequisite',
-                    Condition: null,
-                    ExclusiveGroup: null,
-                } as unknown as MJTaskDependencyEntity,
-                {
-                    ID: 'dep-2-3',
-                    TaskID: node3.ID,
-                    DependsOnTaskID: node2.ID,
-                    DependencyType: 'Prerequisite',
-                    Condition: null,
-                    ExclusiveGroup: null,
-                } as unknown as MJTaskDependencyEntity,
-            ];
-            const createdRequests: MJAIAgentRequestEntity[] = [];
-
-            let compTaskSeq = 1;
-            let depSeq = 1;
-            const provider = {
-                RunView: vi.fn().mockImplementation(async (params: { EntityName: string; ExtraFilter?: string }) => {
-                    if (params.EntityName === 'MJ: Task Types') {
-                        return { Success: true, Results: [{ ID: WORKFLOW_TYPE_ID }] };
-                    }
-                    if (params.EntityName === 'MJ: Tasks') {
-                        return { Success: true, Results: [...tasksInDB] };
-                    }
-                    if (params.EntityName === 'MJ: Task Dependencies') {
-                        return { Success: true, Results: [...depsInDB] };
-                    }
-                    return { Success: true, Results: [] };
-                }),
-                GetEntityObject: vi.fn().mockImplementation(async (entityName: string) => {
-                    if (entityName === 'MJ: Tasks') {
-                        const newId = `00000000-0000-4000-8000-00000000020${compTaskSeq++}`;
-                        const draft = createMockTask({
-                            ID: newId,
-                            ParentID: parentTask.ID,
-                            Name: '',
-                            Status: 'Pending',
-                        });
-                        draft.Load = vi.fn().mockImplementation(async (id: string) => {
-                            if (id === parentTask.ID) {
-                                Object.assign(draft, parentTask);
-                                return true;
-                            }
-                            return false;
-                        });
-                        draft.Save = vi.fn().mockImplementation(async () => {
-                            if (!tasksInDB.some((t) => t.ID === draft.ID) && draft.ParentID === parentTask.ID) {
-                                tasksInDB.push(draft);
-                            }
-                            return true;
-                        });
-                        return draft;
-                    }
-                    if (entityName === 'MJ: Task Dependencies') {
-                        const depDraft = {
-                            ID: `dep-comp-${depSeq++}`,
-                            TaskID: '',
-                            DependsOnTaskID: '',
-                            DependencyType: 'Prerequisite',
-                            Condition: null,
-                            ExclusiveGroup: null,
-                            NewRecord: vi.fn(),
-                            Save: vi.fn().mockImplementation(async () => {
-                                depsInDB.push(depDraft as unknown as MJTaskDependencyEntity);
-                                return true;
-                            }),
-                        };
-                        return depDraft;
-                    }
-                    if (entityName === 'MJ: AI Agent Requests') {
-                        const reqDraft = {
-                            ID: `req-esc-${createdRequests.length + 1}`,
-                            OriginatingTaskID: null,
-                            AgentID: null,
-                            RequestForUserID: null,
-                            RequestedAt: null,
-                            Status: 'Requested',
-                            Request: '',
-                            OriginatingAgentRunID: null,
-                            NewRecord: vi.fn(),
-                            Save: vi.fn().mockImplementation(async () => {
-                                createdRequests.push(reqDraft as unknown as MJAIAgentRequestEntity);
-                                return true;
-                            }),
-                        };
-                        return reqDraft;
-                    }
-                    throw new Error(`Unexpected entity: ${entityName}`);
-                }),
-            } as unknown as IMetadataProvider;
-
-            const dispatcher = new TaskGraphDispatcher(
-                { CreateProvider: vi.fn().mockResolvedValue(provider) },
-                { RunAgentForTask: vi.fn() },
-                TEST_USER,
-                { InstanceID: 'inst-saga-1' },
-            );
-
-            // Stub claim store methods used during propagateAndRollup
-            const claims = (dispatcher as unknown as {
-                claims: {
-                    TryStampParentStart: ReturnType<typeof vi.fn>;
-                    TryUpdateParentProgress: ReturnType<typeof vi.fn>;
-                    TrySettleParent: ReturnType<typeof vi.fn>;
-                };
-            }).claims;
-            claims.TryStampParentStart = vi.fn().mockResolvedValue(true);
-            claims.TryUpdateParentProgress = vi.fn().mockResolvedValue(true);
-            claims.TrySettleParent = vi.fn().mockResolvedValue(true);
-
-            const loadGraphState = (dispatcher as unknown as {
-                loadGraphState: (
-                    p: IMetadataProvider,
-                    parentID: string,
-                    debug?: undefined,
-                    preloadedParent?: MJTaskEntity,
-                ) => Promise<unknown>;
-            }).loadGraphState.bind(dispatcher);
-            const coordinateSaga = (dispatcher as unknown as {
-                coordinateSagaCompensation: (
-                    p: IMetadataProvider,
-                    parentID: string,
-                    g: unknown,
-                ) => Promise<{
-                    nodes: Array<{ id: string; status: string }>;
-                    edges: Array<{ taskId: string; dependsOnTaskId: string }>;
-                    handledFailureIDs: Set<string>;
-                    parentMetadata: { sagaState?: string };
-                }>;
-            }).coordinateSagaCompensation.bind(dispatcher);
-
-            // Pass 1: Node 3 failed, Nodes 1 and 2 completed -> materializes Comp 2 and Comp 1 in reverse order
-            const initialGraph = await loadGraphState(provider, parentTask.ID, undefined, parentTask);
-            const afterMaterialize = await coordinateSaga(provider, parentTask.ID, initialGraph);
-
-            const compTasks = tasksInDB.filter((t) => IsCompensationTask(t));
-            expect(compTasks).toHaveLength(2);
-            expect(compTasks[0].Name).toBe('Compensate: Step 2: Charge Card');
-            expect(compTasks[0].ActionID).toBe(COMP_ACTION_2_ID);
-            expect(JSON.parse(compTasks[0].InputPayload!)).toEqual({
-                ChargeID: 'CHG-202',
-                RefundAmount: 1999,
-            });
-            expect(compTasks[1].Name).toBe('Compensate: Step 1: Reserve Inventory');
-            expect(compTasks[1].ActionID).toBe(COMP_ACTION_1_ID);
-            expect(JSON.parse(compTasks[1].InputPayload!)).toEqual({
-                ReservationID: 'RES-101',
-                OriginalSKU: 'LAPTOP-1',
-            });
-
-            // Verify sequential dependency chaining: Comp 1 depends on Comp 2 (so Comp 2 runs first)
-            expect(afterMaterialize.edges).toContainEqual({
-                taskId: compTasks[1].ID,
-                dependsOnTaskId: compTasks[0].ID,
-                dependencyType: 'Prerequisite',
-            });
-            expect(afterMaterialize.parentMetadata.sagaState).toBe('Compensating');
-
-            // Verify forward tasks record `compensatedByTaskID`
-            expect(ReadTaskCompensationMetadata(node2.Configuration)?.compensatedByTaskID).toBe(compTasks[0].ID);
-            expect(ReadTaskCompensationMetadata(node1.Configuration)?.compensatedByTaskID).toBe(compTasks[1].ID);
-
-            // Pass 2: Simulate Comp 2 failing with `onCompensationFailure: 'ContinueCompensation'`
-            // and Comp 1 failing with `onCompensationFailure: 'EscalateToHumanTask'`
-            compTasks[0].Status = 'Failed';
-            compTasks[0].ErrorMessage = 'Gateway temporary error (continue allowed)';
-            const graphAfterComp2Fail = (await loadGraphState(provider, parentTask.ID, undefined, parentTask)) as {
-                handledFailureIDs: Set<string>;
-            };
-            // Because Comp 2 has `ContinueCompensation`, it is marked in `handledFailureIDs` so Comp 1 is released
-            expect(graphAfterComp2Fail.handledFailureIDs.has(compTasks[0].ID)).toBe(true);
-
-            compTasks[1].Status = 'Failed';
-            compTasks[1].ErrorMessage = 'Inventory lock held by warehouse override';
-            const graphAfterComp1Fail = await loadGraphState(provider, parentTask.ID, undefined, parentTask);
-            const finalGraph = await coordinateSaga(provider, parentTask.ID, graphAfterComp1Fail);
-
-            // Verify HITL escalation created an `MJ: AI Agent Requests` record for Comp 1
-            expect(createdRequests).toHaveLength(1);
-            expect(createdRequests[0].OriginatingTaskID).toBe(compTasks[1].ID);
-            expect(createdRequests[0].AgentID).toBe(OWNING_AGENT_ID);
-            expect(createdRequests[0].Request).toContain('Order Checkout Saga');
-            expect(createdRequests[0].Request).toContain('Inventory lock held by warehouse override');
-            expect(ReadTaskCompensationMetadata(compTasks[1].Configuration)?.escalatedRequestID).toBe(
-                createdRequests[0].ID,
-            );
-            expect(finalGraph.parentMetadata.sagaState).toBe('CompensationEscalated');
+        it('compensates the first step first', () => expect(step().Kind).toBe('Compensate'));
+        it('waits on a running compensation', () => expect(step(comp('In Progress')).Kind).toBe('Wait'));
+        it('moves to the next step once one is compensated', () => {
+            const next = step(comp('Complete'));
+            expect(next.Kind === 'Compensate' && next.Forward.ID).toBe('F2');
         });
+        it('stops on HaltSaga', () => expect(step(comp('Failed', 'HaltSaga'))).toEqual({ Kind: 'Finished', State: 'CompensationFailed' }));
+        it('carries on past ContinueCompensation', () => {
+            const next = step(comp('Failed', 'ContinueCompensation'));
+            expect(next.Kind === 'Compensate' && next.Forward.ID).toBe('F2');
+        });
+        it('escalates a failure to a person by default, and waits on them (B23)', () => {
+            expect(step(comp('Failed')).Kind).toBe('Escalate');
+            expect(step(comp('Failed'), human('Pending')).Kind).toBe('Wait');
+        });
+        it('resumes when the person completes the step, and stops when they cancel it (B23)', () => {
+            const resumed = step(comp('Failed'), human('Complete'));
+            expect(resumed.Kind === 'Compensate' && resumed.Forward.ID).toBe('F2');
+            expect(step(comp('Failed'), human('Cancelled'))).toEqual({ Kind: 'Finished', State: 'CompensationEscalated' });
+        });
+    });
+});
+
+describe('TaskGraphDispatcher saga coordinator', () => {
+    let db: SagaDb;
+    let previousCache: typeof globalRef.___SINGLETON__UserCache;
+    beforeEach(() => {
+        previousCache = globalRef.___SINGLETON__UserCache;
+        globalRef.___SINGLETON__UserCache = { Users: [TEST_USER], FindUser: async ({ ID }) => (ID === TEST_USER.ID ? TEST_USER : undefined) };
+        db = new SagaDb();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async (params: RunViewParams, user?: UserInfo) => db.RunView(params, user)),
+        } as unknown as RunView);
+    });
+    afterEach(() => {
+        globalRef.___SINGLETON__UserCache = previousCache;
+        vi.restoreAllMocks();
+    });
+
+    it('skips the remaining forward work through the guarded write and compensates the latest step first, linked by CompensatesTaskID (B4, B4d)', async () => {
+        checkoutGraph(db);
+        const c = coordinator(db);
+        await c.pass();
+
+        expect(c.skips).toEqual(['T-D']);
+        const voidInvoice = compensationOf(db, 'T-B');
+        expect(voidInvoice?.ActionID).toBe(VOID_INVOICE);
+        expect(compensationOf(db, 'T-A')).toBeUndefined();
+        // No full-row save of an existing row: not the forward steps, not the parent.
+        expect(db.SavedExisting).toEqual([]);
+        expect(c.sagaStates).toContain('Compensating');
+    });
+
+    it('reads the action defaults through explicit typed columns (B4b)', async () => {
+        checkoutGraph(db);
+        await coordinator(db).pass();
+        const actionsRead = db.RunViewCalls.find((call) => call.Params.EntityName === 'MJ: Actions');
+        expect(actionsRead?.Params.Fields).toEqual(['ID', 'CompensationActionID', 'CompensationInputMapping', 'IsIdempotent']);
+    });
+
+    it('creates exactly one compensation when two dispatchers decide at once (B4)', async () => {
+        checkoutGraph(db);
+        const first = coordinator(db);
+        const second = coordinator(db);
+        await Promise.all([first.pass(), second.pass()]);
+        expect([...db.Rows.values()].filter((r) => r.CompensatesTaskID === 'T-B')).toHaveLength(1);
+    });
+
+    it('compensates the next step only after the previous compensation completes', async () => {
+        checkoutGraph(db);
+        const c = coordinator(db);
+        await c.pass();
+        await c.pass();
+        expect(compensationOf(db, 'T-A')).toBeUndefined();
+        compensationOf(db, 'T-B')!.Status = 'Complete';
+        await c.pass();
+        const release = compensationOf(db, 'T-A');
+        expect(release?.ActionID).toBe(RELEASE);
+        expect(JSON.parse(release!.InputPayload!)).toEqual({ ReservationID: 'R-1' });
+        release!.Status = 'Complete';
+        await c.pass();
+        expect(c.sagaStates.at(-1)).toBe('Compensated');
+    });
+
+    it('reads the forward step\'s record changes as the acting user, bounded to its action log window (S10)', async () => {
+        checkoutGraph(db);
+        await coordinator(db).pass();
+        const changesRead = db.RunViewCalls.find((call) => call.Params.EntityName === 'MJ: Record Changes');
+        expect(changesRead?.User).toBe(TEST_USER);
+        expect(changesRead?.Params.ExtraFilter).toContain(`UserID='${TEST_USER.ID}'`);
+        expect(changesRead?.Params.ExtraFilter).toContain("ChangedAt >= '2026-11-02T10:00:30.000Z'");
+        expect(changesRead?.Params.ExtraFilter).toContain("ChangedAt <= '2026-11-02T10:00:59.000Z'");
+    });
+
+    it('gives a compensation task the forward step\'s envelope and its output taint (S7)', async () => {
+        checkoutGraph(db);
+        db.Rows.get('T-B')!.SecurityEnvelope = SerializeTaskSecurityEnvelope({ Version: TASK_SECURITY_ENVELOPE_VERSION, IsRunTainted: false, RunScope: { PrimaryScopeEntityName: null, PrimaryScopeRecordID: 'org-A', SecondaryScopes: null } });
+        await coordinator(db).pass();
+        const envelope = JSON.parse(compensationOf(db, 'T-B')!.SecurityEnvelope!);
+        expect(envelope.IsRunTainted).toBe(true);
+        expect(envelope.RunScope.PrimaryScopeRecordID).toBe('org-A');
+    });
+
+    it('escalates a failed compensation to a Human step for the submitter, then resumes when it completes (B23)', async () => {
+        checkoutGraph(db);
+        const c = coordinator(db);
+        await c.pass();
+        const voidInvoice = compensationOf(db, 'T-B')!;
+        voidInvoice.Status = 'Failed';
+        voidInvoice.ErrorMessage = 'void API down';
+        await c.pass();
+
+        const human = [...db.Rows.values()].find((r) => r.StepType === 'Human')!;
+        expect(human.CompensatesTaskID).toBe(voidInvoice.ID);
+        expect(human.UserID).toBe(TEST_USER.ID);
+        expect(human.Description).toContain('void API down');
+        expect(compensationOf(db, 'T-A')).toBeUndefined();
+
+        await c.pass();
+        expect([...db.Rows.values()].filter((r) => r.StepType === 'Human')).toHaveLength(1);
+
+        human.Status = 'Complete';
+        await c.pass();
+        expect(compensationOf(db, 'T-A')?.ActionID).toBe(RELEASE);
+    });
+
+    it('stops the rollback when the person cancels the escalation (B23)', async () => {
+        checkoutGraph(db);
+        const c = coordinator(db);
+        await c.pass();
+        compensationOf(db, 'T-B')!.Status = 'Failed';
+        await c.pass();
+        [...db.Rows.values()].find((r) => r.StepType === 'Human')!.Status = 'Cancelled';
+        await c.pass();
+        expect(compensationOf(db, 'T-A')).toBeUndefined();
+        expect(c.sagaStates.at(-1)).toBe('CompensationEscalated');
+    });
+
+    it('does nothing under the default Halt policy', async () => {
+        checkoutGraph(db);
+        const parent = parentRow();
+        (parent as unknown as { InputPayload: string }).InputPayload = JSON.stringify(BuildTaskGraphParentInputPayload({
+            continuation: 'none', reinvokeDepth: 0, failureSemantics: 'block', submittedByAgentRunID: null, submittedByUserID: TEST_USER.ID,
+        }));
+        const c = coordinator(db, parent);
+        await c.pass();
+        expect(c.skips).toEqual([]);
+        expect(compensationOf(db, 'T-B')).toBeUndefined();
+    });
+});
+
+describe('TaskGraphDispatcher action retries (B4c)', () => {
+    let db: SagaDb;
+    beforeEach(() => {
+        db = new SagaDb();
+        vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+            RunView: vi.fn(async (params: RunViewParams, user?: UserInfo) => db.RunView(params, user)),
+        } as unknown as RunView);
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    async function runStep(row: Row, failures: number): Promise<number> {
+        const run = vi.fn();
+        for (let i = 0; i < failures; i++) run.mockResolvedValueOnce({ Success: false, ErrorMessage: 'transient' });
+        run.mockResolvedValue({ Success: true, Output: {} });
+        const actionRunner: TaskActionRunner = { EnforcesSecurityEnvelope: true, RunActionForTask: run };
+        const dispatcher = new TaskGraphDispatcher(
+            { CreateProvider: vi.fn().mockResolvedValue({} as IMetadataProvider) },
+            { RunAgentForTask: vi.fn() },
+            TEST_USER,
+            { InstanceID: 'inst-retry', RetryBackoffBaseMs: 1 },
+            undefined,
+            undefined,
+            actionRunner,
+        );
+        (dispatcher as unknown as { claims: { CompleteClaimed: unknown } }).claims.CompleteClaimed = vi.fn().mockResolvedValue(true);
+        const task = { ...row, get ConfigurationObject() { return row.Configuration ? JSON.parse(row.Configuration) : null; } } as unknown as MJTaskEntity;
+        const parent = parentRow();
+        await (dispatcher as unknown as { executeClaimed: (c: ClaimedTaskCandidate) => Promise<void> }).executeClaimed({
+            ID: row.ID, ParentID: PARENT_ID, taskEntity: task, parentTask: parent,
+            parentMetadata: ParseTaskGraphParentMetadata(parent.InputPayload), dependencyOutputs: new Map(), upstreamTasks: [],
+        });
+        return run.mock.calls.length;
+    }
+
+    it("retries a forward step whose action's IsIdempotent column says so", async () => {
+        db.Actions.push({ ID: RESERVE, CompensationActionID: null, CompensationInputMapping: null, IsIdempotent: true });
+        const row = db.Add({ ID: 'T-1', Name: 'Reserve', ActionID: RESERVE, Configuration: JSON.stringify({ policy: { retryCount: 2 } }) });
+        expect(await runStep(row, 1)).toBe(2);
+    });
+
+    it('never retries a forward step whose action is not idempotent', async () => {
+        db.Actions.push({ ID: CHARGE, CompensationActionID: null, CompensationInputMapping: null, IsIdempotent: false });
+        const row = db.Add({ ID: 'T-2', Name: 'Charge', ActionID: CHARGE, Configuration: JSON.stringify({ policy: { retryCount: 3 } }) });
+        expect(await runStep(row, 1)).toBe(1);
+    });
+
+    it("lets a node's own isIdempotent override its action's", async () => {
+        db.Actions.push({ ID: CHARGE, CompensationActionID: null, CompensationInputMapping: null, IsIdempotent: false });
+        const row = db.Add({ ID: 'T-3', Name: 'Charge', ActionID: CHARGE, Configuration: JSON.stringify({ policy: { retryCount: 1 }, compensation: { isIdempotent: true } }) });
+        expect(await runStep(row, 1)).toBe(2);
+    });
+
+    it("retries a compensation task only when its compensation action is idempotent", async () => {
+        db.Actions.push({ ID: VOID_INVOICE, CompensationActionID: null, CompensationInputMapping: null, IsIdempotent: false });
+        const row = db.Add({ ID: 'T-4', Name: 'Compensate: Invoice', ActionID: VOID_INVOICE, CompensatesTaskID: 'T-B', Configuration: JSON.stringify({ policy: { retryCount: 3 } }) });
+        expect(await runStep(row, 1)).toBe(1);
     });
 });

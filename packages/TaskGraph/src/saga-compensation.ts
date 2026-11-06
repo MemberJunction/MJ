@@ -1,11 +1,16 @@
 /**
- * @fileoverview Pure and durable Saga Compensation helpers for `TaskGraphDispatcher` (WS-4.3).
+ * @fileoverview Pure saga-compensation rules for `TaskGraphDispatcher` (WS-4.3).
  *
- * When a task graph runs with `failurePolicy: 'CompensateCompleted'` and an unhandled forward step
- * transitions to `Failed`, the dispatcher identifies all completed upstream `Action` steps that
- * declare a compensation action (either on the workflow node via {@link ActionCompensationSpec} or
- * on the `MJ: Actions` metadata record) and materializes child compensation `MJ: Tasks` rows in
- * **reverse topological completion order**.
+ * When a task graph runs with `failurePolicy: 'CompensateCompleted'` and a forward step fails
+ * unhandled, the dispatcher undoes the completed `Action` steps that declare a compensation action
+ * (on the workflow node, {@link ActionCompensationSpec}, or on the `MJ: Actions` row), in **reverse
+ * topological order**, one at a time. Each compensation is a child `MJ: Tasks` row linked to the step
+ * it undoes through `CompensatesTaskID`, whose unique index is what makes materializing it a claim:
+ * two dispatchers can both decide to compensate a step, and only one insert succeeds.
+ *
+ * Everything here is pure; the dispatcher reads the rows, asks {@link NextSagaStep} what to do, and
+ * does it. Because the answer is computed from durable rows on every pass, any dispatcher can pick a
+ * saga up where another left it.
  *
  * @module @memberjunction/task-graph
  */
@@ -14,10 +19,13 @@ import {
     type ActionCompensationFailurePolicy,
     type ActionCompensationSpec,
 } from '@memberjunction/ai-core-plus';
+import type { MJActionEntity, MJTaskEntity } from '@memberjunction/core-entities';
 import { UUIDMap, UUIDSet } from '@memberjunction/global';
+import { IsHumanTask } from './task-predicates';
 
 /**
- * Saga lifecycle state recorded on the parent workflow task's metadata (`InputPayload`).
+ * Saga lifecycle state recorded on the parent workflow task's metadata (`InputPayload.sagaState`).
+ * Informational: every decision is recomputed from the rows, never read back from this.
  */
 export type SagaExecutionState =
     | 'Running'
@@ -27,313 +35,238 @@ export type SagaExecutionState =
     | 'CompensationFailed';
 
 /**
- * Compensation metadata persisted in `Task.Configuration.compensation`.
+ * Compensation settings persisted in `Task.Configuration.compensation`: on a forward step, how to undo
+ * it; on a compensation task, the policy for its own failure.
  */
 export interface TaskCompensationStepMetadata {
-    /** Resolved `MJ: Actions` ID of the compensation action to invoke if this step must be rolled back. */
+    /** The `MJ: Actions` ID of the compensation action. */
     compensationActionId?: string;
-    /** Optional action name of the compensation action (resolved to `compensationActionId` at submit/dispatch time). */
+    /** The compensation action's name, resolved to `compensationActionId` at submit or dispatch time. */
     compensationActionName?: string;
-    /**
-     * Parameter mapping from `{ input, output, actionLogId, recordChanges, payload }` -> compensation action inputs.
-     */
+    /** Compensation parameter name → path into the forward run (`input.*`, `output.*`, `actionLogId`, `recordChanges`). */
     inputMapping?: Readonly<Record<string, string>> | string;
-    /**
-     * Alias for `inputMapping` matching `CompensationInputMapping` metadata column naming.
-     */
-    compensationInputMapping?: Readonly<Record<string, string>> | string;
-    /** Policy if the compensation task itself fails after retries exhaust. Default `'EscalateToHumanTask'`. */
+    /** What to do when the compensation itself fails after its retries. Default `'EscalateToHumanTask'`. */
     onCompensationFailure?: ActionCompensationFailurePolicy;
-    /** Signals safe automatic retry and compensation replay. */
+    /** On a forward step: whether its own action may be retried automatically (overrides `Action.IsIdempotent`). */
     isIdempotent?: boolean;
-    /** Optional automatic retry count when `isIdempotent === true` or on the compensation step. */
+    /** How many times the compensation task retries, when its action is idempotent. */
     retryCount?: number;
-    /**
-     * Present on a synthesized compensation child `MJ: Tasks` row: the forward `Task.ID` this task compensates.
-     */
-    compensatesTaskID?: string;
-    /**
-     * Present on a forward task once its compensation task has been materialized so compensation is idempotent.
-     */
-    compensatedByTaskID?: string;
-    /**
-     * Present on a failed compensation task once HITL escalation (`MJ: AI Agent Requests`) has been raised.
-     */
-    escalatedRequestID?: string;
 }
 
-/**
- * Structural slice of an `MJ: Actions` record (or action metadata row) that may carry default
- * compensation metadata either as direct properties or inside its `Config_` JSON column.
- */
-export interface CompensatableActionRecord {
-    ID?: string;
-    Name?: string;
-    Config_?: string | null;
-    CompensationActionID?: string | null;
-    CompensationInputMapping?: Readonly<Record<string, string>> | string | null;
-    IsIdempotent?: boolean | null;
-}
+/** The `MJ: Actions` fields a saga reads, typed from the generated entity. */
+export type CompensatableActionRow = Pick<MJActionEntity, 'ID' | 'CompensationActionID' | 'CompensationInputMapping' | 'IsIdempotent'>;
+
+/** The `MJ: Tasks` columns the saga planner reads. */
+export type SagaTaskRow = Pick<
+    MJTaskEntity,
+    'ID' | 'Name' | 'Status' | 'StepType' | 'UserID' | 'ActionID' | 'CompletedAt' | 'Configuration' | 'CompensatesTaskID'
+>;
+
+/** A completed forward step to undo, and how. */
+export type CompensationPlanEntry<T extends SagaTaskRow> = { Task: T; Compensation: TaskCompensationStepMetadata };
+
+/** What the dispatcher does next for a saga. */
+export type SagaStep<T extends SagaTaskRow> =
+    /** A compensation or an escalation is still running, or a forward step is still finishing. */
+    | { Kind: 'Wait' }
+    /** Create the compensation task for this forward step. */
+    | { Kind: 'Compensate'; Forward: T; Compensation: TaskCompensationStepMetadata }
+    /** Create the Human step that asks a person to undo this forward step by hand. */
+    | { Kind: 'Escalate'; Forward: T; FailedCompensation: T }
+    /** Nothing more to do; the saga ended in this state. */
+    | { Kind: 'Finished'; State: SagaExecutionState };
 
 /**
- * Structural slice of a `MJ: Tasks` row inspected by the reverse-topological saga planner.
+ * Reads the compensation settings an `MJ: Actions` row declares through its typed columns:
+ * `CompensationActionID`, `CompensationInputMapping` (a JSON object of parameter → path) and
+ * `IsIdempotent`. `null` when the action names no compensation action.
  */
-export interface CompensatableTaskRow {
-    ID: string;
-    Name: string;
-    Status: string;
-    StepType: string | null;
-    ActionID: string | null;
-    CompletedAt: Date | string | null;
-    Configuration: string | null;
-    InputPayload: string | null;
-    OutputPayload: string | null;
-    ErrorMessage?: string | null;
-}
-
-/**
- * Reads default `ActionCompensationSpec` metadata from an `MJ: Actions` record (`Config_` JSON or
- * direct `CompensationActionID` / `CompensationInputMapping` / `IsIdempotent` fields).
- */
-export function ReadActionCompensationMetadata(
-    action: CompensatableActionRecord | null | undefined,
-): ActionCompensationSpec | null {
-    if (!action) return null;
-
-    let fromConfig: Partial<ActionCompensationSpec> = {};
-    if (typeof action.Config_ === 'string' && action.Config_.trim().length > 0) {
-        try {
-            const parsed: unknown = JSON.parse(action.Config_);
-            if (isRecord(parsed)) {
-                const nested = isRecord(parsed.compensation) ? parsed.compensation : parsed;
-                const mapped = normalizeMappingField(
-                    nested.inputMapping ?? nested.compensationInputMapping ?? nested.CompensationInputMapping,
-                );
-                fromConfig = {
-                    compensationActionId: asNonEmptyString(nested.compensationActionId ?? nested.CompensationActionID),
-                    compensationActionName: asNonEmptyString(nested.compensationActionName ?? nested.CompensationActionName),
-                    inputMapping: mapped,
-                    compensationInputMapping: mapped,
-                    onCompensationFailure: normalizeFailurePolicy(nested.onCompensationFailure),
-                    isIdempotent: typeof (nested.isIdempotent ?? nested.IsIdempotent) === 'boolean'
-                        ? Boolean(nested.isIdempotent ?? nested.IsIdempotent)
-                        : undefined,
-                    retryCount: typeof nested.retryCount === 'number' && Number.isFinite(nested.retryCount)
-                        ? Math.max(0, Math.floor(nested.retryCount))
-                        : undefined,
-                };
-            }
-        } catch {
-            // Non-JSON or unrelated action Config_ is ignored.
-        }
-    }
-
-    const compensationActionId = asNonEmptyString(action.CompensationActionID) ?? fromConfig.compensationActionId;
-    const compensationActionName = fromConfig.compensationActionName;
-    const inputMapping = normalizeMappingField(action.CompensationInputMapping) ?? fromConfig.inputMapping;
-    const isIdempotent = typeof action.IsIdempotent === 'boolean' ? action.IsIdempotent : fromConfig.isIdempotent;
-    const onCompensationFailure = fromConfig.onCompensationFailure;
-    const retryCount = fromConfig.retryCount;
-
-    if (
-        !compensationActionId &&
-        !compensationActionName &&
-        !inputMapping &&
-        isIdempotent === undefined &&
-        !onCompensationFailure &&
-        retryCount === undefined
-    ) {
-        return null;
-    }
-
+export function ReadActionCompensationMetadata(action: CompensatableActionRow | null | undefined): TaskCompensationStepMetadata | null {
+    const compensationActionId = asNonEmptyString(action?.CompensationActionID);
+    if (!action || !compensationActionId) return null;
+    const inputMapping = parseMappingDictionary(action.CompensationInputMapping);
     return {
-        ...(compensationActionId ? { compensationActionId } : {}),
-        ...(compensationActionName ? { compensationActionName } : {}),
-        ...(inputMapping ? { inputMapping, compensationInputMapping: inputMapping } : {}),
-        ...(onCompensationFailure ? { onCompensationFailure } : {}),
-        ...(isIdempotent !== undefined ? { isIdempotent } : {}),
-        ...(retryCount !== undefined ? { retryCount } : {}),
+        compensationActionId,
+        ...(inputMapping ? { inputMapping } : {}),
+        ...(typeof action.IsIdempotent === 'boolean' ? { isIdempotent: action.IsIdempotent } : {}),
     };
 }
 
 /**
- * Merges an action's default compensation metadata with a workflow node's explicit override.
- * Node-level fields take precedence over action-level defaults.
+ * Combines an action's default compensation with a workflow node's own: every field the node sets
+ * wins. `null` when neither names a compensation action.
  */
 export function MergeActionCompensationSpecs(
-    actionDefault: ActionCompensationSpec | null | undefined,
-    nodeOverride: ActionCompensationSpec | TaskCompensationStepMetadata | null | undefined,
+    actionDefault: TaskCompensationStepMetadata | null | undefined,
+    nodeOverride: TaskCompensationStepMetadata | null | undefined,
 ): TaskCompensationStepMetadata | null {
-    if (!actionDefault && !nodeOverride) return null;
-
-    const compensationActionId =
-        asNonEmptyString(nodeOverride?.compensationActionId) ??
-        asNonEmptyString(actionDefault?.compensationActionId);
-    const compensationActionName =
-        asNonEmptyString(nodeOverride?.compensationActionName) ??
-        asNonEmptyString(actionDefault?.compensationActionName);
-    const inputMapping =
-        nodeOverride?.inputMapping ??
-        nodeOverride?.compensationInputMapping ??
-        actionDefault?.inputMapping ??
-        actionDefault?.compensationInputMapping;
-    const onCompensationFailure =
-        normalizeFailurePolicy(nodeOverride?.onCompensationFailure) ??
-        normalizeFailurePolicy(actionDefault?.onCompensationFailure) ??
-        'EscalateToHumanTask';
-    const isIdempotent =
-        typeof nodeOverride?.isIdempotent === 'boolean'
-            ? nodeOverride.isIdempotent
-            : typeof actionDefault?.isIdempotent === 'boolean'
-                ? actionDefault.isIdempotent
-                : undefined;
-    const retryCount =
-        typeof nodeOverride?.retryCount === 'number' && Number.isFinite(nodeOverride.retryCount)
-            ? Math.max(0, Math.floor(nodeOverride.retryCount))
-            : typeof actionDefault?.retryCount === 'number' && Number.isFinite(actionDefault.retryCount)
-                ? Math.max(0, Math.floor(actionDefault.retryCount))
-                : undefined;
-
-    const existingMeta = nodeOverride as TaskCompensationStepMetadata | null | undefined;
+    const compensationActionId = asNonEmptyString(nodeOverride?.compensationActionId) ?? asNonEmptyString(actionDefault?.compensationActionId);
+    const compensationActionName = asNonEmptyString(nodeOverride?.compensationActionName) ?? asNonEmptyString(actionDefault?.compensationActionName);
+    if (!compensationActionId && !compensationActionName) return null;
+    const inputMapping = nodeOverride?.inputMapping ?? actionDefault?.inputMapping;
+    const onCompensationFailure = nodeOverride?.onCompensationFailure ?? actionDefault?.onCompensationFailure;
+    const retryCount = nodeOverride?.retryCount ?? actionDefault?.retryCount;
     return {
         ...(compensationActionId ? { compensationActionId } : {}),
         ...(compensationActionName ? { compensationActionName } : {}),
-        ...(inputMapping !== undefined ? { inputMapping, compensationInputMapping: inputMapping } : {}),
-        onCompensationFailure,
-        ...(isIdempotent !== undefined ? { isIdempotent } : {}),
+        ...(inputMapping !== undefined ? { inputMapping } : {}),
+        onCompensationFailure: onCompensationFailure ?? 'EscalateToHumanTask',
         ...(retryCount !== undefined ? { retryCount } : {}),
-        ...(existingMeta?.compensatesTaskID ? { compensatesTaskID: existingMeta.compensatesTaskID } : {}),
-        ...(existingMeta?.compensatedByTaskID ? { compensatedByTaskID: existingMeta.compensatedByTaskID } : {}),
-        ...(existingMeta?.escalatedRequestID ? { escalatedRequestID: existingMeta.escalatedRequestID } : {}),
     };
 }
 
 /**
- * Reads `Task.Configuration.compensation` from a serialized `Configuration` JSON string.
+ * The compensation settings a workflow node's spec declares (`configuration.compensation`), in the
+ * shape a step stores. `inputMapping` and its alias `compensationInputMapping` are one setting.
  */
-export function ReadTaskCompensationMetadata(
-    configurationJson: string | null | undefined,
-): TaskCompensationStepMetadata | null {
+export function CompensationFromSpec(spec: ActionCompensationSpec | undefined): TaskCompensationStepMetadata | undefined {
+    if (!spec) return undefined;
+    const inputMapping = spec.inputMapping ?? spec.compensationInputMapping;
+    const retryCount = normalizeRetryCount(spec.retryCount);
+    return {
+        ...(asNonEmptyString(spec.compensationActionId) ? { compensationActionId: spec.compensationActionId } : {}),
+        ...(asNonEmptyString(spec.compensationActionName) ? { compensationActionName: spec.compensationActionName } : {}),
+        ...(inputMapping !== undefined ? { inputMapping } : {}),
+        ...(spec.onCompensationFailure ? { onCompensationFailure: spec.onCompensationFailure } : {}),
+        ...(typeof spec.isIdempotent === 'boolean' ? { isIdempotent: spec.isIdempotent } : {}),
+        ...(retryCount !== undefined ? { retryCount } : {}),
+    };
+}
+
+/**
+ * Reads `Task.Configuration.compensation` from a serialized `Configuration`.
+ */
+export function ReadTaskCompensationMetadata(configurationJson: string | null | undefined): TaskCompensationStepMetadata | null {
     if (!configurationJson) return null;
     try {
         const parsed: unknown = JSON.parse(configurationJson);
         if (!isRecord(parsed) || !isRecord(parsed.compensation)) return null;
         const comp = parsed.compensation;
-        const mapping = normalizeMappingField(comp.inputMapping ?? comp.compensationInputMapping);
-        const retryCount = typeof comp.retryCount === 'number' && Number.isFinite(comp.retryCount)
-            ? Math.max(0, Math.floor(comp.retryCount))
-            : undefined;
+        const inputMapping = normalizeMappingField(comp.inputMapping ?? comp.compensationInputMapping);
+        const onFailure = normalizeFailurePolicy(comp.onCompensationFailure);
+        const retryCount = normalizeRetryCount(comp.retryCount);
         return {
             ...(asNonEmptyString(comp.compensationActionId) ? { compensationActionId: asNonEmptyString(comp.compensationActionId) } : {}),
             ...(asNonEmptyString(comp.compensationActionName) ? { compensationActionName: asNonEmptyString(comp.compensationActionName) } : {}),
-            ...(mapping !== undefined ? { inputMapping: mapping, compensationInputMapping: mapping } : {}),
-            ...(normalizeFailurePolicy(comp.onCompensationFailure)
-                ? { onCompensationFailure: normalizeFailurePolicy(comp.onCompensationFailure) }
-                : {}),
+            ...(inputMapping !== undefined ? { inputMapping } : {}),
+            ...(onFailure ? { onCompensationFailure: onFailure } : {}),
             ...(typeof comp.isIdempotent === 'boolean' ? { isIdempotent: comp.isIdempotent } : {}),
             ...(retryCount !== undefined ? { retryCount } : {}),
-            ...(asNonEmptyString(comp.compensatesTaskID) ? { compensatesTaskID: asNonEmptyString(comp.compensatesTaskID) } : {}),
-            ...(asNonEmptyString(comp.compensatedByTaskID) ? { compensatedByTaskID: asNonEmptyString(comp.compensatedByTaskID) } : {}),
-            ...(asNonEmptyString(comp.escalatedRequestID) ? { escalatedRequestID: asNonEmptyString(comp.escalatedRequestID) } : {}),
         };
     } catch {
         return null;
     }
 }
 
-/**
- * Returns true when `row` is a synthesized saga compensation task (`Configuration.compensation.compensatesTaskID` is set).
- */
-export function IsCompensationTask(row: Pick<CompensatableTaskRow, 'Configuration'>): boolean {
-    const meta = ReadTaskCompensationMetadata(row.Configuration);
-    return typeof meta?.compensatesTaskID === 'string' && meta.compensatesTaskID.length > 0;
+/** True for a task that undoes another (a compensation task, or the Human step escalating a failed one). */
+export function IsCompensationTask(row: Pick<MJTaskEntity, 'CompensatesTaskID'>): boolean {
+    return !!row.CompensatesTaskID;
 }
 
 /**
- * Selects all completed forward `Action` tasks that require compensation, ordered in **reverse
- * topological completion order**:
- * 1. Higher topological depth / `sequence` first when ranks differ;
- * 2. Later `CompletedAt` timestamp first when ranks are equal or absent;
- * 3. Deterministic `ID` tie-breaker.
+ * The completed forward `Action` steps a saga undoes, in **reverse topological order**: deeper steps
+ * first (by the submit-time `sequence`, else the dependency depth), then later `CompletedAt`, then ID.
+ * A step is included when its node or its action names a compensation action.
  *
- * Excludes tasks that are themselves compensation tasks or already have a materialized compensation
- * task (`compensatedByTaskID` or an existing child task with `compensatesTaskID === row.ID`).
+ * @param actionDefaults the compensation each action's own row declares, keyed by Action ID
  */
-export function SelectTasksToCompensate<T extends CompensatableTaskRow>(
+export function SelectTasksToCompensate<T extends SagaTaskRow>(
     tasks: readonly T[],
-    actionDefaultsOrDependencies?:
-        | ReadonlyMap<string, ActionCompensationSpec>
-        | ReadonlyArray<{ TaskID: string; DependsOnTaskID: string }>,
-    dependencies?: ReadonlyArray<{ TaskID: string; DependsOnTaskID: string }>,
-): Array<{ task: T; compensation: TaskCompensationStepMetadata }> {
-    const alreadyCompensatedTaskIDs = new UUIDSet();
+    actionDefaults: UUIDMap<TaskCompensationStepMetadata>,
+    dependencies: ReadonlyArray<{ TaskID: string; DependsOnTaskID: string }> = [],
+): Array<CompensationPlanEntry<T>> {
+    const depthByTask = computeTopologicalDepthByTaskId(tasks, dependencies);
+    const candidates: Array<CompensationPlanEntry<T> & { Rank: number; CompletedAtMs: number }> = [];
     for (const row of tasks) {
-        const meta = ReadTaskCompensationMetadata(row.Configuration);
-        if (meta?.compensatesTaskID) {
-            alreadyCompensatedTaskIDs.Add(meta.compensatesTaskID);
-        }
-    }
-
-    const actionDefaultsByActionId = Array.isArray(actionDefaultsOrDependencies)
-        ? undefined
-        : (actionDefaultsOrDependencies as ReadonlyMap<string, ActionCompensationSpec> | undefined);
-    const effectiveDeps = Array.isArray(actionDefaultsOrDependencies)
-        ? actionDefaultsOrDependencies
-        : dependencies;
-
-    const normalizedActionDefaults = new UUIDMap<ActionCompensationSpec>();
-    if (actionDefaultsByActionId) {
-        for (const [key, spec] of actionDefaultsByActionId.entries()) {
-            normalizedActionDefaults.Set(key, spec);
-        }
-    }
-
-    const topoDepthByTaskId = computeTopologicalDepthByTaskId(tasks, effectiveDeps);
-
-    const candidates: Array<{
-        task: T;
-        compensation: TaskCompensationStepMetadata;
-        sequence: number;
-        completedAtMs: number;
-    }> = [];
-
-    for (const row of tasks) {
-        if (row.Status !== 'Complete') continue;
+        if (row.Status !== 'Complete' || IsCompensationTask(row) || !row.ActionID) continue;
         if (row.StepType && row.StepType !== 'Action') continue;
-        if (!row.ActionID && !ReadTaskCompensationMetadata(row.Configuration)?.compensationActionId && !ReadTaskCompensationMetadata(row.Configuration)?.compensationActionName) {
-            continue;
-        }
-
-        const nodeComp = ReadTaskCompensationMetadata(row.Configuration);
-        if (nodeComp?.compensatesTaskID) continue;
-        if (nodeComp?.compensatedByTaskID) continue;
-        if (alreadyCompensatedTaskIDs.Has(row.ID)) continue;
-
-        const actionDefault = row.ActionID ? normalizedActionDefaults.Get(row.ActionID) : undefined;
-        const merged = MergeActionCompensationSpecs(actionDefault, nodeComp);
-        if (!merged?.compensationActionId && !merged?.compensationActionName) continue;
-
-        const explicitSeq = readSequenceFromConfiguration(row.Configuration);
-        const topoDepth = topoDepthByTaskId.Get(row.ID) ?? 0;
+        const compensation = MergeActionCompensationSpecs(
+            actionDefaults.Get(row.ActionID),
+            ReadTaskCompensationMetadata(row.Configuration),
+        );
+        if (!compensation) continue;
+        const sequence = readSequenceFromConfiguration(row.Configuration);
         candidates.push({
-            task: row,
-            compensation: merged,
-            sequence: explicitSeq >= 0 ? explicitSeq : topoDepth,
-            completedAtMs: parseTimestampMs(row.CompletedAt),
+            Task: row,
+            Compensation: compensation,
+            Rank: sequence >= 0 ? sequence : depthByTask.Get(row.ID) ?? 0,
+            CompletedAtMs: parseTimestampMs(row.CompletedAt),
         });
     }
+    candidates.sort((a, b) => b.Rank - a.Rank || b.CompletedAtMs - a.CompletedAtMs || b.Task.ID.localeCompare(a.Task.ID));
+    return candidates.map(({ Task, Compensation }) => ({ Task, Compensation }));
+}
 
-    candidates.sort((a, b) => {
-        if (a.sequence !== b.sequence) {
-            return b.sequence - a.sequence;
+/**
+ * What a saga does next, from the rows alone. Walks the plan in order:
+ *
+ * - no compensation task for a step yet → create it (`Compensate`), one at a time;
+ * - a compensation task still `Pending` or `In Progress` → `Wait`;
+ * - a compensation that `Complete`d → next step;
+ * - a compensation that failed, by its `onCompensationFailure`:
+ *   - `'ContinueCompensation'` → next step (the saga ends `CompensationFailed`);
+ *   - `'HaltSaga'` → stop: `Finished` with `CompensationFailed`;
+ *   - `'EscalateToHumanTask'` (default) → create a Human step (`Escalate`) and wait on it. When the
+ *     person completes it, they have undone the step by hand and the saga resumes with the next step;
+ *     when the Human step ends any other way (cancelled, skipped, failed, expired), the saga stops:
+ *     `Finished` with `CompensationEscalated`.
+ *
+ * @param compensationFor the task whose `CompensatesTaskID` is the forward step, if any
+ * @param escalationFor the Human step whose `CompensatesTaskID` is the failed compensation task, if any
+ */
+export function NextSagaStep<T extends SagaTaskRow>(args: {
+    Plan: ReadonlyArray<CompensationPlanEntry<T>>;
+    CompensationFor: (forwardTaskID: string) => T | undefined;
+    EscalationFor: (compensationTaskID: string) => T | undefined;
+}): SagaStep<T> {
+    let anyUnresolvedFailure = false;
+    for (const { Task: forward, Compensation } of args.Plan) {
+        const compensation = args.CompensationFor(forward.ID);
+        if (!compensation) {
+            return { Kind: 'Compensate', Forward: forward, Compensation };
         }
-        if (a.completedAtMs !== b.completedAtMs) {
-            return b.completedAtMs - a.completedAtMs;
+        if (isActive(compensation)) {
+            return { Kind: 'Wait' };
         }
-        return b.task.ID.localeCompare(a.task.ID);
-    });
+        if (compensation.Status === 'Complete') {
+            continue;
+        }
+        const policy = ReadTaskCompensationMetadata(compensation.Configuration)?.onCompensationFailure ?? 'EscalateToHumanTask';
+        if (policy === 'ContinueCompensation') {
+            anyUnresolvedFailure = true;
+            continue;
+        }
+        if (policy === 'HaltSaga') {
+            return { Kind: 'Finished', State: 'CompensationFailed' };
+        }
+        const escalation = args.EscalationFor(compensation.ID);
+        if (!escalation) {
+            return { Kind: 'Escalate', Forward: forward, FailedCompensation: compensation };
+        }
+        if (isActive(escalation)) {
+            return { Kind: 'Wait' };
+        }
+        if (escalation.Status !== 'Complete') {
+            return { Kind: 'Finished', State: 'CompensationEscalated' };
+        }
+    }
+    return { Kind: 'Finished', State: anyUnresolvedFailure ? 'CompensationFailed' : 'Compensated' };
+}
 
-    return candidates.map(({ task, compensation }) => ({ task, compensation }));
+/** Indexes the rows that undo another by the row they undo (`CompensatesTaskID`), split into tasks and Human escalations. */
+export function IndexCompensationRows<T extends SagaTaskRow>(rows: readonly T[]): { Compensations: UUIDMap<T>; Escalations: UUIDMap<T> } {
+    const compensations = new UUIDMap<T>();
+    const escalations = new UUIDMap<T>();
+    for (const row of rows) {
+        if (!row.CompensatesTaskID) continue;
+        (IsHumanTask(row) ? escalations : compensations).Set(row.CompensatesTaskID, row);
+    }
+    return { Compensations: compensations, Escalations: escalations };
+}
+
+/** Exponential backoff before retry `attempt` (1-based): base, 2×base, 4×base…, capped at 30× base. */
+export function RetryBackoffMs(attempt: number, baseMs: number): number {
+    return Math.min(baseMs * 30, baseMs * 2 ** Math.max(0, attempt - 1));
 }
 
 /**
@@ -347,13 +280,7 @@ export function BuildCompensationInputPayload(args: {
     RecordChanges?: readonly Record<string, unknown>[];
     InputMapping?: Readonly<Record<string, string>> | string | null;
 }): Record<string, unknown> {
-    const {
-        ForwardInput,
-        ForwardOutput,
-        ActionLogID = null,
-        RecordChanges = [],
-        InputMapping,
-    } = args;
+    const { ForwardInput, ForwardOutput, ActionLogID = null, RecordChanges = [], InputMapping } = args;
 
     const envelope: Record<string, unknown> = {
         input: ForwardInput,
@@ -382,105 +309,82 @@ export function BuildCompensationInputPayload(args: {
 }
 
 /**
- * Formats a structured human escalation request body when a compensation task fails under
+ * Formats the request a person sees when a compensation fails under
  * `onCompensationFailure: 'EscalateToHumanTask'`.
  */
 export function BuildCompensationEscalationSummary(args: {
     WorkflowName: string;
-    ForwardTask: Pick<CompensatableTaskRow, 'ID' | 'Name' | 'InputPayload' | 'OutputPayload'>;
-    CompensationTask: Pick<CompensatableTaskRow, 'ID' | 'Name' | 'InputPayload' | 'ErrorMessage'>;
+    ForwardTask: Pick<MJTaskEntity, 'ID' | 'Name' | 'InputPayload' | 'OutputPayload'>;
+    CompensationTask: Pick<MJTaskEntity, 'ID' | 'Name' | 'InputPayload' | 'ErrorMessage'>;
     ActionLogID?: string | null;
     RecordChanges?: readonly Record<string, unknown>[];
 }): { RequestText: string; ContextData: Record<string, unknown> } {
-    const forwardInput = safeParseJsonObject(args.ForwardTask.InputPayload);
-    const forwardOutput = safeParseJsonObject(args.ForwardTask.OutputPayload);
-    const compInput = safeParseJsonObject(args.CompensationTask.InputPayload);
     const errorMessage = args.CompensationTask.ErrorMessage || 'Compensation action failed without an error message.';
-
     const contextData: Record<string, unknown> = {
         workflowName: args.WorkflowName,
         forwardTaskID: args.ForwardTask.ID,
         forwardTaskName: args.ForwardTask.Name,
-        forwardInput,
-        forwardOutput,
+        forwardInput: safeParseJsonObject(args.ForwardTask.InputPayload),
+        forwardOutput: safeParseJsonObject(args.ForwardTask.OutputPayload),
         actionLogID: args.ActionLogID ?? null,
         recordChanges: args.RecordChanges ?? [],
         compensationTaskID: args.CompensationTask.ID,
         compensationTaskName: args.CompensationTask.Name,
-        compensationInput: compInput,
+        compensationInput: safeParseJsonObject(args.CompensationTask.InputPayload),
         compensationError: errorMessage,
     };
-
     const requestText =
         `Saga compensation failed in workflow "${args.WorkflowName}" while rolling back step ` +
         `"${args.ForwardTask.Name}" (${args.ForwardTask.ID}).\n` +
-        `Compensation task "${args.CompensationTask.Name}" (${args.CompensationTask.ID}) failed with error: ${errorMessage}`;
-
+        `Compensation task "${args.CompensationTask.Name}" (${args.CompensationTask.ID}) failed with error: ${errorMessage}\n` +
+        'Undo the step by hand, then complete this task to let the rollback continue; cancel it to stop the rollback here.';
     return { RequestText: requestText, ContextData: contextData };
 }
 
-function resolveCompensationMappingExpression(
-    rawExpression: string,
-    envelope: Record<string, unknown>,
-): unknown {
+function isActive(row: SagaTaskRow): boolean {
+    return row.Status === 'Pending' || row.Status === 'In Progress' || row.Status === 'Deferred';
+}
+
+function resolveCompensationMappingExpression(rawExpression: string, envelope: Record<string, unknown>): unknown {
     const trimmed = rawExpression.trim();
     if (trimmed.toLowerCase().startsWith('static:')) {
         return rawExpression.substring(rawExpression.indexOf(':') + 1);
     }
-    const unwrapped = trimmed.startsWith('{{') && trimmed.endsWith('}}')
-        ? trimmed.slice(2, -2).trim()
-        : trimmed;
-
-    if (unwrapped === 'input' || unwrapped === 'output' || unwrapped === 'actionLogId' || unwrapped === 'actionLogID' || unwrapped === 'recordChanges' || unwrapped === 'payload') {
+    const unwrapped = trimmed.startsWith('{{') && trimmed.endsWith('}}') ? trimmed.slice(2, -2).trim() : trimmed;
+    if (['input', 'output', 'actionLogId', 'actionLogID', 'recordChanges', 'payload'].includes(unwrapped)) {
         return envelope[unwrapped];
     }
-
     const dotIndex = unwrapped.indexOf('.');
     if (dotIndex > 0) {
         const prefix = unwrapped.slice(0, dotIndex);
-        const remainder = unwrapped.slice(dotIndex + 1);
         if (prefix === 'input' || prefix === 'output' || prefix === 'recordChanges' || prefix === 'payload') {
-            return GetValueFromPath(envelope[prefix], remainder);
+            return GetValueFromPath(envelope[prefix], unwrapped.slice(dotIndex + 1));
         }
     }
-
     const fromEnvelope = GetValueFromPath(envelope, unwrapped);
     return fromEnvelope !== undefined ? fromEnvelope : rawExpression;
 }
 
-function parseMappingDictionary(
-    mapping: Readonly<Record<string, string>> | string | null | undefined,
-): Record<string, string> | null {
+function parseMappingDictionary(mapping: Readonly<Record<string, string>> | string | null | undefined): Record<string, string> | null {
     if (!mapping) return null;
+    let raw: unknown = mapping;
     if (typeof mapping === 'string') {
         try {
-            const parsed: unknown = JSON.parse(mapping);
-            if (!isRecord(parsed)) return null;
-            const out: Record<string, string> = {};
-            for (const [k, v] of Object.entries(parsed)) {
-                if (typeof v === 'string') out[k] = v;
-            }
-            return out;
+            raw = JSON.parse(mapping);
         } catch {
             return null;
         }
     }
-    if (isRecord(mapping)) {
-        const out: Record<string, string> = {};
-        for (const [k, v] of Object.entries(mapping)) {
-            if (typeof v === 'string') out[k] = v;
-        }
-        return out;
+    if (!isRecord(raw)) return null;
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(raw)) {
+        if (typeof v === 'string') out[k] = v;
     }
-    return null;
+    return Object.keys(out).length > 0 ? out : null;
 }
 
-function normalizeMappingField(
-    raw: unknown,
-): Readonly<Record<string, string>> | string | undefined {
-    if (typeof raw === 'string' && raw.trim().length > 0) {
-        return raw.trim();
-    }
+function normalizeMappingField(raw: unknown): Readonly<Record<string, string>> | string | undefined {
+    if (typeof raw === 'string' && raw.trim().length > 0) return raw.trim();
     if (isRecord(raw)) {
         const out: Record<string, string> = {};
         for (const [k, v] of Object.entries(raw)) {
@@ -492,20 +396,18 @@ function normalizeMappingField(
 }
 
 function normalizeFailurePolicy(raw: unknown): ActionCompensationFailurePolicy | undefined {
-    if (raw === 'EscalateToHumanTask' || raw === 'HaltSaga' || raw === 'ContinueCompensation') {
-        return raw;
-    }
-    return undefined;
+    return raw === 'EscalateToHumanTask' || raw === 'HaltSaga' || raw === 'ContinueCompensation' ? raw : undefined;
+}
+
+function normalizeRetryCount(raw: unknown): number | undefined {
+    return typeof raw === 'number' && Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : undefined;
 }
 
 function readSequenceFromConfiguration(configurationJson: string | null): number {
     if (!configurationJson) return -1;
     try {
         const parsed: unknown = JSON.parse(configurationJson);
-        if (isRecord(parsed) && typeof parsed.sequence === 'number' && Number.isFinite(parsed.sequence)) {
-            return parsed.sequence;
-        }
-        return -1;
+        return isRecord(parsed) && typeof parsed.sequence === 'number' && Number.isFinite(parsed.sequence) ? parsed.sequence : -1;
     } catch {
         return -1;
     }
@@ -513,8 +415,7 @@ function readSequenceFromConfiguration(configurationJson: string | null): number
 
 function parseTimestampMs(value: Date | string | null | undefined): number {
     if (!value) return 0;
-    if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.getTime() : 0;
-    const ms = Date.parse(value);
+    const ms = value instanceof Date ? value.getTime() : Date.parse(value);
     return Number.isFinite(ms) ? ms : 0;
 }
 
@@ -529,39 +430,32 @@ function safeParseJsonObject(raw: string | null | undefined): Record<string, unk
 }
 
 function computeTopologicalDepthByTaskId(
-    tasks: readonly CompensatableTaskRow[],
-    dependencies?: ReadonlyArray<{ TaskID: string; DependsOnTaskID: string }>,
+    tasks: readonly SagaTaskRow[],
+    dependencies: ReadonlyArray<{ TaskID: string; DependsOnTaskID: string }>,
 ): UUIDMap<number> {
     const depths = new UUIDMap<number>();
-    if (!dependencies || dependencies.length === 0) return depths;
-
+    if (dependencies.length === 0) return depths;
     const dependsOnByTask = new UUIDMap<string[]>();
     for (const dep of dependencies) {
         const existing = dependsOnByTask.Get(dep.TaskID) ?? [];
         existing.push(dep.DependsOnTaskID);
         dependsOnByTask.Set(dep.TaskID, existing);
     }
-
     const visiting = new UUIDSet();
     const visit = (taskId: string): number => {
         const cached = depths.Get(taskId);
         if (cached !== undefined) return cached;
         if (visiting.Has(taskId)) return 0;
         visiting.Add(taskId);
-        const parents = dependsOnByTask.Get(taskId) ?? [];
         let maxParentDepth = -1;
-        for (const parentId of parents) {
+        for (const parentId of dependsOnByTask.Get(taskId) ?? []) {
             maxParentDepth = Math.max(maxParentDepth, visit(parentId));
         }
         visiting.Delete(taskId);
-        const depth = maxParentDepth + 1;
-        depths.Set(taskId, depth);
-        return depth;
+        depths.Set(taskId, maxParentDepth + 1);
+        return maxParentDepth + 1;
     };
-
-    for (const row of tasks) {
-        visit(row.ID);
-    }
+    for (const row of tasks) visit(row.ID);
     return depths;
 }
 

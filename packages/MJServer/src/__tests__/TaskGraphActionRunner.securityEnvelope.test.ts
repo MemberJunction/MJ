@@ -15,9 +15,9 @@ vi.mock('@memberjunction/actions', () => ({
 }));
 
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type { TaskSecurityEnvelope } from '@memberjunction/ai-core-plus';
+import { TAINTED_EGRESS_BLOCKED, type TaskSecurityEnvelope } from '@memberjunction/ai-core-plus';
 import type { TaskActionRunParams } from '@memberjunction/task-graph';
-import { TAINTED_EGRESS_BLOCKED, TaskGraphActionRunner, ToActionRunScope } from '../services/TaskGraphActionRunner';
+import { TaskGraphActionRunner, ToActionRunScope } from '../services/TaskGraphActionRunner';
 
 const SCOPED_SEARCH = 'f0000000-0000-4000-8000-000000000001';
 const SEND_EMAIL = 'f0000000-0000-4000-8000-000000000002';

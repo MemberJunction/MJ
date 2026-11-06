@@ -11,14 +11,11 @@
  */
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam, type ActionRunAudience, type ActionRunScope, type MJActionEntityExtended } from '@memberjunction/actions-base';
-import { ApplyTaskSecurityEnvelopeToParams, BuildActionOutputObject, type TaskRunScope, type TaskSecurityEnvelope } from '@memberjunction/ai-core-plus';
+import { ApplyTaskSecurityEnvelopeToParams, BuildActionOutputObject, TAINTED_EGRESS_BLOCKED, type TaskRunScope, type TaskSecurityEnvelope } from '@memberjunction/ai-core-plus';
 import { LogError, UserInfo } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 import type { TaskActionRunner, TaskActionRunParams, TaskActionRunResult } from '@memberjunction/task-graph';
-
-/** The result code a tainted node's refused action reports. */
-export const TAINTED_EGRESS_BLOCKED = 'TAINTED_EGRESS_BLOCKED';
 
 /**
  * Runs a task-graph action node under the node's security envelope, as `BaseAgent` runs an action

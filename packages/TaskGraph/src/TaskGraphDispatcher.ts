@@ -55,11 +55,13 @@ import {
     type TaskGraphDecisionAnswer,
     ApplyTaskSecurityEnvelopeToParams,
     SerializeTaskSecurityEnvelope,
+    TAINTED_EGRESS_BLOCKED,
     type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
 import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
-import { IShutdownable, IndexByUUID, ShutdownRegistry, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, IShutdownable, IndexByUUID, ShutdownRegistry, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
+import type { MJActionExecutionLogEntity, MJRecordChangeEntity } from '@memberjunction/core-entities';
 import type { MJTaskEntity_ITaskStepConfiguration, MJTaskEntity_ITaskLoopIteration } from '@memberjunction/core-entities';
 import { TaskClaimStore, TERMINAL_PARENT_STATUSES, TERMINAL_PARENT_STATUS_SQL } from './TaskClaimStore';
 import {
@@ -108,11 +110,13 @@ import { RegisterTaskGraphKick } from './task-graph-kick';
 import {
     BuildCompensationEscalationSummary,
     BuildCompensationInputPayload,
-    type CompensatableActionRecord,
+    type CompensatableActionRow,
+    IndexCompensationRows,
     IsCompensationTask,
-    MergeActionCompensationSpecs,
+    NextSagaStep,
     ReadActionCompensationMetadata,
     ReadTaskCompensationMetadata,
+    RetryBackoffMs,
     type SagaExecutionState,
     SelectTasksToCompensate,
     type TaskCompensationStepMetadata,
@@ -238,6 +242,7 @@ import {
     ProviderFactory,
     type ReconciliationEvent,
     TaskActionRunner,
+    type TaskActionRunResult,
     TaskAgentRunner,
     TaskPromptRunner,
     TaskGraphDispatcherConfig,
@@ -2642,10 +2647,14 @@ export class TaskGraphDispatcher implements IShutdownable {
                 }
             }
 
+            // A graph rolling back starts no new forward work, on any instance: the same rows decide it
+            // everywhere (sagaHoldsForwardWork), so no dispatcher claims a step another is skipping.
+            const sagaHolds = this.sagaHoldsForwardWork(graph);
             for (const node of eligible) {
                 if (allowedTaskIDs && !allowedTaskIDs.has(node.id)) continue;
                 const entity = graph.entityById.get(node.id);
                 if (!entity) continue;
+                if (sagaHolds && !IsCompensationTask(entity)) continue;
 
                 // Human tasks are never dispatched — a person completes them. But "eligible" is the
                 // moment that person can finally act, and nothing else in the system knows it has
@@ -3717,7 +3726,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         const stored = context.Security.Envelope;
         const inputTainted = ComputeNodeInputTaint({
             EnvelopeTainted: stored?.IsRunTainted === true,
-            IsCompensation: !!task.CompensatesTaskID || IsCompensationTask(task),
+            IsCompensation: IsCompensationTask(task),
             Upstream: upstream,
         });
         return { Envelope: WithInputTaint(stored, inputTainted) };
@@ -3950,7 +3959,7 @@ export class TaskGraphDispatcher implements IShutdownable {
 
         const raw = task.ActionID
             ? {
-                ...await this.invokeActionWithIdempotentRetry(
+                ...await this.invokeActionWithRetry(
                     task,
                     provider,
                     effectiveInput,
@@ -3975,59 +3984,96 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
-     * Runs an action task and automatically retries transient failures when the action is marked
-     * idempotent (`compensation.isIdempotent === true`) or is itself a saga compensation task.
+     * Runs an action task, retrying a failure up to the step's `retryCount` — but only when running the
+     * action again is safe. A forward step retries when its node says `compensation.isIdempotent`, or else
+     * its action's `IsIdempotent` column does; a compensation task retries when its compensation action is
+     * idempotent. A non-idempotent action is never re-run: a payment that failed after charging must not
+     * charge again. Retries back off exponentially (`RetryBackoffBaseMs`, doubling, capped at 30×).
      */
-    private async invokeActionWithIdempotentRetry(
+    private async invokeActionWithRetry(
         task: MJTaskEntity,
-        executionProvider: IMetadataProvider,
+        provider: IMetadataProvider,
         effectiveInput: Record<string, unknown>,
         dependencyOutputs: Map<string, unknown>,
         executionUser: UserInfo,
         onProgress?: TaskRunProgressCallback,
         effectiveEnvelope?: TaskSecurityEnvelope,
-    ): Promise<Awaited<ReturnType<TaskActionRunner['RunActionForTask']>>> {
-        const config = (task.ConfigurationObject ?? this.parseConfiguration(task)) as TaskStepConfiguration | null;
-        const compMeta = config?.compensation ?? ReadTaskCompensationMetadata(task.Configuration);
-        const isIdempotentOrCompensation = Boolean(
-            compMeta?.isIdempotent === true || compMeta?.compensatesTaskID,
-        );
-        const maxRetries = isIdempotentOrCompensation
-            ? Math.max(0, Math.floor(compMeta?.retryCount ?? config?.policy?.retryCount ?? 0))
-            : 0;
-
-        let lastResult = await this.actionRunner!.RunActionForTask({
+    ): Promise<TaskActionRunResult> {
+        const run = () => this.actionRunner!.RunActionForTask({
             TaskID: task.ID,
             ActionID: task.ActionID!,
             InputPayload: effectiveInput,
             DependencyOutputs: dependencyOutputs,
-            Provider: executionProvider,
+            Provider: provider,
             ContextUser: executionUser,
             OnProgress: onProgress,
             ...(effectiveEnvelope ? { SecurityEnvelope: effectiveEnvelope } : {}),
         });
-        for (let attempt = 1; !lastResult.Success && attempt <= maxRetries; attempt++) {
-            LogStatus(
-                `[TaskGraphDispatcher] Retrying idempotent action task '${task.Name}' (${task.ID}) ` +
-                `attempt ${attempt}/${maxRetries}...`,
-            );
-            lastResult = await this.actionRunner!.RunActionForTask({
-                TaskID: task.ID,
-                ActionID: task.ActionID!,
-                InputPayload: effectiveInput,
-                DependencyOutputs: dependencyOutputs,
-                Provider: executionProvider,
-                ContextUser: executionUser,
-                OnProgress: onProgress,
-                ...(effectiveEnvelope ? { SecurityEnvelope: effectiveEnvelope } : {}),
-            });
+        let result = await run();
+        if (result.Success || result.ResultCode === TAINTED_EGRESS_BLOCKED) {
+            return result;
         }
-        return lastResult;
+        const retries = await this.allowedRetries(provider, task);
+        for (let attempt = 1; !result.Success && attempt <= retries; attempt++) {
+            const delay = RetryBackoffMs(attempt, this.config.RetryBackoffBaseMs);
+            LogStatus(`[TaskGraphDispatcher] Retrying idempotent action task '${task.Name}' (${task.ID}) in ${delay}ms, attempt ${attempt}/${retries}.`);
+            await new Promise<void>((resolve) => setTimeout(resolve, delay));
+            result = await run();
+        }
+        return result;
+    }
+
+    /** How many times a failed action step may be retried: its `retryCount`, or 0 when the action is not idempotent. */
+    private async allowedRetries(provider: IMetadataProvider, task: MJTaskEntity): Promise<number> {
+        const config = this.parseConfiguration(task) as TaskStepConfiguration | undefined;
+        const compensation = ReadTaskCompensationMetadata(task.Configuration);
+        const requested = Math.max(0, Math.floor(config?.policy?.retryCount ?? compensation?.retryCount ?? 0));
+        if (requested === 0 || !task.ActionID) {
+            return 0;
+        }
+        // A compensation task's own action decides; a forward step's node may override its action.
+        const nodeSays = IsCompensationTask(task) ? undefined : compensation?.isIdempotent;
+        const idempotent = nodeSays ?? (await this.actionRows(provider, [task.ActionID])).Get(task.ActionID)?.IsIdempotent === true;
+        if (!idempotent) {
+            LogStatus(`[TaskGraphDispatcher] Not retrying '${task.Name}' (${task.ID}): its action is not marked idempotent.`);
+            return 0;
+        }
+        return requested;
     }
 
     /**
-     * Coordinates reverse-topological saga compensation and HITL escalation when a task graph with
-     * `failurePolicy: 'CompensateCompleted'` experiences an unhandled forward step failure.
+     * The saga columns of the given actions (`CompensationActionID`, `CompensationInputMapping`,
+     * `IsIdempotent`), read through their typed fields.
+     */
+    private async actionRows(provider: IMetadataProvider, actionIDs: readonly string[]): Promise<UUIDMap<CompensatableActionRow>> {
+        const byID = new UUIDMap<CompensatableActionRow>();
+        if (actionIDs.length === 0) return byID;
+        const result = await RunView.FromMetadataProvider(provider).RunView<CompensatableActionRow>(
+            {
+                EntityName: 'MJ: Actions',
+                ExtraFilter: `ID IN (${actionIDs.map((id) => `'${EscapeSQLString(id)}'`).join(',')})`,
+                Fields: ['ID', 'CompensationActionID', 'CompensationInputMapping', 'IsIdempotent'],
+                ResultType: 'simple',
+            },
+            this.contextUser,
+        );
+        if (!result.Success) {
+            LogError(`[TaskGraphDispatcher] Could not read action saga settings: ${result.ErrorMessage}`);
+            return byID;
+        }
+        for (const row of result.Results ?? []) byID.Set(row.ID, row);
+        return byID;
+    }
+
+    /**
+     * Drives a graph's saga one move per pass (WS-4.3), when its `failurePolicy` is
+     * `'CompensateCompleted'` and a forward step failed unhandled.
+     *
+     * Every decision is recomputed from durable rows ({@link NextSagaStep}), so any dispatcher picks up
+     * where another left off, and every write is one that cannot be raced into a wrong state: the
+     * remaining forward steps are skipped through the guarded `TrySkipPending` (and the claim filter
+     * already refuses them, see `sagaHoldsForwardWork`), and each compensation or escalation row is
+     * inserted with `CompensatesTaskID`, whose unique index lets exactly one dispatcher create it.
      */
     private async coordinateSagaCompensation(
         provider: IMetadataProvider,
@@ -4035,209 +4081,226 @@ export class TaskGraphDispatcher implements IShutdownable {
         graph: GraphState,
         debug?: TaskGraphDebugState,
     ): Promise<GraphState> {
-        const failurePolicy = graph.parentMetadata?.failurePolicy ?? 'Halt';
-        if (failurePolicy !== 'CompensateCompleted' && !graph.parentMetadata?.sagaState) {
+        if (!this.sagaHoldsForwardWork(graph)) {
+            return graph;
+        }
+        const forwardTasks = [...graph.entityById.values()].filter((t) => !IsCompensationTask(t));
+        await this.skipRemainingForwardTasks(provider, graph, forwardTasks);
+        // A forward step still running may yet complete — and then needs compensating too.
+        if (forwardTasks.some((t) => t.Status === 'In Progress')) {
             return graph;
         }
 
-        const allTasks = [...graph.entityById.values()];
-        const forwardTasks = allTasks.filter((t) => !IsCompensationTask(t));
-        const unhandledFailedForward = forwardTasks.filter(
-            (t) => t.Status === 'Failed' && !graph.handledFailureIDs.has(t.ID),
-        );
-
-        // Once an unhandled forward failure occurs under `CompensateCompleted`, block any remaining
-        // `Pending` forward tasks (including independent parallel branches) so they cannot be claimed
-        // while compensation is waiting or running.
-        if (unhandledFailedForward.length > 0 || graph.parentMetadata?.sagaState) {
-            const nodeById = IndexByUUID(graph.nodes, (n) => n.id);
-            for (const ft of forwardTasks) {
-                if (ft.Status !== 'Pending') continue;
-                ft.Status = 'Blocked';
-                if (await ft.Save()) {
-                    const node = nodeById.Get(ft.ID);
-                    if (node) node.status = 'Blocked';
-                }
-            }
+        const completedActionIDs = forwardTasks.filter((t) => t.Status === 'Complete' && t.ActionID).map((t) => t.ActionID!);
+        const actionDefaults = new UUIDMap<TaskCompensationStepMetadata>();
+        for (const [id, row] of await this.actionRows(provider, completedActionIDs)) {
+            const meta = ReadActionCompensationMetadata(row);
+            if (meta) actionDefaults.Set(id, meta);
         }
+        const plan = SelectTasksToCompensate(forwardTasks, actionDefaults, graph.rawDependencies);
+        const rows = IndexCompensationRows([...graph.entityById.values()]);
+        const step = NextSagaStep({
+            Plan: plan,
+            CompensationFor: (id) => rows.Compensations.Get(id),
+            EscalationFor: (id) => rows.Escalations.Get(id),
+        });
 
-        const hasInProgressForwardTask = forwardTasks.some((t) => t.Status === 'In Progress');
-        if (hasInProgressForwardTask) {
-            return graph;
-        }
-
-        let compensationTasks = allTasks.filter((t) => IsCompensationTask(t));
-        if (
-            unhandledFailedForward.length > 0 &&
-            compensationTasks.length === 0 &&
-            !graph.parentMetadata?.sagaState
-        ) {
-            await this.hydrateActionMetadataForSaga(provider, forwardTasks);
-            const orderedToCompensate = SelectTasksToCompensate(
-                forwardTasks,
-                graph.rawDependencies.map((d) => ({ TaskID: d.TaskID, DependsOnTaskID: d.DependsOnTaskID })),
-            );
-            if (orderedToCompensate.length === 0) {
-                await this.updateParentSagaState(provider, graph, 'Compensated');
-                return graph;
-            }
-            const createdCount = await this.materializeSagaCompensationTasks(
-                provider,
-                parentID,
-                graph,
-                orderedToCompensate,
-            );
-            if (createdCount > 0) {
+        switch (step.Kind) {
+            case 'Wait':
                 await this.updateParentSagaState(provider, graph, 'Compensating');
-                graph = await this.loadGraphState(provider, parentID, debug, graph.parent);
-                compensationTasks = [...graph.entityById.values()].filter((t) => IsCompensationTask(t));
-            }
+                return graph;
+            case 'Compensate':
+                await this.updateParentSagaState(provider, graph, 'Compensating');
+                if (await this.materializeCompensation(provider, graph, step.Forward, step.Compensation)) {
+                    return this.loadGraphState(provider, parentID, debug, graph.parent);
+                }
+                return graph;
+            case 'Escalate':
+                await this.updateParentSagaState(provider, graph, 'CompensationEscalated');
+                if (await this.escalateCompensationFailure(provider, graph, step.Forward, step.FailedCompensation)) {
+                    return this.loadGraphState(provider, parentID, debug, graph.parent);
+                }
+                return graph;
+            case 'Finished':
+                await this.updateParentSagaState(provider, graph, step.State);
+                return graph;
         }
-
-        if (compensationTasks.length > 0) {
-            await this.reconcileSagaCompensationTasks(
-                provider,
-                graph,
-                compensationTasks,
-                unhandledFailedForward[0] ?? null,
-            );
-        }
-        return graph;
     }
 
     /**
-     * Hydrates action-level compensation metadata from `MJ: Actions` (`Config` JSON or direct fields)
-     * onto completed forward action tasks that have not yet resolved `compensationActionId`.
+     * Whether a graph is rolling back, so its forward steps must not start: its policy is
+     * `'CompensateCompleted'` and a forward step failed with no drawn route out of the failure. Read from
+     * the rows, so every dispatcher's claim filter agrees.
      */
-    private async hydrateActionMetadataForSaga(
+    private sagaHoldsForwardWork(graph: GraphState): boolean {
+        if (graph.parentMetadata?.failurePolicy !== 'CompensateCompleted') {
+            return false;
+        }
+        return [...graph.entityById.values()].some(
+            (t) => !IsCompensationTask(t) && t.Status === 'Failed' && !graph.handledFailureIDs.has(t.ID),
+        );
+    }
+
+    /**
+     * Skips every forward step still `Pending` once the graph is rolling back — independent branches too,
+     * since running new work while undoing old work is what the policy exists to prevent. Guarded on
+     * `Pending` in the statement, so a step another dispatcher claimed meanwhile is left to finish (and
+     * is then compensated), never overwritten.
+     */
+    private async skipRemainingForwardTasks(
         provider: IMetadataProvider,
+        graph: GraphState,
         forwardTasks: readonly MJTaskEntity[],
     ): Promise<void> {
-        const actionIDsToLoad: string[] = [];
-        for (const task of forwardTasks) {
-            if (task.Status !== 'Complete' || !task.ActionID) continue;
-            const existing = ReadTaskCompensationMetadata(task.Configuration);
-            if (!existing?.compensationActionId && !existing?.compensationActionName) {
-                actionIDsToLoad.push(task.ActionID);
-            }
+        const pending = forwardTasks.filter((t) => t.Status === 'Pending');
+        if (pending.length === 0) return;
+        const typeID = await this.workflowTaskTypeID(provider);
+        if (!typeID) return;
+        for (const task of pending) {
+            if (!(await this.claims.TrySkipPending(provider, task.ID, typeID, this.contextUser))) continue;
+            task.Status = 'Skipped';
+            const node = graph.nodes.find((n) => UUIDsEqual(n.id, task.ID));
+            if (node) node.status = 'Skipped';
+            LogStatus(`[TaskGraphDispatcher] Skipped '${task.Name}' (${task.ID}) — the workflow is rolling back.`);
         }
-        if (actionIDsToLoad.length === 0) return;
+        await this.withdrawOpenRequests(provider, pending.filter((t) => t.Status === 'Skipped').map((t) => t.ID),
+            'The workflow is rolling back, so this step is no longer needed.');
+    }
 
-        const rv = RunView.FromMetadataProvider(provider);
-        const filter = actionIDsToLoad.map((id) => `'${id}'`).join(',');
-        const actionsResult = await rv.RunView<CompensatableActionRecord & { ID: string }>(
+    /**
+     * Creates the compensation task for one forward step, linked by `CompensatesTaskID`. Its unique index
+     * is the claim: when two dispatchers both get here, one insert succeeds and the other finds the
+     * winner's row and treats the step as already materialized. Nothing is written to the forward step.
+     *
+     * @returns true when this call created the row
+     */
+    private async materializeCompensation(
+        provider: IMetadataProvider,
+        graph: GraphState,
+        forwardTask: MJTaskEntity,
+        compensation: TaskCompensationStepMetadata,
+    ): Promise<boolean> {
+        const compActionID = await this.resolveCompensationActionID(provider, compensation);
+        if (!compActionID) {
+            LogError(`[TaskGraphDispatcher] Cannot compensate '${forwardTask.Name}' (${forwardTask.ID}): its compensation action could not be resolved.`);
+            return false;
+        }
+        const envelope = this.compensationEnvelope(graph, forwardTask);
+        if ('Refusal' in envelope) {
+            LogError(`[TaskGraphDispatcher] Not compensating task ${forwardTask.ID}: ${envelope.Refusal}`);
+            return false;
+        }
+        const actingUser = await this.sagaActingUser(provider, graph, forwardTask);
+        const recordChanges = await this.loadCorrelatedRecordChanges(provider, forwardTask, actingUser);
+        const compTask = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+        compTask.NewRecord();
+        compTask.ParentID = graph.parentTaskID;
+        compTask.TypeID = forwardTask.TypeID;
+        compTask.Name = `Compensate: ${forwardTask.Name}`;
+        compTask.Description = `Saga compensation for task "${forwardTask.Name}" (${forwardTask.ID}).`;
+        compTask.StepType = 'Action';
+        compTask.Status = 'Pending';
+        compTask.PercentComplete = 0;
+        compTask.ActionID = compActionID;
+        compTask.AgentRunID = forwardTask.AgentRunID ?? graph.parent?.AgentRunID ?? null;
+        compTask.CompensatesTaskID = forwardTask.ID;
+        compTask.SecurityEnvelope = SerializeTaskSecurityEnvelope(envelope.Envelope);
+        compTask.InputPayload = JSON.stringify(this.buildForwardTaskCompensationInput(forwardTask, compensation, recordChanges));
+        const compConfig: TaskStepConfiguration = {
+            ...(compensation.retryCount != null ? { policy: { retryCount: compensation.retryCount } } : {}),
+            compensation: {
+                compensationActionId: compActionID,
+                ...(compensation.onCompensationFailure ? { onCompensationFailure: compensation.onCompensationFailure } : {}),
+            },
+        };
+        compTask.Configuration = JSON.stringify(compConfig);
+        if (await compTask.Save()) {
+            LogStatus(`[TaskGraphDispatcher] Compensating '${forwardTask.Name}' (${forwardTask.ID}) with task ${compTask.ID}.`);
+            return true;
+        }
+        if (await this.rowCompensating(provider, forwardTask.ID)) {
+            LogStatus(`[TaskGraphDispatcher] '${forwardTask.Name}' (${forwardTask.ID}) is already being compensated by another dispatcher.`);
+        } else {
+            LogError(`[TaskGraphDispatcher] Could not create the compensation task for ${forwardTask.ID}: ${compTask.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        return false;
+    }
+
+    /**
+     * Asks a person to undo a step by hand after its compensation failed under
+     * `onCompensationFailure: 'EscalateToHumanTask'`: a `Human` step under the graph, assigned to the user
+     * who submitted it, linked to the failed compensation task by `CompensatesTaskID` (unique, so one
+     * escalation per failure however many dispatchers see it). The ordinary human-step machinery then
+     * notifies the person and raises an `MJ: AI Agent Requests` row on behalf of the graph's agent — or,
+     * for a graph with no agent, logs that once and leaves the step in the Tasks UI. Completing the step
+     * resumes the rollback; cancelling it (or letting it expire) stops it (see {@link NextSagaStep}).
+     *
+     * @returns true when this call created the step
+     */
+    private async escalateCompensationFailure(
+        provider: IMetadataProvider,
+        graph: GraphState,
+        forwardTask: MJTaskEntity,
+        failedCompensation: MJTaskEntity,
+    ): Promise<boolean> {
+        const actingUser = await this.sagaActingUser(provider, graph, forwardTask);
+        const escalation = BuildCompensationEscalationSummary({
+            WorkflowName: graph.parent?.Name ?? graph.parentTaskID,
+            ForwardTask: forwardTask,
+            CompensationTask: failedCompensation,
+            ActionLogID: this.runtimeActionLogID(forwardTask),
+            RecordChanges: await this.loadCorrelatedRecordChanges(provider, forwardTask, actingUser),
+        });
+        const human = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+        human.NewRecord();
+        human.ParentID = graph.parentTaskID;
+        human.TypeID = failedCompensation.TypeID;
+        human.Name = `Undo by hand: ${forwardTask.Name}`;
+        human.Description = escalation.RequestText;
+        human.StepType = 'Human';
+        human.Status = 'Pending';
+        human.PercentComplete = 0;
+        human.UserID = graph.parentMetadata?.submittedByUserID ?? graph.parent?.UserID ?? actingUser.ID;
+        human.CompensatesTaskID = failedCompensation.ID;
+        human.SecurityEnvelope = failedCompensation.SecurityEnvelope;
+        human.InputPayload = JSON.stringify(escalation.ContextData);
+        if (await human.Save()) {
+            LogStatus(`[TaskGraphDispatcher] Compensation ${failedCompensation.ID} failed; asked a person to undo '${forwardTask.Name}' (task ${human.ID}).`);
+            return true;
+        }
+        if (await this.rowCompensating(provider, failedCompensation.ID)) {
+            return false;
+        }
+        LogError(`[TaskGraphDispatcher] Could not create the escalation step for compensation ${failedCompensation.ID}: ${human.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        return false;
+    }
+
+    /** Whether some task already undoes `taskID` — the row the unique `CompensatesTaskID` index let another dispatcher insert. */
+    private async rowCompensating(provider: IMetadataProvider, taskID: string): Promise<boolean> {
+        const result = await RunView.FromMetadataProvider(provider).RunView<Pick<MJTaskEntity, 'ID'>>(
             {
-                EntityName: 'MJ: Actions',
-                ExtraFilter: `ID IN (${filter})`,
+                EntityName: 'MJ: Tasks',
+                ExtraFilter: `CompensatesTaskID='${EscapeSQLString(taskID)}'`,
+                Fields: ['ID'],
                 ResultType: 'simple',
+                BypassCache: true,
+                MaxRows: 1,
             },
             this.contextUser,
         );
-        if (!actionsResult.Success || !actionsResult.Results) return;
-
-        const actionById = IndexByUUID(actionsResult.Results, (r) => r.ID);
-        for (const task of forwardTasks) {
-            if (task.Status !== 'Complete' || !task.ActionID) continue;
-            const actionRow = actionById.Get(task.ActionID);
-            if (!actionRow) continue;
-            const actionComp = ReadActionCompensationMetadata(actionRow);
-            if (!actionComp) continue;
-            const existingConfig = (this.parseConfiguration(task) ?? {}) as TaskStepConfiguration;
-            const mergedComp = MergeActionCompensationSpecs(actionComp, existingConfig.compensation);
-            if (!mergedComp) continue;
-            task.Configuration = JSON.stringify({
-                ...existingConfig,
-                compensation: {
-                    ...existingConfig.compensation,
-                    ...mergedComp,
-                },
-            });
-        }
+        return result.Success && (result.Results?.length ?? 0) > 0;
     }
 
-    /**
-     * Persists child `MJ: Tasks` rows and sequential `MJ: Task Dependencies` edges for each completed
-     * forward task in reverse topological order.
-     */
-    private async materializeSagaCompensationTasks(
-        provider: IMetadataProvider,
-        parentID: string,
-        graph: GraphState,
-        orderedToCompensate: ReadonlyArray<{ task: MJTaskEntity; compensation: TaskCompensationStepMetadata }>,
-    ): Promise<number> {
-        const typeID = await this.workflowTaskTypeID(provider);
-        let previousCompTaskID: string | null = null;
-        let createdCount = 0;
-
-        for (const { task: forwardTask, compensation: compMeta } of orderedToCompensate) {
-            const compActionID = await this.resolveCompensationActionID(provider, compMeta);
-            if (!compActionID) continue;
-            const envelope = this.compensationEnvelope(graph, forwardTask);
-            if ('Refusal' in envelope) {
-                LogError(`[TaskGraphDispatcher] Not compensating task ${forwardTask.ID}: ${envelope.Refusal}`);
-                continue;
-            }
-
-            const recordChanges = await this.loadCorrelatedRecordChangesForTask(provider, forwardTask);
-            const compInput = this.buildForwardTaskCompensationInput(forwardTask, compMeta, recordChanges);
-            const forwardConfig = this.parseConfiguration(forwardTask) as TaskStepConfiguration | null;
-            const compTask = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
-            compTask.NewRecord();
-            compTask.ParentID = parentID;
-            if (forwardTask.TypeID || typeID) {
-                compTask.TypeID = (forwardTask.TypeID ?? typeID)!;
-            }
-            compTask.Name = `Compensate: ${forwardTask.Name}`;
-            compTask.Description = `Saga compensation for task "${forwardTask.Name}" (${forwardTask.ID}).`;
-            compTask.StepType = 'Action';
-            compTask.Status = 'Pending';
-            compTask.PercentComplete = 0;
-            compTask.ActionID = compActionID;
-            compTask.UserID = forwardTask.UserID ?? graph.parent?.UserID ?? null;
-            compTask.AgentRunID = forwardTask.AgentRunID ?? graph.parent?.AgentRunID ?? null;
-            compTask.InputPayload = JSON.stringify(compInput);
-            compTask.SecurityEnvelope = SerializeTaskSecurityEnvelope(envelope.Envelope);
-            const compStepConfig: TaskStepConfiguration = {
-                ...(compMeta.retryCount != null ? { policy: { retryCount: compMeta.retryCount } } : {}),
-                compensation: {
-                    ...compMeta,
-                    compensationActionId: compActionID,
-                    compensatesTaskID: forwardTask.ID,
-                },
-            };
-            compTask.Configuration = JSON.stringify(compStepConfig);
-            if (!(await compTask.Save())) {
-                LogError(`[TaskGraphDispatcher] Failed to create compensation task for ${forwardTask.ID}.`);
-                continue;
-            }
-            createdCount++;
-
-            if (previousCompTaskID) {
-                const dep = await provider.GetEntityObject<MJTaskDependencyEntity>(
-                    'MJ: Task Dependencies',
-                    this.contextUser,
-                );
-                dep.NewRecord();
-                dep.TaskID = compTask.ID;
-                dep.DependsOnTaskID = previousCompTaskID;
-                dep.DependencyType = 'Prerequisite';
-                await dep.Save();
-            }
-            previousCompTaskID = compTask.ID;
-
-            forwardTask.Configuration = JSON.stringify({
-                ...(forwardConfig ?? {}),
-                compensation: {
-                    ...compMeta,
-                    compensationActionId: compActionID,
-                    compensatedByTaskID: compTask.ID,
-                },
-            });
-            await forwardTask.Save();
-        }
-        return createdCount;
+    /** The user the graph's work runs as (the submitter, stamped with the caller's tenant when the graph carries one). */
+    private async sagaActingUser(provider: IMetadataProvider, graph: GraphState, forwardTask: MJTaskEntity): Promise<UserInfo> {
+        const context = await this.graphContext(provider, forwardTask, { parentTask: graph.parent, parentMetadata: graph.parentMetadata });
+        return context.ExecutionUser;
     }
 
+    /** The `MJ: Action Execution Logs` row a completed action step recorded (`runtime.actionLogID`). */
+    private runtimeActionLogID(task: MJTaskEntity): string | null {
+        return (this.parseConfiguration(task) as TaskStepConfiguration | undefined)?.runtime?.actionLogID ?? null;
+    }
     /**
      * The envelope a compensation task is written with: the forward task's constraints, tainted when
      * the forward task's output was. A compensation reads the forward run's input and output, so it
@@ -4277,31 +4340,54 @@ export class TaskGraphDispatcher implements IShutdownable {
     }
 
     /**
-     * Loads `MJ: Record Changes` rows written during `forwardTask`'s execution window when available.
+     * The `MJ: Record Changes` a forward action step made, for its compensation's input and a failed
+     * compensation's escalation. Read as the user the graph's work runs as — never the system user — so
+     * the user's own permissions bound what comes back.
+     *
+     * Bounded to the action's own execution window, `StartedAt`..`EndedAt` of the `MJ: Action Execution
+     * Logs` row the step recorded, and to the user that log ran as. That is the tightest correlation the
+     * data allows: a Record Change carries no action-log or task reference, only who changed what and
+     * when, so a window around the one execution — not the task's whole life, which spans its queueing
+     * and retries — is as close as it gets. Changes the same user made elsewhere inside that window can
+     * still appear; a step with no recorded log gets none.
      */
-    private async loadCorrelatedRecordChangesForTask(
+    private async loadCorrelatedRecordChanges(
         provider: IMetadataProvider,
-        forwardTask: MJTaskEntity | undefined,
+        forwardTask: MJTaskEntity,
+        actingUser: UserInfo,
     ): Promise<ReadonlyArray<Record<string, unknown>>> {
-        if (!forwardTask?.StartedAt) return [];
+        const logID = this.runtimeActionLogID(forwardTask);
+        if (!logID) return [];
         try {
             const rv = RunView.FromMetadataProvider(provider);
-            const startIso = forwardTask.StartedAt.toISOString();
-            const endIso = (forwardTask.CompletedAt ?? new Date()).toISOString();
-            const userClause = forwardTask.UserID ? `UserID='${forwardTask.UserID}' AND ` : '';
-            const res = await rv.RunView<Record<string, unknown>>(
+            const logs = await rv.RunView<Pick<MJActionExecutionLogEntity, 'ID' | 'StartedAt' | 'EndedAt' | 'UserID'>>(
+                {
+                    EntityName: 'MJ: Action Execution Logs',
+                    ExtraFilter: `ID='${EscapeSQLString(logID)}'`,
+                    Fields: ['ID', 'StartedAt', 'EndedAt', 'UserID'],
+                    ResultType: 'simple',
+                    MaxRows: 1,
+                },
+                actingUser,
+            );
+            const log = logs.Success ? logs.Results?.[0] : undefined;
+            if (!log?.StartedAt || !log.EndedAt) return [];
+            const changes = await rv.RunView<Pick<MJRecordChangeEntity, 'ID' | 'EntityID' | 'Entity' | 'RecordID' | 'Type' | 'ChangesJSON' | 'ChangedAt'>>(
                 {
                     EntityName: 'MJ: Record Changes',
-                    ExtraFilter: `${userClause}ChangedAt >= '${startIso}' AND ChangedAt <= '${endIso}'`,
+                    ExtraFilter:
+                        `UserID='${EscapeSQLString(log.UserID)}' AND ` +
+                        `ChangedAt >= '${new Date(log.StartedAt).toISOString()}' AND ChangedAt <= '${new Date(log.EndedAt).toISOString()}'`,
                     Fields: ['ID', 'EntityID', 'Entity', 'RecordID', 'Type', 'ChangesJSON', 'ChangedAt'],
-                    OrderBy: 'ChangedAt DESC',
+                    OrderBy: 'ChangedAt ASC',
                     MaxRows: 50,
                     ResultType: 'simple',
                 },
-                this.contextUser,
+                actingUser,
             );
-            return res.Success && Array.isArray(res.Results) ? res.Results : [];
-        } catch {
+            return changes.Success ? changes.Results ?? [] : [];
+        } catch (e) {
+            LogError(`[TaskGraphDispatcher] Could not read the record changes of task ${forwardTask.ID}: ${e instanceof Error ? e.message : String(e)}`);
             return [];
         }
     }
@@ -4332,130 +4418,22 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // Non-object output payloads default to `{}`
             }
         }
-        const config = this.parseConfiguration(forwardTask);
-        const runtimeBag = (config as { runtime?: { actionLogID?: string } } | null)?.runtime;
         return BuildCompensationInputPayload({
             ForwardInput: forwardInput,
             ForwardOutput: forwardOutput,
-            ActionLogID: runtimeBag?.actionLogID ?? null,
+            ActionLogID: this.runtimeActionLogID(forwardTask),
             RecordChanges: recordChanges,
-            InputMapping: compMeta.inputMapping ?? compMeta.compensationInputMapping,
+            InputMapping: compMeta.inputMapping,
         });
     }
 
     /**
-     * Inspects compensation tasks for failures requiring HITL escalation (`EscalateToHumanTask`)
-     * and updates the parent graph's `sagaState` once all compensation tasks settle.
-     */
-    private async reconcileSagaCompensationTasks(
-        provider: IMetadataProvider,
-        graph: GraphState,
-        compensationTasks: readonly MJTaskEntity[],
-        failedTriggerTask: MJTaskEntity | null,
-    ): Promise<void> {
-        let anyEscalated = false;
-        for (const compTask of compensationTasks) {
-            if (compTask.Status !== 'Failed') continue;
-            const compMeta = ReadTaskCompensationMetadata(compTask.Configuration);
-            const onFailure = compMeta?.onCompensationFailure ?? 'EscalateToHumanTask';
-            if (onFailure === 'EscalateToHumanTask') {
-                anyEscalated = true;
-                if (!compMeta?.escalatedRequestID) {
-                    await this.escalateCompensationFailureToHuman(
-                        provider,
-                        compTask,
-                        compMeta ?? {},
-                        graph,
-                        failedTriggerTask,
-                    );
-                }
-            }
-        }
-
-        const hasActiveComp = compensationTasks.some(
-            (t) => t.Status === 'Pending' || t.Status === 'In Progress',
-        );
-        if (hasActiveComp) return;
-
-        const allCompensated = compensationTasks.every((t) => t.Status === 'Complete');
-        const nextState: SagaExecutionState = allCompensated
-            ? 'Compensated'
-            : anyEscalated
-                ? 'CompensationEscalated'
-                : 'CompensationFailed';
-        await this.updateParentSagaState(provider, graph, nextState);
-    }
-
-    /**
-     * Creates a human-in-the-loop `MJ: AI Agent Requests` escalation record when a compensation step
-     * fails under `onCompensationFailure: 'EscalateToHumanTask'`.
-     */
-    private async escalateCompensationFailureToHuman(
-        provider: IMetadataProvider,
-        compTask: MJTaskEntity,
-        compMeta: TaskCompensationStepMetadata,
-        graph: GraphState,
-        failedTriggerTask: MJTaskEntity | null,
-    ): Promise<void> {
-        try {
-            const forwardTask = compMeta.compensatesTaskID
-                ? graph.entityById.get(compMeta.compensatesTaskID)
-                : undefined;
-            const recordChanges = await this.loadCorrelatedRecordChangesForTask(provider, forwardTask);
-            const request = await provider.GetEntityObject<MJAIAgentRequestEntity>(
-                'MJ: AI Agent Requests',
-                this.contextUser,
-            );
-            request.NewRecord();
-            request.OriginatingTaskID = compTask.ID;
-            const owningAgentID = await this.owningAgentOf(provider, compTask, graph.parent);
-            if (owningAgentID) {
-                request.AgentID = owningAgentID;
-            }
-            request.RequestForUserID =
-                compTask.UserID ?? graph.parentMetadata?.submittedByUserID ?? this.contextUser?.ID ?? null;
-            request.RequestedAt = new Date();
-            request.Status = 'Requested';
-            request.OriginatingAgentRunID = await this.submittingRunOf(provider, compTask, graph.parent);
-            const escalation = BuildCompensationEscalationSummary({
-                WorkflowName: graph.parent?.Name ?? graph.parentTaskID,
-                ForwardTask: {
-                    ID: forwardTask?.ID ?? compMeta.compensatesTaskID ?? compTask.ID,
-                    Name: forwardTask?.Name ?? compTask.Name,
-                    InputPayload: forwardTask?.InputPayload ?? null,
-                    OutputPayload: forwardTask?.OutputPayload ?? null,
-                },
-                CompensationTask: {
-                    ID: compTask.ID,
-                    Name: compTask.Name,
-                    InputPayload: compTask.InputPayload ?? null,
-                    ErrorMessage: compTask.ErrorMessage ?? failedTriggerTask?.ErrorMessage ?? null,
-                },
-                RecordChanges: recordChanges,
-            });
-            request.Request = escalation.RequestText;
-            request.Comments = JSON.stringify(escalation.ContextData);
-            if (await request.Save()) {
-                const existingConfig = this.parseConfiguration(compTask) ?? {};
-                compTask.Configuration = JSON.stringify({
-                    ...existingConfig,
-                    compensation: {
-                        ...compMeta,
-                        escalatedRequestID: request.ID,
-                    },
-                });
-                await compTask.Save();
-            }
-        } catch (e) {
-            LogError(
-                `[TaskGraphDispatcher] Failed to escalate compensation task ${compTask.ID}: ` +
-                `${e instanceof Error ? e.message : String(e)}`,
-            );
-        }
-    }
-
-    /**
-     * Updates `sagaState` on both the in-memory `GraphState.parentMetadata` and the persisted parent task.
+     * Records the saga's state on the parent (`InputPayload.sagaState`) for anyone reading the graph.
+     *
+     * Written through the guarded, type-scoped single-field write and nothing else: a full-row save of the
+     * parent would carry this pass's snapshot of `InputPayload` and could erase a continuation marker or a
+     * debug field another dispatcher wrote meanwhile (R2-14, R3-1). The state is informational — every saga
+     * decision is recomputed from the rows — so a write that does not land is retried on the next pass.
      */
     private async updateParentSagaState(
         provider: IMetadataProvider,
@@ -4463,36 +4441,19 @@ export class TaskGraphDispatcher implements IShutdownable {
         nextState: SagaExecutionState,
     ): Promise<void> {
         if (graph.parentMetadata?.sagaState === nextState) return;
-        if (graph.parentMetadata) {
+        const typeID = await this.workflowTaskTypeID(provider);
+        if (!typeID) return;
+        const wrote = await this.claims.TryWriteDebugFields(
+            provider,
+            graph.parentTaskID,
+            [TaskClaimStore.DebugField('$.sagaState', { Kind: 'string', Value: nextState })],
+            typeID,
+            this.contextUser,
+        );
+        if (wrote && graph.parentMetadata) {
             graph.parentMetadata.sagaState = nextState;
-        }
-        const parent = graph.parent;
-        if (!parent) return;
-        try {
-            const parsed = parent.InputPayload
-                ? (JSON.parse(parent.InputPayload) as Record<string, unknown>)
-                : {};
-            parsed.sagaState = nextState;
-            parent.InputPayload = JSON.stringify(parsed);
-
-            const typeID = await this.workflowTaskTypeID(provider);
-            const hasExecuteSQL = typeof (provider as unknown as { ExecuteSQL?: unknown }).ExecuteSQL === 'function';
-            if (typeID && hasExecuteSQL) {
-                const wrote = await this.claims.TryWriteDebugFields(
-                    provider,
-                    graph.parentTaskID,
-                    [TaskClaimStore.DebugField('$.sagaState', { Kind: 'string', Value: nextState })],
-                    typeID,
-                    this.contextUser,
-                );
-                if (wrote) return;
-            }
-            await parent.Save();
-        } catch (e) {
-            LogError(
-                `[TaskGraphDispatcher] Could not persist sagaState='${nextState}' on parent ${graph.parentTaskID}: ` +
-                `${e instanceof Error ? e.message : String(e)}`,
-            );
+        } else if (!wrote) {
+            LogError(`[TaskGraphDispatcher] Could not record sagaState='${nextState}' on graph ${graph.parentTaskID}; the next pass retries.`);
         }
     }
 

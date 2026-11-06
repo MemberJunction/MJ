@@ -509,6 +509,13 @@ export type TaskContinuationParams = {
 /** Tuning knobs for the durable dispatcher. */
 export type TaskGraphDispatcherConfig = {
     /**
+     * The first delay before retrying a failed idempotent action step; each later retry doubles it, up to
+     * 30× this. Only idempotent actions are retried at all (see `TaskCompensationStepMetadata.isIdempotent`
+     * and `Action.IsIdempotent`).
+     */
+    RetryBackoffBaseMs: number;
+
+    /**
      * Identifies this dispatcher instance in `Task.ClaimedBy`. Must be stable for the process
      * lifetime and distinct per instance — it is what lets reconciliation tell "my orphaned work"
      * from "another instance's live work".
@@ -555,6 +562,7 @@ export type TaskGraphDispatcherConfig = {
 
 /** Defaults chosen so a heartbeat has several chances to land before a claim lapses. */
 export const DEFAULT_DISPATCHER_CONFIG: Omit<TaskGraphDispatcherConfig, 'InstanceID'> = {
+    RetryBackoffBaseMs: 1000,
     ClaimTTLSeconds: 300,
     HeartbeatIntervalSeconds: 60,
     MaxConcurrentTasks: 5,

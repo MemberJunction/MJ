@@ -54,7 +54,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { AgentDecisionService } from '@memberjunction/ai-agents';
 import { ResolveRecordsByNameOrToolName } from './resolve-by-tool-name';
 import { HeldDecisionAnswers, type DecisionTaskRow, type TaskStepConfiguration } from './decision-node';
-import type { SagaExecutionState } from './saga-compensation';
+import { CompensationFromSpec, type SagaExecutionState } from './saga-compensation';
 import { TaskClaimStore, type TaskGraphDebugFieldWrite } from './TaskClaimStore';
 import { ParseTaskGraphDebugState, type EdgeOverrideVerdict, type StepTarget, type TaskGraphDebugState } from './debug-state';
 import { KickTaskGraphDispatchers } from './task-graph-kick';
@@ -458,15 +458,10 @@ export function BuildStepConfiguration(node: TaskGraphSpecNode): TaskStepConfigu
     const outputMapping = action?.outputMapping;
     if (inputMapping) config.inputMapping = inputMapping;
     if (outputMapping) config.outputMapping = outputMapping;
-    if (action?.compensation) {
-        config.compensation = {
-            ...(action.compensation.compensationActionId ? { compensationActionId: action.compensation.compensationActionId } : {}),
-            ...(action.compensation.compensationActionName ? { compensationActionName: action.compensation.compensationActionName } : {}),
-            ...(action.compensation.inputMapping !== undefined ? { inputMapping: action.compensation.inputMapping } : {}),
-            ...(action.compensation.onCompensationFailure ? { onCompensationFailure: action.compensation.onCompensationFailure } : {}),
-            ...(action.compensation.isIdempotent !== undefined ? { isIdempotent: action.compensation.isIdempotent } : {}),
-        };
-    }
+    // Every setting the spec's compensation names travels, `retryCount` and the `compensationInputMapping`
+    // alias included (folded into `inputMapping`): dropping them made a spec's retry and mapping vanish.
+    const compensation = CompensationFromSpec(action?.compensation);
+    if (compensation) config.compensation = compensation;
 
     if (node.policy) {
         config.policy = {
