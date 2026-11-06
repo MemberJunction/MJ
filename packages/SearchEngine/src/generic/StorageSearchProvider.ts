@@ -28,6 +28,17 @@ import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeC
  */
 type SearchableAccount = StorageAccountWithProvider;
 
+/** Removes `<...>` tags, repeating until none remain so removal cannot leave a new tag behind. */
+function removeTags(text: string): string {
+    let previous: string;
+    let current = text;
+    do {
+        previous = current;
+        current = current.replace(/<[^>]*>/g, '');
+    } while (current !== previous);
+    return current;
+}
+
 /**
  * Provides file-level search across MJ File Storage accounts using each
  * provider's native SearchFiles() API. Only accounts with
@@ -310,7 +321,7 @@ export class StorageSearchProvider extends BaseSearchProvider {
 
         // If provider returned a content excerpt, lead with that
         if (file.excerpt) {
-            const cleanExcerpt = file.excerpt.replace(/<[^>]*>/g, '').trim();
+            const cleanExcerpt = removeTags(file.excerpt).trim();
             if (cleanExcerpt.length > 0) {
                 parts.push(cleanExcerpt.length > 150 ? cleanExcerpt.substring(0, 150) + '...' : cleanExcerpt);
             }

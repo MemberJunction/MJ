@@ -121,8 +121,19 @@ function safeCodePoint(code: number): string {
  */
 export function StripHtml(text: string): string {
     const unescaped = decodeEntities(text);
-    const withoutTags = unescaped.replace(/<[^>]*>/g, '');
+    const withoutTags = removeTags(unescaped);
     return decodeEntities(withoutTags).replace(/\s+/g, ' ').trim();
+}
+
+/** Removes `<...>` tags, repeating until none remain so removal cannot leave a new tag behind. */
+function removeTags(text: string): string {
+    let previous: string;
+    let current = text;
+    do {
+        previous = current;
+        current = current.replace(/<[^>]*>/g, '');
+    } while (current !== previous);
+    return current;
 }
 
 /** @deprecated Use {@link StripHtml}. */
