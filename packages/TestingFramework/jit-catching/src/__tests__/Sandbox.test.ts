@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, realpathSync, symlinkSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -42,6 +42,21 @@ describe('Sandbox.BuildArgs', () => {
       expect(() => sb.BuildArgs({ ...base, Mounts: [{ Host: host, Container: '/s', Mode: 'ro' }] }), host).toThrow(/refusing to mount/);
     const ok = mkdtempSync(join(tmpdir(), 'jit-ok-'));
     expect(sb.BuildArgs({ ...base, Mounts: [{ Host: ok, Container: '/s', Mode: 'ro' }] })).toContain('-v');
+  });
+  it.runIf(process.platform === 'darwin')('rejects a denied folder spelled in another case on a case-insensitive disk', () => {
+    expect(() => sb.BuildArgs({ ...base, Mounts: [{ Host: join(homedir(), '.DOCKER'), Container: '/s', Mode: 'ro' }] })).toThrow(/refusing to mount/);
+  });
+  it("rejects Docker Desktop's container folder", () => {
+    const host = join(homedir(), 'Library', 'Containers', 'com.docker.docker');
+    expect(() => sb.BuildArgs({ ...base, Mounts: [{ Host: host, Container: '/s', Mode: 'ro' }] })).toThrow(/refusing to mount/);
+  });
+  it('mounts the realpath of a symlinked host folder', () => {
+    const target = mkdtempSync(join(tmpdir(), 'jit-target-'));
+    const link = join(mkdtempSync(join(tmpdir(), 'jit-link-')), 'link');
+    symlinkSync(target, link);
+    const a = sb.BuildArgs({ ...base, Mounts: [{ Host: link, Container: '/s', Mode: 'ro' }] });
+    expect(a).toContain(`${realpathSync.native(target)}:/s:ro`);
+    expect(a).not.toContain(`${link}:/s:ro`);
   });
   it('rejects a host or container path with a colon or a comma', () => {
     expect(() => sb.BuildArgs({ ...base, Mounts: [{ Host: '/h/a:b', Container: '/s', Mode: 'ro' }] })).toThrow(/refusing to mount/);

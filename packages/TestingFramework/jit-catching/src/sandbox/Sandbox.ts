@@ -14,9 +14,11 @@ const ENV_ALLOW = new Set(['TZ', 'HOME', 'CI', 'NODE_OPTIONS', 'TURBO_CACHE_DIR'
 const MAX_OUTPUT = 32 * 1024 * 1024;
 /**
  * Host folders the sandbox never mounts, nor any folder inside or above them. The runner user has
- * passwordless sudo, so a socket or system path is a way out. `~/.docker` holds Docker Desktop's socket on macOS.
+ * passwordless sudo, so a socket or system path is a way out. On macOS, Docker Desktop keeps its sockets
+ * in `~/.docker` and `~/Library/Containers/com.docker.docker`.
  */
-const DENIED_ROOTS = ['/etc', '/proc', '/sys', '/dev', '/run', '/var/run', '/root', '/boot', '/private/etc', '/private/var/run', join(homedir(), '.docker')];
+const DENIED_ROOTS = ['/etc', '/proc', '/sys', '/dev', '/run', '/var/run', '/root', '/boot', '/private/etc', '/private/var/run',
+    join(homedir(), '.docker'), join(homedir(), 'Library', 'Containers', 'com.docker.docker')];
 
 /** Runs untrusted code in a Docker container with no network, no secrets and its own PID namespace (D28). */
 export class Sandbox {
@@ -59,11 +61,15 @@ function newContainerName(): string {
     return `jit-${randomBytes(6).toString('hex')}`;
 }
 
-/** The absolute host path of a mount; throws when the mount would expose a denied folder or breaks the `-v` syntax. */
+/**
+ * The real on-disk host path of a mount, which is what Docker mounts; throws when the mount would expose
+ * a denied folder or breaks the `-v` syntax.
+ */
 function checkedHost(m: SandboxMount): string {
     const host = resolve(m.Host);
-    if (/[:,]/.test(m.Host) || /[:,]/.test(m.Container) || isDenied(host) || isDenied(resolveExisting(host))) throw new Error(`refusing to mount ${m.Host}`);
-    return host;
+    const real = resolveExisting(host);
+    if (/[:,]/.test(m.Host) || /[:,]/.test(m.Container) || isDenied(host) || isDenied(real)) throw new Error(`refusing to mount ${m.Host}`);
+    return real;
 }
 
 /** True for `/`, a Docker socket, a denied folder, a folder inside one, or a folder that contains one. */
@@ -72,9 +78,12 @@ function isDenied(p: string): boolean {
     return DENIED_ROOTS.some((d) => p === d || p.startsWith(`${d}/`) || d.startsWith(`${p}/`));
 }
 
-/** `realpath` of the path, or of its nearest existing parent joined with the rest, so a symlink cannot hide a denied folder. */
+/**
+ * Native `realpath` of the path (true on-disk spelling, so case and symlinks cannot hide a denied folder),
+ * or of its nearest existing parent joined with the rest.
+ */
 function resolveExisting(p: string): string {
-    if (existsSync(p)) return realpathSync(p);
+    if (existsSync(p)) return realpathSync.native(p);
     const parent = dirname(p);
     return parent === p ? p : `${resolveExisting(parent).replace(/\/$/, '')}/${p.slice(parent.length).replace(/^\//, '')}`;
 }
