@@ -143,6 +143,7 @@ stubs (`DatabaseProviderStub`, `EntitiesOnlyProvider`, `TestLLM`); `@vitest/cove
 | D38 | Agent credential | The agent runner never runs inside a Claude Code session, passes the SDK child only `PATH`, an empty `HOME` and `ANTHROPIC_API_KEY`, and requires `apiKeySource: "ANTHROPIC_API_KEY"` in the init message | Inside a Claude Code session the SDK child used that session's login (`apiKeySource: "none"`); in a clean environment it used the key (spike §2) |
 | D39 | TP Prob model | `gpt-4.1-mini` (a setting) | Returns the 5 `top_logprobs` the judge asks for; `gpt-5.1-mini` does not exist and `gpt-5.4-nano` returns only 1 (spike §4) |
 | D40 | Test failure details | A small custom vitest reporter records `name`, `message`, `expected`, `actual`, `diff`, first stack frame and a timeout flag; `--reporter=json` is the fallback, with its limits stated (§7) | The JSON reporter gives only `error.stack`: no `expected`/`actual`/diff, and a timeout reads `Error: STACK_TRACE_ERROR` (spike §6) |
+| D41 | File-swap eligibility (narrows D9) | Only a PR whose changes are all under one package's `src/`, with no deletions or renames and no `package.json`, vitest, tsconfig, turbo or other outside change; otherwise the full head build | Spike §7 matched two worktrees only on that shape; a deleted or renamed file breaks the copy, and changes outside `src/` are never copied |
 
 ---
 
@@ -347,9 +348,13 @@ package, and 49% changed two or more. Tests read their own package from `src/` b
    (`package-import-method=copy`); the spike measured 32–57 s for this copy and 3.2 GB of store. If the host fetch
    fails, the PR is recorded as an infrastructure failure. There is no install-container fallback with network access:
    it would run the PR's `.pnpmfile.cjs` with a way to send data out (spike §8 option (c)).
-2. **Fast path.** If the PR changes only `src/` files of one package (no `package.json`, lockfile or config changes), use
-   a copy of the base build from job 1 and put head's version of the changed files in it, in the sandbox, for the head
-   run. Vitest reads the package's own source directly, so nothing builds cold.
+2. **Fast path (D41).** Use a copy of the base build from job 1 and put head's version of the changed files in it, in
+   the sandbox, for the head run. Vitest reads the package's own source directly, so nothing builds cold. The PR is
+   eligible only when every file it changes is under one package's `src/`, it deletes or renames no file, and it
+   changes no `package.json`, vitest, tsconfig or turbo config and no file outside that `src/`. Every other PR takes the
+   default path. Generated tests import their package by relative path; an import by the package's own name resolves
+   to base's `dist/` and would not see the swapped files. Spike §7 found the same results as two worktrees on 3
+   eligible PRs (1207, 627 and 1275 tests, all passing), so no failing test was compared.
 
 **Running.** Generated tests live at `packages/<X>/src/__tests__/jit/<id>.jit.test.ts`; the shared vitest `include`
 already matches them. Per revision, all generated tests for a package run in one `vitest run` call, repeated 3 times.
