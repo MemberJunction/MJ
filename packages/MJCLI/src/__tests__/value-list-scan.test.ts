@@ -14,6 +14,7 @@ import {
     MAX_LISTED_VALUES,
     ParseFixTargets,
     ScanValueLists,
+    UnknownEntityNames,
     ValueListFields,
     type ValueListFixProvider,
     type ValueListScanProvider,
@@ -33,6 +34,7 @@ function field(id: string, name: string, valueListType: string, values: string[]
         Sequence: 1,
         Status: 'Active',
         IsVirtual: false,
+        AllowUpdateAPI: true,
         ValueListType: valueListType,
         EntityFieldValues: values.map((v, i) => ({ ID: `${id}-v${i}`, EntityFieldID: id, Sequence: i + 1, Value: v, Code: v })),
         ...extra,
@@ -55,6 +57,7 @@ function projects(): EntityInfo {
             field('f-free', 'Notes', 'None', []),
             field('f-empty', 'Kind', 'List', []),
             field('f-virtual', 'OwnerName', 'List', ['X'], { IsVirtual: true }),
+            field('f-readonly', 'Source', 'List', ['Y'], { AllowUpdateAPI: false }),
         ],
     });
 }
@@ -88,13 +91,27 @@ function answers(byColumn: Record<string, Row[]>): (sql: string) => Row[] {
 }
 
 describe('ValueListFields', () => {
-    it('reads only real List fields; ListOrUserEntry, None and virtual fields are skipped', () => {
+    it('reads only List fields a save validates; ListOrUserEntry, None, virtual and read-only fields are skipped', () => {
         expect(ValueListFields([projects()]).map((f) => f.Field.Name)).toEqual(['Phase', 'Status', 'Kind']);
+    });
+
+    it('skips a read-only field because EntityField.Validate() skips it, so its value never fails a save', () => {
+        const readOnly = projects().Fields.find((f) => f.Name === 'Source')!;
+        expect(readOnly.ReadOnly).toBe(true);
+        expect(ValueListFields([projects()]).some((f) => f.Field.Name === 'Source')).toBe(false);
     });
 
     it('filters by entity name, case-insensitively', () => {
         expect(ValueListFields([projects()], ['projects'])).toHaveLength(3);
         expect(ValueListFields([projects()], ['Other'])).toHaveLength(0);
+    });
+});
+
+describe('UnknownEntityNames', () => {
+    it('returns the names that match no entity, so a mistyped --entity is not reported clean', () => {
+        expect(UnknownEntityNames([projects()], ['projects', 'AI Agents'])).toEqual(['AI Agents']);
+        expect(UnknownEntityNames([projects()], [' Projects '])).toEqual([]);
+        expect(UnknownEntityNames([projects()], undefined)).toEqual([]);
     });
 });
 
@@ -175,6 +192,16 @@ describe('CheckConstrainedColumns', () => {
         const columns = await CheckConstrainedColumns(scanProvider(() => [{ SchemaName: 'APP', TableName: 'Project', ColumnName: 'Status' }]));
         expect(columns?.has('app.project.status')).toBe(true);
     });
+
+    it('treats an empty catalog as unknown: a PostgreSQL role that owns no tables sees no rows rather than an error', async () => {
+        expect(await CheckConstrainedColumns(scanProvider(() => []))).toBeNull();
+        const report = await ScanValueLists(
+            scanProvider((sql) => (sql.includes('INFORMATION_SCHEMA') ? [] : sql.includes('[Phase]') ? [{ Value: 'Launch', ValueCount: 1 }] : [])),
+            [projects()],
+        );
+        expect(report.Findings.map((f) => f.HasCheckConstraint)).toEqual([null]);
+        expect(FormatValueListScan(report)[0]).toContain('CHECK unknown');
+    });
 });
 
 describe('ParseFixTargets', () => {
@@ -240,7 +267,15 @@ describe('ApplyValueListFixes', () => {
 
     it('reports a failed save with the entity layer message', async () => {
         const { Provider } = fixProvider(false);
-        const [result] = await ApplyValueListFixes(Provider, [projects()], [{ Entity: 'Projects', Field: 'Phase' }], null);
+        const [result] = await ApplyValueListFixes(Provider, [projects()], [{ Entity: 'Projects', Field: 'Phase' }], new Set());
         expect(result).toMatchObject({ Fixed: false, Message: 'denied' });
+    });
+
+    it('changes nothing when the CHECK constraints could not be read, since its CHECK guard cannot apply', async () => {
+        const { Provider, Saved } = fixProvider();
+        const [result] = await ApplyValueListFixes(Provider, [projects()], [{ Entity: 'Projects', Field: 'Phase' }], null);
+        expect(Saved).toEqual([]);
+        expect(result.Fixed).toBe(false);
+        expect(result.Message).toMatch(/could not be read/);
     });
 });

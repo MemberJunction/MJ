@@ -251,7 +251,7 @@ WHERE  [Entity] = '<entity name>' AND [Name] = '<field name>' AND [ValueListType
 
 then restart MJAPI so the metadata cache picks it up.
 
-To find affected rows, run `mj doctor value-lists` (6.2 and later) against the database. It reads
+To find affected rows, run `mj doctor value-lists` (6.3 and later) against the database. It reads
 every `List` field's distinct values, classifies them with the same rule the save path uses, and
 lists each field with rows outside its list, the offending values, and whether the column has a
 CHECK constraint. `--format json --fail-on-findings` suits CI. `--fix "<Entity>.<Field>"` sets the

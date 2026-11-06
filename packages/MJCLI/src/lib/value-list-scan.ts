@@ -8,7 +8,8 @@
  * that saved fine before and are refused on their next save. This scan finds them in advance.
  *
  * Membership is decided by `EntityFieldInfo.ValueIsPermittedByValueList`, the same rule the save
- * path applies, so the scan never disagrees with what a save would do.
+ * path applies, and only fields the save path validates are read (see {@link ValueListFields}), so
+ * the scan reports what a save would refuse.
  */
 import { EntityFieldValueListType, type DatabaseProviderBase, type EntityFieldInfo, type EntityInfo, type UserInfo } from '@memberjunction/core';
 import type { MJEntityFieldEntity } from '@memberjunction/core-entities';
@@ -73,7 +74,12 @@ interface CheckColumnRow {
 
 const columnKey = (schema: string, table: string, column: string): string => `${schema}.${table}.${column}`.toLowerCase();
 
-/** The `List` fields the scan reads: real columns of entities that have a base table. */
+/**
+ * The `List` fields the scan reads: columns of entities that have a base table, that the save path
+ * validates. `EntityField.Validate()` skips a field that is read-only (`AllowUpdateAPI` off, the
+ * primary key, a special date field), virtual, or auto-increment (`SkipValidation`), so a value
+ * outside the list there never fails a save and is not reported.
+ */
 export function ValueListFields(entities: readonly EntityInfo[], entityNames?: readonly string[]): Array<{ Entity: EntityInfo; Field: EntityFieldInfo }> {
     const wanted = entityNames?.length ? new Set(entityNames.map((n) => n.trim().toLowerCase())) : null;
     const fields: Array<{ Entity: EntityInfo; Field: EntityFieldInfo }> = [];
@@ -81,11 +87,19 @@ export function ValueListFields(entities: readonly EntityInfo[], entityNames?: r
         if (wanted && !wanted.has(entity.Name.toLowerCase())) continue;
         if (!entity.BaseTable || !entity.SchemaName) continue;
         for (const field of entity.Fields) {
-            if (field.ValueListTypeEnum !== EntityFieldValueListType.List || field.IsVirtual) continue;
+            if (field.ValueListTypeEnum !== EntityFieldValueListType.List) continue;
+            if (field.ReadOnly || field.SkipValidation) continue;
             fields.push({ Entity: entity, Field: field });
         }
     }
     return fields;
+}
+
+/** The names in `entityNames` that match no entity (case-insensitive), as given. */
+export function UnknownEntityNames(entities: readonly EntityInfo[], entityNames?: readonly string[]): string[] {
+    if (!entityNames?.length) return [];
+    const known = new Set(entities.map((e) => e.Name.toLowerCase()));
+    return entityNames.filter((n) => !known.has(n.trim().toLowerCase()));
 }
 
 /** One `SELECT <col>, COUNT(*) … GROUP BY <col>` over the field's base table, in the provider's dialect. */
@@ -102,6 +116,11 @@ export function DistinctValuesSQL(provider: ValueListScanProvider, entity: Entit
  * The columns that carry a CHECK constraint, read from INFORMATION_SCHEMA (the same views on SQL
  * Server and PostgreSQL). Null when the catalog cannot be read, so the report says "unknown"
  * rather than "no".
+ *
+ * An empty result is also treated as unreadable. PostgreSQL's `constraint_column_usage` lists only
+ * tables the connected role owns, so a role with only `SELECT` gets no rows rather than an error,
+ * and every MJ database has CHECK constraints on its own core tables, so "none at all" means the
+ * catalog was not visible.
  */
 export async function CheckConstrainedColumns(provider: ValueListScanProvider, user?: UserInfo): Promise<Set<string> | null> {
     const q = (name: string): string => provider.QuoteIdentifier(name);
@@ -112,6 +131,7 @@ export async function CheckConstrainedColumns(provider: ValueListScanProvider, u
         `ON cc.CONSTRAINT_SCHEMA = ccu.CONSTRAINT_SCHEMA AND cc.CONSTRAINT_NAME = ccu.CONSTRAINT_NAME`;
     try {
         const rows = await provider.ExecuteSQL<CheckColumnRow>(sql, undefined, { description: 'Value-list scan: CHECK-constrained columns', ignoreLogging: true }, user);
+        if (rows.length === 0) return null;
         return new Set(rows.map((r) => columnKey(r.SchemaName, r.TableName, r.ColumnName)));
     } catch {
         return null;
@@ -201,7 +221,8 @@ export function ParseFixTargets(values: readonly string[]): ValueListFixTarget[]
  *
  * A field whose column carries a CHECK constraint is skipped: CodeGen sets such a field back to
  * `List` on its next run, and the database refuses the values anyway, so the change would not
- * last. Fix the data or the constraint instead.
+ * last. Fix the data or the constraint instead. When the CHECK constraints could not be read
+ * (`checkColumns` is null), nothing is changed, since that guard cannot be applied.
  */
 export async function ApplyValueListFixes(
     provider: ValueListFixProvider,
@@ -222,7 +243,15 @@ export async function ApplyValueListFixes(
             results.push({ ...target, Fixed: false, Message: `ValueListType is already ${field.ValueListType}` });
             continue;
         }
-        if (checkColumns?.has(columnKey(entity.SchemaName, entity.BaseTable, field.Name))) {
+        if (checkColumns === null) {
+            results.push({
+                ...target,
+                Fixed: false,
+                Message: 'the CHECK constraints could not be read (does this login own the tables?), so whether CodeGen would set the field back to List is unknown',
+            });
+            continue;
+        }
+        if (checkColumns.has(columnKey(entity.SchemaName, entity.BaseTable, field.Name))) {
             results.push({
                 ...target,
                 Fixed: false,
