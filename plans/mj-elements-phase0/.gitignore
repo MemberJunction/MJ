@@ -1,0 +1,6 @@
+# Built element bundles are copied here by sync-bundles.mjs and never committed.
+bundles/
+# measure.mjs output (regenerate with `node measure.mjs`; the numbers that matter are copied into FINDINGS.md).
+sizes.json
+reports/
+serve.log
