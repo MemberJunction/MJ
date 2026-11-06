@@ -14,9 +14,9 @@ import { JIT_REPORTER_ARG, JIT_REPORTER_MOUNT, WriteJitReporter } from './JitRep
 import { StripPatchInfo } from './LockfileStrip';
 
 const execFileAsync = promisify(execFile);
-/** Runs one trusted command on the host. Injected so tests see the calls; the default is execFile. */
-export type HostRunner = (file: string, args: string[], cwd: string) => Promise<void>;
-const DEFAULT_HOST_RUNNER: HostRunner = async (file, args, cwd) => { await execFileAsync(file, args, { cwd, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, CI: '1' } }); };
+/** Runs one trusted command on the host and returns its stdout. Injected so tests see the calls; the default is execFile. */
+export type HostRunner = (file: string, args: string[], cwd: string) => Promise<string>;
+const DEFAULT_HOST_RUNNER: HostRunner = async (file, args, cwd) => (await execFileAsync(file, args, { cwd, maxBuffer: 64 * 1024 * 1024, env: { ...process.env, CI: '1' } })).stdout;
 /** `StoreDir` is the pnpm store for one run only: the sandbox install writes patched files into it, so no other run may use it. */
 export interface TargetOptions { Repo: GitRepo; Sandbox: Sandbox; Settings: Settings; WorkRoot: string; PackageMap: PackageMap; StoreDir: string; HostRunner?: HostRunner; }
 /** A revision could not be prepared (host fetch or sandbox install). The PR is an infrastructure failure, not a test result. */
@@ -56,16 +56,33 @@ export class VitestCatchTarget extends BaseCatchTarget {
         return prepared;
     }
 
-    /** `pnpm fetch` on the host, in a folder that holds only the revision's lockfile with the patch information removed. */
+    /**
+     * `pnpm fetch` on the host, in a folder that holds only host-written files: the revision's lockfile with the
+     * patch information removed and a `package.json` whose `packageManager` pins the image's pnpm. pnpm switches
+     * itself to that version, so the store it writes has the layout the image reads. The version is checked first.
+     */
     private async hostFetch(revision: RevisionRef, worktree: string): Promise<void> {
         const fetchDir = join(this.o.WorkRoot, `${revision.Kind.toLowerCase()}-fetch`);
+        const pinned = this.o.Settings.Sandbox.PnpmVersion;
+        const host = this.o.HostRunner ?? DEFAULT_HOST_RUNNER;
         try {
             rmSync(fetchDir, { recursive: true, force: true }); mkdirSync(fetchDir, { recursive: true }); mkdirSync(this.o.StoreDir, { recursive: true });
             writeFileSync(join(fetchDir, 'pnpm-lock.yaml'), StripPatchInfo(readFileSync(join(worktree, 'pnpm-lock.yaml'), 'utf8')));
-            await (this.o.HostRunner ?? DEFAULT_HOST_RUNNER)('pnpm', ['fetch', '--store-dir', this.o.StoreDir], fetchDir);
+            writeFileSync(join(fetchDir, 'package.json'), JSON.stringify({ name: 'jit-fetch', private: true, packageManager: `pnpm@${pinned}` }));
         } catch (e) {
-            throw new InfrastructureError(`host pnpm fetch failed on ${revision.Kind}: ${(e as Error).message.slice(-4000)}`);
+            throw new InfrastructureError(`could not write the fetch folder for ${revision.Kind}: ${(e as Error).message}`);
         }
+        await this.checkHostPnpm(host, fetchDir, pinned);
+        try { await host('pnpm', ['fetch', '--store-dir', this.o.StoreDir], fetchDir); }
+        catch (e) { throw new InfrastructureError(`host pnpm fetch failed on ${revision.Kind}: ${(e as Error).message.slice(-4000)}`); }
+    }
+
+    /** Throws when the pnpm that runs in the fetch folder is not the pinned version. */
+    private async checkHostPnpm(host: HostRunner, fetchDir: string, pinned: string): Promise<void> {
+        let actual: string;
+        try { actual = (await host('pnpm', ['--version'], fetchDir)).trim(); }
+        catch (e) { throw new InfrastructureError(`host pnpm --version failed: ${(e as Error).message.slice(-4000)}`); }
+        if (actual !== pinned) throw new InfrastructureError(`host pnpm is ${actual} in the fetch folder, but the sandbox image uses ${pinned}`);
     }
 
     /** `turbo run build --filter=<pkg>...` for the packages under test, inside the sandbox with the local cache only. */

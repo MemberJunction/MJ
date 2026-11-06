@@ -22,7 +22,8 @@ export const SettingsSchema = z.object({
         Nightly: z.object({ MinMedian: z.enum(['High', 'Medium', 'Low']), MediumWithBoosts: z.array(z.string()) }),
     }),
     Prices: z.record(z.string(), z.object({ Input: z.number(), Output: z.number(), CachedInput: z.number() })),
-    Sandbox: z.object({ Image: z.string(), MemoryGB: z.number().positive(), Cpus: z.number().positive(), PidsLimit: z.number().int().positive() }),
+    /** `PnpmVersion` is the pnpm the image installs; the host fetch runs the same version so the store layout matches. */
+    Sandbox: z.object({ Image: z.string(), MemoryGB: z.number().positive(), Cpus: z.number().positive(), PidsLimit: z.number().int().positive(), PnpmVersion: z.string().regex(/^\d+\.\d+\.\d+$/) }),
     RiskPaths: z.array(z.string()),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
@@ -41,7 +42,7 @@ export const DEFAULT_SETTINGS: Settings = {
         'claude-opus-5-5': { Input: 4, Output: 20, CachedInput: 0.2 }, 'claude-sonnet-5-5': { Input: 2, Output: 10, CachedInput: 0.2 },
         'claude-haiku-5-5': { Input: 0.1, Output: 0.5, CachedInput: 0.1 }, 'gemini-4-argon': { Input: 2, Output: 10, CachedInput: 0.1 },
     },
-    Sandbox: { Image: 'jit-sandbox:local', MemoryGB: 6, Cpus: 3, PidsLimit: 1024 },
+    Sandbox: { Image: 'jit-sandbox:local', MemoryGB: 6, Cpus: 3, PidsLimit: 1024, PnpmVersion: '10.33.0' },
     RiskPaths: [
         'packages/MJCore/src/generic/securityInfo.ts', 'packages/MJCore/src/generic/fieldSecuritySQLGate.ts', 'packages/GenericDatabaseProvider/', 'packages/MJServer/',
         'packages/SQLServerDataProvider/', 'packages/PostgreSQLDataProvider/', 'packages/GraphQLDataProvider/', 'packages/RedisProvider/', 'packages/CodeGenLib/', 'packages/OpenApp/',

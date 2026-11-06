@@ -69,7 +69,7 @@ describe('VitestCatchTarget.Run', () => {
 
 describe('VitestCatchTarget.Prepare', () => {
   const LOCK = 'lockfileVersion: 9.0\n\npatchedDependencies:\n  type-graphql@2.0.0-beta.3:\n    hash: abc123\n    path: patches/type-graphql@2.0.0-beta.3.patch\n\nimporters:\n  .:\n    dependencies:\n      type-graphql:\n        version: 2.0.0-beta.3(patch_hash=abc123)(graphql@16.12.0)\n';
-  function prepWorld(hostRunner: (f: string, a: string[], cwd: string) => Promise<void>) {
+  function prepWorld(hostRunner: (f: string, a: string[], cwd: string) => Promise<string>) {
     const { target, calls } = fakeTarget(() => ({ Stdout: '', ExitCode: 0 }));
     const work = mkdtempSync(join(tmpdir(), 'jit-prep-'));
     (target as never as { o: object }).o = { ...(target as never as { o: object }).o, WorkRoot: work, StoreDir: join(work, 'store'), HostRunner: hostRunner,
@@ -78,18 +78,28 @@ describe('VitestCatchTarget.Prepare', () => {
   }
   it('runs pnpm on the host only as `fetch`, in a folder holding just a lockfile copy without patch information, then installs offline in the sandbox with the worktree and the run store mounted rw', async () => {
     const host: { File: string; Args: string[]; Cwd: string; Files: string[]; Lock: string }[] = [];
-    const { target, calls, work } = prepWorld(async (File, Args, Cwd) => { host.push({ File, Args, Cwd, Files: readdirSync(Cwd), Lock: readFileSync(join(Cwd, 'pnpm-lock.yaml'), 'utf8') }); });
+    const { target, calls, work } = prepWorld(async (File, Args, Cwd) => { host.push({ File, Args, Cwd, Files: readdirSync(Cwd).sort(), Lock: readFileSync(join(Cwd, 'pnpm-lock.yaml'), 'utf8') }); return Args[0] === '--version' ? '10.33.0\n' : ''; });
     await target.Prepare({ Kind: 'Head', SHA: 'h' });
-    expect(host).toHaveLength(1); expect(host[0].File).toBe('pnpm'); expect(host[0].Args).toEqual(['fetch', '--store-dir', join(work, 'store')]);
-    expect(host[0].Cwd).not.toBe(join(work, 'head')); expect(host[0].Files).toEqual(['pnpm-lock.yaml']);
+    expect(host.map((h) => [h.File, ...h.Args])).toEqual([['pnpm', '--version'], ['pnpm', 'fetch', '--store-dir', join(work, 'store')]]);
+    expect(host[1].Cwd).not.toBe(join(work, 'head')); expect(host[1].Cwd).toBe(host[0].Cwd); expect(host[1].Files).toEqual(['package.json', 'pnpm-lock.yaml']);
+    expect(JSON.parse(readFileSync(join(host[1].Cwd, 'package.json'), 'utf8'))).toEqual({ name: 'jit-fetch', private: true, packageManager: 'pnpm@10.33.0' });
+    host.splice(0, 1);
     expect(host[0].Lock).not.toContain('patchedDependencies'); expect(host[0].Lock).not.toContain('patch_hash'); expect(host[0].Lock).toContain('version: 2.0.0-beta.3(graphql@16.12.0)');
     const install = calls[0]; expect(install.Command.join(' ')).toContain('pnpm install --offline --frozen-lockfile --ignore-scripts');
     expect(install.Mounts.find((m) => m.Container === '/work')?.Mode).toBe('rw'); expect(install.Mounts.find((m) => m.Container === '/pnpm-store')).toEqual({ Host: join(work, 'store'), Container: '/pnpm-store', Mode: 'rw' });
   });
   it('turns a failed host fetch into an InfrastructureError and never starts the sandbox', async () => {
-    const { target, calls } = prepWorld(async () => { throw new Error('ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED'); });
+    const { target, calls } = prepWorld(async (_f, a) => { if (a[0] === '--version') return '10.33.0'; throw new Error('ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED'); });
     await expect(target.Prepare({ Kind: 'Head', SHA: 'h' })).rejects.toBeInstanceOf(InfrastructureError);
     expect(calls).toHaveLength(0);
+  });
+  it('refuses to fetch when the host pnpm in the fetch folder is not the pinned version the image uses', async () => {
+    const host: string[][] = [];
+    const { target, calls } = prepWorld(async (_f, a) => { host.push(a); return '11.24.0\n'; });
+    const err = await target.Prepare({ Kind: 'Head', SHA: 'h' }).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(InfrastructureError);
+    expect((err as Error).message).toContain('11.24.0'); expect((err as Error).message).toContain('10.33.0');
+    expect(host).toEqual([['--version']]); expect(calls).toHaveLength(0);
   });
 });
 
