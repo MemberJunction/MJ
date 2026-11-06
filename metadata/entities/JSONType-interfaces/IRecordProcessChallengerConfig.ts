@@ -22,9 +22,6 @@ export interface IRecordProcessChallengerConfig {
     /** The MJ: AI Prompts record the challenger runs, for WorkType 'Infer'. */
     ChallengerPromptID?: string;
 
-    /** Endpoint-specific options passed through to the challenger's scoring call. */
-    ChallengerEndpointConfig?: Record<string, string | number | boolean>;
-
     /** Time budget for one challenger score, in milliseconds. A score that takes longer is recorded as timed out. */
     MaxLatencyMs: number;
 }
