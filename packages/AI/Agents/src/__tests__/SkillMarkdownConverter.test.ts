@@ -182,6 +182,18 @@ Second line.
             expect(result).toContain('name: "Skill: With Colon"');
         });
 
+        it('round-trips quotes and backslashes in quoted scalars', () => {
+            const name = 'Path: C:\\temp\\ "x"';
+            const result = SkillMarkdownConverter.Parse(SkillMarkdownConverter.Serialize({ name, instructions: 'Body.' }));
+            expect(result.frontmatter.name).toBe(name);
+        });
+
+        it('round-trips a value that starts and ends with a quote', () => {
+            const name = '"Quoted"';
+            const result = SkillMarkdownConverter.Parse(SkillMarkdownConverter.Serialize({ name, instructions: 'Body.' }));
+            expect(result.frontmatter.name).toBe(name);
+        });
+
         it('round-trips through Parse after Serialize', () => {
             const original = {
                 name: 'Round Trip Skill',

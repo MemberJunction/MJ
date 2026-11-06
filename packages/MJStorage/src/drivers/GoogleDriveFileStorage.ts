@@ -454,8 +454,8 @@ export class GoogleDriveFileStorage extends FileStorageBase {
       const part = pathParts[i];
       const isLastPart = i === pathParts.length - 1;
 
-      // Escape single quotes in the part name for Google Drive query syntax
-      const escapedPart = part.replace(/'/g, "\\'");
+      // Escape the part name for Google Drive query syntax
+      const escapedPart = this._escapeQuery(part);
 
       // Query for the item
       const query = isLastPart
@@ -1675,7 +1675,8 @@ export class GoogleDriveFileStorage extends FileStorageBase {
    * @private
    */
   private _escapeQuery(query: string): string {
-    return query.replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+    // Backslashes first, so the backslash added before each quote is not escaped again
+    return query.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   }
 
   /**
