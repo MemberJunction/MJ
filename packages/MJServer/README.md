@@ -625,7 +625,7 @@ The server includes resolvers for the following domains:
 | `UserViewResolver` | User view management |
 | `UserResolver` | User profile operations |
 | `UserFavoriteResolver` | Favorite record management |
-| `MergeRecordsResolver` | Record merge operations |
+| `MergeRecordsResolver` | `MergeRecords` mutation (requires `AllowRecordMerge` on the entity; API keys need the `entity:merge` scope), plus `GetEntityDependencies` / `GetRecordDependencies` queries. See the [Duplicate Management Guide](../../guides/DUPLICATE_MANAGEMENT_GUIDE.md). |
 | `SyncDataResolver` / `SyncRolesUsersResolver` | Data synchronization |
 | `FileResolver` / `FileCategoryResolver` | File and category management |
 | `EntityCommunicationsResolver` | Entity-level communications |
@@ -638,7 +638,8 @@ The server includes resolvers for the following domains:
 | `TelemetryResolver` | Server telemetry queries |
 | `ColorResolver` | Color palette operations |
 | `InfoResolver` | Server info queries |
-| `PotentialDuplicateRecordResolver` | Duplicate detection |
+| `PotentialDuplicateRecordResolver` | `GetRecordDuplicates` query: starts a list-based duplicate detection run (asynchronous; returns `Inprogress`) |
+| `DuplicateEntryCheckResolver` | `CheckDuplicateEntry` mutation: the entry-time duplicate check for a new record's values (API keys need `view:run` and `prompt:execute`) |
 | `RunTestResolver` | Test execution |
 | `RunTemplateResolver` | Template execution |
 | `TaskResolver` | Task orchestration |

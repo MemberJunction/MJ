@@ -11,6 +11,10 @@
       "AllowCaching": false,
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:43.021Z",
+      "checksum": "f357ce7a30be1bc718196bb891e47ffdaeffc60cc8e38b17785833ff8d1bf63c"
     }
   },
   {
@@ -37,9 +41,17 @@
           },
           "fields": {
             "ExtendedType": null
+          },
+          "sync": {
+            "lastModified": "2026-11-03T23:45:43.092Z",
+            "checksum": "090b66956d216c3ddff048db1461ce4b3d3ed3a47d598f3d55408fe7f5fb0fbf"
           }
         }
       ]
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:43.033Z",
+      "checksum": "755949973dfb3771c28328a02a54e14534881ddd5d925891a988e2806e15498f"
     }
   },
   {
@@ -56,6 +68,10 @@
       "AllowUserSearchAPI": false,
       "AutoUpdateAllowUserSearchAPI": false,
       "Icon": "fa fa-box-open"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:43.045Z",
+      "checksum": "06e51724ecc16575669368754e62e1b4dc0adeb798078cfa53bac8ef606d005e"
     }
   }
 ]
