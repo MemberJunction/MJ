@@ -34,7 +34,7 @@ Predictive Studio decides what a training run ships with a three-outcome gate (t
 signal), stores that decision with its reason on the run, and renders the trust verdict from it.
 
 The seeded-random holdout carves by the unit row's group key, so every row of one group lands on the same side of the
-holdout.
+holdout. A stored seeded-random holdout on a unit whose row id is not its lower-cased group key re-carves when retrained.
 
 - `@memberjunction/predictive-studio-core`: `GateRules` (the gate decision table, proven equal to the reference
   pipeline's and to the sidecar's on seeded cases, plus two guards: a holdout minority class below

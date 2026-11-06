@@ -129,11 +129,11 @@ const SEED_42_HOLDOUT = 997;
 const SEED_7_EIGHT_ROWS: readonly string[] = ['r3', 'r5', 'r6', 'r7'];
 
 describe('HoldoutCarve.SeededRandomCarve', () => {
-  const ids = Array.from({ length: 4000 }, (_, i) => ({ RowID: `r${i}`, GroupKey: `r${i}` }));
+  const rows = Array.from({ length: 4000 }, (_, i) => ({ RowID: `r${i}`, GroupKey: `r${i}` }));
   const keyed = (list: readonly string[]) => list.map((id) => ({ RowID: id, GroupKey: id }));
   it('assigns the same rows whatever the read order, at about the declared fraction', () => {
-    const a = HoldoutCarve.SeededRandomCarve(ids, 0.25, 42);
-    const b = HoldoutCarve.SeededRandomCarve([...ids].reverse(), 0.25, 42);
+    const a = HoldoutCarve.SeededRandomCarve(rows, 0.25, 42);
+    const b = HoldoutCarve.SeededRandomCarve([...rows].reverse(), 0.25, 42);
     expect([...a.HoldoutRowIDs].sort()).toEqual([...b.HoldoutRowIDs].sort());
     expect(a.HoldoutRowIDs.length).toBeGreaterThan(900);
     expect(a.HoldoutRowIDs.length).toBeLessThan(1100);
@@ -141,18 +141,18 @@ describe('HoldoutCarve.SeededRandomCarve', () => {
   });
   it('stays near the declared fraction on short sequential ids for every seed', () => {
     for (const seed of [0, 1, 7, 42, 123]) {
-      const n = HoldoutCarve.SeededRandomCarve(ids, 0.25, seed).HoldoutRowIDs.length;
+      const n = HoldoutCarve.SeededRandomCarve(rows, 0.25, seed).HoldoutRowIDs.length;
       expect(n, `seed ${seed}`).toBeGreaterThan(900);
       expect(n, `seed ${seed}`).toBeLessThan(1100);
     }
   });
   it('keeps the assignment of a seed fixed across releases (a stored holdout is never silently re-carved)', () => {
-    expect(HoldoutCarve.SeededRandomCarve(ids, 0.25, 42).HoldoutRowIDs.length).toBe(SEED_42_HOLDOUT);
+    expect(HoldoutCarve.SeededRandomCarve(rows, 0.25, 42).HoldoutRowIDs.length).toBe(SEED_42_HOLDOUT);
     expect(HoldoutCarve.SeededRandomCarve(keyed(['r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7']), 0.5, 7).HoldoutRowIDs).toEqual(SEED_7_EIGHT_ROWS);
   });
   it('draws a different holdout under a different seed', () => {
-    const a = new Set(HoldoutCarve.SeededRandomCarve(ids, 0.25, 1).HoldoutRowIDs);
-    const b = HoldoutCarve.SeededRandomCarve(ids, 0.25, 2).HoldoutRowIDs;
+    const a = new Set(HoldoutCarve.SeededRandomCarve(rows, 0.25, 1).HoldoutRowIDs);
+    const b = HoldoutCarve.SeededRandomCarve(rows, 0.25, 2).HoldoutRowIDs;
     expect(b.filter((id) => a.has(id)).length).toBeLessThan(b.length / 2);
   });
   it('keeps every row of a group on one side (300 groups of 6 rows, none straddle)', () => {

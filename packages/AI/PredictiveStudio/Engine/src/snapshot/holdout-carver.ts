@@ -111,7 +111,8 @@ export class DateCarvedCarver implements IHoldoutCarver {
 
 /**
  * The seeded group-hash carve for units whose rows share one fixed decision date (no date to carve on): a row is held
- * out when the protocol seed's hash of its group key (the entity key when the unit declares no group field) falls below the fraction, so a group is never split across the holdout, whatever the order the rows were read in.
+ * out when the protocol seed's hash of its group key (the entity key when the unit declares no group field) falls
+ * below the fraction, so a group is never split across the holdout, whatever the order the rows were read in.
  * A carve that leaves either side empty is refused.
  */
 export class SeededRandomCarver implements IHoldoutCarver {
