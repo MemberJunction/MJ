@@ -1,19 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AgentFeedbackCoordinator } from '../AgentFeedbackCoordinator';
-import { BaseAgent } from '../base-agent';
 import {
     ParseAssignmentStrategy,
+    type AgentRequestAssignmentStrategy,
+    type AgentResponseForm,
     type BaseAgentNextStep,
     type ExecuteAgentParams,
     type MJAIAgentEntityExtended,
     type MJAIAgentRunEntityExtended,
     type MJAIAgentRunStepEntityExtended,
-    type MJAIAgentTypeEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import type {
     MJAIAgentCategoryEntity,
     MJAIAgentRequestEntity,
     MJAIAgentRequestTypeEntity,
+    MJAIAgentTypeEntity,
 } from '@memberjunction/core-entities';
 import {
     LogError,
@@ -24,28 +25,11 @@ import {
     type UserInfo,
 } from '@memberjunction/core';
 
-/** BaseAgent's private feedback-request members, reached the way the other BaseAgent suites reach private members. */
-interface FeedbackRequestInternals {
-    createFeedbackRequest(params: ExecuteAgentParams, step: MJAIAgentRunStepEntityExtended, decision: BaseAgentNextStep): Promise<void>;
-    _feedbackRequestId: string | null;
-}
-
-class TestFeedbackBaseAgent extends BaseAgent {
-    public async InvokeCreateFeedbackRequest(
-        params: ExecuteAgentParams,
-        stepEntity: MJAIAgentRunStepEntityExtended,
-        decision: BaseAgentNextStep,
-        agentRun?: MJAIAgentRunEntityExtended
-    ): Promise<string | null> {
-        this._agentRun = agentRun;
-        const internals = this as unknown as FeedbackRequestInternals;
-        await internals.createFeedbackRequest(params, stepEntity, decision);
-        return internals._feedbackRequestId;
-    }
-}
-
 const mockRunViews = vi.fn<(views: RunViewParams[], contextUser?: UserInfo) => Promise<RunViewResult[]>>();
 const mockGetEntityObject = vi.fn<(entityName: string, contextUser?: UserInfo) => Promise<MJAIAgentRequestEntity>>();
+/** The provider's entity factory, routed to {@link mockGetEntityObject} with the user it was called with. */
+const providerGetEntityObject = ((entityName: string, contextUser?: UserInfo) =>
+    mockGetEntityObject(entityName, contextUser)) as IMetadataProvider['GetEntityObject'];
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<Record<string, Object>>();
@@ -67,7 +51,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     };
 });
 
-const mockAgentTypes: MJAIAgentTypeEntityExtended[] = [];
+const mockAgentTypes: MJAIAgentTypeEntity[] = [];
 const mockAgentCategories: MJAIAgentCategoryEntity[] = [];
 const mockAgentRequestTypes: MJAIAgentRequestTypeEntity[] = [];
 const mockResolveAgentRequestTypeID = vi.fn<(name: 'Approval' | 'Information', contextUser?: UserInfo) => Promise<string | null>>();
@@ -76,7 +60,7 @@ vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
         get Instance() {
             return {
-                get AgentTypes(): MJAIAgentTypeEntityExtended[] {
+                get AgentTypes(): MJAIAgentTypeEntity[] {
                     return mockAgentTypes;
                 },
                 get AgentCategories(): MJAIAgentCategoryEntity[] {
@@ -232,11 +216,11 @@ describe('AgentFeedbackCoordinator', () => {
             expect(fromCategory).toEqual({ type: 'AgentOwner', priority: 60 });
 
             // 2. AgentType takes precedence over Category
-            const agentTypeStub: Partial<MJAIAgentTypeEntityExtended> = {
+            const agentTypeStub: Partial<MJAIAgentTypeEntity> = {
                 ID: AGENT_TYPE_ID,
                 AssignmentStrategy: JSON.stringify({ type: 'RunUser' }),
             };
-            mockAgentTypes.push(agentTypeStub as MJAIAgentTypeEntityExtended);
+            mockAgentTypes.push(agentTypeStub as MJAIAgentTypeEntity);
             const fromAgentType = await coordinator.ResolveAssignmentStrategy(
                 catParams,
                 'dddddddd-dddd-4ddd-8ddd-000000000001'
@@ -726,8 +710,7 @@ describe('AgentFeedbackCoordinator', () => {
                 responseForm: coordinator.BuildPlanApprovalForm('Step 1: Execute'),
             };
             const providerStub: Partial<IMetadataProvider> = {
-                GetEntityObject: async <T>(entityName: string, contextUser?: UserInfo): Promise<T> =>
-                    (await mockGetEntityObject(entityName, contextUser)) as T,
+                GetEntityObject: providerGetEntityObject,
             };
 
             const requestId = await coordinator.CreateFeedbackRequest({
@@ -748,82 +731,433 @@ describe('AgentFeedbackCoordinator', () => {
             expect(savedRecord.Status).toBe('Requested');
             expect(savedRecord.Save).toHaveBeenCalledOnce();
         });
+    });
 
-        it('should drive BaseAgent.createFeedbackRequest end to end with a List (RoundRobin) strategy through the real BaseAgent wrapper', async () => {
-            mockRunViews
-                .mockResolvedValueOnce([
-                    makeViewResult([{ ID: LIST_ID, EntityID: 'e-users', Entity: 'MJ: Users' }]),
-                    makeViewResult([
-                        { ID: 'ld-1', RecordID: USER_1, Sequence: 1, Status: 'Pending' },
-                        { ID: 'ld-2', RecordID: USER_2, Sequence: 2, Status: 'Pending' },
-                    ]),
-                ])
-                .mockResolvedValueOnce([
-                    makeViewResult([
-                        { ID: USER_1, IsActive: true },
-                        { ID: USER_2, IsActive: true },
-                    ]),
-                    makeViewResult([
-                        {
-                            ID: 'req-prev',
-                            AgentID: AGENT_ID,
-                            RequestForUserID: USER_1,
-                            RequestedAt: '2026-11-05T10:00:00Z',
-                        },
-                    ]),
-                ]);
+    describe('ResolveRequestTypeID', () => {
+        // The lookup must go through the AI engine (AIEngineBase caches the table during Config and exposes
+        // ResolveAgentRequestTypeID), not a private per-run RunView, so the actions, the Chief of Staff app and the
+        // agent runner all resolve a type through one source.
+        const tester: Partial<UserInfo> = { ID: 'u1', Name: 'Tester' };
+        const ctx = tester as UserInfo;
 
-            const savedRecord: Partial<MJAIAgentRequestEntity> & {
-                Save: () => Promise<boolean>;
-                NewRecord: () => boolean;
-            } = {
-                ID: 'eeeeeeee-eeee-4eee-8eee-000000000002',
-                NewRecord: () => true,
-                Save: vi.fn(async () => true),
-            };
-            mockGetEntityObject.mockResolvedValueOnce(savedRecord as MJAIAgentRequestEntity);
-            mockResolveAgentRequestTypeID.mockResolvedValueOnce('dddddddd-dddd-4ddd-8ddd-000000000001');
-
-            const providerStub: Partial<IMetadataProvider> = {
-                GetEntityObject: async <T>(entityName: string, contextUser?: UserInfo): Promise<T> =>
-                    (await mockGetEntityObject(entityName, contextUser)) as T,
-            };
-
-            const params = createParamsStub({
-                provider: providerStub as IMetadataProvider,
-                assignmentStrategy: {
-                    type: 'List',
-                    listID: LIST_ID,
-                    listStrategy: 'RoundRobin',
-                    priority: 75,
-                },
-            });
-            const agentRun: Partial<MJAIAgentRunEntityExtended> = {
-                ID: 'ffffffff-ffff-4fff-8fff-000000000002',
-            };
-            const step: Partial<MJAIAgentRunStepEntityExtended> = {
-                ID: '99999999-9999-4999-8999-000000000002',
-            };
-            const decision: BaseAgentNextStep = {
-                step: 'Chat',
-                terminate: true,
-                message: 'Please review the findings.',
-            };
-
-            const agent = new TestFeedbackBaseAgent();
-            const feedbackRequestId = await agent.InvokeCreateFeedbackRequest(
-                params,
-                step as MJAIAgentRunStepEntityExtended,
-                decision,
-                agentRun as MJAIAgentRunEntityExtended
+        function engineKnows(types: Array<{ ID: string; Name: string }>): void {
+            mockResolveAgentRequestTypeID.mockImplementation(async (name: string) =>
+                types.find((t) => t.Name.toLowerCase() === name.trim().toLowerCase())?.ID ?? null
             );
+        }
 
-            expect(feedbackRequestId).toBe('eeeeeeee-eeee-4eee-8eee-000000000002');
-            expect(savedRecord.RequestForUserID).toBe(USER_2);
-            expect(savedRecord.Priority).toBe(75);
-            expect(savedRecord.OriginatingAgentRunID).toBe('ffffffff-ffff-4fff-8fff-000000000002');
-            expect(savedRecord.OriginatingAgentRunStepID).toBe('99999999-9999-4999-8999-000000000002');
-            expect(savedRecord.Save).toHaveBeenCalledOnce();
+        const approvalForm: AgentResponseForm = {
+            questions: [
+                {
+                    id: 'q1',
+                    label: 'Approve this?',
+                    type: {
+                        type: 'buttongroup',
+                        options: [
+                            { label: 'Approve', value: 'approve' },
+                            { label: 'Reject', value: 'reject' },
+                        ],
+                    },
+                },
+            ],
+        };
+
+        it('resolves "Information" through the engine cache when there is no response form', async () => {
+            engineKnows([{ ID: 'RT-INFO', Name: 'Information' }, { ID: 'RT-APPR', Name: 'Approval' }]);
+
+            const id = await coordinator.ResolveRequestTypeID({ step: 'Chat', terminate: false }, ctx);
+
+            expect(id).toBe('RT-INFO');
+            expect(mockResolveAgentRequestTypeID).toHaveBeenCalledWith('Information', ctx);
+        });
+
+        it('resolves "Approval" for a two-button approve/reject form', async () => {
+            engineKnows([{ ID: 'RT-INFO', Name: 'Information' }, { ID: 'RT-APPR', Name: 'Approval' }]);
+
+            const id = await coordinator.ResolveRequestTypeID({ step: 'Chat', terminate: false, responseForm: approvalForm }, ctx);
+
+            expect(id).toBe('RT-APPR');
+            expect(mockResolveAgentRequestTypeID).toHaveBeenCalledWith('Approval', ctx);
+        });
+
+        it('returns null when the engine has no matching request type', async () => {
+            engineKnows([]);
+
+            const id = await coordinator.ResolveRequestTypeID({ step: 'Chat', terminate: false }, ctx);
+
+            expect(id).toBeNull();
+        });
+
+        it('returns null instead of throwing when the engine cannot be configured', async () => {
+            mockResolveAgentRequestTypeID.mockRejectedValue(new Error('metadata unavailable'));
+
+            const id = await coordinator.ResolveRequestTypeID({ step: 'Chat', terminate: false }, ctx);
+
+            expect(id).toBeNull();
+        });
+    });
+
+    describe('assignment resolution chain', () => {
+        const USER_A = 'AAAA-1111';
+        const USER_B = 'BBBB-2222';
+        const USER_C = 'CCCC-3333';
+
+        const AGENT_TYPE_LOOP: Partial<MJAIAgentTypeEntity> = {
+            ID: 'type-loop',
+            AssignmentStrategy: null,
+        };
+        const AGENT_TYPE_FLOW: Partial<MJAIAgentTypeEntity> = {
+            ID: 'type-flow',
+            AssignmentStrategy: JSON.stringify({ type: 'AgentOwner' }),
+        };
+
+        const CATEGORIES: Array<Partial<MJAIAgentCategoryEntity>> = [
+            { ID: 'cat-root', ParentID: null, AssignmentStrategy: JSON.stringify({ type: 'RunUser', priority: 25 }) },
+            { ID: 'cat-assistant', ParentID: 'cat-root', AssignmentStrategy: null },
+            { ID: 'cat-research', ParentID: 'cat-root', AssignmentStrategy: JSON.stringify({ type: 'SpecificUser', userID: USER_C }) },
+            { ID: 'cat-deep-research', ParentID: 'cat-research', AssignmentStrategy: null },
+        ];
+
+        const RT_APPROVAL: Partial<MJAIAgentRequestTypeEntity> = {
+            ID: 'rt-approval',
+            DefaultAssignmentStrategy: JSON.stringify({ type: 'AgentOwner', priority: 80 }),
+        };
+        const RT_CHAT: Partial<MJAIAgentRequestTypeEntity> = {
+            ID: 'rt-chat',
+            DefaultAssignmentStrategy: null,
+        };
+
+        function makeAgent(overrides: Partial<MJAIAgentEntityExtended> = {}): MJAIAgentEntityExtended {
+            const base: Partial<MJAIAgentEntityExtended> = {
+                ID: 'agent-1',
+                Name: 'TestAgent',
+                OwnerUserID: USER_B,
+                TypeID: 'type-loop',
+                CategoryID: 'cat-assistant',
+                ...overrides,
+            };
+            return base as MJAIAgentEntityExtended;
+        }
+
+        function makeParams(overrides: Partial<ExecuteAgentParams> = {}): ExecuteAgentParams {
+            const caller: Partial<UserInfo> = { ID: USER_A };
+            return {
+                agent: makeAgent(),
+                conversationMessages: [],
+                contextUser: caller as UserInfo,
+                ...overrides,
+            };
+        }
+
+        describe('ResolveAssignmentStrategy', () => {
+            it('should return per-invocation strategy when provided (highest priority)', async () => {
+                mockAgentTypes.push(AGENT_TYPE_LOOP as MJAIAgentTypeEntity);
+                mockAgentCategories.push(...(CATEGORIES as MJAIAgentCategoryEntity[]));
+                mockAgentRequestTypes.push(RT_APPROVAL as MJAIAgentRequestTypeEntity);
+
+                const perInvocation: AgentRequestAssignmentStrategy = { type: 'SpecificUser', userID: USER_C };
+                const result = await coordinator.ResolveAssignmentStrategy(
+                    makeParams({ assignmentStrategy: perInvocation }),
+                    'rt-approval'
+                );
+                expect(result).toEqual(perInvocation);
+            });
+
+            it('should return agent type strategy when no per-invocation strategy', async () => {
+                mockAgentTypes.push(
+                    AGENT_TYPE_LOOP as MJAIAgentTypeEntity,
+                    AGENT_TYPE_FLOW as MJAIAgentTypeEntity
+                );
+                const result = await coordinator.ResolveAssignmentStrategy(
+                    makeParams({ agent: makeAgent({ TypeID: 'type-flow' }) }),
+                    null
+                );
+                expect(result).toEqual({ type: 'AgentOwner' });
+            });
+
+            it('should walk category tree and find strategy on parent', async () => {
+                mockAgentTypes.push(AGENT_TYPE_LOOP as MJAIAgentTypeEntity);
+                mockAgentCategories.push(...(CATEGORIES as MJAIAgentCategoryEntity[]));
+                const result = await coordinator.ResolveAssignmentStrategy(makeParams(), null);
+                expect(result).toEqual({ type: 'RunUser', priority: 25 });
+            });
+
+            it('should find strategy on the direct category (not walk further up)', async () => {
+                mockAgentTypes.push(AGENT_TYPE_LOOP as MJAIAgentTypeEntity);
+                mockAgentCategories.push(...(CATEGORIES as MJAIAgentCategoryEntity[]));
+                const result = await coordinator.ResolveAssignmentStrategy(
+                    makeParams({ agent: makeAgent({ CategoryID: 'cat-research' }) }),
+                    null
+                );
+                expect(result).toEqual({ type: 'SpecificUser', userID: USER_C });
+            });
+
+            it('should walk up from deep-research to research (skip to first strategy)', async () => {
+                mockAgentTypes.push(AGENT_TYPE_LOOP as MJAIAgentTypeEntity);
+                mockAgentCategories.push(...(CATEGORIES as MJAIAgentCategoryEntity[]));
+                const result = await coordinator.ResolveAssignmentStrategy(
+                    makeParams({ agent: makeAgent({ CategoryID: 'cat-deep-research' }) }),
+                    null
+                );
+                expect(result).toEqual({ type: 'SpecificUser', userID: USER_C });
+            });
+
+            it('should fall back to request type strategy when category tree is empty', async () => {
+                mockAgentTypes.push(AGENT_TYPE_LOOP as MJAIAgentTypeEntity);
+                mockAgentRequestTypes.push(RT_APPROVAL as MJAIAgentRequestTypeEntity);
+                const result = await coordinator.ResolveAssignmentStrategy(
+                    makeParams({ agent: makeAgent({ CategoryID: null }) }),
+                    'rt-approval'
+                );
+                expect(result).toEqual({ type: 'AgentOwner', priority: 80 });
+            });
+
+            it('should return null when no strategy is found anywhere', async () => {
+                mockAgentTypes.push(AGENT_TYPE_LOOP as MJAIAgentTypeEntity);
+                mockAgentRequestTypes.push(RT_CHAT as MJAIAgentRequestTypeEntity);
+                const result = await coordinator.ResolveAssignmentStrategy(
+                    makeParams({ agent: makeAgent({ CategoryID: null }) }),
+                    'rt-chat'
+                );
+                expect(result).toBeNull();
+            });
+
+            it('should return null when all lookups miss (no matching type, no category, no RT)', async () => {
+                mockAgentTypes.push(AGENT_TYPE_LOOP as MJAIAgentTypeEntity);
+                mockAgentCategories.push(...(CATEGORIES as MJAIAgentCategoryEntity[]));
+                mockAgentRequestTypes.push(RT_APPROVAL as MJAIAgentRequestTypeEntity);
+                const result = await coordinator.ResolveAssignmentStrategy(
+                    makeParams({ agent: makeAgent({ TypeID: 'nonexistent', CategoryID: 'nonexistent' }) }),
+                    'nonexistent'
+                );
+                expect(result).toBeNull();
+            });
+        });
+
+        describe('ResolveCategoryAssignmentStrategy', () => {
+            beforeEach(() => {
+                mockAgentCategories.push(...(CATEGORIES as MJAIAgentCategoryEntity[]));
+            });
+
+            it('should return null for null categoryId', async () => {
+                expect(
+                    await coordinator.ResolveCategoryAssignmentStrategy(
+                        makeParams({ agent: makeAgent({ CategoryID: null }) })
+                    )
+                ).toBeNull();
+            });
+
+            it('should return null for unknown category', async () => {
+                expect(
+                    await coordinator.ResolveCategoryAssignmentStrategy(
+                        makeParams({ agent: makeAgent({ CategoryID: 'unknown' }) })
+                    )
+                ).toBeNull();
+            });
+
+            it('should return strategy from direct category', async () => {
+                expect(
+                    await coordinator.ResolveCategoryAssignmentStrategy(
+                        makeParams({ agent: makeAgent({ CategoryID: 'cat-root' }) })
+                    )
+                ).toEqual({
+                    type: 'RunUser',
+                    priority: 25,
+                });
+            });
+
+            it('should walk up to parent when direct category has no strategy', async () => {
+                expect(
+                    await coordinator.ResolveCategoryAssignmentStrategy(
+                        makeParams({ agent: makeAgent({ CategoryID: 'cat-assistant' }) })
+                    )
+                ).toEqual({
+                    type: 'RunUser',
+                    priority: 25,
+                });
+            });
+
+            it('should stop at the first non-null strategy in the chain', async () => {
+                expect(
+                    await coordinator.ResolveCategoryAssignmentStrategy(
+                        makeParams({ agent: makeAgent({ CategoryID: 'cat-deep-research' }) })
+                    )
+                ).toEqual({
+                    type: 'SpecificUser',
+                    userID: USER_C,
+                });
+            });
+
+            it('should handle circular ParentID references without infinite loop', async () => {
+                mockAgentCategories.length = 0;
+                mockAgentCategories.push(
+                    { ID: 'a', ParentID: 'b', AssignmentStrategy: null } as MJAIAgentCategoryEntity,
+                    { ID: 'b', ParentID: 'a', AssignmentStrategy: null } as MJAIAgentCategoryEntity
+                );
+                expect(
+                    await coordinator.ResolveCategoryAssignmentStrategy(
+                        makeParams({ agent: makeAgent({ CategoryID: 'a' }) })
+                    )
+                ).toBeNull();
+            });
+
+            it('should handle self-referencing ParentID', async () => {
+                mockAgentCategories.length = 0;
+                mockAgentCategories.push({
+                    ID: 'self',
+                    ParentID: 'self',
+                    AssignmentStrategy: null,
+                } as MJAIAgentCategoryEntity);
+                expect(
+                    await coordinator.ResolveCategoryAssignmentStrategy(
+                        makeParams({ agent: makeAgent({ CategoryID: 'self' }) })
+                    )
+                ).toBeNull();
+            });
+        });
+
+        describe('ResolveAssigneeUserID and ResolveStaticAssigneeUserID', () => {
+            const defaultRun: Partial<MJAIAgentRunEntityExtended> = { UserID: USER_C };
+
+            describe('when strategy is null (fallback)', () => {
+                it('should return contextUser ID', () => {
+                    expect(
+                        coordinator.ResolveStaticAssigneeUserID(
+                            null,
+                            makeParams(),
+                            defaultRun as MJAIAgentRunEntityExtended
+                        )
+                    ).toBe(USER_A);
+                });
+
+                it('should return null if no contextUser', () => {
+                    expect(
+                        coordinator.ResolveStaticAssigneeUserID(
+                            null,
+                            makeParams({ contextUser: undefined }),
+                            null
+                        )
+                    ).toBeNull();
+                });
+            });
+
+            describe('RunUser strategy', () => {
+                const strategy: AgentRequestAssignmentStrategy = { type: 'RunUser' };
+
+                it('should return contextUser ID', () => {
+                    expect(
+                        coordinator.ResolveStaticAssigneeUserID(
+                            strategy,
+                            makeParams(),
+                            defaultRun as MJAIAgentRunEntityExtended
+                        )
+                    ).toBe(USER_A);
+                });
+
+                it('should fall back to agentRun UserID when no contextUser', () => {
+                    expect(
+                        coordinator.ResolveStaticAssigneeUserID(
+                            strategy,
+                            makeParams({ contextUser: undefined }),
+                            defaultRun as MJAIAgentRunEntityExtended
+                        )
+                    ).toBe(USER_C);
+                });
+
+                it('should return null when no contextUser and no agentRun', () => {
+                    expect(
+                        coordinator.ResolveStaticAssigneeUserID(
+                            strategy,
+                            makeParams({ contextUser: undefined }),
+                            null
+                        )
+                    ).toBeNull();
+                });
+            });
+
+            describe('AgentOwner strategy', () => {
+                const strategy: AgentRequestAssignmentStrategy = { type: 'AgentOwner' };
+
+                it('should return agent OwnerUserID', () => {
+                    expect(coordinator.ResolveStaticAssigneeUserID(strategy, makeParams(), null)).toBe(USER_B);
+                });
+
+                it('should return null when agent has no OwnerUserID', () => {
+                    expect(
+                        coordinator.ResolveStaticAssigneeUserID(
+                            strategy,
+                            makeParams({ agent: makeAgent({ OwnerUserID: null }) }),
+                            null
+                        )
+                    ).toBeNull();
+                });
+            });
+
+            describe('SpecificUser strategy', () => {
+                it('should return the specified userID', () => {
+                    const strategy: AgentRequestAssignmentStrategy = {
+                        type: 'SpecificUser',
+                        userID: 'specific-user',
+                    };
+                    expect(coordinator.ResolveStaticAssigneeUserID(strategy, makeParams(), null)).toBe(
+                        'specific-user'
+                    );
+                });
+
+                it('should return null when userID is not set', () => {
+                    const strategy: AgentRequestAssignmentStrategy = { type: 'SpecificUser' };
+                    expect(coordinator.ResolveStaticAssigneeUserID(strategy, makeParams(), null)).toBeNull();
+                });
+            });
+
+            describe('List strategy', () => {
+                it('should resolve active list member via ResolveAssigneeUserID (RoundRobin)', async () => {
+                    mockRunViews
+                        .mockResolvedValueOnce([
+                            makeViewResult([{ ID: 'some-list', EntityID: 'e-users', Entity: 'MJ: Users' }]),
+                            makeViewResult([
+                                { ID: 'ld-1', RecordID: USER_B, Sequence: 1, Status: 'Pending' },
+                                { ID: 'ld-2', RecordID: USER_C, Sequence: 2, Status: 'Pending' },
+                            ]),
+                        ])
+                        .mockResolvedValueOnce([
+                            makeViewResult([
+                                { ID: USER_B, IsActive: true },
+                                { ID: USER_C, IsActive: true },
+                            ]),
+                            makeViewResult([]),
+                        ]);
+
+                    const strategy: AgentRequestAssignmentStrategy = {
+                        type: 'List',
+                        listID: 'some-list',
+                        listStrategy: 'RoundRobin',
+                    };
+                    expect(await coordinator.ResolveAssigneeUserID(strategy, makeParams(), null)).toBe(USER_B);
+                });
+
+                it('should return null when list has no members and no contextUser is available', async () => {
+                    mockRunViews.mockResolvedValueOnce([
+                        makeViewResult([{ ID: 'some-list', EntityID: 'e-users', Entity: 'MJ: Users' }]),
+                        makeViewResult([]),
+                    ]);
+                    const strategy: AgentRequestAssignmentStrategy = { type: 'List', listID: 'some-list' };
+                    expect(
+                        await coordinator.ResolveAssigneeUserID(
+                            strategy,
+                            makeParams({ contextUser: undefined }),
+                            null
+                        )
+                    ).toBeNull();
+                });
+            });
+
+            describe('SharedInbox strategy', () => {
+                it('should always return null (unassigned)', () => {
+                    const strategy: AgentRequestAssignmentStrategy = { type: 'SharedInbox', listID: 'inbox' };
+                    expect(coordinator.ResolveStaticAssigneeUserID(strategy, makeParams(), null)).toBeNull();
+                });
+            });
         });
     });
 });
