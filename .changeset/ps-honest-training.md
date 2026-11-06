@@ -37,7 +37,7 @@ The seeded-random holdout carves by the unit row's group key, so every row of on
 holdout. A stored seeded-random holdout on a unit whose row id is not its lower-cased group key re-carves when retrained.
 
 An incumbent-heuristic baseline is refused for multiclass units (the protocol rules and the sidecar both refuse it, and the default protocol leaves it out): it scores one number per row, which a multiclass log loss cannot judge.
-An incumbent rule with no value on a holdout row (a column it reads is missing there) refuses the run before training (`incumbent-score-missing`, naming the count and the first row ids) instead of failing at the holdout stage.
+An incumbent rule with no value on a training-snapshot row (a column it reads is missing there) refuses the run before training (`incumbent-score-missing`, naming the count and the first row ids) instead of failing at the holdout stage.
 
 - `@memberjunction/predictive-studio-core`: `GateRules` (the gate decision table, proven equal to the reference
   pipeline's and to the sidecar's on seeded cases, plus two guards: a holdout minority class below

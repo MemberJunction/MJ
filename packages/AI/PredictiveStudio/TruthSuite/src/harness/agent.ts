@@ -21,10 +21,6 @@ export class HarnessAgent {
   private static readonly maxPipelineNameLength = 80;
 
   /**
-   * Run the Pipeline Builder agent on `plan` and report the run, its build, and every pipeline the run created — read
-   * back by the exact names the builder gives them, so a failed run's pipelines are reported too.
-   */
-  /**
    * The Pipeline Builder run of a plan. The gates measure what automation publishes, so the run turns publishing on (a
    * conversation's build leaves its model in Draft).
    */
@@ -37,6 +33,10 @@ export class HarnessAgent {
     };
   }
 
+  /**
+   * Run the Pipeline Builder agent on `plan` and report the run, its build, and every pipeline the run created — read
+   * back by the exact names the builder gives them, so a failed run's pipelines are reported too.
+   */
   public static async RunBuilderAgent(ctx: RunContext, plan: ModelingPlanSpec): Promise<AgentStepResult> {
     const agent = await HarnessAgent.loadAgent(ctx, 'Pipeline Builder');
     if (agent.DriverClass !== 'PredictiveStudioPipelineBuilderAgent') {
