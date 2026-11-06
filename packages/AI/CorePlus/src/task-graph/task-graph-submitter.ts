@@ -19,6 +19,7 @@
  */
 import { MJGlobal } from '@memberjunction/global';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import type { ActionRunScope } from '@memberjunction/actions-base';
 import type { TaskGraphSpec } from './task-graph-spec';
 import { SanitizeForPersistence } from '../safe-persist';
 
@@ -63,6 +64,19 @@ export type TaskGraphSubmitRequest = {
      * the hierarchy directly without walking ancestor runs in a loop.
      */
     ParentAgentHierarchy?: string[];
+    /**
+     * The submitting run's validated scope, as BaseAgent hands it to every action dispatch
+     * (`RunActionParams.RunScope`). Persisted on the parent task so the graph's action nodes run
+     * under it: an action that scopes by tenant (Scoped Search) then refuses a tenant the run does not
+     * carry, as it would inside the run (#5624). Set only by an agent run; absent for a graph a person,
+     * a schedule or a remote caller submitted, which keeps today's behaviour.
+     */
+    RunScope?: ActionRunScope;
+    /**
+     * The skills active in the submitting run (`Context.ActiveSkillIDs` on its action calls), carried
+     * with {@link RunScope} so a graph's action nodes bind to the same skills. `[]` means none.
+     */
+    ActiveSkillIDs?: string[];
     /**
      * Seed `$.debug` on the parent row at insert. `paused: true` is start-paused — the dispatcher
      * must not claim until Resume/Step. Written with the row because Pause-after-submit races the

@@ -29,6 +29,8 @@ import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult, GetSentPre
 import { BaseLLM, ChatMessage, ChatMessageContent, AIErrorType, AIAPIKeyResolver, BaseRealtimeModel, GetAIAPIKey, CredentialScopeAllows, MakeAIAPIKeyResolver, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { LoopAgentType } from './agent-types/loop-agent-type';
+import { CreateAgentInstance } from './agent-instance';
+import { FailingStepError, IsPromptTurnStep, MAX_REPEATED_FAILING_STEP, RepeatedFailingStepTracker } from './repeated-failing-step';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import { ExecuteSelfCheck, PickSelfCheckLink, type SelfCheckLink, type SelfCheckLinkRow } from './self-check';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
@@ -3258,12 +3260,11 @@ export class BaseAgent {
     /**
      * Why this run is not offered task graphs and refuses one the model writes, or null when it may use them — the one
      * predicate, so every condition that withholds graphs is added in one place. A graph runs outside the run: its
-     * action nodes are dispatched by the task-graph runner (MJServer's `TaskGraphActionRunner`) with no `Audience`,
-     * no `RunScope` and no run `Context`, outside {@link ExecuteSingleAction}, and an agent node starts a run
-     * (`TaskGraphAgentRunner`) that carries neither the audience nor the scope. So graphs are withheld when the
-     * audience adds a reader, and when the run's validated scope carries a tenant or a secondary dimension
-     * (`ActionRunScopeIsBounded`): a model-written Scoped Search node would search outside the run's tenant, and an
-     * agent node would drop it. Likewise when the host assigned the run's search scopes (`SearchScopeIDs`): a graph's
+     * action nodes are dispatched by the task-graph runner (MJServer's `TaskGraphActionRunner`) outside
+     * {@link ExecuteSingleAction}, with the run's `RunScope` and active skills (persisted at submit, #5624) but no
+     * `Audience`, and an agent node starts a run (`TaskGraphAgentRunner`) that carries neither the audience nor the
+     * scope. So graphs are withheld when the audience adds a reader, and when the run's validated scope carries a
+     * tenant or a secondary dimension (`ActionRunScopeIsBounded`): an agent node would drop it. Likewise when the host assigned the run's search scopes (`SearchScopeIDs`): a graph's
      * Scoped Search node would fall back to the agent's own search access.
      */
     private taskGraphWithholdingReason(params: ExecuteAgentParams): string | null {
@@ -3676,6 +3677,10 @@ export class BaseAgent {
             // CreateBridgeRealtimeSession (the LiveKit / telephony factory) passes no apiKeys today.
             APIKeys: params.apiKeys,
             CredentialScope: params.CredentialScope,
+            // The run's validated scope and active skills, built here on the server (never read from the session's
+            // Config), so the session's direct tool calls and delegated runs carry them (#5624).
+            RunScope: this.runScopeFor(params),
+            ActiveSkillIDs: this.activeSkillIDsForRun(params),
             AgentSessionID: (params.data?.agentSessionId as string | undefined) ?? '',
             PreferredModelID: modelID,
             ConfigOverridesJson: BuildRealtimeOverridesJson(modelID, voice) ?? undefined,
@@ -4666,6 +4671,35 @@ export class BaseAgent {
     }
 
     /**
+     * Feeds one executed decision (never a prompt turn) to the repeated-failing-step guard (#4832).
+     * The consecutive-failed-steps counter cannot see a model that re-issues the same failing step:
+     * the prompt between two failures returns a non-Failed decision and resets it. When the same
+     * decision has failed {@link MAX_REPEATED_FAILING_STEP} times in a row, `nextStep` is turned
+     * into a terminating Failed step naming the step type and the last error.
+     */
+    private checkRepeatedFailingStep<P>(
+        params: ExecuteAgentParams,
+        tracker: RepeatedFailingStepTracker,
+        executedDecision: BaseAgentNextStep<P>,
+        nextStep: BaseAgentNextStep<P>
+    ): void {
+        const count = tracker.Observe(executedDecision, nextStep);
+        if (count < MAX_REPEATED_FAILING_STEP) {
+            return;
+        }
+        const lastError = FailingStepError(nextStep);
+        const message = `Agent repeated the same failing ${executedDecision.step} step ${count} times. Last error: ${lastError}`;
+        this.logError(`⛔ Agent '${params.agent.Name}': ${message}`, {
+            agent: params.agent,
+            category: 'ExecutionSafetyNet',
+            metadata: { repeatedFailures: count, stepType: executedDecision.step, lastError }
+        });
+        nextStep.step = 'Failed';
+        nextStep.terminate = true;
+        nextStep.errorMessage = message;
+    }
+
+    /**
      * Executes the agent's internal logic.
      * 
      * This method contains the core execution logic that drives agent behavior. By default,
@@ -4692,6 +4726,9 @@ export class BaseAgent {
         let stepCount = 0;
         let consecutiveFailedSteps = 0;
         let consecutiveUnproductiveRetries = 0;
+        // Model-driven types only: a Flow graph may re-run a failing node on purpose (see
+        // BaseAgentType.UsesActionCircuitBreaker), and has no model that could repeat itself.
+        const repeatedFailures = this.AgentTypeInstance?.UsesActionCircuitBreaker === false ? null : new RepeatedFailingStepTracker();
 
         while (continueExecution) {
             // Check for cancellation before each step
@@ -4710,6 +4747,7 @@ export class BaseAgent {
 
             // Execute the current step based on previous decision or initial prompt
             this.logStatus(`🔄 Executing step ${stepCount + 1} for agent '${params.agent.Name}'`, true, params);
+            const executedDecision = currentNextStep;
             const nextStep = await this.executeNextStep<P>(params, config, currentNextStep, stepCount);
             stepCount++;
 
@@ -4749,6 +4787,10 @@ export class BaseAgent {
                 }
             } else if (nextStep.step !== 'Failed') {
                 consecutiveFailedSteps = 0;
+            }
+
+            if (repeatedFailures && executedDecision && !IsPromptTurnStep(executedDecision) && !nextStep.terminate) {
+                this.checkRepeatedFailingStep(params, repeatedFailures, executedDecision, nextStep);
             }
 
             // Track consecutive *unproductive* retries to prevent infinite loops that the
@@ -5771,7 +5813,7 @@ export class BaseAgent {
             }
             // Counted only on the native path: null means "envelope", which is different from a
             // native turn where the model chose not to call anything (0).
-            if (mode === 'Native' || mode === 'NativeFallback' || mode === 'NativeImplicit') {
+            if (mode === 'Native' || mode === 'NativeFallback' || mode === 'NativeImplicit' || mode === 'NativeRecovered') {
                 const message = promptResult?.chatResult?.data?.choices?.[0]?.message;
                 const callCount = message?.toolCalls?.length ?? 0;
                 stepEntity.NativeToolCallCount = callCount;
@@ -7933,6 +7975,27 @@ export class BaseAgent {
                     stepActionNamesLower.has(a.Name.trim().toLowerCase()) ||
                     stepActionNamesSanitized.has(SanitizeToolName(a.Name)))
         );
+    }
+
+    /**
+     * Returns the active agents named by an agent's own active Flow steps: a `Sub-Agent` step's
+     * `SubAgentID`, or the `SubAgentID` of a `ForEach`/`While` step whose `LoopBodyType` is
+     * `'Sub-Agent'`. Flow agents bind sub-agents on `AIAgentStep` rather than through `ParentID`
+     * or `AIAgentRelationship`, so {@link resolveSubAgentByName} needs these in scope, as
+     * {@link getFlowStepActions} does for actions.
+     */
+    private getFlowStepSubAgents(agentId: string): MJAIAgentEntityExtended[] {
+        if (!agentId) return [];
+        const steps = AIEngine.Instance.GetAgentSteps?.(agentId, 'Active') ?? [];
+        const ids = new UUIDSet(
+            steps
+                .filter(s => s.StepType === 'Sub-Agent'
+                    || ((s.StepType === 'ForEach' || s.StepType === 'While') && s.LoopBodyType === 'Sub-Agent'))
+                .map(s => s.SubAgentID)
+                .filter((id): id is string => typeof id === 'string' && id.length > 0)
+        );
+        if (ids.Size === 0) return [];
+        return AIEngine.Instance.Agents.filter(a => a.Status === 'Active' && ids.Has(a.ID));
     }
 
     /**
@@ -16507,7 +16570,12 @@ The context is now within limits. Please retry your request with the recovered c
         if (!previousDecision) {
             // First execution - ask the agent type what to do
             const initialStep = await this.AgentTypeInstance.DetermineInitialStep<P>(params, params.payload, this.AgentTypeState);
-            await this.recordExecutionRouting(params);
+            // A run refused before its first step (a dispatch refusal, a flow that does not compile)
+            // never ran on either engine, so it gets no routing record: a completed Decision step
+            // there would read as a successful dispatch (#4622).
+            if (initialStep?.step !== 'Failed') {
+                await this.recordExecutionRouting(params);
+            }
 
             if (initialStep) {
                 // Agent type provided an initial step
@@ -18016,7 +18084,8 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Finds a sub-agent by name, checking child agents (ParentID) first, then
-     * related agents (AgentRelationships). Returns `undefined` when the name
+     * related agents (AgentRelationships), then agents named on this agent's own
+     * Flow steps, then runtime-granted sub-agents. Returns `undefined` when the name
      * doesn't resolve to an active agent reachable from `params.agent`.
      *
      * Used by both the single and parallel sub-agent dispatch paths so name
@@ -18069,7 +18138,19 @@ The context is now within limits. Please retry your request with the recovered c
                 return { subAgentEntity: matchedPair.agent, relationship: matchedPair.rel };
             }
         }
-        // 3) Runtime-granted sub-agents (skill activation / caller subAgentChanges): resolve from
+        // 3) Sub-agents named on this agent's own Flow steps (#1415). A Flow agent binds a sub-agent on
+        // its step (`AIAgentStep.SubAgentID`, or a ForEach/While body with LoopBodyType 'Sub-Agent'),
+        // not through ParentID or a relationship row, so without this tier an in-run Flow could not
+        // reach the agent its own step names. The same reasoning as getFlowStepActions. A Loop agent
+        // has no steps, so this adds nothing for it.
+        const flowStepPool = this.getFlowStepSubAgents(params.agent.ID);
+        const flowStepAgent =
+            flowStepPool.find(a => a.Name.trim().toLowerCase() === normalized)
+            ?? this.matchNamedBySanitizedToolName(name, flowStepPool, true).match;
+        if (flowStepAgent) {
+            return { subAgentEntity: flowStepAgent };
+        }
+        // 4) Runtime-granted sub-agents (skill activation / caller subAgentChanges): resolve from
         // the SAME effective set the prompt offered and validateSubAgentNextStep approved. Without
         // this branch, a skill-granted sub-agent passes validation but fails execution ("not found
         // or not active") — and because the catalog keeps offering it, the model re-picks the same
@@ -18084,7 +18165,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (effectiveAgent) {
             return { subAgentEntity: effectiveAgent };
         }
-        // 4) Single-node constant-folded task graphs (D9): an orchestrator (e.g. Sage) may discover
+        // 5) Single-node constant-folded task graphs (D9): an orchestrator (e.g. Sage) may discover
         // any active peer agent via Find Candidate Agents and delegate a 1-node Tasks graph to it.
         // LoopAgentType folds that 1-node graph into an in-run Sub-Agent step (`taskGraph.folded === true`),
         // so allow resolving any active agent in AIEngine.Instance.Agents.
@@ -20723,6 +20804,11 @@ The context is now within limits. Please retry your request with the recovered c
             ConversationDetailID: params.conversationDetailId ?? null,
             AgentRunID: this._agentRun?.ID ?? null,
             ParentAgentHierarchy: this._agentHierarchy.length > 0 ? [...this._agentHierarchy] : undefined,
+            // The run's validated scope and active skills, persisted on the graph so its action nodes
+            // are handed them as every action call inside this run is (#5624): a node's Scoped Search
+            // then refuses a tenant or skill this run does not carry.
+            RunScope: this.runScopeFor(params),
+            ActiveSkillIDs: this.activeSkillIDsForRun(params),
             // If THIS run was itself started by a finished graph, the graph it emits inherits that
             // depth + 1. Without this the chain restarts at zero on every hop and
             // MAX_REINVOKE_DEPTH never fires — a graph reinvoking an agent that emits a graph would
@@ -22551,6 +22637,12 @@ The context is now within limits. Please retry your request with the recovered c
      * @returns {Promise<ExecuteAgentResult>} The cancelled result
      */
     private async createCancelledResult(message: string, contextUser?: UserInfo): Promise<ExecuteAgentResult> {
+        // The watchdog aborts a run it force-failed with the row's own message (#4883). The row
+        // already says Failed and clients were told so; finalizing Cancelled would contradict it.
+        const abortReason = this._runAbortController?.signal.reason;
+        if (AgentRunWatchdog.IsForceFailedAbortReason(typeof abortReason === 'string' ? abortReason : null)) {
+            return this.createFailureResult(abortReason, contextUser);
+        }
         const [{ failures }] = await Promise.all([
             this._stepSaveQueue.Flush(),
             this.flushPromptRunnerSaves(),
@@ -22599,7 +22691,9 @@ The context is now within limits. Please retry your request with the recovered c
      * Maps the reason an abort signal carried to the run's `CancellationReason` value: the
      * watchdog's stop relay raises {@link AgentRunWatchdog.UserCancelAbortReason} for a row marked
      * `User Request`; the wall-clock guard's reason starts with {@link AgentTimeoutAbortReason};
-     * anything else (an upstream caller's token, a shutdown) is `System`.
+     * anything else (an upstream caller's token, a shutdown) is `System`. A watchdog force-fail
+     * ({@link AgentRunWatchdog.ForceFailedAbortReason}) never gets here: {@link createCancelledResult}
+     * finalizes it `Failed`, with no cancellation reason.
      */
     public static CancellationReasonForAbort(reason: string | null | undefined): NonNullable<MJAIAgentRunEntityExtended['CancellationReason']> {
         if (reason === AgentRunWatchdog.UserCancelAbortReason) {
@@ -23703,9 +23797,16 @@ The context is now within limits. Please retry your request with the recovered c
             return;
         }
 
-        const driverKey = memoryManagerEntity.DriverClass || 'MemoryManagerAgent';
-        const memoryAgent = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAgent>(BaseAgent, driverKey);
-        if (!memoryAgent) {
+        // Resolved like every other agent (CreateAgentInstance); a Memory Manager row matched by name
+        // with no DriverClass still runs its own class rather than the plain BaseAgent.
+        let memoryAgent: BaseAgent;
+        try {
+            memoryAgent = await CreateAgentInstance({
+                Name: memoryManagerEntity.Name,
+                DriverClass: memoryManagerEntity.DriverClass?.trim() || 'MemoryManagerAgent',
+            });
+        } catch (error) {
+            LogError(`Post-run MemoryManager not started: ${error instanceof Error ? error.message : String(error)}`);
             return;
         }
 

@@ -71,7 +71,20 @@ vi.mock('@memberjunction/ai', () => {
     protected apiKey: string;
     constructor(apiKey: string) { this.apiKey = apiKey; }
   }
+  class MockModelUsage {
+    unitKind = 'Tokens';
+    inputUnits = 0;
+    outputUnits = 0;
+    static ForMedia(kind: string, inputUnits: number, outputUnits = 0) {
+      const usage = new MockModelUsage();
+      usage.unitKind = kind;
+      usage.inputUnits = inputUnits;
+      usage.outputUnits = outputUnits;
+      return usage;
+    }
+  }
   return {
+    ModelUsage: MockModelUsage,
     BaseAudioGenerator: MockBaseAudioGenerator,
     // Read only as the driver's second @RegisterClass argument; RegisterClass is a no-op here.
     BaseTextToSpeech: class MockBaseTextToSpeech {},
@@ -267,6 +280,46 @@ describe('ElevenLabsAudioGenerator', () => {
       expect(result.data).toEqual(Buffer.from(sampleBytes));
       expect(result.content).toBe(Buffer.from(sampleBytes).toString('base64'));
       expect(result.Alignment).toBeUndefined();
+    });
+
+    const allSettings = { stability: 0.4, similarity_boost: 0.8, style: 0.2, use_speaker_boost: true, speed: 1.1 };
+    const camelSettings = { stability: 0.4, similarityBoost: 0.8, style: 0.2, useSpeakerBoost: true, speed: 1.1 };
+
+    it('sends all five voice settings to convert in the SDK camelCase shape (#4863)', async () => {
+      mockConvert.mockResolvedValueOnce(streamFromBytes(new Uint8Array([1])));
+      await audio.CreateSpeech({ voice: 'v', text: 'Hi', model_id: 'm', voice_settings: allSettings });
+      expect(mockConvert.mock.calls[0][1].voiceSettings).toEqual(camelSettings);
+    });
+
+    it('sends all five voice settings to convertWithTimestamps in the SDK camelCase shape', async () => {
+      mockConvertWithTimestamps.mockResolvedValueOnce({ audioBase64: Buffer.from([1]).toString('base64') });
+      await audio.CreateSpeech({ voice: 'v', text: 'Hi', model_id: 'm', voice_settings: allSettings, IncludeTimestamps: true });
+      expect(mockConvertWithTimestamps.mock.calls[0][1].voiceSettings).toEqual(camelSettings);
+    });
+
+    it('leaves unset voice settings unset', async () => {
+      mockConvert.mockResolvedValueOnce(streamFromBytes(new Uint8Array([1])));
+      await audio.CreateSpeech({ voice: 'v', text: 'Hi', model_id: 'm' });
+      expect(mockConvert.mock.calls[0][1].voiceSettings).toBeUndefined();
+      expect(ElevenLabsAudioGenerator.ToSdkVoiceSettings({ stability: 0.5 } as unknown as Parameters<typeof ElevenLabsAudioGenerator.ToSdkVoiceSettings>[0])).toEqual({ stability: 0.5 });
+    });
+
+    it('records Characters usage equal to the text length on both paths (#4865)', async () => {
+      mockConvert.mockResolvedValueOnce(streamFromBytes(new Uint8Array([1])));
+      const plain = await audio.CreateSpeech({ voice: 'v', text: 'Hello there', model_id: 'm' });
+      expect(plain.usage).toMatchObject({ unitKind: 'Characters', inputUnits: 11, outputUnits: 0 });
+
+      mockConvertWithTimestamps.mockResolvedValueOnce({ audioBase64: Buffer.from([1]).toString('base64') });
+      const timed = await audio.CreateSpeech({ voice: 'v', text: 'Hi 👋', model_id: 'm', IncludeTimestamps: true });
+      // Code points: the emoji is one character.
+      expect(timed.usage).toMatchObject({ unitKind: 'Characters', inputUnits: 4 });
+    });
+
+    it('records no usage when the request fails', async () => {
+      mockConvert.mockRejectedValueOnce(new Error('boom'));
+      const result = await audio.CreateSpeech({ voice: 'v', text: 'Hello', model_id: 'm' });
+      expect(result.success).toBe(false);
+      expect(result.usage).toBeUndefined();
     });
 
     it('calls convertWithTimestamps and populates Alignment when IncludeTimestamps is true', async () => {

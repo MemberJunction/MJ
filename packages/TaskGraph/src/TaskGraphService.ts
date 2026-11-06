@@ -45,6 +45,7 @@ import {
     ConfigOf,
 } from '@memberjunction/ai-core-plus';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import type { ActionRunScope, ActionRunScopeValue } from '@memberjunction/actions-base';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AgentDecisionService } from '@memberjunction/ai-agents';
@@ -89,6 +90,14 @@ export type TaskGraphSubmitContext = {
      */
     ParentAgentHierarchy?: string[];
     /**
+     * The submitting agent run's validated scope (`RunActionParams.RunScope` inside that run). Persisted
+     * on the parent row so the graph's action nodes run under it (#5624). Only the agent-run submit
+     * seam sets it; a graph submitted any other way has none, and its action nodes run as before.
+     */
+    RunScope?: ActionRunScope;
+    /** The skills active in the submitting run, persisted with {@link RunScope}. */
+    ActiveSkillIDs?: string[];
+    /**
      * How many continuation hops produced this graph. A graph submitted by an agent that was itself
      * re-invoked by a finished graph carries its parent's depth + 1.
      */
@@ -130,6 +139,13 @@ export type TaskGraphParentMetadata = {
      * ancestor runs in a loop.
      */
     parentAgentHierarchy?: string[];
+    /**
+     * The submitting agent run's scope, handed to every action node as `RunActionParams.RunScope` (#5624).
+     * Absent for a graph no agent run submitted. Normalized by {@link ParseTaskGraphRunScope}.
+     */
+    runScope?: ActionRunScope;
+    /** The skills active in the submitting run, handed to action nodes as `Context.ActiveSkillIDs`. Set with `runScope`. */
+    activeSkillIDs?: string[];
     /**
      * Who the graph belongs to.
      *
@@ -219,6 +235,7 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
                 .map((name) => name.trim())
                 .filter((name) => name.length > 0)
             : undefined;
+        const runScope = ParseTaskGraphRunScope(parsed.runScope);
         return {
             ...DEFAULT_PARENT_METADATA,
             ...parsed,
@@ -238,10 +255,69 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
             parentAgentHierarchy: parentAgentHierarchy && parentAgentHierarchy.length > 0
                 ? parentAgentHierarchy
                 : undefined,
+            // Guarded like the fields above: action nodes hand these to the action engine as the run's
+            // scope, so they must have the shape an action expects.
+            runScope,
+            activeSkillIDs: runScope ? ParseStringList(parsed.activeSkillIDs) : undefined,
         };
     } catch {
         return { ...DEFAULT_PARENT_METADATA };
     }
+}
+
+/** The scope a stored `runScope` that is present but not an object reads as: inside a run, with no tenant. */
+const UNSCOPED_RUN_SCOPE: ActionRunScope = { PrimaryScopeEntityName: null, PrimaryScopeRecordID: null, SecondaryScopes: null };
+
+/** Non-blank strings from a JSON value, trimmed; anything that is not an array reads as none. */
+function ParseStringList(value: unknown): string[] {
+    return Array.isArray(value)
+        ? value.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter((item) => item.length > 0)
+        : [];
+}
+
+/** A non-blank string, trimmed, or null. */
+function ParseScopeText(value: unknown): string | null {
+    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+/** One secondary dimension's value when it has the {@link ActionRunScopeValue} shape, else undefined. */
+function ParseScopeValue(value: unknown): ActionRunScopeValue | undefined {
+    if (typeof value === 'string' || typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) {
+        return value;
+    }
+    if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
+        return [...value];
+    }
+    return undefined;
+}
+
+/**
+ * Reads the submitting run's scope off a graph's parent metadata (#5624).
+ *
+ * `undefined` when none was stored: the graph was not submitted by an agent run, and its action nodes
+ * run with no `RunScope`, as they always have. A stored value that is not an object reads as an
+ * unscoped run (every field null), so an action node is still treated as inside a run and refuses a
+ * tenant its parameters name. Fields with the wrong type are dropped. This validates shape, not trust:
+ * the scope is as trustworthy as the parent row, which already decides whose user the graph runs as.
+ */
+export function ParseTaskGraphRunScope(raw: unknown): ActionRunScope | undefined {
+    if (raw === undefined || raw === null) return undefined;
+    if (typeof raw !== 'object' || Array.isArray(raw)) return { ...UNSCOPED_RUN_SCOPE };
+    const stored = raw as Record<string, unknown>;
+    const secondary: Record<string, ActionRunScopeValue> = {};
+    if (stored.SecondaryScopes && typeof stored.SecondaryScopes === 'object' && !Array.isArray(stored.SecondaryScopes)) {
+        for (const [key, value] of Object.entries(stored.SecondaryScopes as Record<string, unknown>)) {
+            const parsed = ParseScopeValue(value);
+            if (parsed !== undefined) secondary[key] = parsed;
+        }
+    }
+    const searchScopeIDs = ParseStringList(stored.SearchScopeIDs);
+    return {
+        PrimaryScopeEntityName: ParseScopeText(stored.PrimaryScopeEntityName),
+        PrimaryScopeRecordID: ParseScopeText(stored.PrimaryScopeRecordID),
+        SecondaryScopes: Object.keys(secondary).length > 0 ? secondary : null,
+        ...(searchScopeIDs.length > 0 ? { SearchScopeIDs: searchScopeIDs } : {}),
+    };
 }
 
 /**
@@ -256,9 +332,12 @@ export function BuildTaskGraphParentInputPayload(args: {
     submittedByAgentRunID: string | null;
     submittedByUserID: string | null;
     parentAgentHierarchy?: string[];
+    runScope?: ActionRunScope;
+    activeSkillIDs?: string[];
     invocation?: { data?: unknown; context?: unknown } | null;
     startPaused?: boolean;
 }): Record<string, unknown> {
+    const runScope = ParseTaskGraphRunScope(args.runScope);
     const parentAgentHierarchy = Array.isArray(args.parentAgentHierarchy)
         ? args.parentAgentHierarchy
             .filter((name): name is string => typeof name === 'string')
@@ -272,6 +351,7 @@ export function BuildTaskGraphParentInputPayload(args: {
         submittedByAgentRunID: args.submittedByAgentRunID,
         submittedByUserID: args.submittedByUserID,
         ...(parentAgentHierarchy.length > 0 ? { parentAgentHierarchy } : {}),
+        ...(runScope ? { runScope, activeSkillIDs: ParseStringList(args.activeSkillIDs) } : {}),
         ...(args.invocation
             ? { invocation: { data: args.invocation.data, context: args.invocation.context } }
             : {}),
@@ -1698,6 +1778,8 @@ export class TaskGraphService {
             submittedByAgentRunID: context.AgentRunID ?? null,
             submittedByUserID: context.ContextUser?.ID ?? null,
             parentAgentHierarchy: context.ParentAgentHierarchy,
+            runScope: context.RunScope,
+            activeSkillIDs: context.ActiveSkillIDs,
             invocation: sanitized.Envelope
                 ? { data: sanitized.Envelope.Data, context: sanitized.Envelope.Context }
                 : null,

@@ -2515,7 +2515,7 @@ detailed information about what validation rules failed.`),
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: Array<MJAIAgentRunStepEntity_AgentSkillInvocation>
         * * Description: JSON array of skill-invocation records (AgentSkillInvocation[]) associating this step with the skills involved in it, or NULL when no skills are in play. Each record carries SkillID, SkillName, ActivationType (requested = user /skill mention; auto = agent self-activation), Provenance of authority (the gate values that admitted the skill: AcceptsSkills, both ActivationMode dials, and who requested it), and an optional agent-stated Reason when self-activated. Population: Skill steps record the activation(s) they performed; Prompt steps record the full set of skills in effect for that turn; Actions and Sub-Agent steps record the skill(s) through which the executed tool became available (NULL means the tool was a native grant).`),
-    ToolCallingMode: z.union([z.literal('Envelope'), z.literal('Native'), z.literal('NativeFallback'), z.literal('NativeImplicit')]).nullable().describe(`
+    ToolCallingMode: z.union([z.literal('Envelope'), z.literal('Native'), z.literal('NativeFallback'), z.literal('NativeImplicit'), z.literal('NativeRecovered')]).nullable().describe(`
         * * Field Name: ToolCallingMode
         * * Display Name: Tool Calling Mode
         * * SQL Data Type: nvarchar(25)
@@ -2525,7 +2525,8 @@ detailed information about what validation rules failed.`),
     *   * Native
     *   * NativeFallback
     *   * NativeImplicit
-        * * Description: Which tool-calling path this step's model call took: Native (Actions as tools, envelope control flow), NativeImplicit (Actions, sub-agents, payload changes and ask_user as tools; plain text ends the turn), Envelope (prose action catalog + JSON envelope), or NativeFallback (a native attempt failed in a tools-specific way and completed via an envelope retry). NULL for steps that never reached a model call, and for rows predating the feature.`),
+    *   * NativeRecovered
+        * * Description: Which tool-calling path this step's model call took: Native (Actions as tools, envelope control flow), NativeImplicit (Actions, sub-agents, payload changes and ask_user as tools; plain text ends the turn), NativeRecovered (a Native call the provider rejected for its arguments, read back out of the rejection and dispatched), Envelope (prose action catalog + JSON envelope), or NativeFallback (a native attempt failed in a tools-specific way and completed via an envelope retry). NULL for steps that never reached a model call, and for rows predating the feature.`),
     NativeToolCallCount: z.number().nullable().describe(`
         * * Field Name: NativeToolCallCount
         * * Display Name: Native Tool Call Count
@@ -6314,15 +6315,18 @@ export const MJAIModelSchema = z.object({
     DriverClass: z.string().nullable().describe(`
         * * Field Name: DriverClass
         * * Display Name: Driver Class
-        * * SQL Data Type: nvarchar(100)`),
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Read-only, from the view vwAIModels: the DriverClass of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read DriverClass from that vendor's MJ: AI Model Vendors row.`),
     DriverImportPath: z.string().nullable().describe(`
         * * Field Name: DriverImportPath
         * * Display Name: Driver Import Path
-        * * SQL Data Type: nvarchar(255)`),
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Read-only, from the view vwAIModels: the DriverImportPath of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read DriverImportPath from that vendor's MJ: AI Model Vendors row.`),
     APIName: z.string().nullable().describe(`
         * * Field Name: APIName
         * * Display Name: API Name
-        * * SQL Data Type: nvarchar(100)`),
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Read-only, from the view vwAIModels: the APIName of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read APIName from that vendor's MJ: AI Model Vendors row.`),
     InputTokenLimit: z.number().nullable().describe(`
         * * Field Name: InputTokenLimit
         * * Display Name: Input Token Limit
@@ -7299,7 +7303,7 @@ export const MJAIPromptRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Usage Types (vwAIUsageTypes.ID)
         * * Description: The base measure this run's quantities are counted in. Defaults to Tokens, where the Tokens* columns carry the quantity and the units columns are unused; a continuous-media run sets it to Seconds, Characters or Images and populates InputUnitsUsed / OutputUnitsUsed. Always the base measure, never the billing measure: audio billed per hour is still recorded as Seconds, and the price unit type converts. NULL means token-billed, which is what every row predating this column is; it is read as Tokens at one seam in MJAIPromptRunEntityServer, and becomes NOT NULL in the release after the AI Usage Types seed ships.`),
-    ToolCallingMode: z.union([z.literal('Envelope'), z.literal('Native'), z.literal('NativeFallback'), z.literal('NativeImplicit')]).nullable().describe(`
+    ToolCallingMode: z.union([z.literal('Envelope'), z.literal('Native'), z.literal('NativeFallback'), z.literal('NativeImplicit'), z.literal('NativeRecovered')]).nullable().describe(`
         * * Field Name: ToolCallingMode
         * * Display Name: Tool Calling Mode
         * * SQL Data Type: nvarchar(25)
@@ -7309,7 +7313,8 @@ export const MJAIPromptRunSchema = z.object({
     *   * Native
     *   * NativeFallback
     *   * NativeImplicit
-        * * Description: Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.`),
+    *   * NativeRecovered
+        * * Description: Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'NativeRecovered' = a hybrid native call the provider rejected for its arguments (Groq tool_use_failed) whose tool call the driver read back out of the rejection; the arguments then go through the usual coercion. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.`),
     UserID: z.string().nullable().describe(`
         * * Field Name: UserID
         * * Display Name: User ID
@@ -7747,7 +7752,7 @@ export const MJAIPromptSchema = z.object({
     *   * PowerRank
     *   * SameModelDifferentVendor
     *   * SameModelDifferentVendor
-        * * Description: Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None`),
+        * * Description: Whether a failed model call fails over to other candidates. None: the selected model is called once, with no failover. Any other value (SameModelDifferentVendor, NextBestModel, PowerRank): after a failover-eligible error, the remaining candidates from model selection are tried in priority order, and they can include other models; the chat prompt runner does not tell these values apart. Only the embedding runner narrows by strategy: SameModelDifferentVendor keeps it on the selected model, so vectors stay in one space.`),
     FailoverMaxAttempts: z.number().nullable().describe(`
         * * Field Name: FailoverMaxAttempts
         * * Display Name: Failover Max Attempts
@@ -7833,6 +7838,11 @@ export const MJAIPromptSchema = z.object({
     *   * None
     *   * Referenced
         * * Description: Which template inputs (data, templateData) prompt runs store in Messages: None (shape only), Referenced (only keys the template uses) or Full. NULL uses the server default.`),
+    TimeoutMS: z.number().nullable().describe(`
+        * * Field Name: TimeoutMS
+        * * Display Name: Timeout MS
+        * * SQL Data Type: int
+        * * Description: Wall-clock bound, in milliseconds, on each model call this prompt makes (each failover candidate, validation retry and parallel task gets its own budget). A call that runs longer is aborted and fails over like a network error. A timeoutMS passed by the caller takes precedence; the runner default applies when both are empty. NULL means this prompt sets no bound.`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template Text
@@ -48911,12 +48921,13 @@ detailed information about what validation rules failed.
     *   * Native
     *   * NativeFallback
     *   * NativeImplicit
-    * * Description: Which tool-calling path this step's model call took: Native (Actions as tools, envelope control flow), NativeImplicit (Actions, sub-agents, payload changes and ask_user as tools; plain text ends the turn), Envelope (prose action catalog + JSON envelope), or NativeFallback (a native attempt failed in a tools-specific way and completed via an envelope retry). NULL for steps that never reached a model call, and for rows predating the feature.
+    *   * NativeRecovered
+    * * Description: Which tool-calling path this step's model call took: Native (Actions as tools, envelope control flow), NativeImplicit (Actions, sub-agents, payload changes and ask_user as tools; plain text ends the turn), NativeRecovered (a Native call the provider rejected for its arguments, read back out of the rejection and dispatched), Envelope (prose action catalog + JSON envelope), or NativeFallback (a native attempt failed in a tools-specific way and completed via an envelope retry). NULL for steps that never reached a model call, and for rows predating the feature.
     */
-    get ToolCallingMode(): 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | null {
+    get ToolCallingMode(): 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | 'NativeRecovered' | null {
         return this.Get('ToolCallingMode');
     }
-    set ToolCallingMode(value: 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | null) {
+    set ToolCallingMode(value: 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | 'NativeRecovered' | null) {
         this.Set('ToolCallingMode', value);
     }
 
@@ -58683,6 +58694,16 @@ export interface MJAIModelTypeEntity_LLMConfigurationSettings {
     SupportsForcedToolChoice?: boolean | null;
 
     /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
+
+    /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
      * it reuses a prior request only when that request's entire prompt is a prefix of the new one
      * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
@@ -59378,6 +59399,16 @@ export interface MJAIModelVendorEntity_LLMConfigurationSettings {
      * forced choice, and the agent's prompt is what steers the model to the tool.
      */
     SupportsForcedToolChoice?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
 
     /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
@@ -60269,6 +60300,16 @@ export interface MJAIModelEntity_LLMConfigurationSettings {
     SupportsForcedToolChoice?: boolean | null;
 
     /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
+
+    /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
      * it reuses a prior request only when that request's entire prompt is a prefix of the new one
      * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
@@ -60992,6 +61033,7 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
     * * Field Name: DriverClass
     * * Display Name: Driver Class
     * * SQL Data Type: nvarchar(100)
+    * * Description: Read-only, from the view vwAIModels: the DriverClass of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read DriverClass from that vendor's MJ: AI Model Vendors row.
     */
     get DriverClass(): string | null {
         return this.Get('DriverClass');
@@ -61004,6 +61046,7 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
     * * Field Name: DriverImportPath
     * * Display Name: Driver Import Path
     * * SQL Data Type: nvarchar(255)
+    * * Description: Read-only, from the view vwAIModels: the DriverImportPath of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read DriverImportPath from that vendor's MJ: AI Model Vendors row.
     */
     get DriverImportPath(): string | null {
         return this.Get('DriverImportPath');
@@ -61016,6 +61059,7 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
     * * Field Name: APIName
     * * Display Name: API Name
     * * SQL Data Type: nvarchar(100)
+    * * Description: Read-only, from the view vwAIModels: the APIName of this model's highest-Priority Active Inference Provider row in MJ: AI Model Vendors. It describes that one vendor row only, not the model; another vendor that serves the same model can use a different value. Code that calls a specific vendor must read APIName from that vendor's MJ: AI Model Vendors row.
     */
     get APIName(): string | null {
         return this.Get('APIName');
@@ -61879,6 +61923,16 @@ export interface MJAIPromptModelEntity_LLMConfigurationSettings {
      * forced choice, and the agent's prompt is what steers the model to the tool.
      */
     SupportsForcedToolChoice?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
 
     /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
@@ -64325,12 +64379,13 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     *   * Native
     *   * NativeFallback
     *   * NativeImplicit
-    * * Description: Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.
+    *   * NativeRecovered
+    * * Description: Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'NativeRecovered' = a hybrid native call the provider rejected for its arguments (Groq tool_use_failed) whose tool call the driver read back out of the rejection; the arguments then go through the usual coercion. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.
     */
-    get ToolCallingMode(): 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | null {
+    get ToolCallingMode(): 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | 'NativeRecovered' | null {
         return this.Get('ToolCallingMode');
     }
-    set ToolCallingMode(value: 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | null) {
+    set ToolCallingMode(value: 'Envelope' | 'Native' | 'NativeFallback' | 'NativeImplicit' | 'NativeRecovered' | null) {
         this.Set('ToolCallingMode', value);
     }
 
@@ -64714,6 +64769,16 @@ export interface MJAIPromptEntity_LLMConfigurationSettings {
      * forced choice, and the agent's prompt is what steers the model to the tool.
      */
     SupportsForcedToolChoice?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
 
     /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
@@ -65998,7 +66063,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     *   * PowerRank
     *   * SameModelDifferentVendor
     *   * SameModelDifferentVendor
-    * * Description: Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None
+    * * Description: Whether a failed model call fails over to other candidates. None: the selected model is called once, with no failover. Any other value (SameModelDifferentVendor, NextBestModel, PowerRank): after a failover-eligible error, the remaining candidates from model selection are tried in priority order, and they can include other models; the chat prompt runner does not tell these values apart. Only the embedding runner narrows by strategy: SameModelDifferentVendor keeps it on the selected model, so vectors stay in one space.
     */
     get FailoverStrategy(): 'NextBestModel' | 'NextBestModel' | 'None' | 'None' | 'PowerRank' | 'PowerRank' | 'SameModelDifferentVendor' | 'SameModelDifferentVendor' {
         return this.Get('FailoverStrategy');
@@ -66185,6 +66250,19 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     }
     set TemplateDataCapture(value: 'Full' | 'None' | 'Referenced' | null) {
         this.Set('TemplateDataCapture', value);
+    }
+
+    /**
+    * * Field Name: TimeoutMS
+    * * Display Name: Timeout MS
+    * * SQL Data Type: int
+    * * Description: Wall-clock bound, in milliseconds, on each model call this prompt makes (each failover candidate, validation retry and parallel task gets its own budget). A call that runs longer is aborted and fails over like a network error. A timeoutMS passed by the caller takes precedence; the runner default applies when both are empty. NULL means this prompt sets no bound.
+    */
+    get TimeoutMS(): number | null {
+        return this.Get('TimeoutMS');
+    }
+    set TimeoutMS(value: number | null) {
+        this.Set('TimeoutMS', value);
     }
 
     /**
@@ -68133,6 +68211,16 @@ export interface MJAIVendorEntity_LLMConfigurationSettings {
      * forced choice, and the agent's prompt is what steers the model to the tool.
      */
     SupportsForcedToolChoice?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path accepts function tools on Chat Completions
+     * only with reasoning turned off (`reasoning_effort: 'none'`); GPT-6 Luna on OpenAI is one. When
+     * `true` and a request declares tools, the prompt runner sets `ChatParams.toolsRequireNoReasoning`
+     * and the OpenAI driver sends `reasoning_effort: 'none'` on the first request, instead of learning
+     * it from the provider's 400. Absent or `false` changes nothing; the driver still recovers from
+     * that 400 for models the catalog does not mark.
+     */
+    ChatCompletionsToolsRequireNoReasoning?: boolean | null;
 
     /**
      * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:

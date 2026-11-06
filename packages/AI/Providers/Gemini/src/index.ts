@@ -4,7 +4,7 @@
 import { GoogleGenAI, ApiError, Content, Part, Blob, FileData, FunctionDeclaration, FunctionCallingConfigMode, ToolConfig, ToolListUnion, GenerateContentResponseUsageMetadata, ThinkingConfig } from "@google/genai";
 
 // MJ stuff
-import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ChatMessageContentBlock, ModelUsage, ErrorAnalyzer, FileCapabilities, ChatToolCall, ChatReasoningBlock, CHAT_FINISH_REASON_TOOL_CALLS, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL, CHAT_FINISH_REASON_UNEXPECTED_TOOL_CALL } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ChatMessageContentBlock, ModelUsage, ErrorAnalyzer, FileCapabilities, ChatToolCall, ChatReasoningBlock, CHAT_FINISH_REASON_TOOL_CALLS, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL, CHAT_FINISH_REASON_UNEXPECTED_TOOL_CALL, NormalizeFinishReason } from "@memberjunction/ai";
 import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
 import { AcceptsCustomSampling } from "./geminiSampling";
 import { GeminiThinkingFallback, ResolveGeminiThinkingConfig } from "./geminiThinking";
@@ -392,9 +392,9 @@ export class GeminiLLM extends BaseLLM {
                             toolCalls: toolCalls,
                             ...(reasoning ? { reasoning } : {})
                         },
-                        // Normalize the tool-call case and Gemini's "tried to call a tool but the call was
-                        // unreadable" case; every other reason keeps Gemini's own value.
-                        finish_reason: toolCalls ? CHAT_FINISH_REASON_TOOL_CALLS : (rejectedCall ?? (finishReason || "completed")),
+                        // Tool calls and Gemini's "tried to call a tool but the call was unreadable" cases
+                        // have their own markers; every other reason goes through NormalizeFinishReason.
+                        finish_reason: toolCalls ? CHAT_FINISH_REASON_TOOL_CALLS : (rejectedCall ?? NormalizeFinishReason(finishReason)),
                         index: 0,
                         ...(rejectedCall && candidate.finishMessage ? { finishMessage: candidate.finishMessage } : {})
                     }],
@@ -1080,7 +1080,7 @@ export class GeminiLLM extends BaseLLM {
                     content: accumulatedContent ? accumulatedContent : '',
                     thinking: thinkingContent || undefined
                 },
-                finish_reason: finishReason,
+                finish_reason: NormalizeFinishReason(finishReason),
                 index: 0
             }],
             usage: usage || new ModelUsage(0, 0)

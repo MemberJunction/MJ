@@ -319,7 +319,8 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             entry.ParametersHash = params.parametersHash;
             entry.KeyHash = params.keyHash;
         }
-        entry.KeyDisplay = params.keyDisplay;
+        // Lookup goes by KeyHash, so shortening the display text is safe; an over-long value would fail the save (#4917).
+        entry.KeyDisplay = FeatureValueCacheService.ClampToLength(params.keyDisplay, FeatureValueCacheService.fieldMaxLength(entry, 'KeyDisplay'));
         entry.KeyJSON = params.keyJSON;
         entry.OutputsJSON = params.outputsJSON;
         entry.Reasoning = params.reasoning ?? null;
@@ -333,6 +334,23 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             throw new Error(`FeatureValueCacheService: failed to save cache entry for keyHash '${params.keyHash}': ${entry.LatestResult?.CompleteMessage || 'unknown error'}`);
         }
         return entry;
+    }
+
+    /**
+     * Shortens `value` to at most `maxLength` characters, ending with `…` when cut.
+     * @param value - The text to fit.
+     * @param maxLength - The column's character limit; 0 or less means unlimited.
+     */
+    public static ClampToLength(value: string, maxLength: number): string {
+        if (maxLength <= 0 || value.length <= maxLength) {
+            return value;
+        }
+        return `${value.substring(0, maxLength - 1)}…`;
+    }
+
+    /** Character limit of a field from entity metadata; 0 when unlimited or unknown. */
+    private static fieldMaxLength(entry: MJFeatureValueCacheEntity, fieldName: string): number {
+        return entry.EntityInfo?.Fields.find(f => f.Name === fieldName)?.MaxLength ?? 0;
     }
 
     /** The row on a store's key, expired or not; null when there is none. */

@@ -15,6 +15,8 @@ export * from './agent-types/base-agent-type';
 export * from './agent-types/loop-agent-response-type';
 export * from './agent-types/loop-agent-prompt-params';
 export * from './base-agent';
+export * from './agent-instance';
+export * from './repeated-failing-step';
 export * from './bound-action-params';
 export * from './decision-discovery';
 export * from './handoff-target';

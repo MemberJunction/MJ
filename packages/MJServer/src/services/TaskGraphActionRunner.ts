@@ -29,6 +29,11 @@ export class TaskGraphActionRunner implements TaskActionRunner {
                 Action: action,
                 ContextUser: params.ContextUser,
                 Params: this.buildParams(params),
+                // The submitting agent run's scope and active skills, as BaseAgent stamps them on every
+                // action call inside that run (#5624). Without them a node's Scoped Search runs as a direct
+                // call and searches whatever tenant and skill its model-written input names. Absent for a
+                // graph no agent run submitted, which runs as it always has.
+                ...(params.RunScope ? { RunScope: params.RunScope, Context: { ActiveSkillIDs: params.ActiveSkillIDs ?? [] } } : {}),
                 // No Filters. A durable node is work that a filter ALREADY let through — the entity
                 // action's gate ran at dispatch time, on the change context that no longer exists by
                 // the time the dispatcher picks the task up. Re-evaluating here would ask a
