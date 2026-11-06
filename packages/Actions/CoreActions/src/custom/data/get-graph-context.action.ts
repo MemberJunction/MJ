@@ -43,12 +43,20 @@ export class GetGraphContextAction extends BaseAction {
                 };
             }
 
-            if (GraphEngine.Instance.Graphs.length === 0) {
-                await GraphEngine.Instance.Config(false, params.ContextUser, params.Provider);
-            }
+            // GraphEngine is lazily configured; on a server it loads as the system user, and every node it
+            // returns is checked as ContextUser at the hop it is reached.
+            await CanonGraphEngine.Instance.EnsureConfigured(params.ContextUser, params.Provider);
 
             const graphName =
                 this.getStringParam(params, 'GraphName')?.trim() || GetGraphContextAction.DEFAULT_GRAPH_NAME;
+            const graph = GraphEngine.Instance.GetGraph(graphName);
+            if (!graph) {
+                return {
+                    Success: false,
+                    ResultCode: 'GRAPH_NOT_FOUND',
+                    Message: `Graph '${graphName}' was not found or is not active.`,
+                };
+            }
             const question = this.getStringParam(params, 'Question')?.trim();
             const rawSeeds = this.getParamValue(params, 'Seeds');
 
@@ -70,7 +78,7 @@ export class GetGraphContextAction extends BaseAction {
                     : undefined;
             const includeProposed = this.getBooleanParam(params, 'IncludeProposed', false);
 
-            const seeds = this.resolveSeeds(question, rawSeeds, params.ContextUser);
+            const seeds = await this.resolveSeeds(question, rawSeeds, graph.Name, params);
             if (!question && seeds.length === 0) {
                 return {
                     Success: false,
@@ -90,7 +98,7 @@ export class GetGraphContextAction extends BaseAction {
 
             const subgraph: GraphSubgraph =
                 seeds.length > 0
-                    ? await GraphEngine.Instance.Subgraph(graphName, seeds, options, params.ContextUser)
+                    ? await GraphEngine.Instance.Subgraph(graph.Name, seeds, options, params.ContextUser)
                     : { Nodes: [], Edges: [] };
 
             const promptText = GraphEngine.Instance.DescribeForPrompt(subgraph);
@@ -108,7 +116,7 @@ export class GetGraphContextAction extends BaseAction {
                 Message:
                     nodeCount > 0
                         ? promptText
-                        : `No matching graph nodes found in '${graphName}' for the supplied inputs.`,
+                        : `No matching graph nodes found in '${graph.Name}' for the supplied inputs.${subgraph.Message ? ` ${subgraph.Message}` : ''}`,
                 Subgraph: subgraph,
                 PromptText: promptText,
                 NodeCount: nodeCount,
@@ -125,11 +133,18 @@ export class GetGraphContextAction extends BaseAction {
         }
     }
 
-    private resolveSeeds(
+    /**
+     * Seeds from the question (concept matches the caller can see, in `graphName`) and from explicit
+     * `Seeds` (record references, or concept names/IDs). Every seed is checked again as the caller when
+     * the traversal admits it.
+     */
+    private async resolveSeeds(
         question: string | undefined,
         rawSeeds: unknown,
-        user: UserInfo,
-    ): GraphNodeRef[] {
+        graphName: string,
+        params: RunActionParams,
+    ): Promise<GraphNodeRef[]> {
+        const user: UserInfo = params.ContextUser;
         const resolved: GraphNodeRef[] = [];
         const seenKeys = new Set<string>();
 
@@ -140,9 +155,10 @@ export class GetGraphContextAction extends BaseAction {
                 resolved.push(ref);
             }
         };
+        const conceptSearch = { GraphNames: [graphName], provider: params.Provider };
 
         if (question && question.length > 0) {
-            const matched = CanonGraphEngine.Instance.FindConcepts(question, user);
+            const matched = await CanonGraphEngine.Instance.FindConcepts(question, user, conceptSearch);
             for (const c of matched.slice(0, 5)) {
                 pushSeed({
                     EntityName: c.EntityName,
@@ -170,7 +186,7 @@ export class GetGraphContextAction extends BaseAction {
                         RecordID: exactConcept.ID,
                     });
                 } else {
-                    const fuzzyConcepts = CanonGraphEngine.Instance.FindConcepts(trimmed, user);
+                    const fuzzyConcepts = await CanonGraphEngine.Instance.FindConcepts(trimmed, user, conceptSearch);
                     for (const fc of fuzzyConcepts.slice(0, 3)) {
                         pushSeed({
                             EntityName: fc.EntityName,

@@ -70,6 +70,5 @@ export * from './attachment-blob-store';
 // MJOPUS1 realtime-recording shard wire format, shared by the browser recorder and MJAPI.
 export * from './realtime-recording-shard-format';
 export * from './AgentUserPolicyEngine';
-export * from './graph-expansion';
 
 

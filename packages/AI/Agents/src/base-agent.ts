@@ -11570,9 +11570,16 @@ The context is now within limits. Please retry your request with the recovered c
         // failure surfaces as a 'Failed' step (answering "do pipeline errors show as errors?": yes).
         let result: PipelineExecutionResult;
         try {
+            // The run's audience (hydrated once per run): a graphExpand stage admits only nodes every reader
+            // may see. An unusable audience refuses the pipeline, as it refuses an action call.
+            const audience = await this.audienceReadersFor(params);
+            if ('Error' in audience) {
+                throw new Error(audience.Error);
+            }
             result = await new PipelineExecutor(registry, undefined, {
                 contextUser: params.contextUser,
                 provider: this.ProviderToUse,
+                audienceReaders: audience.Readers,
             }).Execute(pipeline.steps as PipelineStage[]);
         } catch (e) {
             result = {

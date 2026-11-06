@@ -14,14 +14,16 @@
  * @module @memberjunction/ai-agents
  */
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { CreateCanonGraphExpansionService, GraphEngine } from '@memberjunction/core-entities';
 import {
-    ComputeGraphNodeAttenuatedScore,
+    ClampGraphDepth,
+    ClampGraphMaxNodes,
+    ComputeGraphPathWeight,
     FormatGraphNodeBreadcrumb,
     GetRegisteredGraphExpansionService,
-    GraphSeedNode,
-    IGraphExpansionService,
-} from '@memberjunction/ai-core-plus';
+    type GraphExpansionResult,
+    type GraphSeedNode,
+    type IGraphExpansionService,
+} from '@memberjunction/core-entities';
 import {
     PipeValue,
     PipelineStage,
@@ -58,6 +60,11 @@ export interface PipelineExecutorOptions {
     contextUser?: UserInfo;
     /** Optional metadata provider passed to `IGraphExpansionService` during `graphExpand`. */
     provider?: IMetadataProvider;
+    /**
+     * The run's audience beyond `contextUser` (`ExecuteAgentParams.Audience`, hydrated). `graphExpand`
+     * hands them to the expansion service, which admits a node only when every one of them may see it.
+     */
+    audienceReaders?: readonly UserInfo[];
 }
 
 /** Internal outcome of running a single stage (never throws). */
@@ -88,6 +95,7 @@ export class PipelineExecutor {
     private readonly graphExpansionService?: IGraphExpansionService;
     private readonly contextUser?: UserInfo;
     private readonly provider?: IMetadataProvider;
+    private readonly audienceReaders: readonly UserInfo[];
 
     constructor(
         private readonly registry: PipelineToolRegistry,
@@ -101,6 +109,7 @@ export class PipelineExecutor {
         this.graphExpansionService = opts.graphExpansionService;
         this.contextUser = opts.contextUser;
         this.provider = opts.provider;
+        this.audienceReaders = opts.audienceReaders ?? [];
     }
 
     /**
@@ -330,28 +339,25 @@ export class PipelineExecutor {
         scope: TemplateScope,
     ): Promise<StageOutcome> {
         const cfg = this.extractGraphExpandConfig(stage);
-        const service =
-            this.graphExpansionService ??
-            GetRegisteredGraphExpansionService() ??
-            (GraphEngine.Instance.Graphs.length > 0 ? CreateCanonGraphExpansionService() : null);
+        // No registered service (no graph runtime in this process) means the stage is a no-op.
+        const service = this.graphExpansionService ?? GetRegisteredGraphExpansionService();
         const seedInput = this.extractSeedInput(cfg.seedSource, current, scope);
         const effectiveUser = this.contextUser;
 
         const seeds = effectiveUser
             ? await this.resolveGraphExpandSeeds(seedInput, cfg.graphNames, service, effectiveUser)
             : [];
-        const maxDepth = cfg.maxDepth ? Math.max(1, Math.min(4, cfg.maxDepth)) : 2;
-        const maxNodes = cfg.maxNodes && cfg.maxNodes >= 1 ? cfg.maxNodes : 25;
 
-        const expansion =
+        const expansion: GraphExpansionResult =
             service && effectiveUser && seeds.length > 0
                 ? await service.Expand(
                       {
                           Seeds: seeds,
                           GraphNames: cfg.graphNames,
-                          MaxDepth: maxDepth,
-                          MaxNodes: maxNodes,
+                          MaxDepth: ClampGraphDepth(cfg.maxDepth),
+                          MaxNodes: ClampGraphMaxNodes(cfg.maxNodes, 25),
                           EdgeTypeFilter: cfg.edgeTypeFilter,
+                          AudienceReaders: this.audienceReaders,
                       },
                       effectiveUser,
                       this.provider,
@@ -373,7 +379,7 @@ export class PipelineExecutor {
                 title: n.Title,
                 snippet: n.Snippet ?? null,
                 nodeKind: n.NodeKind ?? 'Record',
-                score: ComputeGraphNodeAttenuatedScore(n),
+                score: ComputeGraphPathWeight(n),
                 breadcrumb: FormatGraphNodeBreadcrumb(n),
             })),
             edges: expansion.Edges.map((e) => ({
@@ -384,6 +390,7 @@ export class PipelineExecutor {
                 label: e.Label ?? e.EdgeType,
             })),
             breadcrumbs: expansion.Nodes.map((n) => FormatGraphNodeBreadcrumb(n)),
+            messages: expansion.Messages ? [...expansion.Messages] : [],
         };
 
         scope[cfg.outputKey] = formattedSubgraph;

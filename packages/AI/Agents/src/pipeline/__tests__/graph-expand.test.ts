@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { UserInfo } from '@memberjunction/core';
 import {
-    IGraphExpansionService,
-    GraphSeedNode,
-    GraphExpansionParams,
-    GraphExpansionResult,
     RegisterGraphExpansionService,
-} from '@memberjunction/ai-core-plus';
+    type IGraphExpansionService,
+    type GraphSeedNode,
+    type GraphExpansionParams,
+    type GraphExpansionResult,
+} from '@memberjunction/core-entities';
 import { PipelineExecutor } from '../pipeline-executor';
 import { PipelineToolRegistry } from '../pipeline-registry';
 import type { GraphExpandPipelineStage, PipelineStage, PipeValue } from '../pipeline.types';
@@ -214,6 +214,33 @@ describe('PipelineExecutor graphExpand stage (WS-4.2)', () => {
         const finalObj = result.finalOutput as Record<string, PipeValue>;
         const subgraph = finalObj['deniedGraph'] as Record<string, PipeValue>;
         expect(subgraph['nodes']).toEqual([]);
+    });
+
+    it('passes the run\'s audience to the expansion service and clamps maxNodes to 1..200 and depth to 1..4', async () => {
+        const reader = { ID: 'user-2', Name: 'Reader', UserRoles: [] } as unknown as UserInfo;
+        const calls: GraphExpansionParams[] = [];
+        const service: IGraphExpansionService = {
+            ResolveSeeds: async (): Promise<readonly GraphSeedNode[]> => [{ EntityName: 'MJ: Graph Concepts', RecordID: 'c-1' }],
+            Expand: async (params: GraphExpansionParams): Promise<GraphExpansionResult> => {
+                calls.push(params);
+                return { Nodes: [], Edges: [], Messages: ['Expansion stopped at the 200-node limit.'] };
+            },
+        };
+        const executor = new PipelineExecutor(new PipelineToolRegistry(), 20, {
+            initialValue: { query: 'Open AR' },
+            graphExpansionService: service,
+            contextUser: TEST_USER,
+            audienceReaders: [reader],
+        });
+        const result = await executor.Execute([
+            { stageType: 'graphExpand', graphNames: ['MJ Canon'], seedSource: '$.query', maxNodes: 1_000_000, maxDepth: 9, outputKey: 'g' } as unknown as PipelineStage,
+        ]);
+        expect(result.success).toBe(true);
+        expect(calls[0].AudienceReaders?.map((r) => r.ID)).toEqual(['user-2']);
+        expect(calls[0].MaxNodes).toBe(200);
+        expect(calls[0].MaxDepth).toBe(4);
+        const g = (result.finalOutput as Record<string, PipeValue>)['g'] as Record<string, PipeValue>;
+        expect(g['messages']).toEqual(['Expansion stopped at the 200-node limit.']);
     });
 
     it('should degrade gracefully with an empty subgraph when no IGraphExpansionService is registered', async () => {

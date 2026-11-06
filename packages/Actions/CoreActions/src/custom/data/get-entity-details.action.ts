@@ -4,7 +4,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { MJGlobal } from "@memberjunction/global";
 import { EntityInfo, IMetadataProvider, LogError, Metadata, RunView, RunViewParams, UserInfo } from "@memberjunction/core";
 import type { IRunViewProvider } from "@memberjunction/core";
-import { CanonGraphEngine, GraphEngine, type CanonEntityExplanation } from "@memberjunction/core-entities";
+import { CanonGraphEngine, type CanonEntityExplanation } from "@memberjunction/core-entities";
 
 /**
  * Action that returns field details and sample data for a specific entity.
@@ -180,11 +180,14 @@ export class GetEntityDetailsAction extends BaseAction {
                     Status: abv.Status
                 }));
 
+            // The graph engine loads lazily, so ask it rather than checking whether it has graphs yet; with no
+            // active canon graph the explanation is simply empty.
             let canonExplanation: CanonEntityExplanation | undefined;
-            if (GraphEngine.Instance.Graphs.length > 0 && params.ContextUser) {
+            if (params.ContextUser) {
                 try {
-                    canonExplanation = await CanonGraphEngine.Instance.ExplainEntity(entity.Name, params.ContextUser);
-                } catch {
+                    canonExplanation = await CanonGraphEngine.Instance.ExplainEntity(entity.Name, params.ContextUser, params.Provider);
+                } catch (err: unknown) {
+                    LogError(`Get Entity Details: canon section skipped for "${entity.Name}": ${err instanceof Error ? err.message : String(err)}`);
                     canonExplanation = undefined;
                 }
             }
