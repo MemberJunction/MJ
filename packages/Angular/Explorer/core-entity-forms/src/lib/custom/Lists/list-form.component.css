@@ -164,6 +164,11 @@
     letter-spacing: 0.5px;
 }
 
+/* Phone section picker: hidden until the 768px rule below swaps it in for the rail */
+.phone-section-picker {
+    display: none;
+}
+
 /* Navigation Rail */
 .nav-rail {
     grid-area: nav;
@@ -1054,6 +1059,20 @@
 }
 
 @media (max-width: 768px) {
+    /* The rail becomes one section-picker button in the nav grid area (same pattern as the
+       standard record form). */
+    .nav-rail {
+        display: none;
+    }
+
+    .phone-section-picker {
+        grid-area: nav;
+        display: block;
+        padding: 4px 8px;
+        border-bottom: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface);
+    }
+
     .list-header {
         flex-direction: column;
         align-items: flex-start;

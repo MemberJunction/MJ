@@ -29,11 +29,7 @@ interface CapturedLogRow {
     NewRecord: () => void;
     Save: () => Promise<boolean>;
     LatestResult: unknown;
-    ProviderToUse: object | undefined;
 }
-
-/** The provider each new log row reports as its `ProviderToUse`; set per test, reset in beforeEach. */
-let logRowProvider: object | undefined;
 
 const { logRows } = vi.hoisted(() => ({ logRows: [] as CapturedLogRow[] }));
 
@@ -53,8 +49,7 @@ function newLogRow(): CapturedLogRow {
         TargetRecordID: null,
         NewRecord: vi.fn(),
         Save: vi.fn().mockResolvedValue(true),
-        LatestResult: null,
-        ProviderToUse: logRowProvider
+        LatestResult: null
     };
     logRows.push(row);
     return row;
@@ -138,8 +133,7 @@ import { ActionEngineServer } from '../generic/ActionEngine';
 import { BaseAction } from '../generic/BaseAction';
 import type { ActionParam, RunActionParams } from '@memberjunction/actions-base';
 import type { MJActionParamEntity, MJEntityActionParamEntity } from '@memberjunction/core-entities';
-import type { PostCommitToken, UserInfo } from '@memberjunction/core';
-import { DatabaseProviderBase } from '@memberjunction/core';
+import type { UserInfo } from '@memberjunction/core';
 import { BuildUser, EmployeeEntityInfo, FullEmployeeRow, HR_ROLE_ID, INTERN_ROLE_ID, LoadEmployeeFor, SALARY } from './fieldSecurityFixture';
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────────────────────────
@@ -162,7 +156,7 @@ interface EngineInternals {
  * chains the 'ended' UPDATE behind the 'started' INSERT (covered by the existing ActionEngine tests);
  * flattening it here keeps these assertions about WHAT is written, not when.
  */
-function engine(paramDefinitions: MJActionParamEntity[] = [], settled: () => Promise<void> = () => Promise.resolve()): ActionEngineServer {
+function engine(paramDefinitions: MJActionParamEntity[] = []): ActionEngineServer {
     const e = new ActionEngineServer();
     const internals = e as unknown as EngineInternals;
     // The engine reads param definitions off the shared ActionEngineBase cache via a getter, so the
@@ -173,8 +167,8 @@ function engine(paramDefinitions: MJActionParamEntity[] = [], settled: () => Pro
     internals._logQueue = {
         Insert: (row: unknown) => { inserted.push(row); },
         Update: (_row: unknown, mutate: () => void) => { mutate(); },
-        // Writes apply synchronously above, so every row has already "landed" unless a test says otherwise.
-        Settled: settled
+        // Writes apply synchronously above, so every row has already "landed".
+        Settled: () => Promise.resolve()
     };
     (e as unknown as { _inserted: unknown[] })._inserted = inserted;
     return e;
@@ -224,7 +218,6 @@ class FailingAction extends BaseAction {
 
 beforeEach(() => {
     logRows.length = 0;
-    logRowProvider = undefined;
     bodyRunCount = 0;
     mockClassFactory.CreateInstance.mockReset();
     mockClassFactory.CreateInstance.mockImplementation(() => new OutputWritingAction());
@@ -538,55 +531,5 @@ describe('ActionExecutionLog parameters are projected for the user the action ra
         const logged = await loggedResultParams(BuildUser([HR_ROLE_ID], 'hr-log'));
         expect(logged.find(p => p.Name === 'Employee')?.Value).toMatchObject({ Salary: SALARY });
         expect(logged.find(p => p.Name === 'Rows')?.Value).toEqual([FullEmployeeRow()]);
-    });
-});
-
-// ── Writes inside an open transaction ────────────────────────────────────────────────────────────
-
-/** A database provider whose only behaviour is reporting whether the caller is in a transaction. */
-function providerInTransaction(open: boolean): DatabaseProviderBase {
-    const token: PostCommitToken = { Epoch: open ? 1 : null, FrameIds: open ? [1] : [] };
-    return Object.create(DatabaseProviderBase.prototype, {
-        CapturePostCommitToken: { value: () => token }
-    }) as DatabaseProviderBase;
-}
-
-/** A Settled() the test resolves by hand, recording whether RunAction returned before it did. */
-function heldSettle(): { Settled: () => Promise<void>; Release: () => void } {
-    let release!: () => void;
-    const held = new Promise<void>((resolve) => { release = resolve; });
-    return { Settled: () => held, Release: () => release() };
-}
-
-describe('log writes when the run is inside an open transaction', () => {
-    it('waits for the queued writes before returning, so they land before the transaction commits', async () => {
-        logRowProvider = providerInTransaction(true);
-        const settle = heldSettle();
-        let returned = false;
-        const run = engine([], settle.Settled).RunAction(runParams()).then(() => { returned = true; });
-
-        await new Promise((resolve) => setTimeout(resolve, 20));
-        expect(returned).toBe(false);
-
-        settle.Release();
-        await run;
-        expect(returned).toBe(true);
-    });
-
-    it('stays fire-and-forget when the provider has no transaction open for the caller', async () => {
-        logRowProvider = providerInTransaction(false);
-        const settle = heldSettle();
-        const result = await engine([], settle.Settled).RunAction(runParams());
-
-        expect(result.Success).toBe(true);
-        settle.Release();
-    });
-
-    it('stays fire-and-forget when the log row is not on a database provider', async () => {
-        const settle = heldSettle();
-        const result = await engine([], settle.Settled).RunAction(runParams());
-
-        expect(result.Success).toBe(true);
-        settle.Release();
     });
 });

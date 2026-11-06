@@ -15,6 +15,7 @@ import {
     OpenAILiveRealtime,
     OpenAILiveSession,
     ILiveWebSocketLike,
+    DescribeOpenAILiveTurnDetection,
 } from '../models/openAILiveRealtime';
 import { OpenAIRealtime } from '../models/openAIRealtime';
 
@@ -1138,5 +1139,51 @@ describe('OpenAILiveRealtime SDP broker URL', () => {
         expect(minted.SessionConfig).not.toHaveProperty('brokerBaseUrl');
         // The rest of the bag still applies.
         expect((minted.SessionConfig as { audio?: { output?: { voice?: string } } }).audio?.output?.voice).toBe('marin');
+    });
+});
+
+describe('OpenAILiveRealtime turn detection', () => {
+    let warnSpy: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+        warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+    afterEach(() => {
+        warnSpy.mockRestore();
+    });
+
+    const turnDetection = { Mode: 'serverVad', Eagerness: 'low', Threshold: 0.55, SilenceDurationMs: 800 };
+
+    it('names every requested setting, since session.start has no turn-detection block', () => {
+        const line = DescribeOpenAILiveTurnDetection({ turnDetection });
+        expect(line).toContain('[OpenAILiveRealtime]');
+        expect(line).toContain('Mode="serverVad"');
+        expect(line).toContain('Eagerness="low"');
+        expect(line).toContain('Threshold=0.55');
+        expect(line).toContain('SilenceDurationMs=800');
+    });
+
+    it('says nothing when no turn detection was requested', () => {
+        expect(DescribeOpenAILiveTurnDetection(undefined)).toBeUndefined();
+        expect(DescribeOpenAILiveTurnDetection({ turnDetection: { Mode: 'default' } })).toBeUndefined();
+    });
+
+    it('warns once at session.start and sends no turn-detection field', async () => {
+        const driver = new TestableOpenAILiveRealtime('test-key');
+        const sessionPromise = driver.StartSession({ Model: 'gpt-live-1', SystemPrompt: 'Hi', Config: { turnDetection } });
+        const socket = driver.lastMockSocket!;
+        socket.triggerOpen();
+        const startFrame = JSON.parse(socket.sentFrames[0]);
+        expect(JSON.stringify(startFrame)).not.toContain('turn');
+        socket.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 'live-td' }));
+        await sessionPromise;
+        const turnWarnings = warnSpy.mock.calls.filter((c) => String(c[0]).includes('Turn-detection'));
+        expect(turnWarnings).toHaveLength(1);
+    });
+
+    it('warns when minting a client-direct session and keeps turnDetection out of the session config', async () => {
+        const driver = new OpenAILiveRealtime('test-key');
+        const clientConfig = await driver.CreateClientSession({ Model: 'gpt-live-1', SystemPrompt: 'Hi', Config: { turnDetection } });
+        expect(clientConfig.SessionConfig).not.toHaveProperty('turnDetection');
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Turn-detection setting(s) not applied'));
     });
 });

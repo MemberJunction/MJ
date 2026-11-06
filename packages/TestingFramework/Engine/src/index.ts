@@ -46,6 +46,7 @@ export * from './utils/cost-calculator';
 export * from './utils/result-formatter';
 export * from './utils/execution-context';
 export * from './utils/variable-resolver';
+export * from './utils/suite-sharding';
 export * from './eval';
 export * from './decision-eval';
 export * from './drivers/AgentPromptComposer';
