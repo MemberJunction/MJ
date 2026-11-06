@@ -58,6 +58,12 @@
     </div>
   </header>
 
+  <!-- Phone: the rail becomes one button that opens the Sections sheet -->
+  <mj-section-picker class="phone-section-picker"
+                     [Items]="SectionPickerItems"
+                     [ActiveKey]="ActiveSection"
+                     (ActiveKeyChange)="OnSectionPicked($event)"></mj-section-picker>
+
   <!-- Navigation Rail -->
   <nav class="nav-rail">
     @for (nav of navItems; track nav) {
