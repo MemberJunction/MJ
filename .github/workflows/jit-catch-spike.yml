@@ -1,0 +1,47 @@
+name: JiT catch spike (temporary)
+# Runs the phase 0 probes that must execute on a GitHub-hosted runner. Deleted at the end of phase 0.
+on:
+  workflow_dispatch:
+    inputs:
+      base: { description: 'base SHA', required: true }
+      head: { description: 'head SHA', required: true }
+      package: { description: 'package to build, e.g. @memberjunction/core', required: true, default: '@memberjunction/core' }
+permissions:
+  contents: read
+jobs:
+  q3-sandbox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@v4            # probe 10 runs pnpm on the host
+      - run: docker build -q -f plans/catching-jittests-spike/Dockerfile.sandbox -t jit-sandbox:spike plans/catching-jittests-spike
+      - name: Attack the sandbox from inside
+        run: bash plans/catching-jittests-spike/q3-sandbox-attack.sh | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Show what the runner user can do (context for the design, never inside the sandbox)
+        run: |
+          echo "runner uid: $(id -u); sudo: $(sudo -n true 2>&1 && echo yes || echo no); docker: $(docker --version)" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "ACTIONS_RUNTIME_TOKEN set on host: $([ -n "${ACTIONS_RUNTIME_TOKEN:-}" ] && echo yes || echo no)" | tee -a "$GITHUB_STEP_SUMMARY"
+  q1-q8-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      # Job 1 half only. The job 2 half runs in the sandbox, which has no environment at all.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, filter: 'blob:none', persist-credentials: false }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with: { node-version: 24 }            # no `cache: pnpm` — this job must not save a cache (D29)
+      - name: Restore pnpm store (restore only)
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: jit-spike-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: jit-spike-pnpm-
+      - run: df -m . | tee -a "$GITHUB_STEP_SUMMARY"
+      - run: bash plans/catching-jittests-spike/q1-q8-build-timing.sh "${{ inputs.base }}" "${{ inputs.head }}" "${{ inputs.package }}" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
