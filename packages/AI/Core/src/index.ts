@@ -24,6 +24,7 @@ export * from './generic/turnDetectionSettings';
 export * from './generic/modelConfiguration';
 export * from './generic/transcriptContinuation';
 export * from './generic/realtimeDroppedInputReporter';
+export * from './generic/realtimeTurnDetection';
 export * from './generic/realtimeProxyRegistry';
 export * from './generic/baseRealtimeChannelServer';
 export * from './generic/errorTypes';

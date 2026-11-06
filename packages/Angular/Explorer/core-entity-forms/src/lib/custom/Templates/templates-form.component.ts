@@ -13,15 +13,37 @@ import { languages } from '@codemirror/language-data';
 import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { TemplateEditorComponent, TemplateEditorConfig } from '../../shared/components/template-editor.component';
+import { JoinHeroSummary, CountLabel } from '../../shared/phone-hero';
+import { PhoneSectionsState } from '../../shared/phone-sections-state';
 
 @RegisterClass(BaseFormComponent, 'MJ: Templates') 
 @Component({
   standalone: false,
     selector: 'mj-templates-form',
     templateUrl: './templates-form.component.html',
-    styleUrls: ['../../../shared/form-styles.css', './templates-form.component.css']
+    styleUrls: ['../../../shared/form-styles.css', './templates-form.component.css', '../../shared/phone-hero.css']
 })
 export class MJTemplateFormComponentExtended extends MJTemplateFormComponent implements OnInit, OnDestroy, AfterViewInit {
+
+    /** Phone width shows the stacked accordions as sections behind one picker (design call 7A). */
+    public Phone = new PhoneSectionsState(() => this.cdr.markForCheck());
+
+    /** Phone hero (6A): whether the summary line is expanded to show the rest of the hero. */
+    public HeroDetailsOpen = false;
+
+    /** Toggles the phone hero between its compact identity row and the full hero. */
+    public ToggleHeroDetails(): void {
+        this.HeroDetailsOpen = !this.HeroDetailsOpen;
+        this.cdr.markForCheck();
+    }
+
+    /** The phone hero's one-line summary of what the compact hero leaves out. */
+    public get HeroSummary(): string {
+        return JoinHeroSummary([
+            this.record.Category,
+            CountLabel(this.TemplateContents.length, 'content'),
+        ]);
+    }
     public record!: MJTemplateEntity;
     public readonly ToolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
 
@@ -240,6 +262,7 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
 
     ngOnDestroy() {
         super.ngOnDestroy();
+        this.Phone.Stop();
         this.destroy$.next();
         this.destroy$.complete();
         
