@@ -307,6 +307,12 @@ release workflows.
 builds base with read-only remote turbo cache access. It uploads the base build outputs and its local turbo cache as an
 artifact. Job 2 uses the base build as is, and seeds its own local turbo cache from it for the head build.
 
+Open item (Q4, spike §1): in 3 of 5 spike PRs the head build missed 54–117 tasks the PR does not reach, which cost
+150–204 s; the cause is not known and the time still fits a hosted runner. Candidates not yet checked: inside the
+sandbox the head worktree's `.git` file points to a host path that is not mounted, so turbo hashes without git; or
+the base's remote hits are not all written to the local cache that seeds the head. Both builds keep their turbo run
+summaries (`--summarize`) so the task hashes and the seed folder can be compared. This does not block phase 1.
+
 ---
 
 ## 6. Triggers and PR selection
@@ -828,7 +834,7 @@ judges, reporting model and gates carry over.
 | The runner's real cache token (`ACTIONS_RUNTIME_TOKEN`) reaches the sandbox | Not yet tested: a `run:` step has no real token, so spike probe 6 used a fake value and shows only that the host environment does not reach the container. Open evidence gap; repeat probe 6 from a step that holds the real token when the phase 3 workflows exist |
 | The host fetch fails for a PR (for example a git dependency with build scripts, which `pnpm fetch` refuses), or the copied store is too slow | The PR is recorded as an infrastructure failure, not retried with network; spike question 8 measured the copy import at 32–57 s |
 | A PR's lockfile or patch files make the host apply or read PR content | The host fetches with a copy of the lockfile without patch information and reads no patch file (D35); patches apply only in the sandbox; each run has its own store |
-| Cold head builds are too slow or fill the runner's disk | Base hand-off and seeded local turbo cache; one-package fast path; spike question 1 measures time and disk |
+| Cold head builds are too slow or fill the runner's disk | Base hand-off and seeded local turbo cache; one-package fast path; spike question 1 measured 1–5 minutes for job 2 and 14 GB of disk with 71 GB free; the unexplained head cache misses are Q4 |
 | Gate 2 does not reach 15 answered catches | Nightly catches count (D34); 8-week limit with a defined outcome |
 | Agent SDK cannot enforce the tool limits | Spike question 2; fall back to a hand-written tool loop with the Anthropic SDK |
 | Contention with normal CI | Nightly at 07:45 UTC in the existing nightly window, after `test.yml` starts; at most 2 PRs in parallel |
@@ -843,6 +849,7 @@ judges, reporting model and gates carry over.
 | Q1 | May the promotion workflow commit with the existing release GitHub App token, or a new App? | Repo admins |
 | Q2 | Is an OpenAI key available to CI (inside `INTEGRATION_LIVE_MODEL_KEYS` or new)? | Repo admins |
 | Q3 | Monthly spend limit after gate 1 measures real cost | Team |
+| Q4 | Why does the head build miss turbo tasks the PR does not reach (§5.4)? Compare the base and head run summaries | Phase 1 |
 
 ---
 

@@ -2093,6 +2093,8 @@ function safeJson(text: string): unknown { try { return JSON.parse(text); } catc
 
 The sandbox is used for **every** `pnpm install`, `pnpm rebuild`, `turbo`, vitest and tsc invocation, on base too (generated tests are untrusted even on base). The host runs only `git`, `StripPatchInfo` and `pnpm fetch`, and no other pnpm command in any folder that holds revision files, not even `pnpm --version` (spike §3: `pnpm --version` beside a head's `.pnpmfile.cjs` loaded it): `pnpm install --ignore-scripts` on the host would still load `.pnpmfile.cjs` and follow `packageManager`, both PR-controlled (design §5.4). The fetch runs in a folder that holds nothing but a copy of the revision's `pnpm-lock.yaml` with the patch information removed (D35): with the patch entries in place, `pnpm fetch` needs `patches/`, and with `patches/` it applies the PR's diffs on the host (spike §8). The host never reads a patch file. The sandbox install uses the real lockfile and `patches/`, so pnpm applies the patches there and writes the patched files into the store; `StoreDir` is therefore one folder per run (Task 1.23 puts it in the run directory), never shared between runs. A failed host fetch or sandbox install throws `InfrastructureError` and is not retried with network access.
 
+Head cache misses (spike §1, design §18 Q4): in 3 of 5 spike PRs the head build missed 54–117 turbo tasks the PR does not reach. To find why, `BuildPackages` runs turbo with `--summarize` and copies each run summary to `<WorkRoot>/turbo-summaries/<base|head>/`, so the base and head task hashes (and the seeded cache folder) can be compared. In CI the base summary travels with job 1's hand-off artifact.
+
 Path choice: this task builds every head with the default path (design §7 item 1). The file-swap fast path is not implemented here (see the self-review notes). If it is added, it applies only when every file the PR changes is under one package's `src/`, with no deletions or renames and no change to `package.json`, vitest, tsconfig or turbo config or any file outside that `src/` (design §7 item 2, D41); every other PR keeps the full head build. Two mount phases: `Prepare` and `BuildPackages` mount the worktree read-write (they write `node_modules`, `dist`, `.turbo`); `Run`, `TypeCheck` and `Coverage` mount it read-only plus the jit folders. Base is prepared before any head code exists and is never mounted read-write afterwards.
 
 - [ ] **Step 1: Failing tests** (pure parts: command construction and result assembly; docker and git are injected)
@@ -2173,6 +2175,17 @@ describe('VitestCatchTarget.Prepare', () => {
   });
 });
 
+describe('VitestCatchTarget.BuildPackages', () => {
+  it('builds with --summarize and keeps the turbo run summary per revision', async () => {
+    const work = mkdtempSync(join(tmpdir(), 'jit-build-')); const head = join(work, 'head');
+    const { target, calls } = fakeTarget(() => { mkdirSync(join(head, '.turbo/runs'), { recursive: true }); writeFileSync(join(head, '.turbo/runs/abc.json'), '{"tasks":[]}'); return { Stdout: '', ExitCode: 0 }; });
+    (target as never as { o: object }).o = { ...(target as never as { o: object }).o, WorkRoot: work } as never;
+    await target.BuildPackages({ Ref: { Kind: 'Head', SHA: 'h' }, RootDir: head }, ['@memberjunction/core']);
+    expect(calls[0].Command.join(' ')).toContain('--summarize');
+    expect(readdirSync(join(work, 'turbo-summaries', 'head'))).toEqual(['abc.json']);
+  });
+});
+
 describe('VitestCatchTarget.TypeCheck', () => {
   it('runs tsc --noEmit on the package with the jit file included and reports the error text per test', async () => {
     const { target, calls } = fakeTarget(() => ({ Stdout: `src/__tests__/jit/${ID1}.jit.test.ts(3,5): error TS2339: Property 'x' does not exist`, ExitCode: 2 }));
@@ -2231,7 +2244,7 @@ The blank line between the block and the next top-level key goes with the block,
 ```ts
 // VitestCatchTarget.ts
 import { execFile } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync, existsSync, rmSync, readFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync, existsSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { promisify } from 'node:util';
@@ -2286,8 +2299,16 @@ export class VitestCatchTarget extends BaseCatchTarget {
     public async BuildPackages(revision: PreparedRevision, packages: string[]): Promise<void> {
         if (packages.length === 0) return;
         const filters = packages.map((p) => `--filter=${p}...`).join(' ');
-        const r = await this.inSandbox(revision, 'rw', ['sh', '-c', `npx turbo run build ${filters} --cache=local:rw,remote:r --log-order=stream`], 45 * 60_000, { TURBO_CACHE_DIR: `${CONTAINER_ROOT}/.turbo/cache`, TURBO_TELEMETRY_DISABLED: '1' });
+        const r = await this.inSandbox(revision, 'rw', ['sh', '-c', `npx turbo run build ${filters} --cache=local:rw,remote:r --log-order=stream --summarize`], 45 * 60_000, { TURBO_CACHE_DIR: `${CONTAINER_ROOT}/.turbo/cache`, TURBO_TELEMETRY_DISABLED: '1' });
+        this.keepTurboSummaries(revision);
         if (r.ExitCode !== 0) throw new Error(`build failed on ${revision.Ref.Kind}: ${r.Stderr.slice(-4000)}`);
+    }
+
+    /** Copies turbo's run summaries out of the worktree, so base and head task hashes can be compared (design §5.4, Q4). */
+    private keepTurboSummaries(revision: PreparedRevision): void {
+        const from = join(revision.RootDir, '.turbo', 'runs'); if (!existsSync(from)) return;
+        const to = join(this.o.WorkRoot, 'turbo-summaries', revision.Ref.Kind.toLowerCase()); mkdirSync(to, { recursive: true });
+        for (const f of readdirSync(from)) if (f.endsWith('.json')) copyFileSync(join(from, f), join(to, f));
     }
 
     public async WriteTests(revision: PreparedRevision, tests: CandidateTest[]): Promise<void> {
