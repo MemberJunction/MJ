@@ -440,8 +440,12 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
   const user = { ID: 'user-1' } as UserInfo;
   const ctx = (entityID?: string): RecordProcessorContext => ({ ContextUser: user, Provider: provider, ...(entityID ? { EntityID: entityID } : {}) });
 
+  /** The unit world a model is trained and scored over: its tables, metadata and unit row (the shared world by default). */
+  interface ScoringWorld { readonly Tables: Record<string, SourceRow[]>; readonly Metadata: IAssemblyMetadata; readonly Unit: PredictionUnitColumns }
+  const defaultWorld = (): ScoringWorld => ({ Tables: UnitYearsWorld.Tables(), Metadata: UnitYearsWorld.Metadata(), Unit: UnitYearsWorld.UnitColumns() });
+
   /** The training-side deps over the unit world: the pipeline row, the unit store, the metadata and the tables. */
-  function trainingDeps(dataAccess: TableDataAccess): TrainingDeps {
+  function trainingDeps(dataAccess: TableDataAccess, world: ScoringWorld = defaultWorld()): TrainingDeps {
     const pipeline = {
       ID: 'pipe-u', Version: 1, PredictionUnitID: UnitYearsWorld.UnitID, TargetEntity: 'Years', TargetVariable: '__ps_label', ProblemType: 'classification',
       Algorithm: 'xgboost', AlgorithmID: 'algo', Hyperparameters: '{}', SourceBindings: '[]', FeatureSteps: JSON.stringify(steps), AsOfStrategy: null,
@@ -454,8 +458,8 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
       artifactStore: { save: unused, delete: unused, AssertWritable: unused },
       contextUser: user,
       provider,
-      predictionUnits: new FakePredictionUnitStore(UnitYearsWorld.UnitColumns()),
-      assemblyMetadata: UnitYearsWorld.Metadata(),
+      predictionUnits: new FakePredictionUnitStore(world.Unit),
+      assemblyMetadata: world.Metadata,
       dataAccess,
     };
   }
@@ -464,10 +468,10 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
   const pipelineUnits = { PredictionUnitIDOf: async (pipelineId: string) => (pipelineId === 'pipe-u' ? UnitYearsWorld.UnitID : null) };
 
   /** A Validated unit model whose lineage carries what training stored: the unit, the feature spec and the kept levels. */
-  async function unitModel(lineageOverride?: string, lookup: typeof pipelineUnits = pipelineUnits, trainingRowIds: ReadonlySet<string> = new Set<string>()): Promise<{ deps: MLInferenceDeps; sidecar: FakeSidecar; training: Awaited<ReturnType<TrainingEngine['AssembleForTraining']>> }> {
-    const dataAccess = new TableDataAccess(UnitYearsWorld.Tables());
-    const training = await new TrainingEngine().AssembleForTraining('pipe-u', trainingDeps(dataAccess));
-    if (training.Assembled.Status !== 'assembled') throw new Error('training assembly refused');
+  async function unitModel(lineageOverride?: string, lookup: typeof pipelineUnits = pipelineUnits, trainingRowIds: ReadonlySet<string> = new Set<string>(), world: ScoringWorld = defaultWorld()): Promise<{ deps: MLInferenceDeps; sidecar: FakeSidecar; training: Awaited<ReturnType<TrainingEngine['AssembleForTraining']>> }> {
+    const dataAccess = new TableDataAccess(world.Tables);
+    const training = await new TrainingEngine().AssembleForTraining('pipe-u', trainingDeps(dataAccess, world));
+    if (training.Assembled.Status !== 'assembled') throw new Error(`training assembly refused: ${JSON.stringify(training.Assembled.Refusal)}`);
     const model = new FakeMLModel();
     model.Status = 'Validated';
     model.PipelineID = 'pipe-u';
@@ -480,7 +484,7 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     });
     if (lineageOverride !== undefined) model.Lineage = lineageOverride;
     const { deps, sidecar } = buildDeps(model, trainingRowIds);
-    return { deps: { ...deps, pipelineUnits: lookup, predictionUnits: new FakePredictionUnitStore(UnitYearsWorld.UnitColumns()), assemblyMetadata: UnitYearsWorld.Metadata(), dataAccess }, sidecar, training };
+    return { deps: { ...deps, pipelineUnits: lookup, predictionUnits: new FakePredictionUnitStore(world.Unit), assemblyMetadata: world.Metadata, dataAccess }, sidecar, training };
   }
 
   it('refuses in Preflight a scope whose entity is not the unit row entity, as a typed refusal', async () => {
@@ -601,6 +605,53 @@ describe('MLModelInferenceProcessor — Prediction Unit models', () => {
     expect(batch.map((r) => (r.ResultPayload as MLInferenceResultPayload).inTraining)).toEqual([true, false]);
     const single = await processor.ProcessRecord(records[0], ctx(UnitYearsWorld.YearsEntity.ID));
     expect((single.ResultPayload as MLInferenceResultPayload).inTraining).toBe(true);
+  });
+
+  /**
+   * The shared world with person p1 hard-deleted on `deletedAt`: no People row, and a Delete change row whose
+   * FullRecordJSON holds the record as it stood. p1's rows are y2024-1 (decided 2024-12-01) and y2025-1 (2025-12-01).
+   * `immutableStatus` declares People.Status not updatable, so it is a stored read (the Delete row is its only source
+   * once the row is gone) and the p2 Update row that would contradict that is left out; otherwise Status is replayed.
+   */
+  function worldWithDeletedPerson(deletedAt: string, immutableStatus: boolean, onUncoveredRow: 'refuse' | 'exclude-and-count'): ScoringWorld {
+    const tables = UnitYearsWorld.Tables();
+    tables.People = tables.People.filter((p) => p.ID !== 'p1');
+    const changes = immutableStatus ? tables['MJ: Record Changes'].filter((c) => c.ID !== 'rc-update-p2') : tables['MJ: Record Changes'];
+    tables['MJ: Record Changes'] = [...changes, {
+      ID: 'rc-delete-p1', EntityID: UnitYearsWorld.PeopleEntity.ID, Status: 'Complete', RecordID: 'ID|p1', Type: 'Delete', Source: 'Internal',
+      ChangedAt: new Date(deletedAt), ChangesJSON: '{}', FullRecordJSON: JSON.stringify({ ID: 'p1', Status: 'Active' }),
+    }];
+    const people = { ...UnitYearsWorld.PeopleEntity, Fields: UnitYearsWorld.PeopleEntity.Fields.map((f) => (f.Name === 'Status' ? { ...f, AllowUpdateAPI: !immutableStatus } : f)) };
+    const byName = new Map([UnitYearsWorld.YearsEntity, people].map((e) => [e.Name, e] as const));
+    const unit = { ...UnitYearsWorld.UnitColumns(), ChangeHistoryPolicy: JSON.stringify({ onUncoveredRow, externalSourceRows: 'ineligible' }) };
+    return { Tables: tables, Metadata: { Entity: (name: string) => byName.get(name) || null }, Unit: unit };
+  }
+
+  it('scores a row whose parent was hard-deleted after its decision date with the value its Delete row holds', async () => {
+    const records: RecordRef[] = [{ EntityID: UnitYearsWorld.YearsEntity.ID, RecordID: 'y2025-1' }];
+    for (const immutableStatus of [true, false]) {
+      const { deps, sidecar } = await unitModel(undefined, pipelineUnits, new Set<string>(), worldWithDeletedPerson('2026-02-01T00:00:00Z', immutableStatus, 'refuse'));
+      const results = await new MLModelInferenceProcessor({ modelId: 'model-1', deps }).ProcessBatch(records, ctx(UnitYearsWorld.YearsEntity.ID));
+      expect(results.map((r) => r.Status)).toEqual(['Succeeded']);
+      expect(sidecar.Requests[0].rows).toEqual([{ EventsAttended: UnitYearsWorld.EventsAttended(1, 2025), Status: 'Active' }]);
+      if (!immutableStatus) continue;
+      const scored = await new MLModelInferenceProcessor({ modelId: 'model-1', deps }).AssembleForScoring([{ ID: 'y2025-1' }], ctx(), 'unit-rule');
+      expect(scored.Status === 'assembled' && scored.Rows[0].Provenance[1]).toMatchObject({ sourceRef: 'People/p1/Status', sourceVersion: 'rc-delete-p1' });
+    }
+  });
+
+  it('fails the batch with a typed refusal naming the entity and field when a scored row\'s parent was hard-deleted before its decision date', async () => {
+    // Deleted 2025-03-01: training reads y2024-1 and excludes y2025-1 (exclude-and-count); scoring y2025-1 cannot read it.
+    const { deps } = await unitModel(undefined, pipelineUnits, new Set<string>(), worldWithDeletedPerson('2025-03-01T00:00:00Z', false, 'exclude-and-count'));
+    const processor = new MLModelInferenceProcessor({ modelId: 'model-1', deps });
+    const assembled = await processor.AssembleForScoring([{ ID: 'y2025-1' }], ctx(), 'unit-rule');
+    expect(assembled.Status === 'assembled' && assembled.UncoveredRowsExcluded).toEqual([{ entity: 'People', field: 'Status', rows: 1 }]);
+    const errors = ConsoleCapture.Errors();
+    const records: RecordRef[] = [{ EntityID: UnitYearsWorld.YearsEntity.ID, RecordID: 'y2024-1' }, { EntityID: UnitYearsWorld.YearsEntity.ID, RecordID: 'y2025-1' }];
+    const results = await processor.ProcessBatch(records, ctx(UnitYearsWorld.YearsEntity.ID));
+    const refusal = TrainingRefusedError.DescribeTrainingRefusal({ stage: 'assembly', reason: { kind: 'decision-date-before-change-history', entity: 'People', field: 'Status', historyStart: '2023-01-01T00:00:00.000Z', rowsAffected: 1 } });
+    expect(results).toEqual([{ Status: 'Failed', ErrorMessage: refusal }, { Status: 'Failed', ErrorMessage: refusal }]);
+    expect(ConsoleCapture.Lines(errors)).toEqual([`MLModelInferenceProcessor: batch scoring failed: ${refusal}`]);
   });
 
   it('fails the run when the training rows cannot be read, naming the cause', async () => {

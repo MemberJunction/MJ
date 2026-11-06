@@ -73,6 +73,8 @@ import {
   type MatrixData,
   type OutcomeConfig,
   type PredictionUnitSpec,
+  type AssemblyRefusal,
+  type UncoveredRowsCount,
   LABEL_COLUMN,
   PredictionUnit,
 } from '@memberjunction/predictive-studio-core';
@@ -81,7 +83,7 @@ import { FeatureAssemblyExecutor, type FeatureAssemblyResult, type DatedSourceSp
 import type { SourceRow } from '../feature-assembly';
 import { RunViewDataAccess, type ICountingDataAccess } from '../feature-assembly/data-access';
 import { ProviderAssemblyMetadata, type AssemblyEntityInfo, type IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
-import { AsOfFeatureAssembler, type AsOfAssemblyResult, type AssemblyRowRef } from '../feature-assembly/as-of/as-of-assembler';
+import { AsOfFeatureAssembler, type AsOfAssembledMatrix, type AsOfAssemblyResult, type AssemblyRowRef } from '../feature-assembly/as-of/as-of-assembler';
 import { KeyedReader } from '../feature-assembly/as-of/read-by-keys';
 import { RunViewRecordHistoryReader } from '../feature-assembly/as-of/record-history';
 import type { SeriesHistory } from '../feature-assembly/as-of/series-features';
@@ -542,19 +544,25 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
 
   /**
    * A unit model's matrix, assembled as of each row's decision date. A refusal is thrown as a typed
-   * {@link TrainingRefusedError}; a row whose history does not cover its decision date fails the batch, since its
-   * prediction would be made from values the model never saw for that date and the results are aligned by position.
+   * {@link TrainingRefusedError}. A row the history cannot read as of its decision date (its history starts after it,
+   * or its parent was hard-deleted before it) fails the whole batch, since the results are aligned by position: it is
+   * thrown as the typed `decision-date-before-change-history` refusal training's `refuse` policy raises, built from the
+   * first uncovered entity field, whatever the unit's `onUncoveredRow` policy.
    */
   private async assembleUnitFeatures(model: LoadedModel, rows: SourceRow[], context: RecordProcessorContext): Promise<FeatureAssemblyResult> {
     const assembled = await this.AssembleForScoring(rows, context, 'unit-rule');
     if (assembled.Status === 'refused') throw new TrainingRefusedError({ stage: 'assembly', reason: assembled.Refusal });
-    if (assembled.ExcludedRowIDs.size > 0) {
-      const named = assembled.UncoveredRowsExcluded.map((u) => `${u.entity}.${u.field} ${u.rows}`).join(', ');
-      throw new Error(`MLModelInferenceProcessor: ${assembled.ExcludedRowIDs.size} of ${rows.length} record(s) cannot be read as of their decision date (uncovered history: ${named})`);
-    }
+    const first = assembled.UncoveredRowsExcluded[0];
+    if (first) throw new TrainingRefusedError({ stage: 'assembly', reason: MLModelInferenceProcessor.uncoveredRefusal(assembled, first) });
     const assembly = AsOfFeatureAssembler.ToFeatureAssemblyResult(assembled, null, LABEL_COLUMN);
     this.assertHasColumns(model, assembly);
     return assembly;
+  }
+
+  /** The refusal of an uncovered entity field: its history start is the one the assembly's coverage reports for it. */
+  private static uncoveredRefusal(assembled: AsOfAssembledMatrix, first: UncoveredRowsCount): AssemblyRefusal {
+    const coverage = assembled.Coverage.find((c) => c.entity === first.entity && c.field === first.field);
+    return { kind: 'decision-date-before-change-history', entity: first.entity, field: first.field, historyStart: coverage?.historyStart || null, rowsAffected: first.rows };
   }
 
   // region: as-of assembly (unit models) ----------------------------------------
