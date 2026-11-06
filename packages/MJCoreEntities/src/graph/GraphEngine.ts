@@ -50,6 +50,16 @@ export const GRAPH_DEFAULT_MAX_NODES = 50;
 export const GRAPH_MAX_NODES = 200;
 /** Row cap on the stored edges one expansion step reads on demand. */
 export const GRAPH_MAX_STORED_EDGES_PER_STEP = 1000;
+
+/**
+ * Server operation key (`ServerOperationScopeManager`) under which the Content Pipeline `Graph` stage
+ * saves the `Inferred` edges its content source's `GraphOverlay` policy approves (every
+ * `ConceptTaxonomyMode` except `propose-only`). `MJGraphEdgeEntityServer` lets a new `Inferred` edge
+ * start `Approved` without `Graph: Approve Edges` only inside this scope. Client CRUD entry points
+ * (GraphQL, REST, transaction groups) run inside a client CRUD boundary that masks every outer scope,
+ * so an API caller cannot enter it; only server code that names this key can.
+ */
+export const GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION = 'ContentPipeline.GraphStage.ApproveInferredEdges';
 /** Per-hop decay applied to best-first path scores, so near nodes outrank far ones. */
 const HOP_DECAY = 0.85;
 

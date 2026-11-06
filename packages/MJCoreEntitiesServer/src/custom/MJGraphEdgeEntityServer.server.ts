@@ -4,6 +4,7 @@ import {
     IMetadataProvider,
     RunView,
     RunViewParams,
+    ServerOperationScopeManager,
     UserInfo,
     ValidationErrorInfo,
     ValidationErrorType,
@@ -13,6 +14,7 @@ import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/glob
 import {
     EvaluateAuthorizationChecks,
     FormatGraphNodeKey,
+    GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION,
     GraphEngine,
     IsGraphDataProvider,
     MJGraphEdgeEntity,
@@ -26,6 +28,8 @@ export const MAX_GRAPH_EDGE_RECORD_ID_LENGTH = 400;
 /** Named authorization required for every approval decision on `MJ: Graph Edges` (see {@link EvaluateGraphEdgeApproval}). */
 export const GRAPH_APPROVE_EDGES_AUTHORIZATION = 'Graph: Approve Edges';
 
+const GRAPH_EDGES_ENTITY_NAME = 'MJ: Graph Edges';
+
 /**
  * Input snapshot of a `MJ: Graph Edges` row evaluated by {@link ValidateGraphEdgeInvariants}.
  */
@@ -36,9 +40,6 @@ export interface GraphEdgeValidationInput {
     readonly SourceRecordID: string | null | undefined;
     readonly TargetEntityID: string | null | undefined;
     readonly TargetRecordID: string | null | undefined;
-    readonly Origin: MJGraphEdgeEntity['Origin'] | null | undefined;
-    readonly Status: MJGraphEdgeEntity['Status'] | null | undefined;
-    readonly IsSaved: boolean;
 }
 
 /**
@@ -89,7 +90,9 @@ export function CanonicalizeUndirectedEdgeEndpoints(
  * 3. `EdgeTypeID` resolves to an edge type with `AllowStored === true` (refuses provider-only types)
  *    that belongs to the edge's `GraphID` or is global (`GraphID === null`).
  * 4. `SourceEntityID` and `TargetEntityID` satisfy `GraphEngine.ValidateEdgeEndpoint` constraints.
- * 5. A new `Inferred` edge (`!IsSaved && Origin === 'Inferred'`) must be created with `Status === 'Proposed'`.
+ *
+ * Who may create an edge that starts `Approved` is not an invariant of the row: it is the approval
+ * gate's decision ({@link EvaluateGraphEdgeApproval}), and it applies to every `Origin`.
  */
 export function ValidateGraphEdgeInvariants(
     input: GraphEdgeValidationInput,
@@ -211,17 +214,6 @@ export function ValidateGraphEdgeInvariants(
         }
     }
 
-    if (!input.IsSaved && input.Origin === 'Inferred' && input.Status !== 'Proposed') {
-        errors.push(
-            new ValidationErrorInfo(
-                'Status',
-                `Inferred edges must be created with Status = "Proposed" (got "${input.Status ?? ''}").`,
-                input.Status,
-                ValidationErrorType.Failure,
-            ),
-        );
-    }
-
     return errors;
 }
 
@@ -232,6 +224,8 @@ export function ValidateGraphEdgeInvariants(
 export interface GraphEdgeApprovalInput {
     /** `true` for an update of an existing row, `false` for a create. */
     readonly IsSaved: boolean;
+    /** The `Origin` being saved. */
+    readonly Origin: MJGraphEdgeEntity['Origin'] | null | undefined;
     /** The stored `Status` before this save (the field's `OldValue`); ignored for a create. */
     readonly PreviousStatus: MJGraphEdgeEntity['Status'] | null | undefined;
     /** The `Status` being saved. */
@@ -243,6 +237,11 @@ export interface GraphEdgeApprovalInput {
     readonly IdentityChanged: boolean;
     readonly User: UserInfo | undefined;
     readonly Authorizations: AuthorizationInfo[] | undefined;
+    /**
+     * `true` when the save runs inside the Content Pipeline's {@link GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION}
+     * server operation scope for this caller ({@link IsInGraphPipelineApprovalScope}).
+     */
+    readonly InPipelineApprovalScope: boolean;
 }
 
 /**
@@ -272,15 +271,34 @@ export function GraphEdgeSaveNeedsApproval(input: GraphEdgeApprovalInput): boole
 }
 
 /**
+ * True when this save is the Content Pipeline creating an `Inferred` edge its content source's
+ * `GraphOverlay` policy approves: a create, `Origin = 'Inferred'`, `Status = 'Approved'`, inside the
+ * {@link GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION} scope. Nothing else (a `Declared` edge, a status
+ * change, a re-pointed or edited edge) is covered by the pipeline's policy.
+ */
+export function IsPipelinePolicyApprovedCreate(input: GraphEdgeApprovalInput): boolean {
+    return input.InPipelineApprovalScope && !input.IsSaved && input.Origin === 'Inferred' && input.NextStatus === 'Approved';
+}
+
+/**
  * Pure fail-closed gate for approval decisions on `MJ: Graph Edges` (see {@link GraphEdgeSaveNeedsApproval}).
  *
  * The caller must hold `Graph: Approve Edges` (or an ancestor) through `EvaluateAuthorizationChecks`,
- * MJ's role-based evaluation. There is no bypass for any user type: an authorization that is not
- * seeded, an empty authorization list, or a missing caller all deny, because each of them means
- * nobody has been granted the right.
+ * MJ's role-based evaluation, whatever the edge's `Origin`. There is no bypass for any user type: an
+ * authorization that is not seeded, an empty authorization list, or a missing caller all deny,
+ * because each of them means nobody has been granted the right.
+ *
+ * The one exception is {@link IsPipelinePolicyApprovedCreate}. The Content Pipeline `Graph` stage
+ * (`EntityGraphOverlayStore.UpsertEdges`) saves as the run's user: the scheduler's user, whoever ran
+ * the Record Process on demand, or whoever uploaded the document, most of whom hold no
+ * `Graph: Approve Edges`. Its `Approved` status is not that user's decision but the content source's
+ * configured `GraphOverlay.ConceptTaxonomyMode`, so tying it to the run user would break `auto-grow`
+ * for every run but a developer's. The stage therefore saves inside a server operation scope instead,
+ * which no API caller can enter (see {@link GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION}). Such an edge is
+ * not stamped as reviewed: no person reviewed it.
  */
 export function EvaluateGraphEdgeApproval(input: GraphEdgeApprovalInput): GraphEdgeApprovalVerdict {
-    if (!GraphEdgeSaveNeedsApproval(input)) {
+    if (!GraphEdgeSaveNeedsApproval(input) || IsPipelinePolicyApprovedCreate(input)) {
         return { Error: null, ShouldStampReview: false };
     }
     if (!input.User) {
@@ -303,6 +321,19 @@ export function EvaluateGraphEdgeApproval(input: GraphEdgeApprovalInput): GraphE
         };
     }
     return { Error: null, ShouldStampReview: true };
+}
+
+/**
+ * True while the current async call chain is inside a {@link GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION}
+ * server operation scope bound to `user` (`ServerOperationScopeManager.IsOperationActive`). Frames
+ * outside the innermost client CRUD boundary are masked, so a GraphQL, REST or transaction-group save
+ * never sees one.
+ */
+export function IsInGraphPipelineApprovalScope(user: UserInfo | undefined): boolean {
+    if (!user) {
+        return false;
+    }
+    return ServerOperationScopeManager.Instance.IsOperationActive([GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION], GRAPH_EDGES_ENTITY_NAME, user);
 }
 
 function approvalError(reason: string, nextStatus: MJGraphEdgeEntity['Status'] | null | undefined): ValidationErrorInfo {
@@ -417,9 +448,10 @@ const IDENTITY_FIELDS = ['GraphID', 'EdgeTypeID', 'SourceEntityID', 'SourceRecor
  * - Refuses an `EdgeTypeID` that is unknown, provider-only (`AllowStored = false`) or scoped to another graph
  * - Enforces `MJ: Graph Edge Type Endpoints` source/target entity constraints via `GraphEngine.Instance.ValidateEdgeEndpoint`
  * - Canonicalizes undirected (`IsDirected = false`) edge endpoint orientation (lower `<entityID>|<recordID>` key first)
- * - Requires new `Inferred` edges to start with `Status = 'Proposed'`
- * - Requires `Graph: Approve Edges` for every approval decision ({@link EvaluateGraphEdgeApproval}) and stamps
- *   `ReviewedByUserID` / `ReviewedAt` into `Attributes`
+ * - Requires `Graph: Approve Edges` for every approval decision, whatever the `Origin`, including creating
+ *   an edge that starts `Approved` ({@link EvaluateGraphEdgeApproval}), and stamps `ReviewedByUserID` /
+ *   `ReviewedAt` into `Attributes`; the Content Pipeline's policy-approved `Inferred` edges are the one
+ *   exception ({@link IsPipelinePolicyApprovedCreate})
  * - Verifies `Source` and `Target` endpoint records exist, as the caller, via batched `RunViews` (`count_only`)
  *
  * Every check fails closed: graph metadata that cannot be loaded is a validation error, not a pass.
@@ -456,9 +488,6 @@ export class MJGraphEdgeEntityServer extends MJGraphEdgeEntity {
                 SourceRecordID: this.SourceRecordID,
                 TargetEntityID: this.TargetEntityID,
                 TargetRecordID: this.TargetRecordID,
-                Origin: this.Origin,
-                Status: this.Status,
-                IsSaved: this.IsSaved,
             },
             edgeType,
         );
@@ -468,11 +497,13 @@ export class MJGraphEdgeEntityServer extends MJGraphEdgeEntity {
 
         const approval = EvaluateGraphEdgeApproval({
             IsSaved: this.IsSaved,
+            Origin: this.Origin,
             PreviousStatus: this.previousStatus(),
             NextStatus: this.Status,
             IdentityChanged: this.IsSaved && IDENTITY_FIELDS.some((f) => this.GetFieldByName(f)?.Dirty === true),
             User: this.ContextCurrentUser,
             Authorizations: provider.Authorizations,
+            InPipelineApprovalScope: IsInGraphPipelineApprovalScope(this.ContextCurrentUser),
         });
         if (approval.Error) {
             errors.push(approval.Error);

@@ -16,10 +16,11 @@ import {
     type RunViewParams,
     type RunViewResult,
     type UserInfo,
+    ServerOperationScopeManager,
     ValidationErrorType,
     ValidationResult,
 } from '@memberjunction/core';
-import type { MJGraphEdgeTypeEntity } from '@memberjunction/core-entities';
+import { GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION, type MJGraphEdgeTypeEntity } from '@memberjunction/core-entities';
 
 interface EngineStub {
     EdgeTypes: Array<Pick<MJGraphEdgeTypeEntity, 'ID' | 'Name' | 'GraphID' | 'IsDirected' | 'AllowStored'>>;
@@ -141,9 +142,6 @@ function makeValidEdgeInput(overrides: Partial<GraphEdgeValidationInput> = {}): 
         SourceRecordID: 'F0000001-0000-0000-0000-000000000001',
         TargetEntityID: ENTITY_QUERIES_ID,
         TargetRecordID: 'F0000001-0000-0000-0000-000000000002',
-        Origin: 'Declared',
-        Status: 'Approved',
-        IsSaved: false,
         ...overrides,
     };
 }
@@ -218,32 +216,6 @@ describe('MJGraphEdgeEntityServer (Phase G1.3 invariants)', () => {
         expect(errors[0].Message).toContain('not permitted as a Source endpoint');
     });
 
-    it('refuses a new Inferred edge created with Status = Approved (requires Proposed)', () => {
-        const rejectedErrors = ValidateGraphEdgeInvariants(
-            makeValidEdgeInput({ Origin: 'Inferred', Status: 'Approved', IsSaved: false }),
-            storedEdgeType,
-            () => true,
-        );
-        expect(rejectedErrors).toHaveLength(1);
-        expect(rejectedErrors[0].Source).toBe('Status');
-        expect(rejectedErrors[0].Message).toContain('Status = "Proposed"');
-
-        const proposedErrors = ValidateGraphEdgeInvariants(
-            makeValidEdgeInput({ Origin: 'Inferred', Status: 'Proposed', IsSaved: false }),
-            storedEdgeType,
-            () => true,
-        );
-        expect(proposedErrors).toEqual([]);
-
-        // Promoting an already-saved Inferred edge to Approved is allowed
-        const savedPromotionErrors = ValidateGraphEdgeInvariants(
-            makeValidEdgeInput({ Origin: 'Inferred', Status: 'Approved', IsSaved: true }),
-            storedEdgeType,
-            () => true,
-        );
-        expect(savedPromotionErrors).toEqual([]);
-    });
-
     it('refuses oversize SourceRecordID or TargetRecordID (> 400 characters)', () => {
         const oversize = 'X'.repeat(MAX_GRAPH_EDGE_RECORD_ID_LENGTH + 1);
         const errors = ValidateGraphEdgeInvariants(
@@ -281,11 +253,13 @@ describe('MJGraphEdgeEntityServer (Phase G1.3 invariants)', () => {
 function approvalInput(overrides: Partial<GraphEdgeApprovalInput>): GraphEdgeApprovalInput {
     return {
         IsSaved: true,
+        Origin: 'Declared',
         PreviousStatus: 'Proposed',
         NextStatus: 'Approved',
         IdentityChanged: false,
         User: curator,
         Authorizations: makeApproveAuthorizations(),
+        InPipelineApprovalScope: false,
         ...overrides,
     };
 }
@@ -439,7 +413,13 @@ describe('MJGraphEdgeEntityServer.ValidateAsync', () => {
         engine.ValidateEdgeEndpoint = () => true;
     });
 
-    function makeEdge(fields: Partial<GraphEdgeValidationInput>, user: UserInfo, provider: ProviderStub | object): MJGraphEdgeEntityServer {
+    interface EdgeFields extends GraphEdgeValidationInput {
+        Origin: 'Declared' | 'Inferred';
+        Status: 'Approved' | 'Proposed' | 'Rejected';
+        IsSaved: boolean;
+    }
+
+    function makeEdge(fields: Partial<EdgeFields>, user: UserInfo, provider: ProviderStub | object): MJGraphEdgeEntityServer {
         const edge = new MJGraphEdgeEntityServer();
         const input = makeValidEdgeInput(fields);
         edge.GraphID = input.GraphID ?? '';
@@ -448,13 +428,21 @@ describe('MJGraphEdgeEntityServer.ValidateAsync', () => {
         edge.SourceRecordID = input.SourceRecordID ?? '';
         edge.TargetEntityID = input.TargetEntityID ?? '';
         edge.TargetRecordID = input.TargetRecordID ?? '';
-        edge.Origin = input.Origin ?? 'Declared';
-        edge.Status = input.Status ?? 'Proposed';
+        edge.Origin = fields.Origin ?? 'Declared';
+        edge.Status = fields.Status ?? 'Approved';
         const internal = edge as unknown as { IsSaved: boolean; ContextCurrentUser: UserInfo; ProviderToUse: object };
-        internal.IsSaved = input.IsSaved;
+        internal.IsSaved = fields.IsSaved ?? false;
         internal.ContextCurrentUser = user;
         internal.ProviderToUse = provider;
         return edge;
+    }
+
+    /** Runs `work` the way `EntityGraphOverlayStore.UpsertEdges` saves: inside the pipeline's approval scope, bound to `user`. */
+    function inPipelineScope<T>(user: UserInfo, work: () => Promise<T>): Promise<T> {
+        return ServerOperationScopeManager.Instance.RunWithAuthority(
+            { operationKey: GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION, source: 'ServerEngine', allowedEntities: ['MJ: Graph Edges'], userId: user.ID },
+            work,
+        );
     }
 
     function markSaved(edge: MJGraphEdgeEntityServer, previousStatus: string, dirty: string[] = []): void {
@@ -521,6 +509,47 @@ describe('MJGraphEdgeEntityServer.ValidateAsync', () => {
         const result = await makeEdge({ Status: 'Proposed' }, staff, { Entities: [] }).ValidateAsync();
         expect(result.Success).toBe(false);
         expect(result.Errors[0].Type).toBe(ValidationErrorType.Failure);
+    });
+
+    it('accepts a new Inferred edge that starts Approved from a caller who holds Graph: Approve Edges (IT162 SG4)', async () => {
+        const result = await makeEdge({ Origin: 'Inferred', Status: 'Approved' }, curator, makeProvider({ Authorizations: makeApproveAuthorizations() })).ValidateAsync();
+        expect(result.Errors.map((e) => e.Message)).toEqual([]);
+        expect(result.Success).toBe(true);
+    });
+
+    it('refuses a new Inferred edge that starts Approved from a caller without the authorization, outside the pipeline scope', async () => {
+        const result = await makeEdge({ Origin: 'Inferred', Status: 'Approved' }, staff, makeProvider({ Authorizations: makeApproveAuthorizations() })).ValidateAsync();
+        expect(result.Success).toBe(false);
+        expect(result.Errors.some((e) => e.Source === 'Status' && e.Message.includes(GRAPH_APPROVE_EDGES_AUTHORIZATION))).toBe(true);
+    });
+
+    it('accepts the pipeline\'s policy-approved Inferred edge inside its approval scope, for a run user without the authorization', async () => {
+        const edge = makeEdge({ Origin: 'Inferred', Status: 'Approved' }, staff, makeProvider({ Authorizations: makeApproveAuthorizations() }));
+        const result = await inPipelineScope(staff, () => edge.ValidateAsync());
+        expect(result.Errors.map((e) => e.Message)).toEqual([]);
+        expect(result.Success).toBe(true);
+        expect(edge.Attributes).toBeNull(); // approved by policy, not reviewed by a person: no review stamp
+    });
+
+    it('gives an API save no pipeline scope: a client CRUD boundary masks it', async () => {
+        const edge = makeEdge({ Origin: 'Inferred', Status: 'Approved' }, staff, makeProvider({ Authorizations: makeApproveAuthorizations() }));
+        const result = await inPipelineScope(staff, () => ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() => edge.ValidateAsync()));
+        expect(result.Success).toBe(false);
+    });
+
+    it('approves nothing else inside the pipeline scope: a Declared edge, an approval of a saved edge, another user', async () => {
+        const authorizations = makeApproveAuthorizations();
+        const declared = await inPipelineScope(staff, () => makeEdge({ Origin: 'Declared', Status: 'Approved' }, staff, makeProvider({ Authorizations: authorizations })).ValidateAsync());
+        expect(declared.Success).toBe(false);
+
+        const saved = makeEdge({ Origin: 'Inferred', Status: 'Approved', IsSaved: true }, staff, makeProvider({ Authorizations: authorizations }));
+        markSaved(saved, 'Proposed');
+        expect((await inPipelineScope(staff, () => saved.ValidateAsync())).Success).toBe(false);
+
+        const otherUser = await inPipelineScope(curator, () =>
+            makeEdge({ Origin: 'Inferred', Status: 'Approved' }, staff, makeProvider({ Authorizations: authorizations })).ValidateAsync(),
+        );
+        expect(otherUser.Success).toBe(false);
     });
 
     it('reports a missing endpoint record', async () => {
