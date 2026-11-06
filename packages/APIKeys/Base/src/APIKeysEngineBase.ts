@@ -115,18 +115,21 @@ export class APIKeysEngineBase extends BaseEngine<APIKeysEngineBase> {
      * If the engine has already loaded, it reloads once so the new interval applies.
      *
      * @param intervalMs - Refresh interval in milliseconds; 0, negative or undefined disables it.
+     * @returns Settles when that reload is done (it never rejects; a failure is logged). Callers
+     *          that do not need the reload finished can ignore it.
      */
-    public SetRefreshInterval(intervalMs: number | undefined): void {
+    public SetRefreshInterval(intervalMs: number | undefined): Promise<void> {
         const next = intervalMs !== undefined && intervalMs > 0 ? intervalMs : undefined;
         if (next === this._refreshIntervalMs) {
-            return;
+            return Promise.resolve();
         }
         this._refreshIntervalMs = next;
-        if (this.Loaded) {
-            this.Config(true, this.ContextUser).catch((e: Error) =>
-                LogError(`APIKeysEngineBase: reload after refresh-interval change failed — ${e.message}`)
-            );
+        if (!this.Loaded) {
+            return Promise.resolve();
         }
+        return this.Config(true, this.ContextUser).catch((e: Error) =>
+            LogError(`APIKeysEngineBase: reload after refresh-interval change failed — ${e.message}`)
+        );
     }
 
     /**

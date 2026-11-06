@@ -74,8 +74,9 @@ export class APIKeysEngineBase {
         // No-op in mock
     }
 
-    SetRefreshInterval(intervalMs: number | undefined): void {
+    SetRefreshInterval(intervalMs: number | undefined): Promise<void> {
         _refreshIntervalMs = intervalMs;
+        return Promise.resolve();
     }
 
     get Scopes(): MJAPIScopeEntity[] {

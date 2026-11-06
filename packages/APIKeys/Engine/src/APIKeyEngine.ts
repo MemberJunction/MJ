@@ -224,7 +224,7 @@ export class APIKeyEngine {
         // Scope, key-application and application rows are read from the base engine's cache.
         // Re-read them on the same TTL as the key and user validation caches, so a scope removed
         // or an application deactivated by another process stops granting within one TTL.
-        this.Base.SetRefreshInterval(this._config.scopeCacheTTLMs);
+        void this.Base.SetRefreshInterval(this._config.scopeCacheTTLMs);
     }
 
     /**
@@ -317,10 +317,11 @@ export class APIKeyEngine {
      * Changes the cache TTL at runtime: the key and user validation caches use it from the next
      * entry on, and the scope, application and key-binding tables are re-read on the new interval.
      * @param ttlMs - TTL in milliseconds; 0 disables the caches and the timed re-read.
+     * @returns Settles when the tables have reloaded under the new interval (never rejects).
      */
-    public SetScopeCacheTTL(ttlMs: number): void {
+    public SetScopeCacheTTL(ttlMs: number): Promise<void> {
         this._config.scopeCacheTTLMs = ttlMs;
-        this.Base.SetRefreshInterval(ttlMs);
+        return this.Base.SetRefreshInterval(ttlMs);
     }
 
     // =========================================================================

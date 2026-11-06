@@ -450,6 +450,13 @@ export async function CheckSe5_FullAccessIsOrdinaryAtEngine(ctx: IntegrationChec
 /** Refresh interval SE6 uses so the check waits seconds, not the 60 s default TTL. */
 const SE6_REFRESH_MS = 1500;
 
+/**
+ * How long SE6 waits after saving its fixture row before deleting it. Must exceed BaseEngine's
+ * entity-event debounce (1.5 s): the save's debounced reload reads the database, so if it lands
+ * after the SQL delete it clears the row itself and SE6 passes without the timed refresh.
+ */
+const SE6_SAVE_SETTLE_MS = 2500;
+
 /** Polls `probe` until it returns true or `timeoutMs` elapses. */
 async function waitFor(probe: () => Promise<boolean>, timeoutMs: number): Promise<boolean> {
     const deadline = Date.now() + timeoutMs;
@@ -486,13 +493,14 @@ export async function CheckSe6OutOfProcessScopeRevocation(ctx: IntegrationCheckC
     try {
         const key = await createKey(engine, ctx, cleanup);
         await addKeyScope(ctx, cleanup, key.apiKeyId, readScopeId, { isDeny: false, priority: 0 });
-        await engine.Config(true, ctx.User);
+        // Let the save's debounced reload finish first, so only the timed refresh can see the delete.
+        await new Promise(resolve => setTimeout(resolve, SE6_SAVE_SETTLE_MS));
+        await engine.SetScopeCacheTTL(SE6_REFRESH_MS);
 
         const authorize = () => engine.Authorize(key.hash, 'MJAPI', 'entity:read', 'Users', ctx.User, undefined, { skipLogging: true });
         const before = await authorize();
         Assert(before.Allowed, `fixture key was denied before the delete — not a revocation proof: ${before.Reason}`);
 
-        engine.SetScopeCacheTTL(SE6_REFRESH_MS);
         await pool.request().query(
             `DELETE FROM [${ctx.Schema}].[APIKeyScope] WHERE [APIKeyID] = '${key.apiKeyId}'`
         );
@@ -501,7 +509,7 @@ export async function CheckSe6OutOfProcessScopeRevocation(ctx: IntegrationCheckC
         Assert(revoked, `a key scope deleted out of process still granted access after ${SE6_REFRESH_MS * 4} ms (SECURITY)`);
         console.log(`      → entity:read: allowed, row deleted by SQL, denied within the ${SE6_REFRESH_MS} ms refresh`);
     } finally {
-        engine.SetScopeCacheTTL(previousTTL);
+        await engine.SetScopeCacheTTL(previousTTL);
         await runCleanup(cleanup);
     }
 }
