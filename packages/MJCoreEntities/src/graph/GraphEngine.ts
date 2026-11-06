@@ -738,8 +738,8 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
     private storedEdgeTextReadable(principals: UserInfo[], provider: GraphDataProvider): StoredEdgeTextReadability {
         const edgeEntity = provider.EntityByName(GRAPH_EDGES_ENTITY);
         return {
-            Description: edgeEntity != null && FieldReadableByAll(edgeEntity, 'Description', principals),
-            Attributes: edgeEntity != null && FieldReadableByAll(edgeEntity, 'Attributes', principals),
+            Description: edgeEntity != null && IsFieldReadableByAll(edgeEntity, 'Description', principals),
+            Attributes: edgeEntity != null && IsFieldReadableByAll(edgeEntity, 'Attributes', principals),
         };
     }
 
@@ -1018,8 +1018,8 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
             if (!readable) {
                 const nameField = entity.NameField?.Name;
                 readable = {
-                    Name: nameField != null && FieldReadableByAll(entity, nameField, principals),
-                    Description: FieldReadableByAll(entity, 'Description', principals),
+                    Name: nameField != null && IsFieldReadableByAll(entity, nameField, principals),
+                    Description: IsFieldReadableByAll(entity, 'Description', principals),
                 };
                 readableByEntity.set(entity.Name, readable);
             }
@@ -1238,7 +1238,7 @@ export function NeutralGraphNodeLabel(entityName: string, recordId: string): str
 }
 
 /** True when every principal may read `fieldName` on `entity` (MJ field-level security). */
-function FieldReadableByAll(entity: EntityInfo, fieldName: string, principals: readonly UserInfo[]): boolean {
+export function IsFieldReadableByAll(entity: EntityInfo, fieldName: string, principals: readonly UserInfo[]): boolean {
     return principals.every((p) => entity.IsFieldReadableByUser(fieldName, p));
 }
 

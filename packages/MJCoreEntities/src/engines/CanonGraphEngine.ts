@@ -10,7 +10,7 @@ import {
     type GraphSubgraph,
     type GraphTraversalOptions,
 } from '../graph/BaseGraphEdgeProvider';
-import { CanUserReadEntity, ClampGraphDepth, ClampGraphMaxNodes, GraphEngine, IsGraphConceptStatusVisible } from '../graph/GraphEngine';
+import { CanUserReadEntity, ClampGraphDepth, ClampGraphMaxNodes, GraphEngine, IsFieldReadableByAll, IsGraphConceptStatusVisible } from '../graph/GraphEngine';
 import type {
     GraphExpandedEdge,
     GraphExpandedNode,
@@ -109,7 +109,18 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
         }
 
         const includeProposed = options.IncludeProposed === true;
-        const scored = this.scoreConcepts(query, graphIds, includeProposed);
+        // The cache holds every column (it loads as the engine's identity). Match only on fields the
+        // caller and every reader may read, or a match on a denied synonym would reveal it.
+        const conceptEntity = (options.provider ?? GraphEngine.Instance.ProviderToUse).EntityByName(CONCEPT_ENTITY);
+        if (!conceptEntity) {
+            return [];
+        }
+        const principals = [user, ...(options.AudienceReaders ?? [])];
+        const matchable: MatchableConceptFields = {
+            Name: IsFieldReadableByAll(conceptEntity, 'Name', principals),
+            Synonyms: IsFieldReadableByAll(conceptEntity, 'Synonyms', principals),
+        };
+        const scored = this.scoreConcepts(query, graphIds, includeProposed, matchable);
         if (scored.length === 0) {
             return [];
         }
@@ -268,14 +279,19 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
      * Candidate concepts scored against the query. Only concepts whose cached `Status` is visible are
      * candidates; each principal's own read of `Status` decides again in `FilterNodesForUser`.
      */
-    private scoreConcepts(query: string, graphIds: UUIDSet, includeProposed: boolean): Array<{ Concept: MJGraphConceptEntity; Score: number }> {
+    private scoreConcepts(
+        query: string,
+        graphIds: UUIDSet,
+        includeProposed: boolean,
+        matchable: MatchableConceptFields,
+    ): Array<{ Concept: MJGraphConceptEntity; Score: number }> {
         const queryTokens = tokenizeAlphanumeric(query);
         const scored: Array<{ Concept: MJGraphConceptEntity; Score: number }> = [];
         for (const concept of GraphEngine.Instance.Concepts) {
             if (!IsGraphConceptStatusVisible(concept.Status, includeProposed) || !graphIds.Has(concept.GraphID)) {
                 continue;
             }
-            const score = scoreConceptMatch(concept, query, queryTokens);
+            const score = scoreConceptMatch(concept, query, queryTokens, matchable);
             if (score > 0) {
                 scored.push({ Concept: concept, Score: score });
             }
@@ -536,15 +552,21 @@ function classifyNodeKind(entityName: string): GraphNodeKind {
     return 'Record';
 }
 
-function scoreConceptMatch(concept: MJGraphConceptEntity, queryLower: string, queryTokens: readonly string[]): number {
-    const nameLower = concept.Name.trim().toLowerCase();
-    if (nameLower === queryLower) {
+/** Which concept fields a lookup may match on: those every principal may read. */
+interface MatchableConceptFields {
+    Name: boolean;
+    Synonyms: boolean;
+}
+
+function scoreConceptMatch(concept: MJGraphConceptEntity, queryLower: string, queryTokens: readonly string[], matchable: MatchableConceptFields): number {
+    const nameLower = matchable.Name ? concept.Name.trim().toLowerCase() : '';
+    if (nameLower && nameLower === queryLower) {
         return 1.0;
     }
-    if (queryLower.includes(nameLower) || nameLower.startsWith(queryLower)) {
+    if (nameLower && (queryLower.includes(nameLower) || nameLower.startsWith(queryLower))) {
         return 0.9;
     }
-    const synonyms = parseSynonyms(concept.Synonyms).map((s) => s.toLowerCase());
+    const synonyms = matchable.Synonyms ? parseSynonyms(concept.Synonyms).map((s) => s.toLowerCase()) : [];
     for (const syn of synonyms) {
         if (syn === queryLower) {
             return 0.95;

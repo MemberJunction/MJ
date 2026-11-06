@@ -10,7 +10,7 @@ import { GraphEngine } from '../../graph/GraphEngine';
 import { LoadGraphEdgeProviders } from '../../graph';
 import { QueryEngine } from '../../engines/QueryEngine';
 import type { MJQueryEntityExtended } from '../../custom/MJQueryEntityExtended';
-import { CanonMetadataRows, FakeGraphProvider, IDS, MakeUser, NODE, StoredEdge, type FakeRow } from './graphTestFixtures';
+import { CanonMetadataRows, FakeGraphProvider, IDS, MakeUser, NODE, StandardEntitySpecs, StoredEdge, type FakeRow } from './graphTestFixtures';
 
 const analyst = MakeUser('u-analyst', ['Analyst']);
 const provider = new FakeGraphProvider();
@@ -64,6 +64,17 @@ describe('CanonGraphEngine', () => {
             expect(await service.ResolveSeeds('Open AR', ['MJ Canon'], analyst)).toEqual([]);
             expect(await CanonGraphEngine.Instance.ExplainConcept('Open AR', analyst)).toBeNull();
             expect((await CanonGraphEngine.Instance.ExplainConcept('Open AR', analyst, undefined, true))?.Concept.Label).toBe('Open AR');
+        });
+
+        it('matches only on fields the caller and every reader may read, so a denied synonym is no oracle', async () => {
+            const rows = CanonMetadataRows();
+            provider.Reset(rows, StandardEntitySpecs({ 'MJ: Graph Concepts': { ReadRoles: 'all', DeniedReadFieldsByRole: { Intern: ['Synonyms'] } } }));
+            await GraphEngine.Instance.Config(true, analyst, provider as unknown as IMetadataProvider);
+            const intern = MakeUser('u-intern', ['Intern']);
+            expect((await CanonGraphEngine.Instance.FindConcepts('Unpaid Invoices', analyst)).map((c) => c.Label)).toEqual(['Open AR']);
+            expect(await CanonGraphEngine.Instance.FindConcepts('Unpaid Invoices', intern)).toEqual([]);
+            expect(await CanonGraphEngine.Instance.FindConcepts('Unpaid Invoices', analyst, { AudienceReaders: [intern] })).toEqual([]);
+            expect((await CanonGraphEngine.Instance.FindConcepts('Open AR', intern)).map((c) => c.Label)).toEqual(['Open AR']);
         });
 
         it('applies audience readers too', async () => {
