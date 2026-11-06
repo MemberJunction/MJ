@@ -2,7 +2,7 @@
   "name": "@memberjunction/ai-vector-dupe",
   "type": "module",
   "version": "6.2.0",
-  "description": "MemberJunction: AI Vector/Entity Sync Package - Handles synchronization between Vector DB and MJ CDP Data",
+  "description": "MemberJunction: AI-powered duplicate record detection for MJ entities - vector and hybrid candidate search, an optional threshold-gated LLM reasoning layer, an entry-time duplicate check, and guarded auto-merge.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

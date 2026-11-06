@@ -5,6 +5,8 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { MJActionExecutionLogFormComponent } from '../../generated/Entities/MJActionExecutionLog/mjactionexecutionlog.form.component';
+import { JoinHeroSummary } from '../../shared/phone-hero';
+import { PhoneSectionsState } from '../../shared/phone-sections-state';
 
 type ParamType = 'Input' | 'Output' | 'Both';
 type TypeFilter = 'All' | ParamType;
@@ -30,9 +32,35 @@ interface DisplayParameter extends ActionParameter {
   standalone: false,
     selector: 'mj-action-execution-log-form',
     templateUrl: './action-execution-log-form.component.html',
-    styleUrls: ['./action-execution-log-form.component.css']
+    styleUrls: ['./action-execution-log-form.component.css', '../../shared/phone-hero.css']
 })
 export class MJActionExecutionLogFormComponentExtended extends MJActionExecutionLogFormComponent implements OnInit {
+
+    /** Phone width shows the stacked accordions as sections behind one picker (design call 7A). */
+    public Phone = new PhoneSectionsState(() => this.cdr.markForCheck());
+
+    ngOnDestroy() {
+        super.ngOnDestroy();
+        this.Phone.Stop();
+    }
+
+    /** Phone hero (6A): whether the summary line is expanded to show the rest of the hero. */
+    public HeroDetailsOpen = false;
+
+    /** Toggles the phone hero between its compact identity row and the full hero. */
+    public ToggleHeroDetails(): void {
+        this.HeroDetailsOpen = !this.HeroDetailsOpen;
+        this.cdr.markForCheck();
+    }
+
+    /** The phone hero's one-line summary of what the compact hero leaves out. */
+    public get HeroSummary(): string {
+        return JoinHeroSummary([
+            this.Action?.Name,
+            this.formatDuration(this.getExecutionDuration()),
+            this.User?.Name,
+        ]);
+    }
     public record!: MJActionExecutionLogEntity;
 
     // Related entities
