@@ -71,8 +71,8 @@ describe('Predictive Studio maintenance job and action metadata (D9, R2, R3, R5)
 
     const driftJob = jobs.find((j) => j.fields.Name === 'Predictive Studio Drift Evaluation');
     expect(driftJob).toBeDefined();
-    expect(driftJob?.fields.Status).toBe('Disabled');
-    expect(driftJob?.fields.Description).toContain('RetrainingPolicy.driftEnabled');
+    expect(driftJob?.fields.Description).toContain('NotifyUserID');
+    expect(driftJob?.fields.Description).not.toContain('RetrainingPolicy.driftEnabled');
     expect(driftJob?.fields.Configuration).toEqual({
       ActionID: `@lookup:MJ: Actions.DriverClass=${EVALUATE_DRIFT_DRIVER_CLASS}`,
     });

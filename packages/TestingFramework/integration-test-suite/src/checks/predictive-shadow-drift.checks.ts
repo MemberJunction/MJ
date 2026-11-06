@@ -295,6 +295,16 @@ export const PredictiveShadowDriftChecks: NamedCheck[] = [
                     'Champion row must have non-null ValueKeyHash',
                 );
                 AssertEqual(challRow!.ValueKeyHash, null, 'Challenger row must have ValueKeyHash = null');
+                Assert(
+                    UUIDsEqual(champRow!.MLModelID, championModel.ID),
+                    'Champion row must record championModel.ID in MLModelID',
+                );
+                AssertEqual(champRow!.AIModelID, null, 'Champion row must leave AIModelID null for ML Model');
+                Assert(
+                    UUIDsEqual(challRow!.MLModelID, challengerModel.ID),
+                    'Challenger row must record challengerModel.ID in MLModelID',
+                );
+                AssertEqual(challRow!.AIModelID, null, 'Challenger row must leave AIModelID null for ML Model');
 
                 const latest = await FeatureValueCacheService.Instance.GetLatestValue({
                     RecordProcessID: recordProcess.ID,

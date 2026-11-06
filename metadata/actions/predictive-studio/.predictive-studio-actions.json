@@ -1097,7 +1097,7 @@
     ],
     "fields": {
       "Name": "Evaluate Feature and Prediction Drift",
-      "Description": "Evaluates Population Stability Index (PSI) feature and prediction drift across numeric, categorical, and pre-binned distributions, confidence-floor degradation, and champion-vs-challenger shadow divergence. Loads baseline and rolling evaluation windows from MJ: Feature Values when RecordProcessID or ModelID is provided, and emits a drift alert notification when thresholds are breached.",
+      "Description": "Evaluates Population Stability Index (PSI) feature and prediction drift across numeric, categorical, and pre-binned distributions, confidence-floor degradation, and champion-vs-challenger shadow divergence. Loads baseline and rolling evaluation windows from pipeline-generated MJ: Feature Values (Source = 'Pipeline', human overrides excluded) when RecordProcessID or an MJ: ML Models ModelID is provided, and emits a drift alert notification when thresholds are breached. Because champion Feature Values are upserted in place by ValueKeyHash, each window holds changed values computed in that window (not a full population snapshot), and each evaluation-window challenger row is paired with the latest champion row for the same record and feature. An ML Model process with no challenger configured has no drift population (reports InsufficientData). Feature Values store no latency metrics, so the scheduled sweep reports no P95 latency ratio.",
       "Type": "Custom",
       "DriverClass": "PredictiveStudioEvaluateDriftAction",
       "Status": "Active",
@@ -1285,6 +1285,34 @@
           },
           "primaryKey": {
             "ID": "4EE7A519-74E6-4064-AF30-1D7FC4308065"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NotifyUserID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional User ID to receive drift alerts. Required when running as system user (e.g. from scheduled jobs), otherwise alerts are logged but suppressed."
+          },
+          "primaryKey": {
+            "ID": "B8BB82A6-B9C9-46B3-BCB3-4E2B2C07C5D7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxRows",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional maximum number of Feature Value rows loaded per process during drift evaluation (defaults to 100,000)."
+          },
+          "primaryKey": {
+            "ID": "E6B65E19-1457-421D-B9DB-A5CC0B4C3D39"
           }
         },
         {

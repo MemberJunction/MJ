@@ -16,7 +16,7 @@
  * - $\text{PSI} \ge 0.25$: `'Critical'` (severe distributional shift)
  */
 
-import { RunView, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
+import { LogError, RunView, type IMetadataProvider, type RunViewParams, type UserInfo } from '@memberjunction/core';
 import type { MJFeatureValueEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
 import type { DriftContext, DriftResult, IDriftDetector } from './types';
@@ -32,6 +32,12 @@ export const PSI_CRITICAL_THRESHOLD = 0.25;
 
 /** Default minimum valid sample size required before PSI or confidence drift is evaluated. */
 export const DEFAULT_MIN_SAMPLE_SIZE = 100;
+
+/** Default maximum rows loaded from `MJ: Feature Values` in a single drift evaluation. */
+export const DEFAULT_DRIFT_MAX_ROWS = 100000;
+
+/** Batch size (in Record Processes) when running scheduled drift sweeps across multiple processes. */
+export const DRIFT_SWEEP_BATCH_SIZE = 10;
 
 /** Severity level for feature or prediction drift. */
 export type DriftSeverity = 'None' | 'Warning' | 'Critical';
@@ -96,6 +102,7 @@ export interface ConfidenceAndDivergenceMetrics {
   readonly BelowFloorRate: number | null;
   readonly ConfidenceDegraded: boolean;
   readonly ConfidenceInsufficientData?: boolean;
+  readonly DivergenceInsufficientData?: boolean;
   readonly PairCount: number;
   readonly ChallengerTimeoutCount: number;
   readonly ChallengerFailureCount: number;
@@ -109,6 +116,7 @@ export interface ConfidenceAndDivergenceMetrics {
 export interface FeatureAndPredictionDriftInput {
   readonly ModelID?: string;
   readonly RecordProcessID?: string;
+  readonly Truncated?: boolean;
   readonly NumericFeatures?: Readonly<
     Record<
       string,
@@ -158,13 +166,16 @@ export interface FeatureAndPredictionDriftReport {
   readonly DivergenceMetrics: ConfidenceAndDivergenceMetrics;
   readonly ShouldAlert: boolean;
   readonly InsufficientData: boolean;
+  readonly Truncated?: boolean;
   readonly Summary: string;
 }
 
 /** Options for loading baseline and evaluation windows from `MJ: Feature Values`. */
 export interface LoadDriftFromFeatureValuesOptions {
   readonly RecordProcessID?: string;
+  /** Optional `MJ: ML Models` ID; filters `MJ: Feature Values.MLModelID` when `RecordProcessID` is omitted. */
   readonly ModelID?: string;
+  readonly ProblemType?: 'classification' | 'regression';
   readonly BaselineWindowEnd?: Date | string;
   readonly EvaluationWindowStart?: Date | string;
   readonly Provider: IMetadataProvider;
@@ -173,6 +184,7 @@ export interface LoadDriftFromFeatureValuesOptions {
   readonly CriticalPSIThreshold?: number;
   readonly Epsilon?: number;
   readonly MinSampleSize?: number;
+  readonly MaxRows?: number;
 }
 
 type FeatureValueDriftRow = Pick<
@@ -185,6 +197,8 @@ type FeatureValueDriftRow = Pick<
   | 'FeatureName'
   | 'Role'
   | 'AIModelID'
+  | 'MLModelID'
+  | 'Source'
   | 'ValueNumeric'
   | 'ValueText'
   | 'Confidence'
@@ -654,9 +668,10 @@ export function ComputeConfidenceAndChallengerDivergence(
   const p95Chall = computePercentile(challLatencies, 0.95);
   const p95LatencyRatio = p95Champ !== null && p95Champ > 0 && p95Chall !== null ? p95Chall / p95Champ : null;
 
-  const agreementBreached = agreementRate !== null && agreementRate < minAgreementRate;
-  const deltaBreached = meanAbsoluteScoreDelta !== null && meanAbsoluteScoreDelta > maxMeanAbsScoreDelta;
-  const latencyBreached = p95LatencyRatio !== null && p95LatencyRatio > maxP95LatencyRatio;
+  const divergenceInsufficientData = pairs.length > 0 && pairs.length < minSamples;
+  const agreementBreached = !divergenceInsufficientData && agreementRate !== null && agreementRate < minAgreementRate;
+  const deltaBreached = !divergenceInsufficientData && meanAbsoluteScoreDelta !== null && meanAbsoluteScoreDelta > maxMeanAbsScoreDelta;
+  const latencyBreached = !divergenceInsufficientData && p95LatencyRatio !== null && p95LatencyRatio > maxP95LatencyRatio;
   const challengerDiverged = agreementBreached || deltaBreached || latencyBreached;
 
   return {
@@ -665,6 +680,7 @@ export function ComputeConfidenceAndChallengerDivergence(
     BelowFloorRate: belowFloorRate,
     ConfidenceDegraded: confidenceDegraded,
     ConfidenceInsufficientData: confidenceInsufficientData,
+    DivergenceInsufficientData: divergenceInsufficientData,
     PairCount: pairs.length,
     ChallengerTimeoutCount: challengerTimeoutCount,
     ChallengerFailureCount: challengerFailureCount,
@@ -773,8 +789,12 @@ export function EvaluateFeatureAndPredictionDrift(
   const driftedFeatures = featureResults.filter((f) => f.Severity !== 'None');
   const maxPSI = featureResults.reduce((max, f) => Math.max(max, f.PSI), 0);
   const insufficientData =
-    featureResults.some((f) => f.InsufficientData === true) ||
-    divergence.ConfidenceInsufficientData === true;
+    featureResults.length > 0
+      ? featureResults.some((f) => f.InsufficientData === true) ||
+        divergence.ConfidenceInsufficientData === true
+      : divergence.ConfidenceInsufficientData === true ||
+        divergence.DivergenceInsufficientData === true ||
+        divergence.PairCount === 0;
 
   let overallSeverity: DriftSeverity = ClassifyPSISeverity(maxPSI, warnThreshold, critThreshold);
   for (const f of featureResults) {
@@ -801,6 +821,11 @@ export function EvaluateFeatureAndPredictionDrift(
   if (insufficientData) {
     summaryParts.push('InsufficientData=true');
   }
+  if (divergence.DivergenceInsufficientData) {
+    summaryParts.push(
+      `DivergenceInsufficientData=true (PairCount=${divergence.PairCount}/${minSampleSize})`,
+    );
+  }
   if (divergence.ConfidenceDegraded) {
     summaryParts.push(
       `ConfidenceDegraded=true (BelowFloorRate=${(divergence.BelowFloorRate ?? 0).toFixed(2)})`,
@@ -810,6 +835,9 @@ export function EvaluateFeatureAndPredictionDrift(
     summaryParts.push(
       `ChallengerDiverged=true (AgreementRate=${(divergence.AgreementRate ?? 1).toFixed(2)}, MeanDelta=${(divergence.MeanAbsoluteScoreDelta ?? 0).toFixed(4)}, Timeouts=${divergence.ChallengerTimeoutCount}, Failures=${divergence.ChallengerFailureCount})`,
     );
+  }
+  if (input.Truncated) {
+    summaryParts.push('Truncated=true');
   }
 
   return {
@@ -822,6 +850,7 @@ export function EvaluateFeatureAndPredictionDrift(
     DivergenceMetrics: divergence,
     ShouldAlert: shouldAlert,
     InsufficientData: insufficientData,
+    Truncated: input.Truncated,
     Summary: summaryParts.join(', '),
   };
 }
@@ -854,9 +883,10 @@ function featureValueDriftView(options: LoadDriftFromFeatureValuesOptions, windo
   if (typeof options.RecordProcessID === 'string' && options.RecordProcessID.trim().length > 0) {
     filterClauses.push(`RecordProcessID = '${EscapeSQLString(options.RecordProcessID.trim())}'`);
   } else if (typeof options.ModelID === 'string' && options.ModelID.trim().length > 0) {
-    filterClauses.push(`AIModelID = '${EscapeSQLString(options.ModelID.trim())}'`);
+    filterClauses.push(`MLModelID = '${EscapeSQLString(options.ModelID.trim())}'`);
   }
   filterClauses.push(`ComputedAt >= '${EscapeSQLString(new Date(windows.BaselineStartMs).toISOString())}'`);
+  filterClauses.push("Source = 'Pipeline'");
   return {
     EntityName: 'MJ: Feature Values',
     ExtraFilter: filterClauses.join(' AND '),
@@ -870,6 +900,8 @@ function featureValueDriftView(options: LoadDriftFromFeatureValuesOptions, windo
       'FeatureName',
       'Role',
       'AIModelID',
+      'MLModelID',
+      'Source',
       'ValueNumeric',
       'ValueText',
       'Confidence',
@@ -877,19 +909,31 @@ function featureValueDriftView(options: LoadDriftFromFeatureValuesOptions, windo
       'ComputedAt',
     ],
     ResultType: 'simple',
-    // Bounded by the record process (or model) and the baseline start above.
-    IgnoreMaxRows: true,
+    MaxRows: options.MaxRows ?? DEFAULT_DRIFT_MAX_ROWS,
   };
 }
 
 /**
  * Load baseline and rolling evaluation feature distributions, confidence distributions, and
- * champion-vs-challenger pairs from `MJ: Feature Values` for a given `RecordProcessID` or `ModelID`.
+ * champion-vs-challenger pairs from pipeline-generated `MJ: Feature Values` (`Source = 'Pipeline'`)
+ * for a given `RecordProcessID` or `MJ: ML Models` `ModelID` (`MLModelID`).
+ *
+ * Important semantics:
+ * - Champion rows are upserted in place by `ValueKeyHash` (`EntityID + RecordID + FeatureName`), so each
+ *   window holds values *computed* (i.e. changed) in that window rather than a full historical population
+ *   snapshot.
+ * - Each challenger row computed in the evaluation window is paired with the latest champion row for the
+ *   same record and feature (the latest champion value is all that exists).
+ * - An ML Model Record Process with no challenger configured writes no Feature Values, so it has no drift
+ *   population and the sweep reports `InsufficientData: true` for it.
+ * - `MJ: Feature Values` rows carry no latency metrics, so the scheduled sweep reports no P95 latency
+ *   ratio (`LatencyRatio` is evaluated only when callers pass inline latencies).
  */
 export async function LoadFeatureAndPredictionDriftFromFeatureValues(
   options: LoadDriftFromFeatureValuesOptions,
 ): Promise<FeatureAndPredictionDriftInput> {
   const windows = resolveDriftWindows(options);
+  const maxRows = options.MaxRows ?? DEFAULT_DRIFT_MAX_ROWS;
   const res = await RunView.FromMetadataProvider(options.Provider).RunView<FeatureValueDriftRow>(
     featureValueDriftView(options, windows),
     options.ContextUser,
@@ -899,7 +943,18 @@ export async function LoadFeatureAndPredictionDriftFromFeatureValues(
       `Failed to load MJ: Feature Values for drift evaluation: ${res.ErrorMessage ?? 'unknown error'}`,
     );
   }
-  return buildDriftInputFromRows(res.Results ?? [], windows, options);
+  const rows = res.Results ?? [];
+  const truncated = rows.length >= maxRows;
+  if (truncated) {
+    LogError(
+      `Drift evaluation for Record Process '${options.RecordProcessID ?? options.ModelID ?? ''}' was truncated at MaxRows (${maxRows}). Drift metrics may be incomplete.`,
+    );
+  }
+  const input = buildDriftInputFromRows(rows, windows, options);
+  if (truncated) {
+    (input as { Truncated?: boolean }).Truncated = true;
+  }
+  return input;
 }
 
 /** One record process's drift input, or (with no `Input`) why its Feature Values could not be read. */
@@ -912,6 +967,7 @@ export interface RecordProcessDriftLoad {
 /**
  * Drift inputs for several record processes in one batched `RunViews` round trip (one bounded view per
  * process), so a sweep never reads in a loop. A failed view is reported for its own process only.
+ * Sweeps are chunked in batches of {@link DRIFT_SWEEP_BATCH_SIZE} (10).
  */
 export async function LoadFeatureAndPredictionDriftForRecordProcesses(
   recordProcessIDs: readonly string[],
@@ -921,22 +977,50 @@ export async function LoadFeatureAndPredictionDriftForRecordProcesses(
     return [];
   }
   const windows = resolveDriftWindows(options);
-  const perProcess: LoadDriftFromFeatureValuesOptions[] = recordProcessIDs.map((id) => ({ ...options, RecordProcessID: id }));
-  const results = await RunView.FromMetadataProvider(options.Provider).RunViews<FeatureValueDriftRow>(
-    perProcess.map((o) => featureValueDriftView(o, windows)),
-    options.ContextUser,
-  );
-  return perProcess.map((o, i): RecordProcessDriftLoad => {
-    const recordProcessID = o.RecordProcessID ?? '';
-    const res = results[i];
-    if (!res?.Success) {
-      return {
+  const maxRows = options.MaxRows ?? DEFAULT_DRIFT_MAX_ROWS;
+  const allLoads: RecordProcessDriftLoad[] = [];
+
+  for (let c = 0; c < recordProcessIDs.length; c += DRIFT_SWEEP_BATCH_SIZE) {
+    const chunkIDs = recordProcessIDs.slice(c, c + DRIFT_SWEEP_BATCH_SIZE);
+    const perProcess: LoadDriftFromFeatureValuesOptions[] = chunkIDs.map((id) => ({
+      ...options,
+      RecordProcessID: id,
+    }));
+    const results = await RunView.FromMetadataProvider(options.Provider).RunViews<FeatureValueDriftRow>(
+      perProcess.map((o) => featureValueDriftView(o, windows)),
+      options.ContextUser,
+    );
+
+    for (let i = 0; i < perProcess.length; i++) {
+      const o = perProcess[i];
+      const recordProcessID = o.RecordProcessID ?? '';
+      const res = results[i];
+      if (!res?.Success) {
+        allLoads.push({
+          RecordProcessID: recordProcessID,
+          ErrorMessage: `Failed to load MJ: Feature Values for drift evaluation: ${res?.ErrorMessage ?? 'unknown error'}`,
+        });
+        continue;
+      }
+      const rows = res.Results ?? [];
+      const truncated = rows.length >= maxRows;
+      if (truncated) {
+        LogError(
+          `Drift evaluation for Record Process '${recordProcessID}' was truncated at MaxRows (${maxRows}). Drift metrics may be incomplete.`,
+        );
+      }
+      const input = buildDriftInputFromRows(rows, windows, o);
+      if (truncated) {
+        (input as { Truncated?: boolean }).Truncated = true;
+      }
+      allLoads.push({
         RecordProcessID: recordProcessID,
-        ErrorMessage: `Failed to load MJ: Feature Values for drift evaluation: ${res?.ErrorMessage ?? 'unknown error'}`,
-      };
+        Input: input,
+      });
     }
-    return { RecordProcessID: recordProcessID, Input: buildDriftInputFromRows(res.Results ?? [], windows, o) };
-  });
+  }
+
+  return allLoads;
 }
 
 /** Splits loaded Feature Value rows into the two windows' feature distributions and champion/challenger pairs. */
@@ -950,8 +1034,14 @@ function buildDriftInputFromRows(
   const challengerRows: FeatureValueDriftRow[] = [];
 
   for (const row of rows) {
+    if (row.Source && row.Source !== 'Pipeline') {
+      continue;
+    }
+    const rowTs = new Date(row.ComputedAt).getTime();
     if (row.Role === 'Challenger') {
-      challengerRows.push(row);
+      if (rowTs >= windows.EvaluationStartMs) {
+        challengerRows.push(row);
+      }
     } else {
       const featureName = row.FeatureName || 'Prediction';
       const list = championByFeature.get(featureName) ?? [];
@@ -1038,6 +1128,7 @@ function buildDriftInputFromRows(
       EvaluationConfidences: evaluationConfidences,
       Pairs: pairs,
       MinSampleSize: options.MinSampleSize,
+      ProblemType: options.ProblemType,
     },
     WarningPSIThreshold: options.WarningPSIThreshold,
     CriticalPSIThreshold: options.CriticalPSIThreshold,

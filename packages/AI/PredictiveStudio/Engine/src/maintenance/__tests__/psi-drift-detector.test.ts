@@ -6,7 +6,10 @@ import {
   ComputeConfidenceAndChallengerDivergence,
   ComputeNumericFeaturePSI,
   ComputePopulationStabilityIndex,
+  DEFAULT_DRIFT_MAX_ROWS,
+  DRIFT_SWEEP_BATCH_SIZE,
   EvaluateFeatureAndPredictionDrift,
+  LoadFeatureAndPredictionDriftForRecordProcesses,
   LoadFeatureAndPredictionDriftFromFeatureValues,
   PSIDriftDetector,
 } from '../psi-drift-detector';
@@ -142,7 +145,7 @@ describe('psi-drift-detector', () => {
         })),
       ];
 
-      const metrics = ComputeConfidenceAndChallengerDivergence({ Pairs: pairs });
+      const metrics = ComputeConfidenceAndChallengerDivergence({ Pairs: pairs, MinSampleSize: 10 });
       expect(metrics.PairCount).toBe(10);
       expect(metrics.ChallengerTimeoutCount).toBe(5);
       expect(metrics.ChallengerFailureCount).toBe(5);
@@ -153,6 +156,7 @@ describe('psi-drift-detector', () => {
     it('should not treat regression pairs (42.1, 98.7) as agreeing under a >= 0.5 binary cut', () => {
       const metrics = ComputeConfidenceAndChallengerDivergence({
         ProblemType: 'regression',
+        MinSampleSize: 2,
         Pairs: [
           { RecordID: 'r1', ChampionScore: 42.1, ChallengerScore: 98.7 },
           { RecordID: 'r2', ChampionScore: 55.0, ChallengerScore: 120.4 },
@@ -160,6 +164,30 @@ describe('psi-drift-detector', () => {
       });
       expect(metrics.AgreementRate).toBe(0);
       expect(metrics.ChallengerDiverged).toBe(true);
+    });
+
+    it('should report DivergenceInsufficientData: true and suppress ChallengerDiverged when pair count is below MinSampleSize (S4)', () => {
+      // 10 disagreeing pairs with default MinSampleSize (100)
+      const pairs = Array.from({ length: 10 }, (_, i) => ({
+        RecordID: `r-${i}`,
+        ChampionLabel: 'Approve',
+        ChallengerLabel: 'Reject',
+      }));
+
+      const metrics = ComputeConfidenceAndChallengerDivergence({ Pairs: pairs });
+      expect(metrics.PairCount).toBe(10);
+      expect(metrics.AgreementRate).toBe(0);
+      expect(metrics.DivergenceInsufficientData).toBe(true);
+      expect(metrics.ChallengerDiverged).toBe(false);
+
+      // In EvaluateFeatureAndPredictionDrift, divergence alone below MinSampleSize does not alert
+      const report = EvaluateFeatureAndPredictionDrift({
+        ConfidenceAndDivergence: { Pairs: pairs },
+      });
+      expect(report.DivergenceMetrics.DivergenceInsufficientData).toBe(true);
+      expect(report.OverallSeverity).toBe('None');
+      expect(report.ShouldAlert).toBe(false);
+      expect(report.InsufficientData).toBe(true);
     });
   });
 
@@ -337,6 +365,233 @@ describe('psi-drift-detector', () => {
       expect(report.InsufficientData).toBe(true);
       expect(report.OverallSeverity).toBe('None');
       expect(report.ShouldAlert).toBe(false);
+    });
+
+    it('filters rows to Source=Pipeline, ignoring human override and imported rows (S6a)', async () => {
+      const nowMs = Date.now();
+      const rows = [
+        // 120 baseline pipeline rows
+        ...Array.from({ length: 120 }, (_, i) => ({
+          ID: `champ-b-${i}`,
+          RecordProcessID: 'rp-src',
+          RecordID: `rec-b-${i}`,
+          FeatureName: 'Score',
+          Role: 'Champion' as const,
+          Source: 'Pipeline' as const,
+          ValueNumeric: 0.2,
+          ComputedAt: new Date(nowMs - 20 * 86_400_000 + i * 1000),
+        })),
+        // 120 evaluation pipeline rows
+        ...Array.from({ length: 120 }, (_, i) => ({
+          ID: `champ-e-${i}`,
+          RecordProcessID: 'rp-src',
+          RecordID: `rec-e-${i}`,
+          FeatureName: 'Score',
+          Role: 'Champion' as const,
+          Source: 'Pipeline' as const,
+          ValueNumeric: 0.8,
+          ComputedAt: new Date(nowMs - 3 * 86_400_000 + i * 1000),
+        })),
+        // Human override rows that should be excluded
+        ...Array.from({ length: 50 }, (_, i) => ({
+          ID: `champ-h-${i}`,
+          RecordProcessID: 'rp-src',
+          RecordID: `rec-h-${i}`,
+          FeatureName: 'Score',
+          Role: 'Champion' as const,
+          Source: 'Human' as const,
+          ValueNumeric: 0.99,
+          ComputedAt: new Date(nowMs - 2 * 86_400_000 + i * 1000),
+        })),
+      ];
+
+      let capturedFilter = '';
+      const provider = {
+        RunView: async (params: RunViewParams): Promise<RunViewResult> => {
+          capturedFilter = String(params.ExtraFilter ?? '');
+          return {
+            Success: true,
+            Results: rows,
+            RowCount: rows.length,
+            TotalRowCount: rows.length,
+            ExecutionTime: 1,
+            ErrorMessage: '',
+          };
+        },
+      } as Pick<IMetadataProvider, 'RunView'> as IMetadataProvider;
+
+      const driftInput = await LoadFeatureAndPredictionDriftFromFeatureValues({
+        RecordProcessID: 'rp-src',
+        Provider: provider,
+        ContextUser: { ID: 'user-1' } as UserInfo,
+      });
+
+      expect(capturedFilter).toContain("Source = 'Pipeline'");
+      // Human rows are ignored by buildDriftInputFromRows as well
+      expect(driftInput.NumericFeatures?.['Score']?.Evaluation).toHaveLength(120);
+    });
+
+    it('only pairs challenger rows computed in the evaluation window (S6b)', async () => {
+      const nowMs = Date.now();
+      const rows = [
+        // Champion in evaluation window
+        {
+          ID: 'champ-eval-1',
+          RecordProcessID: 'rp-win',
+          RecordID: 'rec-1',
+          FeatureName: 'Prediction',
+          Role: 'Champion' as const,
+          Source: 'Pipeline' as const,
+          ValueNumeric: 0.5,
+          ComputedAt: new Date(nowMs - 2 * 86_400_000),
+        },
+        // Challenger computed 25 days ago (in baseline window, outside evaluation window) -> should NOT pair
+        {
+          ID: 'chall-old',
+          RecordProcessID: 'rp-win',
+          RecordID: 'rec-1',
+          FeatureName: 'Prediction',
+          Role: 'Challenger' as const,
+          Source: 'Pipeline' as const,
+          ValueNumeric: 0.9,
+          ComputedAt: new Date(nowMs - 25 * 86_400_000),
+        },
+        // Challenger computed 2 days ago (in evaluation window) -> SHOULD pair
+        {
+          ID: 'chall-recent',
+          RecordProcessID: 'rp-win',
+          RecordID: 'rec-1',
+          FeatureName: 'Prediction',
+          Role: 'Challenger' as const,
+          Source: 'Pipeline' as const,
+          ValueNumeric: 0.55,
+          ComputedAt: new Date(nowMs - 2 * 86_400_000),
+        },
+      ];
+
+      const provider = {
+        RunView: async (): Promise<RunViewResult> => ({
+          Success: true,
+          Results: rows,
+          RowCount: rows.length,
+          TotalRowCount: rows.length,
+          ExecutionTime: 1,
+          ErrorMessage: '',
+        }),
+      } as Pick<IMetadataProvider, 'RunView'> as IMetadataProvider;
+
+      const driftInput = await LoadFeatureAndPredictionDriftFromFeatureValues({
+        RecordProcessID: 'rp-win',
+        Provider: provider,
+        ContextUser: { ID: 'user-1' } as UserInfo,
+      });
+
+      expect(driftInput.ConfidenceAndDivergence?.Pairs).toHaveLength(1);
+      expect(driftInput.ConfidenceAndDivergence?.Pairs?.[0]?.ChallengerScore).toBe(0.55);
+    });
+
+    it('filters by MLModelID when ModelID is provided (S8)', async () => {
+      let capturedFilter = '';
+      const provider = {
+        RunView: async (params: RunViewParams): Promise<RunViewResult> => {
+          capturedFilter = String(params.ExtraFilter ?? '');
+          return {
+            Success: true,
+            Results: [],
+            RowCount: 0,
+            TotalRowCount: 0,
+            ExecutionTime: 1,
+            ErrorMessage: '',
+          };
+        },
+      } as Pick<IMetadataProvider, 'RunView'> as IMetadataProvider;
+
+      await LoadFeatureAndPredictionDriftFromFeatureValues({
+        ModelID: 'model-ml-target-uuid',
+        Provider: provider,
+        ContextUser: { ID: 'user-1' } as UserInfo,
+      });
+
+      expect(capturedFilter).toContain("MLModelID = 'model-ml-target-uuid'");
+      expect(capturedFilter).not.toContain("AIModelID = 'model-ml-target-uuid'");
+    });
+
+    it('chunks record process sweep into batches of DRIFT_SWEEP_BATCH_SIZE (10) and flags truncation at MaxRows (S9)', async () => {
+      const batchSizes: number[] = [];
+      const fakeProvider = {
+        RunViews: async (views: RunViewParams[]): Promise<RunViewResult[]> => {
+          batchSizes.push(views.length);
+          return views.map((v) => {
+            const isTruncated = String(v.ExtraFilter ?? '').includes("'rp-trunc'");
+            const count = isTruncated ? 50 : 2;
+            return {
+              Success: true,
+              Results: Array.from({ length: count }, (_, i) => ({
+                ID: `r-${i}`,
+                RecordProcessID: 'rp-test',
+                RecordID: `rec-${i}`,
+                FeatureName: 'Score',
+                Role: 'Champion' as const,
+                Source: 'Pipeline' as const,
+                ValueNumeric: 0.5,
+                ComputedAt: new Date(),
+              })),
+              RowCount: count,
+              TotalRowCount: count,
+              ExecutionTime: 1,
+              ErrorMessage: '',
+            };
+          });
+        },
+      } as Pick<IMetadataProvider, 'RunViews'> as IMetadataProvider;
+
+      // 25 processes -> batches of 10, 10, 5
+      const processIds = [
+        ...Array.from({ length: 24 }, (_, i) => `rp-${i}`),
+        'rp-trunc',
+      ];
+
+      const loads = await LoadFeatureAndPredictionDriftForRecordProcesses(processIds, {
+        Provider: fakeProvider,
+        ContextUser: { ID: 'user-1' } as UserInfo,
+        MaxRows: 50,
+      });
+
+      expect(loads).toHaveLength(25);
+      expect(batchSizes).toEqual([10, 10, 5]);
+
+      const truncLoad = loads.find((l) => l.RecordProcessID === 'rp-trunc');
+      expect(truncLoad?.Input?.Truncated).toBe(true);
+
+      const report = EvaluateFeatureAndPredictionDrift(truncLoad!.Input!);
+      expect(report.Truncated).toBe(true);
+      expect(report.Summary).toContain('Truncated=true');
+    });
+
+    it('compares classification labels for agreement when both champion and challenger have labels (M3)', () => {
+      const metrics = ComputeConfidenceAndChallengerDivergence({
+        ProblemType: 'classification',
+        MinSampleSize: 2,
+        Pairs: [
+          {
+            RecordID: 'r1',
+            ChampionScore: 0.9,
+            ChampionLabel: 'Approve',
+            ChallengerScore: 0.8,
+            ChallengerLabel: 'Approve',
+          },
+          {
+            RecordID: 'r2',
+            ChampionScore: 0.9,
+            ChampionLabel: 'Approve',
+            ChallengerScore: 0.85,
+            ChallengerLabel: 'Reject',
+          },
+        ],
+      });
+
+      expect(metrics.AgreementRate).toBeCloseTo(0.5, 5);
+      expect(metrics.ChallengerDiverged).toBe(true);
     });
   });
 });

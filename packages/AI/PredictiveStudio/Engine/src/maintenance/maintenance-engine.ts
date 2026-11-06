@@ -182,6 +182,7 @@ export class MaintenanceEngine {
     }
     const context: DriftContext = {
       modelId: model.ID,
+      recordProcessId: binding.RecordProcessID ?? undefined,
       trainedRowCount,
       currentRowCount,
       lastScoredRowCount: binding.LastRowCount ?? undefined,

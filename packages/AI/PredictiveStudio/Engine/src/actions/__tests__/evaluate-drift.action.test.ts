@@ -422,5 +422,222 @@ describe('EvaluateFeatureAndPredictionDriftAction', () => {
       expect(result.Success).toBe(false);
       expect(result.ResultCode).toBe('MISSING_PARAMETER');
     });
+
+    it('routes alerts to NotifyUserID when provided and populates process name/ID and resource fields (S3)', async () => {
+      const savedNotifications: Array<{
+        UserID: string;
+        Title: string;
+        Message: string;
+        ResourceTypeID?: string;
+        ResourceRecordID?: string;
+        ResourceConfiguration?: string;
+      }> = [];
+
+      const fakeProvider = {
+        RunView: async (viewParams: RunViewParams): Promise<RunViewResult> => {
+          if (viewParams.EntityName === 'MJ: Record Processes') {
+            return {
+              Success: true,
+              Results: [{ ID: 'rp-alert-1', Name: 'Customer Churn Predictor', WorkType: 'ML Model', Status: 'Active' }],
+              RowCount: 1,
+              TotalRowCount: 1,
+              ExecutionTime: 1,
+              ErrorMessage: '',
+            };
+          }
+          // Return drifting rows so alert is triggered
+          return {
+            Success: true,
+            Results: [
+              ...Array.from({ length: 120 }, (_, i) => ({
+                ID: `b-${i}`,
+                RecordProcessID: 'rp-alert-1',
+                ProcessRunID: 'run-1',
+                EntityID: 'ent-1',
+                RecordID: `r-${i}`,
+                FeatureName: 'Score',
+                Role: 'Champion',
+                AIModelID: 'model-1',
+                ValueNumeric: 0.1,
+                ValueText: null,
+                Confidence: 0.9,
+                Reasoning: null,
+                ComputedAt: new Date(Date.now() - 14 * 86_400_000).toISOString(),
+              })),
+              ...Array.from({ length: 120 }, (_, i) => ({
+                ID: `e-${i}`,
+                RecordProcessID: 'rp-alert-1',
+                ProcessRunID: 'run-2',
+                EntityID: 'ent-1',
+                RecordID: `r-e-${i}`,
+                FeatureName: 'Score',
+                Role: 'Champion',
+                AIModelID: 'model-1',
+                ValueNumeric: 0.99,
+                ValueText: null,
+                Confidence: 0.9,
+                Reasoning: null,
+                ComputedAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+              })),
+            ],
+            RowCount: 240,
+            TotalRowCount: 240,
+            ExecutionTime: 1,
+            ErrorMessage: '',
+          };
+        },
+        RunViews: async (views: RunViewParams[]): Promise<RunViewResult[]> =>
+          Promise.all(views.map((v) => fakeProvider.RunView(v))),
+        GetEntityObject: async <T>() => {
+          const notif = {
+            ID: 'notif-admin-1',
+            UserID: '',
+            Title: '',
+            Message: '',
+            ResourceTypeID: '',
+            ResourceRecordID: '',
+            ResourceConfiguration: '',
+            Unread: false,
+            LatestResult: null,
+            NewRecord: () => true,
+            Save: async () => {
+              savedNotifications.push({
+                UserID: notif.UserID,
+                Title: notif.Title,
+                Message: notif.Message,
+                ResourceTypeID: notif.ResourceTypeID,
+                ResourceRecordID: notif.ResourceRecordID,
+                ResourceConfiguration: notif.ResourceConfiguration,
+              });
+              return true;
+            },
+          };
+          return notif as T;
+        },
+      } as Pick<IMetadataProvider, 'RunView' | 'RunViews' | 'GetEntityObject'> as IMetadataProvider;
+
+      const action = new EvaluateFeatureAndPredictionDriftAction();
+      const runParams = buildRunParams({
+        NotifyUserID: { value: 'admin-target-uuid' },
+      });
+      runParams.Provider = fakeProvider;
+
+      const result = await action.Run(runParams);
+      expect(result.Success).toBe(true);
+      expect(getOutput(runParams, 'AlertEmitted')).toBe(true);
+      expect(savedNotifications).toHaveLength(1);
+      const notif = savedNotifications[0];
+      expect(notif.UserID).toBe('admin-target-uuid');
+      expect(notif.Title).toContain('Predictive Drift Alert');
+      expect(notif.Title).toContain('Customer Churn Predictor (rp-alert-1)');
+      expect(notif.Message).toContain('Customer Churn Predictor (rp-alert-1)');
+      expect(notif.ResourceTypeID).toBe('DAAFCCEC-6A37-EF11-86D4-000D3A4E707E');
+      expect(notif.ResourceRecordID).toBe('rp-alert-1');
+      expect(JSON.parse(notif.ResourceConfiguration || '{}')).toEqual({
+        EntityName: 'MJ: Record Processes',
+        RecordID: 'rp-alert-1',
+      });
+    });
+
+    it('suppresses alerts when executed by system user without NotifyUserID and logs warning (S3)', async () => {
+      const savedNotifications: Array<{ UserID: string }> = [];
+
+      const fakeProvider = {
+        RunView: async (): Promise<RunViewResult> => ({
+          Success: true,
+          Results: [
+            ...Array.from({ length: 120 }, (_, i) => ({
+              ID: `b-${i}`,
+              RecordProcessID: 'rp-alert-2',
+              ProcessRunID: 'run-1',
+              EntityID: 'ent-1',
+              RecordID: `r-${i}`,
+              FeatureName: 'Score',
+              Role: 'Champion',
+              AIModelID: 'model-1',
+              ValueNumeric: 0.1,
+              ValueText: null,
+              Confidence: 0.9,
+              Reasoning: null,
+              ComputedAt: new Date(Date.now() - 14 * 86_400_000).toISOString(),
+            })),
+            ...Array.from({ length: 120 }, (_, i) => ({
+              ID: `e-${i}`,
+              RecordProcessID: 'rp-alert-2',
+              ProcessRunID: 'run-2',
+              EntityID: 'ent-1',
+              RecordID: `r-e-${i}`,
+              FeatureName: 'Score',
+              Role: 'Champion',
+              AIModelID: 'model-1',
+              ValueNumeric: 0.99,
+              ValueText: null,
+              Confidence: 0.9,
+              Reasoning: null,
+              ComputedAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+            })),
+          ],
+          RowCount: 240,
+          TotalRowCount: 240,
+          ExecutionTime: 1,
+          ErrorMessage: '',
+        }),
+        GetEntityObject: async <T>() => {
+          const notif = {
+            ID: 'notif-sys',
+            UserID: '',
+            NewRecord: () => true,
+            Save: async () => {
+              savedNotifications.push({ UserID: notif.UserID });
+              return true;
+            },
+          };
+          return notif as T;
+        },
+      } as Pick<IMetadataProvider, 'RunView' | 'GetEntityObject'> as IMetadataProvider;
+
+      const action = new EvaluateFeatureAndPredictionDriftAction();
+      const runParams = buildRunParams({
+        RecordProcessID: { value: 'rp-alert-2' },
+      });
+      // System user as context user without NotifyUserID
+      runParams.ContextUser = { ID: 'system-user-uuid', Name: 'System', Type: 'System' } as unknown as UserInfo;
+      runParams.Provider = fakeProvider;
+
+      const result = await action.Run(runParams);
+      expect(result.Success).toBe(true);
+      expect(getOutput(runParams, 'ShouldAlert')).toBe(true);
+      expect(getOutput(runParams, 'AlertEmitted')).toBe(false);
+      expect(savedNotifications).toHaveLength(0);
+    });
+
+    it('passes MaxRows to the drift loader (S9)', async () => {
+      let capturedMaxRows: number | undefined;
+
+      const fakeProvider = {
+        RunView: async (params: RunViewParams): Promise<RunViewResult> => {
+          capturedMaxRows = params.MaxRows;
+          return {
+            Success: true,
+            Results: [],
+            RowCount: 0,
+            TotalRowCount: 0,
+            ExecutionTime: 1,
+            ErrorMessage: '',
+          };
+        },
+      } as Pick<IMetadataProvider, 'RunView'> as IMetadataProvider;
+
+      const action = new EvaluateFeatureAndPredictionDriftAction();
+      const runParams = buildRunParams({
+        RecordProcessID: { value: 'rp-maxrows-test' },
+        MaxRows: { value: 5000 },
+        EmitAlertOnDrift: { value: false },
+      });
+      runParams.Provider = fakeProvider;
+
+      await action.Run(runParams);
+      expect(capturedMaxRows).toBe(5000);
+    });
   });
 });

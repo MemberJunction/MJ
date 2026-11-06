@@ -14,6 +14,7 @@
 "@memberjunction/ng-bootstrap-lite": minor
 "@memberjunction/ng-core-entity-forms": minor
 "@memberjunction/predictive-studio": minor
+"@memberjunction/predictive-studio-sidecar": minor
 "@memberjunction/search-engine": minor
 "@memberjunction/server": minor
 "@memberjunction/server-bootstrap": minor
