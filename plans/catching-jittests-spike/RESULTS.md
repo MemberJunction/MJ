@@ -705,4 +705,4 @@ The lockfile has `patchedDependencies: type-graphql@2.0.0-beta.3: { path: patche
 
 The choice is not made here.
 
-The temporary workflow `.github/workflows/jit-catch-spike.yml` is deleted at the end of phase 0. Its `pull_request` trigger would run it on any PR that touches `plans/catching-jittests-spike/**`.
+The temporary workflow `.github/workflows/jit-catch-spike.yml` was removed at the end of phase 0 (commit 8f6c5f1673). Its `pull_request` trigger would otherwise run it on any PR that touches `plans/catching-jittests-spike/**`.
