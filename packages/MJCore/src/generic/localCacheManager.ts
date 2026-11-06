@@ -1,6 +1,6 @@
 import { BaseSingleton, MJGlobal, MJEventType, IsValueEncrypted, ENCRYPTED_SENTINEL } from "@memberjunction/global";
 import { AggregateResult, DatasetItemFilterType, DatasetResultType, IMetadataProvider, ILocalStorageProvider, LocalStorageWriteOptions } from "./interfaces";
-import { AggregateExpression, RunViewParams, IsMaterializedDataSource, NormalizeAlternateBaseViewName } from "../views/runView";
+import { AggregateExpression, RunViewParams, RunViewParametersKey, IsMaterializedDataSource, NormalizeAlternateBaseViewName } from "../views/runView";
 import { GetEffectiveAlternateBaseViewName } from "./alternateBaseViews";
 import { ViewPropertyValuesKey } from "../views/viewProperties";
 import { LogError, LogStatusEx, LogWarning } from "./logging";
@@ -2925,6 +2925,16 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const propertyKey = ViewPropertyValuesKey(params.Properties, params.ServerProperties);
         if (propertyKey.length > 0) {
             parts.push(`vp:${propertyKey}`);
+        }
+
+        // Bound-parameter segment (RunViewParams.Parameters). Two calls that share the same
+        // parameterized ExtraFilter template (e.g. `Status = @status`) but supply different bound
+        // values must never share a cache slot, and a parameterized view is a narrowed view
+        // (`hasNarrowingSegment` checks index >= 7). Appended ONLY when at least one defined
+        // parameter is present, so non-parameterized calls keep their exact fingerprint.
+        const paramsKey = RunViewParametersKey(params.Parameters);
+        if (paramsKey.length > 0) {
+            parts.push(`prm:${paramsKey}`);
         }
 
         // Dataset namespace. `GetDatasetByName` caches each dataset ITEM's rows through this same
