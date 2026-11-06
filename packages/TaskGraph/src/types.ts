@@ -3,7 +3,21 @@
  * @module @memberjunction/task-graph
  */
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type { AgentDecisionQuestion, TaskGraphDecisionAnswer } from '@memberjunction/ai-core-plus';
+import type {
+    AgentDecisionQuestion,
+    TaskGraphDecisionAnswer,
+    TaskSecurityEnvelope,
+    TaskTenantEnvelope,
+} from '@memberjunction/ai-core-plus';
+
+/**
+ * Optional tenant and user context passed to {@link ProviderFactory.CreateProvider} when minting
+ * a provider for a scoped task-graph node execution.
+ */
+export type ProviderFactoryOptions = {
+    TenantContext?: TaskTenantEnvelope;
+    ContextUser?: UserInfo;
+};
 
 /**
  * Mints a fresh metadata/data provider.
@@ -19,7 +33,7 @@ import type { AgentDecisionQuestion, TaskGraphDecisionAnswer } from '@memberjunc
  * responsible for nothing beyond using it — pooling and lifetime are the host's concern.
  */
 export type ProviderFactory = {
-    CreateProvider(): Promise<IMetadataProvider>;
+    CreateProvider(options?: ProviderFactoryOptions): Promise<IMetadataProvider>;
 };
 
 /**
@@ -53,6 +67,8 @@ export type TaskActionRunParams = {
     DependencyOutputs: Map<string, unknown>;
     Provider: IMetadataProvider;
     ContextUser: UserInfo;
+    /** Effective security envelope enforced on this node. */
+    SecurityEnvelope?: TaskSecurityEnvelope;
     /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */
     OnProgress?: TaskRunProgressCallback;
 };
@@ -62,6 +78,8 @@ export type TaskActionRunResult = {
     Success: boolean;
     Output?: unknown;
     ErrorMessage?: string;
+    /** Raw result code from the action engine (e.g., `AUDIENCE_UNSUPPORTED` or `TAINTED_EGRESS_BLOCKED`). */
+    ResultCode?: string;
     /**
      * The `MJ: Action Execution Logs` row this run produced.
      *
@@ -70,6 +88,11 @@ export type TaskActionRunResult = {
      * cannot produce one is limited, not broken.
      */
     ActionLogID?: string;
+    /**
+     * When true, marks this node's output as tainted by untrusted external data so downstream nodes
+     * inherit `IsRunTainted: true` monotonically unless a Human (HITL) step intervenes.
+     */
+    IsOutputTainted?: boolean;
 };
 
 /**
@@ -87,6 +110,12 @@ export type TaskActionRunResult = {
  */
 export type TaskActionRunner = {
     RunActionForTask(params: TaskActionRunParams): Promise<TaskActionRunResult>;
+    /**
+     * When true, indicates the runner enforces per-action `SupportsAudience` checks (as
+     * `ActionEngineServer` does). When omitted/false, the dispatcher fails closed with
+     * `AUDIENCE_UNSUPPORTED` before invoking the runner whenever `Audience.ReaderUserIDs` is non-empty.
+     */
+    SupportsAudience?: boolean;
 };
 
 /** Everything running one prompt for one task node needs. */
@@ -101,6 +130,8 @@ export type TaskPromptRunParams = {
     TemplateParameters?: Record<string, string>;
     Provider: IMetadataProvider;
     ContextUser: UserInfo;
+    /** Effective security envelope enforced on this node. */
+    SecurityEnvelope?: TaskSecurityEnvelope;
     /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */
     OnProgress?: TaskRunProgressCallback;
 };
@@ -122,6 +153,8 @@ export type TaskPromptRunResult = {
      * abandoned graph.
      */
     ChatMessage?: string;
+    /** When true, marks this node's output as tainted so downstream nodes inherit `IsRunTainted: true`. */
+    IsOutputTainted?: boolean;
 };
 
 /**
@@ -399,6 +432,8 @@ export type TaskAgentRunParams = {
     ContextUser: UserInfo;
     /** Optional configuration preset name for the target agent, configured on the Agent step. */
     ConfigurationPresetName?: string;
+    /** Effective security envelope enforced on this node and propagated to the sub-agent run. */
+    SecurityEnvelope?: TaskSecurityEnvelope;
     /** Optional progress sink; the dispatcher turns calls into rate-limited `NodeProgress` frames. */
     OnProgress?: TaskRunProgressCallback;
 };
@@ -412,6 +447,8 @@ export type TaskAgentRunResult = {
     ErrorMessage?: string;
     /** The `MJ: AI Agent Runs` row that executed this task, for `Task.AgentRunID`. */
     AgentRunID?: string;
+    /** When true, marks this node's output as tainted so downstream nodes inherit `IsRunTainted: true`. */
+    IsOutputTainted?: boolean;
 };
 
 /**

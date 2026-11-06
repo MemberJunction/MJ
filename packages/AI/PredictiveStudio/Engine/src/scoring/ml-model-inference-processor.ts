@@ -84,6 +84,7 @@ import type {
   MLInferenceDeps,
   LoadedModel,
 } from './types';
+import type { IRecordProcessChallengerConfig, ShadowScoringCoordinator } from './shadow-scoring';
 
 /** Stable work-type keys this processor is registered under on the ClassFactory. */
 export const ML_INFERENCE_WORK_TYPE = 'ML Model';
@@ -105,6 +106,8 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
   private readonly primaryKeyField: string;
   private readonly datedSources?: DatedSourceSpec[];
   private readonly assembler: FeatureAssemblyExecutor;
+  private readonly challengerConfig?: IRecordProcessChallengerConfig;
+  private readonly shadowCoordinator?: ShadowScoringCoordinator;
 
   /** Warm model cache — loaded once on first record, reused across the batch. */
   private loadedModel: LoadedModel | null = null;
@@ -122,6 +125,8 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
     this.datedSources = options.datedSources;
     this.autoTrain = options.autoTrain;
     this.autoTrainer = options.autoTrainer;
+    this.challengerConfig = options.challengerConfig;
+    this.shadowCoordinator = options.shadowCoordinator;
     this.assembler = assembler ?? new FeatureAssemblyExecutor();
   }
 
@@ -186,6 +191,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
    */
   public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {
     try {
+      const startedAt = Date.now();
       const model = await this.ensureModel(context);
       const row = this.recordToPlain(record);
       const assembly = await this.assembleFeatures(model, [row], context);
@@ -194,7 +200,10 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       if (!prediction) {
         return { Status: 'Failed', ErrorMessage: 'Sidecar returned no prediction for the record' };
       }
-      return { Status: 'Succeeded', ResultPayload: this.toPayload(model, prediction) };
+      const championLatencyMs = Date.now() - startedAt;
+      const payload = this.toPayload(model, prediction);
+      this.dispatchShadowIfConfigured(record, model, assembly, 0, prediction, championLatencyMs, context);
+      return { Status: 'Succeeded', ResultPayload: payload };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       LogError(`MLModelInferenceProcessor: scoring failed for record '${record.RecordID}': ${message}`);
@@ -218,20 +227,62 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       return [];
     }
     try {
+      const startedAt = Date.now();
       const model = await this.ensureModel(context);
       const rows = records.map((r) => this.recordToPlain(r));
       const assembly = await this.assembleFeatures(model, rows, context);
       const response = await this.callSidecar(model, assembly);
-      return records.map((_r, i) => {
+      const championLatencyMs = Date.now() - startedAt;
+      return records.map((rec, i) => {
         const prediction = response.predictions[i];
-        return prediction
-          ? { Status: 'Succeeded' as const, ResultPayload: this.toPayload(model, prediction) }
-          : { Status: 'Failed' as const, ErrorMessage: 'Sidecar returned no prediction for the record' };
+        if (!prediction) {
+          return { Status: 'Failed' as const, ErrorMessage: 'Sidecar returned no prediction for the record' };
+        }
+        this.dispatchShadowIfConfigured(rec, model, assembly, i, prediction, championLatencyMs, context);
+        return { Status: 'Succeeded' as const, ResultPayload: this.toPayload(model, prediction) };
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       LogError(`MLModelInferenceProcessor: batch scoring failed: ${message}`);
       return records.map(() => ({ Status: 'Failed' as const, ErrorMessage: message }));
+    }
+  }
+
+  private dispatchShadowIfConfigured(
+    record: RecordRef,
+    model: LoadedModel,
+    assembly: FeatureAssemblyResult,
+    rowIndex: number,
+    prediction: Prediction,
+    championLatencyMs: number,
+    context: RecordProcessorContext,
+  ): void {
+    if (!this.shadowCoordinator || !this.challengerConfig || context.DryRun) {
+      return;
+    }
+    try {
+      const featureRows = MatrixToFeatureRows(assembly.matrix, model.featureSchema);
+      const featureRow = featureRows[rowIndex] ?? {};
+      this.shadowCoordinator.DispatchShadowScore(
+        {
+          RecordProcessID: context.RecordProcessID,
+          EntityID: record.EntityID,
+          EntityName: model.targetEntityName,
+          RecordID: record.RecordID,
+          ChampionModelID: model.modelId,
+          ChallengerConfig: this.challengerConfig,
+          FrozenFeatures: Object.freeze({ ...featureRow }),
+          ChampionScore: prediction.score,
+          ChampionLabel: prediction.class != null ? String(prediction.class) : undefined,
+          ChampionLatencyMs: championLatencyMs,
+          DispatchedAt: new Date().toISOString(),
+        },
+        context.ContextUser,
+        context.Provider,
+      );
+    } catch (shadowErr: unknown) {
+      const msg = shadowErr instanceof Error ? shadowErr.message : String(shadowErr);
+      LogError(`MLModelInferenceProcessor: non-fatal shadow dispatch failure for '${record.RecordID}': ${msg}`);
     }
   }
 

@@ -4,6 +4,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { MJGlobal } from "@memberjunction/global";
 import { EntityInfo, IMetadataProvider, LogError, Metadata, RunView, RunViewParams, UserInfo } from "@memberjunction/core";
 import type { IRunViewProvider } from "@memberjunction/core";
+import { CanonGraphEngine, GraphEngine, type CanonEntityExplanation } from "@memberjunction/core-entities";
 
 /**
  * Action that returns field details and sample data for a specific entity.
@@ -144,7 +145,7 @@ export class GetEntityDetailsAction extends BaseAction {
             const primaryKeyFields = fields.filter(f => f.IsPrimaryKey).map(f => f.Name);
 
             // Build related entity info (if requested)
-            let relatedEntities: any[] = [];
+            let relatedEntities: Array<{ ID: string | null; Name: string; FieldsReferencingThis: string[] }> = [];
             if (includeRelatedEntityInfo) {
                 const relatedEntityNames = new Set(
                     fields
@@ -179,6 +180,15 @@ export class GetEntityDetailsAction extends BaseAction {
                     Status: abv.Status
                 }));
 
+            let canonExplanation: CanonEntityExplanation | undefined;
+            if (GraphEngine.Instance.Graphs.length > 0 && params.ContextUser) {
+                try {
+                    canonExplanation = await CanonGraphEngine.Instance.ExplainEntity(entity.Name, params.ContextUser);
+                } catch {
+                    canonExplanation = undefined;
+                }
+            }
+
             const executionTimeMs = Date.now() - startTime;
 
             // Build detailed message
@@ -189,7 +199,8 @@ export class GetEntityDetailsAction extends BaseAction {
                 totalRowCount,
                 primaryKeyFields,
                 relatedEntities,
-                alternateBaseViews
+                alternateBaseViews,
+                canonExplanation
             );
 
             return {
@@ -206,6 +217,7 @@ export class GetEntityDetailsAction extends BaseAction {
                 Description: entity.Description,
                 BaseView: entity.BaseView,
                 AlternateBaseViews: alternateBaseViews,
+                ...(canonExplanation ? { Canon: canonExplanation } : {}),
                 IsVirtual: entity.VirtualEntity,
                 Fields: fields,
                 PrimaryKeyFields: primaryKeyFields,
@@ -357,7 +369,8 @@ export class GetEntityDetailsAction extends BaseAction {
             ParentID: string | null;
             CachePolicy: string;
             Status: string;
-        }> = []
+        }> = [],
+        canonExplanation?: CanonEntityExplanation
     ): string {
         const lines: string[] = [];
 
@@ -372,6 +385,32 @@ export class GetEntityDetailsAction extends BaseAction {
         lines.push(`**Virtual Entity:** ${entity.VirtualEntity ? 'Yes' : 'No'}`);
         lines.push(`**Total Rows:** ${(totalRowCount ?? 0).toLocaleString()}`);
         lines.push(`\n---\n`);
+
+        // Canon Context (when Canon graph is active and has governed artifacts for this entity)
+        if (
+            canonExplanation &&
+            (canonExplanation.DescribedConcepts.length > 0 ||
+                canonExplanation.ReadingQueries.length > 0 ||
+                canonExplanation.MeasuringQueries.length > 0)
+        ) {
+            lines.push(`## Canon Context`);
+            if (canonExplanation.DescribedConcepts.length > 0) {
+                lines.push(
+                    `- **Described Concepts:** ${canonExplanation.DescribedConcepts.map((c) => c.Label).join(', ')}`
+                );
+            }
+            if (canonExplanation.ReadingQueries.length > 0) {
+                lines.push(
+                    `- **Reading Queries:** ${canonExplanation.ReadingQueries.map((q) => q.Label).join(', ')}`
+                );
+            }
+            if (canonExplanation.MeasuringQueries.length > 0) {
+                lines.push(
+                    `- **Measuring Queries:** ${canonExplanation.MeasuringQueries.map((q) => q.Label).join(', ')}`
+                );
+            }
+            lines.push('');
+        }
 
         // Alternate Base Views
         if (alternateBaseViews.length > 0) {

@@ -8,3 +8,4 @@ export const PROMOTE_MODEL_DRIVER_CLASS = 'PredictiveStudioPromoteModelAction';
 export const TRAIN_MODEL_DRIVER_CLASS = 'PredictiveStudioTrainModelAction';
 export const SCHEDULE_MODEL_SCORING_DRIVER_CLASS = 'PredictiveStudioScheduleModelScoringAction';
 export const SCORE_RECORD_SET_DRIVER_CLASS = 'PredictiveStudioScoreRecordSetAction';
+export const EVALUATE_DRIFT_DRIVER_CLASS = 'EvaluateFeatureAndPredictionDriftAction';

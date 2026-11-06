@@ -33,6 +33,7 @@ import {
   ML_INFERENCE_WORK_TYPE_ALIAS,
 } from './ml-model-inference-processor';
 import type { IModelAutoTrainer, MLAutoTrainConfig, MLInferenceDeps, MLModelInferenceProcessorOptions } from './types';
+import type { IRecordProcessChallengerConfig, ShadowScoringCoordinator } from './shadow-scoring';
 import type { DatedSourceSpec } from '../feature-assembly';
 
 // Register the alias key too, so both `'ML Model'` (the human-readable work-type)
@@ -116,6 +117,8 @@ export interface MLScoringConfiguration {
   datedSources?: DatedSourceSpec[];
   /** Opt-in train-if-untrained (see {@link MLAutoTrainConfig}). Off unless declared. */
   autoTrain?: MLAutoTrainConfig;
+  /** Optional WS-4.4 shadow challenger configuration (`ChallengerConfiguration`). */
+  challengerConfiguration?: IRecordProcessChallengerConfig;
 }
 
 /**
@@ -130,8 +133,14 @@ export interface MLScoringConfiguration {
  * startup/bootstrap with the production deps.
  *
  * @param deps the injected runtime seams the ML scorer needs (model loader, artifact loader, sidecar)
+ * @param autoTrainer optional auto-trainer for train-if-untrained processes
+ * @param shadowCoordinator optional shadow scoring coordinator for challenger runs
  */
-export function RegisterMLScoringProcessor(deps: MLInferenceDeps, autoTrainer?: IModelAutoTrainer): void {
+export function RegisterMLScoringProcessor(
+  deps: MLInferenceDeps,
+  autoTrainer?: IModelAutoTrainer,
+  shadowCoordinator?: ShadowScoringCoordinator,
+): void {
   const factory = (context: RecordProcessorBuildContext): IRecordProcessor => {
     const config = context.Configuration ? SafeJSONParse<MLScoringConfiguration>(context.Configuration) : undefined;
     const autoTrain = config?.autoTrain?.pipelineId ? config.autoTrain : undefined;
@@ -147,6 +156,8 @@ export function RegisterMLScoringProcessor(deps: MLInferenceDeps, autoTrainer?: 
       datedSources: config.datedSources,
       autoTrain,
       autoTrainer: autoTrain ? autoTrainer : undefined,
+      challengerConfig: config.challengerConfiguration,
+      shadowCoordinator,
     };
     // Resolve through the ClassFactory so a higher-priority subclass registration (if any) wins.
     return ResolveMLInferenceProcessor(context.WorkType, options) ?? new MLModelInferenceProcessor(options);
@@ -159,8 +170,12 @@ export function RegisterMLScoringProcessor(deps: MLInferenceDeps, autoTrainer?: 
 }
 
 /** @deprecated Use {@link RegisterMLScoringProcessor}. */
-export function registerMLScoringProcessor(deps: MLInferenceDeps, autoTrainer?: IModelAutoTrainer): void {
-  return RegisterMLScoringProcessor(deps, autoTrainer);
+export function registerMLScoringProcessor(
+  deps: MLInferenceDeps,
+  autoTrainer?: IModelAutoTrainer,
+  shadowCoordinator?: ShadowScoringCoordinator,
+): void {
+  return RegisterMLScoringProcessor(deps, autoTrainer, shadowCoordinator);
 }
 
 /**

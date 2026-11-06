@@ -20,6 +20,7 @@
 import { MJGlobal } from '@memberjunction/global';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import type { TaskGraphSpec } from './task-graph-spec';
+import type { TaskSecurityEnvelope } from './task-security-envelope';
 import { SanitizeForPersistence } from '../safe-persist';
 
 /** Everything a submitter needs beyond the graph itself. */
@@ -63,6 +64,12 @@ export type TaskGraphSubmitRequest = {
      * the hierarchy directly without walking ancestor runs in a loop.
      */
     ParentAgentHierarchy?: string[];
+    /**
+     * Durable security envelope (`BoundActionParams`, `Audience`, `TenantContext`, monotonic
+     * `IsRunTainted`, and `AllowedEgressActionIDs`) persisted onto the parent `MJ: Tasks` row and
+     * enforced by `TaskGraphDispatcher` across every node in the graph.
+     */
+    SecurityEnvelope?: TaskSecurityEnvelope;
     /**
      * Seed `$.debug` on the parent row at insert. `paused: true` is start-paused — the dispatcher
      * must not claim until Resume/Step. Written with the row because Pause-after-submit races the
@@ -109,6 +116,12 @@ export type TaskGraphSubmitOutcome = {
  * makes a graph outlive the run that produced it (D2).
  */
 export abstract class TaskGraphSubmitter {
+    /**
+     * Whether this submitter persists and enforces {@link TaskSecurityEnvelope} across dispatched
+     * nodes (`DurableTaskGraphSubmitter` overrides to `true`).
+     */
+    public readonly SupportsSecurityEnvelope: boolean = false;
+
     public abstract Submit(request: TaskGraphSubmitRequest): Promise<TaskGraphSubmitOutcome>;
 }
 
@@ -130,8 +143,22 @@ export const TASK_GRAPH_SUBMITTER_KEY = 'TaskGraphSubmitter';
  * is "this host has no dispatcher". That is precisely the diagnosis the null return exists to give,
  * so the contract is enforced here rather than trusted.
  */
+/** Explicit submitter instance registered programmatically (e.g. in tests or custom hosts). */
+let explicitSubmitter: TaskGraphSubmitter | null | undefined = undefined;
+
+/**
+ * Registers or clears an explicit {@link TaskGraphSubmitter} instance for this process.
+ * Pass `null` to reset to default `ClassFactory` resolution.
+ */
+export function RegisterTaskGraphSubmitter(submitter: TaskGraphSubmitter | null): void {
+    explicitSubmitter = submitter ?? undefined;
+}
+
 export function GetTaskGraphSubmitter(): TaskGraphSubmitter | null {
     if (submissionSuppressedBecause) return null;
+    if (explicitSubmitter !== undefined) {
+        return explicitSubmitter;
+    }
     const submitter = MJGlobal.Instance.ClassFactory.CreateInstance<TaskGraphSubmitter>(
         TaskGraphSubmitter, TASK_GRAPH_SUBMITTER_KEY,
     );

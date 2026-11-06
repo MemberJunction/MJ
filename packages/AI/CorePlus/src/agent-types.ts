@@ -1683,6 +1683,20 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     taskGraphDebug?: { paused?: boolean };
 
     /**
+     * Optional explicit `TaskSecurityEnvelope` to attach to any durable task graph emitted by this run,
+     * merged with any `boundActionParams`, `Audience`, and tenant scope active on the run.
+     */
+    securityEnvelope?: import('./task-graph/task-security-envelope').TaskSecurityEnvelope;  // case-violation-ok-legacy-back-compat: ExecuteAgentParams uses camelCase properties
+
+    /**
+     * When true, permits the agent run to offer and submit durable task graphs even under
+     * `boundActionParams`, `Audience`, or tenant scoping by attaching a `TaskSecurityEnvelope` to the
+     * submitted graph. Also enabled automatically when the registered `TaskGraphSubmitter` declares
+     * `SupportsSecurityEnvelope === true`.
+     */
+    allowScopedTaskGraphs?: boolean;  // case-violation-ok-legacy-back-compat: ExecuteAgentParams uses camelCase properties
+
+    /**
      * Skills the caller (typically an end user via a `/skill-name` mention in the composer)
      * explicitly requests be active for this run, identified by `AISkill.ID`. The framework
      * treats these as pre-activation hints: at run start each requested skill is activated

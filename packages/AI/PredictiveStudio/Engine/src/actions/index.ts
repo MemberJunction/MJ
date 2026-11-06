@@ -30,12 +30,14 @@ export * from './promote-model.action';
 export * from './promote-model.gate';
 export * from './model-scoring-action-generator';
 export * from './schedule-model-scoring.action';
+export * from './evaluate-drift.action';
 
 import { PredictiveStudioTrainModelAction } from './train-model.action';
 import { PredictiveStudioScoreRecordSetAction } from './score-record-set.action';
 import { PredictiveStudioRunExperimentAction } from './run-experiment.action';
 import { PredictiveStudioPromoteModelAction } from './promote-model.action';
 import { PredictiveStudioScheduleModelScoringAction } from './schedule-model-scoring.action';
+import { EvaluateFeatureAndPredictionDriftAction } from './evaluate-drift.action';
 
 /**
  * Tree-shaking anchor — call from a server bootstrap to guarantee the
@@ -49,4 +51,5 @@ export function LoadPredictiveStudioActions(): void {
   void PredictiveStudioRunExperimentAction;
   void PredictiveStudioPromoteModelAction;
   void PredictiveStudioScheduleModelScoringAction;
+  void EvaluateFeatureAndPredictionDriftAction;
 }

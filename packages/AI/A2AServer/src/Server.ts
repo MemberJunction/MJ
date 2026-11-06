@@ -10,8 +10,9 @@ import { configInfo, dbDatabase, dbHost, dbPassword, dbPort, dbUsername, dbInsta
 import type { OperationResult } from './EntityOperations.js';
 import { AIEngine } from "@memberjunction/aiengine";
 import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { randomUUID } from "crypto";
 import { ShutdownRegistry } from "@memberjunction/global";
-import { TaskStore, Task, TaskStatus, Message, Artifact, Part } from "./TaskStore.js";
+import { DurableEntityA2ATaskStore, TaskStore, Task, TaskStatus, Message, Artifact, Part } from "./TaskStore.js";
 import { AgentCard, AgentCardAgentCapability, AgentCardEntityCapability, BuildAgentCard, ResolveAgentCardIdentity } from "./AgentCard.js";
 import { CreateTaskOperations } from "./TaskOperations.js";
 
@@ -38,15 +39,12 @@ if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.tr
     poolConfig.options!.instanceName = dbInstanceName;
 }
 
-// A2A Server Classes and Types — `TaskStatus`, `Task`, `Message`, `Part`, `Artifact`
-// are imported from `./TaskStore.js` (extracted for testability).
-
-// In-memory storage for tasks. Bounded by the periodic sweep started below;
-// in production you'd swap in a database-backed store. See `./TaskStore.ts`
-// for the implementation; the module-level `tasks` reference is kept for
-// drop-in compatibility with the rest of this file (which uses `tasks.set`
-// / `tasks.get` directly).
-const taskStore = new TaskStore();
+// Durable `MJ: Tasks`-backed task store with in-memory L1 cache and periodic sweep.
+// Configurable via `a2aServerSettings.taskStoreMode` ('entity' by default, 'memory' for non-persistent runs).
+const taskStore = new DurableEntityA2ATaskStore({
+    PersistenceEnabled: (a2aServerSettings?.taskStoreMode ?? 'entity') === 'entity',
+    DefaultTaskTypeId: a2aServerSettings?.defaultTaskTypeId,
+});
 taskStore.Start();
 ShutdownRegistry.Instance.Register(taskStore);
 const tasks = taskStore;
@@ -277,17 +275,24 @@ function setupRoutes() {
     app.use('/a2a/tasks', authenticateRequest);
 
     // Send a message to a task
-    app.post('/a2a/tasks/send', (req: Request, res: Response) => {
-        const reqWithUser = req as RequestWithUser;
-        const authContext = reqWithUser.apiKeyHash && reqWithUser.authenticatedUser
-            ? { apiKeyHash: reqWithUser.apiKeyHash, user: reqWithUser.authenticatedUser }
-            : undefined;
-        const result = handleTaskSend(req.body, reqWithUser.authenticatedUser, authContext);
-        res.json(result);
+    app.post('/a2a/tasks/send', async (req: Request, res: Response) => {
+        try {
+            const reqWithUser = req as RequestWithUser;
+            const authContext = reqWithUser.apiKeyHash && reqWithUser.authenticatedUser
+                ? { apiKeyHash: reqWithUser.apiKeyHash, user: reqWithUser.authenticatedUser }
+                : undefined;
+            const result = await handleTaskSend(req.body, reqWithUser.authenticatedUser, authContext);
+            res.json(result);
+        } catch (err: unknown) {
+            const statusErr = err as { error?: { code?: number; message?: string } };
+            res.status(statusErr?.error?.code ?? 500).json(statusErr?.error ? statusErr : {
+                error: { code: 500, message: err instanceof Error ? err.message : String(err) }
+            });
+        }
     });
 
     // Send a message to a task with streaming response
-    app.post('/a2a/tasks/sendSubscribe', (req: Request, res: Response) => {
+    app.post('/a2a/tasks/sendSubscribe', async (req: Request, res: Response) => {
         if (!a2aServerSettings?.streamingEnabled) {
             res.status(400).json({
                 error: {
@@ -307,13 +312,15 @@ function setupRoutes() {
         const authContext = reqWithUser.apiKeyHash && reqWithUser.authenticatedUser
             ? { apiKeyHash: reqWithUser.apiKeyHash, user: reqWithUser.authenticatedUser }
             : undefined;
-        handleTaskSendSubscribe(req.body, res, reqWithUser.authenticatedUser, authContext);
+        await handleTaskSendSubscribe(req.body, res, reqWithUser.authenticatedUser, authContext);
     });
 
     // Get a task's status
-    app.get('/a2a/tasks/:taskId', (req: Request, res: Response) => {
+    app.get('/a2a/tasks/:taskId', async (req: Request, res: Response) => {
         const taskId = req.params.taskId as string;
-        const task = tasks.GetForUser(taskId, callerId(req));
+        const reqWithUser = req as RequestWithUser;
+        const task = (await tasks.LoadTaskForUser(taskId, reqWithUser.authenticatedUser, resolveProviderForRequest()))
+            ?? tasks.GetForUser(taskId, callerId(req));
 
         if (!task) {
             res.status(404).json({
@@ -329,9 +336,11 @@ function setupRoutes() {
     });
 
     // Cancel a task
-    app.post('/a2a/tasks/:taskId/cancel', (req: Request, res: Response) => {
+    app.post('/a2a/tasks/:taskId/cancel', async (req: Request, res: Response) => {
         const taskId = req.params.taskId as string;
-        const task = tasks.GetForUser(taskId, callerId(req));
+        const reqWithUser = req as RequestWithUser;
+        const task = (await tasks.LoadTaskForUser(taskId, reqWithUser.authenticatedUser, resolveProviderForRequest()))
+            ?? tasks.GetForUser(taskId, callerId(req));
 
         if (!task) {
             res.status(404).json({
@@ -343,8 +352,13 @@ function setupRoutes() {
             return;
         }
 
-        // Cancel a task and propagate cancellation to any in-flight agent execution
-        tasks.CancelTask(taskId);
+        // Cancel a task and propagate cancellation to any in-flight agent execution and durable MJ: Tasks row
+        await tasks.CancelTaskForUser(
+            taskId,
+            reqWithUser.authenticatedUser,
+            'Task cancelled via A2A',
+            resolveProviderForRequest()
+        );
 
         res.json({ success: true });
     });
@@ -556,7 +570,7 @@ function getMatchingEntitiesForConfig(allEntities: EntityInfo[], config: any) {
     });
 }
 
-function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
+async function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
     const { taskId, message } = requestBody as { taskId?: string; message?: { parts?: Part[] } };
 
     if (!taskId) {
@@ -583,9 +597,10 @@ function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?
         }
 
         tasks.Set(newTaskId, task, authenticatedUser?.ID);
+        await tasks.SaveTask(task, authenticatedUser, resolveProviderForRequest());
 
         // Process the task asynchronously with the authenticated user
-        processTask(task, authenticatedUser, authContext);
+        void processTask(task, authenticatedUser, authContext);
 
         return {
             taskId: newTaskId,
@@ -593,7 +608,10 @@ function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?
         };
     } else {
         // Update an existing task: only the caller's own, so another user's task reads as missing
-        const task = authenticatedUser ? tasks.GetForUser(taskId, authenticatedUser.ID) : undefined;
+        const task = authenticatedUser
+            ? ((await tasks.LoadTaskForUser(taskId, authenticatedUser, resolveProviderForRequest()))
+                ?? tasks.GetForUser(taskId, authenticatedUser.ID))
+            : undefined;
 
         if (!task) {
             throw {
@@ -625,8 +643,10 @@ function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?
             task.updated = new Date();
         }
 
+        await tasks.SaveTask(task, authenticatedUser, resolveProviderForRequest());
+
         // Process the updated task with the authenticated user
-        processTask(task, authenticatedUser, authContext);
+        void processTask(task, authenticatedUser, authContext);
 
         return {
             taskId: task.id,
@@ -635,9 +655,12 @@ function handleTaskSend(requestBody: Record<string, unknown>, authenticatedUser?
     }
 }
 
-function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Response, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
-    const result = handleTaskSend(requestBody, authenticatedUser, authContext);
-    const task = authenticatedUser ? tasks.GetForUser(result.taskId, authenticatedUser.ID) : undefined;
+async function handleTaskSendSubscribe(requestBody: Record<string, unknown>, res: Response, authenticatedUser?: UserInfo, authContext?: AuthorizationContext) {
+    const result = await handleTaskSend(requestBody, authenticatedUser, authContext);
+    const task = authenticatedUser
+        ? (tasks.GetForUser(result.taskId, authenticatedUser.ID)
+            ?? (await tasks.LoadTaskForUser(result.taskId, authenticatedUser, resolveProviderForRequest())))
+        : undefined;
 
     if (!task) {
         res.write(`data: ${JSON.stringify({ error: { code: 404, message: "Task not found" } })}\n\n`);
@@ -695,7 +718,7 @@ async function processTask(task: Task, authenticatedUser?: UserInfo, authContext
     try {
         task.status = 'in_progress';
         task.updated = new Date();
-        tasks.Notify(task);
+        await tasks.NotifyTask(task, authenticatedUser, resolveProviderForRequest());
 
         // Get the last user message
         const lastMessage = task.messages.filter(m => m.role === 'user').pop();
@@ -869,7 +892,7 @@ async function processTask(task: Task, authenticatedUser?: UserInfo, authContext
             task.status = 'cancelled';
         }
         task.updated = new Date();
-        tasks.Notify(task);
+        await tasks.NotifyTask(task, authenticatedUser, provider);
 
     } catch (error) {
         console.error("Error processing task:", error);
@@ -916,11 +939,11 @@ async function processTask(task: Task, authenticatedUser?: UserInfo, authContext
             task.status = 'cancelled';
         }
         task.updated = new Date();
-        tasks.Notify(task);
+        await tasks.NotifyTask(task, authenticatedUser, resolveProviderForRequest());
     }
 }
 
-// Utility function to generate a random ID
-function generateId() {
-    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+// Utility function to generate a UUID v4 identifier compatible with MJ: Tasks PK
+function generateId(): string {
+    return randomUUID();
 }

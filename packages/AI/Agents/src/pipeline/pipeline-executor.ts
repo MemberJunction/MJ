@@ -13,16 +13,27 @@
  *
  * @module @memberjunction/ai-agents
  */
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { CreateCanonGraphExpansionService, GraphEngine } from '@memberjunction/core-entities';
+import {
+    ComputeGraphNodeAttenuatedScore,
+    FormatGraphNodeBreadcrumb,
+    GetRegisteredGraphExpansionService,
+    GraphSeedNode,
+    IGraphExpansionService,
+} from '@memberjunction/ai-core-plus';
 import {
     PipeValue,
     PipelineStage,
     PipelineStepRecord,
     PipelineExecutionResult,
     PipelineProviderKind,
+    GraphExpandPipelineStage,
 } from './pipeline.types';
 import { PipelineToolRegistry } from './pipeline-registry';
 import { GetOperator, CONTROL_VERBS } from './operators';
 import { ResolveParams, TemplateScope } from './template';
+import { GetValue, GetValues } from './path';
 import { SizeOf, PreviewOf, DescribeEmptyMatch } from './coerce';
 
 export const MAX_PIPELINE_STAGES = 20;
@@ -37,6 +48,16 @@ export interface PipelineExecutorOptions {
     deadlineMs?: number;
     /** Caller cancellation; honored at the same checkpoints as the deadline. */
     signal?: AbortSignal;
+    /** Optional initial stream value (`$`) before stage 0 runs. */
+    initialValue?: PipeValue;
+    /** Optional initial named variable bindings in `scope`. */
+    initialScope?: TemplateScope;
+    /** Optional graph expansion service override for `graphExpand` stages. */
+    graphExpansionService?: IGraphExpansionService;
+    /** Optional user context passed to `IGraphExpansionService` during `graphExpand`. */
+    contextUser?: UserInfo;
+    /** Optional metadata provider passed to `IGraphExpansionService` during `graphExpand`. */
+    provider?: IMetadataProvider;
 }
 
 /** Internal outcome of running a single stage (never throws). */
@@ -62,6 +83,11 @@ export class PipelineExecutor {
     private deadlineAt = Number.POSITIVE_INFINITY;
     private readonly deadlineMs: number;
     private readonly signal?: AbortSignal;
+    private readonly initialValue: PipeValue;
+    private readonly initialScope: TemplateScope;
+    private readonly graphExpansionService?: IGraphExpansionService;
+    private readonly contextUser?: UserInfo;
+    private readonly provider?: IMetadataProvider;
 
     constructor(
         private readonly registry: PipelineToolRegistry,
@@ -70,6 +96,11 @@ export class PipelineExecutor {
     ) {
         this.deadlineMs = opts.deadlineMs ?? DEFAULT_PIPELINE_DEADLINE_MS;
         this.signal = opts.signal;
+        this.initialValue = opts.initialValue ?? null;
+        this.initialScope = opts.initialScope ? { ...opts.initialScope } : {};
+        this.graphExpansionService = opts.graphExpansionService;
+        this.contextUser = opts.contextUser;
+        this.provider = opts.provider;
     }
 
     /**
@@ -98,8 +129,9 @@ export class PipelineExecutor {
         }
 
         const records: PipelineStepRecord[] = [];
-        const scope: TemplateScope = {};
-        let current: PipeValue = null;
+        const scope: TemplateScope = { ...this.initialScope };
+        let current: PipeValue = this.initialValue;
+        scope['$'] = current;
         this.producedBytes = 0;
         this.deadlineAt = Date.now() + this.deadlineMs;
         let firstDiagnostic: string | undefined;
@@ -178,6 +210,9 @@ export class PipelineExecutor {
             }
             if ('let' in stage) {
                 return await this.runLetStage(stage, current, scope);
+            }
+            if ('graphExpand' in stage || stage.stageType === 'graphExpand') {
+                return await this.runGraphExpandStage(stage, current, scope);
             }
             return this.runOperatorStage(stage, current);
         } catch (e) {
@@ -287,6 +322,179 @@ export class PipelineExecutor {
         }
         scope[cfg.name] = sub.value; // bind for downstream {{name}}; stream passes through unchanged
         return { output: current, success: true, providerKind: 'Transform', toolName: `let ${cfg.name}` };
+    }
+
+    private async runGraphExpandStage(
+        stage: PipelineStage,
+        current: PipeValue,
+        scope: TemplateScope,
+    ): Promise<StageOutcome> {
+        const cfg = this.extractGraphExpandConfig(stage);
+        const service =
+            this.graphExpansionService ??
+            GetRegisteredGraphExpansionService() ??
+            (GraphEngine.Instance.Graphs.length > 0 ? CreateCanonGraphExpansionService() : null);
+        const seedInput = this.extractSeedInput(cfg.seedSource, current, scope);
+        const effectiveUser = this.contextUser;
+
+        const seeds = effectiveUser
+            ? await this.resolveGraphExpandSeeds(seedInput, cfg.graphNames, service, effectiveUser)
+            : [];
+        const maxDepth = cfg.maxDepth ? Math.max(1, Math.min(4, cfg.maxDepth)) : 2;
+        const maxNodes = cfg.maxNodes && cfg.maxNodes >= 1 ? cfg.maxNodes : 25;
+
+        const expansion =
+            service && effectiveUser && seeds.length > 0
+                ? await service.Expand(
+                      {
+                          Seeds: seeds,
+                          GraphNames: cfg.graphNames,
+                          MaxDepth: maxDepth,
+                          MaxNodes: maxNodes,
+                          EdgeTypeFilter: cfg.edgeTypeFilter,
+                      },
+                      effectiveUser,
+                      this.provider,
+                  )
+                : { Nodes: [], Edges: [] };
+
+        const formattedSubgraph: PipeValue = {
+            graphNames: [...cfg.graphNames],
+            seeds: seeds.map((s) => ({
+                EntityName: s.EntityName,
+                RecordID: s.RecordID,
+                Title: s.Title ?? null,
+                SeedScore: s.SeedScore ?? 1.0,
+            })),
+            nodes: expansion.Nodes.map((n) => ({
+                nodeId: n.NodeID,
+                entityName: n.EntityName,
+                recordId: n.RecordID,
+                title: n.Title,
+                snippet: n.Snippet ?? null,
+                nodeKind: n.NodeKind ?? 'Record',
+                score: ComputeGraphNodeAttenuatedScore(n),
+                breadcrumb: FormatGraphNodeBreadcrumb(n),
+            })),
+            edges: expansion.Edges.map((e) => ({
+                fromNodeId: e.FromNodeID,
+                toNodeId: e.ToNodeID,
+                edgeType: e.EdgeType,
+                weight: e.Weight,
+                label: e.Label ?? e.EdgeType,
+            })),
+            breadcrumbs: expansion.Nodes.map((n) => FormatGraphNodeBreadcrumb(n)),
+        };
+
+        scope[cfg.outputKey] = formattedSubgraph;
+        const output: PipeValue =
+            current !== null && typeof current === 'object' && !Array.isArray(current)
+                ? { ...current, [cfg.outputKey]: formattedSubgraph }
+                : { [cfg.outputKey]: formattedSubgraph };
+
+        const label = cfg.id ? `graphExpand:${cfg.id}` : 'graphExpand';
+        return {
+            output,
+            success: true,
+            providerKind: 'Transform',
+            toolName: label,
+            preview: PreviewOf(formattedSubgraph),
+        };
+    }
+
+    private extractGraphExpandConfig(stage: PipelineStage): GraphExpandPipelineStage {
+        const raw = ('graphExpand' in stage ? stage.graphExpand : stage) as Partial<GraphExpandPipelineStage> | undefined;
+        if (!raw || typeof raw !== 'object') {
+            throw new Error('"graphExpand" requires a stage configuration object.');
+        }
+        if (!Array.isArray(raw.graphNames) || raw.graphNames.length === 0) {
+            throw new Error('"graphExpand" requires a non-empty "graphNames" array.');
+        }
+        if (typeof raw.seedSource !== 'string' || raw.seedSource.trim().length === 0) {
+            throw new Error('"graphExpand" requires a non-empty "seedSource" expression.');
+        }
+        if (typeof raw.outputKey !== 'string' || raw.outputKey.trim().length === 0) {
+            throw new Error('"graphExpand" requires a non-empty "outputKey".');
+        }
+        return raw as GraphExpandPipelineStage;
+    }
+
+    private extractSeedInput(seedSource: string, current: PipeValue, scope: TemplateScope): unknown {
+        const trimmed = seedSource.trim();
+        const fullScope: TemplateScope = { ...scope, $: current };
+        if (trimmed.includes('{{')) {
+            return ResolveParams({ seed: trimmed }, fullScope).seed;
+        }
+        if (trimmed.startsWith('$')) {
+            const values = GetValues(current, trimmed);
+            if (values.length === 1) {
+                return values[0];
+            }
+            if (values.length > 1) {
+                return values;
+            }
+            return null;
+        }
+        if (trimmed in fullScope) {
+            return fullScope[trimmed];
+        }
+        if (current !== null && typeof current === 'object') {
+            const extracted = GetValue(current, trimmed);
+            if (extracted !== undefined) {
+                return extracted;
+            }
+        }
+        return trimmed;
+    }
+
+    private async resolveGraphExpandSeeds(
+        seedInput: unknown,
+        graphNames: readonly string[],
+        service: IGraphExpansionService | null,
+        contextUser: UserInfo,
+    ): Promise<GraphSeedNode[]> {
+        if (seedInput == null) {
+            return [];
+        }
+        const items = Array.isArray(seedInput) ? seedInput : [seedInput];
+        const resolvedSeeds: GraphSeedNode[] = [];
+        for (const item of items) {
+            if (typeof item === 'string') {
+                const queryText = item.trim();
+                if (queryText.length > 0 && service) {
+                    const seedsFromText = await service.ResolveSeeds(
+                        queryText,
+                        graphNames,
+                        contextUser,
+                        this.provider,
+                    );
+                    resolvedSeeds.push(...seedsFromText);
+                }
+            } else if (item !== null && typeof item === 'object') {
+                const record = item as Record<string, unknown>;
+                const entityName =
+                    typeof record['EntityName'] === 'string'
+                        ? record['EntityName']
+                        : typeof record['entityName'] === 'string'
+                          ? record['entityName']
+                          : undefined;
+                const recordId =
+                    typeof record['RecordID'] === 'string'
+                        ? record['RecordID']
+                        : typeof record['recordId'] === 'string'
+                          ? record['recordId']
+                          : undefined;
+                if (entityName && recordId) {
+                    resolvedSeeds.push({
+                        EntityName: entityName,
+                        RecordID: recordId,
+                        Title: typeof record['Title'] === 'string' ? record['Title'] : undefined,
+                        SeedScore: typeof record['SeedScore'] === 'number' ? record['SeedScore'] : 1.0,
+                    });
+                }
+            }
+        }
+        return resolvedSeeds;
     }
 
     /** Run a sub-pipeline (map/let) with no top-level record-keeping; fails fast internally. */
@@ -406,6 +614,7 @@ function stageVerb(stage: PipelineStage): string {
     if ('tool' in stage) return String(stage.tool);
     if ('map' in stage) return 'map';
     if ('let' in stage) return 'let';
+    if ('graphExpand' in stage || stage.stageType === 'graphExpand') return 'graphExpand';
     const verbs = Object.keys(stage).filter((k) => !CONTROL_VERBS.has(k));
     return verbs[0] ?? 'unknown';
 }

@@ -39,6 +39,7 @@ import type {
 } from '@memberjunction/predictive-studio-core';
 
 import type { DatedSourceSpec } from '../feature-assembly';
+import type { IRecordProcessChallengerConfig, ShadowScoringCoordinator } from './shadow-scoring';
 
 /**
  * Read seam for loading the immutable `MJ: ML Models` row to score against.
@@ -159,6 +160,10 @@ export interface MLModelInferenceProcessorOptions {
   autoTrain?: MLAutoTrainConfig;
   /** The trainer that fulfils {@link autoTrain}. Required for auto-train to take effect. */
   autoTrainer?: IModelAutoTrainer;
+  /** Optional WS-4.4 shadow challenger configuration (`ChallengerConfiguration`). */
+  challengerConfig?: IRecordProcessChallengerConfig;
+  /** Optional WS-4.4 shadow scoring coordinator. */
+  shadowCoordinator?: ShadowScoringCoordinator;
 }
 
 /**

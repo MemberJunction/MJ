@@ -10,13 +10,16 @@
  * @module @memberjunction/server
  */
 import { ActionEngineServer } from '@memberjunction/actions';
-import { ActionParam } from '@memberjunction/actions-base';
-import { BuildActionOutputObject } from '@memberjunction/ai-core-plus';
-import { LogError } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { ActionParam, type ActionRunAudience } from '@memberjunction/actions-base';
+import { ApplyTaskSecurityEnvelopeToParams, BuildActionOutputObject } from '@memberjunction/ai-core-plus';
+import { LogError, UserInfo } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/generic-database-provider';
+import { IndexByUUID, UUIDsEqual } from '@memberjunction/global';
 import type { TaskActionRunner, TaskActionRunParams, TaskActionRunResult } from '@memberjunction/task-graph';
 
 export class TaskGraphActionRunner implements TaskActionRunner {
+    public readonly SupportsAudience = true;
+
     public async RunActionForTask(params: TaskActionRunParams): Promise<TaskActionRunResult> {
         try {
             await ActionEngineServer.Instance.Config(false, params.ContextUser);
@@ -25,15 +28,22 @@ export class TaskGraphActionRunner implements TaskActionRunner {
                 return { Success: false, ErrorMessage: `Action ${params.ActionID} is not in the engine's metadata.` };
             }
 
+            const readerIds = params.SecurityEnvelope?.Audience?.ReaderUserIDs;
+            const audience: ActionRunAudience | undefined =
+                readerIds && readerIds.length > 0
+                    ? { Readers: this.resolveAudienceReaders(readerIds) }
+                    : undefined;
+
             const result = await ActionEngineServer.Instance.RunAction({
                 Action: action,
                 ContextUser: params.ContextUser,
-                Params: this.buildParams(params),
+                Params: this.buildParams(params, action.Name),
                 // No Filters. A durable node is work that a filter ALREADY let through — the entity
                 // action's gate ran at dispatch time, on the change context that no longer exists by
                 // the time the dispatcher picks the task up. Re-evaluating here would ask a
                 // transition question with nothing to answer it, and fail closed on every retry.
                 Filters: [],
+                ...(audience ? { Audience: audience } : {}),
             });
 
             const output = this.buildOutput(result.Params, result.Message);
@@ -43,7 +53,7 @@ export class TaskGraphActionRunner implements TaskActionRunner {
                     `Action "${action.Name}" returned output param "${unstorable.Name}", which cannot be stored ` +
                     `as the step's result: ${unstorable.Reason}. Output params of a durable step must be plain data.`;
                 LogError(`[TaskGraphActionRunner] Task ${params.TaskID}: ${message}`);
-                return { Success: false, ErrorMessage: message, ActionLogID: result.LogEntry?.ID };
+                return { Success: false, ErrorMessage: message, ActionLogID: result.LogEntry?.ID, ResultCode: result.ResultCode };
             }
 
             return {
@@ -54,6 +64,7 @@ export class TaskGraphActionRunner implements TaskActionRunner {
                 // carrying it out, a workflow's action step has no path back to its own execution
                 // record — the one thing anyone wants when an action misbehaves.
                 ActionLogID: result.LogEntry?.ID,
+                ResultCode: result.ResultCode,
             };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
@@ -118,10 +129,35 @@ export class TaskGraphActionRunner implements TaskActionRunner {
      * not read here — spreading it would hand the action one extra parameter per dependency, named
      * by a GUID and holding that task's whole output.
      */
-    private buildParams(params: TaskActionRunParams): ActionParam[] {
-        if (!params.InputPayload || typeof params.InputPayload !== 'object') {
-            return [];
+    private buildParams(params: TaskActionRunParams, actionName?: string | null): ActionParam[] {
+        const base = params.InputPayload && typeof params.InputPayload === 'object' && !Array.isArray(params.InputPayload)
+            ? (params.InputPayload as Record<string, unknown>)
+            : {};
+        const enforced = ApplyTaskSecurityEnvelopeToParams(
+            base,
+            params.SecurityEnvelope,
+            params.ActionID,
+            actionName,
+        ).Params;
+        return Object.entries(enforced).map(([Name, Value]) => ({ Name, Value, Type: 'Input' }));
+    }
+
+    private resolveAudienceReaders(readerIds: ReadonlyArray<string>): UserInfo[] {
+        let cachedUsers: UserInfo[] = [];
+        try {
+            cachedUsers = UserCache.Instance?.Users ?? UserCache.Users ?? [];
+        } catch {
+            cachedUsers = [];
         }
-        return Object.entries(params.InputPayload as Record<string, unknown>).map(([Name, Value]) => ({ Name, Value, Type: 'Input' }));
+        const byId = IndexByUUID(cachedUsers, (u) => u.ID);
+        return readerIds.map((id) => {
+            const matched = byId.Get(id);
+            if (matched) {
+                return matched;
+            }
+            const placeholder = new UserInfo();
+            placeholder.ID = id;
+            return placeholder;
+        });
     }
 }

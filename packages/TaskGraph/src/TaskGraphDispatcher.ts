@@ -53,9 +53,13 @@ import {
     DecisionReferencesIn,
     ResolveDecisionState,
     type TaskGraphDecisionAnswer,
+    ApplyTaskSecurityEnvelopeToParams,
+    MergeTaskSecurityEnvelopes,
+    ParseTaskSecurityEnvelope,
+    type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
 import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
-import { IShutdownable, ShutdownRegistry, UUIDsEqual } from '@memberjunction/global';
+import { IShutdownable, IndexByUUID, ShutdownRegistry, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import type { MJTaskEntity_ITaskStepConfiguration, MJTaskEntity_ITaskLoopIteration } from '@memberjunction/core-entities';
 import { TaskClaimStore, TERMINAL_PARENT_STATUSES, TERMINAL_PARENT_STATUS_SQL } from './TaskClaimStore';
@@ -102,6 +106,18 @@ import {
 } from './debug-state';
 import { RunForEachLoop, RunWhileLoop, type LoopBodyInvoker } from './TaskLoopExecutor';
 import { RegisterTaskGraphKick } from './task-graph-kick';
+import {
+    BuildCompensationEscalationSummary,
+    BuildCompensationInputPayload,
+    type CompensatableActionRecord,
+    IsCompensationTask,
+    MergeActionCompensationSpecs,
+    ReadActionCompensationMetadata,
+    ReadTaskCompensationMetadata,
+    type SagaExecutionState,
+    SelectTasksToCompensate,
+    type TaskCompensationStepMetadata,
+} from './saga-compensation';
 import { NotificationEngine } from '@memberjunction/notifications';
 
 /** Metadata-seeded notification type for human tasks (metadata/notifications/.task-assignment-type.json). */
@@ -268,6 +284,10 @@ type TaskBodyOutcome = {
      * would be a second implementation of the same rule, free to drift.
      */
     PayloadAtStart?: Record<string, unknown>;
+    /** Structured result code returned by the action runner or security gate (e.g. `AUDIENCE_UNSUPPORTED`, `TAINTED_EGRESS_BLOCKED`). */
+    ResultCode?: string;
+    /** True when the step's output is tainted by untrusted context or an upstream tainted node. */
+    IsOutputTainted?: boolean;
 };
 
 interface GlobalUserCacheLookup {
@@ -290,6 +310,10 @@ type GraphContext = {
      * to the dispatcher's `this.contextUser` when no distinct submitting user is recorded.
      */
     ExecutionUser: UserInfo;
+    /**
+     * Durable security envelope inherited from the parent graph (`InputPayload.securityEnvelope`), if any.
+     */
+    SecurityEnvelope?: TaskSecurityEnvelope;
 };
 
 /**
@@ -461,11 +485,23 @@ export type ClaimedTaskCandidate = {
      * Accepts either a `Map` or a plain `Record` when supplied by callers/tests.
      */
     dependencyOutputs?: Map<string, unknown> | Record<string, unknown>;
+    /**
+     * True when any direct upstream dependency of this task produced tainted output and has not been
+     * sanitized by a completed Human approval step.
+     */
+    isUpstreamTainted?: boolean;
+    /**
+     * True when a direct upstream dependency of this task is a completed Human approval step, acting
+     * as a HITL sanitization barrier for inherited run taint.
+     */
+    isSanitizedByHuman?: boolean;
 };
 
 export class TaskGraphDispatcher implements IShutdownable {
     private readonly config: TaskGraphDispatcherConfig;
     private readonly claims: TaskClaimStore;
+    /** Tracks upstream taint / human sanitization discovered during non-prehydrated `loadDependencyOutputs`. */
+    private readonly loadedDependencyTaint = new Map<string, { isUpstreamTainted: boolean; isSanitizedByHuman: boolean }>();
 
     /**
      * Edges already reported as unevaluable, so the report is once per transition and not once per
@@ -1184,7 +1220,15 @@ export class TaskGraphDispatcher implements IShutdownable {
             : (taskOrID.taskId ?? taskOrID.ID ?? taskOrID.taskEntity.ID);
         let heartbeat: ReturnType<typeof setInterval> | null = null;
         try {
-            const provider = await this.providerFactory.CreateProvider();
+            const parentEnv = hydrated?.parentMetadata?.securityEnvelope
+                ?? (hydrated?.parentTask ? ParseTaskGraphParentMetadata(hydrated.parentTask.InputPayload).securityEnvelope : undefined);
+            const stepEnv = ParseTaskSecurityEnvelope(
+                (hydrated?.taskEntity?.ConfigurationObject as TaskStepConfiguration | undefined)?.securityEnvelope,
+            );
+            const prehydratedTenantContext = MergeTaskSecurityEnvelopes(parentEnv, stepEnv)?.TenantContext;
+            const provider = prehydratedTenantContext
+                ? await this.providerFactory.CreateProvider({ TenantContext: prehydratedTenantContext, ContextUser: this.contextUser })
+                : await this.providerFactory.CreateProvider();
 
             let task: MJTaskEntity;
             if (hydrated?.taskEntity) {
@@ -1251,7 +1295,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 result = { Success: false, ErrorMessage: parsed.ErrorMessage };
             } else {
                 const onProgress = this.nodeProgressEmitter(graphID, ownerUserID, taskID, task.Name);
-                result = await this.runTaskBody(task, provider, parsed.Payload, dependencyOutputs, onProgress, hydrated);
+                result = await this.runTaskBody(task, provider, parsed.Payload, dependencyOutputs, onProgress, hydrated, Boolean(prehydratedTenantContext));
             }
 
             // ONLY THE CONFIRMED OWNER MUTATES THE GRAPH (R2-10).
@@ -1273,7 +1317,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                     ErrorMessage: result.ErrorMessage ?? null,
                     AgentRunID: result.AgentRunID ?? null,
                     Configuration: this.configurationWithRuntime(
-                        task, result.PromptRunID, result.ActionLogID, result.Iterations, result.PayloadAtStart,
+                        task, result.PromptRunID, result.ActionLogID, result.Iterations, result.PayloadAtStart, result.IsOutputTainted,
                     ),
                 },
                 this.contextUser,
@@ -1434,6 +1478,8 @@ export class TaskGraphDispatcher implements IShutdownable {
                     });
                 }
             }
+
+            graph = await this.coordinateSagaCompensation(provider, parentID, graph, debug);
 
             // Holds are passed in, or the detector reports a held graph as healthy: a held target's
             // gating edge is still live and its origin Complete, so ComputeEligibleTasks counts it
@@ -1905,6 +1951,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         let invocation: { data?: unknown; context?: unknown } = {};
         let submittedByUserID: string | null | undefined = task.UserID;
         let parentAgentHierarchy: string[] | undefined = undefined;
+        let securityEnvelope: TaskSecurityEnvelope | undefined = undefined;
 
         if (task.ParentID && prehydrated && (prehydrated.parentMetadata || prehydrated.parentTask)) {
             const parent = prehydrated.parentTask ?? null;
@@ -1913,8 +1960,10 @@ export class TaskGraphDispatcher implements IShutdownable {
                 : ParseTaskGraphParentMetadata(parent?.InputPayload ?? null);
             depth = meta.reinvokeDepth + 1;
             submittingAgentRunID = parent?.AgentRunID ?? meta.submittedByAgentRunID ?? null;
+            parentAgentHierarchy = meta.parentAgentHierarchy;
             invocation = { data: meta.invocation?.data, context: meta.invocation?.context };
             submittedByUserID = meta.submittedByUserID ?? parent?.UserID ?? task.UserID;
+            securityEnvelope = meta.securityEnvelope ?? prehydrated.parentMetadata?.securityEnvelope;
         } else if (task.ParentID && typeof provider?.GetEntityObject === 'function') {
             try {
                 const parent = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
@@ -1927,12 +1976,15 @@ export class TaskGraphDispatcher implements IShutdownable {
                     parentAgentHierarchy = meta.parentAgentHierarchy;
                     invocation = { data: meta.invocation?.data, context: meta.invocation?.context };
                     submittedByUserID = meta.submittedByUserID ?? parent.UserID ?? task.UserID;
+                    securityEnvelope = meta.securityEnvelope;
                 }
             } catch (e) {
                 // An unreadable parent must not stop the work; depth zero is the safe reading, and the
                 // submit-time cap still guards the next hop. Logged, because it also blanks `data.*`.
                 LogError(`[TaskGraphDispatcher] Task ${task.ID}: reading parent ${task.ParentID} failed; running at depth 0 with no invocation data/context: ${e instanceof Error ? e.message : String(e)}`);
             }
+        } else if (prehydrated?.parentMetadata?.securityEnvelope) {
+            securityEnvelope = prehydrated.parentMetadata.securityEnvelope;
         }
 
         const executionUser = await this.resolveGraphExecutionUser(submittedByUserID, task.ParentID ?? task.ID);
@@ -1942,6 +1994,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             ParentAgentHierarchy: parentAgentHierarchy,
             Invocation: invocation,
             ExecutionUser: executionUser,
+            ...(securityEnvelope ? { SecurityEnvelope: securityEnvelope } : {}),
         };
     }
 
@@ -1997,12 +2050,21 @@ export class TaskGraphDispatcher implements IShutdownable {
         failureSemantics: TaskGraphParentMetadata['failureSemantics'],
         nodes: TaskGraphNode[],
         edges: TaskGraphEdge[],
+        entityById?: ReadonlyMap<string, MJTaskEntity>,
     ): Set<string> {
         const handled = new Set<string>();
-        if (failureSemantics !== 'edges') return handled;
 
         for (const node of nodes) {
             if (node.status !== 'Failed') continue;
+            const entity = entityById?.get(node.id);
+            if (entity && IsCompensationTask(entity)) {
+                const compMeta = ReadTaskCompensationMetadata(entity.Configuration);
+                if (compMeta?.onCompensationFailure === 'ContinueCompensation') {
+                    handled.add(node.id);
+                    continue;
+                }
+            }
+            if (failureSemantics !== 'edges') continue;
             // "Has somewhere to go" is the test. An edge out of a failed step that survived condition
             // evaluation IS the drawn recovery route; a failed step with no outgoing edges has none,
             // and stays terminal.
@@ -2620,6 +2682,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 }
 
                 if (this.inFlight.has(entity.ID)) continue;
+                const upstreamTaint = this.computeUpstreamTaintInGraph(entity.ID, graph);
                 claimable.push({
                     ID: entity.ID,
                     taskId: entity.ID,
@@ -2629,6 +2692,8 @@ export class TaskGraphDispatcher implements IShutdownable {
                     parentTask: graph.parent ?? null,
                     parentMetadata: graph.parentMetadata,
                     dependencyOutputs: this.extractDependencyOutputsFromGraph(entity.ID, graph),
+                    isUpstreamTainted: upstreamTaint.isUpstreamTainted,
+                    isSanitizedByHuman: upstreamTaint.isSanitizedByHuman,
                 });
                 if (claimable.length >= limit) break;
             }
@@ -3427,7 +3492,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             // Exclusive holds and ordinary-condition holds are the same state and share one set:
             // "we cannot tell yet, so nothing may claim this."
             holdTaskIDs: new Set([...resolution.holdTaskIDs, ...heldByCondition]),
-            handledFailureIDs: this.computeHandledFailures(failureSemantics, nodes, liveEdges),
+            handledFailureIDs: this.computeHandledFailures(failureSemantics, nodes, liveEdges, entityById),
         };
     }
 
@@ -3620,6 +3685,194 @@ export class TaskGraphDispatcher implements IShutdownable {
 
 
     /**
+     * Returns true when a completed upstream task produced tainted output and is not a Human approval step.
+     */
+    private isTaskEntityOutputTainted(upstream: MJTaskEntity): boolean {
+        if (IsHumanTask(upstream)) {
+            return false;
+        }
+        const cfg = this.parseConfiguration(upstream) as TaskStepConfiguration | undefined;
+        if (cfg?.runtime?.isOutputTainted === true) {
+            return true;
+        }
+        if (ParseTaskSecurityEnvelope(cfg?.securityEnvelope)?.IsRunTainted === true) {
+            return true;
+        }
+        if (upstream.OutputPayload) {
+            try {
+                const parsed: unknown = JSON.parse(upstream.OutputPayload);
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                    const rec = parsed as Record<string, unknown>;
+                    if (rec.__isTainted === true || rec.isOutputTainted === true) {
+                        return true;
+                    }
+                }
+            } catch {
+                // Ignore malformed JSON here; extractDependencyOutputsFromGraph logs it.
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Computes whether `taskID` has any tainted upstream ancestors or is sanitized by a completed
+     * Human approval ancestor directly from the in-memory `GraphState` (0 database queries).
+     *
+     * A tainted ancestor `T` is sanitized if and only if at least one completed Human ancestor `H`
+     * of `taskID` is downstream of `T` (`T` ∈ ancestors(`H`)), and every ancestor of `taskID` that
+     * is not upstream of `H` is untainted.
+     */
+    private computeUpstreamTaintInGraph(
+        taskID: string,
+        graph: GraphState,
+    ): { isUpstreamTainted: boolean; isSanitizedByHuman: boolean } {
+        const deps = graph.rawDependencies ?? [];
+        const collectAncestors = (startId: string): UUIDSet => {
+            const visited = new UUIDSet();
+            const stack: string[] = [startId];
+            while (stack.length > 0) {
+                const current = stack.pop()!;
+                for (const dep of deps) {
+                    if (!UUIDsEqual(dep.TaskID, current)) continue;
+                    if (!visited.Has(dep.DependsOnTaskID)) {
+                        visited.Add(dep.DependsOnTaskID);
+                        stack.push(dep.DependsOnTaskID);
+                    }
+                }
+            }
+            return visited;
+        };
+
+        const allAncestors = collectAncestors(taskID);
+        if (allAncestors.Size === 0) {
+            return { isUpstreamTainted: false, isSanitizedByHuman: false };
+        }
+
+        const completedHumanAncestors: string[] = [];
+        const sanitizedAncestorIds = new UUIDSet();
+        for (const ancId of allAncestors) {
+            const ancEntity = graph.entityById.get(ancId);
+            if (ancEntity && IsHumanTask(ancEntity) && ancEntity.Status === 'Complete') {
+                completedHumanAncestors.push(ancId);
+                for (const upstreamOfHuman of collectAncestors(ancId)) {
+                    sanitizedAncestorIds.Add(upstreamOfHuman);
+                }
+            }
+        }
+
+        let hasUnsanitizedTaintedAncestor = false;
+        let hasUnsanitizedNonHumanBranch = false;
+        for (const ancId of allAncestors) {
+            const ancEntity = graph.entityById.get(ancId);
+            if (!ancEntity) continue;
+            const isCompletedHuman = IsHumanTask(ancEntity) && ancEntity.Status === 'Complete';
+            if (isCompletedHuman || sanitizedAncestorIds.Has(ancId)) {
+                continue;
+            }
+            hasUnsanitizedNonHumanBranch = true;
+            if (this.isTaskEntityOutputTainted(ancEntity)) {
+                hasUnsanitizedTaintedAncestor = true;
+            }
+        }
+
+        return {
+            isUpstreamTainted: hasUnsanitizedTaintedAncestor,
+            isSanitizedByHuman:
+                completedHumanAncestors.length > 0 &&
+                !hasUnsanitizedTaintedAncestor &&
+                !hasUnsanitizedNonHumanBranch,
+        };
+    }
+
+    /**
+     * Evaluates Audience and Tainted Egress security gates before invoking an Action runner.
+     * Returns a failed `TaskBodyOutcome` when blocked, or `null` when allowed to proceed.
+     */
+    private checkActionSecurityGates(
+        taskName: string,
+        actionID: string,
+        envelope: TaskSecurityEnvelope | undefined,
+    ): TaskBodyOutcome | null {
+        if (envelope?.Audience?.ReaderUserIDs && envelope.Audience.ReaderUserIDs.length > 0) {
+            if (this.actionRunner?.SupportsAudience !== true) {
+                const msg =
+                    `Action "${taskName}" (${actionID}) blocked by security envelope (AUDIENCE_UNSUPPORTED): ` +
+                    `action runner does not support audience enforcement.`;
+                LogError(`[TaskGraphDispatcher] ${msg}`);
+                return {
+                    Success: false,
+                    AgentRunID: null,
+                    ResultCode: 'AUDIENCE_UNSUPPORTED',
+                    ErrorMessage: msg,
+                };
+            }
+        }
+        if (envelope?.IsRunTainted === true) {
+            const allowedIds = envelope.AllowedEgressActionIDs ?? [];
+            const isAllowed = allowedIds.some((allowedId) => UUIDsEqual(allowedId, actionID));
+            if (!isAllowed) {
+                const msg =
+                    `Action "${taskName}" (${actionID}) blocked by security envelope (TAINTED_EGRESS_BLOCKED): ` +
+                    `run is tainted by untrusted context and action is not in AllowedEgressActionIDs.`;
+                LogError(`[TaskGraphDispatcher] ${msg}`);
+                return {
+                    Success: false,
+                    AgentRunID: null,
+                    ResultCode: 'TAINTED_EGRESS_BLOCKED',
+                    ErrorMessage: msg,
+                    IsOutputTainted: true,
+                };
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Resolves the effective `TaskSecurityEnvelope` for a task by merging its parent graph envelope,
+     * its step-level configuration envelope, and monotonic upstream taint (unless sanitized by a
+     * completed Human approval prerequisite).
+     */
+    private resolveEffectiveSecurityEnvelope(
+        task: MJTaskEntity,
+        contextEnvelope: TaskSecurityEnvelope | undefined,
+        dependencyOutputs: Map<string, unknown>,
+        prehydrated?: Pick<ClaimedTaskCandidate, 'isUpstreamTainted' | 'isSanitizedByHuman'>,
+    ): TaskSecurityEnvelope | undefined {
+        const loadedTaint = this.loadedDependencyTaint?.get(task.ID);
+        this.loadedDependencyTaint?.delete(task.ID);
+
+        let depOutputTainted = false;
+        for (const outVal of dependencyOutputs.values()) {
+            if (outVal && typeof outVal === 'object' && !Array.isArray(outVal)) {
+                const rec = outVal as Record<string, unknown>;
+                if (rec.__isTainted === true || rec.isOutputTainted === true) {
+                    depOutputTainted = true;
+                    break;
+                }
+            }
+        }
+
+        const isSanitizedByHuman = Boolean(prehydrated?.isSanitizedByHuman ?? loadedTaint?.isSanitizedByHuman);
+        const isUpstreamTainted = !isSanitizedByHuman && Boolean(
+            prehydrated?.isUpstreamTainted ?? loadedTaint?.isUpstreamTainted ?? depOutputTainted,
+        );
+
+        const rawStepEnv = (task.ConfigurationObject as TaskStepConfiguration | null)?.securityEnvelope
+            ?? (this.parseConfiguration(task) as TaskStepConfiguration | undefined)?.securityEnvelope;
+        const stepEnvelope = ParseTaskSecurityEnvelope(rawStepEnv);
+
+        let effective = MergeTaskSecurityEnvelopes(
+            contextEnvelope,
+            stepEnvelope,
+            isUpstreamTainted ? { IsRunTainted: true } : undefined,
+        );
+        if (isSanitizedByHuman && effective?.IsRunTainted && !stepEnvelope?.IsRunTainted) {
+            effective = { ...effective, IsRunTainted: false };
+        }
+        return effective;
+    }
+
+    /**
      * Extracts parsed `OutputPayload` values for all dependencies of `taskID` directly from the
      * already-loaded `GraphState`, avoiding any additional database round-trips when claiming and
      * executing a task.
@@ -3650,13 +3903,29 @@ export class TaskGraphDispatcher implements IShutdownable {
             { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID='${taskID}'`, ResultType: 'entity_object', BypassCache: true },
             this.contextUser,
         );
+        let hasTaintedDep = false;
+        let sawCompletedHuman = false;
+        let sawNonHumanDep = false;
         for (const dep of (deps.Success ? deps.Results : []) ?? []) {
             const upstream = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
             if (!(await upstream.Load(dep.DependsOnTaskID))) continue;
+            if (IsHumanTask(upstream) && upstream.Status === 'Complete') {
+                sawCompletedHuman = true;
+            } else {
+                sawNonHumanDep = true;
+                if (this.isTaskEntityOutputTainted(upstream)) {
+                    hasTaintedDep = true;
+                }
+            }
             if (!upstream.OutputPayload) continue;
             try { outputs.set(dep.DependsOnTaskID, JSON.parse(upstream.OutputPayload)); }
             catch (e) { LogError(`[TaskGraphDispatcher] Task ${dep.DependsOnTaskID} has malformed OutputPayload: ${e}`); }
         }
+        const isSanitizedByHuman = sawCompletedHuman && !sawNonHumanDep && !hasTaintedDep;
+        this.loadedDependencyTaint?.set(taskID, {
+            isUpstreamTainted: hasTaintedDep,
+            isSanitizedByHuman,
+        });
         return outputs;
     }
 
@@ -3677,7 +3946,8 @@ export class TaskGraphDispatcher implements IShutdownable {
         inputPayload: unknown,
         dependencyOutputs: Map<string, unknown>,
         onProgress?: TaskRunProgressCallback,
-        prehydrated?: Pick<ClaimedTaskCandidate, 'parentTask' | 'parentMetadata'>,
+        prehydrated?: Pick<ClaimedTaskCandidate, 'parentTask' | 'parentMetadata' | 'isUpstreamTainted' | 'isSanitizedByHuman'>,
+        tenantProviderAlreadyMinted: boolean = false,
     ): Promise<TaskBodyOutcome> {
         // A node's input is a name → value object (`TaskGraphSpecNode.inputPayload: Record<string, unknown>`).
         // `mergedPayload` below only merges objects, so anything else would be dropped without a word
@@ -3696,26 +3966,44 @@ export class TaskGraphDispatcher implements IShutdownable {
             return { Success: false, ErrorMessage: message };
         }
 
-        const payload = this.mergedPayload(inputPayload, dependencyOutputs);
+        const rawPayload = this.mergedPayload(inputPayload, dependencyOutputs);
         const config = task.ConfigurationObject;
 
         // A loop's own step type decides how many times its body runs; the body itself is dispatched
         // through the very same runners as a one-shot step.
         if (task.StepType === 'ForEach' || task.StepType === 'While') {
-            return { ...await this.runLoopTask(task, provider, payload, dependencyOutputs, prehydrated), PayloadAtStart: payload };
+            return {
+                ...await this.runLoopTask(task, provider, rawPayload, dependencyOutputs, prehydrated, tenantProviderAlreadyMinted),
+                PayloadAtStart: rawPayload,
+            };
         }
 
         // Routed on StepType before the mappings below: a Decision reads its state from the merged
         // payload by path and writes its answers back under `decisions`, so it has no mapping of its
         // own. And it carries a PromptID, so the Prompt branch would otherwise take it.
         if (task.StepType === 'Decision') {
-            return { ...await this.runDecisionNode(task, provider, payload, onProgress, prehydrated), PayloadAtStart: payload };
+            return { ...await this.runDecisionNode(task, provider, rawPayload, onProgress, prehydrated), PayloadAtStart: rawPayload };
         }
 
         // `data.*` / `context.*` resolve against the invocation that submitted the graph, exactly as
         // the in-run walker resolves them and as branch conditions already see them (R3-3). Without
         // it a mapping like `RecordID: data.ID` reached the action as the literal "data.ID".
         const context = await this.graphContext(provider, task, prehydrated);
+        const effectiveEnvelope = this.resolveEffectiveSecurityEnvelope(
+            task,
+            context.SecurityEnvelope,
+            dependencyOutputs,
+            prehydrated,
+        );
+        const executionProvider =
+            effectiveEnvelope?.TenantContext && !tenantProviderAlreadyMinted
+                ? await this.providerFactory.CreateProvider({
+                    TenantContext: effectiveEnvelope.TenantContext,
+                    ContextUser: context.ExecutionUser,
+                })
+                : provider;
+
+        const payload = rawPayload;
         const invocation = config?.inputMapping ? context.Invocation : {};
         const { params, errors } = BuildMappedInput(config?.inputMapping, { payload, ...invocation });
         for (const e of errors) LogError(`[TaskGraphDispatcher] Task ${task.ID}: ${e}`);
@@ -3732,7 +4020,18 @@ export class TaskGraphDispatcher implements IShutdownable {
         // which was TRUE of what it had been handed while twenty research results sat in the
         // dependency outputs beside it, and the reviewer then rejected the draft for saying so.
         // Every layer looked like it was working.
-        const effectiveInput = Object.keys(params).length > 0 ? params : payload;
+        const rawEffectiveInput = Object.keys(params).length > 0 ? params : payload;
+        const inputEnforcement = task.ActionID
+            ? ApplyTaskSecurityEnvelopeToParams(rawEffectiveInput, effectiveEnvelope, task.ActionID, task.Name)
+            : { Params: rawEffectiveInput, OverriddenKeys: [] as string[] };
+        const effectiveInput = inputEnforcement.Params;
+        if (inputEnforcement.OverriddenKeys.length > 0) {
+            const overridden = [...new Set(inputEnforcement.OverriddenKeys)];
+            LogStatus(
+                `[TaskGraphDispatcher] Task '${task.Name}' (${task.ID}): restored ${overridden.length} bound parameter(s) ` +
+                `(${overridden.join(', ')}) from TaskSecurityEnvelope.`,
+            );
+        }
 
         if (task.StepType === 'Prompt') {
             if (!this.promptRunner) {
@@ -3745,9 +4044,10 @@ export class TaskGraphDispatcher implements IShutdownable {
                 InputPayload: effectiveInput,
                 DependencyOutputs: dependencyOutputs,
                 TemplateParameters: config?.prompt?.templateParameters,
-                Provider: provider,
+                Provider: executionProvider,
                 ContextUser: context.ExecutionUser,
                 OnProgress: onProgress,
+                ...(effectiveEnvelope ? { SecurityEnvelope: effectiveEnvelope } : {}),
             });
 
             // A prompt's response is DEEP-MERGED into the payload rather than replacing it. A prompt
@@ -3756,6 +4056,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             const merged = promptResult.Success && promptResult.Output && typeof promptResult.Output === 'object'
                 ? deepMergePayload(payload, promptResult.Output as Record<string, unknown>)
                 : payload;
+            const isOutputTainted = !IsHumanTask(task) && Boolean(effectiveEnvelope?.IsRunTainted || promptResult.IsOutputTainted);
 
             return {
                 Success: promptResult.Success,
@@ -3768,26 +4069,539 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // cost rollup that silently omits failures under-reports exactly the runs someone
                 // is most likely to be investigating.
                 PromptRunID: promptResult.PromptRunID,
+                ...(isOutputTainted ? { IsOutputTainted: true } : {}),
             };
         }
 
-        const raw = task.ActionID
-            ? { ...await this.actionRunner!.RunActionForTask({
-                TaskID: task.ID,
-                ActionID: task.ActionID,
-                InputPayload: effectiveInput,
-                DependencyOutputs: dependencyOutputs,
-                Provider: provider,
-                ContextUser: context.ExecutionUser,
-                OnProgress: onProgress,
-            }), AgentRunID: null }
-            : await this.runAgentNode(task, provider, effectiveInput, dependencyOutputs, onProgress, context);
+        if (task.ActionID) {
+            const gateRejection = this.checkActionSecurityGates(task.Name, task.ActionID, effectiveEnvelope);
+            if (gateRejection) {
+                return { ...gateRejection, PayloadAtStart: payload };
+            }
+        }
 
+        const raw = task.ActionID
+            ? {
+                ...await this.invokeActionWithIdempotentRetry(
+                    task,
+                    executionProvider,
+                    effectiveInput,
+                    dependencyOutputs,
+                    context.ExecutionUser,
+                    onProgress,
+                    effectiveEnvelope,
+                ),
+                AgentRunID: null,
+            }
+            : await this.runAgentNode(task, executionProvider, effectiveInput, dependencyOutputs, onProgress, context, effectiveEnvelope);
+
+        const isOutputTainted = !IsHumanTask(task) && Boolean(effectiveEnvelope?.IsRunTainted || raw.IsOutputTainted);
         return {
             ...raw,
             Output: this.applyStepOutputMapping(task, payload, raw.Output, config?.outputMapping),
             PayloadAtStart: payload,
+            ...(isOutputTainted ? { IsOutputTainted: true } : {}),
         };
+    }
+
+    /**
+     * Runs an action task and automatically retries transient failures when the action is marked
+     * idempotent (`compensation.isIdempotent === true`) or is itself a saga compensation task.
+     */
+    private async invokeActionWithIdempotentRetry(
+        task: MJTaskEntity,
+        executionProvider: IMetadataProvider,
+        effectiveInput: Record<string, unknown>,
+        dependencyOutputs: Map<string, unknown>,
+        executionUser: UserInfo,
+        onProgress?: TaskRunProgressCallback,
+        effectiveEnvelope?: TaskSecurityEnvelope,
+    ): Promise<Awaited<ReturnType<TaskActionRunner['RunActionForTask']>>> {
+        const config = (task.ConfigurationObject ?? this.parseConfiguration(task)) as TaskStepConfiguration | null;
+        const compMeta = config?.compensation ?? ReadTaskCompensationMetadata(task.Configuration);
+        const isIdempotentOrCompensation = Boolean(
+            compMeta?.isIdempotent === true || compMeta?.compensatesTaskID,
+        );
+        const maxRetries = isIdempotentOrCompensation
+            ? Math.max(0, Math.floor(compMeta?.retryCount ?? config?.policy?.retryCount ?? 0))
+            : 0;
+
+        let lastResult = await this.actionRunner!.RunActionForTask({
+            TaskID: task.ID,
+            ActionID: task.ActionID!,
+            InputPayload: effectiveInput,
+            DependencyOutputs: dependencyOutputs,
+            Provider: executionProvider,
+            ContextUser: executionUser,
+            OnProgress: onProgress,
+            ...(effectiveEnvelope ? { SecurityEnvelope: effectiveEnvelope } : {}),
+        });
+        for (let attempt = 1; !lastResult.Success && attempt <= maxRetries; attempt++) {
+            LogStatus(
+                `[TaskGraphDispatcher] Retrying idempotent action task '${task.Name}' (${task.ID}) ` +
+                `attempt ${attempt}/${maxRetries}...`,
+            );
+            lastResult = await this.actionRunner!.RunActionForTask({
+                TaskID: task.ID,
+                ActionID: task.ActionID!,
+                InputPayload: effectiveInput,
+                DependencyOutputs: dependencyOutputs,
+                Provider: executionProvider,
+                ContextUser: executionUser,
+                OnProgress: onProgress,
+                ...(effectiveEnvelope ? { SecurityEnvelope: effectiveEnvelope } : {}),
+            });
+        }
+        return lastResult;
+    }
+
+    /**
+     * Coordinates reverse-topological saga compensation and HITL escalation when a task graph with
+     * `failurePolicy: 'CompensateCompleted'` experiences an unhandled forward step failure.
+     */
+    private async coordinateSagaCompensation(
+        provider: IMetadataProvider,
+        parentID: string,
+        graph: GraphState,
+        debug?: TaskGraphDebugState,
+    ): Promise<GraphState> {
+        const failurePolicy = graph.parentMetadata?.failurePolicy ?? 'Halt';
+        if (failurePolicy !== 'CompensateCompleted' && !graph.parentMetadata?.sagaState) {
+            return graph;
+        }
+
+        const allTasks = [...graph.entityById.values()];
+        const forwardTasks = allTasks.filter((t) => !IsCompensationTask(t));
+        const unhandledFailedForward = forwardTasks.filter(
+            (t) => t.Status === 'Failed' && !graph.handledFailureIDs.has(t.ID),
+        );
+
+        // Once an unhandled forward failure occurs under `CompensateCompleted`, block any remaining
+        // `Pending` forward tasks (including independent parallel branches) so they cannot be claimed
+        // while compensation is waiting or running.
+        if (unhandledFailedForward.length > 0 || graph.parentMetadata?.sagaState) {
+            const nodeById = IndexByUUID(graph.nodes, (n) => n.id);
+            for (const ft of forwardTasks) {
+                if (ft.Status !== 'Pending') continue;
+                ft.Status = 'Blocked';
+                if (await ft.Save()) {
+                    const node = nodeById.Get(ft.ID);
+                    if (node) node.status = 'Blocked';
+                }
+            }
+        }
+
+        const hasInProgressForwardTask = forwardTasks.some((t) => t.Status === 'In Progress');
+        if (hasInProgressForwardTask) {
+            return graph;
+        }
+
+        let compensationTasks = allTasks.filter((t) => IsCompensationTask(t));
+        if (
+            unhandledFailedForward.length > 0 &&
+            compensationTasks.length === 0 &&
+            !graph.parentMetadata?.sagaState
+        ) {
+            await this.hydrateActionMetadataForSaga(provider, forwardTasks);
+            const orderedToCompensate = SelectTasksToCompensate(
+                forwardTasks,
+                graph.rawDependencies.map((d) => ({ TaskID: d.TaskID, DependsOnTaskID: d.DependsOnTaskID })),
+            );
+            if (orderedToCompensate.length === 0) {
+                await this.updateParentSagaState(provider, graph, 'Compensated');
+                return graph;
+            }
+            const createdCount = await this.materializeSagaCompensationTasks(
+                provider,
+                parentID,
+                graph,
+                orderedToCompensate,
+            );
+            if (createdCount > 0) {
+                await this.updateParentSagaState(provider, graph, 'Compensating');
+                graph = await this.loadGraphState(provider, parentID, debug, graph.parent);
+                compensationTasks = [...graph.entityById.values()].filter((t) => IsCompensationTask(t));
+            }
+        }
+
+        if (compensationTasks.length > 0) {
+            await this.reconcileSagaCompensationTasks(
+                provider,
+                graph,
+                compensationTasks,
+                unhandledFailedForward[0] ?? null,
+            );
+        }
+        return graph;
+    }
+
+    /**
+     * Hydrates action-level compensation metadata from `MJ: Actions` (`Config` JSON or direct fields)
+     * onto completed forward action tasks that have not yet resolved `compensationActionId`.
+     */
+    private async hydrateActionMetadataForSaga(
+        provider: IMetadataProvider,
+        forwardTasks: readonly MJTaskEntity[],
+    ): Promise<void> {
+        const actionIDsToLoad: string[] = [];
+        for (const task of forwardTasks) {
+            if (task.Status !== 'Complete' || !task.ActionID) continue;
+            const existing = ReadTaskCompensationMetadata(task.Configuration);
+            if (!existing?.compensationActionId && !existing?.compensationActionName) {
+                actionIDsToLoad.push(task.ActionID);
+            }
+        }
+        if (actionIDsToLoad.length === 0) return;
+
+        const rv = RunView.FromMetadataProvider(provider);
+        const filter = actionIDsToLoad.map((id) => `'${id}'`).join(',');
+        const actionsResult = await rv.RunView<CompensatableActionRecord & { ID: string }>(
+            {
+                EntityName: 'MJ: Actions',
+                ExtraFilter: `ID IN (${filter})`,
+                ResultType: 'simple',
+            },
+            this.contextUser,
+        );
+        if (!actionsResult.Success || !actionsResult.Results) return;
+
+        const actionById = IndexByUUID(actionsResult.Results, (r) => r.ID);
+        for (const task of forwardTasks) {
+            if (task.Status !== 'Complete' || !task.ActionID) continue;
+            const actionRow = actionById.Get(task.ActionID);
+            if (!actionRow) continue;
+            const actionComp = ReadActionCompensationMetadata(actionRow);
+            if (!actionComp) continue;
+            const existingConfig = (this.parseConfiguration(task) ?? {}) as TaskStepConfiguration;
+            const mergedComp = MergeActionCompensationSpecs(actionComp, existingConfig.compensation);
+            if (!mergedComp) continue;
+            task.Configuration = JSON.stringify({
+                ...existingConfig,
+                compensation: {
+                    ...existingConfig.compensation,
+                    ...mergedComp,
+                },
+            });
+        }
+    }
+
+    /**
+     * Persists child `MJ: Tasks` rows and sequential `MJ: Task Dependencies` edges for each completed
+     * forward task in reverse topological order.
+     */
+    private async materializeSagaCompensationTasks(
+        provider: IMetadataProvider,
+        parentID: string,
+        graph: GraphState,
+        orderedToCompensate: ReadonlyArray<{ task: MJTaskEntity; compensation: TaskCompensationStepMetadata }>,
+    ): Promise<number> {
+        const typeID = await this.workflowTaskTypeID(provider);
+        let previousCompTaskID: string | null = null;
+        let createdCount = 0;
+
+        for (const { task: forwardTask, compensation: compMeta } of orderedToCompensate) {
+            const compActionID = await this.resolveCompensationActionID(provider, compMeta);
+            if (!compActionID) continue;
+
+            const recordChanges = await this.loadCorrelatedRecordChangesForTask(provider, forwardTask);
+            const compInput = this.buildForwardTaskCompensationInput(forwardTask, compMeta, recordChanges);
+            const forwardConfig = this.parseConfiguration(forwardTask) as TaskStepConfiguration | null;
+            const compTask = await provider.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+            compTask.NewRecord();
+            compTask.ParentID = parentID;
+            if (forwardTask.TypeID || typeID) {
+                compTask.TypeID = (forwardTask.TypeID ?? typeID)!;
+            }
+            compTask.Name = `Compensate: ${forwardTask.Name}`;
+            compTask.Description = `Saga compensation for task "${forwardTask.Name}" (${forwardTask.ID}).`;
+            compTask.StepType = 'Action';
+            compTask.Status = 'Pending';
+            compTask.PercentComplete = 0;
+            compTask.ActionID = compActionID;
+            compTask.UserID = forwardTask.UserID ?? graph.parent?.UserID ?? null;
+            compTask.AgentRunID = forwardTask.AgentRunID ?? graph.parent?.AgentRunID ?? null;
+            compTask.InputPayload = JSON.stringify(compInput);
+            const compStepConfig: TaskStepConfiguration = {
+                ...(forwardConfig?.securityEnvelope ? { securityEnvelope: forwardConfig.securityEnvelope } : {}),
+                ...(compMeta.retryCount != null ? { policy: { retryCount: compMeta.retryCount } } : {}),
+                compensation: {
+                    ...compMeta,
+                    compensationActionId: compActionID,
+                    compensatesTaskID: forwardTask.ID,
+                },
+            };
+            compTask.Configuration = JSON.stringify(compStepConfig);
+            if (!(await compTask.Save())) {
+                LogError(`[TaskGraphDispatcher] Failed to create compensation task for ${forwardTask.ID}.`);
+                continue;
+            }
+            createdCount++;
+
+            if (previousCompTaskID) {
+                const dep = await provider.GetEntityObject<MJTaskDependencyEntity>(
+                    'MJ: Task Dependencies',
+                    this.contextUser,
+                );
+                dep.NewRecord();
+                dep.TaskID = compTask.ID;
+                dep.DependsOnTaskID = previousCompTaskID;
+                dep.DependencyType = 'Prerequisite';
+                await dep.Save();
+            }
+            previousCompTaskID = compTask.ID;
+
+            forwardTask.Configuration = JSON.stringify({
+                ...(forwardConfig ?? {}),
+                compensation: {
+                    ...compMeta,
+                    compensationActionId: compActionID,
+                    compensatedByTaskID: compTask.ID,
+                },
+            });
+            await forwardTask.Save();
+        }
+        return createdCount;
+    }
+
+    /**
+     * Resolves a compensation action UUID from `compensationActionId` or `compensationActionName`.
+     */
+    private async resolveCompensationActionID(
+        provider: IMetadataProvider,
+        compMeta: TaskCompensationStepMetadata,
+    ): Promise<string | null> {
+        if (compMeta.compensationActionId?.trim()) {
+            return compMeta.compensationActionId.trim();
+        }
+        const name = compMeta.compensationActionName?.trim();
+        if (!name) return null;
+        const resolved = await ResolveRecordsByNameOrToolName({
+            EntityName: 'MJ: Actions',
+            Names: [name],
+            Provider: provider,
+            ContextUser: this.contextUser,
+        });
+        return resolved.Map?.get(name) ?? resolved.Map?.get(name.toLowerCase()) ?? null;
+    }
+
+    /**
+     * Loads `MJ: Record Changes` rows written during `forwardTask`'s execution window when available.
+     */
+    private async loadCorrelatedRecordChangesForTask(
+        provider: IMetadataProvider,
+        forwardTask: MJTaskEntity | undefined,
+    ): Promise<ReadonlyArray<Record<string, unknown>>> {
+        if (!forwardTask?.StartedAt) return [];
+        try {
+            const rv = RunView.FromMetadataProvider(provider);
+            const startIso = forwardTask.StartedAt.toISOString();
+            const endIso = (forwardTask.CompletedAt ?? new Date()).toISOString();
+            const userClause = forwardTask.UserID ? `UserID='${forwardTask.UserID}' AND ` : '';
+            const res = await rv.RunView<Record<string, unknown>>(
+                {
+                    EntityName: 'MJ: Record Changes',
+                    ExtraFilter: `${userClause}ChangedAt >= '${startIso}' AND ChangedAt <= '${endIso}'`,
+                    Fields: ['ID', 'EntityID', 'Entity', 'RecordID', 'Type', 'ChangesJSON', 'ChangedAt'],
+                    OrderBy: 'ChangedAt DESC',
+                    MaxRows: 50,
+                    ResultType: 'simple',
+                },
+                this.contextUser,
+            );
+            return res.Success && Array.isArray(res.Results) ? res.Results : [];
+        } catch {
+            return [];
+        }
+    }
+
+    /**
+     * Builds the compensation input payload from a completed forward task's input, output, runtime log ID,
+     * and correlated `MJ: Record Changes` rows.
+     */
+    private buildForwardTaskCompensationInput(
+        forwardTask: MJTaskEntity,
+        compMeta: TaskCompensationStepMetadata,
+        recordChanges?: ReadonlyArray<Record<string, unknown>>,
+    ): Record<string, unknown> {
+        const parsedInput = ParseTaskInputPayload(forwardTask.ID, forwardTask.InputPayload);
+        const rawInput = 'Payload' in parsedInput ? parsedInput.Payload : null;
+        const forwardInput: Record<string, unknown> =
+            rawInput && typeof rawInput === 'object' && !Array.isArray(rawInput)
+                ? (rawInput as Record<string, unknown>)
+                : {};
+        let forwardOutput: Record<string, unknown> = {};
+        if (forwardTask.OutputPayload) {
+            try {
+                const parsedOutput: unknown = JSON.parse(forwardTask.OutputPayload);
+                if (parsedOutput && typeof parsedOutput === 'object' && !Array.isArray(parsedOutput)) {
+                    forwardOutput = parsedOutput as Record<string, unknown>;
+                }
+            } catch {
+                // Non-object output payloads default to `{}`
+            }
+        }
+        const config = this.parseConfiguration(forwardTask);
+        const runtimeBag = (config as { runtime?: { actionLogID?: string } } | null)?.runtime;
+        return BuildCompensationInputPayload({
+            ForwardInput: forwardInput,
+            ForwardOutput: forwardOutput,
+            ActionLogID: runtimeBag?.actionLogID ?? null,
+            RecordChanges: recordChanges,
+            InputMapping: compMeta.inputMapping ?? compMeta.compensationInputMapping,
+        });
+    }
+
+    /**
+     * Inspects compensation tasks for failures requiring HITL escalation (`EscalateToHumanTask`)
+     * and updates the parent graph's `sagaState` once all compensation tasks settle.
+     */
+    private async reconcileSagaCompensationTasks(
+        provider: IMetadataProvider,
+        graph: GraphState,
+        compensationTasks: readonly MJTaskEntity[],
+        failedTriggerTask: MJTaskEntity | null,
+    ): Promise<void> {
+        let anyEscalated = false;
+        for (const compTask of compensationTasks) {
+            if (compTask.Status !== 'Failed') continue;
+            const compMeta = ReadTaskCompensationMetadata(compTask.Configuration);
+            const onFailure = compMeta?.onCompensationFailure ?? 'EscalateToHumanTask';
+            if (onFailure === 'EscalateToHumanTask') {
+                anyEscalated = true;
+                if (!compMeta?.escalatedRequestID) {
+                    await this.escalateCompensationFailureToHuman(
+                        provider,
+                        compTask,
+                        compMeta ?? {},
+                        graph,
+                        failedTriggerTask,
+                    );
+                }
+            }
+        }
+
+        const hasActiveComp = compensationTasks.some(
+            (t) => t.Status === 'Pending' || t.Status === 'In Progress',
+        );
+        if (hasActiveComp) return;
+
+        const allCompensated = compensationTasks.every((t) => t.Status === 'Complete');
+        const nextState: SagaExecutionState = allCompensated
+            ? 'Compensated'
+            : anyEscalated
+                ? 'CompensationEscalated'
+                : 'CompensationFailed';
+        await this.updateParentSagaState(provider, graph, nextState);
+    }
+
+    /**
+     * Creates a human-in-the-loop `MJ: AI Agent Requests` escalation record when a compensation step
+     * fails under `onCompensationFailure: 'EscalateToHumanTask'`.
+     */
+    private async escalateCompensationFailureToHuman(
+        provider: IMetadataProvider,
+        compTask: MJTaskEntity,
+        compMeta: TaskCompensationStepMetadata,
+        graph: GraphState,
+        failedTriggerTask: MJTaskEntity | null,
+    ): Promise<void> {
+        try {
+            const forwardTask = compMeta.compensatesTaskID
+                ? graph.entityById.get(compMeta.compensatesTaskID)
+                : undefined;
+            const recordChanges = await this.loadCorrelatedRecordChangesForTask(provider, forwardTask);
+            const request = await provider.GetEntityObject<MJAIAgentRequestEntity>(
+                'MJ: AI Agent Requests',
+                this.contextUser,
+            );
+            request.NewRecord();
+            request.OriginatingTaskID = compTask.ID;
+            const owningAgentID = await this.owningAgentOf(provider, compTask, graph.parent);
+            if (owningAgentID) {
+                request.AgentID = owningAgentID;
+            }
+            request.RequestForUserID =
+                compTask.UserID ?? graph.parentMetadata?.submittedByUserID ?? this.contextUser?.ID ?? null;
+            request.RequestedAt = new Date();
+            request.Status = 'Requested';
+            request.OriginatingAgentRunID = await this.submittingRunOf(provider, compTask, graph.parent);
+            const escalation = BuildCompensationEscalationSummary({
+                WorkflowName: graph.parent?.Name ?? graph.parentTaskID,
+                ForwardTask: {
+                    ID: forwardTask?.ID ?? compMeta.compensatesTaskID ?? compTask.ID,
+                    Name: forwardTask?.Name ?? compTask.Name,
+                    InputPayload: forwardTask?.InputPayload ?? null,
+                    OutputPayload: forwardTask?.OutputPayload ?? null,
+                },
+                CompensationTask: {
+                    ID: compTask.ID,
+                    Name: compTask.Name,
+                    InputPayload: compTask.InputPayload ?? null,
+                    ErrorMessage: compTask.ErrorMessage ?? failedTriggerTask?.ErrorMessage ?? null,
+                },
+                RecordChanges: recordChanges,
+            });
+            request.Request = escalation.RequestText;
+            request.Comments = JSON.stringify(escalation.ContextData);
+            if (await request.Save()) {
+                const existingConfig = this.parseConfiguration(compTask) ?? {};
+                compTask.Configuration = JSON.stringify({
+                    ...existingConfig,
+                    compensation: {
+                        ...compMeta,
+                        escalatedRequestID: request.ID,
+                    },
+                });
+                await compTask.Save();
+            }
+        } catch (e) {
+            LogError(
+                `[TaskGraphDispatcher] Failed to escalate compensation task ${compTask.ID}: ` +
+                `${e instanceof Error ? e.message : String(e)}`,
+            );
+        }
+    }
+
+    /**
+     * Updates `sagaState` on both the in-memory `GraphState.parentMetadata` and the persisted parent task.
+     */
+    private async updateParentSagaState(
+        provider: IMetadataProvider,
+        graph: GraphState,
+        nextState: SagaExecutionState,
+    ): Promise<void> {
+        if (graph.parentMetadata?.sagaState === nextState) return;
+        if (graph.parentMetadata) {
+            graph.parentMetadata.sagaState = nextState;
+        }
+        const parent = graph.parent;
+        if (!parent) return;
+        try {
+            const parsed = parent.InputPayload
+                ? (JSON.parse(parent.InputPayload) as Record<string, unknown>)
+                : {};
+            parsed.sagaState = nextState;
+            parent.InputPayload = JSON.stringify(parsed);
+
+            const typeID = await this.workflowTaskTypeID(provider);
+            const hasExecuteSQL = typeof (provider as unknown as { ExecuteSQL?: unknown }).ExecuteSQL === 'function';
+            if (typeID && hasExecuteSQL) {
+                const wrote = await this.claims.TryWriteDebugFields(
+                    provider,
+                    graph.parentTaskID,
+                    [TaskClaimStore.DebugField('$.sagaState', { Kind: 'string', Value: nextState })],
+                    typeID,
+                    this.contextUser,
+                );
+                if (wrote) return;
+            }
+            await parent.Save();
+        } catch (e) {
+            LogError(
+                `[TaskGraphDispatcher] Could not persist sagaState='${nextState}' on parent ${graph.parentTaskID}: ` +
+                `${e instanceof Error ? e.message : String(e)}`,
+            );
+        }
     }
 
     /**
@@ -3803,7 +4617,8 @@ export class TaskGraphDispatcher implements IShutdownable {
         provider: IMetadataProvider,
         payload: Record<string, unknown>,
         dependencyOutputs: Map<string, unknown>,
-        prehydrated?: Pick<ClaimedTaskCandidate, 'parentTask' | 'parentMetadata'>,
+        prehydrated?: Pick<ClaimedTaskCandidate, 'parentTask' | 'parentMetadata' | 'isUpstreamTainted' | 'isSanitizedByHuman'>,
+        tenantProviderAlreadyMinted: boolean = false,
     ): Promise<TaskBodyOutcome> {
         const config = task.ConfigurationObject as TaskStepConfiguration | null;
         const op = task.StepType === 'ForEach' ? config?.forEach : config?.while;
@@ -3836,6 +4651,19 @@ export class TaskGraphDispatcher implements IShutdownable {
         // loop bodies second-class in every dimension — and reopened the unbounded-recursion hole
         // THROUGH loops, since each spawned run restarted the chain at zero.
         const graphContext = await this.graphContext(provider, task, prehydrated);
+        const effectiveEnvelope = this.resolveEffectiveSecurityEnvelope(
+            task,
+            graphContext.SecurityEnvelope,
+            dependencyOutputs,
+            prehydrated,
+        );
+        const executionProvider =
+            effectiveEnvelope?.TenantContext && !tenantProviderAlreadyMinted
+                ? await this.providerFactory.CreateProvider({
+                    TenantContext: effectiveEnvelope.TenantContext,
+                    ContextUser: graphContext.ExecutionUser,
+                })
+                : provider;
 
         // Pre-resolve ActionIDs once for multi-step action bodies (`op.steps[]`). Submit stamps
         // `config.stepActionIds`; fallback RunView covers callers constructing Task rows directly.
@@ -3849,7 +4677,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 multiSteps,
                 config?.stepActionIds,
                 task.ActionID,
-                provider,
+                executionProvider,
                 graphContext.ExecutionUser,
             );
             if (!resolvedIds.Success || !resolvedIds.Map) {
@@ -3865,6 +4693,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         // took the give-up branch, making the other branch unreachable. The loop ran, reported
         // success, and its result was predetermined.
         let livePayload: Record<string, unknown> = { ...payload };
+        let anyIterationTainted = Boolean(effectiveEnvelope?.IsRunTainted);
 
         // One entry per pass, so the loop's work exists somewhere the platform can see it. Without
         // this a loop is a single childless node: the run tree reaches nested work through six links
@@ -3893,11 +4722,13 @@ export class TaskGraphDispatcher implements IShutdownable {
                     deferLivePayloadFold: isParallelForEach,
                     deferredFoldsByIndex,
                     dependencyOutputs,
-                    provider,
+                    provider: executionProvider,
                     executionUser: graphContext.ExecutionUser,
                     invocation: graphContext.Invocation,
                     iterationTrace,
                     budget,
+                    securityEnvelope: effectiveEnvelope,
+                    onIterationTainted: () => { anyIterationTainted = true; },
                 });
             }
 
@@ -3906,10 +4737,13 @@ export class TaskGraphDispatcher implements IShutdownable {
             // `data.*`, `context.*`, `static:*`) AND the unified ForEachOperation/WhileOperation dialect
             // (`<itemVar>.*`, `{{<itemVar>.*}}`, inline `{{...}}`) while keeping unresolved paths/tokens literal.
             const iterationPayload = { ...livePayload, ...Bindings };
-            const resolved = ResolveLoopBodyParams(bodyMapping, Bindings, {
+            const rawResolved = ResolveLoopBodyParams(bodyMapping, Bindings, {
                 payload: iterationPayload,
                 ...graphContext.Invocation,
             });
+            const resolved = task.ActionID
+                ? ApplyTaskSecurityEnvelopeToParams(rawResolved, effectiveEnvelope, task.ActionID, op.action?.name ?? task.Name).Params
+                : rawResolved;
 
             /**
              * Folds an iteration's output into the running payload the next pass will see, and
@@ -3919,7 +4753,10 @@ export class TaskGraphDispatcher implements IShutdownable {
              * still ran the passes before it, and their runs are real spend that must not vanish
              * because the loop as a whole did not finish.
              */
-            const absorb = <T extends { Success: boolean; Output?: unknown; ErrorMessage?: string; PromptRunID?: string; AgentRunID?: string; ActionLogID?: string }>(outcome: T, bodyInput: unknown): T => {
+            const absorb = <T extends { Success: boolean; Output?: unknown; ErrorMessage?: string; PromptRunID?: string; AgentRunID?: string; ActionLogID?: string; IsOutputTainted?: boolean }>(outcome: T, bodyInput: unknown): T => {
+                if (outcome.IsOutputTainted) {
+                    anyIterationTainted = true;
+                }
                 livePayload = this.foldIterationOutput(task, livePayload, outcome.Output, bodyOutputMapping);
                 iterationTrace.push({
                     index: Index,
@@ -3978,19 +4815,25 @@ export class TaskGraphDispatcher implements IShutdownable {
                     // getting it wrong is silent: the variable renders empty and the model answers
                     // confidently about nothing.
                     TemplateParameters: { ...stringifyBindings(Bindings), ...op.prompt?.templateParameters },
-                    Provider: provider,
+                    Provider: executionProvider,
                     ContextUser: graphContext.ExecutionUser,
+                    ...(effectiveEnvelope ? { SecurityEnvelope: effectiveEnvelope } : {}),
                 }), iterationPayload);
             }
 
             if (task.ActionID) {
+                const gateRejection = this.checkActionSecurityGates(task.Name, task.ActionID, effectiveEnvelope);
+                if (gateRejection) {
+                    return gateRejection;
+                }
                 return absorb(await this.actionRunner!.RunActionForTask({
                     TaskID: task.ID,
                     ActionID: task.ActionID,
                     InputPayload: resolved,
                     DependencyOutputs: dependencyOutputs,
-                    Provider: provider,
+                    Provider: executionProvider,
                     ContextUser: graphContext.ExecutionUser,
+                    ...(effectiveEnvelope ? { SecurityEnvelope: effectiveEnvelope } : {}),
                 }), resolved);
             }
 
@@ -4006,14 +4849,15 @@ export class TaskGraphDispatcher implements IShutdownable {
                 ContinuationDepth: graphContext.Depth,
                 SubmittingAgentRunID: graphContext.SubmittingAgentRunID,
                 ...(graphContext.ParentAgentHierarchy ? { ParentAgentHierarchy: graphContext.ParentAgentHierarchy } : {}),
-                Provider: provider,
+                Provider: executionProvider,
                 ContextUser: graphContext.ExecutionUser,
+                ...(effectiveEnvelope ? { SecurityEnvelope: effectiveEnvelope } : {}),
             }), agentInput);
         };
 
         const evaluator = this.conditionEvaluator ?? new DispatcherConditionEvaluator();
         const outcome = task.StepType === 'ForEach'
-            ? await RunForEachLoop(op as ForEachOperation, { payload, ...graphContext.Invocation }, invokeBody)
+            ? await RunForEachLoop(op as ForEachOperation, { payload: livePayload, ...graphContext.Invocation }, invokeBody)
             : await RunWhileLoop(
                 op as WhileOperation,
                 (iteration) => evaluator.Evaluate(
@@ -4054,6 +4898,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             // pass inside `foldIterationOutput`; applying it again against the accumulated payload
             // is what used to make it match nothing.
             Output: this.applyStepOutputMapping(task, livePayload, outcome.Output, config?.outputMapping),
+            ...(anyIterationTainted ? { IsOutputTainted: true } : {}),
         };
     }
 
@@ -4123,11 +4968,14 @@ export class TaskGraphDispatcher implements IShutdownable {
         invocation: { data?: unknown; context?: unknown };
         iterationTrace: MJTaskEntity_ITaskLoopIteration[];
         budget: IterationPayloadBudget;
+        securityEnvelope?: TaskSecurityEnvelope;
+        onIterationTainted?: () => void;
     }): Promise<{ Success: boolean; Output?: unknown; ErrorMessage?: string; ActionLogID?: string }> {
         const {
             task, op, steps, stepActionIds, index, bindings,
             getLivePayload, setLivePayload, deferLivePayloadFold, deferredFoldsByIndex,
             dependencyOutputs, provider, executionUser, invocation, iterationTrace, budget,
+            securityEnvelope, onIterationTainted,
         } = args;
 
         const evaluator = this.conditionEvaluator ?? new DispatcherConditionEvaluator();
@@ -4184,14 +5032,36 @@ export class TaskGraphDispatcher implements IShutdownable {
             }
 
             const stepPayload = { ...workingPayload, ...stepBindings };
-            const resolvedParams = ResolveLoopBodyParams(
+            const rawResolvedParams = ResolveLoopBodyParams(
                 step.params ?? {},
                 stepBindings,
                 { payload: stepPayload, ...invocation },
             );
-            stepInputsTrace[stepKey] = resolvedParams;
-
             const actionId = stepActionIds.get(step.name)!;
+            const resolvedParams = ApplyTaskSecurityEnvelopeToParams(
+                rawResolvedParams,
+                securityEnvelope,
+                actionId,
+                step.name,
+            ).Params;
+            stepInputsTrace[stepKey] = resolvedParams;
+            const gateRejection = this.checkActionSecurityGates(step.name, actionId, securityEnvelope);
+            if (gateRejection) {
+                iterationTrace.push({
+                    index,
+                    payloadAtStart: budget.Take(stepInputsTrace),
+                    payloadAtEnd: budget.Take({ steps: stepsOutputs }),
+                    actionLogID: lastActionLogID,
+                    success: false,
+                    errorMessage: gateRejection.ErrorMessage,
+                });
+                return {
+                    Success: false,
+                    ErrorMessage: gateRejection.ErrorMessage,
+                    ActionLogID: lastActionLogID,
+                };
+            }
+
             const actionOutcome = await this.actionRunner!.RunActionForTask({
                 TaskID: task.ID,
                 ActionID: actionId,
@@ -4199,9 +5069,13 @@ export class TaskGraphDispatcher implements IShutdownable {
                 DependencyOutputs: dependencyOutputs,
                 Provider: provider,
                 ContextUser: executionUser,
+                ...(securityEnvelope ? { SecurityEnvelope: securityEnvelope } : {}),
             });
             if (actionOutcome.ActionLogID) {
                 lastActionLogID = actionOutcome.ActionLogID;
+            }
+            if (actionOutcome.IsOutputTainted) {
+                onIterationTainted?.();
             }
 
             if (!actionOutcome.Success) {
@@ -4374,6 +5248,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         dependencyOutputs: Map<string, unknown>,
         onProgress?: TaskRunProgressCallback,
         resolvedContext?: GraphContext,
+        securityEnvelope?: TaskSecurityEnvelope,
     ): Promise<TaskBodyOutcome> {
         const context = resolvedContext ?? await this.graphContext(provider, task);
         const presetName = (task.ConfigurationObject as TaskStepConfiguration | null)?.agent?.presetName?.trim() || undefined;
@@ -4389,6 +5264,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             Provider: provider,
             ContextUser: context.ExecutionUser,
             OnProgress: onProgress,
+            ...(securityEnvelope ? { SecurityEnvelope: securityEnvelope } : {}),
         });
     }
 
@@ -5037,11 +5913,12 @@ export class TaskGraphDispatcher implements IShutdownable {
         actionLogID: string | undefined,
         iterations?: MJTaskEntity_ITaskLoopIteration[],
         payloadAtStart?: Record<string, unknown>,
+        isOutputTainted?: boolean,
     ): string | undefined {
-        if (!promptRunID && !actionLogID && !iterations?.length && !payloadAtStart) return undefined;
+        if (!promptRunID && !actionLogID && !iterations?.length && !payloadAtStart && !isOutputTainted) return undefined;
 
         const existing = this.parseConfiguration(task);
-        const merged: MJTaskEntity_ITaskStepConfiguration = {
+        const merged: TaskStepConfiguration = {
             ...existing,
             runtime: {
                 ...existing?.runtime,
@@ -5055,6 +5932,7 @@ export class TaskGraphDispatcher implements IShutdownable {
                 // against. NOT written to Task.InputPayload, which holds the AUTHORED input and
                 // round-trips back out as part of the spec.
                 ...(payloadAtStart ? { payloadAtStart } : {}),
+                ...(isOutputTainted ? { isOutputTainted: true } : {}),
             },
         };
         return JSON.stringify(merged);

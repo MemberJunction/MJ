@@ -34,12 +34,15 @@ import {
 import {
     FormatValidationErrors,
     NormalizeDependency,
+    ParseTaskSecurityEnvelope,
     RankGraphNodes,
     SanitizeInvocationEnvelope,
     ValidateTaskGraphSpec,
+    type TaskGraphFailurePolicy,
     type TaskGraphInvocationEnvelope,
     type TaskGraphSpec,
     type TaskGraphSpecNode,
+    type TaskSecurityEnvelope,
     type ForEachOperation,
     type WhileOperation,
     ConfigOf,
@@ -50,6 +53,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { AgentDecisionService } from '@memberjunction/ai-agents';
 import { ResolveRecordsByNameOrToolName } from './resolve-by-tool-name';
 import { HeldDecisionAnswers, type DecisionTaskRow, type TaskStepConfiguration } from './decision-node';
+import type { SagaExecutionState } from './saga-compensation';
 import { TaskClaimStore, type TaskGraphDebugFieldWrite } from './TaskClaimStore';
 import { ParseTaskGraphDebugState, type EdgeOverrideVerdict, type StepTarget, type TaskGraphDebugState } from './debug-state';
 import { KickTaskGraphDispatchers } from './task-graph-kick';
@@ -101,6 +105,11 @@ export type TaskGraphSubmitContext = {
     Invocation?: TaskGraphInvocationEnvelope;
     /** Seed `$.debug` on the parent at insert. See `TaskGraphStartDebug`. */
     Debug?: { paused?: boolean };
+    /**
+     * Immutable security envelope persisted on the parent task and inherited by all child tasks
+     * (`BoundActionParams`, `Audience`, `TenantContext`, and monotonic `IsRunTainted`).
+     */
+    SecurityEnvelope?: TaskSecurityEnvelope;
 };
 
 /**
@@ -175,6 +184,18 @@ export type TaskGraphParentMetadata = {
      * throwing, exactly as the walker's would on a missing key.
      */
     invocation?: { data?: unknown; context?: unknown };
+    /**
+     * Durable security envelope persisted on the graph parent and enforced across all child nodes.
+     */
+    securityEnvelope?: TaskSecurityEnvelope;
+    /**
+     * Workflow-level saga failure policy (`'Halt'` default, or `'CompensateCompleted'`).
+     */
+    failurePolicy?: TaskGraphFailurePolicy;
+    /**
+     * Current saga lifecycle state when `failurePolicy === 'CompensateCompleted'`.
+     */
+    sagaState?: SagaExecutionState;
 };
 
 /**
@@ -196,6 +217,14 @@ const DEFAULT_PARENT_METADATA: TaskGraphParentMetadata = {
     submittedByAgentRunID: null,
     submittedByUserID: null,
 };
+
+const VALID_SAGA_STATES: ReadonlySet<string> = new Set([
+    'Running',
+    'Compensating',
+    'Compensated',
+    'CompensationEscalated',
+    'CompensationFailed',
+]);
 
 /**
  * Parses a parent Task's continuation metadata.
@@ -219,7 +248,17 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
                 .map((name) => name.trim())
                 .filter((name) => name.length > 0)
             : undefined;
-        return {
+        const securityEnvelope = parsed.securityEnvelope
+            ? ParseTaskSecurityEnvelope(parsed.securityEnvelope)
+            : undefined;
+        const failurePolicy =
+            parsed.failurePolicy === 'CompensateCompleted' || parsed.failurePolicy === 'Halt'
+                ? parsed.failurePolicy
+                : undefined;
+        const sagaState = VALID_SAGA_STATES.has(parsed.sagaState as string)
+            ? parsed.sagaState
+            : undefined;
+        const out: TaskGraphParentMetadata = {
             ...DEFAULT_PARENT_METADATA,
             ...parsed,
             // Guard the two fields the dispatcher branches on. A JSON round-trip, a hand edit, or a
@@ -238,7 +277,13 @@ export function ParseTaskGraphParentMetadata(raw: string | null | undefined): Ta
             parentAgentHierarchy: parentAgentHierarchy && parentAgentHierarchy.length > 0
                 ? parentAgentHierarchy
                 : undefined,
+            securityEnvelope,
+            ...(failurePolicy !== undefined ? { failurePolicy } : {}),
+            ...(sagaState !== undefined ? { sagaState } : {}),
         };
+        if (failurePolicy === undefined) delete out.failurePolicy;
+        if (sagaState === undefined) delete out.sagaState;
+        return out;
     } catch {
         return { ...DEFAULT_PARENT_METADATA };
     }
@@ -253,11 +298,14 @@ export function BuildTaskGraphParentInputPayload(args: {
     continuation: TaskGraphParentMetadata['continuation'];
     reinvokeDepth: number;
     failureSemantics: NonNullable<TaskGraphParentMetadata['failureSemantics']>;
+    failurePolicy?: TaskGraphFailurePolicy;
+    sagaState?: SagaExecutionState;
     submittedByAgentRunID: string | null;
     submittedByUserID: string | null;
     parentAgentHierarchy?: string[];
     invocation?: { data?: unknown; context?: unknown } | null;
     startPaused?: boolean;
+    securityEnvelope?: TaskSecurityEnvelope | null;
 }): Record<string, unknown> {
     const parentAgentHierarchy = Array.isArray(args.parentAgentHierarchy)
         ? args.parentAgentHierarchy
@@ -269,12 +317,15 @@ export function BuildTaskGraphParentInputPayload(args: {
         continuation: args.continuation,
         reinvokeDepth: args.reinvokeDepth,
         failureSemantics: args.failureSemantics,
+        ...(args.failurePolicy && args.failurePolicy !== 'Halt' ? { failurePolicy: args.failurePolicy } : {}),
+        ...(args.sagaState ? { sagaState: args.sagaState } : {}),
         submittedByAgentRunID: args.submittedByAgentRunID,
         submittedByUserID: args.submittedByUserID,
         ...(parentAgentHierarchy.length > 0 ? { parentAgentHierarchy } : {}),
         ...(args.invocation
             ? { invocation: { data: args.invocation.data, context: args.invocation.context } }
             : {}),
+        ...(args.securityEnvelope ? { securityEnvelope: args.securityEnvelope } : {}),
         ...(args.startPaused
             ? {
                 debug: {
@@ -415,6 +466,15 @@ export function BuildStepConfiguration(node: TaskGraphSpecNode): TaskStepConfigu
     const outputMapping = action?.outputMapping;
     if (inputMapping) config.inputMapping = inputMapping;
     if (outputMapping) config.outputMapping = outputMapping;
+    if (action?.compensation) {
+        config.compensation = {
+            ...(action.compensation.compensationActionId ? { compensationActionId: action.compensation.compensationActionId } : {}),
+            ...(action.compensation.compensationActionName ? { compensationActionName: action.compensation.compensationActionName } : {}),
+            ...(action.compensation.inputMapping !== undefined ? { inputMapping: action.compensation.inputMapping } : {}),
+            ...(action.compensation.onCompensationFailure ? { onCompensationFailure: action.compensation.onCompensationFailure } : {}),
+            ...(action.compensation.isIdempotent !== undefined ? { isIdempotent: action.compensation.isIdempotent } : {}),
+        };
+    }
 
     if (node.policy) {
         config.policy = {
@@ -476,11 +536,13 @@ export function DecisionPromptNameOf(node: TaskGraphSpecNode): string | null {
     return decision.promptName?.trim() || AgentDecisionService.DEFAULT_PROMPT_NAME;
 }
 
-/** Every action name a node references, including the action(s) a loop repeats. */
+/** Every action name a node references, including the action(s) a loop repeats and any named compensation action. */
 function actionNamesIn(node: TaskGraphSpecNode): string[] {
     const loopOp = LoopOperationOf(node);
+    const actionCfg = ConfigOf(node, 'Action');
     const names = [
-        ConfigOf(node, 'Action')?.actionName,
+        actionCfg?.actionName,
+        actionCfg?.compensation?.compensationActionName,
         loopOp?.action?.name,
         ...(loopOp?.steps?.map((s) => s.name) ?? []),
     ];
@@ -1695,6 +1757,7 @@ export class TaskGraphService {
             continuation: spec.continuation ?? 'message',
             reinvokeDepth: context.ReinvokeDepth ?? 0,
             failureSemantics: spec.failureSemantics ?? 'block',
+            failurePolicy: spec.failurePolicy ?? 'Halt',
             submittedByAgentRunID: context.AgentRunID ?? null,
             submittedByUserID: context.ContextUser?.ID ?? null,
             parentAgentHierarchy: context.ParentAgentHierarchy,
@@ -1702,6 +1765,7 @@ export class TaskGraphService {
                 ? { data: sanitized.Envelope.Data, context: sanitized.Envelope.Context }
                 : null,
             startPaused: context.Debug?.paused === true,
+            securityEnvelope: context.SecurityEnvelope ?? null,
         }));
         if (!(await parent.Save())) {
             throw new Error(`Could not create parent task: ${parent.LatestResult?.CompleteMessage ?? 'unknown error'}`);
@@ -1831,9 +1895,24 @@ export class TaskGraphService {
                             .filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].length > 0),
                     )
                     : undefined;
+                const builtConfig = buildStepConfiguration(node);
+                const resolvedCompensation = builtConfig?.compensation
+                    ? {
+                        ...builtConfig.compensation,
+                        ...(
+                            !builtConfig.compensation.compensationActionId &&
+                            builtConfig.compensation.compensationActionName &&
+                            actionIDsByName.get(builtConfig.compensation.compensationActionName)
+                                ? { compensationActionId: actionIDsByName.get(builtConfig.compensation.compensationActionName) }
+                                : {}
+                        ),
+                    }
+                    : undefined;
                 const configuration: TaskStepConfiguration = {
-                    ...buildStepConfiguration(node),
+                    ...builtConfig,
+                    ...(resolvedCompensation ? { compensation: resolvedCompensation } : {}),
                     ...(stepActionIds && Object.keys(stepActionIds).length > 0 ? { stepActionIds } : {}),
+                    ...(context.SecurityEnvelope ? { securityEnvelope: context.SecurityEnvelope } : {}),
                     sequence: ranks.get(node.tempId),
                 };
                 task.Configuration = JSON.stringify(configuration);

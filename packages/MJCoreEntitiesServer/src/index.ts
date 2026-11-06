@@ -95,3 +95,6 @@ export * from './custom/rubrics/scaleFreeze';
 export * from './custom/MJInteractionEventEntityServer.server';
 export * from './custom/MJFileEntityServer.server';
 export * from './custom/MJBrandKitEntityServer.server';
+export * from './custom/MJGraphEdgeEntityServer.server';
+export * from './custom/MJGraphEdgeTypeEntityServer.server';
+export * from './custom/MJGraphEdgeProviderEntityServer.server';

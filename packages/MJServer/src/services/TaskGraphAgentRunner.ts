@@ -66,6 +66,16 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
             const conversationDetailId =
                 parentRun?.ConversationDetailID ?? taskContext.conversationDetailId ?? undefined;
 
+            const env = params.SecurityEnvelope;
+            const readerIds = env?.Audience?.ReaderUserIDs;
+            const audience = readerIds && readerIds.length > 0
+                ? { Mode: 'Intersection' as const, UserIDs: [...readerIds] }
+                : undefined;
+            const boundActionParams = this.buildBoundActionParams(env);
+            const secondaryScopes = env?.SecondaryScopes ?? (env?.TenantContext?.SecondaryScopes as typeof env.SecondaryScopes);
+            const primaryScopeEntityName = env?.PrimaryScopeEntityName ?? env?.TenantContext?.PrimaryScopeEntityName ?? undefined;
+            const primaryScopeRecordId = env?.PrimaryScopeRecordID ?? env?.TenantContext?.PrimaryScopeRecordID ?? undefined;
+
             const runner = new AgentRunner(params.Provider);
             const result = await runner.RunAgent({
                 agent,
@@ -91,6 +101,12 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 // dispatcher turns these into rate-limited `NodeProgress` frames, which is how a
                 // running Agent step shows "what it is doing right now" on the workflow canvas.
                 onProgress: this.bridgeProgress(params),
+                ...(env ? { securityEnvelope: env } : {}),
+                ...(boundActionParams ? { boundActionParams } : {}),
+                ...(audience ? { Audience: audience } : {}),
+                ...(primaryScopeEntityName !== undefined ? { PrimaryScopeEntityName: primaryScopeEntityName } : {}),
+                ...(primaryScopeRecordId !== undefined ? { PrimaryScopeRecordID: primaryScopeRecordId } : {}),
+                ...(secondaryScopes ? { SecondaryScopes: secondaryScopes } : {}),
             });
 
             const success = result?.success === true;
@@ -129,17 +145,41 @@ export class TaskGraphAgentRunner implements TaskAgentRunner {
                 }
             }
 
+            const isOutputTainted = Boolean(
+                (result?.taintedSources && result.taintedSources.length > 0) ||
+                env?.IsRunTainted === true,
+            );
             return {
                 Success: success,
                 Output: this.extractOutput(result),
                 ErrorMessage: success ? undefined : (result?.agentRun?.ErrorMessage ?? 'Agent execution failed'),
                 AgentRunID: result?.agentRun?.ID,
+                ...(isOutputTainted ? { IsOutputTainted: true } : {}),
             };
         } catch (e) {
             const message = e instanceof Error ? e.message : String(e);
             LogError(`[TaskGraphAgentRunner] Task ${params.TaskID} failed: ${message}`);
             return { Success: false, ErrorMessage: message };
         }
+    }
+
+    private buildBoundActionParams(
+        env: TaskAgentRunParams['SecurityEnvelope'],
+    ): Record<string, Record<string, unknown>> | undefined {
+        if (!env) return undefined;
+        const map: Record<string, Record<string, unknown>> = {};
+        if (env.BoundParamsByAction) {
+            for (const [actionId, params] of Object.entries(env.BoundParamsByAction)) {
+                map[actionId] = { ...params };
+            }
+        }
+        if (env.BoundActionParams && Object.keys(env.BoundActionParams).length > 0) {
+            map['*'] = {
+                ...(map['*'] ?? {}),
+                ...env.BoundActionParams,
+            };
+        }
+        return Object.keys(map).length > 0 ? map : undefined;
     }
 
     private resolveActingUser(ownerUserId: string | null | undefined, fallback: UserInfo): UserInfo {

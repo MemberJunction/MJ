@@ -17,9 +17,11 @@ import {
     type TaskGraphDecisionAnswer,
     type TaskGraphDecisionQuestion,
     type TaskGraphNodeConfigMap,
+    type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
 import type { MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
 import { ParseConditionOutput } from './condition-gate';
+import type { TaskCompensationStepMetadata } from './saga-compensation';
 
 /**
  * What a Decision step keeps in `Task.Configuration.decision`: its spec configuration, plus the name
@@ -50,6 +52,14 @@ export type TaskStepConfiguration = MJTaskEntity_ITaskStepConfiguration & {
     /** Settings for an Agent step, extended with optional configuration preset name. */
     agent?: NonNullable<MJTaskEntity_ITaskStepConfiguration['agent']> & {
         presetName?: string;
+    };
+    /** Optional node-level security envelope merged with the parent graph's security envelope. */
+    securityEnvelope?: TaskSecurityEnvelope;
+    /** Optional saga compensation metadata for an Action step or synthesized compensation task. */
+    compensation?: TaskCompensationStepMetadata;
+    /** Runtime execution metadata extended with monotonic output taint tracking. */
+    runtime?: NonNullable<MJTaskEntity_ITaskStepConfiguration['runtime']> & {
+        isOutputTainted?: boolean;
     };
 };
 
