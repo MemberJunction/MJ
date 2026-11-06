@@ -1,0 +1,54 @@
+.mj-fls-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-3);
+}
+
+.mj-fls-status {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-2) var(--mj-space-3);
+  background: var(--mj-bg-surface-sunken);
+  border-radius: var(--mj-radius-md);
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-muted);
+}
+
+.mj-fls-status.enabled {
+  background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+  color: var(--mj-status-success);
+}
+
+.mj-fls-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-primary);
+}
+
+.mj-fls-confirm {
+  padding: var(--mj-space-3);
+  border: 1px solid var(--mj-status-warning);
+  border-radius: var(--mj-radius-md);
+  background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-primary);
+}
+
+.mj-fls-confirm p {
+  margin: 0 0 var(--mj-space-3);
+}
+
+.mj-fls-confirm-actions {
+  display: flex;
+  gap: var(--mj-space-2);
+}
+
+.mj-fls-help,
+.mj-fls-count {
+  margin: 0;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+}

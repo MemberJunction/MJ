@@ -11,6 +11,7 @@ import { EntityTransactionScope } from "./entityTransactionScope";
 import { LogError } from "./logging";
 import { LocalCacheManager } from "./localCacheManager";
 import { AssertClientInputWritableForUser } from "./entityValueFieldSecurity";
+import { SaveErrorMessageForUser } from "./constraintErrorRedaction";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { CanonicalPrimaryKeyValue } from "./util";
@@ -2539,7 +2540,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             }
             resumeRefresh();
             entityResult.EndedAt = new Date();
-            entityResult.Message = (e as Error).message;
+            // A constraint error can echo column values, including the stored value of a column
+            // this user may not read (a unique index spanning it). The caller gets the message
+            // without them; the server log keeps the original.
+            entityResult.Message = SaveErrorMessageForUser((e as Error).message, entity.EntityInfo, user);
             LogError(e);
             throw e;
         } finally {
