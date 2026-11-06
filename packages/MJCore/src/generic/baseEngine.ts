@@ -3720,8 +3720,32 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (this._expirationTimers.has(propertyName)) {
             clearTimeout(this._expirationTimers.get(propertyName));
         }
-        const timer = setTimeout(() => this.RefreshItem(propertyName), expiration);
+        const timer = setTimeout(() => this.runExpirationRefresh(propertyName, expiration, timer as unknown as number), expiration);
+        // A cache-refresh timer must never keep a Node process alive on its own (CLI tools and
+        // test runners load engines and then expect to exit). Browsers return a number: no-op.
+        if (typeof timer === 'object' && timer !== null && 'unref' in timer && typeof timer.unref === 'function') {
+            timer.unref();
+        }
         this._expirationTimers.set(propertyName, timer as unknown as number);
+    }
+
+    /**
+     * Runs one timed refresh and keeps the timer alive. A successful load re-arms the timer from
+     * {@link HandleSingleViewResult}; a failed one (an unsuccessful result, or a thrown connection
+     * error) does not, so without this the refresh would stop for good after a single failed read
+     * and the property would keep its last rows indefinitely.
+     * @param timer - The handle that fired; if the map no longer holds it, a successful load or a
+     *                {@link RemoveDynamicConfig} already decided what happens next.
+     */
+    private async runExpirationRefresh(propertyName: string, expiration: number, timer: number): Promise<void> {
+        try {
+            await this.RefreshItem(propertyName);
+        } catch (e) {
+            LogError(`${this.constructor.name}: timed refresh of ${propertyName} failed — ${(e as Error).message}. Retrying in ${expiration} ms.`);
+        }
+        if (this._expirationTimers.get(propertyName) === timer) {
+            this.setExpirationTimer(propertyName, expiration);
+        }
     }
 
     /**
@@ -3763,7 +3787,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     public async RefreshItem(propertyName: string): Promise<void> {
         const config = this._metadataConfigs.find(c => c.PropertyName === propertyName) || this._dynamicConfigs.get(propertyName);
         if (config) {
-            await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ false, /*suppressEmit*/ true);
+            // A config with an Expiration exists to pick up changes made outside this process, which
+            // the local cache never hears about — so its timed refresh must read the database.
+            await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ !!config.Expiration, /*suppressEmit*/ true);
             await this.RebuildDerivedState(this._contextUser);
             this.emitPropertyChange(config.PropertyName);
         }
