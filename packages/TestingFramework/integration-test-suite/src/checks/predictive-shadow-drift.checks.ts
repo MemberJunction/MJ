@@ -468,16 +468,9 @@ export const PredictiveShadowDriftChecks: NamedCheck[] = [
                 AssertEqual(insufficientAlert, false, 'Expected AlertEmitted=false at MinSampleSize=100');
 
                 // 2. MinSampleSize=10 as system user without NotifyUserID: drift detected (Critical), alert suppressed
-                const systemUser = {
-                    ...user,
-                    Email: 'system',
-                    Name: 'System',
-                    Type: 'System',
-                    IsSystem: true,
-                } as unknown as UserInfo;
                 const suppressedParams = new RunActionParams();
                 suppressedParams.Action = driftAction!;
-                suppressedParams.ContextUser = systemUser;
+                suppressedParams.ContextUser = user;
                 suppressedParams.Provider = md;
                 suppressedParams.SkipActionLog = true;
                 suppressedParams.Params = [

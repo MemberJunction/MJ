@@ -167,7 +167,11 @@ function buildInMemoryHarness() {
             }) as unknown as RunView,
     );
 
-    const user = { ID: 'user-it-1', Name: 'IT Tester', Email: 'it@example.com' } as unknown as UserInfo;
+    const user = {
+        ID: 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E',
+        Name: 'System',
+        Email: 'system@memberjunction.org',
+    } as unknown as UserInfo;
     const ctx = { Provider: provider, User: user } as unknown as IntegrationCheckContext;
 
     return { ctx, featureValueRows, notificationRows, runViewCalls, runViewSpy };
