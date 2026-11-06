@@ -216,7 +216,7 @@ describe('GraphSearchProvider over CanonGraphEngine', () => {
         'MJ: Graphs': [{ ID: graphId, Name: 'MJ Canon', GraphTypeID: 'gt', LoadMode: 'Preload', Status: 'Active' }],
         'MJ: Graph Types': [{ ID: 'gt', Name: 'Canon', IsCanon: true }],
         'MJ: Graph Edge Types': [{ ID: 'et-related', Name: 'Related To', IsDirected: false, DefaultWeight: 0.5 }],
-        'MJ: Graph Concepts': [{ ID: conceptId, GraphID: graphId, Name: 'Open AR', Synonyms: null, Status: 'Canonical' }],
+        'MJ: Graph Concepts': [{ ID: conceptId, GraphID: graphId, Name: 'Open AR', Synonyms: null, Status: 'Approved' }],
         'MJ: Graph Edges': [edge('e1', conceptEntityId, conceptId, accountsEntityId, 'mid'), edge('e2', accountsEntityId, 'mid', accountsEntityId, 'far')],
         Accounts: [
             { ID: 'mid', Name: 'Middle' },

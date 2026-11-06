@@ -78,7 +78,7 @@ export class GetGraphContextAction extends BaseAction {
                     : undefined;
             const includeProposed = this.getBooleanParam(params, 'IncludeProposed', false);
 
-            const seeds = await this.resolveSeeds(question, rawSeeds, graph.Name, params);
+            const seeds = await this.resolveSeeds(question, rawSeeds, graph.Name, includeProposed, params);
             if (!question && seeds.length === 0) {
                 return {
                     Success: false,
@@ -142,6 +142,7 @@ export class GetGraphContextAction extends BaseAction {
         question: string | undefined,
         rawSeeds: unknown,
         graphName: string,
+        includeProposed: boolean,
         params: RunActionParams,
     ): Promise<GraphNodeRef[]> {
         const user: UserInfo = params.ContextUser;
@@ -155,7 +156,7 @@ export class GetGraphContextAction extends BaseAction {
                 resolved.push(ref);
             }
         };
-        const conceptSearch = { GraphNames: [graphName], provider: params.Provider };
+        const conceptSearch = { GraphNames: [graphName], IncludeProposed: includeProposed, provider: params.Provider };
 
         if (question && question.length > 0) {
             const matched = await CanonGraphEngine.Instance.FindConcepts(question, user, conceptSearch);

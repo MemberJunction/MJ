@@ -156,6 +156,48 @@ describe('GraphEngine', () => {
             expect(nodeReads[0].Filter).toContain('acc-hidden');
         });
 
+        it('admits only Approved concepts (Proposed with IncludeProposed; Draft and Deprecated never), as a seed or through an edge', async () => {
+            const draftId = '77777777-7777-4777-8777-777777777791';
+            const proposedId = '77777777-7777-4777-8777-777777777792';
+            const deprecatedId = '77777777-7777-4777-8777-777777777793';
+            const concept = (id: string, name: string, status: string): FakeRow => ({ ID: id, GraphID: IDS.GraphCanon, Graph: 'MJ Canon', Name: name, Description: null, Status: status });
+            const provider = providerWith({
+                'MJ: Graph Concepts': [
+                    ...CanonMetadataRows()['MJ: Graph Concepts'],
+                    concept(draftId, 'Draft Concept', 'Draft'),
+                    concept(proposedId, 'Proposed Concept', 'Proposed'),
+                    concept(deprecatedId, 'Old Concept', 'Deprecated'),
+                ],
+                'MJ: Graph Edges': [draftId, proposedId, deprecatedId].map((id) =>
+                    StoredEdge(IDS.GraphCanon, IDS.EdgeTypeBroader, 'Broader Than', NODE.Concept(IDS.ConceptOpenAr), NODE.Concept(id), 0.9),
+                ),
+            });
+            const engine = await configure(provider);
+
+            const reached = await engine.Subgraph('MJ Canon', canonSeed, { Depth: 1 }, analyst);
+            expect(reached.Nodes.map((n) => n.RecordID)).toEqual([IDS.ConceptOpenAr]);
+            const withProposed = await engine.Subgraph('MJ Canon', canonSeed, { Depth: 1, IncludeProposed: true }, analyst);
+            expect(withProposed.Nodes.map((n) => n.RecordID).sort()).toEqual([IDS.ConceptOpenAr, proposedId].sort());
+
+            for (const id of [draftId, proposedId, deprecatedId]) {
+                const asSeed = await engine.Subgraph('MJ Canon', [{ EntityName: 'MJ: Graph Concepts', RecordID: id }], { Depth: 1 }, analyst);
+                expect(asSeed.Nodes).toEqual([]);
+            }
+            expect((await engine.FilterNodesForUser([NODE.Concept(proposedId)], analyst, [], { IncludeProposed: true })).size).toBe(1);
+            expect((await engine.FilterNodesForUser([NODE.Concept(draftId)], analyst, [], { IncludeProposed: true })).size).toBe(0);
+        });
+
+        it('treats a concept whose Status a principal cannot read as not approved', async () => {
+            const provider = providerWith({});
+            const engine = await configure(provider);
+            // What this caller's read returns when field-level security drops the Status column.
+            provider.Rows['MJ: Graph Concepts'] = provider.Rows['MJ: Graph Concepts'].map((c) => {
+                const { Status: _dropped, ...rest } = c;
+                return rest;
+            });
+            expect((await engine.FilterNodesForUser([NODE.Concept(IDS.ConceptOpenAr)], analyst)).size).toBe(0);
+        });
+
         it('gives no user type a bypass: an Owner without a read grant is denied', () => {
             const provider = providerWith({});
             const owner = MakeUser('u-owner', [], 'Owner');

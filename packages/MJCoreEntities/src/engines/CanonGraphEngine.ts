@@ -10,7 +10,7 @@ import {
     type GraphSubgraph,
     type GraphTraversalOptions,
 } from '../graph/BaseGraphEdgeProvider';
-import { CanUserReadEntity, ClampGraphDepth, ClampGraphMaxNodes, GraphEngine } from '../graph/GraphEngine';
+import { CanUserReadEntity, ClampGraphDepth, ClampGraphMaxNodes, GraphEngine, IsGraphConceptStatusVisible } from '../graph/GraphEngine';
 import type {
     GraphExpandedEdge,
     GraphExpandedNode,
@@ -60,13 +60,15 @@ export interface FindConceptsOptions {
     GraphNames?: readonly string[];
     /** Readers besides the caller who must also be able to see each concept. */
     AudienceReaders?: readonly UserInfo[];
+    /** When `true`, `Proposed` concepts match alongside `Approved` ones (`false` by default). */
+    IncludeProposed?: boolean;
     provider?: IMetadataProvider;
 }
 
 /** The concept columns a caller reads when a concept is explained. */
 type ConceptDetailRow = Pick<
     MJGraphConceptEntityType,
-    'ID' | 'Name' | 'Description' | 'Specification' | 'Synonyms' | 'AuthorityTier' | 'ConceptType' | 'Graph'
+    'ID' | 'Name' | 'Description' | 'Specification' | 'Synonyms' | 'AuthorityTier' | 'ConceptType' | 'Graph' | 'Status'
 >;
 
 /**
@@ -92,7 +94,8 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
 
     /**
      * `MJ: Graph Concepts` matching `text` by `Name` and `Synonyms` (v1 lexical matching), best match
-     * first, limited to concepts the caller — and every audience reader — may see.
+     * first, limited to concepts the caller — and every audience reader — may see, and to `Approved`
+     * concepts (plus `Proposed` ones when `options.IncludeProposed`; see `IsGraphConceptStatusVisible`).
      */
     public async FindConcepts(text: string, user: UserInfo, options: FindConceptsOptions = {}): Promise<GraphNodeView[]> {
         const query = text?.trim().toLowerCase();
@@ -105,12 +108,13 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
             return [];
         }
 
-        const scored = this.scoreConcepts(query, graphIds);
+        const includeProposed = options.IncludeProposed === true;
+        const scored = this.scoreConcepts(query, graphIds, includeProposed);
         if (scored.length === 0) {
             return [];
         }
         const refs = scored.map((s) => ({ EntityName: CONCEPT_ENTITY, RecordID: s.Concept.ID }));
-        const visible = await GraphEngine.Instance.FilterNodesForUser(refs, user, options.AudienceReaders);
+        const visible = await GraphEngine.Instance.FilterNodesForUser(refs, user, options.AudienceReaders, { IncludeProposed: includeProposed });
         const result: GraphNodeView[] = [];
         for (const s of scored) {
             const view = visible.get(GraphEngine.Instance.GetNodeKey({ EntityName: CONCEPT_ENTITY, RecordID: s.Concept.ID }));
@@ -125,7 +129,7 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
      * Resolve `MJ: Graph Concepts` matching `question` and expand their bounded Canon neighborhood.
      */
     public async CanonContext(question: string, options: GraphTraversalOptions, user: UserInfo): Promise<GraphSubgraph> {
-        const matched = await this.FindConcepts(question, user, { AudienceReaders: options.AudienceReaders });
+        const matched = await this.FindConcepts(question, user, { AudienceReaders: options.AudienceReaders, IncludeProposed: options.IncludeProposed });
         if (matched.length === 0) {
             return { Nodes: [], Edges: [] };
         }
@@ -162,9 +166,15 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
      *
      * The concept is read AS THE CALLER (row-level and field-level security apply), so a concept the
      * caller may not read returns `null`, and its specification and synonyms come from the caller's own
-     * read, never from the engine's cache.
+     * read, never from the engine's cache. A concept that is not `Approved` (or `Proposed`, with
+     * `includeProposed`) returns `null` as well: it is not canon.
      */
-    public async ExplainConcept(conceptNameOrId: string, user: UserInfo, provider?: IMetadataProvider): Promise<CanonConceptExplanation | null> {
+    public async ExplainConcept(
+        conceptNameOrId: string,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+        includeProposed: boolean = false,
+    ): Promise<CanonConceptExplanation | null> {
         const trimmed = conceptNameOrId?.trim();
         if (!trimmed || !user) {
             return null;
@@ -176,12 +186,17 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
             return null;
         }
         const detail = await this.readConceptAsUser(cached.ID, user, provider);
-        if (!detail) {
+        if (!detail || !IsGraphConceptStatusVisible(detail.Status, includeProposed)) {
             return null;
         }
 
         const seed: GraphNodeRef = { EntityName: CONCEPT_ENTITY, RecordID: detail.ID };
-        const subgraph = await GraphEngine.Instance.Subgraph(detail.Graph || this.ResolvePrimaryCanonGraphName(), [seed], { Depth: 2, MaxNodes: 50, Direction: 'Both' }, user);
+        const subgraph = await GraphEngine.Instance.Subgraph(
+            detail.Graph || this.ResolvePrimaryCanonGraphName(),
+            [seed],
+            { Depth: 2, MaxNodes: 50, Direction: 'Both', IncludeProposed: includeProposed },
+            user,
+        );
         const conceptEntity = (provider ?? GraphEngine.Instance.ProviderToUse).EntityByName(CONCEPT_ENTITY);
         return {
             Concept: {
@@ -249,11 +264,15 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
         return ids;
     }
 
-    private scoreConcepts(query: string, graphIds: UUIDSet): Array<{ Concept: MJGraphConceptEntity; Score: number }> {
+    /**
+     * Candidate concepts scored against the query. Only concepts whose cached `Status` is visible are
+     * candidates; each principal's own read of `Status` decides again in `FilterNodesForUser`.
+     */
+    private scoreConcepts(query: string, graphIds: UUIDSet, includeProposed: boolean): Array<{ Concept: MJGraphConceptEntity; Score: number }> {
         const queryTokens = tokenizeAlphanumeric(query);
         const scored: Array<{ Concept: MJGraphConceptEntity; Score: number }> = [];
         for (const concept of GraphEngine.Instance.Concepts) {
-            if (concept.Status === 'Deprecated' || !graphIds.Has(concept.GraphID)) {
+            if (!IsGraphConceptStatusVisible(concept.Status, includeProposed) || !graphIds.Has(concept.GraphID)) {
                 continue;
             }
             const score = scoreConceptMatch(concept, query, queryTokens);
@@ -311,7 +330,7 @@ export class CanonGraphEngine extends BaseSingleton<CanonGraphEngine> {
             {
                 EntityName: CONCEPT_ENTITY,
                 ExtraFilter: `[ID] = '${EscapeSQLString(conceptId)}'`,
-                Fields: ['ID', 'Name', 'Description', 'Specification', 'Synonyms', 'AuthorityTier', 'ConceptType', 'Graph'],
+                Fields: ['ID', 'Name', 'Description', 'Specification', 'Synonyms', 'AuthorityTier', 'ConceptType', 'Graph', 'Status'],
                 ResultType: 'simple',
                 MaxRows: 1,
             },

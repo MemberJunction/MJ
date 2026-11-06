@@ -44,6 +44,28 @@ describe('CanonGraphEngine', () => {
             expect(provider.ReadsOf('MJ: Graph Concepts', analyst.ID).length).toBeGreaterThan(0);
         });
 
+        it('matches only Approved concepts unless proposed content is asked for, and never a Draft one', async () => {
+            const rows = CanonMetadataRows()['MJ: Graph Concepts'];
+            await setup({
+                'MJ: Graph Concepts': [
+                    { ...rows[0], ID: '77777777-7777-4777-8777-777777777781', Name: 'Open AR Draft', Status: 'Draft' },
+                    { ...rows[0], ID: '77777777-7777-4777-8777-777777777782', Name: 'Open AR Proposed', Status: 'Proposed' },
+                ],
+            });
+            expect((await CanonGraphEngine.Instance.FindConcepts('Open AR', analyst)).map((c) => c.Label)).toEqual(['Open AR']);
+            expect((await CanonGraphEngine.Instance.FindConcepts('Open AR', analyst, { IncludeProposed: true })).map((c) => c.Label).sort()).toEqual(['Open AR', 'Open AR Proposed']);
+        });
+
+        it('gives an unreviewed concept no seed: the expansion service resolves none (reviewer probe)', async () => {
+            await setup();
+            provider.Rows['MJ: Graph Concepts'] = provider.Rows['MJ: Graph Concepts'].map((c) => ({ ...c, Status: 'Proposed' }));
+            await GraphEngine.Instance.Config(true, analyst, provider as unknown as IMetadataProvider);
+            const service = CanonGraphEngine.Instance.AsExpansionService();
+            expect(await service.ResolveSeeds('Open AR', ['MJ Canon'], analyst)).toEqual([]);
+            expect(await CanonGraphEngine.Instance.ExplainConcept('Open AR', analyst)).toBeNull();
+            expect((await CanonGraphEngine.Instance.ExplainConcept('Open AR', analyst, undefined, true))?.Concept.Label).toBe('Open AR');
+        });
+
         it('applies audience readers too', async () => {
             await setup();
             const reader = MakeUser('u-reader');

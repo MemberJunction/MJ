@@ -47,12 +47,18 @@ describe('GetGraphContextAction', () => {
         expect(result.Success).toBe(true);
         expect(result.NodeCount).toBe(2);
         expect(ensureSpy).toHaveBeenCalledWith(caller, undefined);
-        expect(findSpy).toHaveBeenCalledWith('What is Unpaid Invoices?', caller, { GraphNames: ['MJ Canon'], provider: undefined });
+        expect(findSpy).toHaveBeenCalledWith('What is Unpaid Invoices?', caller, { GraphNames: ['MJ Canon'], IncludeProposed: false, provider: undefined });
         const [graphName, seeds, options, user] = subgraphSpy.mock.calls[0];
         expect(graphName).toBe('MJ Canon');
         expect(seeds).toEqual([{ EntityName: 'MJ: Graph Concepts', EntityID: undefined, RecordID: 'c-open-ar' }]);
         expect(options).toMatchObject({ Depth: 4, MaxNodes: 200 });
         expect(user).toBe(caller);
+    });
+
+    it('asks for proposed concepts only when IncludeProposed is set, for the seeds and the traversal alike', async () => {
+        await run([{ Name: 'Question', Value: 'Open AR' }, { Name: 'IncludeProposed', Value: true }]);
+        expect(findSpy).toHaveBeenCalledWith('Open AR', caller, { GraphNames: ['MJ Canon'], IncludeProposed: true, provider: undefined });
+        expect(subgraphSpy.mock.calls[0][2]).toMatchObject({ IncludeProposed: true });
     });
 
     it('fails with GRAPH_NOT_FOUND for an unknown or inactive graph instead of traversing anything', async () => {

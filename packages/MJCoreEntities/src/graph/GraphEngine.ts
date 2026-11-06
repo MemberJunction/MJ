@@ -108,6 +108,12 @@ const STORED_EDGE_FIELDS: Array<keyof StoredEdgeRow> = [
     'Confidence',
 ];
 
+/** Options for {@link GraphEngine.FilterNodesForUser}. */
+export interface GraphNodeFilterOptions {
+    /** When `true`, `Proposed` concepts are visible alongside `Approved` ones (`false` by default). */
+    IncludeProposed?: boolean;
+}
+
 /** A node admitted during traversal, with the best path that reached it. */
 interface DiscoveredNode {
     Node: GraphNodeRef;
@@ -292,17 +298,19 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
      * labels, keyed by node key. Data records (including concepts) are read as each principal with one
      * batched `RunViews` per principal, so entity permissions and row-level security apply; metadata
      * nodes use entity `CanRead`, `UserCanRun` (queries) and `CanRead` + `IsUsable` (alternate views).
+     * A concept appears only when {@link IsGraphConceptStatusVisible} for `options.IncludeProposed`.
      */
     public async FilterNodesForUser(
         nodes: GraphNodeRef[],
         user: UserInfo,
         audienceReaders?: readonly UserInfo[],
+        options: GraphNodeFilterOptions = {},
     ): Promise<Map<string, GraphNodeView>> {
         if (!user || !nodes || nodes.length === 0) {
             return new Map<string, GraphNodeView>();
         }
         const provider = this.graphProvider();
-        return this.resolveVisibleNodes(nodes, this.principals(user, audienceReaders), provider);
+        return this.resolveVisibleNodes(nodes, this.principals(user, audienceReaders), provider, options.IncludeProposed === true);
     }
 
     /**
@@ -330,7 +338,7 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         for (const edge of rawEdges) {
             endpoints.push(edge.Source, edge.Target);
         }
-        const visible = await this.resolveVisibleNodes(endpoints, principals, provider);
+        const visible = await this.resolveVisibleNodes(endpoints, principals, provider, options.IncludeProposed === true);
         return rawEdges.filter(
             (edge) => visible.has(this.nodeKey(edge.Source, provider)) && visible.has(this.nodeKey(edge.Target, provider)),
         );
@@ -367,15 +375,16 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         const maxNodes = ClampGraphMaxNodes(options.MaxNodes);
         const minWeight = options.MinWeight ?? 0;
 
+        const includeProposed = options.IncludeProposed === true;
         const discovered = new Map<string, DiscoveredNode>();
         const visibleByKey = new Map<string, GraphNodeView>();
-        let frontier = await this.admitSeeds(seeds, principals, maxNodes, provider, discovered, visibleByKey);
+        let frontier = await this.admitSeeds(seeds, principals, maxNodes, provider, includeProposed, discovered, visibleByKey);
         let capped = false;
 
         for (let hop = 1; hop <= maxDepth && frontier.length > 0; hop++) {
             const stepEdges = await this.getEdgesForFrontier(graph, frontier.map((f) => f.Node), options, principals, provider);
             const candidates = this.rankCandidates(stepEdges, frontier, discovered, minWeight, hop, provider);
-            const visible = await this.resolveVisibleNodes(this.uniqueNeighborRefs(candidates), principals, provider);
+            const visible = await this.resolveVisibleNodes(this.uniqueNeighborRefs(candidates), principals, provider, includeProposed);
             const admitted = this.admitCandidates(candidates, visible, maxNodes, hop, discovered, visibleByKey);
             capped = capped || admitted.Capped;
             frontier = admitted.Next;
@@ -485,11 +494,12 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         principals: UserInfo[],
         maxNodes: number,
         provider: GraphDataProvider,
+        includeProposed: boolean,
         discovered: Map<string, DiscoveredNode>,
         visibleByKey: Map<string, GraphNodeView>,
     ): Promise<DiscoveredNode[]> {
         const normalized = seeds.map((s) => this.normalizeNodeRef(s, provider));
-        const visible = await this.resolveVisibleNodes(normalized, principals, provider);
+        const visible = await this.resolveVisibleNodes(normalized, principals, provider, includeProposed);
         const frontier: DiscoveredNode[] = [];
         for (const seed of normalized) {
             const key = this.nodeKey(seed, provider);
@@ -936,12 +946,13 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         candidates: GraphNodeRef[],
         principals: UserInfo[],
         provider: GraphDataProvider,
+        includeProposed: boolean,
     ): Promise<Map<string, GraphNodeView>> {
         if (candidates.length === 0 || principals.length === 0) {
             return new Map<string, GraphNodeView>();
         }
         const normalized = candidates.map((c) => this.normalizeNodeRef(c, provider));
-        const perPrincipal = await Promise.all(principals.map((p) => this.resolveNodesForPrincipal(normalized, p, provider)));
+        const perPrincipal = await Promise.all(principals.map((p) => this.resolveNodesForPrincipal(normalized, p, provider, includeProposed)));
         const visible = perPrincipal[0];
         for (const other of perPrincipal.slice(1)) {
             for (const key of Array.from(visible.keys())) {
@@ -956,12 +967,14 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
     /**
      * Nodes `principal` may see. Metadata nodes are checked against metadata; every data record —
      * concepts included — is read as `principal` in one batched `RunViews` (`[pk] IN (...)` per
-     * entity), and a record that does not come back is invisible.
+     * entity), and a record that does not come back is invisible. A concept whose `Status` (as this
+     * principal read it) is not {@link IsGraphConceptStatusVisible} is invisible too.
      */
     private async resolveNodesForPrincipal(
         nodes: GraphNodeRef[],
         principal: UserInfo,
         provider: GraphDataProvider,
+        includeProposed: boolean,
     ): Promise<Map<string, GraphNodeView>> {
         const visible = new Map<string, GraphNodeView>();
         const buckets = new Map<string, DataNodeBucket>();
@@ -988,7 +1001,7 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
             bucket.Nodes.push({ Ref: node, Key: key });
             buckets.set(entity.Name, bucket);
         }
-        await this.resolveDataNodes(Array.from(buckets.values()), principal, provider, visible);
+        await this.resolveDataNodes(Array.from(buckets.values()), principal, provider, includeProposed, visible);
         return visible;
     }
 
@@ -1050,6 +1063,7 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         buckets: DataNodeBucket[],
         principal: UserInfo,
         provider: GraphDataProvider,
+        includeProposed: boolean,
         visible: Map<string, GraphNodeView>,
     ): Promise<void> {
         if (buckets.length === 0) {
@@ -1063,7 +1077,7 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
                 LogError(`GraphEngine: reading ${buckets[i].Entity.Name} nodes failed: ${res?.ErrorMessage ?? 'no result'}`);
                 continue; // unreadable means invisible
             }
-            this.addReturnedRows(buckets[i], res.Results, visible);
+            this.addReturnedRows(buckets[i], res.Results, includeProposed, visible);
         }
     }
 
@@ -1074,8 +1088,11 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         if (nameField) {
             fields.add(nameField);
         }
-        if (bucket.Entity.Name === GRAPH_CONCEPTS_ENTITY && bucket.Entity.Fields?.some((f) => f.Name === 'Description')) {
-            fields.add('Description');
+        if (isConceptEntity(bucket.Entity)) {
+            fields.add('Status'); // a concept's visibility depends on its review status
+            if (bucket.Entity.Fields?.some((f) => f.Name === 'Description')) {
+                fields.add('Description');
+            }
         }
         const ids = Array.from(new Set(bucket.Nodes.map((n) => n.Ref.RecordID))).sort();
         return {
@@ -1087,9 +1104,15 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         };
     }
 
-    private addReturnedRows(bucket: DataNodeBucket, rows: Array<Record<string, unknown>>, visible: Map<string, GraphNodeView>): void {
+    private addReturnedRows(
+        bucket: DataNodeBucket,
+        rows: Array<Record<string, unknown>>,
+        includeProposed: boolean,
+        visible: Map<string, GraphNodeView>,
+    ): void {
         const pkField = bucket.Entity.FirstPrimaryKey.Name; // first-pk-ok: Graph node keys address single-PK or URL-segment records via FirstPrimaryKey
         const nameField = bucket.Entity.NameField?.Name;
+        const isConcept = isConceptEntity(bucket.Entity);
         const rowByKey = new Map<string, Record<string, unknown>>();
         for (const row of rows) {
             const id = row[pkField];
@@ -1101,6 +1124,9 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
             const row = rowByKey.get(item.Key);
             if (!row) {
                 continue; // not returned to this principal: entity permission or row-level security
+            }
+            if (isConcept && !IsGraphConceptStatusVisible(row['Status'], includeProposed)) {
+                continue; // an unreviewed (Draft/Proposed) or Deprecated concept is not canon
             }
             const label = nameField && row[nameField] != null ? String(row[nameField]) : `${bucket.Entity.Name} ${item.Ref.RecordID}`;
             const description = row['Description'];
@@ -1135,6 +1161,25 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         const normalized = this.normalizeNodeRef(node, provider);
         return FormatGraphNodeKey(normalized.EntityID ?? normalized.EntityName, normalized.RecordID);
     }
+}
+
+function isConceptEntity(entity: EntityInfo): boolean {
+    return entity.Name.trim().toLowerCase() === GRAPH_CONCEPTS_ENTITY.toLowerCase();
+}
+
+/** `MJ: Graph Concepts.Status` values, from the generated entity. */
+export type GraphConceptStatus = MJGraphConceptEntity['Status'];
+
+/**
+ * Whether a concept with this `Status` may seed a traversal or appear in one. Only `Approved`
+ * concepts are canon; `Proposed` ones appear only when the caller asked for proposed content
+ * (`IncludeProposed`); `Draft` (the column default: still being written) and `Deprecated` never do.
+ * Anything else, including a status the reader could not read, is not visible.
+ */
+export function IsGraphConceptStatusVisible(status: unknown, includeProposed: boolean): boolean {
+    const approved: GraphConceptStatus = 'Approved';
+    const proposed: GraphConceptStatus = 'Proposed';
+    return status === approved || (includeProposed && status === proposed);
 }
 
 function metadataNodeKind(entityName: string): MetadataNodeKindName | null {
