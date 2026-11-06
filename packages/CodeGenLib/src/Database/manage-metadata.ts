@@ -42,6 +42,7 @@ import path from 'path';
 import { CanonicalJSONStringify, DeepEqualJSON } from "../Misc/util";
 import { TrimTrailingStatementTerminators } from "../Misc/sql_text";
 import { SQLLogging } from "../Misc/sql_logging";
+import { ConfigEntityIndex, DedupeRelatedEntities, DesiredOrganicKey, OrganicKeyNeedsUpdate, OrganicKeyRelatedRowKey, OrganicKeyRelatedRowNeedsUpdate, OrganicKeyRelatedRowValues, OrganicKeyRowKey, OrganicKeyRowValues } from "./organic-key-sync";
 import { AIEngine } from "@memberjunction/aiengine";
 import { ComputeFieldMetadataUpdate, FieldLockContext } from "./field-metadata-lock";
 import {
@@ -440,6 +441,16 @@ export interface OrganicKeyConfig {
    Sequence?: number;
    /** Related entities to show on the form when viewing a record matched by this key */
    RelatedEntities: OrganicKeyRelatedEntityConfig[];
+}
+
+/** What the organic-key config pass did, per key. A key is `updated` when it or any of its related rows was written. */
+export interface OrganicKeyConfigResult {
+   success: boolean;
+   createdCount: number;
+   updatedCount: number;
+   /** Keys whose row and related rows already matched the file: nothing written. */
+   unchangedCount: number;
+   failedCount: number;
 }
 
 /**
@@ -1173,9 +1184,13 @@ export class ManageMetadataBase {
    /**
     * Extracts organic key configurations from the additionalSchemaInfo config file.
     * Walks all schema-keyed table arrays and collects OrganicKeys arrays with their
-    * owning schema and table name.
+    * owning schema and table name. A related entity listed twice under one key (same schema and
+    * table) keeps only its last entry, which is what each duplicate overwriting the stored row left
+    * behind (#3815).
+    * @param warnOnDuplicates log one warning per dropped duplicate (the writing pass sets it; the
+    * retraction pass reads the same file and would repeat them)
     */
-   protected extractOrganicKeysFromConfig(config: Record<string, unknown>): { SchemaName: string; TableName: string; OrganicKeys: OrganicKeyConfig[] }[] {
+   protected extractOrganicKeysFromConfig(config: Record<string, unknown>, warnOnDuplicates: boolean = false): { SchemaName: string; TableName: string; OrganicKeys: OrganicKeyConfig[] }[] {
       const results: { SchemaName: string; TableName: string; OrganicKeys: OrganicKeyConfig[] }[] = [];
 
       for (const [key, value] of Object.entries(config)) {
@@ -1210,6 +1225,16 @@ export class ManageMetadataBase {
                   }))
                   : [],
             }));
+
+            for (const ok of organicKeys) {
+               const { Kept, Dropped } = DedupeRelatedEntities(ok.RelatedEntities);
+               ok.RelatedEntities = Kept;
+               if (warnOnDuplicates) {
+                  for (const dup of Dropped) {
+                     LogWarning(`    > Organic key "${ok.Name}" on ${schemaName}.${tableConfig.TableName}: related entity "${dup.SchemaName}.${dup.TableName}" is listed more than once — using its last entry`);
+                  }
+               }
+            }
 
             results.push({ SchemaName: schemaName, TableName: tableConfig.TableName as string, OrganicKeys: organicKeys });
          }
@@ -1284,190 +1309,245 @@ export class ManageMetadataBase {
     *    the file now owns a key it declares, which is what lets a later run retract it (#4535)
     * 3. Upserts EntityOrganicKeyRelatedEntity records (matched on EntityOrganicKeyID + RelatedEntityID)
     *
+    * Entities and existing rows are read once up front, and a row is written only when it differs
+    * from the file, so a run over unchanged config issues three reads and no writes (#3815).
     * All SQL is executed AND logged via LogSQLAndExecute for complete CI/CD traceability.
     * Must run AFTER entities are created.
     */
-   protected async processOrganicKeyConfig(pool: CodeGenConnection): Promise<{ success: boolean; createdCount: number; updatedCount: number; failedCount: number }> {
+   protected async processOrganicKeyConfig(pool: CodeGenConnection): Promise<OrganicKeyConfigResult> {
+      const result: OrganicKeyConfigResult = { success: true, createdCount: 0, updatedCount: 0, unchangedCount: 0, failedCount: 0 };
       const config = ManageMetadataBase.getSoftPKFKConfig();
-      if (!config) return { success: true, createdCount: 0, updatedCount: 0, failedCount: 0 };
+      if (!config) return result;
 
-      const allOrganicKeys = this.extractOrganicKeysFromConfig(config as Record<string, unknown>);
-      if (allOrganicKeys.length === 0) return { success: true, createdCount: 0, updatedCount: 0, failedCount: 0 };
+      const allOrganicKeys = this.extractOrganicKeysFromConfig(config as Record<string, unknown>, true);
+      if (allOrganicKeys.length === 0) return result;
 
-      const schema = MjCoreSchema();
-      let createdCount = 0;
-      let updatedCount = 0;
-      let failedCount = 0;
+      const entities = new ConfigEntityIndex(await this.loadEntityRefsForRetraction(pool));
+      const existingKeys = await this.loadOrganicKeyRows(pool);
+      const existingRelated = await this.loadOrganicKeyRelatedRows(pool);
+
+      const progress = this.organicKeyProgressReporter(allOrganicKeys);
 
       for (const tableConfig of allOrganicKeys) {
-         // Resolve the owning entity
-         const owner = await this.findOrganicKeyEntity(pool, tableConfig.SchemaName, tableConfig.TableName);
+         const owner = entities.Resolve(tableConfig.SchemaName, tableConfig.TableName);
          if (!owner) {
             // Every key declared on this table goes unapplied, so each one counts as a failure.
-            failedCount += tableConfig.OrganicKeys.length;
+            result.failedCount += tableConfig.OrganicKeys.length;
             logError(`    > Organic keys config: entity "${tableConfig.SchemaName}.${tableConfig.TableName}" not found — skipping its ${tableConfig.OrganicKeys.length} organic key(s)`);
+            for (const okConfig of tableConfig.OrganicKeys) {
+               progress(okConfig.RelatedEntities.length);
+            }
             continue;
          }
 
-         const ownerEntityId = owner.ID;
-         const ownerEntityName = owner.Name;
-
          for (const okConfig of tableConfig.OrganicKeys) {
             try {
-               // Resolve every related entity BEFORE writing anything for this key. Step 1 creates
-               // bridge views (in the database and the migration log) and step 2 records the key, so
-               // discovering a missing related entity in step 3 would leave an orphan view and a key
-               // with a mapping missing.
-               const relatedEntities = await this.resolveOrganicKeyRelatedEntities(pool, okConfig);
-               if (!relatedEntities) {
-                  failedCount++;
-                  continue;
-               }
-
-               // Step 1: Create transitive views if defined
-               for (const re of okConfig.RelatedEntities) {
-                  if (re.TransitiveView) {
-                     const viewSchema = re.TransitiveView.SchemaName || re.SchemaName;
-                     const viewFullName = `${viewSchema}.${re.TransitiveView.Name}`;
-
-                     const viewSQL = this.dbProvider.generateCreateOrReplaceViewSQL(viewSchema, re.TransitiveView.Name, re.TransitiveView.SQL);
-                     // T-SQL requires CREATE [OR ALTER] VIEW to be the ONLY statement in its batch — first as
-                     // well as last — and the metadata DML logged just before it (entity-config UPDATEs, the
-                     // previous key's INSERTs) has no trailing GO. requiresOwnBatch puts the provider's
-                     // separator on both sides in the migration file ('' on PostgreSQL: nothing is added).
-                     await this.logSQLAndExecute(pool, viewSQL,
-                        `Create transitive bridge view ${viewFullName} for organic key "${okConfig.Name}" on ${ownerEntityName}`,
-                        false, true, this.dbProvider.BatchSeparator, true);
-
-                     // Auto-populate TransitiveObject from the view definition
-                     re.TransitiveObject = viewFullName;
-                  }
-               }
-
-               // Step 2: Upsert EntityOrganicKey (match on EntityID + Name)
-               const existingKey = await this.runQueryWithParams(pool,
-                  `SELECT ID FROM ${this.qs(schema, 'EntityOrganicKey')} WHERE EntityID = @EntityID AND Name = @Name`,
-                  { 'EntityID': ownerEntityId, 'Name': okConfig.Name });
-
-               let organicKeyId: string;
-               const matchFieldNames = okConfig.MatchFieldNames.join(',');
-
-               if (existingKey.recordset.length > 0) {
-                  // Update existing
-                  organicKeyId = existingKey.recordset[0].ID;
-                  const updateSQL = `UPDATE ${this.qs(schema, 'EntityOrganicKey')} SET
-                     MatchFieldNames = '${matchFieldNames}',
-                     NormalizationStrategy = '${okConfig.NormalizationStrategy || 'LowerCaseTrim'}',
-                     ${okConfig.CustomNormalizationExpression ? `CustomNormalizationExpression = '${okConfig.CustomNormalizationExpression.replace(/'/g, "''")}',` : ''}
-                     ${okConfig.Description ? `Description = '${okConfig.Description.replace(/'/g, "''")}',` : ''}
-                     Sequence = ${okConfig.Sequence ?? 0},
-                     Status = 'Active',
-                     Source = 'Config'
-                     WHERE ID = '${organicKeyId}'`;
-                  await this.logSQLAndExecute(pool, updateSQL,
-                     `Update organic key "${okConfig.Name}" on ${ownerEntityName}`);
-                  updatedCount++;
-                  logStatus(`    > Organic key: Updated "${okConfig.Name}" on ${ownerEntityName}`);
-               } else {
-                  // Insert new — use entity-lookup subquery so the logged SQL is portable across databases
-                  const ownerSubquery = this.entityIdSubquery(tableConfig.TableName, tableConfig.SchemaName);
-                  const insertSQL = `INSERT INTO ${this.qs(schema, 'EntityOrganicKey')}
-                     (EntityID, Name, ${okConfig.Description ? 'Description, ' : ''}MatchFieldNames, NormalizationStrategy, ${okConfig.CustomNormalizationExpression ? 'CustomNormalizationExpression, ' : ''}Sequence, Status, Source)
-                     VALUES (${ownerSubquery}, '${okConfig.Name}', ${okConfig.Description ? `'${okConfig.Description.replace(/'/g, "''")}', ` : ''}'${matchFieldNames}', '${okConfig.NormalizationStrategy || 'LowerCaseTrim'}', ${okConfig.CustomNormalizationExpression ? `'${okConfig.CustomNormalizationExpression.replace(/'/g, "''")}', ` : ''}${okConfig.Sequence ?? 0}, 'Active', 'Config')`;
-                  await this.logSQLAndExecute(pool, insertSQL,
-                     `Insert organic key "${okConfig.Name}" on ${ownerEntityName}`);
-                  createdCount++;
-                  logStatus(`    > Organic key: Created "${okConfig.Name}" on ${ownerEntityName}`);
-
-                  // Fetch the new ID
-                  const newKey = await this.runQueryWithParams(pool,
-                     `SELECT ID FROM ${this.qs(schema, 'EntityOrganicKey')} WHERE EntityID = @EntityID AND Name = @Name`,
-                     { 'EntityID': ownerEntityId, 'Name': okConfig.Name });
-                  organicKeyId = newKey.recordset[0].ID;
-               }
-
-               // Step 3: Upsert EntityOrganicKeyRelatedEntity for each related entity
-               for (const { config: reConfig, entity: relEntity } of relatedEntities) {
-                  const relEntityId = relEntity.ID;
-                  const relEntityName = relEntity.Name;
-
-                  // Check if this related entity mapping already exists
-                  const existingRel = await this.runQueryWithParams(pool,
-                     `SELECT ID FROM ${this.qs(schema, 'EntityOrganicKeyRelatedEntity')} WHERE EntityOrganicKeyID = @KeyID AND RelatedEntityID = @RelEntityID`,
-                     { 'KeyID': organicKeyId, 'RelEntityID': relEntityId });
-
-                  // Build field values
-                  const isDirect = reConfig.RelatedFieldNames && reConfig.RelatedFieldNames.length > 0;
-                  const relFieldNames = isDirect ? reConfig.RelatedFieldNames!.join(',') : null;
-                  const transitiveObject = reConfig.TransitiveObject || null;
-                  const transitiveMatchFields = reConfig.TransitiveMatchFieldNames ? reConfig.TransitiveMatchFieldNames.join(',') : null;
-
-                  if (existingRel.recordset.length > 0) {
-                     const relId = existingRel.recordset[0].ID;
-                     const updateRelSQL = `UPDATE ${this.qs(schema, 'EntityOrganicKeyRelatedEntity')} SET
-                        RelatedEntityFieldNames = ${relFieldNames ? `'${relFieldNames}'` : 'NULL'},
-                        TransitiveObjectName = ${transitiveObject ? `'${transitiveObject}'` : 'NULL'},
-                        TransitiveObjectMatchFieldNames = ${transitiveMatchFields ? `'${transitiveMatchFields}'` : 'NULL'},
-                        TransitiveObjectOutputFieldName = ${reConfig.TransitiveOutputFieldName ? `'${reConfig.TransitiveOutputFieldName}'` : 'NULL'},
-                        RelatedEntityJoinFieldName = ${reConfig.RelatedEntityJoinFieldName ? `'${reConfig.RelatedEntityJoinFieldName}'` : 'NULL'},
-                        DisplayName = ${reConfig.DisplayName ? `'${reConfig.DisplayName.replace(/'/g, "''")}'` : 'NULL'},
-                        DisplayLocation = '${reConfig.DisplayLocation || 'After Field Tabs'}',
-                        Sequence = ${reConfig.Sequence ?? 0}
-                        WHERE ID = '${relId}'`;
-                     await this.logSQLAndExecute(pool, updateRelSQL,
-                        `Update organic key related entity: "${okConfig.Name}" → ${relEntityName}`);
-                  } else {
-                     // Use subqueries for FK references so the logged SQL is portable across databases
-                     const ownerSubquery = this.entityIdSubquery(tableConfig.TableName, tableConfig.SchemaName);
-                     const organicKeySubquery = `(SELECT ID FROM ${this.qs(schema, 'EntityOrganicKey')} WHERE EntityID = ${ownerSubquery} AND Name = '${okConfig.Name}')`;
-                     const relEntitySubquery = this.entityIdSubquery(reConfig.TableName, reConfig.SchemaName);
-                     const insertRelSQL = `INSERT INTO ${this.qs(schema, 'EntityOrganicKeyRelatedEntity')}
-                        (EntityOrganicKeyID, RelatedEntityID, RelatedEntityFieldNames,
-                         TransitiveObjectName, TransitiveObjectMatchFieldNames, TransitiveObjectOutputFieldName, RelatedEntityJoinFieldName,
-                         DisplayName, DisplayLocation, Sequence)
-                        VALUES (${organicKeySubquery}, ${relEntitySubquery},
-                         ${relFieldNames ? `'${relFieldNames}'` : 'NULL'},
-                         ${transitiveObject ? `'${transitiveObject}'` : 'NULL'},
-                         ${transitiveMatchFields ? `'${transitiveMatchFields}'` : 'NULL'},
-                         ${reConfig.TransitiveOutputFieldName ? `'${reConfig.TransitiveOutputFieldName}'` : 'NULL'},
-                         ${reConfig.RelatedEntityJoinFieldName ? `'${reConfig.RelatedEntityJoinFieldName}'` : 'NULL'},
-                         ${reConfig.DisplayName ? `'${reConfig.DisplayName.replace(/'/g, "''")}'` : 'NULL'},
-                         '${reConfig.DisplayLocation || 'After Field Tabs'}',
-                         ${reConfig.Sequence ?? 0})`;
-                     await this.logSQLAndExecute(pool, insertRelSQL,
-                        `Insert organic key related entity: "${okConfig.Name}" → ${relEntityName}`);
-                  }
-
-                  logStatus(`    > Organic key "${okConfig.Name}": ${existingRel.recordset.length > 0 ? 'updated' : 'created'} → ${relEntityName} (${isDirect ? 'direct' : 'transitive'})`);
-               }
+               const outcome = await this.applyOrganicKey(pool, entities, tableConfig, owner, okConfig, existingKeys, existingRelated);
+               if (outcome === 'failed') result.failedCount++;
+               else if (outcome === 'created') result.createdCount++;
+               else if (outcome === 'updated') result.updatedCount++;
+               else result.unchangedCount++;
             } catch (err) {
                // Keep going so one bad key doesn't block the others — but count it: a key that failed
                // here (bridge-view DDL the database rejected, a refused view drop, …) is missing from
                // the database, and the run must not report success for it.
-               failedCount++;
+               result.failedCount++;
                const errMessage = err instanceof Error ? err.message : String(err);
-               logError(`    > Organic key config: Failed to process "${okConfig.Name}" on ${ownerEntityName}: ${errMessage}`);
+               logError(`    > Organic key config: Failed to process "${okConfig.Name}" on ${owner.Name}: ${errMessage}`);
             }
+            progress(okConfig.RelatedEntities.length);
          }
       }
 
-      return { success: failedCount === 0, createdCount, updatedCount, failedCount };
+      result.success = result.failedCount === 0;
+      return result;
+   }
+
+   /** Every this many (key, related entity) pairs, the organic-key pass logs one progress line. */
+   private static readonly organicKeyProgressInterval = 250;
+
+   /** Returns a callback that counts processed pairs and logs a line each time a multiple of the interval is crossed. */
+   private organicKeyProgressReporter(allOrganicKeys: { OrganicKeys: OrganicKeyConfig[] }[]): (pairs: number) => void {
+      const total = allOrganicKeys.reduce((sum, t) => sum + t.OrganicKeys.reduce((s, ok) => s + ok.RelatedEntities.length, 0), 0);
+      const interval = ManageMetadataBase.organicKeyProgressInterval;
+      let processed = 0;
+      return (pairs: number) => {
+         const before = processed;
+         processed += pairs;
+         if (Math.floor(processed / interval) > Math.floor(before / interval)) {
+            logStatus(`    > Organic keys: processed ${processed}/${total} organic key relationships`);
+         }
+      };
    }
 
    /**
-    * Finds the entity an organic-key config names: by base table + schema, else by entity name.
-    * Returns `null` when neither matches.
+    * Applies one organic key: bridge views, the key row, then its related-entity rows. Rows already
+    * matching the file are left alone. The maps are updated with what was written, so a key the file
+    * declares twice is compared against this run's write rather than inserted again.
     */
-   private async findOrganicKeyEntity(pool: CodeGenConnection, schemaName: string, tableName: string): Promise<{ ID: string; Name: string } | null> {
-      const result = await this.runQueryWithParams(pool, `
-         ${this.selectTop(1, 'ID, Name',
-            `FROM ${this.qs(MjCoreSchema(), 'vwEntities')}
-         WHERE (BaseTable = @TableName AND SchemaName = @SchemaName)
-            OR Name = @TableName`,
-            'CASE WHEN BaseTable = @TableName AND SchemaName = @SchemaName THEN 0 ELSE 1 END')}
-      `, { 'TableName': tableName, 'SchemaName': schemaName });
-      const row = result.recordset[0];
-      return row ? { ID: row.ID, Name: row.Name } : null;
+   private async applyOrganicKey(
+      pool: CodeGenConnection,
+      entities: ConfigEntityIndex,
+      tableConfig: { SchemaName: string; TableName: string },
+      owner: ConfigEntityRef,
+      okConfig: OrganicKeyConfig,
+      existingKeys: Map<string, OrganicKeyRowValues>,
+      existingRelated: Map<string, OrganicKeyRelatedRowValues>,
+   ): Promise<'created' | 'updated' | 'unchanged' | 'failed'> {
+      const schema = MjCoreSchema();
+      const ownerEntityName = owner.Name;
+
+      // Resolve every related entity BEFORE writing anything for this key. Step 1 creates
+      // bridge views (in the database and the migration log) and step 2 records the key, so
+      // discovering a missing related entity in step 3 would leave an orphan view and a key
+      // with a mapping missing.
+      const relatedEntities = this.resolveOrganicKeyRelatedEntities(entities, okConfig);
+      if (!relatedEntities) {
+         return 'failed';
+      }
+
+      // Step 1: Create transitive views if defined
+      for (const re of okConfig.RelatedEntities) {
+         if (re.TransitiveView) {
+            const viewSchema = re.TransitiveView.SchemaName || re.SchemaName;
+            const viewFullName = `${viewSchema}.${re.TransitiveView.Name}`;
+
+            const viewSQL = this.dbProvider.generateCreateOrReplaceViewSQL(viewSchema, re.TransitiveView.Name, re.TransitiveView.SQL);
+            // T-SQL requires CREATE [OR ALTER] VIEW to be the ONLY statement in its batch — first as
+            // well as last — and the metadata DML logged just before it (entity-config UPDATEs, the
+            // previous key's INSERTs) has no trailing GO. requiresOwnBatch puts the provider's
+            // separator on both sides in the migration file ('' on PostgreSQL: nothing is added).
+            await this.logSQLAndExecute(pool, viewSQL,
+               `Create transitive bridge view ${viewFullName} for organic key "${okConfig.Name}" on ${ownerEntityName}`,
+               false, true, this.dbProvider.BatchSeparator, true);
+
+            // Auto-populate TransitiveObject from the view definition
+            re.TransitiveObject = viewFullName;
+         }
+      }
+
+      // Step 2: Upsert EntityOrganicKey (match on EntityID + Name)
+      const matchFieldNames = okConfig.MatchFieldNames.join(',');
+      const desiredKey: DesiredOrganicKey = {
+         MatchFieldNames: matchFieldNames,
+         NormalizationStrategy: okConfig.NormalizationStrategy || 'LowerCaseTrim',
+         CustomNormalizationExpression: okConfig.CustomNormalizationExpression || undefined,
+         Description: okConfig.Description || undefined,
+         Sequence: okConfig.Sequence ?? 0,
+         Status: 'Active',
+         Source: 'Config',
+      };
+      const keyRowKey = OrganicKeyRowKey(owner.ID, okConfig.Name);
+      const existingKey = existingKeys.get(keyRowKey);
+      let keyCreated = false;
+      let wroteAny = false;
+
+      if (existingKey) {
+         if (OrganicKeyNeedsUpdate(existingKey, desiredKey)) {
+            const organicKeyId = existingKey.ID ?? await this.lookupOrganicKeyId(pool, owner.ID, okConfig.Name);
+            const updateSQL = `UPDATE ${this.qs(schema, 'EntityOrganicKey')} SET
+               MatchFieldNames = '${matchFieldNames}',
+               NormalizationStrategy = '${desiredKey.NormalizationStrategy}',
+               ${okConfig.CustomNormalizationExpression ? `CustomNormalizationExpression = '${okConfig.CustomNormalizationExpression.replace(/'/g, "''")}',` : ''}
+               ${okConfig.Description ? `Description = '${okConfig.Description.replace(/'/g, "''")}',` : ''}
+               Sequence = ${desiredKey.Sequence},
+               Status = 'Active',
+               Source = 'Config'
+               WHERE ID = '${organicKeyId}'`;
+            await this.logSQLAndExecute(pool, updateSQL,
+               `Update organic key "${okConfig.Name}" on ${ownerEntityName}`);
+            wroteAny = true;
+            logStatus(`    > Organic key: Updated "${okConfig.Name}" on ${ownerEntityName}`);
+            existingKeys.set(keyRowKey, {
+               ...existingKey,
+               ...desiredKey,
+               ID: organicKeyId,
+               CustomNormalizationExpression: desiredKey.CustomNormalizationExpression ?? existingKey.CustomNormalizationExpression,
+               Description: desiredKey.Description ?? existingKey.Description,
+            });
+         }
+      } else {
+         // Insert new — use entity-lookup subquery so the logged SQL is portable across databases
+         const ownerSubquery = this.entityIdSubquery(tableConfig.TableName, tableConfig.SchemaName);
+         const insertSQL = `INSERT INTO ${this.qs(schema, 'EntityOrganicKey')}
+            (EntityID, Name, ${okConfig.Description ? 'Description, ' : ''}MatchFieldNames, NormalizationStrategy, ${okConfig.CustomNormalizationExpression ? 'CustomNormalizationExpression, ' : ''}Sequence, Status, Source)
+            VALUES (${ownerSubquery}, '${okConfig.Name}', ${okConfig.Description ? `'${okConfig.Description.replace(/'/g, "''")}', ` : ''}'${matchFieldNames}', '${desiredKey.NormalizationStrategy}', ${okConfig.CustomNormalizationExpression ? `'${okConfig.CustomNormalizationExpression.replace(/'/g, "''")}', ` : ''}${desiredKey.Sequence}, 'Active', 'Config')`;
+         await this.logSQLAndExecute(pool, insertSQL,
+            `Insert organic key "${okConfig.Name}" on ${ownerEntityName}`);
+         keyCreated = true;
+         logStatus(`    > Organic key: Created "${okConfig.Name}" on ${ownerEntityName}`);
+         existingKeys.set(keyRowKey, {
+            ...desiredKey,
+            ID: null,
+            CustomNormalizationExpression: desiredKey.CustomNormalizationExpression ?? null,
+            Description: desiredKey.Description ?? null,
+         });
+      }
+
+      // Step 3: Upsert EntityOrganicKeyRelatedEntity for each related entity
+      for (const { config: reConfig, entity: relEntity } of relatedEntities) {
+         const relEntityName = relEntity.Name;
+         const isDirect = !!reConfig.RelatedFieldNames && reConfig.RelatedFieldNames.length > 0;
+         const desiredRel: Omit<OrganicKeyRelatedRowValues, 'ID'> = {
+            RelatedEntityFieldNames: isDirect ? reConfig.RelatedFieldNames!.join(',') : null,
+            TransitiveObjectName: reConfig.TransitiveObject || null,
+            TransitiveObjectMatchFieldNames: reConfig.TransitiveMatchFieldNames ? reConfig.TransitiveMatchFieldNames.join(',') : null,
+            TransitiveObjectOutputFieldName: reConfig.TransitiveOutputFieldName || null,
+            RelatedEntityJoinFieldName: reConfig.RelatedEntityJoinFieldName || null,
+            DisplayName: reConfig.DisplayName || null,
+            DisplayLocation: reConfig.DisplayLocation || 'After Field Tabs',
+            Sequence: reConfig.Sequence ?? 0,
+         };
+         const relRowKey = OrganicKeyRelatedRowKey(owner.ID, okConfig.Name, relEntity.ID);
+         const existingRel = existingRelated.get(relRowKey);
+         const lit = (value: string | null) => (value ? `'${value}'` : 'NULL');
+         const displayNameLit = desiredRel.DisplayName ? `'${desiredRel.DisplayName.replace(/'/g, "''")}'` : 'NULL';
+
+         if (existingRel) {
+            if (!OrganicKeyRelatedRowNeedsUpdate(existingRel, desiredRel)) {
+               continue;
+            }
+            const relId = existingRel.ID ?? await this.lookupOrganicKeyRelatedId(pool, owner.ID, okConfig.Name, relEntity.ID);
+            const updateRelSQL = `UPDATE ${this.qs(schema, 'EntityOrganicKeyRelatedEntity')} SET
+               RelatedEntityFieldNames = ${lit(desiredRel.RelatedEntityFieldNames)},
+               TransitiveObjectName = ${lit(desiredRel.TransitiveObjectName)},
+               TransitiveObjectMatchFieldNames = ${lit(desiredRel.TransitiveObjectMatchFieldNames)},
+               TransitiveObjectOutputFieldName = ${lit(desiredRel.TransitiveObjectOutputFieldName)},
+               RelatedEntityJoinFieldName = ${lit(desiredRel.RelatedEntityJoinFieldName)},
+               DisplayName = ${displayNameLit},
+               DisplayLocation = '${desiredRel.DisplayLocation}',
+               Sequence = ${desiredRel.Sequence}
+               WHERE ID = '${relId}'`;
+            await this.logSQLAndExecute(pool, updateRelSQL,
+               `Update organic key related entity: "${okConfig.Name}" → ${relEntityName}`);
+            existingRelated.set(relRowKey, { ...desiredRel, ID: relId });
+         } else {
+            // Use subqueries for FK references so the logged SQL is portable across databases
+            const ownerSubquery = this.entityIdSubquery(tableConfig.TableName, tableConfig.SchemaName);
+            const organicKeySubquery = `(SELECT ID FROM ${this.qs(schema, 'EntityOrganicKey')} WHERE EntityID = ${ownerSubquery} AND Name = '${okConfig.Name}')`;
+            const relEntitySubquery = this.entityIdSubquery(reConfig.TableName, reConfig.SchemaName);
+            const insertRelSQL = `INSERT INTO ${this.qs(schema, 'EntityOrganicKeyRelatedEntity')}
+               (EntityOrganicKeyID, RelatedEntityID, RelatedEntityFieldNames,
+                TransitiveObjectName, TransitiveObjectMatchFieldNames, TransitiveObjectOutputFieldName, RelatedEntityJoinFieldName,
+                DisplayName, DisplayLocation, Sequence)
+               VALUES (${organicKeySubquery}, ${relEntitySubquery},
+                ${lit(desiredRel.RelatedEntityFieldNames)},
+                ${lit(desiredRel.TransitiveObjectName)},
+                ${lit(desiredRel.TransitiveObjectMatchFieldNames)},
+                ${lit(desiredRel.TransitiveObjectOutputFieldName)},
+                ${lit(desiredRel.RelatedEntityJoinFieldName)},
+                ${displayNameLit},
+                '${desiredRel.DisplayLocation}',
+                ${desiredRel.Sequence})`;
+            await this.logSQLAndExecute(pool, insertRelSQL,
+               `Insert organic key related entity: "${okConfig.Name}" → ${relEntityName}`);
+            existingRelated.set(relRowKey, { ...desiredRel, ID: null });
+         }
+         wroteAny = true;
+         logStatus(`    > Organic key "${okConfig.Name}": ${existingRel ? 'updated' : 'created'} → ${relEntityName} (${isDirect ? 'direct' : 'transitive'})`);
+      }
+
+      return keyCreated ? 'created' : wroteAny ? 'updated' : 'unchanged';
    }
 
    /**
@@ -1475,14 +1555,14 @@ export class ManageMetadataBase {
     * resolve and returns `null` if any is missing, so the caller can skip the key before writing any
     * of it.
     */
-   private async resolveOrganicKeyRelatedEntities(
-      pool: CodeGenConnection,
+   private resolveOrganicKeyRelatedEntities(
+      entities: ConfigEntityIndex,
       okConfig: OrganicKeyConfig
-   ): Promise<{ config: OrganicKeyRelatedEntityConfig; entity: { ID: string; Name: string } }[] | null> {
-      const resolved: { config: OrganicKeyRelatedEntityConfig; entity: { ID: string; Name: string } }[] = [];
+   ): { config: OrganicKeyRelatedEntityConfig; entity: ConfigEntityRef }[] | null {
+      const resolved: { config: OrganicKeyRelatedEntityConfig; entity: ConfigEntityRef }[] = [];
       let missing = 0;
       for (const reConfig of okConfig.RelatedEntities) {
-         const entity = await this.findOrganicKeyEntity(pool, reConfig.SchemaName, reConfig.TableName);
+         const entity = entities.Resolve(reConfig.SchemaName, reConfig.TableName);
          if (entity) {
             resolved.push({ config: reConfig, entity });
          } else {
@@ -1491,6 +1571,74 @@ export class ManageMetadataBase {
          }
       }
       return missing === 0 ? resolved : null;
+   }
+
+   /** Every EntityOrganicKey row, keyed by {@link OrganicKeyRowKey}, with the columns the pass compares. */
+   private async loadOrganicKeyRows(pool: CodeGenConnection): Promise<Map<string, OrganicKeyRowValues>> {
+      const columns = ['ID', 'EntityID', 'Name', 'MatchFieldNames', 'NormalizationStrategy', 'CustomNormalizationExpression', 'Description', 'Sequence', 'Status', 'Source'];
+      const sql = `SELECT ${columns.map(c => this.qi(c)).join(', ')} FROM ${this.qs(MjCoreSchema(), 'EntityOrganicKey')}`;
+      const rows = new Map<string, OrganicKeyRowValues>();
+      for (const row of (await this.runQuery(pool, sql)).recordset) {
+         const key = OrganicKeyRowKey(String(row.EntityID), String(row.Name));
+         if (rows.has(key)) continue;
+         rows.set(key, {
+            ID: String(row.ID),
+            MatchFieldNames: String(row.MatchFieldNames),
+            NormalizationStrategy: String(row.NormalizationStrategy),
+            CustomNormalizationExpression: this.optionalText(row.CustomNormalizationExpression),
+            Description: this.optionalText(row.Description),
+            Sequence: Number(row.Sequence),
+            Status: String(row.Status),
+            Source: String(row.Source),
+         });
+      }
+      return rows;
+   }
+
+   /** Every EntityOrganicKeyRelatedEntity row, keyed by {@link OrganicKeyRelatedRowKey}, with the columns the pass compares. */
+   private async loadOrganicKeyRelatedRows(pool: CodeGenConnection): Promise<Map<string, OrganicKeyRelatedRowValues>> {
+      const schema = MjCoreSchema();
+      const q = (alias: string, column: string) => `${alias}.${this.qi(column)}`;
+      const relatedColumns = ['ID', 'RelatedEntityID', 'RelatedEntityFieldNames', 'TransitiveObjectName', 'TransitiveObjectMatchFieldNames',
+         'TransitiveObjectOutputFieldName', 'RelatedEntityJoinFieldName', 'DisplayName', 'DisplayLocation', 'Sequence'];
+      const sql = `SELECT ${q('k', 'EntityID')} AS ${this.qi('KeyEntityID')}, ${q('k', 'Name')} AS ${this.qi('KeyName')},
+                          ${relatedColumns.map(c => q('r', c)).join(', ')}
+                   FROM ${this.qs(schema, 'EntityOrganicKeyRelatedEntity')} r
+                   INNER JOIN ${this.qs(schema, 'EntityOrganicKey')} k ON ${q('k', 'ID')} = ${q('r', 'EntityOrganicKeyID')}`;
+      const rows = new Map<string, OrganicKeyRelatedRowValues>();
+      for (const row of (await this.runQuery(pool, sql)).recordset) {
+         const key = OrganicKeyRelatedRowKey(String(row.KeyEntityID), String(row.KeyName), String(row.RelatedEntityID));
+         if (rows.has(key)) continue;
+         rows.set(key, {
+            ID: String(row.ID),
+            RelatedEntityFieldNames: this.optionalText(row.RelatedEntityFieldNames),
+            TransitiveObjectName: this.optionalText(row.TransitiveObjectName),
+            TransitiveObjectMatchFieldNames: this.optionalText(row.TransitiveObjectMatchFieldNames),
+            TransitiveObjectOutputFieldName: this.optionalText(row.TransitiveObjectOutputFieldName),
+            RelatedEntityJoinFieldName: this.optionalText(row.RelatedEntityJoinFieldName),
+            DisplayName: this.optionalText(row.DisplayName),
+            DisplayLocation: String(row.DisplayLocation),
+            Sequence: Number(row.Sequence),
+         });
+      }
+      return rows;
+   }
+
+   /** The ID of a key this run inserted, needed only when the file declares the same key twice and the second differs. */
+   private async lookupOrganicKeyId(pool: CodeGenConnection, entityID: string, keyName: string): Promise<string> {
+      const result = await this.runQueryWithParams(pool,
+         `SELECT ID FROM ${this.qs(MjCoreSchema(), 'EntityOrganicKey')} WHERE EntityID = @EntityID AND Name = @Name`,
+         { 'EntityID': entityID, 'Name': keyName });
+      return String(result.recordset[0].ID);
+   }
+
+   /** The ID of a related-entity row this run inserted; same rare path as {@link lookupOrganicKeyId}. */
+   private async lookupOrganicKeyRelatedId(pool: CodeGenConnection, entityID: string, keyName: string, relatedEntityID: string): Promise<string> {
+      const keyId = await this.lookupOrganicKeyId(pool, entityID, keyName);
+      const result = await this.runQueryWithParams(pool,
+         `SELECT ID FROM ${this.qs(MjCoreSchema(), 'EntityOrganicKeyRelatedEntity')} WHERE EntityOrganicKeyID = @KeyID AND RelatedEntityID = @RelEntityID`,
+         { 'KeyID': keyId, 'RelEntityID': relatedEntityID });
+      return String(result.recordset[0].ID);
    }
 
    // ─── Retraction of declarations removed from additionalSchemaInfo (#4535) ───────────────────
@@ -3349,8 +3497,8 @@ export class ManageMetadataBase {
       // below: a related row the pass reshapes in place loses the bridge view it referenced.
       const organicKeysBeforeConfig = await this.loadOrganicKeyStateForRetraction(pool);
       const organicKeyResult = await this.processOrganicKeyConfig(pool);
-      if (organicKeyResult.createdCount > 0 || organicKeyResult.updatedCount > 0) {
-         logStatus(`    > Organic keys: ${organicKeyResult.createdCount} created, ${organicKeyResult.updatedCount} updated from config`);
+      if (organicKeyResult.createdCount > 0 || organicKeyResult.updatedCount > 0 || organicKeyResult.unchangedCount > 0) {
+         logStatus(`    > Organic keys: ${organicKeyResult.createdCount} created, ${organicKeyResult.updatedCount} updated, ${organicKeyResult.unchangedCount} unchanged from config`);
       }
       if (!organicKeyResult.success) {
          logError(`   Error processing organic keys: ${organicKeyResult.failedCount} key(s) failed and were not applied — see the errors above`);
