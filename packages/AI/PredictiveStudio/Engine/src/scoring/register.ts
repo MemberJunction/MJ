@@ -20,8 +20,9 @@
  * required, so the package stays Predictive-Studio-free.
  */
 
+import { LogError } from '@memberjunction/core';
 import { MJGlobal, RegisterClass, SafeJSONParse } from '@memberjunction/global';
-import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
+import type { MJRecordProcessEntity, MJRecordProcessEntity_IRecordProcessChallengerConfig } from '@memberjunction/core-entities';
 import {
   RecordProcessorRegistry,
   type IRecordProcessor,
@@ -162,7 +163,16 @@ export function RegisterMLScoringProcessor(
       );
     }
     const rpEntity = context.RecordProcess as Partial<MJRecordProcessEntity> | undefined;
-    const challengerConfig = rpEntity?.ChallengerConfigurationObject ?? undefined;
+    let challengerConfig: MJRecordProcessEntity_IRecordProcessChallengerConfig | undefined = undefined;
+    try {
+      challengerConfig = rpEntity?.ChallengerConfigurationObject ?? undefined;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      LogError(
+        `Record Process '${context.RecordProcessName ?? context.RecordProcessID ?? ''}': failed to parse ChallengerConfiguration; ignoring challenger config: ${msg}`,
+      );
+      challengerConfig = undefined;
+    }
 
     const options: MLModelInferenceProcessorOptions = {
       modelId: config.modelId ?? '',

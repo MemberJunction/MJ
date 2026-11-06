@@ -27,6 +27,7 @@ class SavedFeatureValueDouble {
   public RecordProcessID: string | null = null;
   public ProcessRunID: string | null = null;
   public AIModelID: string | null = null;
+  public MLModelID: string | null = null;
   public PromptID: string | null = null;
   public ValueNumeric: number | null = null;
   public ValueText: string | null = null;
@@ -43,6 +44,26 @@ class SavedFeatureValueDouble {
   }
 
   public async Save(): Promise<boolean> {
+    if (
+      this.AIModelID &&
+      !this.AIModelID.toLowerCase().startsWith('aimodel-') &&
+      !this.AIModelID.toLowerCase().startsWith('ai-model-')
+    ) {
+      this.LatestResult = {
+        CompleteMessage: `FK violation: '${this.AIModelID}' is not an MJ: AI Models ID`,
+      };
+      return false;
+    }
+    if (
+      this.MLModelID &&
+      !this.MLModelID.toLowerCase().startsWith('model-') &&
+      !this.MLModelID.toLowerCase().startsWith('mlmodel-')
+    ) {
+      this.LatestResult = {
+        CompleteMessage: `FK violation: '${this.MLModelID}' is not an MJ: ML Models ID`,
+      };
+      return false;
+    }
     this.SaveCalled = true;
     return true;
   }
@@ -311,6 +332,115 @@ describe('ShadowScoringCoordinator', () => {
       expect(coordinator.InFlightCount).toBe(0);
       expect(executedCount).toBe(2);
     });
+
+    it('holds in-flight slots until slow sidecar calls settle so timeouts do not defeat MaxInFlight (S1)', async () => {
+      let activeCalls = 0;
+      let maxObservedActiveCalls = 0;
+
+      const slowRunner: IChallengerScoreRunner = {
+        RunChallenger: async (_env, signal) => {
+          activeCalls++;
+          maxObservedActiveCalls = Math.max(maxObservedActiveCalls, activeCalls);
+          try {
+            await new Promise<void>((resolve) => {
+              const timer = setTimeout(resolve, 60);
+              signal?.addEventListener('abort', () => {
+                clearTimeout(timer);
+                resolve();
+              });
+            });
+            return { Score: 0.5 };
+          } finally {
+            activeCalls--;
+          }
+        },
+      };
+
+      const coordinator = new ShadowScoringCoordinator({
+        MaxInFlight: 4,
+        ChallengerRunner: slowRunner,
+      });
+
+      for (let i = 0; i < 36; i++) {
+        coordinator.DispatchShadowScore({
+          RecordID: `rec-${i}`,
+          ChallengerConfig: { ...baseConfig, MaxLatencyMs: 15 },
+          FrozenFeatures: { x: 1 },
+          DispatchedAt: '2026-11-02T12:00:00.000Z',
+        });
+      }
+
+      // Concurrency must never exceed MaxInFlight (4)
+      expect(maxObservedActiveCalls).toBeLessThanOrEqual(4);
+      expect(coordinator.DroppedCount).toBeGreaterThan(0);
+
+      await coordinator.FlushInFlight();
+      expect(coordinator.InFlightCount).toBe(0);
+      expect(maxObservedActiveCalls).toBeLessThanOrEqual(4);
+    });
+
+    it('persists champion audit row even when challenger task is dropped by in-flight cap (S5)', async () => {
+      let releaseRunner: (() => void) | undefined;
+      const gate = new Promise<void>((resolve) => {
+        releaseRunner = resolve;
+      });
+
+      const createdEntities: SavedFeatureValueDouble[] = [];
+      const fakeProvider = {
+        GetEntityObject: async <T>(): Promise<T> => {
+          const entity = new SavedFeatureValueDouble();
+          createdEntities.push(entity);
+          return entity as T;
+        },
+        EntityByName: () => ({ ID: 'Ent-Members' } as ReturnType<IMetadataProvider['EntityByName']>),
+        RunView: async () => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' }),
+        RunViews: async (views: unknown[]) =>
+          views.map(() => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '' })),
+      } as unknown as IMetadataProvider;
+
+      const coordinator = new ShadowScoringCoordinator({
+        MaxInFlight: 1,
+        ChallengerRunner: {
+          RunChallenger: async () => {
+            await gate;
+            return { Score: 0.8 };
+          },
+        },
+        AuditSink: new FeatureValueShadowAuditSink(),
+      });
+
+      const makeEnvelope = (id: string): ShadowScoreEnvelope => ({
+        RecordProcessID: 'RP-1',
+        EntityID: 'Ent-Members',
+        RecordID: id,
+        FeatureName: 'Churn',
+        ChampionModelID: 'Model-Champ-1',
+        ChampionScore: 0.42,
+        ChampionConfidence: 0.9,
+        ChallengerConfig: { ...baseConfig, MaxLatencyMs: 5000 },
+        FrozenFeatures: { x: 1 },
+        DispatchedAt: '2026-11-02T12:00:00.000Z',
+      });
+
+      // Dispatch 3 tasks: first occupies the 1 in-flight slot, next 2 are dropped for challenger
+      coordinator.DispatchShadowScore(makeEnvelope('rec-1'), { ID: 'user-1' } as UserInfo, fakeProvider);
+      coordinator.DispatchShadowScore(makeEnvelope('rec-2'), { ID: 'user-1' } as UserInfo, fakeProvider);
+      coordinator.DispatchShadowScore(makeEnvelope('rec-3'), { ID: 'user-1' } as UserInfo, fakeProvider);
+
+      expect(coordinator.DroppedCount).toBe(2);
+
+      releaseRunner?.();
+      await coordinator.FlushInFlight();
+
+      // All 3 champion rows must have been persisted despite 2 challenger tasks being dropped
+      const championRows = createdEntities.filter((e) => e.Role === 'Champion');
+      expect(championRows).toHaveLength(3);
+      expect(championRows.map((e) => e.RecordID)).toEqual(['rec-1', 'rec-2', 'rec-3']);
+      for (const row of championRows) {
+        expect(row.MLModelID).toBe('Model-Champ-1');
+        expect(row.AIModelID).toBeNull();
+      }
+    });
   });
 
   describe('MLModelChallengerScoreRunner & FeatureValueShadowAuditSink (D1)', () => {
@@ -398,7 +528,8 @@ describe('ShadowScoringCoordinator', () => {
       expect(championSaved!.EntityID).toBe('Ent-Members');
       expect(championSaved!.RecordID).toBe('Mem-42');
       expect(championSaved!.FeatureName).toBe('Renewed');
-      expect(championSaved!.AIModelID).toBe('Model-Champion-V1');
+      expect(championSaved!.MLModelID).toBe('Model-Champion-V1');
+      expect(championSaved!.AIModelID).toBeNull();
       expect(championSaved!.ValueNumeric).toBe(0.65);
       expect(championSaved!.Confidence).toBeCloseTo(0.65, 5);
 
@@ -412,7 +543,8 @@ describe('ShadowScoringCoordinator', () => {
       expect(challengerSaved!.EntityID).toBe('Ent-Members');
       expect(challengerSaved!.RecordID).toBe('Mem-42');
       expect(challengerSaved!.FeatureName).toBe('Renewed');
-      expect(challengerSaved!.AIModelID).toBe('Model-Challenger-V2');
+      expect(challengerSaved!.MLModelID).toBe('Model-Challenger-V2');
+      expect(challengerSaved!.AIModelID).toBeNull();
       expect(challengerSaved!.ValueNumeric).toBe(0.87);
       expect(challengerSaved!.ValueText).toBe('renew');
       expect(challengerSaved!.Confidence).toBeCloseTo(0.87, 5);
@@ -483,6 +615,46 @@ describe('ShadowScoringCoordinator', () => {
       expect(observedArtifactLoads).toEqual(['challenger-artifact-v1', 'challenger-artifact-v2']);
       expect(capturedPredictArtifacts[0]).toBe(Buffer.from('bytes-v1').toString('base64'));
       expect(capturedPredictArtifacts[2]).toBe(Buffer.from('bytes-v2').toString('base64'));
+    });
+
+    it('throws SHADOW_ERROR with missing feature names when challenger schema features are missing from frozen row (M4)', async () => {
+      const artifacts = new InMemoryArtifactLoader();
+      artifacts.set('file-1', new TextEncoder().encode('artifact-data'));
+
+      const runner = new MLModelChallengerScoreRunner({
+        modelLoader: {
+          loadModel: async () =>
+            ({
+              ID: 'Model-Schema-Strict',
+              Status: 'Validated',
+              ArtifactFileID: 'file-1',
+              FeatureSchema: JSON.stringify([
+                { Name: 'income', Kind: 'numeric' },
+                { Name: 'credit_score', Kind: 'numeric' },
+              ]),
+            }) as unknown as MJMLModelEntity,
+        },
+        artifactLoader: artifacts,
+        sidecar: {
+          predict: async () => ({ predictions: [{ score: 0.9 }] }),
+        },
+      });
+
+      const envelope: ShadowScoreEnvelope = {
+        RecordID: 'rec-missing-features',
+        ChallengerConfig: {
+          Enabled: true,
+          SampleRate: 1.0,
+          WorkType: 'ML Model',
+          ChallengerModelID: 'Model-Schema-Strict',
+        },
+        FrozenFeatures: { income: 50000 }, // credit_score missing
+        DispatchedAt: '2026-11-02T12:00:00.000Z',
+      };
+
+      await expect(runner.RunChallenger(envelope)).rejects.toThrow(
+        /SHADOW_ERROR: Frozen feature row lacks features required by challenger schema: credit_score/,
+      );
     });
   });
 });

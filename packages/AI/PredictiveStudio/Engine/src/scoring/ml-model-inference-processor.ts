@@ -77,6 +77,7 @@ import {
   ModelNeedsTrainingError,
   ModelNotScorableError,
 } from './model-readiness';
+import type { MJRecordProcessEntity_IRecordProcessChallengerConfig } from '@memberjunction/core-entities';
 import type {
   IModelAutoTrainer,
   MLAutoTrainConfig,
@@ -84,7 +85,7 @@ import type {
   MLInferenceDeps,
   LoadedModel,
 } from './types';
-import type { IRecordProcessChallengerConfig, ShadowScoringCoordinator } from './shadow-scoring';
+import type { ShadowScoringCoordinator } from './shadow-scoring';
 
 /** Stable work-type keys this processor is registered under on the ClassFactory. */
 export const ML_INFERENCE_WORK_TYPE = 'ML Model';
@@ -95,6 +96,10 @@ export const ML_INFERENCE_WORK_TYPE_ALIAS = 'MLModelInference';
  * Record Set Processing **scoring** processor. Stateless across records except
  * for a warm, lazily-loaded model cache (artifact + frozen contract) shared
  * across a batch. Construct one per Record Process run.
+ *
+ * Note on drift population: An ML Record Process with no challenger configured
+ * does not run shadow sampling, so no Feature Values are recorded and the
+ * scheduled drift sweep reports InsufficientData for it (S5).
  */
 @RegisterClass(MLModelInferenceProcessor, ML_INFERENCE_WORK_TYPE)
 export class MLModelInferenceProcessor implements IRecordProcessor {
@@ -107,7 +112,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
   private readonly datedSources?: DatedSourceSpec[];
   private readonly assembler: FeatureAssemblyExecutor;
   private readonly recordProcessId?: string;
-  private readonly challengerConfig?: IRecordProcessChallengerConfig;
+  private readonly challengerConfig?: MJRecordProcessEntity_IRecordProcessChallengerConfig;
   private readonly shadowCoordinator?: ShadowScoringCoordinator;
 
   /** Warm model cache — loaded once on first record, reused across the batch. */
@@ -257,7 +262,8 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       // Amortize batch wall-clock latency across the batch size so per-record champion latency
       // is comparable to single-record challenger latency for P95 latency-ratio drift checks.
       const perRecordLatencyMs = (Date.now() - startedAt) / Math.max(1, records.length);
-      return records.map((rec, i) => {
+      const previousDropped = this.shadowCoordinator?.DroppedCount ?? 0;
+      const results = records.map((rec, i) => {
         const prediction = response.predictions[i];
         if (!prediction) {
           return { Status: 'Failed' as const, ErrorMessage: 'Sidecar returned no prediction for the record' };
@@ -265,6 +271,13 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
         this.dispatchShadowIfConfigured(rec, model, featureRows[i] ?? {}, prediction, perRecordLatencyMs, context);
         return { Status: 'Succeeded' as const, ResultPayload: this.toPayload(model, prediction) };
       });
+      const currentDropped = this.shadowCoordinator?.DroppedCount ?? 0;
+      if (currentDropped > previousDropped) {
+        LogError(
+          `MLModelInferenceProcessor: ${currentDropped - previousDropped} shadow score task(s) dropped due to in-flight concurrency cap (total dropped: ${currentDropped})`,
+        );
+      }
+      return results;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       LogError(`MLModelInferenceProcessor: batch scoring failed: ${message}`);
