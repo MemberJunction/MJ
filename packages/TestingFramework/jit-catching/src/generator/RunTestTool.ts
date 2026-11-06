@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, realpathSync, rmSync } from 'node:fs';
-import { dirname, join, relative, isAbsolute } from 'node:path';
+import { existsSync, lstatSync, mkdirSync, realpathSync, rmSync } from 'node:fs';
+import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import type { Sandbox, SandboxMount, SandboxRunResult } from '../sandbox/Sandbox';
 import type { FailureDetail, MutantEdit } from '../types';
 import type { Settings } from '../settings';
@@ -41,14 +41,19 @@ export class RunTestTool {
         return out;
     }
 
-    /** Returns an error when the file is not an existing `.jit.test.ts` under the package's jit folder, inside the worktree on disk. */
+    /**
+     * Returns an error unless the file is `<jitDir>/<name>.jit.test.ts` (one file-name segment), exists,
+     * the jit folder is not a symlink, and the file's real path is inside the worktree.
+     */
     private checkFile(file: string): string | null {
         const jitDir = this.jitDir();
-        if (!file.startsWith(`${jitDir}/`) || !file.endsWith('.jit.test.ts') || file.includes('..')) return `run_test accepts only files under ${jitDir}/ ending in .jit.test.ts`;
+        if (!this.jitFilePattern().test(file)) return `run_test accepts only files directly under ${jitDir}/ ending in .jit.test.ts`;
+        const root = realpathSync.native(this.o.BaseRootDir);
+        const jitAbs = join(this.o.BaseRootDir, jitDir);
+        if (!existsSync(jitAbs) || realpathSync.native(jitAbs) !== join(root, jitDir)) return `the jit folder must be a real folder inside the worktree: ${jitDir}`;
         const abs = join(this.o.BaseRootDir, file);
         if (!existsSync(abs)) return `file not found: ${file}`;
-        const rel = relative(realpathSync.native(this.o.BaseRootDir), realpathSync.native(abs));
-        if (rel.startsWith('..') || isAbsolute(rel)) return `file resolves outside the worktree: ${file}`;
+        if (!isInside(root, realpathSync.native(abs))) return `file resolves outside the worktree: ${file}`;
         return null;
     }
 
@@ -57,8 +62,23 @@ export class RunTestTool {
         const err = ValidateMutantEdits(this.o.PackageRelDir, edits);
         if (err) return `invalid mutant: ${err}`;
         const scratch = CopyPackageForMutant(join(this.o.BaseRootDir, this.o.PackageRelDir), this.o.ScratchRoot);
+        const linkError = this.checkEditTargets(scratch, edits);
+        if (linkError) { rmSync(dirname(scratch), { recursive: true, force: true }); return `invalid mutant: ${linkError}`; }
         try { return { Scratch: scratch, Patch: ApplyMutantEdits(scratch, edits, this.o.PackageRelDir).Patch }; }
         catch (e) { rmSync(dirname(scratch), { recursive: true, force: true }); return `invalid mutant: ${(e as Error).message}`; }
+    }
+
+    /** Returns an error when an edit target in the scratch copy is a symlink or resolves outside the copy. */
+    private checkEditTargets(scratch: string, edits: MutantEdit[]): string | null {
+        const scratchReal = realpathSync.native(scratch);
+        for (const e of edits) {
+            const target = join(scratch, e.File.slice(this.o.PackageRelDir.length + 1));
+            const stat = lstatSync(target, { throwIfNoEntry: false });
+            if (!stat) continue;
+            if (stat.isSymbolicLink()) return `a mutant may not edit a symlink: ${e.File}`;
+            if (!isInside(scratchReal, realpathSync.native(target))) return `a mutant edit resolves outside the package through a symlink: ${e.File}`;
+        }
+        return null;
     }
 
     /** Runs vitest on one file. The worktree is read-only; the jit folder and a mutant's package copy are writable. */
@@ -85,14 +105,26 @@ export class RunTestTool {
         mkdirSync(join(scratch ?? join(this.o.BaseRootDir, this.o.PackageRelDir), 'node_modules/.vite'), { recursive: true });
     }
 
-    /** Maps the sandbox result to the tool output. A report with no result for the file is a RunnerError carrying an output excerpt. */
+    /** Maps the sandbox result to the tool output. Every RunnerError carries an excerpt of stderr (or stdout when stderr is empty) in Error. */
     private toOutput(r: SandboxRunResult, input: RunTestInput): RunTestOutput {
         if (r.TimedOut) return { Ran: true, Status: 'Timeout', TestName: null, Failure: null, DurationMs: r.DurationMs };
         const [res] = ParseVitestOutput(r.Stdout, { FilePathToTestID: { [input.File]: 'probe' }, Revision: input.Mutant ? 'Mutant' : 'Base', RunIndex: 0 });
-        if (!res) return { Ran: true, Status: 'RunnerError', TestName: null, Failure: null, DurationMs: r.DurationMs, Error: (r.Stderr || r.Stdout).slice(0, OUTPUT_EXCERPT_CHARS) };
-        return { Ran: true, Status: res.Status, TestName: res.TestName, Failure: res.Failure, DurationMs: res.DurationMs };
+        const excerpt = (r.Stderr || r.Stdout).slice(0, OUTPUT_EXCERPT_CHARS);
+        if (!res) return { Ran: true, Status: 'RunnerError', TestName: null, Failure: null, DurationMs: r.DurationMs, Error: excerpt };
+        const out: RunTestOutput = { Ran: true, Status: res.Status, TestName: res.TestName, Failure: res.Failure, DurationMs: res.DurationMs };
+        if (res.Status === 'RunnerError') out.Error = excerpt;
+        return out;
     }
 
+    private jitFilePattern(): RegExp { return new RegExp(`^${escapeRegExp(this.jitDir())}/[^/]+\\.jit\\.test\\.ts$`); }
     private jitDir(): string { return `${this.o.PackageRelDir}/src/__tests__/jit`; }
     private refuse(error: string): RunTestOutput { return { Ran: false, Status: 'RunnerError', TestName: null, Failure: null, DurationMs: 0, Error: error }; }
 }
+
+/** True when `child` is `parent` or lies under it. Both paths must already be real paths. */
+function isInside(parent: string, child: string): boolean {
+    const rel = relative(parent, child);
+    return rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+}
+
+function escapeRegExp(text: string): string { return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }

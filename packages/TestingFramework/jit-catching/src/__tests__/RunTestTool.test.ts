@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { RunTestTool } from '../generator/RunTestTool';
@@ -76,5 +76,36 @@ describe('RunTestTool', () => {
     await tool.Run({ File: name });
     expect(calls[0].Command).toContain('src/__tests__/jit/a;touch x.jit.test.ts');
     expect(calls[0].Command[0]).not.toBe('sh');
+  });
+  it('refuses a mutant edit to a file that is a symlink, leaving the link target unchanged', async () => {
+    const { tool, calls, root } = setup(failReport);
+    const victim = join(mkdtempSync(join(tmpdir(), 'jit-victim-')), 'victim.ts'); writeFileSync(victim, 'SAFE');
+    symlinkSync(victim, join(root, 'packages/MJCore/src/link.ts'));
+    const out = await tool.Run({ File: `packages/MJCore/src/__tests__/jit/${ID}.jit.test.ts`, Mutant: { Edits: [{ File: 'packages/MJCore/src/link.ts', Find: 'SAFE', Replace: 'PWNED' }] } });
+    expect(out.Ran).toBe(false); expect(out.Error).toMatch(/symlink/); expect(calls).toHaveLength(0);
+    expect(readFileSync(victim, 'utf8')).toBe('SAFE');
+  });
+  it('refuses a run when the jit folder is a symlink', async () => {
+    const { tool, calls, root } = setup(passReport);
+    const jit = join(root, 'packages/MJCore/src/__tests__/jit');
+    rmSync(jit, { recursive: true, force: true }); symlinkSync('../../../..', jit);
+    writeFileSync(join(root, `${ID}.jit.test.ts`), 'x');
+    const out = await tool.Run({ File: `packages/MJCore/src/__tests__/jit/${ID}.jit.test.ts` });
+    expect(out.Ran).toBe(false); expect(calls).toHaveLength(0);
+  });
+  it('puts the stderr excerpt in Error for a RunnerError from the parser', async () => {
+    const { tool } = setup('', 'boom-stderr');
+    const out = await tool.Run({ File: `packages/MJCore/src/__tests__/jit/${ID}.jit.test.ts` });
+    expect(out.Status).toBe('RunnerError'); expect(out.Error).toContain('boom-stderr');
+  });
+  it('refuses a file path with a ./ segment or a subfolder under the jit folder', async () => {
+    const { tool, calls, root } = setup(passReport);
+    mkdirSync(join(root, 'packages/MJCore/src/__tests__/jit/sub')); writeFileSync(join(root, 'packages/MJCore/src/__tests__/jit/sub/x.jit.test.ts'), 'x');
+    writeFileSync(join(root, 'packages/MJCore/src/__tests__/jit/x.jit.test.ts'), 'x');
+    for (const File of ['packages/MJCore/src/__tests__/jit/./x.jit.test.ts', 'packages/MJCore/src/__tests__/jit/sub/x.jit.test.ts']) {
+      const out = await tool.Run({ File });
+      expect(out.Ran).toBe(false);
+    }
+    expect(calls).toHaveLength(0);
   });
 });
