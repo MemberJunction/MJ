@@ -3758,11 +3758,14 @@ export function AllRules(): BaseCatchRule[] { return [new PrivateAccess(), new I
 - Produces:
   ```ts
   function CreateLLM(vendor: Vendor, env?: NodeJS.ProcessEnv): BaseLLM            // AnthropicLLM / OpenAILLM / GeminiLLM from ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY; throws when missing
+  function SafeChat(llm: BaseLLM, params: ChatParams): Promise<{ Ok: true; Result: ChatResult } | { Ok: false; Error: string }>  // never throws
   function BuildJudgeInput(c: CatchContext): string                                  // §9.2 input with untrusted markers
   class TpProbJudge extends BaseCatchJudge { constructor(llm: BaseLLM, model: string) }   // Score = P(yes) − P(no) from first-token top_logprobs; Bucket null
   class BucketJudge extends BaseCatchJudge { constructor(llm: BaseLLM, model: string) }   // Score 1/0/−1, Bucket High/Medium/Low, Reason
   class JudgePanel { constructor(judges: BaseCatchJudge[]); Judge(c: CatchContext): Promise<{ TPProb: number | null; Buckets: JudgeBucket[]; Median: Bucket | null }> }  // median via GetConsensus(scores, 'Median') from @memberjunction/rubrics
   ```
+
+Provider errors come in two shapes (spike §4): `OpenAILLM.ChatCompletion` throws (the OpenAI SDK's `NotFoundError`, for example), while `AnthropicLLM` returns `success: false`. Every judge calls through `SafeChat`, which turns both into `{ Ok: false, Error }`, so a judge records a provider error the same way whichever vendor it uses.
 
 - [ ] **Step 1: Failing tests**
 
@@ -3792,6 +3795,7 @@ export function ctx(): CatchContext {
 }
 
 // TpProbJudge.test.ts
+import { TestLLM } from '@memberjunction/unit-testing';
 import { scripted, ctx } from './helpers/judgeFixtures';
 import { TpProbJudge } from '../judges/TpProbJudge';
 describe('TpProbJudge', () => {
@@ -3804,9 +3808,16 @@ describe('TpProbJudge', () => {
     expect((await new TpProbJudge(scripted({ content: 'no', logprobs: { content: [{ token: ' no', logprob: Math.log(0.9), bytes: null, top_logprobs: [{ token: ' no', logprob: Math.log(0.9), bytes: null }] }], refusal: null } }), 'm').Judge(ctx())).Score).toBeCloseTo(-0.9, 2);
     const s = await new TpProbJudge(scripted({ content: 'Yes' }), 'm').Judge(ctx()); expect(s.Score).toBe(0); expect(s.Reason).toMatch(/logprobs/);
   });
+  it('records a thrown provider error and a success: false result the same way', async () => {
+    for (const outcome of [{ kind: 'throw' as const, error: new Error('404 model not found') }, { kind: 'fail' as const, error: new Error('404 model not found') }]) {
+      const s = await new TpProbJudge(new TestLLM().Script(outcome), 'm').Judge(ctx());
+      expect(s).toMatchObject({ Score: 0, Bucket: null }); expect(s.Reason).toMatch(/^provider error/);
+    }
+  });
   it('asks for exactly one output token with logprobs', async () => { const llm = scripted({ content: 'Yes' }); await new TpProbJudge(llm, 'm').Judge(ctx()); expect(llm.Calls[0]).toMatchObject({ includeLogProbs: true, topLogProbs: 5, maxOutputTokens: 1 }); });
 });
 // BucketJudge.test.ts
+import { TestLLM } from '@memberjunction/unit-testing';
 import { scripted, ctx } from './helpers/judgeFixtures';
 import { BucketJudge } from '../judges/BucketJudge';
 describe('BucketJudge', () => {
@@ -3817,6 +3828,12 @@ describe('BucketJudge', () => {
   it('retries once on bad JSON then returns Medium with a parse-failure reason', async () => {
     const llm = scripted({ content: 'meh' }, { content: 'still meh' }); const s = await new BucketJudge(llm, 'm').Judge(ctx());
     expect(s.Bucket).toBe('Medium'); expect(llm.Calls).toHaveLength(2);
+  });
+  it('returns Medium with the provider error, without a retry, for a throw and for success: false', async () => {
+    for (const outcome of [{ kind: 'throw' as const, error: new Error('overloaded') }, { kind: 'fail' as const, error: new Error('overloaded') }]) {
+      const llm = new TestLLM().Script(outcome); const s = await new BucketJudge(llm, 'm').Judge(ctx());
+      expect(s).toMatchObject({ Score: 0, Bucket: 'Medium' }); expect(s.Reason).toMatch(/^provider error/); expect(llm.Calls).toHaveLength(1);
+    }
   });
   it('marks PR text and head output as untrusted in the prompt', async () => { const llm = scripted({ content: '{"bucket":"Low","reason":"x"}' }); await new BucketJudge(llm, 'm').Judge(ctx()); expect(String(llm.Calls[0].messages[1].content)).toContain('<<<untrusted'); });
 });
@@ -3835,6 +3852,10 @@ describe('JudgePanel', () => {
     const bad = new (class extends BaseCatchJudge { get Name() { return 'bad'; } async Judge(): Promise<JudgeScore> { throw new Error('429'); } })();
     const r = await new JudgePanel([fake('a', 1, 'High'), bad]).Judge(ctx()); expect(r.Buckets.find((b) => b.Model === 'bad')?.Reason).toMatch(/429/);
   });
+  it('a TP Prob judge that throws gives no TP Prob and adds no bucket', async () => {
+    const bad = new (class extends BaseCatchJudge { get Name() { return 'TpProb'; } async Judge(): Promise<JudgeScore> { throw new Error('404'); } })();
+    const r = await new JudgePanel([bad, fake('a', 1, 'High')]).Judge(ctx()); expect(r.TPProb).toBeNull(); expect(r.Buckets).toHaveLength(1);
+  });
 });
 ```
 
@@ -3844,7 +3865,7 @@ Run → FAIL.
 
 ```ts
 // ProviderFactory.ts
-import type { BaseLLM } from '@memberjunction/ai';
+import type { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
 import { AnthropicLLM } from '@memberjunction/ai-anthropic';
 import { OpenAILLM } from '@memberjunction/ai-openai';
 import { GeminiLLM } from '@memberjunction/ai-gemini';
@@ -3854,6 +3875,13 @@ const ENV: Record<Vendor, string> = { Anthropic: 'ANTHROPIC_API_KEY', OpenAI: 'O
 export function CreateLLM(vendor: Vendor, env: NodeJS.ProcessEnv = process.env): BaseLLM {
     const key = env[ENV[vendor]]; if (!key) throw new Error(`${ENV[vendor]} is not set`);
     switch (vendor) { case 'Anthropic': return new AnthropicLLM(key); case 'OpenAI': return new OpenAILLM(key); case 'Gemini': return new GeminiLLM(key); }
+}
+/** One ChatCompletion call that never throws. OpenAILLM throws on an API error; AnthropicLLM returns `success: false`. */
+export async function SafeChat(llm: BaseLLM, params: ChatParams): Promise<{ Ok: true; Result: ChatResult } | { Ok: false; Error: string }> {
+    try {
+        const r = await llm.ChatCompletion(params);
+        return r.success ? { Ok: true, Result: r } : { Ok: false, Error: r.errorMessage || 'provider returned success: false' };
+    } catch (e) { return { Ok: false, Error: (e as Error).message }; }
 }
 
 // JudgePanel.ts (also holds BuildJudgeInput)
@@ -3869,7 +3897,10 @@ const BUCKET_SCORE: Record<Bucket, number> = { High: 1, Medium: 0, Low: -1 };
 export class JudgePanel {
     constructor(private readonly judges: BaseCatchJudge[]) {}
     public async Judge(c: CatchContext): Promise<{ TPProb: number | null; Buckets: JudgeBucket[]; Median: Bucket | null }> {
-        const scores = await Promise.all(this.judges.map(async (j) => { try { return await j.Judge(c); } catch (e) { return { Judge: j.Name, Model: j.Name, Score: 0, Bucket: 'Medium' as Bucket, Reason: `judge failed: ${(e as Error).message}` }; } }));
+        const scores = await Promise.all(this.judges.map(async (j): Promise<JudgeScore | null> => {
+            try { return await j.Judge(c); }
+            catch (e) { return j.Name === 'TpProb' ? null : { Judge: j.Name, Model: j.Name, Score: 0, Bucket: 'Medium', Reason: `judge failed: ${(e as Error).message}` }; }
+        })).then((all) => all.filter((s): s is JudgeScore => s !== null));
         const tp = scores.find((s) => s.Judge === 'TpProb'); const buckets = scores.filter((s) => s.Bucket !== null).map((s) => ({ Model: s.Model, Bucket: s.Bucket!, Reason: s.Reason }));
         const median = buckets.length ? GetConsensus(buckets.map((b) => BUCKET_SCORE[b.Bucket]), 'Median').Overall : null;
         return { TPProb: tp?.Score ?? null, Buckets: buckets, Median: median === null ? null : median >= 0.5 ? 'High' : median <= -0.5 ? 'Low' : 'Medium' };
@@ -3886,8 +3917,9 @@ export class TpProbJudge extends BaseCatchJudge {
     constructor(private readonly llm: BaseLLM, private readonly model: string) { super(); }
     public get Name(): string { return 'TpProb'; }
     public async Judge(c: CatchContext): Promise<JudgeScore> {
-        const r = await this.llm.ChatCompletion({ model: this.model, messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: `${BuildJudgeInput(c)}\n\nIs this failure an unintended bug? Yes or No.` }], temperature: 0, maxOutputTokens: 1, includeLogProbs: true, topLogProbs: 5 });
-        const top = r.success ? r.data.choices[0]?.logprobs?.content?.[0]?.top_logprobs ?? null : null;
+        const r = await SafeChat(this.llm, { model: this.model, messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: `${BuildJudgeInput(c)}\n\nIs this failure an unintended bug? Yes or No.` }], temperature: 0, maxOutputTokens: 1, includeLogProbs: true, topLogProbs: 5 });
+        if (!r.Ok) return { Judge: this.Name, Model: this.model, Score: 0, Bucket: null, Reason: `provider error: ${r.Error.slice(0, 300)}` };
+        const top = r.Result.data.choices[0]?.logprobs?.content?.[0]?.top_logprobs ?? null;
         if (!top) return { Judge: this.Name, Model: this.model, Score: 0, Bucket: null, Reason: 'no logprobs returned' };
         const p = (re: RegExp) => top.filter((t) => re.test(t.token)).reduce((s, t) => s + Math.exp(t.logprob), 0);
         const score = Math.max(-1, Math.min(1, p(/^\s*yes/i) - p(/^\s*no/i)));
@@ -3902,8 +3934,9 @@ export class BucketJudge extends BaseCatchJudge {
     public get Name(): string { return `Bucket:${this.model}`; }
     public async Judge(c: CatchContext): Promise<JudgeScore> {
         for (let i = 0; i < 2; i++) {
-            const r = await this.llm.ChatCompletion({ model: this.model, messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: BuildJudgeInput(c) }], temperature: 0, maxOutputTokens: 300 });
-            const text = r.success ? GetTextFromContent(r.data.choices[0]?.message.content ?? '') : ''; const m = /\{[\s\S]*\}/.exec(text);
+            const r = await SafeChat(this.llm, { model: this.model, messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: BuildJudgeInput(c) }], temperature: 0, maxOutputTokens: 300 });
+            if (!r.Ok) return { Judge: this.Name, Model: this.model, Score: 0, Bucket: 'Medium', Reason: `provider error: ${r.Error.slice(0, 300)}` };
+            const text = GetTextFromContent(r.Result.data.choices[0]?.message.content ?? ''); const m = /\{[\s\S]*\}/.exec(text);
             const parsed = m ? BucketAnswer.safeParse(safeParse(m[0])) : null;
             if (parsed?.success) return { Judge: this.Name, Model: this.model, Score: BUCKET_SCORE[parsed.data.bucket], Bucket: parsed.data.bucket, Reason: parsed.data.reason };
         }
