@@ -25,6 +25,7 @@ class RubricEvaluationAgentRunner implements EvaluationAgentRunner {
             ExtraFilter: input.agentId ? `ID='${EscapeSQLString(input.agentId)}'` : `Name='${EscapeSQLString(RUBRIC_EVALUATION_AGENT)}'`,
             ResultType: 'entity_object',
             MaxRows: 1,
+            SkipTotalRowCount: true,
         }, this.user as never);
         const agent = found.Results?.[0];
         if (!found.Success) throw new Error(found.ErrorMessage || 'Could not read the rubric evaluation agent.');

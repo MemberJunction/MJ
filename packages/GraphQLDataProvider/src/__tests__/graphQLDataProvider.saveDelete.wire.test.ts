@@ -299,7 +299,7 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
     });
 
     describe('Save — update', () => {
-        it('builds an Update mutation and includes ONLY the primary key and dirty writable fields in input and delta selection set', async () => {
+        it('builds an Update mutation with a delta input and a selection set of every loaded non-binary field', async () => {
             const entity = loadedCustomer();
             entity.Set('Name', 'New Name');
             GraphQLWire.EnqueueResponse(saveResponse('UpdateCRMCustomer', { ID: 'CUST-0001', Name: 'New Name' }));
@@ -309,13 +309,12 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             const doc = GraphQLWire.LastRequest.document;
             expect(doc).toContain('mutation UpdateCRMCustomer ($input: UpdateCRMCustomerInput!)');
             expect(doc).toContain('UpdateCRMCustomer(input: $input)');
-            // Delta response selection set requests ONLY PK, dirty fields, and datestamps
-            for (const expected of ['ID', 'Name', '_mj__CreatedAt', '_mj__UpdatedAt']) {
+            // The selection set requests PK, datestamps, the dirty field and every other loaded
+            // non-binary field; only the binary Photo column stays out.
+            for (const expected of ['ID', 'Name', '_mj__CreatedAt', '_mj__UpdatedAt', 'First_Name', 'Tier', 'IsActive', 'Age', 'SignedUpAt']) {
                 expect(doc).toContain(expected);
             }
-            for (const omitted of ['First_Name', 'Tier', 'IsActive', 'Age', 'SignedUpAt', 'Photo']) {
-                expect(doc).not.toContain(omitted);
-            }
+            expect(doc).not.toContain('Photo');
 
             const input = lastInputRecord();
             expect(input['ID']).toBe('CUST-0001');
@@ -328,6 +327,35 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             expect(input).not.toHaveProperty('First_Name');
             expect(Object.keys(input).sort()).toEqual(['ID', 'Name', 'OldValues___']);
             expect(entity.LatestResult.Type).toBe('update');
+        });
+
+        it('requests clean loaded writable fields in the Update selection set so a concurrent change to an untouched field reaches the entity', async () => {
+            // Session B changed Tier to 'Platinum' after this entity was loaded. The server preserves
+            // B's Tier on the non-overlapping save and returns the merged row; the client must ask
+            // for Tier back or it keeps showing the stale 'Gold'.
+            const entity = loadedCustomer();
+            entity.Set('Name', 'New Name');
+            GraphQLWire.EnqueueResponse(
+                saveResponse('UpdateCRMCustomer', {
+                    ID: 'CUST-0001',
+                    Name: 'New Name',
+                    Tier: 'Platinum',
+                    _mj__CreatedAt: CREATED_AT.toISOString(),
+                    _mj__UpdatedAt: new Date('2026-03-01T00:00:00Z').toISOString(),
+                })
+            );
+
+            const savedValues = (await provider.Save(entity, user, new EntitySaveOptions())) as Record<string, unknown>;
+
+            const doc = GraphQLWire.LastRequest.document;
+            for (const loadedField of ['First_Name', 'Tier', 'IsActive', 'Age', 'SignedUpAt']) {
+                expect(doc, `${loadedField} is loaded and readable, so the response must carry it`).toContain(loadedField);
+            }
+            // Binary columns stay out of the delta response: they are heavy and never merged concurrently.
+            expect(doc).not.toContain('Photo');
+            // The INPUT stays delta-only: only the primary key and the dirty field travel to the server.
+            expect(Object.keys(lastInputRecord()).sort()).toEqual(['ID', 'Name', 'OldValues___']);
+            expect(savedValues['Tier']).toBe('Platinum');
         });
 
         it('sends delta-only OldValues___ (PK + dirty writable fields) on a single-field update', async () => {
@@ -375,7 +403,7 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             expect(keys).not.toContain('_mj__UpdatedAt');
         });
 
-        it('20-field entity update: modifying 1 field sends ONLY PK + that 1 field in vars.input, OldValues___, and selection set', async () => {
+        it('20-field entity update: modifying 1 field sends ONLY PK + that 1 field in vars.input and OldValues___, while the selection set still requests the loaded fields', async () => {
             const entityId = 'A1B2C3D4-0000-4000-8000-000000000020';
             const twentyFields = [
                 {
@@ -492,15 +520,16 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
                 { Key: 'Description', Value: 'Initial description' },
             ]);
 
-            // Selection set requests PK (ID), dirty field (Description), virtual/read-only field (OwnerName), and datestamp (_mj__UpdatedAt),
-            // while omitting all 16 untouched writable fields (Field3..Field18)
+            // Selection set requests PK (ID), dirty field (Description), virtual/read-only field (OwnerName),
+            // datestamp (_mj__UpdatedAt) and the 16 untouched loaded fields (Field3..Field18), so a
+            // concurrent change to any of them comes back with the saved row.
             const doc = GraphQLWire.LastRequest.document;
             expect(doc).toContain('ID');
             expect(doc).toContain('Description');
             expect(doc).toContain('OwnerName');
             expect(doc).toContain('_mj__UpdatedAt');
             for (let i = 3; i <= 18; i++) {
-                expect(doc).not.toContain(`Field${i}`);
+                expect(doc).toContain(`Field${i}`);
             }
 
             // And Save() merges the delta response onto wideEntity.GetAll() so all 17 clean loaded fields remain present
@@ -630,9 +659,9 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             expect(doc).toContain('FirstName');
             expect(doc).toContain('DisplayName');
             expect(doc).toContain('_mj__UpdatedAt');
-            // Untouched writable fields LastName and Notes are omitted from selection set and input
-            expect(doc).not.toContain('LastName');
-            expect(doc).not.toContain('Notes');
+            // Untouched writable fields LastName and Notes are requested back but never sent as input
+            expect(doc).toContain('LastName');
+            expect(doc).toContain('Notes');
 
             const input = lastInputRecord();
             expect(Object.keys(input).sort()).toEqual(['FirstName', 'ID', 'OldValues___']);
@@ -786,7 +815,8 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             expect(doc).toContain('WhereClause');
             expect(doc).toContain('SmartFilterWhereClause');
             expect(doc).toContain('SmartFilterExplanation');
-            expect(doc).not.toContain('Name');
+            // The clean loaded Name is requested back too, but never sent as input.
+            expect(doc).toContain('\n                    Name\n');
 
             const input = lastInputRecord();
             expect(Object.keys(input).sort()).toEqual(['ID', 'OldValues___', 'SmartFilterPrompt']);
@@ -899,8 +929,8 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             expect(doc).toContain('CategoryID');
             expect(doc).toContain('Category');
             expect(doc).toContain('_mj__UpdatedAt');
-            // Clean scalar field Name is still omitted from the selection set
-            expect(doc).not.toContain('\n                    Name\n');
+            // The clean scalar field Name is requested back so a concurrent change to it is not lost
+            expect(doc).toContain('\n                    Name\n');
 
             // Merged return values have refreshed Category AND preserved clean Name
             expect(savedValues['CategoryID']).toBe('CAT-NEW');
@@ -943,6 +973,11 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
 
             const saved = await entity.Save();
             expect(saved).toBe(true);
+            // NotLoaded fields are never requested back; loaded ones are.
+            const doc = GraphQLWire.LastRequest.document;
+            expect(doc).not.toContain('Photo');
+            expect(doc).not.toContain('Age');
+            expect(doc).toContain('Tier');
             expect(entity.Get('Name')).toBe('Updated Name');
             expect(entity.Get('Tier')).toBe('Gold');
             expect(entity.Get('First Name')).toBe('Ada');

@@ -16,6 +16,7 @@ vi.mock('../Misc/status_logging', async (importOriginal) => ({
 
 import {
    DecideConfigValueListAction,
+   EntityFieldValueSource,
    FieldKey,
    NormalizeObjectName,
    OrganicKeyStateRow,
@@ -245,7 +246,7 @@ class TestableRetraction extends ManageMetadataBase {
    protected async refreshMetadataAfterRetraction(): Promise<void> {
       // no metadata provider in a unit test
    }
-   public Sync(pool: CodeGenConnection, fieldID: string, values: string[], rows: ExistingEntityFieldValueRow[], source: 'Check' | 'Config'): Promise<boolean> {
+   public Sync(pool: CodeGenConnection, fieldID: string, values: string[], rows: ExistingEntityFieldValueRow[], source: EntityFieldValueSource): Promise<boolean> {
       return this.syncEntityFieldValues(pool, fieldID, values, rows, source);
    }
    public Retract(pool: CodeGenConnection, before: OrganicKeyStateRow[] | null): Promise<boolean> {
@@ -304,6 +305,23 @@ describe('ManageMetadataBase — Source stamping', () => {
       await mm.Sync(connection(() => []), 'F1', ['A', 'B'], rows, 'Config');
       expect(logged).toHaveLength(1);
       expect(logged[0][1]).toBe(`UPDATE [__mj].[EntityFieldValue] SET [Source]='Config' WHERE ID='V1';`);
+   });
+
+   it('writes nothing on a second CHECK-pass run over rows the first run stamped (warm-twice drift gate)', async () => {
+      // Rows a migration inserted without Source take the column default, Manual. The first run
+      // claims them for the CHECK constraint; the second must find nothing to change.
+      const mm = new TestableRetraction(new SQLServerCodeGenProvider());
+      const rows: ExistingEntityFieldValueRow[] = [
+         { ID: 'V1', EntityFieldID: 'F1', Value: 'Idle', Sequence: 1, Source: 'Manual' },
+         { ID: 'V2', EntityFieldID: 'F1', Value: 'Janitor', Sequence: '2', Source: 'Check' },
+      ];
+      await mm.Sync(connection(() => []), 'F1', ['Idle', 'Janitor'], rows, 'Check');
+      expect(logged.map(c => c[1])).toEqual([`UPDATE [__mj].[EntityFieldValue] SET [Source]='Check' WHERE ID='V1'`]);
+
+      logged = [];
+      const afterFirstRun = rows.map(r => ({ ...r, Source: 'Check' }));
+      await mm.Sync(connection(() => []), 'F1', ['Idle', 'Janitor'], afterFirstRun, 'Check');
+      expect(logged).toHaveLength(0);
    });
 
    it('stamps organic keys written from the file as Config, on insert and on update', async () => {

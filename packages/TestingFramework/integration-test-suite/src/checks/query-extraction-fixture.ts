@@ -118,6 +118,7 @@ export async function NewFixtureQuery(ctx: IntegrationCheckContext, categoryID: 
     query.Reusable = spec.Reusable ?? false;
     if (spec.ExternalDataSourceID) query.ExternalDataSourceID = spec.ExternalDataSourceID;
     query.ExtractionOverride = spec.Override ?? 'Auto';
+    query.SkipEmbeddings = true;
     return query;
 }
 

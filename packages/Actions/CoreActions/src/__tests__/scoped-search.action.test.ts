@@ -827,6 +827,68 @@ describe('ScopedSearchAction', () => {
         });
     });
 
+    describe('Host-assigned search scopes (RunActionParams.RunScope.SearchScopeIDs)', () => {
+        // A host (e.g. a space) hands its run the scopes it may search. Any agent the host runs can then search them —
+        // its own SearchScopeAccess neither refuses nor widens — while the user's own permission still decides.
+        const TENANT = 'aaaaaaaa-1111-4222-8333-444444444444';
+        const HOST_SCOPE = 'cccccccc-1111-4222-8333-444444444444';
+        const inHostRun = (extra: Array<{ Name: string; Value: unknown }> = []): RunActionParams => {
+            const params = mkParams([{ Name: 'Query', Value: 'q' }, { Name: 'AgentID', Value: 'agent-1' }, ...extra],
+                { AgentID: 'agent-1', ActiveSkillIDs: [] });
+            (params as unknown as { RunScope: unknown }).RunScope = { PrimaryScopeRecordID: TENANT, SecondaryScopes: null, SearchScopeIDs: [HOST_SCOPE] };
+            return params;
+        };
+
+        beforeEach(() => {
+            loadedAgentStub.SearchScopeAccess = 'None';
+            getActiveScopeByIDSpy.mockReturnValue({ ID: HOST_SCOPE, Name: 'Space' });
+        });
+
+        it("lets an agent at SearchScopeAccess='None' search the host's scope, and tells the permission decision it was host-assigned", async () => {
+            const result = await run(new ScopedSearchAction(), inHostRun());
+            expect(result.Success).toBe(true);
+            expect(getActiveScopeByIDSpy).toHaveBeenCalledWith(HOST_SCOPE);
+            expect(searchSpy.mock.calls[0][0].ScopeIDs).toEqual([HOST_SCOPE]);
+            expect(permissionResolveSpy).toHaveBeenCalledWith(expect.objectContaining({ SearchScopeID: HOST_SCOPE, HostAssigned: true }));
+        });
+
+        it('accepts a requested scope the host assigned, in any case', async () => {
+            const result = await run(new ScopedSearchAction(), inHostRun([{ Name: 'ScopeID', Value: HOST_SCOPE.toUpperCase() }]));
+            expect(result.Success).toBe(true);
+        });
+
+        it('REFUSES a requested scope the host did not assign: ACCESS_DENIED and no search', async () => {
+            const result = await run(new ScopedSearchAction(), inHostRun([{ Name: 'ScopeID', Value: 'scope-elsewhere' }]));
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('ACCESS_DENIED');
+            expect(searchSpy).not.toHaveBeenCalled();
+        });
+
+        it("still refuses when the user has no grant on the host's scope: the host never grants", async () => {
+            permissionResolveSpy.mockResolvedValueOnce({
+                Allowed: false,
+                Level: 'None',
+                Source: 'NoGrant',
+                Reason: 'No grant.',
+                toSqlPredicate: () => '1=0',
+            });
+            const result = await run(new ScopedSearchAction(), inHostRun());
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('PERMISSION_DENIED');
+            expect(searchSpy).not.toHaveBeenCalled();
+        });
+
+        it('refuses a host-assigned Global scope in a tenant-scoped run, saying the host assigned it (no other scope is searchable)', async () => {
+            getActiveScopeByIDSpy.mockReturnValue({ ID: HOST_SCOPE, Name: 'Global', IsGlobal: true });
+            const result = await run(new ScopedSearchAction(), inHostRun());
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('INVALID_PARAM');
+            expect(result.Message).toMatch(/host assigned this scope/);
+            expect(result.Message).not.toMatch(/Pass a ScopeID/);
+            expect(searchSpy).not.toHaveBeenCalled();
+        });
+    });
+
     describe('Tenant — bound to the RUN when inside one (RunActionParams.RunScope)', () => {
         // BaseAgent.ExecuteSingleAction stamps RunActionParams.RunScope (the run's validated tenant and secondary
         // scopes) on every dispatch. Inside a Loop agent PrimaryScopeRecordID / SecondaryScopes are written by the

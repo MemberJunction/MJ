@@ -630,6 +630,7 @@ export class MjRecordPreviewPopoverComponent extends BaseAngularComponent implem
                 ExtraFilter: pk.ToWhereClause(),
                 Fields: Array.from(fieldNamesToFetch),
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple'
             });
 

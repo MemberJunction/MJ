@@ -58,6 +58,12 @@
         }
         @if (conversation) {
           <ng-container *ngTemplateOutlet="titleBar"></ng-container>
+          @if (CurrentOwnerAgent) {
+            <span class="with-chip" [style.--agent-accent]="CurrentOwnerAccentVar">
+              <span class="dot" aria-hidden="true"></span>
+              <span>with <b>{{ CurrentOwnerAgentName }}</b></span>
+            </span>
+          }
         }
         @if (sharedByBadge) {
           <span class="shared-by-badge" [title]="sharedByBadge.fullTooltip">
@@ -395,6 +401,7 @@
               [ReadOnly]="EffectiveReadOnly"
               [AllowStopRun]="AllowStopRun"
               [InFlightCount]="InFlightCount"
+              [OpenLinksInNewTab]="OpenLinksInNewTab"
               [assistantDisplayName]="assistantDisplayName"
               [assistantAvatarUrl]="assistantAvatarUrl"
               [messages]="DisplayMessages"
@@ -408,6 +415,7 @@
               [isProcessing]="isProcessing"
               [artifactMap]="effectiveArtifactsMap"
               [agentRunMap]="agentRunsByDetailId"
+              [HandoffMap]="HandoffsByDetailId"
               [ratingsMap]="ratingsByDetailId"
               [userAvatarMap]="userAvatarMap"
               [attachmentsMap]="attachmentsByDetailId"
@@ -758,6 +766,7 @@
       [Compact]="overlayMode"
       [ShowDevLinks]="!overlayMode"
       [ShowDensityPicker]="!overlayMode"
+      [OpenLinksInNewTab]="OpenLinksInNewTab"
       (NavigateRequest)="onRealtimeNavigateRequest($event)"
       (StartLiveRequested)="onReviewStartLive($event)"
       (ReviewClosed)="onReviewClosed()">

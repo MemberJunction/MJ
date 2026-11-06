@@ -171,6 +171,16 @@ export function findSqlCaptureFiles(afterTimestamp = 0) {
   return results;
 }
 
+/**
+ * The capture files a run created: those in `after` whose path was not already in `before`.
+ * Run 1 finishes writing its own capture (the Flyway rewrite in FinishSQLLogging) moments before
+ * run 2 starts, so an mtime window alone attributes run 1's file to run 2.
+ */
+export function selectNewCaptureFiles(before, after) {
+  const existing = new Set(before.map((c) => c.fullPath));
+  return after.filter((c) => !existing.has(c.fullPath));
+}
+
 export async function getLatestReport(afterTimestamp = 0) {
   const stateDir = path.join(os.homedir(), '.mj', 'codegen-state');
   if (!existsSync(stateDir)) return null;
@@ -232,6 +242,7 @@ export async function checkWarmTwice({ noAI = false, skipFirstRun = false }) {
 
   // Run 2
   log('Running CodeGen (run 2)...');
+  const capturesBeforeRun2 = findSqlCaptureFiles(0);
   const run2StartTime = Date.now();
   runProcess('node', ['packages/MJCLI/bin/run.js', 'codegen', ...(noAI ? ['--no-ai'] : [])], codegenEnv);
 
@@ -248,7 +259,7 @@ export async function checkWarmTwice({ noAI = false, skipFirstRun = false }) {
   }
 
   // Assertion 2: No new CodeGen_Run_*.sql left behind by run 2
-  const run2Captures = findSqlCaptureFiles(run2StartTime - 1000);
+  const run2Captures = selectNewCaptureFiles(capturesBeforeRun2, findSqlCaptureFiles(run2StartTime - 1000));
   if (run2Captures.length > 0) {
     const files = run2Captures.map((c) => c.fullPath).join(', ');
     logError(`Surviving CodeGen_Run_*.sql found after run 2: ${files}`);
@@ -299,6 +310,13 @@ export async function checkSingleColumn({ noAI = false, skipWarm = false, keepCo
   const probeColumn = 'IdempotencyProbe';
   let probeFieldId = null;
   let probeCaptureFile = null;
+  let stageAssertionsPassed = false;
+  let procRestoreError = null;
+
+  // CodeGen recompiles these procs with the probe column in them. Dropping the column does not
+  // recompile them, so without a restore every later Entity create/update on this database fails
+  // ("Invalid column name 'IdempotencyProbe'"). Capture their text now, re-apply it in cleanup.
+  const procDefinitions = await captureProcDefinitions(pool, PROBE_RECOMPILED_PROCS);
 
   // Snapshot before-probe state
   const beforeSnapshot = snapshotFiles(['packages/', 'metadata/']);
@@ -430,6 +448,7 @@ export async function checkSingleColumn({ noAI = false, skipWarm = false, keepCo
     }
 
     logSuccess('Stage single-column assertions PASSED.');
+    stageAssertionsPassed = true;
   } finally {
     if (!keepColumn) {
       log('Cleaning up probe column and restoring database view...');
@@ -471,6 +490,12 @@ export async function checkSingleColumn({ noAI = false, skipWarm = false, keepCo
           EXEC sp_refreshview '[__mj].[vwEntities]';
           COMMIT;
         `);
+        try {
+          await restoreProcDefinitions(pool, procDefinitions, probeColumn);
+        } catch (restoreErr) {
+          procRestoreError = restoreErr;
+          logError(`Restoring ${PROBE_RECOMPILED_PROCS.join(', ')} failed: ${restoreErr.message}`);
+        }
         if (probeCaptureFile && existsSync(probeCaptureFile)) {
           unlinkSync(probeCaptureFile);
         }
@@ -491,7 +516,79 @@ export async function checkSingleColumn({ noAI = false, skipWarm = false, keepCo
       }
     }
     await pool.close();
+    // A database left with procs naming a dropped column is broken for every later Entity write,
+    // so a failed restore fails the stage (unless the stage already failed for its own reason,
+    // which must not be masked).
+    if (procRestoreError && stageAssertionsPassed) {
+      throw new Error(`Stage single-column failed: cleanup could not restore the Entity procs: ${procRestoreError.message}`);
+    }
   }
+}
+
+/** Procs CodeGen recompiles when a column is added to [__mj].[Entity]. */
+const PROBE_RECOMPILED_PROCS = ['spCreateEntity', 'spUpdateEntity'];
+
+/** Current text of each `[__mj]` proc in `names` (from sys.sql_modules), keyed by name. */
+async function captureProcDefinitions(pool, names) {
+  const definitions = new Map();
+  for (const name of names) {
+    const result = await pool
+      .request()
+      .input('name', sql.NVarChar, `[__mj].[${name}]`)
+      .query('SELECT OBJECT_DEFINITION(OBJECT_ID(@name)) AS Definition');
+    const definition = result.recordset[0]?.Definition;
+    if (!definition) {
+      throw new Error(`Stage single-column failed: could not read the definition of [__mj].[${name}] before the probe.`);
+    }
+    definitions.set(name, definition);
+  }
+  return definitions;
+}
+
+/**
+ * The text after any leading whitespace, `-- …` line comments and `/* … *\/` block comments. Scanned
+ * by index rather than with one regular expression, which could backtrack over runs of comments.
+ */
+function skipLeadingComments(text) {
+  let i = 0;
+  for (;;) {
+    while (i < text.length && /\s/.test(text[i])) i++;
+    if (text.startsWith('--', i)) {
+      const end = text.indexOf('\n', i);
+      if (end === -1) return '';
+      i = end + 1;
+    } else if (text.startsWith('/*', i)) {
+      const end = text.indexOf('*/', i + 2);
+      if (end === -1) return '';
+      i = end + 2;
+    } else {
+      return text.slice(i);
+    }
+  }
+}
+
+/**
+ * Turn a captured `CREATE PROCEDURE` into `CREATE OR ALTER PROCEDURE`, so it can be re-applied over
+ * the version CodeGen compiled during the stage. Only the first CREATE (the statement's own) changes.
+ */
+export function toCreateOrAlter(definition) {
+  if (/^CREATE\s+OR\s+ALTER\b/i.test(skipLeadingComments(definition))) {
+    return definition;
+  }
+  return definition.replace(/\bCREATE(\s+)(PROC(?:EDURE)?)\b/i, 'CREATE OR ALTER$1$2');
+}
+
+/** Re-apply the captured procs, then assert none of them still names the probe column. */
+async function restoreProcDefinitions(pool, definitions, probeColumn) {
+  for (const [name, definition] of definitions) {
+    await pool.request().input('stmt', sql.NVarChar(sql.MAX), toCreateOrAlter(definition)).query('EXEC sp_executesql @stmt');
+  }
+  const after = await captureProcDefinitions(pool, [...definitions.keys()]);
+  const stillNaming = [...after].filter(([, text]) => text.toLowerCase().includes(probeColumn.toLowerCase())).map(([n]) => n);
+  if (stillNaming.length > 0) {
+    throw new Error(`${stillNaming.join(', ')} still reference [${probeColumn}] after cleanup.`);
+  }
+  log(`Restored ${[...definitions.keys()].join(', ')} to their pre-probe definitions.`);
 }
 
 // ---------------------------------------------------------------------------

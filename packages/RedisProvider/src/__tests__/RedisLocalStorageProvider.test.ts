@@ -1728,4 +1728,77 @@ describe('RedisLocalStorageProvider', () => {
             }
         });
     });
+
+    describe('row_delta pub/sub payload support', () => {
+        it('publishes compact row_delta payload in full mode while storing the full entry in Redis, and normalizes to set notice in notice mode', async () => {
+            const pubProvider = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                publishModes: { RunViewCache: 'full', DatasetCache: 'notice' },
+            });
+            try {
+                const publishSpy = pubProvider.Client.publish as ReturnType<typeof vi.fn>;
+                publishSpy.mockClear();
+
+                const fullValue = JSON.stringify({ results: [{ ID: '1', Name: 'Alice' }, { ID: '2', Name: 'Bob' }] });
+                const compactDelta = JSON.stringify({
+                    primaryKeyFields: ['ID'],
+                    upsertedRows: [{ ID: '2', Name: 'Bob' }],
+                    deletedPrimaryKeys: [],
+                    rowCount: 2,
+                    maxUpdatedAt: '2026-10-29T00:00:00.000Z',
+                });
+
+                await pubProvider.SetItem('Users|_|_|-1|0|_|_', fullValue, 'RunViewCache', {
+                    pubSubAction: 'row_delta',
+                    pubSubData: compactDelta,
+                });
+
+                // Backing Redis key stores the full dataset
+                expect(await pubProvider.GetItem('Users|_|_|-1|0|_|_', 'RunViewCache')).toBe(fullValue);
+
+                // Pub/Sub message broadcasts Action='row_delta' with compact pubSubData
+                expect(publishSpy).toHaveBeenCalledTimes(1);
+                const fullPublished = JSON.parse(publishSpy.mock.calls[0][1] as string) as { Action: string; Data?: string };
+                expect(fullPublished.Action).toBe('row_delta');
+                expect(fullPublished.Data).toBe(compactDelta);
+
+                // In 'notice' mode, row_delta normalizes to 'set' without Data
+                publishSpy.mockClear();
+                await pubProvider.SetItem('ds-key', fullValue, 'DatasetCache', {
+                    pubSubAction: 'row_delta',
+                    pubSubData: compactDelta,
+                });
+                expect(publishSpy).toHaveBeenCalledTimes(1);
+                const noticePublished = JSON.parse(publishSpy.mock.calls[0][1] as string) as { Action: string; Data?: string };
+                expect(noticePublished.Action).toBe('set');
+                expect(noticePublished.Data).toBeUndefined();
+            } finally {
+                await pubProvider.Disconnect();
+            }
+        });
+
+        it('publishes an ordinary full set when pubSubAction is row_delta but no compact pubSubData was supplied', async () => {
+            // A row_delta without its payload is unusable to receivers (they fail the shape check and
+            // reload), so the provider must not label the full snapshot as a delta.
+            const pubProvider = new RedisLocalStorageProvider({
+                enablePubSub: true,
+                enableLogging: false,
+                publishModes: { RunViewCache: 'full' },
+            });
+            try {
+                const publishSpy = pubProvider.Client.publish as ReturnType<typeof vi.fn>;
+                publishSpy.mockClear();
+                const fullValue = JSON.stringify({ results: [{ ID: '1', Name: 'Alice' }] });
+                await pubProvider.SetItem('Users|_|_|-1|0|_|_', fullValue, 'RunViewCache', { pubSubAction: 'row_delta' });
+                expect(publishSpy).toHaveBeenCalledTimes(1);
+                const published = JSON.parse(publishSpy.mock.calls[0][1] as string) as { Action: string; Data?: string };
+                expect(published.Action).toBe('set');
+                // an ordinary 'set' carries the stored (serialized) value, exactly as a plain SetItem does
+                expect(JSON.parse(published.Data as string)).toBe(fullValue);
+            } finally {
+                await pubProvider.Disconnect();
+            }
+        });
+    });
 });

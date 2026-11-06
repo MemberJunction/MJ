@@ -215,3 +215,15 @@ describe('X-Powered-By', () => {
         expect(src.match(/app\.disable\('x-powered-by'\)/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
     });
 });
+
+describe('X-MJ-Diagnostic-Trigger', () => {
+    it('is exposed to the browser by the global CORS and by the GraphQL CORS', async () => {
+        const base = await startApp([]);
+        const res = await fetch(`${base}/core`, { headers: { Origin: OTHER_ORIGIN } });
+        expect(res.headers.get('access-control-expose-headers')).toContain('X-MJ-Diagnostic-Trigger');
+
+        const src = readFileSync(new URL('../index.ts', import.meta.url), 'utf8');
+        const graphqlCors = src.match(/app\.use\(\s*graphqlRootPath,\s*cors<cors\.CorsRequest>\(\{\s*exposedHeaders: \[([^\]]*)\]/);
+        expect(graphqlCors?.[1]).toContain('X-MJ-Diagnostic-Trigger');
+    });
+});

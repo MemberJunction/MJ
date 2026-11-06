@@ -23,7 +23,7 @@ const loadNgDashboardsActionsDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/actions-dashboards.module').then(() => {})
 };
 
-// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (19 entries) ---
+// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (22 entries) ---
 const loadNgDashboardsAiDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/ai-dashboards.module',
   load: () => import('@memberjunction/ng-dashboards/ai-dashboards.module').then(() => {})
@@ -119,6 +119,12 @@ const loadNgDashboardsTestingDashboardsModule = {
   load: () => import('@memberjunction/ng-dashboards/testing-dashboards.module').then(() => {})
 };
 
+// --- @memberjunction/ng-dashboards → ./video-studio-dashboards.module (3 entries) ---
+const loadNgDashboardsVideoStudioDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/video-studio-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/video-studio-dashboards.module').then(() => {})
+};
+
 // --- @memberjunction/ng-dashboards → ./work-queue-dashboards.module (1 entries) ---
 const loadNgDashboardsWorkQueueDashboardsModule = {
   chunkId: '@memberjunction/ng-dashboards/work-queue-dashboards.module',
@@ -166,7 +172,10 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::AIPromptsResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::AnalyticsResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::AutotaggingPipelineResource': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::ChiefOfStaffApprovals': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::ChiefOfStaffDashboard': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::ChiefOfStaffGovernance': loadNgDashboardsAiDashboardsModule,
+  'BaseResourceComponent::ChiefOfStaffOverview': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::ChiefOfStaffResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::ClusterVisualizationResource': loadNgDashboardsAiDashboardsModule,
   'BaseResourceComponent::DuplicateDetectionResource': loadNgDashboardsAiDashboardsModule,
@@ -300,6 +309,11 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
   'BaseResourceComponent::TestingReviewResource': loadNgDashboardsTestingDashboardsModule,
   'BaseResourceComponent::TestingRunsResource': loadNgDashboardsTestingDashboardsModule,
 
+  // @memberjunction/ng-dashboards → ./video-studio-dashboards.module
+  'BaseResourceComponent::VideoStudioArchetypesResource': loadNgDashboardsVideoStudioDashboardsModule,
+  'BaseResourceComponent::VideoStudioBrandKitsResource': loadNgDashboardsVideoStudioDashboardsModule,
+  'BaseResourceComponent::VideoStudioProductionsResource': loadNgDashboardsVideoStudioDashboardsModule,
+
   // @memberjunction/ng-dashboards → ./work-queue-dashboards.module
   'BaseDashboard::WorkQueueDashboard': loadNgDashboardsWorkQueueDashboardsModule,
 
@@ -321,4 +335,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => 
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 129;
+export const LAZY_FEATURE_CONFIG_COUNT = 135;

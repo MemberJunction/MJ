@@ -20,10 +20,11 @@ import type { RealtimeTrackDescriptor } from './realtimeTracks';
  * Why an agent session was closed — the server-side channel plugin's view of the session-close
  * provenance. Mirrors the `MJ: AI Agent Sessions.CloseReason` value list (`SessionCloseReason` in
  * `@memberjunction/server`): `'Explicit'` (user hang-up), `'Janitor'` (orphan reconciliation),
- * `'Shutdown'` (graceful host drain), `'Error'` (failure-path teardown). `null` reaches the plugin
+ * `'Shutdown'` (graceful host drain), `'Error'` (failure-path teardown), `'TimeLimit'` (the session's authored
+ * deadline passed), `'Idle'` (no activity past the idle threshold). `null` reaches the plugin
  * only for legacy rows closed before the column existed (or when the reason was never stamped).
  */
-export type RealtimeChannelCloseReason = 'Explicit' | 'Janitor' | 'Shutdown' | 'Error';
+export type RealtimeChannelCloseReason = 'Explicit' | 'Janitor' | 'Shutdown' | 'Error' | 'TimeLimit' | 'Idle';
 
 /**
  * Immutable session facts handed to a {@link BaseRealtimeChannelServer} at
