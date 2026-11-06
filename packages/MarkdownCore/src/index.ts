@@ -11,6 +11,7 @@ export * from './engine/markdown-engine.js';
 export * from './extensions/svg-renderer.extension.js';
 export * from './extensions/collapsible-headings.extension.js';
 export * from './extensions/html-block-repair.extension.js';
+export * from './extensions/math.extension.js';
 
 // Helpers
 export * from './helpers/language.js';

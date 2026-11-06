@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { GetExamplesParams, GetNotesParams } from '../agent-context-injector';
+import type { AgentPreExecutionRAGParams } from '../agent-pre-execution-rag';
 
 // ---- Mocks for the underlying retrieval collaborators ------------------------------------------
 // The builder is the thin orchestration wrapper; we mock the collaborators so the tests are
@@ -22,7 +23,7 @@ vi.mock('../agent-context-injector', () => ({
     }
 }));
 
-const ragExecute = vi.fn(async () => null as unknown);
+const ragExecute = vi.fn(async (_params: AgentPreExecutionRAGParams) => null as unknown);
 vi.mock('../agent-pre-execution-rag', () => ({
     AgentPreExecutionRAG: class {
         Execute = ragExecute;
@@ -132,6 +133,18 @@ describe('AgentMemoryContextBuilder', () => {
             expect(messages[0].content).toContain('NOTES(1)');
         });
 
+        it('formats notes and examples for the run\'s user, so the text holds only fields they may read', async () => {
+            getNotes.mockResolvedValueOnce([{ ID: 'n1' }]);
+            getExamples.mockResolvedValueOnce([{ ID: 'e1' }]);
+            const builder = new AgentMemoryContextBuilder();
+
+            await builder.InjectContextMemory('hi', makeAgent({ InjectNotes: true, InjectExamples: true }),
+                undefined, undefined, fakeUser, [{ role: 'user', content: 'hi' }]);
+
+            expect(formatNotes).toHaveBeenCalledWith([{ ID: 'n1' }], true, fakeUser);
+            expect(formatExamples).toHaveBeenCalledWith([{ ID: 'e1' }], fakeUser);
+        });
+
         it('combines notes and examples into a single system message and returns both', async () => {
             getNotes.mockResolvedValueOnce([{ ID: 'n1' }, { ID: 'n2' }]);
             getExamples.mockResolvedValueOnce([{ ID: 'e1' }]);
@@ -213,6 +226,25 @@ describe('AgentMemoryContextBuilder', () => {
 
             expect(getNotes.mock.calls[0][0].observability).toBeUndefined();
             expect(getExamples.mock.calls[0][0].observability).toBeUndefined();
+        });
+
+        it('forwards SharedOnly to both retrieval calls when the run has an audience', async () => {
+            await new AgentMemoryContextBuilder().InjectContextMemory(
+                'hi', makeAgent({ InjectNotes: true, InjectExamples: true }), 'u1', undefined, fakeUser, [],
+                undefined, undefined, undefined, null, undefined, undefined, true
+            );
+
+            expect(getNotes.mock.calls[0][0]).toMatchObject({ SharedOnly: true, userId: 'u1' });
+            expect(getExamples.mock.calls[0][0]).toMatchObject({ SharedOnly: true, userId: 'u1' });
+        });
+
+        it('leaves SharedOnly off by default', async () => {
+            await new AgentMemoryContextBuilder().InjectContextMemory(
+                'hi', makeAgent({ InjectNotes: true, InjectExamples: true }), 'u1', undefined, fakeUser, []
+            );
+
+            expect(getNotes.mock.calls[0][0].SharedOnly).toBeFalsy();
+            expect(getExamples.mock.calls[0][0].SharedOnly).toBeFalsy();
         });
 
         it('injects an examples-only system message when only InjectExamples is enabled', async () => {
@@ -403,6 +435,28 @@ describe('AgentMemoryContextBuilder', () => {
             expect(arg.recentMessages).toHaveLength(5);
             expect(arg.recentMessages![0].content).toBe('msg-3');
             expect(arg.recentMessages![4].content).toBe('msg-7');
+        });
+
+        it('passes the run\'s active skill IDs through to the RAG engine', async () => {
+            ragExecute.mockResolvedValueOnce(null);
+            const builder = new AgentMemoryContextBuilder();
+
+            await builder.InjectPreExecutionRAG(
+                'hi', makeAgent({}), fakeUser, [], [], undefined, undefined, undefined, undefined, undefined, undefined, ['skill-1']
+            );
+
+            expect(ragExecute.mock.calls[0][0].activeSkillIDs).toEqual(['skill-1']);
+        });
+
+        it('passes the run\'s audience readers through to the RAG engine', async () => {
+            ragExecute.mockResolvedValueOnce(null);
+            const reader = { ID: 'reader-1' } as unknown as UserInfo;
+
+            await new AgentMemoryContextBuilder().InjectPreExecutionRAG(
+                'hi', makeAgent({}), fakeUser, [], [], undefined, undefined, undefined, undefined, undefined, undefined, [], [reader]
+            );
+
+            expect(ragExecute.mock.calls[0][0].audienceReaders).toEqual([reader]);
         });
 
         it('returns null and calls the error logger when RAG execution throws', async () => {

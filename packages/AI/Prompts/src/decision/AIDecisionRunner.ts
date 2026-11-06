@@ -5,10 +5,12 @@ import { TemplateEngineServer } from '@memberjunction/templates';
 import {
   AIErrorType,
   BaseDecision,
+  BuildCancellationErrorInfo,
   DecisionParams,
   DecisionQuestion,
   DecisionResult,
   ErrorAnalyzer,
+  IsRequestAborted,
   ModelUsage,
 } from '@memberjunction/ai';
 import {
@@ -29,6 +31,7 @@ import {
   AIDecisionRunResult,
 } from './decision-runner.types';
 import { LLMDecision } from './LLMDecision';
+import { AIPromptRunner } from '../AIPromptRunner';
 
 /**
  * The result of running a decision, the candidate that produced it (after any failover), and what
@@ -216,21 +219,17 @@ export class AIDecisionRunner extends BaseModelRunner {
   /** Candidates already warned about for lacking credentials, so each warning appears once per process. */
   private static readonly warnedMissingCredentials = new Set<string>();
 
-  /** Selects the first candidate with credentials, or returns an error listing every candidate. */
+  /** Selects the candidate to run (see SelectCandidate), or returns an error listing every candidate. */
   private selectCandidate(
     prompt: MJAIPromptEntityExtended,
     candidates: ModelVendorCandidate[],
     params: AIDecisionParams
   ): DecisionSelection | string {
-    const credentialAvailability = new Map<string, boolean>();
-    let selected: ModelVendorCandidate | undefined;
-    for (const candidate of candidates) {
-      const available = this.HasCredentialsAvailable(candidate.driverClass, prompt.ID, candidate.model.ID, candidate.vendorId, params);
-      credentialAvailability.set(this.candidateKey(candidate), available);
-      if (available && !selected) {
-        selected = candidate;
-      }
-    }
+    const { Candidate: selected, CredentialAvailability: credentialAvailability } = this.SelectCandidate(
+      candidates,
+      c => this.HasCredentialsAvailable(c.driverClass, prompt.ID, c.model.ID, c.vendorId, params),
+      true
+    );
     this.warnSkippedCandidates(candidates, selected, credentialAvailability);
     if (!selected) {
       const summary = candidates
@@ -248,14 +247,15 @@ export class AIDecisionRunner extends BaseModelRunner {
    */
   private warnSkippedCandidates(
     candidates: ModelVendorCandidate[],
-    selected: ModelVendorCandidate | undefined,
+    selected: ModelVendorCandidate | null,
     credentialAvailability: Map<string, boolean>
   ): void {
     for (const candidate of candidates) {
-      if (candidate === selected) {
+      const key = this.CandidateKey(candidate);
+      // Stop at the first credentialed candidate: it decided the model, even when its row vendor runs it.
+      if (candidate === selected || credentialAvailability.get(key) === true) {
         return;
       }
-      const key = this.candidateKey(candidate);
       if (credentialAvailability.get(key) === false && !AIDecisionRunner.warnedMissingCredentials.has(key)) {
         AIDecisionRunner.warnedMissingCredentials.add(key);
         LogStatus(`AIDecisionRunner: skipping '${candidate.model.Name}' (${candidate.driverClass}): no credential. ` +
@@ -451,7 +451,11 @@ export class AIDecisionRunner extends BaseModelRunner {
       return await driver.Decide(driverParams);
     } catch (err: unknown) {
       const failed = this.failedDecision(err instanceof Error ? err.message : String(err), 'Unknown');
-      failed.errorInfo = ErrorAnalyzer.AnalyzeError(err, candidate.vendorName);
+      // An abort is classified by the bound's signal: a caller cancellation is not failed over, a
+      // timeout is.
+      failed.errorInfo = IsRequestAborted(err, bound.Signal)
+        ? BuildCancellationErrorInfo({ error: err, signal: bound.Signal, provider: candidate.vendorName })
+        : ErrorAnalyzer.AnalyzeError(err, candidate.vendorName);
       return failed;
     } finally {
       bound.Dispose();
@@ -598,11 +602,6 @@ export class AIDecisionRunner extends BaseModelRunner {
     };
   }
 
-  /** The key format BaseModelRunner's failover credential cache uses. */
-  private candidateKey(candidate: ModelVendorCandidate): string {
-    return `${candidate.driverClass}:${candidate.model.ID}:${candidate.vendorId || 'default'}`;
-  }
-
   /** Records which candidate was chosen and why, for the run row. */
   private buildSelectionInfo(
     prompt: MJAIPromptEntityExtended,
@@ -617,7 +616,7 @@ export class AIDecisionRunner extends BaseModelRunner {
     info.SelectionReason = 'First candidate with available credentials';
     info.FallbackUsed = false;
     info.ModelsConsidered = candidates.map(c => {
-      const available = selection.CredentialAvailability.get(this.candidateKey(c)) ?? false;
+      const available = selection.CredentialAvailability.get(this.CandidateKey(c)) ?? false;
       return {
         model: c.model,
         vendor: c.vendorId ? AIEngine.Instance.VendorsByID.get(NormalizeUUID(c.vendorId)) : undefined,
@@ -652,7 +651,7 @@ export class AIDecisionRunner extends BaseModelRunner {
       }
       const systemPlaceholders = await SystemPlaceholderManager.resolveAllPlaceholders(params);
       const mergedData = { ...systemPlaceholders, ...params.data, ...params.templateData };
-      const rendered = await TemplateEngineServer.Instance.RenderTemplate(template, content, mergedData, true, false);
+      const rendered = await TemplateEngineServer.Instance.RenderTemplate(template, content, mergedData, true, false, AIPromptRunner.RenderOptions(params));
       if (!rendered?.Success) {
         return { success: false, errorMessage: `Failed to render the template for prompt '${prompt.Name}': ${rendered?.Message ?? 'unknown error'}` };
       }

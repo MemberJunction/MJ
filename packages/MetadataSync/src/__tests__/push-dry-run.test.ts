@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { FlattenedRecord, RecordData, BatchContext } from '../lib/sync-engine';
+import type { RecordData, BatchContext } from '../lib/sync-engine';
+import type { FlattenedRecord } from '../lib/record-dependency-analyzer';
 import type { PushOptions } from '../services/PushService';
 import type { BaseEntity, UserInfo, EntityInfo } from '@memberjunction/core';
 
@@ -95,12 +96,11 @@ function flatten(record: RecordData): FlattenedRecord {
     id: 'rec-1',
     record,
     entityName: 'TestEntity',
-    parentContext: null,
-    dependencies: new Set(),
-    isCircular: false,
-    dependencyLevel: 0,
+    depth: 0,
     path: 'test/path.json',
-    subDirectory: '',
+    dependencies: new Set(),
+    originalIndex: 0,
+    graphId: 'rec-1',
   };
 }
 

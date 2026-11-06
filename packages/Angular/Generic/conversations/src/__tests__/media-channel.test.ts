@@ -6,10 +6,17 @@ import { IMetadataProvider } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '@memberjunction/realtime-runtime';
 import { LoadRealtimeMediaChannel, RealtimeMediaChannel } from '../lib/components/realtime/media/media-channel';
-import { MediaChannelState, MediaItem } from '../lib/components/realtime/media/media-channel-state';
+import {
+  IsAllowedExternalMediaUrl,
+  MediaChannelState,
+  MediaItem,
+} from '../lib/components/realtime/media/media-channel-state';
 import { MEDIA_TOOL_NAMES } from '../lib/components/realtime/media/media-channel-tools';
 import {
-  RealtimeMediaSurfaceComponent, RouteForMediaItem, IsPlayerMediaType
+  IsEmbeddableSurfaceUrl,
+  RealtimeMediaSurfaceComponent,
+  RouteForMediaItem,
+  IsPlayerMediaType,
 } from '../lib/components/realtime/media/realtime-media-surface.component';
 
 LoadRealtimeMediaChannel();
@@ -206,5 +213,68 @@ describe('RouteForMediaItem — surface render routing (pure)', () => {
     expect(IsPlayerMediaType(item({ Type: 'image' }))).toBe(false);
     expect(IsPlayerMediaType(item({ Type: 'pdf' }))).toBe(false);
     expect(IsPlayerMediaType(item({ Type: 'web' }))).toBe(false);
+  });
+});
+
+describe('Realtime media URL scheme screening (PR #6034)', () => {
+  it('Media_ShowMedia rejects javascript:, data:, blob:, relative, and scheme-relative URLs', () => {
+    const channel = new RealtimeMediaChannel();
+    channel.Initialize(makeContext({ Notes: [], Saves: [] }));
+
+    const blockedUrls = [
+      'javascript:alert(document.cookie)',
+      '  JAVASCRIPT:alert(1)',
+      'data:text/html,<script>alert(1)</script>',
+      'blob:https://example.com/uuid',
+      '//evil.example.com/page',
+      '/relative/path.png',
+      'https://',
+    ];
+
+    for (const badUrl of blockedUrls) {
+      const result = parseResult(
+        channel.ApplyAgentTool(
+          MEDIA_TOOL_NAMES.ShowMedia,
+          JSON.stringify({ mediaType: 'web', url: badUrl, displayName: 'Untrusted' }),
+        ),
+      );
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/http:\/\/ or https:\/\//i);
+    }
+    expect(channel.State.Items).toHaveLength(0);
+  });
+
+  it('MediaChannelState.LoadFromJSON drops persisted items carrying poisoned non-http(s) URLs', () => {
+    const poisonedPayload = JSON.stringify({
+      V: 1,
+      Items: [
+        { Id: 'xss-1', Type: 'image', Url: 'javascript:alert(1)', DisplayName: 'XSS' },
+        { Id: 'xss-2', Type: 'web', Url: '//evil.example.com/frame', DisplayName: 'SchemeRelative' },
+        { Id: 'ok-1', Type: 'image', Url: 'https://cdn.example.com/diagram.png', DisplayName: 'Safe' },
+      ],
+      ActiveItemId: 'xss-1',
+    });
+
+    const state = new MediaChannelState();
+    expect(state.LoadFromJSON(poisonedPayload)).toBe(true);
+    expect(state.Items).toHaveLength(1);
+    expect(state.Items[0].Id).toBe('ok-1');
+    expect(state.ActiveItemId).toBe('ok-1');
+  });
+
+  it('IsAllowedExternalMediaUrl and IsEmbeddableSurfaceUrl distinguish external vs same-origin streaming URLs', () => {
+    const origin = 'https://app.example.com';
+
+    expect(IsAllowedExternalMediaUrl('https://cdn.example.com/video.mp4')).toBe(true);
+    expect(IsAllowedExternalMediaUrl('/media/file-1?token=jwt')).toBe(false);
+    expect(IsAllowedExternalMediaUrl('//evil.example.com/video.mp4')).toBe(false);
+    expect(IsAllowedExternalMediaUrl('javascript:alert(1)')).toBe(false);
+
+    expect(IsEmbeddableSurfaceUrl('https://cdn.example.com/video.mp4', origin)).toBe(true);
+    expect(IsEmbeddableSurfaceUrl('/media/file-1?token=jwt', origin)).toBe(true);
+    expect(IsEmbeddableSurfaceUrl('//evil.example.com/video.mp4', origin)).toBe(false);
+    expect(IsEmbeddableSurfaceUrl('javascript:alert(1)', origin)).toBe(false);
+    expect(IsEmbeddableSurfaceUrl('data:text/html,hi', origin)).toBe(false);
+    expect(IsEmbeddableSurfaceUrl('blob:https://app.example.com/id', origin)).toBe(false);
   });
 });

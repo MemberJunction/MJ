@@ -536,7 +536,8 @@ export class ArtifactSelectionDialogComponent extends BaseAngularComponent imple
       const typeResult = await rv.RunView({
         EntityName: 'MJ: Artifact Types',
         ExtraFilter: `Name = 'Component'`,
-        MaxRows: 1
+        MaxRows: 1,
+        SkipTotalRowCount: true
       });
 
       if (typeResult.Success && typeResult.Results?.length > 0) {

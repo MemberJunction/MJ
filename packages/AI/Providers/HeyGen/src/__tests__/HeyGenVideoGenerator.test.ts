@@ -44,6 +44,8 @@ vi.mock('@memberjunction/ai', () => {
       analyzeError: vi.fn().mockReturnValue({ category: 'unknown' }),
       AnalyzeError: vi.fn().mockReturnValue({ category: 'unknown' }),
     },
+    IsRequestAborted: (_error: unknown, signal?: AbortSignal) => signal?.aborted === true,
+    BuildCancellationErrorInfo: vi.fn().mockReturnValue({ errorType: 'Cancelled' }),
   };
 });
 

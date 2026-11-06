@@ -69,6 +69,15 @@ export interface LeakageGuard {
 }
 
 /**
+ * The majority-baseline rule of the trust verdict (containment of F-TR-1).
+ * - `enforce`: a classifier whose accuracy is at or below the always-majority rate, or that predicts one class, is
+ *   graded Poor and cannot be acted on.
+ * - `warn`: the verdict records that finding and its numbers but takes grade and `canAct` from the other rules (AUC
+ *   bands, unmeasured, withheld). An accuracy-only verdict is enforced either way.
+ */
+export type MajorityBaselineRule = 'enforce' | 'warn';
+
+/**
  * Validation discipline for a pipeline (plan §4.2 / §8.2). Defaults to a single
  * train/test split with overfitting detection; k-fold and holdout are opt-in. A
  * locked final holdout the search never sees is scored exactly once on the
@@ -86,6 +95,19 @@ export interface ValidationStrategy {
    * never sees — scored exactly once on the promoted model (plan §8.2).
    */
   LockedHoldoutFraction: number;
+  /**
+   * Column that orders the rows in time (e.g. `MonthIndex`) when the target is a forecast. Declaring it tells
+   * Predictive Studio the model must be tested on later periods than it trained on; until that evaluation exists
+   * (a rolling-origin backtest) the trust verdict is withheld with the stored reason "not evaluated as a forecast".
+   * To be replaced by the Prediction Unit's Temporal Spec.
+   */
+  TimeIndexColumn?: string;
+  /**
+   * How the trust verdict treats a classifier no better than always guessing the most common class (or one that
+   * predicts a single class). Absent = `'enforce'`. Recorded in the model's `Lineage.evaluation` at training time.
+   * To be replaced by the Evaluation Protocol.
+   */
+  MajorityBaselineRule?: MajorityBaselineRule;
 }
 
 /**

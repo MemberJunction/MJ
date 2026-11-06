@@ -19,9 +19,12 @@
  */
 
 /**
- * Supported distance/similarity metrics for vector operations
+ * Supported distance/similarity metrics for vector operations. Each scores higher for more
+ * similar vectors. `cosine` is cosine rescaled to 0-1, `(cos + 1) / 2`; `cosine-similarity` is
+ * the standard cosine in [-1, 1], which is what Pinecone, SQL Server and pgvector report, so use
+ * it where a score is compared against a threshold shared with those stores.
  */
-export type DistanceMetric = 'cosine' | 'euclidean' | 'manhattan' | 'dotproduct' | 'jaccard' | 'hamming';
+export type DistanceMetric = 'cosine' | 'cosine-similarity' | 'euclidean' | 'manhattan' | 'dotproduct' | 'jaccard' | 'hamming';
 
 /** Any numeric vector the kernels accept: `number[]`, `Float32Array`, `Float64Array`. */
 export type NumericVector = ArrayLike<number>;
@@ -164,9 +167,11 @@ export function HammingScore(a: NumericVector, aOffset: number, b: NumericVector
 }
 
 /**
- * The normalized 0-1 similarity for any metric — identical to
- * `SimpleVectorService.CalculateDistance`. Cosine maps [-1, 1] onto [0, 1].
- * The sums of squares are read only by cosine; pass 0 for other metrics.
+ * The similarity for any metric — identical to `SimpleVectorService.CalculateDistance`.
+ * Every metric is normalized to 0-1 except `cosine-similarity`: `cosine` maps [-1, 1]
+ * onto [0, 1], while `cosine-similarity` is the standard cosine in [-1, 1], the score
+ * Pinecone, SQL Server and pgvector report for a cosine index.
+ * The sums of squares are read only by the two cosine metrics; pass 0 for other metrics.
  *
  * @throws {Error} For an unknown metric
  */
@@ -179,6 +184,8 @@ export function MetricScore(
   switch (metric) {
     case 'cosine':
       return (CosineFromNorms(a, aOffset, aNormSq, b, bOffset, bNormSq, dims) + 1) / 2;
+    case 'cosine-similarity':
+      return CosineFromNorms(a, aOffset, aNormSq, b, bOffset, bNormSq, dims);
     case 'euclidean':
       return EuclideanScore(a, aOffset, b, bOffset, dims);
     case 'manhattan':
@@ -196,7 +203,7 @@ export function MetricScore(
 
 /** True when the metric is one the kernels implement. */
 export function IsKnownMetric(metric: string): metric is DistanceMetric {
-  return metric === 'cosine' || metric === 'euclidean' || metric === 'manhattan'
+  return metric === 'cosine' || metric === 'cosine-similarity' || metric === 'euclidean' || metric === 'manhattan'
     || metric === 'dotproduct' || metric === 'jaccard' || metric === 'hamming';
 }
 
@@ -249,12 +256,12 @@ function scanFloat32Rows(data: Float32Array<ArrayBufferLike>, view: VectorRowsVi
     if (live[row] !== 1) continue;
     const offset = row * dims;
     let score: number;
-    if (metric === 'cosine') {
+    if (metric === 'cosine' || metric === 'cosine-similarity') {
       let dot = 0;
       for (let d = 0; d < dims; d++) dot += query[d] * data[offset + d];
       const rowNormSq = norms[row];
       const cosine = queryNormSq === 0 || rowNormSq === 0 ? 0 : dot / (Math.sqrt(queryNormSq) * Math.sqrt(rowNormSq));
-      score = (cosine + 1) / 2;
+      score = metric === 'cosine' ? (cosine + 1) / 2 : cosine;
     } else if (metric === 'euclidean') {
       let sumSquaredDiff = 0;
       for (let d = 0; d < dims; d++) {
@@ -291,12 +298,12 @@ function scanFloat64Rows(data: Float64Array<ArrayBufferLike>, view: VectorRowsVi
     if (live[row] !== 1) continue;
     const offset = row * dims;
     let score: number;
-    if (metric === 'cosine') {
+    if (metric === 'cosine' || metric === 'cosine-similarity') {
       let dot = 0;
       for (let d = 0; d < dims; d++) dot += query[d] * data[offset + d];
       const rowNormSq = norms[row];
       const cosine = queryNormSq === 0 || rowNormSq === 0 ? 0 : dot / (Math.sqrt(queryNormSq) * Math.sqrt(rowNormSq));
-      score = (cosine + 1) / 2;
+      score = metric === 'cosine' ? (cosine + 1) / 2 : cosine;
     } else if (metric === 'euclidean') {
       let sumSquaredDiff = 0;
       for (let d = 0; d < dims; d++) {

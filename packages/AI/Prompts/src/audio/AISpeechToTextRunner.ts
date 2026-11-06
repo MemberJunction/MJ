@@ -52,7 +52,7 @@ export class AISpeechToTextRunner extends BaseMediaRunner<AISpeechToTextRunParam
     const outcome = await this.RunMediaOperation(params, {
       Name: 'SpeechToText',
       Validate: p => (this.audioBytes(p) > 0 ? undefined : 'Audio is required (params.audioData, or base 64 params.audioFile)'),
-      Invoke: (driver, apiName) => driver.SpeechToText(this.toDriverParams(params, apiName)),
+      Invoke: (driver, apiName, signal) => driver.SpeechToText(this.toDriverParams(params, apiName, signal)),
       DescribeRequest: p => this.describeRequest(p),
       DescribeOutput: output => output.content ?? '',
     });
@@ -66,9 +66,10 @@ export class AISpeechToTextRunner extends BaseMediaRunner<AISpeechToTextRunParam
 
   /**
    * The driver's params. `model` is the candidate's API name; when the model has none it is left
-   * empty, which the drivers read as "use your default".
+   * empty, which the drivers read as "use your default". `signal` is the call's bound, which the driver
+   * forwards to its request as `CancellationToken`.
    */
-  private toDriverParams(params: AISpeechToTextRunParams, apiName: string | undefined): SpeechToTextParams {
+  private toDriverParams(params: AISpeechToTextRunParams, apiName: string | undefined, signal: AbortSignal | undefined): SpeechToTextParams {
     const driverParams = new SpeechToTextParams();
     driverParams.model = apiName ?? '';
     driverParams.audioFile = params.audioFile ?? '';
@@ -77,6 +78,7 @@ export class AISpeechToTextRunner extends BaseMediaRunner<AISpeechToTextRunParam
     driverParams.language = params.language;
     driverParams.prompt = params.prompt;
     driverParams.temperature = params.temperature;
+    driverParams.CancellationToken = signal;
     return driverParams;
   }
 

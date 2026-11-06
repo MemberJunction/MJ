@@ -1626,45 +1626,10 @@ GO
 
 
 
-DROP PROC IF EXISTS __mj.spDeleteEntityWithCoreDependencies
-GO
-CREATE PROC __mj.spDeleteEntityWithCoreDependencies
-  @EntityID uniqueidentifier
-AS
-DELETE FROM __mj.EntityFieldValue WHERE EntityFieldID IN (SELECT ID FROM __mj.EntityField WHERE EntityID = @EntityID)
-DELETE FROM __mj.EntitySetting WHERE EntityID = @EntityID
-DELETE FROM __mj.EntityField WHERE EntityID = @EntityID
-DELETE FROM __mj.EntityPermission WHERE EntityID = @EntityID
-DELETE FROM __mj.EntityRelationship WHERE EntityID = @EntityID OR RelatedEntityID = @EntityID
-DELETE FROM __mj.UserApplicationEntity WHERE EntityID = @EntityID
-DELETE FROM __mj.ApplicationEntity WHERE EntityID = @EntityID
-DELETE FROM __mj.RecordChange WHERE EntityID = @EntityID
-DELETE FROM __mj.AuditLog WHERE EntityID=@EntityID
-DELETE FROM __mj.[Conversation] WHERE LinkedEntityID=@EntityID
-DELETE FROM __mj.ListDetail WHERE ListID IN (SELECT ID FROM __mj.List WHERE EntityID=@EntityID)
-DELETE FROM __mj.List WHERE EntityID=@EntityID
-
-DELETE FROM [__mj].[EntityDocument] WHERE [EntityID] = @EntityID;
-DELETE FROM [__mj].[CompanyIntegrationRecordMap] WHERE [EntityID] = @EntityID;
-DELETE FROM [__mj].[ResourceType] WHERE [EntityID] = @EntityID;
-DELETE FROM [__mj].[UserApplicationEntity] WHERE [EntityID] = @EntityID;
-
-UPDATE __mj.Dataset SET __mj_UpdatedAt=GETUTCDATE() WHERE ID IN (SELECT DatasetID FROM __mj.DatasetItem WHERE EntityID=@EntityID)
-DELETE FROM [__mj].[DatasetItem] WHERE [EntityID] = @EntityID;
-
-DELETE FROM [__mj].[UserViewCategory] WHERE [EntityID] = @EntityID;
-DELETE FROM [__mj].[UserView] WHERE [EntityID] = @EntityID;
-
-DELETE FROM [__mj].[EntityAIAction] WHERE [EntityID] = @EntityID;
-DELETE FROM [__mj].[EntityCommunicationMessageType] WHERE [EntityID] = @EntityID;
-DELETE FROM [__mj].[EntityAIAction] WHERE [OutputEntityID] = @EntityID;
-
--- Clear inbound metadata references from OTHER entities' fields that point AT this entity,
--- so the Entity row can be deleted without tripping FK_EntityField_RelatedEntity.
-UPDATE __mj.EntityField SET RelatedEntityID = NULL WHERE RelatedEntityID = @EntityID
-
-DELETE FROM __mj.Entity WHERE ID = @EntityID
-GO
+-- spDeleteEntityWithCoreDependencies is no longer defined here. Its current definition ships
+-- only in migrations (latest: migrations/v6/V202610261530__v6.2.x__CodeGen_EntityField_Drift_Repairs.sql).
+-- The body that used to live here predated the FK coverage and transaction handling, so running
+-- this script would have replaced the migrated proc with an older, weaker one.
 
 
 

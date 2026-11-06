@@ -29,6 +29,8 @@ class EmbeddingInternalResult extends BaseResult {
   public Vectors?: number[][];
   public TokensUsed?: number;
   public Cost?: number;
+  /** Whether the caller cancelled the call, which the run row records as cancelled rather than failed. */
+  public Cancelled = false;
 
   constructor(success: boolean, startTime?: Date, endTime?: Date) {
     const start = startTime ?? new Date();
@@ -166,7 +168,7 @@ export class AIEmbeddingRunner extends BaseModelRunner {
       call.PromptRun
     );
     if (!result.success) {
-      return this.failCall(result.errorMessage ?? 'Embedding execution failed', call, answeredBy);
+      return this.failCall(result.errorMessage ?? 'Embedding execution failed', call, answeredBy, result.Cancelled);
     }
     const endTime = new Date();
     const executionTimeMS = endTime.getTime() - call.StartTime.getTime();
@@ -214,15 +216,16 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     );
   }
 
-  /** Finalizes the run row (when there is one) as failed and returns the failure. */
+  /** Finalizes the run row (when there is one) as failed, or as cancelled, and returns the failure. */
   private async failCall(
     errorMessage: string,
     call: EmbeddingCallState,
-    candidate?: ModelVendorCandidate
+    candidate?: ModelVendorCandidate,
+    cancelled = false
   ): Promise<EmbeddingRunResult> {
     if (call.PromptRun) {
       const endTime = new Date();
-      await this.finalizeFailedRun(call.PromptRun, errorMessage, endTime, endTime.getTime() - call.StartTime.getTime());
+      await this.finalizeFailedRun(call.PromptRun, errorMessage, endTime, endTime.getTime() - call.StartTime.getTime(), cancelled);
     }
     return this.failedResult(errorMessage, call.StartTime, call.PromptRun, candidate);
   }
@@ -234,6 +237,9 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     if (!params?.ContextUser) {
       return 'ContextUser is required';
     }
+    if (params.CancellationToken?.aborted) {
+      return `The ${this.RequiredModelType} call was cancelled before it started`;
+    }
     return undefined;
   }
 
@@ -243,6 +249,8 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     promptParams.contextUser = params.ContextUser;
     promptParams.parentPromptRunId = params.ParentRunID;
     promptParams.provider = params.Provider ?? this._provider ?? undefined;
+    promptParams.timeoutMS = params.TimeoutMS;
+    promptParams.cancellationToken = params.CancellationToken;
     return promptParams;
   }
 
@@ -321,21 +329,11 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     candidates: ModelVendorCandidate[],
     promptParams: AIPromptParams
   ): EmbeddingSelection | string {
-    const credentialAvailability = new Map<string, boolean>();
-    let selected: ModelVendorCandidate | undefined;
-    for (const candidate of candidates) {
-      const available = this.HasCredentialsAvailable(
-        candidate.driverClass,
-        prompt.ID,
-        candidate.model.ID,
-        candidate.vendorId,
-        promptParams
-      );
-      credentialAvailability.set(this.candidateKey(candidate), available);
-      if (available && !selected) {
-        selected = candidate;
-      }
-    }
+    const { Candidate: selected, CredentialAvailability: credentialAvailability } = this.SelectCandidate(
+      candidates,
+      c => this.HasCredentialsAvailable(c.driverClass, prompt.ID, c.model.ID, c.vendorId, promptParams),
+      true
+    );
     if (!selected) {
       const summary = candidates
         .map(c => `[Model: ${c.model.Name}, Vendor: ${c.vendorName ?? 'default'}, Driver: ${c.driverClass}]`)
@@ -389,10 +387,6 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     return driver && driver.constructor !== BaseEmbeddings ? driver : null;
   }
 
-  private candidateKey(candidate: ModelVendorCandidate): string {
-    return `${candidate.driverClass}:${candidate.model.ID}:${candidate.vendorId || 'default'}`;
-  }
-
   private buildSelectionInfo(
     prompt: MJAIPromptEntityExtended,
     candidates: ModelVendorCandidate[],
@@ -408,7 +402,7 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     info.SelectionReason = 'First candidate with available credentials';
     info.FallbackUsed = false;
     info.ModelsConsidered = candidates.map(c => {
-      const available = selection.CredentialAvailability.get(this.candidateKey(c)) ?? false;
+      const available = selection.CredentialAvailability.get(this.CandidateKey(c)) ?? false;
       return {
         model: c.model,
         vendor: c.vendorId ? AIEngine.Instance.VendorsByID.get(NormalizeUUID(c.vendorId)) : undefined,
@@ -507,7 +501,14 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     }
   }
 
+  /**
+   * The result returned when every candidate has failed, or when the caller cancelled and the
+   * failover loop stopped, which the run row records as cancelled.
+   */
   private allCandidatesFailedResult(lastError: Error | null): EmbeddingInternalResult {
+    if (lastError && this.IsCallerCancellation(ErrorAnalyzer.AnalyzeError(lastError))) {
+      return this.cancelledCall();
+    }
     const errRes = new EmbeddingInternalResult(false);
     errRes.errorMessage = lastError?.message ?? 'All embedding candidates failed';
     errRes.errorInfo = { errorType: 'ModelError', severity: 'Retriable', canFailover: false };
@@ -515,6 +516,10 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     return errRes;
   }
 
+  /**
+   * Makes the call on one candidate: resolves its credential, builds its driver, and calls it. A
+   * caller that cancelled while an earlier candidate ran gets no further calls.
+   */
   private async executeOnCandidate(
     candidate: ModelVendorCandidate,
     prompt: MJAIPromptEntityExtended,
@@ -522,6 +527,9 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     params: EmbeddingRunParams
   ): Promise<EmbeddingInternalResult> {
     const startTime = new Date();
+    if (promptParams.cancellationToken?.aborted) {
+      return this.cancelledCall(startTime);
+    }
     let apiKey = '';
     try {
       apiKey = await this.ResolveCredentialForExecution(
@@ -547,36 +555,85 @@ export class AIEmbeddingRunner extends BaseModelRunner {
       res.errorInfo = { errorType: 'ModelError', severity: 'Retriable', canFailover: true };
       return res;
     }
+    return this.callDriver(embeddingInstance, candidate, prompt, promptParams, params, startTime);
+  }
 
+  /**
+   * Calls the driver within the call's bound: the caller's timeout and cancellation token, composed
+   * as for a chat call. The driver is handed the bound's signal, so an abort tears its request down.
+   * A timeout fails with the bound's `AIPromptTimeoutError`, which reads as a network error and so
+   * fails over; a cancelled call is never failed over.
+   */
+  private async callDriver(
+    driver: BaseEmbeddings,
+    candidate: ModelVendorCandidate,
+    prompt: MJAIPromptEntityExtended,
+    promptParams: AIPromptParams,
+    params: EmbeddingRunParams,
+    startTime: Date
+  ): Promise<EmbeddingInternalResult> {
+    const bound = this.createExecutionBound(prompt, promptParams, promptParams.cancellationToken);
     try {
-      const embedResult = await embeddingInstance.EmbedTexts({
-        texts: params.Texts,
-        model: candidate.apiName,
-        dimensions: params.Dimensions,
-      });
-
-      if (!embedResult || !embedResult.vectors || embedResult.vectors.length === 0) {
-        const res = new EmbeddingInternalResult(false, startTime, new Date());
-        res.errorMessage = `No vectors returned from embedding model '${candidate.model.Name}'`;
-        res.errorInfo = { errorType: 'ModelError', severity: 'Retriable', canFailover: true };
-        return res;
-      }
-
-      const res = new EmbeddingInternalResult(true, startTime, new Date());
-      res.EmbedResult = embedResult;
-      res.Vectors = embedResult.vectors;
-      res.TokensUsed = embedResult.ModelUsage?.totalTokens ?? 0;
-      res.Cost = embedResult.ModelUsage?.cost ?? 0;
-      return res;
+      const prepared = AIEngine.Instance.PrepareEmbeddingInput(candidate.model, params.Texts, params.InputType, candidate.vendorId);
+      const embedResult = await this.RaceWithinBound(
+        driver.EmbedTexts({
+          texts: prepared.texts,
+          model: candidate.apiName,
+          dimensions: params.Dimensions,
+          inputType: params.InputType,
+          maxInputTokens: prepared.maxInputTokens,
+          CancellationToken: bound.Signal,
+        }),
+        bound,
+        prompt
+      );
+      return this.callResultFrom(embedResult, candidate, startTime);
     } catch (err: unknown) {
+      if (bound.Signal?.aborted && !bound.TimedOut()) {
+        return this.cancelledCall(startTime);
+      }
       const error = err instanceof Error ? err : new Error(String(err));
-      const errorInfo = ErrorAnalyzer.analyzeError(error);
       const res = new EmbeddingInternalResult(false, startTime, new Date());
       res.errorMessage = error.message;
-      res.errorInfo = errorInfo;
+      res.errorInfo = ErrorAnalyzer.analyzeError(error);
       res.exception = error;
       return res;
+    } finally {
+      bound.Dispose();
     }
+  }
+
+  /** Wraps the driver's result for the failover loop; an empty result fails over as a model error. */
+  private callResultFrom(
+    embedResult: EmbedTextsResult | undefined,
+    candidate: ModelVendorCandidate,
+    startTime: Date
+  ): EmbeddingInternalResult {
+    if (!embedResult || !embedResult.vectors || embedResult.vectors.length === 0) {
+      const res = new EmbeddingInternalResult(false, startTime, new Date());
+      res.errorMessage = `No vectors returned from embedding model '${candidate.model.Name}'`;
+      res.errorInfo = { errorType: 'ModelError', severity: 'Retriable', canFailover: true };
+      return res;
+    }
+    const res = new EmbeddingInternalResult(true, startTime, new Date());
+    res.EmbedResult = embedResult;
+    res.Vectors = embedResult.vectors;
+    res.TokensUsed = embedResult.ModelUsage?.totalTokens ?? 0;
+    res.Cost = embedResult.ModelUsage?.cost ?? 0;
+    return res;
+  }
+
+  /**
+   * A call the caller cancelled. It is not eligible for failover, so the failover loop returns it as
+   * it is, and the run row records it as cancelled.
+   */
+  private cancelledCall(startTime?: Date): EmbeddingInternalResult {
+    const message = `The ${this.RequiredModelType} call was cancelled`;
+    const cancelled = new EmbeddingInternalResult(false, startTime, new Date());
+    cancelled.errorMessage = message;
+    cancelled.errorInfo = this.BuildCancellationError(message).errorInfo;
+    cancelled.Cancelled = true;
+    return cancelled;
   }
 
   private async finalizeSuccessRun(
@@ -606,14 +663,21 @@ export class AIEmbeddingRunner extends BaseModelRunner {
     });
   }
 
+  /** Finalizes the run row as failed, or, for a call the caller cancelled, as cancelled. */
   private async finalizeFailedRun(
     promptRun: MJAIPromptRunEntityExtended,
     errorMessage: string,
     endTime: Date,
-    executionTimeMS: number
+    executionTimeMS: number,
+    cancelled = false
   ): Promise<void> {
     await this.FinalizeRunRecord(promptRun, false, endTime, executionTimeMS, run => {
       run.ErrorMessage = errorMessage;
+      if (cancelled) {
+        run.Status = 'Cancelled';
+        run.Cancelled = true;
+        run.CancellationReason = 'user_requested';
+      }
     });
   }
 

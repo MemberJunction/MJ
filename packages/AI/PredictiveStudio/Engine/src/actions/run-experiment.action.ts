@@ -7,6 +7,10 @@
  * budget bound) and read back the session id, the best model id, and the
  * leaderboard.
  *
+ * Experiment sessions are switched off ({@link ExperimentSessions.Enabled}): the
+ * action refuses with `EXPERIMENT_SESSIONS_UNAVAILABLE` (the same refusal code the
+ * `PredictiveStudio.StartExperimentSession` operation returns) before reading any parameter.
+ *
  * Per CLAUDE.md "Actions are boundaries": this action does NOT do any experiment
  * orchestration. It validates that an **approved** `PlanSpec` is supplied (and an
  * optional `ExperimentID` to attach the session to an existing durable
@@ -22,16 +26,17 @@ import type { ActionResultSimple, RunActionParams } from '@memberjunction/action
 import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
-import type { Budget } from '@memberjunction/predictive-studio-core';
-import { validateModelingPlanSpec, validateBudget } from '@memberjunction/predictive-studio-core';
+import type { Budget, PredictiveStudioRefusalCode } from '@memberjunction/predictive-studio-core';
+import { validateModelingPlanSpec, validateBudget, ExperimentSessions } from '@memberjunction/predictive-studio-core';
 
 import { ExperimentOrchestrator } from '../experiment/experiment-orchestrator';
 import type { ExperimentDeps, ExperimentRunOptions, ExperimentSessionResult } from '../experiment/types';
 import { BasePredictiveStudioAction } from './base-predictive-studio.action';
-import { BuildProductionExperimentDeps } from './run-experiment.deps';
+import { BuildProductionExperimentDeps, ExperimentSessionsUnavailableError } from './run-experiment.deps';
 
 /** The driver-class key this action registers under (matches the metadata row). */
-export const RUN_EXPERIMENT_DRIVER_CLASS = 'PredictiveStudioRunExperimentAction';
+export { RUN_EXPERIMENT_DRIVER_CLASS } from './driver-classes';
+import { RUN_EXPERIMENT_DRIVER_CLASS } from './driver-classes';
 
 /**
  * Runs an approved modeling plan as an experiment session. Outputs: `SessionID`
@@ -43,6 +48,9 @@ export class PredictiveStudioRunExperimentAction extends BasePredictiveStudioAct
   /** @inheritdoc */
   protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
     try {
+      if (!this.sessionsEnabled()) {
+        throw new ExperimentSessionsUnavailableError();
+      }
       const rawPlan = this.getJsonObjectParam(params, 'PlanSpec');
       if (!rawPlan) {
         return this.fail(
@@ -76,6 +84,11 @@ export class PredictiveStudioRunExperimentAction extends BasePredictiveStudioAct
       const result = await orchestrator.runSession(plan, deps, options);
       return this.mapResult(params, result);
     } catch (e) {
+      if (e instanceof ExperimentSessionsUnavailableError) {
+        // The typed refusal code, so the action and the StartExperimentSession operation report one code.
+        const code: PredictiveStudioRefusalCode = 'EXPERIMENT_SESSIONS_UNAVAILABLE';
+        return this.fail(code, e.message);
+      }
       LogError(e);
       return this.fail('EXPERIMENT_FAILED', `Experiment session failed: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -138,10 +151,17 @@ export class PredictiveStudioRunExperimentAction extends BasePredictiveStudioAct
   }
 
   /**
-   * Build the orchestrator's production dependency bundle from the action's run
-   * params. Async because the wiring resolves the active File Storage Provider to
-   * pick the artifact-store family. Overridable so tests inject in-memory seams
-   * (entity factory, fake clock, fake trainer).
+   * Whether experiment sessions may run: {@link ExperimentSessions.Enabled}. Overridable so tests exercise the
+   * validation and delegation path behind the switch.
+   */
+  protected sessionsEnabled(): boolean {
+    return ExperimentSessions.Enabled;
+  }
+
+  /**
+   * Build the orchestrator's production dependency bundle ({@link BuildProductionExperimentDeps}, which refuses while
+   * experiment sessions are switched off). Overridable so tests inject in-memory seams (entity factory, fake clock,
+   * fake trainer).
    */
   protected buildDeps(params: RunActionParams): Promise<ExperimentDeps> {
     return BuildProductionExperimentDeps(params.ContextUser, params.Provider);

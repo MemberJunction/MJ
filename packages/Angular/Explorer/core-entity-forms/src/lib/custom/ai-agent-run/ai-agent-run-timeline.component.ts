@@ -226,6 +226,13 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
 
   /** Graph steps currently being expanded, so a second click cannot start a second load. */
   private expandingGraphIDs = new Set<string>();
+  /**
+   * Tracks user-expanded timeline node IDs (lowercased) across `runTree$` poll cycles so
+   * live workflow refreshes do not collapse an open TaskGraph or its expanded child tasks.
+   */
+  private expandedItemIds = new Set<string>();
+  /** Cached children for expanded Sub-Agent steps so they survive `runTree$` poll rebuilds. */
+  private loadedSubAgentChildren = new Map<string, TimelineItem[]>();
 
   constructor(
     private cdr: ChangeDetectorRef
@@ -440,6 +447,29 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
       subtitle = `${subtitle} · dispatched in ${this.CalculateDuration(step.StartedAt, step.CompletedAt)}`;
     }
 
+    const isExpanded = this.expandedItemIds.has(step.ID.toLowerCase());
+    let children: TimelineItem[] = [];
+    let childrenLoaded: boolean | undefined = undefined;
+    let hasNoChildren: boolean | undefined = undefined;
+
+    if (step.StepType === 'TaskGraph' && isExpanded && this.RunTree) {
+      const stepNode = FindAgentRunTreeNodes(this.RunTree, (n) => UUIDsEqual(n.NodeID, step.ID))[0] ?? null;
+      if (stepNode) {
+        children = ProjectRunTreeToTimeline(stepNode, level + 1, true, (n) => this.resolveActionIcon(n));
+        this.restoreExpansionState(children);
+        childrenLoaded = true;
+        hasNoChildren = children.length === 0;
+      }
+    } else if (step.StepType === 'Sub-Agent') {
+      const cachedChildren = this.loadedSubAgentChildren.get(step.ID.toLowerCase());
+      if (cachedChildren) {
+        children = cachedChildren;
+        this.restoreExpansionState(children);
+        childrenLoaded = true;
+        hasNoChildren = children.length === 0;
+      }
+    }
+
     return {
       id: step.ID,
       type: 'step',
@@ -457,9 +487,11 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
       logoUrl: iconInfo.logoUrl,
       color: this.getStatusColor(graph ? NormalizeStatus(graph.Status) : step.Status),
       data: step,
-      children: [],
+      children,
       level,
-      isExpanded: false
+      isExpanded,
+      childrenLoaded,
+      hasNoChildren
     };
   }
   
@@ -514,7 +546,8 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
       'ForEach': 'fa-repeat',
       'While': 'fa-rotate',
       'Skill': 'fa-wand-magic-sparkles',
-      'Plan': 'fa-clipboard-check'
+      'Plan': 'fa-clipboard-check',
+      'TaskGraph': 'fa-diagram-project'
     };
     return iconMap[stepType] || 'fa-circle';
   }
@@ -561,8 +594,14 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
   async ToggleItemExpansion(item: TimelineItem, event: Event) {
     event.stopPropagation();
 
-    // Toggle expansion state
+    // Toggle expansion state and persist in expandedItemIds so live runTree$ polls preserve it
     item.isExpanded = !item.isExpanded;
+    const key = item.id.toLowerCase();
+    if (item.isExpanded) {
+      this.expandedItemIds.add(key);
+    } else {
+      this.expandedItemIds.delete(key);
+    }
 
     // For Sub-Agent steps, load their run data on demand (requires DB query)
     if (item.isExpanded && !item.childrenLoaded && item.type === 'step' && item.data?.StepType === 'Sub-Agent') {
@@ -575,14 +614,24 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
       await this.ExpandTaskGraph(item);
     }
 
-    // For parent steps (loop containers like ForEach/While), children are already loaded via ParentID
-    // Just toggle - no additional loading needed since we already have all steps from the run
-    // The children were already attached in buildTimelineItems()
+    // For parent steps (loop containers like ForEach/While) and projected workflow tasks,
+    // children are already attached — trigger OnPush change detection immediately.
+    this.cdr.markForCheck();
   }
 
   /** @deprecated Use {@link ToggleItemExpansion}. */
   async toggleItemExpansion(item: TimelineItem, event: Event) {
     return this.ToggleItemExpansion(item, event);
+  }
+
+  private restoreExpansionState(items: TimelineItem[] | undefined): void {
+    if (!items) return;
+    for (const item of items) {
+      item.isExpanded = this.expandedItemIds.has(item.id.toLowerCase());
+      if (item.children && item.children.length > 0) {
+        this.restoreExpansionState(item.children);
+      }
+    }
   }
   
   private async loadSubAgentChildren(item: TimelineItem) {
@@ -609,6 +658,7 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
       // Build hierarchical timeline items with ParentID relationships
       // This ensures that loop steps (ForEach/While) within sub-agents also show their children
       item.children = this.buildHierarchicalItems(data.steps, item.level + 1, data.promptRuns);
+      this.loadedSubAgentChildren.set(item.id.toLowerCase(), item.children);
 
       item.childrenLoaded = true;
       // Trigger change detection after updating the data
@@ -718,9 +768,10 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
 
       // The graph hangs off THIS step in the tree, so the subtree to splice in is the node whose id
       // matches the step — not the whole run, which is already on screen above it.
-      const stepNode = FindAgentRunTreeNodes(this.RunTree, (n) => n.NodeID === item.id)[0] ?? null;
+      const stepNode = FindAgentRunTreeNodes(this.RunTree, (n) => UUIDsEqual(n.NodeID, item.id))[0] ?? null;
 
       item.children = ProjectRunTreeToTimeline(stepNode, item.level + 1, true, (n) => this.resolveActionIcon(n));
+      this.restoreExpansionState(item.children);
       item.childrenLoaded = true;
       item.hasNoChildren = item.children.length === 0;
     } catch (e) {

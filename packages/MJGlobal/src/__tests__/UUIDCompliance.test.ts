@@ -20,6 +20,14 @@ import ts from 'typescript';
 /** Directories that should never contain UUID comparison anti-patterns */
 const SCAN_ROOT = path.resolve(__dirname, '..', '..', '..'); // packages/
 
+/**
+ * Floor on how many files the scan must read. `findTsFiles` returns [] for a missing root, and a
+ * test moved one directory deeper resolves SCAN_ROOT to a single package: either way the gate
+ * would pass while scanning almost nothing. The repo has ~7000 scannable files and no single
+ * top-level folder under packages/ has more than ~2600, so this floor sits between the two.
+ */
+const MIN_SCANNED_FILES = 3000;
+
 /** Patterns that indicate direct UUID comparison (anti-patterns) */
 const ANTI_PATTERNS = [
     /\.ID\s*===\s*(?!['"]|true|false|null|undefined|0\b)/,     // .ID === someVar (not string literals or primitives)
@@ -166,6 +174,7 @@ function findFlaggedLines(filePath: string, relativePath: string): Violation[] {
 describe('UUID Comparison Compliance', () => {
     it('should not have direct UUID comparisons (=== / !==) in source files', () => {
         const tsFiles = findTsFiles(SCAN_ROOT);
+        expect(tsFiles.length).toBeGreaterThan(MIN_SCANNED_FILES);
         const allViolations: Violation[] = [];
 
         for (const file of tsFiles) {
@@ -280,13 +289,13 @@ const NESTED_SCAN_BASELINE: Record<string, number> = {
     'AI/AgentManager/core/src/agent-spec-sync.ts': 6,
     'AI/Agents/src/ArtifactToolManager.ts': 1,
     'AI/Agents/src/SkillImportExportService.ts': 1,
-    'AI/Agents/src/base-agent.ts': 30,
+    'AI/Agents/src/base-agent.ts': 27,
     'AI/Agents/src/decision-discovery.ts': 1,
     'AI/Agents/src/memory-note-gate.ts': 1,
-    'AI/Agents/src/realtime/realtime-client-session-service.ts': 2,
+    'AI/Agents/src/realtime/realtime-client-session-service.ts': 1,
     'AI/BaseAIEngine/src/AIAgentPermissionHelper.ts': 1,
     'AI/BaseAIEngine/src/AISkillPermissionHelper.ts': 1,
-    'AI/BaseAIEngine/src/BaseAIEngine.ts': 10,
+    'AI/BaseAIEngine/src/BaseAIEngine.ts': 6,
     'AI/CorePlus/src/conversation-routing-decision.ts': 1,
     'AI/CorePlus/src/task-graph/flow-graph-compiler.ts': 1,
     'AI/Knowledge/TagEngine/src/TagEngine.ts': 1,
@@ -369,9 +378,8 @@ const NESTED_SCAN_BASELINE: Record<string, number> = {
     'ConversationsRuntime/src/mentions/MentionAutocomplete.ts': 1,
     'DocUtils/src/Engine.ts': 1,
     'GenericDatabaseProvider/src/GenericDatabaseProvider.ts': 2,
-    'GenericDatabaseProvider/src/queryCompositionEngine.ts': 1,
     'MJCore/src/generic/baseEngine.ts': 1,
-    'MJCore/src/generic/entityInfo.ts': 6,
+    'MJCore/src/generic/entityInfo.ts': 2,
     'MJCore/src/generic/providerBase.ts': 3,
     'MJCore/src/generic/securityInfo.ts': 1,
     'MJCoreEntities/src/custom/MJQueryEntityExtended.ts': 3,
@@ -388,17 +396,16 @@ const NESTED_SCAN_BASELINE: Record<string, number> = {
     'MJCoreEntitiesServer/src/custom/MJApplicationEntityServer.server.ts': 1,
     'MJCoreEntitiesServer/src/custom/MJEntityFieldPermissionEntityServer.server.ts': 1,
     'MJCoreEntitiesServer/src/custom/MJUserRoleEntityServer.server.ts': 2,
-    'MJCoreEntitiesServer/src/custom/query-extraction/sync.ts': 7,
+    'MJCoreEntitiesServer/src/custom/query-extraction/sync.ts': 5,
     'MJCoreEntitiesServer/src/custom/rubrics/evaluationSubmit.ts': 2,
     'MJCoreEntitiesServer/src/custom/rubrics/versionPublish.ts': 1,
     'MJServer/src/resolvers/IntegrationDiscoveryResolver.ts': 1,
     'MJServer/src/resolvers/SyncRolesUsersResolver.ts': 1,
-    'MJServer/src/resolvers/meetings/meetingMutations.ts': 1,
     'Rubrics/Base/src/authoring.ts': 2,
     'Rubrics/Engine/src/rubricCli.ts': 2,
     'Scheduling/engine/src/drivers/ActionScheduledJobDriver.ts': 1,
     'SearchEngine/src/generic/SearchEngine.ts': 4,
-    'SearchEngine/src/generic/StorageSearchProvider.ts': 4,
+    'SearchEngine/src/generic/StorageSearchProvider.ts': 1,
     'SearchEngine/src/generic/VectorSearchProvider.ts': 2,
     'SearchEngine/src/permissions/SearchScopePermissionResolver.ts': 1,
     'TaskGraph/src/TaskGraphDispatcher.ts': 2,
@@ -415,7 +422,6 @@ const NESTED_SCAN_BASELINE: Record<string, number> = {
     'TestingFramework/integration-test-suite/src/checks/realtime-deterministic.checks.ts': 1,
     'TestingFramework/integration-test-suite/src/checks/record-cloning.checks.ts': 3,
     'TestingFramework/integration-test-suite/src/checks/runquery-catalog.checks.ts': 1,
-    'TestingFramework/integration-test-suite/src/checks/runquery-rendering.checks.ts': 1,
     'TestingFramework/integration-test-suite/src/checks/trailing-runtime-state.checks.ts': 3,
     'TestingFramework/integration-test-suite/src/checks/transaction-groups-batched.checks.ts': 1,
     'TestingFramework/integration-test-suite/src/discovery-corpus/generator.ts': 1,

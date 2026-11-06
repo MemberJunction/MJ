@@ -84,4 +84,26 @@ describe('MessageListComponent.RefreshRenderedMessage', () => {
         const list = buildList({ 'ai-1': { kind: 'spacer', ref: {} } });
         expect(list.RefreshRenderedMessage(detail())).toBe(true);
     });
+
+    it('updates agentRun from AgentRunMap and respects markStreaming: false', () => {
+        const entry = componentEntry();
+        const list = buildList({ 'ai-1': entry });
+        const run = { ID: 'run-1', Status: 'Running' };
+        (list as unknown as { AgentRunMap: Map<string, unknown> }).AgentRunMap = new Map([['ai-1', run]]);
+        const message = detail();
+        expect(list.RefreshRenderedMessage(message, { markStreaming: false })).toBe(true);
+        expect(entry.ref.instance.message).toBe(message);
+        expect((entry.ref.instance as unknown as { agentRun: unknown }).agentRun).toBe(run);
+        expect(entry.ref.instance.IsStreaming).toBe(false);
+        expect(entry.ref.changeDetectorRef.detectChanges).toHaveBeenCalledTimes(1);
+    });
+
+    it('detaches the scroll listener on ngOnDestroy', () => {
+        const list = buildList({});
+        const detachSpy = vi.fn();
+        (list as unknown as { detachScrollListener: () => void }).detachScrollListener = detachSpy;
+        (list as unknown as { _scrollParentRetryHandle: number | null })._scrollParentRetryHandle = null;
+        list.ngOnDestroy();
+        expect(detachSpy).toHaveBeenCalledTimes(1);
+    });
 });

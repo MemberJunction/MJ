@@ -15,6 +15,7 @@ Direct integrations with large language model APIs.
 | [Anthropic](./Anthropic/readme.md) | `@memberjunction/ai-anthropic` | Wrapper for Anthropic AI Models (Claude) |
 | [Gemini](./Gemini/readme.md) | `@memberjunction/ai-gemini` | Wrapper for Google Gemini AI Models |
 | [Groq](./Groq/readme.md) | `@memberjunction/ai-groq` | Wrapper for Groq AI LPU inference engine |
+| [Inception](./Inception/README.md) | `@memberjunction/ai-inception` | Inception Labs' Mercury diffusion models: the Mercury chat models, and the Mercury Decide decision model on Inception's Decisions API |
 | [Mistral](./Mistral/readme.md) | `@memberjunction/ai-mistral` | Wrapper for Mistral AI Models |
 | [OpenAI](./OpenAI/readme.md) | `@memberjunction/ai-openai` | Wrapper for OpenAI AI Models (GPT-4, etc.) |
 | [xAI](./xAI/README.md) | `@memberjunction/ai-xai` | Wrapper for xAI models (Grok) |
@@ -38,7 +39,7 @@ Services that provide access to multiple models through a single API.
 |---------|-----|-------------|
 | [Fireworks](./Fireworks/README.md) | `@memberjunction/ai-fireworks` | Wrapper for Fireworks.ai AI Models |
 | [OpenRouter](./OpenRouter/README.md) | `@memberjunction/ai-openrouter` | Wrapper for OpenRouter AI inference services |
-| [SystemOne](./SystemOne/README.md) | `@memberjunction/ai-systemone` | Decision models on any System One server (`/v1/systemone`): Kev on Modal, llama.cpp `llama-server`, TypeSafe; and Perplexity's Decisions API (`pplx-decider-v1-27b`) |
+| [SystemOne](./SystemOne/README.md) | `@memberjunction/ai-systemone` | Decision models on any System One server (`/v1/systemone`): Kev on Modal, llama.cpp `llama-server`, TypeSafe; Perplexity's Decisions API (`pplx-decider-v1-27b`); and Subquadratic's SubQ Decisions API (SubQ Snap, `subq-snap-preview`, public preview) |
 
 ### Local Inference
 

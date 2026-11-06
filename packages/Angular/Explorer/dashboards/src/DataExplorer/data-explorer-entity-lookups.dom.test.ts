@@ -40,4 +40,30 @@ describe('DataExplorerDashboardComponent entity lookups', () => {
         d.Entities = [entity(ids[0], 'after')];
         expect(d.FavoriteEntities.map(e => e.Name)).toEqual(['after']);
     });
+
+    it('memoizes AllowedEntityNames, FlatFilteredEntities, and FilteredRecentRecords across CD reads (MJ-NG-4)', () => {
+        const d = dashboard([], [], all);
+        d.EntityFilterText = '';
+        (d as unknown as { State: Record<string, unknown> }).State['homeViewMode'] = 'all';
+        d.EntityFilter = { applicationId: 'app-1' };
+
+        const allowed1 = d.AllowedEntityNames;
+        const allowed2 = d.AllowedEntityNames;
+        expect(allowed1).not.toBeNull();
+        expect(allowed2).toBe(allowed1);
+
+        const flat1 = d.FlatFilteredEntities;
+        const flat2 = d.FlatFilteredEntities;
+        expect(flat2).toBe(flat1);
+
+        d.RecentRecords = [
+            { entityId: ids[0], entityName: 'E1', recordId: '1', recordName: 'R1', latestAt: new Date(), totalCount: 1 },
+            { entityId: ids[1], entityName: 'E2', recordId: '2', recordName: 'R2', latestAt: new Date(), totalCount: 2 },
+        ];
+        d.RecentRecordsEntityFilter = ids[0];
+        const rec1 = d.FilteredRecentRecords;
+        const rec2 = d.FilteredRecentRecords;
+        expect(rec2).toBe(rec1);
+        expect(rec1).toHaveLength(1);
+    });
 });

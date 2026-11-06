@@ -1,11 +1,27 @@
 export { gql } from 'graphql-request';
 export { SetupGraphQLClient, setupGraphQLClient, ConnectGraphQLClient } from './config';
 export { PACKAGE_VERSION } from './version.generated';
-export { GraphQLDataProvider, GraphQLProviderConfigData } from './graphQLDataProvider';
-export type { AuthenticationErrorCallback, SocketConnectionState, TaskGraphFrameEvent } from './graphQLDataProvider';
+export {
+    GraphQLDataProvider,
+    GraphQLProviderConfigData,
+    RegisterNetworkDiagnosticObserver,
+    RegisterResponseHeaderObserver,
+} from './graphQLDataProvider';
+export type {
+    AuthenticationErrorCallback,
+    ExecuteGQLOptions,
+    SocketConnectionState,
+    TaskGraphFrameEvent,
+    NetworkDiagnosticObservation,
+    NetworkDiagnosticObserver,
+    GraphQLResponseHeaders,
+    ResponseHeaderObserver,
+} from './graphQLDataProvider';
 export * from './graphQLTransactionGroup';
 export { FieldMapper } from './FieldMapper';
 export { SanitizeGraphQLError, ToSafeGraphQLError, SafeGraphQLError } from './sanitizeGraphQLError';
+export { IsGraphQLMutation, FirstGraphQLOperationKind, ExtractGraphQLOperationName } from './graphQLOperationKind';
+export type { GraphQLOperationKind } from './graphQLOperationKind';
 export type { SanitizedGraphQLError, SanitizedGraphQLErrorDetail, VariableShape } from './sanitizeGraphQLError';
 export * from './rolesAndUsersType';
 export * from './graphQLSystemUserClient';
@@ -24,7 +40,9 @@ export type {
     EmbedTextParams,
     EmbedTextResult,
     RunAIAgentFromConversationDetailParams,
+    AgentReplyAcknowledgement,
     AutotagPipelineResult,
+    MergeTagsResult,
     VectorizeEntityParams,
     VectorizeEntityResult,
     DuplicateEntryCheckParams,
@@ -108,7 +126,8 @@ export type {
     SearchClientFilters,
     SearchClientProviderInfo,
     SearchSourceCounts,
-    SearchScoreBreakdown
+    SearchScoreBreakdown,
+    SearchStreamClientEvent
 } from './graphQLSearchClient';
 
 export { GraphQLIntegrationClient } from './graphQLIntegrationClient';

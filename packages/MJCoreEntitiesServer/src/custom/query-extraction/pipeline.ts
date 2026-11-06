@@ -12,11 +12,15 @@ import {
 } from "./resolve";
 import { RunLLMEnrichment, MergeParametersWithLLM } from "./enrich";
 import { SyncParameters, SyncFields, SyncEntities, SyncDependencies, RemoveAllRecords } from "./sync";
+import { NO_DECLARED_QUERY_CHILDREN } from "./declared";
+import { SQLUsesTemplate } from "./templateFacts";
 import { QueryEngine } from "@memberjunction/core-entities";
+import { BaseEntity, LocalCacheManager } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 
 /**
- * Result of running the full extraction pipeline.
- * The caller uses `usesTemplate` to update the entity's UsesTemplate flag.
+ * Result of running the full extraction pipeline. `UsesTemplate` is a lexical fact: whether the
+ * SQL holds any template tag outside SQL comments.
  */
 export interface PipelineResult {
     UsesTemplate: boolean;
@@ -31,6 +35,10 @@ export interface PipelineResult {
  *   5. SYNC — parallel database writes
  *
  * Throws on invalid composition references (non-existent, non-Reusable, circular).
+ *
+ * @deprecated Saves extract with `ComputeQueryExtraction` (the database server describes the
+ * output) and `WriteExtractedChildRows` (facts corrected, authored annotations kept). This
+ * LLM-assisted pipeline is kept for callers of the package API.
  */
 export async function RunExtractionPipeline(ctx: QuerySyncContext): Promise<PipelineResult> {
     // ── STAGE 1: PARSE ──
@@ -39,22 +47,19 @@ export async function RunExtractionPipeline(ctx: QuerySyncContext): Promise<Pipe
     // ── STAGE 2: RESOLVE ──
     const resolveResult = resolve(ctx, parseResult);
 
-    // ── STAGE 3: ENRICH (best-effort, non-fatal) ──
-    const llmResult = await RunLLMEnrichment(
-        ctx.sql,
-        resolveResult.EntityMetadata,
-        ctx.contextUser,
-        ctx.metadataProvider
-    );
+    // ── STAGE 3: ENRICH (best-effort, non-fatal; skipped on request, which merges like a failed call) ──
+    const llmResult = ctx.SkipAIEnrichment
+        ? null
+        : await RunLLMEnrichment(ctx.sql, resolveResult.EntityMetadata, ctx.contextUser, ctx.metadataProvider);
 
     // ── STAGE 4: MERGE ──
     const { finalParams, finalFields } = merge(resolveResult, llmResult, parseResult, ctx);
 
-    // ── STAGE 5: SYNC (parallel DB writes) ──
-    await sync(ctx, finalParams, finalFields, resolveResult);
+    // ── STAGE 5: SYNC (parallel DB writes, cache slots rewritten once at the end) ──
+    await runInEntityEventBatches(syncBatchOwners(ctx), () => sync(ctx, finalParams, finalFields, resolveResult));
 
     return {
-        UsesTemplate: resolveResult.AllDeterministicParams.length > 0,
+        UsesTemplate: SQLUsesTemplate(ctx.sql, ctx.platform ?? 'sqlserver'),
     };
 }
 
@@ -119,10 +124,11 @@ function merge(
         ? llmResult.selectClause
         : null;
 
-    // When we have deterministic fields, supplement them with LLM descriptions
+    // When we have deterministic fields, supplement them with LLM descriptions. The LLM never
+    // supplies a source: LLM-only fields carry none.
     const rawFields = resolvedFields
         ? supplementDeterministicWithLLM(resolvedFields, llmFields)
-        : llmFields;
+        : llmFields?.map(f => ({ ...f, sourceEntity: null, sourceFieldName: null })) ?? null;
 
     const finalFields = rawFields
         ? EnrichFieldTypesFromEntityMetadata(
@@ -136,6 +142,49 @@ function merge(
     return { finalParams, finalFields };
 }
 
+/**
+ * The objects the sync stage's saves raise their events through. New rows use the pipeline's
+ * provider. Existing rows come from `QueryEngine`'s cache and keep whatever provider they were
+ * loaded or saved through: the engine's own, or, for a row an earlier request created, that
+ * request's provider instance. Each distinct one gets a batch, or its saves would rewrite and
+ * publish their slots one save at a time.
+ */
+function syncBatchOwners(ctx: QuerySyncContext): object[] {
+    const engine = QueryEngine.Instance;
+    const owners = new Set<object>([ctx.metadataProvider]);
+    if (engine.ProviderToUse) {
+        owners.add(engine.ProviderToUse);
+    }
+    if (engine.Loaded) {
+        const existingRows: BaseEntity[] = [
+            ...engine.GetQueryParameters(ctx.queryID),
+            ...engine.GetQueryFields(ctx.queryID),
+            ...engine.QueryEntities.filter(e => UUIDsEqual(e.QueryID, ctx.queryID)),
+            ...engine.Dependencies.filter(d => UUIDsEqual(d.QueryID, ctx.queryID)),
+        ];
+        for (const row of existingRows) {
+            if (row.ProviderToUse) {
+                owners.add(row.ProviderToUse);
+            }
+        }
+    }
+    return [...owners];
+}
+
+/**
+ * Runs `work` inside an entity-event batch for every owner. Each row save would otherwise rewrite
+ * and publish its entity's whole shared cache slot (every field of every query, for Query Fields);
+ * in a batch each slot is rewritten once when the batch closes. When `work` fails the batch closes
+ * as failed and the touched slots are invalidated instead, so every server reloads them.
+ */
+async function runInEntityEventBatches(owners: object[], work: () => Promise<void>): Promise<void> {
+    if (owners.length === 0) {
+        return work();
+    }
+    const [owner, ...rest] = owners;
+    return LocalCacheManager.Instance.RunInEntityEventBatch(owner, () => runInEntityEventBatches(rest, work));
+}
+
 async function sync(
     ctx: QuerySyncContext,
     finalParams: ReturnType<typeof MergeParametersWithLLM> | null,
@@ -143,24 +192,24 @@ async function sync(
     resolveResult: ResolveResult
 ): Promise<void> {
     const syncPromises: Promise<void>[] = [];
+    const declared = ctx.DeclaredChildren ?? NO_DECLARED_QUERY_CHILDREN;
 
-    // Parameters
-    if (finalParams) {
-        syncPromises.push(SyncParameters(ctx.queryID, finalParams, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
-    } else {
-        syncPromises.push(RemoveAllRecords(ctx.queryID, 'MJ: Query Parameters', ctx.contextUser, ctx.runViewProvider, ctx.isSaved));
-    }
+    // Parameters. With no parameter in the SQL this syncs an empty list: the rows the save declared
+    // and the rows a person authored stay, and only the extracted ones go.
+    syncPromises.push(SyncParameters(ctx.queryID, finalParams ?? [], ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved, declared.ParameterNames));
 
     // Fields: when finalFields is null, preserve existing fields instead of deleting them.
     // Deletion only happens when we have a positive new field list (handled inside SyncFields via diff).
     if (finalFields) {
-        syncPromises.push(SyncFields(ctx.queryID, finalFields, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved, ctx.platform));
+        syncPromises.push(SyncFields(ctx.queryID, finalFields, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved, ctx.platform, declared.FieldNames));
     }
     // When finalFields is null, we intentionally do NOT call RemoveAllRecords — existing fields are preserved.
 
     // Entities
     if (resolveResult.EntityMetadata.length > 0) {
-        syncPromises.push(SyncEntities(ctx.queryID, resolveResult.EntityMetadata, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
+        syncPromises.push(SyncEntities(ctx.queryID, resolveResult.EntityMetadata, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved, declared.EntityKeys));
+    } else if (declared.EntityKeys.size > 0) {
+        syncPromises.push(SyncEntities(ctx.queryID, [], ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved, declared.EntityKeys));
     } else {
         syncPromises.push(RemoveAllRecords(ctx.queryID, 'MJ: Query Entities', ctx.contextUser, ctx.runViewProvider, ctx.isSaved));
     }
@@ -168,7 +217,13 @@ async function sync(
     // Dependencies
     syncPromises.push(SyncDependencies(ctx.queryID, resolveResult.ResolvedCompositionRefs, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
 
-    await Promise.all(syncPromises);
+    // Wait for every write before failing, so the enclosing event batch closes after the last one
+    // instead of while some are still in flight.
+    const outcomes = await Promise.allSettled(syncPromises);
+    const failure = outcomes.find((o): o is PromiseRejectedResult => o.status === 'rejected');
+    if (failure) {
+        throw failure.reason;
+    }
 }
 
 /**
@@ -200,8 +255,8 @@ function supplementDeterministicWithLLM(
             // LLM may identify summary/computed nature better
             isSummary: llmMatch.isSummary ?? df.isSummary,
             computationDescription: llmMatch.computationDescription ?? df.computationDescription,
-            // LLM may identify source entity for columns the parser can't resolve
-            sourceEntity: df.sourceEntity ?? llmMatch.sourceEntity,
+            // The source is a fact: it never comes from the LLM.
+            sourceEntity: df.sourceEntity,
         };
     });
 }

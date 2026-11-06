@@ -8,16 +8,17 @@
  * Also hosts server-side recovery ({@link RecoverRealtimeRecordingFromSegments}): rebuilding a recording
  * from its crash-recovery shards when the end-of-call upload never arrived. Recovery defers to a
  * recording that already exists on a best-effort basis: it re-checks the session immediately before
- * its stamp, but `BaseEntity` has no compare-and-set, so a writer landing inside that one load -> save
- * window can still be overwritten.
+ * its stamp, but `spStampAIAgentSessionRecordingFile` has no compare-and-set, so a writer landing inside
+ * that one load -> stamp proc call window can still be overwritten.
  *
  * @module @memberjunction/ai-agents
  */
 import { randomBytes } from 'crypto';
-import { IMetadataProvider, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { IMetadataProvider, DatabaseProviderBase, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { MJAIAgentEntity, MJAIAgentSessionEntity, MJFileEntityRecordLinkEntity, MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine, FileStorageBase } from '@memberjunction/storage';
 import { RealtimeRecordingMedia } from './realtime-recording-capture';
+import { SqlRealtimeRecordingLedger } from './realtime-recording-ledger';
 
 /**
  * Resolves the storage account a session recording should be written to: the agent's
@@ -35,6 +36,18 @@ export async function ResolveRecordingStorageAccountID(
     if (!providerID) {
         return null;
     }
+    return ResolveStorageAccountIDForProvider(providerID, contextUser, provider);
+}
+
+/**
+ * The first storage account of a storage provider (the account a recording stored under that provider
+ * is read and written through), or `null` when the provider has none.
+ *
+ * @param providerID The `MJ: File Storage Providers` id (e.g. an `MJ: Files` row's `ProviderID`).
+ */
+export async function ResolveStorageAccountIDForProvider(
+    providerID: string, contextUser: UserInfo, provider?: IMetadataProvider
+): Promise<string | null> {
     // Ensure the storage engine has loaded its accounts before reading them. The engine may be
     // unconfigured in this process, or configured BEFORE this storage account was provisioned (a stale
     // cache). Try the loaded cache first; if the provider's account isn't found, force a one-time refresh
@@ -42,7 +55,7 @@ export async function ResolveRecordingStorageAccountID(
     await FileStorageEngine.Instance.Config(false, contextUser, provider);
     let accounts = FileStorageEngine.Instance.GetAccountsByProviderID(providerID);
     if (accounts.length === 0) {
-        await FileStorageEngine.Instance.Config(true, contextUser, provider);
+        await FileStorageEngine.Instance.RefreshAfterMiss(provider);
         accounts = FileStorageEngine.Instance.GetAccountsByProviderID(providerID);
     }
     return accounts[0]?.ID ?? null;
@@ -84,9 +97,9 @@ export interface StoreRealtimeRecordingInput {
     /**
      * When true, the order becomes re-check -> stamp -> link: the session is re-read immediately before
      * the stamp and, if it already has a `RecordingFileID`, that recording is left alone (nothing is
-     * linked or stamped; the result is `Superseded`). The link is written only after the stamp saved, so
+     * linked or stamped; the result is `Superseded`). The link is written only after the stamp landed, so
      * a superseded or failed store never leaves a link row. Best effort, not a guarantee: without a
-     * compare-and-set, a recording stamped inside the one load -> save window is still overwritten.
+     * compare-and-set, a recording stamped inside the one load -> stamp proc call window is still overwritten.
      * Recovery sets this. Left false (the default) for the end-of-call upload, which links and then
      * stamps unconditionally.
      */
@@ -126,8 +139,12 @@ function parsePcmRate(mimeType: string): number | null {
     return null;
 }
 
-/** The per-session folder all of a session's recording artifacts live in (shards + final file). */
-function recordingFolder(sessionID: string): string {
+/**
+ * The per-session storage folder all of a session's recording artifacts live in (legacy `seg-*` shards,
+ * the final `recording.*` file and `peaks.json`). Every writer derives the folder from here so the path
+ * convention lives in one place.
+ */
+export function RecordingFolder(sessionID: string): string {
     return `realtime-recordings/${sessionID}`;
 }
 
@@ -136,8 +153,12 @@ function recordingFolder(sessionID: string): string {
  * the file's own provider/account) — NOT a public pre-signed link. Used to stream a recording to an
  * authorized browser securely. Never throws.
  *
+ * Gated for `contextUser` twice over: the `MJ: Files` row is loaded as the caller, and the storage gate
+ * (`FileStorageEngine.ResolveFileObject`) then requires Read on the account the row's provider resolves to and refuses
+ * an object another row tracks when the caller cannot read that row. A refusal is logged and returns `null`.
+ *
  * @param fileID The `MJ: Files` id of the recording.
- * @returns `{ Bytes, MimeType }` or `null` when the file/account/object can't be resolved.
+ * @returns `{ Bytes, MimeType }` or `null` when the file/account/object can't be resolved or the caller is refused.
  */
 export async function ReadRealtimeRecordingFile(
     fileID: string, contextUser: UserInfo, provider: IMetadataProvider
@@ -147,19 +168,12 @@ export async function ReadRealtimeRecordingFile(
         if (!await file.Load(fileID) || !file.ProviderKey) {
             return null;
         }
-        // Ensure the engine knows this provider's accounts (idempotent; force-refresh if missing).
-        await FileStorageEngine.Instance.Config(false, contextUser, provider);
-        let accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
-        if (accounts.length === 0) {
-            await FileStorageEngine.Instance.Config(true, contextUser, provider);
-            accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
-        }
-        const account = accounts[0];
-        if (!account) {
+        // Resolve the provider's account and driver through the storage gate (throws on refusal — logged below).
+        const resolved = await FileStorageEngine.Instance.ResolveFileObject(file, contextUser, 'Read', provider);
+        if (!resolved) {
             return null;
         }
-        const driver = await FileStorageEngine.Instance.GetDriver(account.ID, contextUser);
-        const bytes = await driver.GetObject({ fullPath: file.ProviderKey });
+        const bytes = await resolved.Driver.GetObject({ fullPath: resolved.ObjectKey });
         if (!bytes || bytes.length === 0) {
             return null;
         }
@@ -216,7 +230,7 @@ export async function WriteRealtimeRecordingSegment(input: WriteRecordingSegment
     try {
         const driver = await FileStorageEngine.Instance.GetDriver(StorageAccountID, ContextUser);
         const name = segmentFileName(SegmentIndex, MimeType);
-        return await driver.PutObject(`${recordingFolder(SessionID)}/${name}`, Audio, MimeType);
+        return await driver.PutObject(`${RecordingFolder(SessionID)}/${name}`, Audio, MimeType);
     } catch (error) {
         LogError(`writeRealtimeRecordingSegment failed (session ${SessionID}, seg ${SegmentIndex}): ${error instanceof Error ? error.message : String(error)}`);
         return false;
@@ -245,7 +259,7 @@ export async function WriteRecordingPeaksSidecar(
     try {
         const driver = await FileStorageEngine.Instance.GetDriver(storageAccountID, contextUser);
         const payload = Buffer.from(JSON.stringify(peaks), 'utf8');
-        return await driver.PutObject(`${recordingFolder(sessionID)}/peaks.json`, payload, 'application/json');
+        return await driver.PutObject(`${RecordingFolder(sessionID)}/peaks.json`, payload, 'application/json');
     } catch (error) {
         LogError(`writeRecordingPeaksSidecar failed (session ${sessionID}): ${error instanceof Error ? error.message : String(error)}`);
         return false;
@@ -270,7 +284,7 @@ export async function writeRecordingPeaksSidecar(
 export async function DeleteRealtimeRecordingSegments(sessionID: string, storageAccountID: string, contextUser: UserInfo): Promise<number> {
     try {
         const driver = await FileStorageEngine.Instance.GetDriver(storageAccountID, contextUser);
-        const folder = recordingFolder(sessionID);
+        const folder = RecordingFolder(sessionID);
         // List the folder's CONTENTS: without the trailing slash, delimiter-based drivers (S3, GCS)
         // return the folder itself as a common prefix and no objects, so no shard was ever deleted.
         const listed = await driver.ListObjects(`${folder}/`);
@@ -314,7 +328,8 @@ export interface StoreRealtimeRecordingResult {
 /**
  * Uploads a session recording to MJStorage, links it to the `AIAgentSession` (via
  * `MJ: File Entity Record Links`), and stamps `RecordingFileID` / `RecordingMedia` / `RecordingStartedAt`
- * on the session. Never throws — a recording-storage failure must not fail the session; failures are
+ * on the session through the ledger's `spStampAIAgentSessionRecordingFile` proc (the recording columns are
+ * not updatable through an entity save, #6010). Never throws — a recording-storage failure must not fail the session; failures are
  * logged AND carried out in the result so the caller can report the real cause (a bare `null` used to
  * strand reasons like Drive's "Service Accounts do not have storage quota" three layers down).
  *
@@ -333,7 +348,7 @@ export async function StoreRealtimeRecording(input: StoreRealtimeRecordingInput)
             contextUser: ContextUser,
             storageAccountId: StorageAccountID,
             provider: Provider,
-            pathPrefix: recordingFolder(SessionID)
+            pathPrefix: RecordingFolder(SessionID)
         });
 
         // Best-effort waveform-peaks sidecar (peaks.json) next to the recording, for fast waveform
@@ -359,17 +374,20 @@ async function linkAndStamp(input: StoreRealtimeRecordingInput, fileID: string):
     const { Media, StartedAt, SessionID, ContextUser, Provider } = input;
     const session = await Provider.GetEntityObject<MJAIAgentSessionEntity>('MJ: AI Agent Sessions', ContextUser);
     const sessionLoaded = await session.Load(SessionID);
-    await linkRecordingToSession(fileID, SessionID, ContextUser, Provider);
+    await LinkRecordingToSession(fileID, SessionID, ContextUser, Provider);
     if (sessionLoaded) {
-        await stampRecordingOnSession(session, fileID, Media, StartedAt);
+        const stampFailure = await stampRecordingOnSession(session, fileID, Media, StartedAt, ContextUser, Provider);
+        if (stampFailure !== null) {
+            return { FileID: fileID, ErrorMessage: `file ${fileID} uploaded and linked, but not stamped on session ${SessionID}: ${stampFailure}`, Superseded: false };
+        }
     }
     return { FileID: fileID, ErrorMessage: null, Superseded: false };
 }
 
 /**
  * Recovery path: re-check -> stamp -> link. The re-check is the last read before the stamp, so the
- * window in which a late recording can still be overwritten is one load -> save. The link is written
- * only once the stamp saved, so a `Superseded` or failed result never leaves a link row behind.
+ * window in which a late recording can still be overwritten is one load -> stamp proc call. The link is written
+ * only once the stamp landed, so a `Superseded` or failed result never leaves a link row behind.
  */
 async function stampPreservingExisting(input: StoreRealtimeRecordingInput, fileID: string): Promise<StoreRealtimeRecordingResult> {
     const { Media, StartedAt, SessionID, ContextUser, Provider } = input;
@@ -383,19 +401,26 @@ async function stampPreservingExisting(input: StoreRealtimeRecordingInput, fileI
         LogStatus(`storeRealtimeRecording: session ${SessionID} already has recording file ${session.RecordingFileID}; the just-uploaded file ${fileID} is orphaned and was not linked or stamped`);
         return { FileID: fileID, ErrorMessage: null, Superseded: true };
     }
-    if (!await stampRecordingOnSession(session, fileID, Media, StartedAt)) {
-        const reason = session.LatestResult?.CompleteMessage ?? 'unknown error';
-        return { FileID: fileID, ErrorMessage: `could not stamp file ${fileID} on session ${SessionID} (file orphaned, not linked): ${reason}`, Superseded: false };
+    const stampFailure = await stampRecordingOnSession(session, fileID, Media, StartedAt, ContextUser, Provider);
+    if (stampFailure !== null) {
+        return { FileID: fileID, ErrorMessage: `could not stamp file ${fileID} on session ${SessionID} (file orphaned, not linked): ${stampFailure}`, Superseded: false };
     }
-    await linkRecordingToSession(fileID, SessionID, ContextUser, Provider);
+    await LinkRecordingToSession(fileID, SessionID, ContextUser, Provider);
     return { FileID: fileID, ErrorMessage: null, Superseded: false };
 }
 
-/** Links the file to the session record so it's discoverable via MJ: File Entity Record Links. */
-async function linkRecordingToSession(fileID: string, sessionID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<void> {
+/**
+ * Links a recording file to its session record so it's discoverable via `MJ: File Entity Record Links`.
+ * Failures are logged with the session and file ids; the link is discoverability only (the session's
+ * `RecordingFileID` is what playback uses), so callers do not fail the recording over it.
+ *
+ * @returns `true` when the link row was saved.
+ */
+export async function LinkRecordingToSession(fileID: string, sessionID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<boolean> {
     const sessionEntityID = provider.EntityByName('MJ: AI Agent Sessions')?.ID;
     if (!sessionEntityID) {
-        return;
+        LogError(`LinkRecordingToSession: entity 'MJ: AI Agent Sessions' is not in metadata; recording file ${fileID} not linked to session ${sessionID}`);
+        return false;
     }
     const link = await provider.GetEntityObject<MJFileEntityRecordLinkEntity>('MJ: File Entity Record Links', contextUser);
     link.NewRecord();
@@ -403,22 +428,47 @@ async function linkRecordingToSession(fileID: string, sessionID: string, context
     link.EntityID = sessionEntityID;
     link.RecordID = sessionID;
     if (!await link.Save()) {
-        LogError(`storeRealtimeRecording: failed to link recording to session ${sessionID}: ${link.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-    }
-}
-
-/** Stamps the recording fields on an already-loaded session (file + media kind + t0). Logs and returns false on a failed save. */
-async function stampRecordingOnSession(
-    session: MJAIAgentSessionEntity, fileID: string, media: RealtimeRecordingMedia, startedAt: Date
-): Promise<boolean> {
-    session.RecordingFileID = fileID;
-    session.RecordingMedia = media;
-    session.RecordingStartedAt = startedAt;
-    if (!await session.Save()) {
-        LogError(`storeRealtimeRecording: failed to stamp recording fields on session ${session.ID}: ${session.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        LogError(`LinkRecordingToSession: failed to link recording file ${fileID} to session ${sessionID}: ${link.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         return false;
     }
     return true;
+}
+
+/**
+ * Stamps the recording file, media kind and t0 on a session through `spStampAIAgentSessionRecordingFile`
+ * (the recording columns are not updatable through an entity save, #6010). Logs with the session id and
+ * returns the failure reason, or `null` when the stamp landed. Never throws.
+ */
+async function stampRecordingOnSession(
+    session: MJAIAgentSessionEntity, fileID: string, media: RealtimeRecordingMedia, startedAt: Date,
+    contextUser: UserInfo, provider: IMetadataProvider
+): Promise<string | null> {
+    try {
+        const ledger = new SqlRealtimeRecordingLedger(requireDatabaseProvider(provider, session.ID), contextUser);
+        await ledger.StampFile(session.ID, { fileID, media, startedAt });
+        return null;
+    } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        LogError(`storeRealtimeRecording: failed to stamp recording file ${fileID} on session ${session.ID}: ${reason}`);
+        return reason;
+    }
+}
+
+/**
+ * The provider as a server-side database provider. Checked structurally (it can run SQL) rather than with
+ * `instanceof`, so a provider from another module copy or a test double still qualifies. The stamp proc
+ * call needs `ExecuteSQL`, so a provider without it fails here with a clear message.
+ */
+function requireDatabaseProvider(provider: IMetadataProvider, sessionID: string): DatabaseProviderBase {
+    if (!isDatabaseProvider(provider)) {
+        throw new Error(`session ${sessionID}: the recording file can only be stamped through a server-side database provider`);
+    }
+    return provider;
+}
+
+/** True when the provider can run SQL, the one capability the stamp proc call needs. */
+function isDatabaseProvider(provider: IMetadataProvider): provider is IMetadataProvider & DatabaseProviderBase {
+    return typeof (provider as Partial<DatabaseProviderBase>).ExecuteSQL === 'function';
 }
 
 /** @deprecated Use {@link StoreRealtimeRecording}. */
@@ -426,7 +476,8 @@ export async function storeRealtimeRecording(input: StoreRealtimeRecordingInput)
     return StoreRealtimeRecording(input);
 }
 
-const RECORDING_WAV_HEADER_BYTES = 44;
+/** Size of the canonical mono PCM16 WAV header {@link WriteRecordingWavHeader} writes. */
+export const RECORDING_WAV_HEADER_BYTES = 44;
 const RECORDING_BYTES_PER_SAMPLE = 2; // mono, 16-bit PCM
 /** WAV stores sizes as uint32; the RIFF chunk size is `36 + dataSize`, so data tops out 36 bytes short of the max. */
 const RECORDING_MAX_DATA_BYTES = 0xFFFFFFFF - 36;
@@ -486,7 +537,7 @@ export function BuildRecordingFromSegments(
 
     // Buffer.alloc zero-fills, so gaps need no explicit write.
     const wav = Buffer.alloc(RECORDING_WAV_HEADER_BYTES + dataSize);
-    writeRecordingWavHeader(wav, sampleRate, dataSize);
+    WriteRecordingWavHeader(wav, sampleRate, dataSize);
     let offset = RECORDING_WAV_HEADER_BYTES;
     let expectedIndex = 0;
     for (const segment of ordered) {
@@ -545,8 +596,16 @@ function findMissingIndexes(ordered: RecordingSegmentBytes[]): number[] {
     return missing;
 }
 
-/** Same canonical header layout as `RealtimeRecordingCapture.encodeWavBuffer` (mono, 16-bit, PCM). */
-function writeRecordingWavHeader(buffer: Buffer, sampleRate: number, dataSize: number): void {
+/**
+ * Writes the canonical 44-byte ({@link RECORDING_WAV_HEADER_BYTES}) mono 16-bit PCM WAV header into the
+ * start of `buffer`. Same layout as `RealtimeRecordingCapture.encodeWavBuffer`; shared by every server
+ * path that produces a recording WAV so they cannot drift apart.
+ *
+ * @param buffer Destination; at least {@link RECORDING_WAV_HEADER_BYTES} long.
+ * @param sampleRate Sample rate of the PCM data, in Hz.
+ * @param dataSize Byte length of the PCM data that follows the header.
+ */
+export function WriteRecordingWavHeader(buffer: Buffer, sampleRate: number, dataSize: number): void {
     buffer.write('RIFF', 0, 'ascii');
     buffer.writeUInt32LE(36 + dataSize, 4);
     buffer.write('WAVE', 8, 'ascii');
@@ -657,14 +716,14 @@ interface ListedShard {
  * failure at any step leaves the shards for the next try. If the session has (or gains) another
  * recording, the outcome is `Superseded` and the shards are kept. Deferring to that recording is best
  * effort: the session is re-checked immediately before the stamp, but a recording stamped inside that
- * one load -> save window is overwritten (there is no compare-and-set).
+ * one load -> stamp proc call window is overwritten (there is no compare-and-set).
  *
  * The sample rate comes from the shard keys (`seg-NNNN.r<rate>.pcm`) or, for legacy `seg-NNNN.pcm`
  * shards, from each object's stored content type. When no shard declares a rate (a legacy shard on a
  * driver that keeps no content type, such as Box), it is inferred from the size of the full shards; see
  * {@link LEGACY_SHARD_SECONDS}.
  *
- * Once the stamp has saved, the outcome is `Recovered` even if the confirming reload or a shard delete
+ * Once the stamp has landed, the outcome is `Recovered` even if the confirming reload or a shard delete
  * fails; the shards it could not remove are named in a `LogError` (nothing revisits a stamped session).
  *
  * Never throws: every failure is logged with the session id and returned as `Failed`.
@@ -732,7 +791,7 @@ async function finishRecovery(
     const { SessionID, StorageAccountID, ContextUser, Provider } = input;
     const session = await Provider.GetEntityObject<MJAIAgentSessionEntity>('MJ: AI Agent Sessions', ContextUser);
     if (!await session.Load(SessionID)) {
-        // The stamp and link already saved, so the recording is in place; only the overwrite check could
+        // The stamp and link already landed, so the recording is in place; only the overwrite check could
         // not run. Keep the shards (they might belong to a recording that replaced ours) and name them.
         LogError(
             `RecoverRealtimeRecordingFromSegments (session ${SessionID}): recovered file ${fileID} is stamped, but the session ` +
@@ -774,7 +833,7 @@ async function deleteListedShards(storageAccountID: string, contextUser: UserInf
 
 /** Lists the session folder's `seg-*` objects. Other objects (recording.*, peaks.json) are ignored. */
 async function listRecordingShards(driver: FileStorageBase, sessionID: string): Promise<ListedShard[]> {
-    const folder = recordingFolder(sessionID);
+    const folder = RecordingFolder(sessionID);
     const listed = await driver.ListObjects(`${folder}/`);
     const shards: ListedShard[] = [];
     for (const obj of listed.objects ?? []) {

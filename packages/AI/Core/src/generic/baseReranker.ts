@@ -15,6 +15,7 @@
 
 import { BaseModel } from './baseModel';
 import { RerankParams, RerankResponse, RerankResult } from './reranker.types';
+import { BuildCancellationErrorInfo, DescribeCancellation, IsRequestAborted } from './cancellation.js';
 
 /**
  * Abstract base class for all reranker implementations.
@@ -60,7 +61,7 @@ export abstract class BaseReranker extends BaseModel {
      * This is the main entry point for reranking operations.
      *
      * The method:
-     * 1. Validates input parameters
+     * 1. Validates input parameters, and refuses a call whose `CancellationToken` is already aborted
      * 2. Calls the provider-specific doRerank() implementation
      * 3. Applies topK limit if specified
      * 4. Returns standardized RerankResponse
@@ -72,6 +73,10 @@ export abstract class BaseReranker extends BaseModel {
         const startTime = Date.now();
 
         try {
+            if (params.CancellationToken?.aborted) {
+                return this.createCancelledResponse(params.CancellationToken, undefined, startTime);
+            }
+
             // Validate input
             if (!params.query || params.query.trim().length === 0) {
                 return this.createErrorResponse('Query cannot be empty', startTime);
@@ -117,6 +122,9 @@ export abstract class BaseReranker extends BaseModel {
                 modelName: this._modelName
             };
         } catch (error) {
+            if (IsRequestAborted(error, params.CancellationToken)) {
+                return this.createCancelledResponse(params.CancellationToken, error, startTime);
+            }
             const message = error instanceof Error ? error.message : String(error);
             console.error(`BaseReranker.Rerank error: ${message}`);
             return this.createErrorResponse(message, startTime);
@@ -124,11 +132,22 @@ export abstract class BaseReranker extends BaseModel {
     }
 
     /**
+     * The response for a call its signal ended, before or during the driver's work. A caller
+     * cancellation is classified `Cancelled`, so it is never failed over; an abort caused by a
+     * timeout reads as a retriable network error.
+     */
+    protected createCancelledResponse(signal: AbortSignal | undefined, error: unknown, startTime: number): RerankResponse {
+        const response = this.createErrorResponse(DescribeCancellation(signal, 'Rerank'), startTime);
+        response.errorInfo = BuildCancellationErrorInfo({ error, signal, provider: this.constructor.name });
+        return response;
+    }
+
+    /**
      * Provider-specific reranking implementation.
      * Subclasses must implement this method to perform the actual reranking.
      *
      * Implementation requirements:
-     * - Call the provider's reranking API
+     * - Call the provider's reranking API, handing it `params.CancellationToken` when one is set
      * - Map results to RerankResult format
      * - Sort results by relevance score (highest first)
      * - Preserve document metadata for zero-copy retrieval

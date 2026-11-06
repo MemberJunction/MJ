@@ -142,6 +142,13 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   private _pendingSettings: Map<string, { value: string; contextUser?: UserInfo; timestamp: number }> = new Map();
 
   /**
+   * Engine properties already reported as permission-constrained by
+   * {@link readIfPermitted}, so the notice is logged once per property per process
+   * rather than on every read (notification badges re-read on every emission).
+   */
+  private _permissionNoticesLogged: Set<string> = new Set();
+
+  /**
    * Timer handle for the debounce flush
    */
   private _settingsDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -314,23 +321,64 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * synchronously (e.g. form-variant picker → form reload) depend on
    * this freshness guarantee.
    *
+   * A user who cannot read `MJ: User Settings` (a permission-constrained session such as an
+   * external magic-link user) gets `undefined` — "not set", so callers fall back to their
+   * defaults — instead of a thrown `PermissionConstrainedError`. The denial is logged once.
+   *
    * @param settingKey - The setting key to find (e.g., "default-view-setting/Contacts")
    * @returns The setting value string, or undefined if not found
    */
   public GetSetting(settingKey: string): string | undefined {
     const pending = this._pendingSettings.get(settingKey);
     if (pending !== undefined) return pending.value;
-    const setting = this.UserSettings.find((s) => s.Setting === settingKey);
+    const setting = this.readIfPermitted('_userSettings', () => this.UserSettings).find((s) => s.Setting === settingKey);
     return setting?.Value ?? undefined;
   }
 
   /**
    * Get a user setting entity by key.
+   *
+   * Like {@link GetSetting}, a user who cannot read `MJ: User Settings` (e.g. an external
+   * magic-link session) gets `undefined` — "not set" — instead of a thrown
+   * `PermissionConstrainedError`; the denial is logged once.
    * @param settingKey - The setting key to find
    * @returns The MJUserSettingEntity, or undefined if not found
    */
   public GetSettingEntity(settingKey: string): MJUserSettingEntity | undefined {
-    return this.UserSettings.find((s) => s.Setting === settingKey);
+    return this.readIfPermitted('_userSettings', () => this.UserSettings).find((s) => s.Setting === settingKey);
+  }
+
+  /**
+   * Reads a permission-gated engine property for a LOOKUP whose empty answer is safe
+   * ("no such setting", "no notifications"). When the current user lacks read permission
+   * on the property's entity, returns `[]` and logs the denial once per property instead
+   * of letting `PermissionConstrainedError` escape.
+   *
+   * Engines are permission-constrained by design for restricted sessions (external
+   * magic-link users hold only 'Magic Link Baseline' plus a granted role), so these
+   * lookups run at every boot for such users and must not throw.
+   *
+   * Also used by the read-only display collections whose empty answer is equally safe —
+   * {@link UserFavorites}, {@link NotificationPreferences} and {@link NotificationTypes}: no
+   * caller treats an empty one as a cue to create records, and their consumers (Home,
+   * profile, notification settings, Data Explorer) run inside a restricted session too.
+   *
+   * Deliberately NOT used by the raw collection getters whose emptiness means "brand-new
+   * user" (`UserSettings`, `Workspaces`, `UserApplications`, ...): those keep throwing,
+   * because such a caller would otherwise auto-create records for a user who simply cannot
+   * see them. Those callers must check {@link IsPermissionConstrained} first.
+   */
+  private readIfPermitted<E>(propertyName: string, read: () => E[]): E[] {
+    if (!this.IsPropertyPermissionConstrained(propertyName)) {
+      return read();
+    }
+    if (!this._permissionNoticesLogged.has(propertyName)) {
+      this._permissionNoticesLogged.add(propertyName);
+      LogStatus(
+        `UserInfoEngine: current user cannot read ${propertyName} (permission-constrained session); treating it as empty.`,
+      );
+    }
+    return [];
   }
 
   /**
@@ -575,7 +623,18 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * Get unread notifications for the current user
    */
   public get UnreadNotifications(): MJUserNotificationEntity[] {
-    return this.UserNotifications.filter((n) => n.Unread);
+    return this.UserNotificationsIfPermitted.filter((n) => n.Unread);
+  }
+
+  /**
+   * The current user's notifications (same filter and order as {@link UserNotifications}),
+   * or `[]` when the user cannot read `MJ: User Notifications` — a permission-constrained
+   * session such as an external magic-link user. Never throws `PermissionConstrainedError`;
+   * the denial is logged once. Use this for badges, counts and lists that should simply
+   * show nothing for such users.
+   */
+  public get UserNotificationsIfPermitted(): MJUserNotificationEntity[] {
+    return this.readIfPermitted('_userNotifications', () => this.UserNotifications);
   }
 
   /**
@@ -641,11 +700,12 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   }
 
   /**
-   * Get all favorites for the current user, ordered by creation date (newest first)
+   * Get all favorites for the current user, ordered by creation date (newest first).
+   * Empty (not a thrown `PermissionConstrainedError`) for a session that cannot read them.
    */
   public get UserFavorites(): MJUserFavoriteEntity[] {
     if (!this._loadedForUserId) return [];
-    return this.GetConfigData<MJUserFavoriteEntity>('_userFavorites')
+    return this.readIfPermitted('_userFavorites', () => this.GetConfigData<MJUserFavoriteEntity>('_userFavorites'))
       .filter((f) => UUIDsEqual(f.UserID, this._loadedForUserId))
       .sort((a, b) => new Date(b.Get('__mj_CreatedAt')).getTime() - new Date(a.Get('__mj_CreatedAt')).getTime());
   }
@@ -1345,11 +1405,12 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   }
 
   /**
-   * Get all notification preferences for the current user
+   * Get all notification preferences for the current user.
+   * Empty (not a thrown `PermissionConstrainedError`) for a session that cannot read them.
    */
   public get NotificationPreferences(): MJUserNotificationPreferenceEntity[] {
     if (!this._loadedForUserId) return [];
-    return this.GetConfigData<MJUserNotificationPreferenceEntity>('_userNotificationPreferences')
+    return this.readIfPermitted('_userNotificationPreferences', () => this.GetConfigData<MJUserNotificationPreferenceEntity>('_userNotificationPreferences'))
       .filter((p) => UUIDsEqual(p.UserID, this._loadedForUserId));
   }
 
@@ -1368,8 +1429,9 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   /**
    * Get all notification types.
    * Notification types are global (not user-specific) and define the available notification categories.
+   * Empty (not a thrown `PermissionConstrainedError`) for a session that cannot read them.
    */
   public get NotificationTypes(): MJUserNotificationTypeEntity[] {
-    return this.GetConfigData<MJUserNotificationTypeEntity>('_notificationTypes');
+    return this.readIfPermitted('_notificationTypes', () => this.GetConfigData<MJUserNotificationTypeEntity>('_notificationTypes'));
   }
 }

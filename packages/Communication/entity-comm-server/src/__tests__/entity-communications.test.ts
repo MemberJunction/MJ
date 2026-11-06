@@ -214,6 +214,7 @@ describe('EntityCommunicationsEngine', () => {
                 ProviderName: 'SendGrid',
                 ProviderMessageTypeName: 'Email',
                 Message: {} as never,
+                ContextUser: { ID: 'user-1' } as never,
             });
 
             expect(result.Success).toBe(false);

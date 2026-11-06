@@ -22,6 +22,8 @@ import type {
 } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { IntegrationCheckContext } from '@memberjunction/testing-integration';
+import { FixtureQuerySaveOptions } from './query-fixture-save-options';
+import { MJQueryEntityServer } from '@memberjunction/core-entities-server';
 
 /** Schema that holds the fixture table. Created and dropped by the bundle. */
 export const RENDER_SCHEMA = 'mjit_render';
@@ -211,6 +213,11 @@ export interface RenderQueryDefinition {
     Variants?: Partial<Record<DatabasePlatform, string>>;
     /** Whether other queries may compose this one. */
     Reusable?: boolean;
+    /**
+     * The SQL breaks a save-time rule on purpose, to test how a query saved before that rule existed
+     * still runs. Saved without extraction (`ExtractionOverride` `Skip`), which is what applies the rules.
+     */
+    BreaksSaveRules?: boolean;
 }
 
 /** Everything the bundle created in the database, for lookups and teardown. */
@@ -250,7 +257,10 @@ export async function CreateRenderQuery(
     query.SQL = definition.SQL;
     query.Status = 'Approved';
     query.Reusable = definition.Reusable ?? false;
-    if (!await query.Save()) {
+    if (definition.BreaksSaveRules && query instanceof MJQueryEntityServer) {
+        query.ExtractionOverride = 'Skip';
+    }
+    if (!await query.Save(FixtureQuerySaveOptions())) {
         throw new Error(`Fixture query '${definition.Name}' save failed: ${query.LatestResult?.CompleteMessage}`);
     }
     fixtures.Queries.set(definition.Name, query);
@@ -269,7 +279,7 @@ async function createVariant(query: MJQueryEntity, platformKey: string, sql: str
     variant.QueryID = query.ID;
     variant.SQLDialectID = dialect.ID;
     variant.SQL = sql;
-    if (!await variant.Save()) {
+    if (!await variant.Save(FixtureQuerySaveOptions())) {
         throw new Error(`Variant for '${query.Name}' (${platformKey}) save failed: ${variant.LatestResult?.CompleteMessage}`);
     }
     return variant;

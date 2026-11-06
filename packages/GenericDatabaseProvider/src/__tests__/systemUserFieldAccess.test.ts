@@ -292,6 +292,40 @@ describe('FindSystemUserFieldAccessViolations', () => {
         expect((systemUserStub.value as UserInfo).UserRoles).toHaveLength(2);
     });
 
+    it('REGRESSION: WithoutRoleID evaluates dormant rules too — disable, remove the role, re-enable is refused at the removal', () => {
+        systemUserHolding(ROLE_A, ROLE_B);
+        const entity = entityWith(FULL, [fieldNamed('Salary', { rules: [allow(ROLE_A), neutral(ROLE_B)] })]);
+        (entity as unknown as { EnableFieldLevelSecurity: boolean }).EnableFieldLevelSecurity = false;
+        expect(FindSystemUserFieldAccessViolations(providerWith([entity]), undefined, { WithoutRoleID: ROLE_A })).toEqual([
+            { EntityName: 'MJ: Employees', FieldName: 'Salary', Verb: 'read' },
+        ]);
+    });
+
+    it('WithoutRoleID: a dormant field the system user was already short of is not blamed on the removal', () => {
+        systemUserHolding(ROLE_A, ROLE_B);
+        const entity = entityWith(FULL, [
+            fieldNamed('Salary', { rules: [neutral(ROLE_A), neutral(ROLE_B)] }),
+            fieldNamed('NoRules'),
+        ]);
+        (entity as unknown as { EnableFieldLevelSecurity: boolean }).EnableFieldLevelSecurity = false;
+        expect(FindSystemUserFieldAccessViolations(providerWith([entity]), undefined, { WithoutRoleID: ROLE_A })).toEqual([]);
+    });
+
+    it('REGRESSION: RulesByFieldID judges the supplied stored rules, not the loaded metadata', () => {
+        systemUserHolding(ROLE_A, ROLE_B);
+        const salary = { ...fieldNamed('Salary', { rules: [allow(ROLE_A), allow(ROLE_B)] }), ID: 'F-SALARY' } as unknown as EntityFieldInfo;
+        const entity = entityWith(FULL, [salary]);
+        // Metadata still shows ROLE_B allowing; the database already has it at No Access.
+        const stored = new Map([['f-salary', [allow(ROLE_A), neutral(ROLE_B)]]]);
+        expect(FindSystemUserFieldAccessViolations(providerWith([entity]), undefined, { WithoutRoleID: ROLE_A, RulesByFieldID: stored })).toEqual([
+            { EntityName: 'MJ: Employees', FieldName: 'Salary', Verb: 'read' },
+        ]);
+        // A field absent from the map has no stored rule for the system user's roles.
+        expect(FindSystemUserFieldAccessViolations(providerWith([entity]), undefined, { RulesByFieldID: new Map() })).toEqual([
+            { EntityName: 'MJ: Employees', FieldName: 'Salary', Verb: 'read' },
+        ]);
+    });
+
     it('accepts an explicitly supplied system user, for callers that resolved it themselves', () => {
         systemUserStub.value = null;
         const user = { ID: SYS_USER_ID, UserRoles: [{ RoleID: ROLE_A, Role: 'A' }] } as unknown as UserInfo;

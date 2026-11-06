@@ -216,6 +216,40 @@
   box-shadow: var(--mj-focus-ring);
 }
 
+.with-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-1-5);
+  padding: 2px var(--mj-space-2);
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-subtle);
+  color: var(--mj-text-secondary);
+  font-size: var(--mj-text-xs);
+  line-height: var(--mj-leading-tight);
+  flex-shrink: 0;
+}
+
+.with-chip .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--mj-radius-full);
+  background: var(--agent-accent, var(--mj-brand-primary));
+  transition: background-color 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  flex-shrink: 0;
+}
+
+.with-chip b {
+  color: var(--mj-text-primary);
+  font-weight: var(--mj-font-semibold);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .with-chip .dot {
+    transition: none;
+  }
+}
+
 .shared-by-badge {
   display: inline-flex;
   align-items: center;
@@ -501,6 +535,137 @@
   display: flex;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
+}
+
+.chat-task-graph-pane {
+  background: var(--mj-bg-surface);
+  border-left: 1px solid var(--mj-border-default);
+}
+
+.task-graph-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--mj-bg-surface-card);
+  border-bottom: 1px solid var(--mj-border-default);
+  flex-shrink: 0;
+}
+
+.task-graph-pane-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.task-graph-pane-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+  color: var(--mj-brand-primary);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.task-graph-pane-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.task-graph-pane-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-graph-pane-subtitle {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+}
+
+.task-graph-pane-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.task-graph-pane-save-btn {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--mj-brand-primary);
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse, #ffffff);
+  cursor: pointer;
+  transition: opacity 0.15s ease, filter 0.15s ease;
+}
+
+.task-graph-pane-save-btn:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.task-graph-pane-save-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.task-graph-pane-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--mj-border-subtle);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.task-graph-pane-btn:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+  border-color: var(--mj-border-default);
+}
+
+.task-graph-pane-body {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  min-width: 0;
+  padding: 12px 16px 16px;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.task-graph-pane-body > mj-task-graph-run-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -1401,4 +1566,25 @@
   background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
   border-color: var(--mj-brand-primary);
   color: var(--mj-brand-primary);
+}
+.chat-actions-buttons > .remote-browser-toggle-btn.active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
+}
+.remote-browser-url-input {
+  width: 220px;
+  max-width: 38vw;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 6px;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+  font-size: 12px;
+  font-family: var(--mj-font-family-mono);
+}
+.remote-browser-url-input:focus {
+  outline: none;
+  border-color: var(--mj-border-focus);
 }

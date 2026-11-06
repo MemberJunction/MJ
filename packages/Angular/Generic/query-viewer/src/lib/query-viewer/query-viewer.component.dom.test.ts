@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { By } from '@angular/platform-browser';
+import type { IMetadataProvider } from '@memberjunction/core';
 import type { MJQueryEntityExtended } from '@memberjunction/core-entities';
 import { renderComponentFixture, query, text, capture } from '@memberjunction/ng-test-utils';
 import { QueryViewerComponent } from './query-viewer.component';
-import type { QueryEntityLinkClickEvent } from '../query-data-grid/models/query-grid-types';
+import type { QueryEntityLinkClickEvent, QueryParameterValues } from '../query-data-grid/models/query-grid-types';
 
 /**
  * DOM coverage for <mj-query-viewer> — the wrapper that runs a stored query and shows its results grid
@@ -16,6 +17,7 @@ import type { QueryEntityLinkClickEvent } from '../query-data-grid/models/query-
 
 @Component({ standalone: true, selector: 'mj-query-data-grid', template: '' })
 class GridStub {
+  @Input() Provider: IMetadataProvider | null = null;
   @Input() QueryInfo: MJQueryEntityExtended | null = null;
   @Input() Data: unknown; @Input() TotalRowCount = 0; @Input() PageNumber = 1; @Input() PageSize = 100;
   @Input() SelectionMode = ''; @Input() ShowToolbar = true; @Input() VisualConfig: unknown; @Input() IsLoading = false;
@@ -23,6 +25,7 @@ class GridStub {
   // A stub that omits an input the template binds is NG0303 at render time, which fails every
   // test that gets far enough to render the grid — not just the ones that assert on export.
   @Input() ExportDataProvider: (() => Promise<Record<string, unknown>[]>) | null = null;
+  @Input() ParameterValues: QueryParameterValues | null = null;
   @Output() PageChange = new EventEmitter<unknown>();
   @Output() EntityLinkClick = new EventEmitter<QueryEntityLinkClickEvent>();
   @Output() RowDoubleClick = new EventEmitter<unknown>();
@@ -31,10 +34,10 @@ class GridStub {
   @Output() RefreshRequest = new EventEmitter<void>();
 }
 @Component({ standalone: true, selector: 'mj-query-parameter-form', template: '' })
-class ParamFormStub { @Input() QueryInfo: MJQueryEntityExtended | null = null; @Input() InitialValues: unknown; @Input() IsOpen = false;
+class ParamFormStub { @Input() QueryInfo: MJQueryEntityExtended | null = null; @Input() InitialValues: unknown; @Input() IsOpen = false; @Input() ReadOnlyParameters: string[] = [];
   @Output() ParametersSubmit = new EventEmitter<unknown>(); @Output() Close = new EventEmitter<void>(); }
 @Component({ standalone: true, selector: 'mj-query-info-panel', template: '' })
-class InfoPanelStub { @Input() QueryInfo: MJQueryEntityExtended | null = null; @Input() Visible = false;
+class InfoPanelStub { @Input() Provider: IMetadataProvider | null = null; @Input() QueryInfo: MJQueryEntityExtended | null = null; @Input() Visible = false;
   @Output() Close = new EventEmitter<void>(); @Output() OpenRecord = new EventEmitter<unknown>(); @Output() CompositionTokenClick = new EventEmitter<unknown>(); }
 
 const CHILDREN = [GridStub, ParamFormStub, InfoPanelStub];

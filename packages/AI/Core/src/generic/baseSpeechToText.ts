@@ -1,4 +1,5 @@
 import { BaseModel } from "./baseModel";
+import { ThrowIfAborted } from "./cancellation";
 import type { AudioModel, AudioSplitter, SpeechResult, SpeechToTextParams, TranscriptionPiece } from "./baseAudio";
 
 /**
@@ -40,12 +41,17 @@ export abstract class BaseSpeechToText extends BaseModel {
  * A free function rather than a protected method so that `BaseAudioGenerator` (which keeps it as
  * one, for its drivers) can still be assigned to {@link BaseSpeechToText}.
  *
+ * Once `cancellationToken` aborts, no further piece is sent: the next piece throws a cancellation
+ * error (classified `Cancelled`) instead. The token is also handed to `transcribeOne`, which forwards
+ * it to its request so the piece in flight is torn down too.
+ *
  * @param audio The full audio to transcribe
  * @param maxUploadBytes The provider's hard upload ceiling
  * @param splitTargetBytes Target piece size, below the ceiling to leave room for multipart framing
  * @param splitter Splitter to use for oversized audio; may be null, in which case oversized audio fails
  * @param providerLabel Provider name, used in the size-limit error messages
  * @param transcribeOne Transcribes a single piece already known to be within the ceiling
+ * @param cancellationToken Cancels the transcription between pieces, and is passed to each piece
  */
 export async function TranscribeAudioWithSplitting(
     audio: Buffer,
@@ -53,10 +59,12 @@ export async function TranscribeAudioWithSplitting(
     splitTargetBytes: number,
     splitter: AudioSplitter | null,
     providerLabel: string,
-    transcribeOne: (piece: Buffer) => Promise<TranscriptionPiece>
+    transcribeOne: (piece: Buffer, cancellationToken?: AbortSignal) => Promise<TranscriptionPiece>,
+    cancellationToken?: AbortSignal
 ): Promise<TranscriptionPiece> {
+    ThrowIfAborted(cancellationToken, providerLabel);
     if (audio.byteLength <= maxUploadBytes) {
-        return await transcribeOne(audio);
+        return await transcribeOne(audio, cancellationToken);
     }
     if (!splitter) {
         throw new Error(
@@ -69,21 +77,26 @@ export async function TranscribeAudioWithSplitting(
     if (pieces.length === 0) {
         throw new Error('The configured AudioSplitter returned no pieces');
     }
-    return transcribePieces(pieces, maxUploadBytes, providerLabel, transcribeOne);
+    return transcribePieces(pieces, maxUploadBytes, providerLabel, transcribeOne, cancellationToken);
 }
 
-/** Transcribes split pieces in order and joins their text and durations. */
+/**
+ * Transcribes split pieces in order and joins their text and durations. Stops before any piece once
+ * the token has aborted.
+ */
 async function transcribePieces(
     pieces: Buffer[],
     maxUploadBytes: number,
     providerLabel: string,
-    transcribeOne: (piece: Buffer) => Promise<TranscriptionPiece>
+    transcribeOne: (piece: Buffer, cancellationToken?: AbortSignal) => Promise<TranscriptionPiece>,
+    cancellationToken?: AbortSignal
 ): Promise<TranscriptionPiece> {
     const transcripts: string[] = [];
     let totalDurationSeconds = 0;
     let everyPieceReportedDuration = true;
 
     for (const piece of pieces) {
+        ThrowIfAborted(cancellationToken, providerLabel);
         // A piece the splitter left oversized would fail at the API with a size error naming
         // neither the splitter nor which piece; say so here instead.
         if (piece.byteLength > maxUploadBytes) {
@@ -92,7 +105,7 @@ async function transcribePieces(
                     `piece, above ${providerLabel}'s ${limitMB(maxUploadBytes)}MB limit`,
             );
         }
-        const transcribed = await transcribeOne(piece);
+        const transcribed = await transcribeOne(piece, cancellationToken);
         transcripts.push(transcribed.text);
         if (transcribed.durationSeconds == null) {
             everyPieceReportedDuration = false;

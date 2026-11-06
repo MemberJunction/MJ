@@ -18,14 +18,15 @@
 
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RegisterClass } from '@memberjunction/global';
-import { LogError, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { LogError, Metadata, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
 
 import { BasePredictiveStudioAction } from './base-predictive-studio.action';
 import { ProductionModelPromotionGate } from './promote-model.gate';
 
 /** The driver-class key this action registers under (matches the metadata row). */
-export const PROMOTE_MODEL_DRIVER_CLASS = 'PredictiveStudioPromoteModelAction';
+export { PROMOTE_MODEL_DRIVER_CLASS } from './driver-classes';
+import { PROMOTE_MODEL_DRIVER_CLASS } from './driver-classes';
 
 /** The lifecycle statuses a model may be promoted/transitioned to. */
 export type PromotableStatus = 'Validated' | 'Published' | 'Archived';
@@ -46,7 +47,8 @@ export interface PromoteModelRequest {
    */
   reason?: string;
   contextUser?: UserInfo;
-  provider?: IMetadataProvider;
+  /** The provider every read and write goes through (required: no fallback to the global provider). */
+  provider: IMetadataProvider;
 }
 
 /** Outcome of a promotion attempt. */
@@ -103,7 +105,7 @@ export class PredictiveStudioPromoteModelAction extends BasePredictiveStudioActi
         signOff,
         reason,
         contextUser: params.ContextUser,
-        provider: params.Provider,
+        provider: params.Provider || Metadata.Provider, // global-provider-ok: RunActionParams.Provider is optional; ActionEngine contract falls back to the global provider (ActionEngine-Base.ts:413-419)
       });
 
       return this.mapOutcome(params, modelId, outcome);

@@ -989,6 +989,9 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
       case 'cosine':
         // Convert from [-1, 1] to [0, 1]
         return (this.CosineSimilarity(a, b) + 1) / 2;
+      case 'cosine-similarity':
+        // Standard cosine similarity, [-1, 1], as vector databases report it
+        return this.CosineSimilarity(a, b);
       case 'euclidean':
         return this.EuclideanDistance(a, b);
       case 'manhattan':

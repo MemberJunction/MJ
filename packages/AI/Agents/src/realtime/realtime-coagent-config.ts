@@ -42,9 +42,11 @@
  * @author MemberJunction.com
  */
 
-// Type-only import from the pure @memberjunction/ai model layer — erased at runtime, so the
-// module keeps its framework-free / pure-transformation contract.
+// From the pure @memberjunction/ai model layer: the type import is erased at runtime, and the one value
+// import is the dependency-free turn-detection normalizer, so the module keeps its framework-free /
+// pure-transformation contract.
 import type { AIModelConfiguration, RealtimeTurnDetectionSettings } from '@memberjunction/ai';
+import { NormalizeTurnDetectionSettings } from '@memberjunction/ai';
 import {
     AccumulateRealtimeChannelsConfig,
     type RealtimeChannelDisplayPolicy,
@@ -389,6 +391,13 @@ export interface RealtimeSessionTuningConfig {
     /** Per-session input-transcription model override (OpenAI-protocol providers). */
     inputTranscriptionModel?: string;
     /**
+     * The languages callers and the agent are expected to speak, as BCP-47 codes (e.g. `["en-US"]`).
+     * A hint for the live captions, not a lock. Without it, providers that caption by auto-detecting
+     * each utterance's language (Gemini Live) can caption English speech in another script. Gemini
+     * maps it to `languageCodes` on both caption streams; other providers scrub it.
+     */
+    transcriptionLanguages?: string[];
+    /**
      * Normalized turn-detection override (mode/eagerness/threshold/silence). Layers ABOVE the
      * model catalog's `ModelConfiguration.Realtime.TurnDetection` default and BELOW the runtime
      * bag — agents/apps refine what the catalog declares. Profiles translate the normalized
@@ -415,7 +424,7 @@ export interface RealtimeSessionTuningConfig {
 /**
  * Projects the effective config's `realtime.session` tuning section onto the FLAT Config-bag keys
  * the realtime drivers consume (`effortLevel`, `parallelToolCalls`, `mcpTools`,
- * `inputTranscriptionModel`). Returns `null` when the section is absent or contributes nothing —
+ * `inputTranscriptionModel`, `transcriptionLanguages`). Returns `null` when the section is absent or contributes nothing —
  * callers then skip the merge entirely, preserving the prior bag byte-for-byte.
  *
  * @param config The effective configuration.
@@ -438,6 +447,10 @@ export function GetSessionTuningSettings(config: RealtimeCoAgentConfig | null | 
     }
     if (typeof tuning.inputTranscriptionModel === 'string' && tuning.inputTranscriptionModel.trim().length > 0) {
         bag['inputTranscriptionModel'] = tuning.inputTranscriptionModel.trim();
+    }
+    const languages = readLanguageCodes(tuning.transcriptionLanguages);
+    if (languages) {
+        bag['transcriptionLanguages'] = languages;
     }
     if (isPlainObject(tuning.turnDetection)) {
         bag['turnDetection'] = { ...tuning.turnDetection } as JSONObjectLike;
@@ -1088,7 +1101,12 @@ function normalizeSession(raw: unknown): RealtimeSessionTuningConfig | undefined
         tuning.inputTranscriptionModel = itModel.trim();
     }
 
-    const turnDetection = normalizeTurnDetection(raw['turnDetection']);
+    const languages = readLanguageCodes(raw['transcriptionLanguages']);
+    if (languages) {
+        tuning.transcriptionLanguages = languages;
+    }
+
+    const turnDetection = NormalizeTurnDetectionSettings(raw['turnDetection']);
     if (turnDetection) {
         tuning.turnDetection = turnDetection;
     }
@@ -1105,37 +1123,18 @@ function normalizeSession(raw: unknown): RealtimeSessionTuningConfig | undefined
     return Object.keys(tuning).length > 0 ? tuning : undefined;
 }
 
+/** The non-blank strings of an array, trimmed — or `undefined` when none remain (a lone string is not a list). */
+function readLanguageCodes(value: unknown): string[] | undefined {
+    if (!Array.isArray(value)) {
+        return undefined;
+    }
+    const codes = value.filter((v): v is string => typeof v === 'string' && v.trim().length > 0).map((v) => v.trim());
+    return codes.length > 0 ? codes : undefined;
+}
+
 /** A finite, positive, whole number — or `undefined` for anything else (a limit of 0, -5 or 1.5 is a typo, not a limit). */
 function readPositiveInteger(value: unknown): number | undefined {
     return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
-}
-
-/**
- * Normalizes the `session.turnDetection` block — only the recognized, correctly-typed knobs of the
- * MJ-normalized turn-detection vocabulary survive. Returns `undefined` when nothing valid is
- * present (tolerant, like every other cascade input). The drivers re-validate on extraction, so
- * this is belt-and-braces plus a typed authoring surface.
- */
-function normalizeTurnDetection(raw: unknown): RealtimeTurnDetectionSettings | undefined {
-    if (!isPlainObject(raw)) {
-        return undefined;
-    }
-    const result: RealtimeTurnDetectionSettings = {};
-    const mode = raw['Mode'];
-    if (mode === 'default' || mode === 'serverVad' || mode === 'semanticVad' || mode === 'native') {
-        result.Mode = mode;
-    }
-    const eagerness = raw['Eagerness'];
-    if (eagerness === 'low' || eagerness === 'auto' || eagerness === 'high') {
-        result.Eagerness = eagerness;
-    }
-    if (typeof raw['Threshold'] === 'number' && Number.isFinite(raw['Threshold'])) {
-        result.Threshold = raw['Threshold'];
-    }
-    if (typeof raw['SilenceDurationMs'] === 'number' && Number.isFinite(raw['SilenceDurationMs'])) {
-        result.SilenceDurationMs = raw['SilenceDurationMs'];
-    }
-    return Object.keys(result).length > 0 ? result : undefined;
 }
 
 /** Normalizes the `turnTaking` block (participation mode + room moderator); returns `null` when nothing usable survives. */

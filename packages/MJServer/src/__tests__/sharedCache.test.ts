@@ -45,7 +45,7 @@ import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import type { CacheSettingsConfig } from '../config.js';
 
 function settings(overrides: Partial<CacheSettingsConfig>): CacheSettingsConfig {
-    return { maxMemoryMB: 150, maxPercentOfCachePerEntity: 50, defaultTTLSeconds: 0, evictionSweepIntervalSeconds: 300, verboseLogging: false, engineSweepIntervalSeconds: 300, ...overrides };
+    return { maxMemoryMB: 150, maxPercentOfCachePerEntity: 50, maxEntryPercentOfCache: 'auto', defaultTTLSeconds: 0, evictionSweepIntervalSeconds: 300, verboseLogging: false, engineSweepIntervalSeconds: 300, ...overrides };
 }
 
 function event(overrides: Partial<CacheChangedEvent>): CacheChangedEvent {
@@ -77,6 +77,17 @@ describe('shared cache event routing', () => {
     it('dispatches a RunView change and relays it to browsers as an entity invalidation', () => {
         RouteSharedCacheEvent(event({ CacheKey: 'MJ: AI Models|_|_|-1|0|_|_|imr:1' }), provider(false));
         expect(dispatch).toHaveBeenCalledOnce();
+        expect(publish).toHaveBeenCalledWith('CACHE_INVALIDATION', expect.objectContaining({ entityName: 'MJ: AI Models', action: 'set', primaryKeyValues: null }));
+    });
+
+    it('dispatches a RunView row_delta to LocalCacheManager while normalizing browser CACHE_INVALIDATION action to set', () => {
+        const deltaEvt = event({
+            CacheKey: 'MJ: AI Models|_|_|-1|0|_|_|imr:1',
+            Action: 'row_delta',
+            Data: JSON.stringify({ primaryKeyFields: ['ID'], upsertedRows: [{ ID: '1' }], deletedPrimaryKeys: [], rowCount: 1, maxUpdatedAt: '' }),
+        });
+        RouteSharedCacheEvent(deltaEvt, provider(false));
+        expect(dispatch).toHaveBeenCalledWith(deltaEvt);
         expect(publish).toHaveBeenCalledWith('CACHE_INVALIDATION', expect.objectContaining({ entityName: 'MJ: AI Models', action: 'set', primaryKeyValues: null }));
     });
 
@@ -117,9 +128,11 @@ describe('shared cache configuration', () => {
     });
 
     it('maps cacheSettings onto LocalCacheManager settings', () => {
-        expect(CacheManagerConfigFromSettings(settings({ maxMemoryMB: 10, maxPercentOfCachePerEntity: 20, defaultTTLSeconds: 5, evictionSweepIntervalSeconds: 7, verboseLogging: true })))
-            .toEqual({ maxSizeBytes: 10 * 1024 * 1024, maxPercentOfCachePerEntity: 20, defaultTTLMs: 5000, evictionSweepIntervalMs: 7000, verboseLogging: true });
+        expect(CacheManagerConfigFromSettings(settings({ maxMemoryMB: 10, maxPercentOfCachePerEntity: 20, maxEntryPercentOfCache: 40, defaultTTLSeconds: 5, evictionSweepIntervalSeconds: 7, verboseLogging: true })))
+            .toEqual({ maxSizeBytes: 10 * 1024 * 1024, maxPercentOfCachePerEntity: 20, maxEntryPercentOfCache: 40, defaultTTLMs: 5000, evictionSweepIntervalMs: 7000, verboseLogging: true });
         expect(CacheManagerConfigFromSettings(undefined).maxSizeBytes).toBe(150 * 1024 * 1024);
+        // The per-entry ceiling reaches the cache, and an unset one is derived rather than a fixed fraction.
+        expect(CacheManagerConfigFromSettings(undefined).maxEntryPercentOfCache).toBe('auto');
     });
 
     it('starts the engine sweep at the configured interval, off when 0', () => {

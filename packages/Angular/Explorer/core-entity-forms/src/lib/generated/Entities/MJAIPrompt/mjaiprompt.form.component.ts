@@ -45,7 +45,8 @@ export class MJAIPromptFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentTypesConversationSummaryPromptID', sectionName: 'AI Agent Types (Conversation Summary Prompt ID)', isExpanded: false },
             { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false },
             { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false },
-            { sectionKey: 'mJFeatureValueCaches', sectionName: 'Feature Value Caches', isExpanded: false }
+            { sectionKey: 'mJFeatureValueCaches', sectionName: 'Feature Value Caches', isExpanded: false },
+            { sectionKey: 'mJFeaturePipelineVersions', sectionName: 'Feature Pipeline Versions', isExpanded: false }
         ]);
     }
 }

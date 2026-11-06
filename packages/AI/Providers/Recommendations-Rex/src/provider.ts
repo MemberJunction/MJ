@@ -118,7 +118,12 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
             ExtraFilter: `EntityDocumentID = '${entityDocumentID}'
                 AND EntityID = '${entityID}'
                 AND RecordID IN (${recordIDs})`,
-            MaxRows: Config.REX_BATCH_SIZE
+            MaxRows: Config.REX_BATCH_SIZE,
+            // Only RecordID and VectorID are read below. Each batch's filter is unique, so a cached copy
+            // would only hold memory, and a cached RunView reads every column (DocumentText, VectorJSON).
+            Fields: ['RecordID', 'VectorID'],
+            ResultType: 'simple',
+            BypassCache: true,
         }, currentUser);
 
         if(!rvVectorResult.Success) {

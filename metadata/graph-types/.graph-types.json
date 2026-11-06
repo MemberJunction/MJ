@@ -1,0 +1,70 @@
+[
+  {
+    "fields": {
+      "Name": "Canon",
+      "Description": "Governed institutional canon graph containing authoritative definitions, policies, metrics, processes, and roles.",
+      "IsCanon": true,
+      "Rank": 10,
+      "IconClass": "fa-solid fa-scale-balanced",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "FD40F8BA-B9EA-4F1F-A703-DA3737AA5224"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:01.080Z",
+      "checksum": "2e53177140debc851f5fdd0a56f0d311691584f2ca11e53bba2718b9f48190aa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Knowledge",
+      "Description": "Content-source and GraphRAG knowledge overlay graph connecting concepts, documents, chunks, and entities.",
+      "IsCanon": false,
+      "Rank": 20,
+      "IconClass": "fa-solid fa-book-open-reader",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B3FDB086-E2C9-4C7F-987D-7DF3A727A66C"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:01.094Z",
+      "checksum": "f3d0ea1f68ffab9b08de88912f0e93cb7dc1dacbe78dd9b6f1afb2c513ee989d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Network",
+      "Description": "Relationship and network topology graph connecting people, organizations, committees, and operational records.",
+      "IsCanon": false,
+      "Rank": 30,
+      "IconClass": "fa-solid fa-diagram-project",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "76A2E6A3-6B52-49C1-8784-BF1A2997ACFE"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:01.104Z",
+      "checksum": "6858c31a57c3f90a4132e58d0ac7225e25d003e20af3d56ba94e03b692893739"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Custom",
+      "Description": "User-defined custom semantic graph partition.",
+      "IsCanon": false,
+      "Rank": 100,
+      "IconClass": "fa-solid fa-circle-nodes",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "C494A14A-055F-4327-8E26-42B3C48DF9FD"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:46:01.115Z",
+      "checksum": "822fd86738fa981259c14dc44ac7a33ff93c03c554af83443af8721657d1e1ef"
+    }
+  }
+]

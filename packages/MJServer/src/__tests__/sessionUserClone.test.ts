@@ -43,6 +43,7 @@ function buildSourceUser(): UserInfo {
   user.ReturningVisitorContext = { VisitorKey: 'vk-1' };
   user.WidgetGuestContext = { WidgetID: 'W0000000-0000-0000-0000-000000000001' };
   user.IsMagicLinkAnonymous = true;
+  user.AnonymousVisitorID = 'visitor-sid-1';
   return user;
 }
 
@@ -99,13 +100,14 @@ describe('CloneUserForSessionContext', () => {
     expect(clone.APIKeyRowFilters).toHaveLength(1);
   });
 
-  it('preserves ReturningVisitorContext, WidgetGuestContext, and IsMagicLinkAnonymous', () => {
+  it('preserves ReturningVisitorContext, WidgetGuestContext, IsMagicLinkAnonymous, and AnonymousVisitorID', () => {
     const source = buildSourceUser();
     const clone = CloneUserForSessionContext(source);
 
     expect(clone.ReturningVisitorContext).toEqual({ VisitorKey: 'vk-1' });
     expect(clone.WidgetGuestContext).toEqual({ WidgetID: 'W0000000-0000-0000-0000-000000000001' });
     expect(clone.IsMagicLinkAnonymous).toBe(true);
+    expect(clone.AnonymousVisitorID).toBe('visitor-sid-1');
   });
 
   it('stamping new contexts on the clone does NOT write through to the source', () => {
@@ -120,6 +122,7 @@ describe('CloneUserForSessionContext', () => {
     clone.APIKeyActingContext = { ActingOrganizationID: 'ORG-OTHER' };
     clone.APIKeyRowFilters = newBindings;
     clone.IsMagicLinkAnonymous = false;
+    clone.AnonymousVisitorID = 'visitor-sid-OTHER';
 
     // The source (potentially the shared UserCache instance) must be untouched
     expect(source.TenantContext).toEqual({ TenantID: 'tenant-1', Source: 'header' });
@@ -128,6 +131,7 @@ describe('CloneUserForSessionContext', () => {
     expect(source.APIKeyRowFilters).toHaveLength(1);
     expect(source.APIKeyRowFilters?.[0].FilterID).toBe('F0000000-0000-0000-0000-000000000001');
     expect(source.IsMagicLinkAnonymous).toBe(true);
+    expect(source.AnonymousVisitorID).toBe('visitor-sid-1');
   });
 
   it('clearing contexts on the clone does NOT clear them on the source', () => {

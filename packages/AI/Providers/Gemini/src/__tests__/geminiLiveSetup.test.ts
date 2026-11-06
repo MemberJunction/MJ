@@ -169,19 +169,19 @@ describe('BuildGeminiLiveSetup: where each key goes', () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
         const setup = BuildGeminiLiveSetup(DEVELOPER, {
             sessionResumption: { handle: 'h', transparent: true },
-            inputAudioTranscription: { languageCodes: ['en-US'] },
+            inputAudioTranscription: { languageCodes: ['en-US'], customVocabulary: ['MemberJunction'] },
             outputAudioTranscription: {},
             explicitVadSignal: true,
             safetySettings: [{ category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH, method: HarmBlockMethod.SEVERITY }],
         });
         expect(setup.sessionResumption).toEqual({ handle: 'h' });
-        expect(setup.inputAudioTranscription).toEqual({});
+        expect(setup.inputAudioTranscription).toEqual({ languageCodes: ['en-US'] });
         expect(setup.outputAudioTranscription).toEqual({});
         expect(setup.explicitVadSignal).toBeUndefined();
         expect(setup.safetySettings).toEqual([{ category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH }]);
         const logged = warnings(warn);
         expect(logged).toHaveLength(1);
-        for (const key of ['explicitVadSignal', 'sessionResumption.transparent', 'inputAudioTranscription.languageCodes', 'safetySettings.method']) {
+        for (const key of ['explicitVadSignal', 'sessionResumption.transparent', 'inputAudioTranscription.customVocabulary', 'safetySettings.method']) {
             expect(logged[0]).toContain(key);
         }
     });

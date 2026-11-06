@@ -23,7 +23,7 @@ import type { DatabasePlatform, IMetadataProvider, QueryDependencySpec, RunQuery
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { QueryEngine } from '@memberjunction/core-entities';
 import type { MJQueryPermissionEntity } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 import {
@@ -350,8 +350,30 @@ const OWN_CAP_CASES: RenderCase[] = [
         Variants: { postgresql: `SELECT ID, Category || ':' || ID::text AS Tag, 'x:y'::text AS Lit FROM ${T} WHERE ID <= 15 ORDER BY ID` },
         Columns: ['ID', 'Tag', 'Lit'], Ordered: true,
         Expect: items => items.filter(i => i.ID <= 15).map(i => ({ ID: i.ID, Tag: `${i.Category}:${i.ID}`, Lit: 'x:y' }))
+    },
+    {
+        // TOP on two branches makes the cap a derived table, so the set operation's ORDER BY,
+        // which names a branch's alias, has to order it from outside. Each branch has exactly five
+        // rows, so its TOP 5 keeps all of them.
+        Name: 'RR Union Branch TOPs Aliased Order',
+        SQL: `SELECT TOP 5 a.ID FROM ${T} a WHERE a.ID <= 5 UNION ALL SELECT TOP 5 b.ID FROM ${T} b WHERE b.ID BETWEEN 101 AND 105 ORDER BY a.ID DESC`,
+        Platforms: ['sqlserver'],
+        Columns: ['ID'], Ordered: true,
+        Expect: items => unionBranchIds(items)
+    },
+    {
+        Name: 'RR Union Branch TOPs Own OFFSET FETCH',
+        SQL: `SELECT TOP 5 a.ID FROM ${T} a WHERE a.ID <= 5 UNION ALL SELECT TOP 5 b.ID FROM ${T} b WHERE b.ID BETWEEN 101 AND 105 ORDER BY a.ID DESC OFFSET 2 ROWS FETCH NEXT 5 ROWS ONLY`,
+        Platforms: ['sqlserver'],
+        Columns: ['ID'], Ordered: true,
+        Expect: items => unionBranchIds(items).slice(2, 7)
     }
 ];
+
+/** IDs 1–5 and 101–105, highest first: the rows of the two-branch UNION cases. */
+function unionBranchIds(items: RenderItem[]): ComparableRow[] {
+    return ids(items.filter(i => i.ID <= 5 || (i.ID >= 101 && i.ID <= 105)).sort((a, b) => b.ID - a.ID));
+}
 
 // ─── Parameters ────────────────────────────────────────────────────────────────
 
@@ -642,6 +664,7 @@ const COMPOSED_CASES: RenderCase[] = [
     },
     {
         Name: 'RR Comp Token In String Literal',
+        BreaksSaveRules: true,
         SQL: `SELECT b.ID, '{{query:"Nowhere/Nothing"}}' AS Note FROM {{query:"{P}/RR Dep Base"}} b WHERE b.ID <= 4 ORDER BY b.ID`,
         Columns: ['ID', 'Note'], Ordered: true,
         Expect: items => items.filter(i => i.ID <= 4).map(i => ({ ID: i.ID, Note: '{{query:"Nowhere/Nothing"}}' }))
@@ -796,10 +819,10 @@ export const RunQueryRenderingChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const fixtures = requireFixtures();
             const path = RenderCategoryPath(fixtures);
-            const missing = await CreateRenderQuery(fixtures, { Name: 'RR Comp Missing', SQL: `SELECT ID FROM {{query:"${path}/RR Nonexistent"}}` }, ctx.User);
-            const notReusable = await CreateRenderQuery(fixtures, { Name: 'RR Comp Not Reusable', SQL: `SELECT ID FROM {{query:"${path}/RR Dep Not Reusable"}}` }, ctx.User);
-            const cycleA = await CreateRenderQuery(fixtures, { Name: 'RR Cycle A', Reusable: true, SQL: `SELECT ID FROM {{query:"${path}/RR Cycle B"}}` }, ctx.User);
-            await CreateRenderQuery(fixtures, { Name: 'RR Cycle B', Reusable: true, SQL: `SELECT ID FROM {{query:"${path}/RR Cycle A"}}` }, ctx.User);
+            const missing = await CreateRenderQuery(fixtures, { Name: 'RR Comp Missing', BreaksSaveRules: true, SQL: `SELECT ID FROM {{query:"${path}/RR Nonexistent"}}` }, ctx.User);
+            const notReusable = await CreateRenderQuery(fixtures, { Name: 'RR Comp Not Reusable', BreaksSaveRules: true, SQL: `SELECT ID FROM {{query:"${path}/RR Dep Not Reusable"}}` }, ctx.User);
+            const cycleA = await CreateRenderQuery(fixtures, { Name: 'RR Cycle A', Reusable: true, BreaksSaveRules: true, SQL: `SELECT ID FROM {{query:"${path}/RR Cycle B"}}` }, ctx.User);
+            await CreateRenderQuery(fixtures, { Name: 'RR Cycle B', Reusable: true, BreaksSaveRules: true, SQL: `SELECT ID FROM {{query:"${path}/RR Cycle A"}}` }, ctx.User);
             await RefreshRenderQueries(ctx.User);
             await expectFailure(missing.ID, /not found/i, 'missing dependency', ctx.User);
             await expectFailure(notReusable.ID, /not marked as Reusable/i, 'non-reusable dependency', ctx.User);
@@ -981,7 +1004,9 @@ async function expectDeniedDependencyFailure(fixtures: RenderFixtures, path: str
     Assert(await permission.Save(), `restricting the dependency failed: ${permission.LatestResult?.CompleteMessage}`);
     try {
         await RefreshRenderQueries(user);
-        await expectFailure(composed.ID, /does not have permission to run query 'RR Comp Restricted'/i, `dependency restricted to role '${role.Name}'`, user);
+        // Run by ID, so the refusal echoes the ID (never the query's name).
+        const unavailable = new RegExp(`^Query '${composed.ID}' does not exist or you do not have permission to run it\\.$`, 'i');
+        await expectFailure(composed.ID, unavailable, `dependency restricted to role '${role.Name}'`, user);
     } finally {
         if (!await permission.Delete()) console.error(`runquery-rendering: removing the dependency restriction failed: ${permission.LatestResult?.CompleteMessage}`);
         await RefreshRenderQueries(user);
@@ -993,7 +1018,8 @@ async function roleNotHeldBy(user: UserInfo): Promise<{ ID: string; Name: string
     const roles = await new RunView().RunView<{ ID: string; Name: string }>({
         EntityName: 'MJ: Roles', Fields: ['ID', 'Name'], ResultType: 'simple'
     }, user);
-    return roles.Results.find(r => !user.UserRoles.some(ur => UUIDsEqual(ur.RoleID, r.ID)));
+    const held = new UUIDSet(user.UserRoles.map(ur => ur.RoleID));
+    return roles.Results.find(r => !held.Has(r.ID));
 }
 
 async function expectFailure(queryID: string, pattern: RegExp, label: string, user: UserInfo): Promise<void> {

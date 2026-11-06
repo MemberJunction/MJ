@@ -37,7 +37,14 @@ export class AIModelRunner {
     /**
      * Awaits all in-flight prompt-run saves queued by this runner.
      */
+    public async FlushPendingSaves(): Promise<void> {
+        await this._embeddingRunner.FlushPendingSaves();
+    }
+
+    /**
+     * Awaits all in-flight prompt-run saves queued by this runner.
+     */
     public async WaitForPendingPromptRunSaves(): Promise<void> {
-        await this._embeddingRunner.WaitForPendingPromptRunSaves();
+        await this.FlushPendingSaves();
     }
 }

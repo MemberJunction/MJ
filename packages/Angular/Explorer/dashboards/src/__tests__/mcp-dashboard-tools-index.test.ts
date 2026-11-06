@@ -164,4 +164,25 @@ describe('MCPDashboardComponent — tools-by-server index precompute', () => {
     expect(component.getToolsForServer(SERVER_A)).toEqual([]);
     expect(component.getToolsForServer(SERVER_B)).toEqual([]);
   });
+
+  it('memoizes McpFilterValues, McpFilterFields, and TestRecentToolIDs across change-detection reads (MJ-NG-4)', () => {
+    const vals1 = component.McpFilterValues;
+    const vals2 = component.McpFilterValues;
+    expect(vals2).toBe(vals1);
+
+    const fields1 = component.McpFilterFields;
+    const fields2 = component.McpFilterFields;
+    expect(fields2).toBe(fields1);
+
+    component.ExecutionLogs = [
+      { ID: 'l1', ConnectionID: 'c1', ToolID: 't1', ToolName: 'a-one', Status: 'Success', StartedAt: new Date(), CompletedAt: null, DurationMs: 10, UserID: 'u1', ErrorMessage: null },
+      { ID: 'l2', ConnectionID: 'c1', ToolID: 't2', ToolName: 'a-two', Status: 'Success', StartedAt: new Date(), CompletedAt: null, DurationMs: 12, UserID: 'u1', ErrorMessage: null },
+    ];
+    const recent1 = component.TestRecentToolIDs;
+    const recent2 = component.TestRecentToolIDs;
+    expect(recent2).toBe(recent1);
+    expect(recent1).toEqual(['t1', 't2']);
+    expect(component.IsRecentTestTool('t1')).toBe(true);
+    expect(component.IsRecentTestTool('t3')).toBe(false);
+  });
 });

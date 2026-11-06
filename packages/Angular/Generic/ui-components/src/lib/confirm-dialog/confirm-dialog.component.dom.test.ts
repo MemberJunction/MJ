@@ -61,6 +61,27 @@ describe('MJConfirmDialogComponent (DOM)', () => {
     expect(confirmBtn(render({ Type: 'warning' })).classList.contains('mj-btn--primary')).toBe(true);
   });
 
+  describe('initial focus', () => {
+    /** mj-dialog moves focus in after the container renders. */
+    const opened = async (f: ComponentFixture<MJConfirmDialogComponent>) => {
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      return f;
+    };
+
+    it('opens a danger confirm on Cancel, so an accidental Enter does not delete or discard', async () => {
+      const f = await opened(render({ Type: 'danger', ConfirmText: 'Delete', CancelText: 'Cancel' }));
+      expect(document.activeElement).toBe(cancelBtn(f));
+    });
+
+    it('opens every other confirm on the confirm button', async () => {
+      for (const type of ['default', 'warning', 'info'] as const) {
+        const f = await opened(render({ Type: type }));
+        expect(document.activeElement).toBe(confirmBtn(f));
+        f.destroy();
+      }
+    });
+  });
+
   it('places the confirm button to the LEFT of cancel (MJ convention)', () => {
     const f = render({ ConfirmText: 'Delete', CancelText: 'Keep' });
     expect(confirmBtn(f).textContent?.trim()).toContain('Delete');

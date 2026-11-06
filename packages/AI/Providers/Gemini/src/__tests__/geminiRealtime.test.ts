@@ -117,6 +117,13 @@ describe('GeminiRealtime client-direct (CreateClientSession)', () => {
         expect(expires).toBeLessThanOrEqual(after + 30 * 60 * 1000);
     });
 
+    it('carries the effective session cap: 1800 by default, the smaller host cap otherwise', async () => {
+        const driver = new ClientDirectTestable('k');
+        expect((await driver.CreateClientSession(makeParams())).MaxSessionSeconds).toBe(1800);
+        expect((await driver.CreateClientSession(makeParams({ MaxSessionSeconds: 900 }))).MaxSessionSeconds).toBe(900);
+        expect((await driver.CreateClientSession(makeParams({ MaxSessionSeconds: 5000 }))).MaxSessionSeconds).toBe(1800);
+    });
+
     it('locks the server-built connect config into the token via liveConnectConstraints', async () => {
         const driver = new ClientDirectTestable('k');
         await driver.CreateClientSession(makeParams({
@@ -129,13 +136,14 @@ describe('GeminiRealtime client-direct (CreateClientSession)', () => {
 
         const mintConfig = driver.MintParams?.config;
         expect(mintConfig).toBeDefined();
-        expect(mintConfig?.uses).toBe(1);
         expect(mintConfig?.lockAdditionalFields).toEqual([]);
         expect(typeof mintConfig?.expireTime).toBe('string');
-        expect(typeof mintConfig?.newSessionExpireTime).toBe('string');
-        // The new-session window precedes the token expiry.
-        expect(new Date(mintConfig!.newSessionExpireTime!).getTime())
-            .toBeLessThan(new Date(mintConfig!.expireTime!).getTime());
+        // Gemini ends a Live connection after about 10 minutes, and the browser resumes on the SAME token, which Gemini
+        // counts as a new session (live runs: a single-use token is refused "Token has been used too many times", a
+        // 10-minute new-session window "new_session_expire_time deadline exceeded"). So the token must open new
+        // sessions until it expires, and allow at least one connection per 10 minutes of the cap the mint reports.
+        expect(mintConfig?.newSessionExpireTime).toBe(mintConfig?.expireTime);
+        expect(mintConfig?.uses).toBeGreaterThanOrEqual(Math.ceil(1800 / 600));
 
         const constraints = mintConfig?.liveConnectConstraints;
         expect(constraints?.model).toBe('gemini-live-2.5-flash-preview');
@@ -148,6 +156,23 @@ describe('GeminiRealtime client-direct (CreateClientSession)', () => {
         expect(locked.tools).toBeUndefined();
         expect(locked.inputAudioTranscription).toBeUndefined();
         expect(locked.outputAudioTranscription).toBeUndefined();
+    });
+
+    // The token is a credential the browser holds: it must not outlive the session cap the host set, or a guest with
+    // a 5-minute cap could keep talking to Gemini directly for the token's full 30 minutes.
+    it('bounds the token by the session cap: expiry and connection count follow a short host cap', async () => {
+        const driver = new ClientDirectTestable('k');
+        const before = Date.now();
+        const cfg = await driver.CreateClientSession(makeParams({ MaxSessionSeconds: 300 }));
+        const mintConfig = driver.MintParams!.config!;
+        const expiresMs = new Date(mintConfig.expireTime!).getTime();
+        expect(cfg.MaxSessionSeconds).toBe(300);
+        expect(expiresMs).toBeLessThanOrEqual(Date.now() + (300 + 60) * 1000);
+        expect(expiresMs).toBeGreaterThanOrEqual(before + 300 * 1000);
+        expect(mintConfig.newSessionExpireTime).toBe(mintConfig.expireTime);
+        expect(cfg.ExpiresAt).toBe(mintConfig.expireTime);
+        expect(mintConfig.uses).toBeLessThan(6);
+        expect(mintConfig.uses).toBeGreaterThanOrEqual(2);
     });
 
     it('carries the same model + config in SessionConfig for the client to pass at connect', async () => {
@@ -1204,6 +1229,102 @@ describe('C7: agnostic voice → Gemini speechConfig (issue #3721)', () => {
         } finally {
             warn.mockRestore();
         }
+    });
+});
+
+describe('C8: transcriptionLanguages → caption language hints', () => {
+    it('hints both caption streams and consumes the neutral key without a scrub warning', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const driver = new TestGeminiRealtime('k');
+            await driver.StartSession(makeParams({ Config: { transcriptionLanguages: [' en-US ', ''] } }));
+            const config = driver.LastConnectArgs!.Config as LiveConnectConfig & Record<string, unknown>;
+            expect(config.inputAudioTranscription).toEqual({ languageCodes: ['en-US'] });
+            expect(config.outputAudioTranscription).toEqual({ languageCodes: ['en-US'] });
+            expect(config.transcriptionLanguages).toBeUndefined();
+            expect(warn).not.toHaveBeenCalled();
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it('lets a provider-native transcription config in the bag win', async () => {
+        const driver = new TestGeminiRealtime('k');
+        await driver.StartSession(makeParams({
+            Config: { transcriptionLanguages: ['en-US'], inputAudioTranscription: { languageCodes: ['fr-FR'] } },
+        }));
+        const config = driver.LastConnectArgs!.Config as LiveConnectConfig;
+        expect(config.inputAudioTranscription).toEqual({ languageCodes: ['fr-FR'] });
+        expect(config.outputAudioTranscription).toEqual({ languageCodes: ['en-US'] });
+    });
+
+    it('warns on a value with no codes and keeps auto-detection', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const driver = new TestGeminiRealtime('k');
+            await driver.StartSession(makeParams({ Config: { transcriptionLanguages: 'en-US' } }));
+            const config = driver.LastConnectArgs!.Config as LiveConnectConfig & Record<string, unknown>;
+            expect(config.inputAudioTranscription).toEqual({});
+            expect(config.outputAudioTranscription).toEqual({});
+            expect(config.transcriptionLanguages).toBeUndefined();
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining('holds no language codes'));
+        } finally {
+            warn.mockRestore();
+        }
+    });
+
+    it('keeps the hint out of the token lock (transcription keys 400 the mint) but in SessionConfig', async () => {
+        const driver = new ClientDirectTestable('k');
+        const cfg = await driver.CreateClientSession(makeParams({ Config: { transcriptionLanguages: ['en-US'] } }));
+        const locked = driver.MintParams?.config?.liveConnectConstraints?.config as LiveConnectConfig;
+        expect(locked.inputAudioTranscription).toBeUndefined();
+        expect(locked.outputAudioTranscription).toBeUndefined();
+        const sessionConfig = (cfg.SessionConfig as { config: LiveConnectConfig & Record<string, unknown> }).config;
+        expect(sessionConfig.inputAudioTranscription).toEqual({ languageCodes: ['en-US'] });
+    });
+});
+
+/**
+ * From @google/genai 2.11, `live.connect` resolves only on the server's setupComplete frame and never
+ * rejects when the socket closes first. These drive the REAL connect seam with a fake SDK client.
+ */
+describe('C9: connect fails fast when the socket closes during setup', () => {
+    type FakeCallbacks = {
+        onmessage: (m: LiveServerMessage) => void;
+        onclose: (e: { code: number; reason: string }) => void;
+        onerror: (e: { message: string }) => void;
+    };
+    const withClient = (connect: (p: { callbacks: FakeCallbacks }) => Promise<unknown>): GeminiRealtime =>
+        Object.assign(new GeminiRealtime('k'), { geminiClient: { live: { connect } } });
+
+    it('rejects with the close code and reason instead of hanging', async () => {
+        const driver = withClient(({ callbacks }) => {
+            setTimeout(() => callbacks.onclose({ code: 1008, reason: 'model not found' }));
+            return new Promise(() => undefined); // what the SDK does: never settles
+        });
+        await expect(driver.StartSession(makeParams())).rejects.toThrow('closed during setup (code 1008: model not found)');
+    });
+
+    it('rejects on a websocket error before setup completes', async () => {
+        const driver = withClient(({ callbacks }) => {
+            setTimeout(() => callbacks.onerror({ message: 'boom' }));
+            return new Promise(() => undefined);
+        });
+        await expect(driver.StartSession(makeParams())).rejects.toThrow('connection failed: boom');
+    });
+
+    it('a close after a successful connect reaches the session, not the connect', async () => {
+        let callbacks: FakeCallbacks | null = null;
+        const driver = withClient((p) => {
+            callbacks = p.callbacks;
+            ConfirmGeminiSetup({ OnMessage: p.callbacks.onmessage });
+            return Promise.resolve(new FakeLiveSession());
+        });
+        const session = await driver.StartSession(makeParams());
+        const errors: string[] = [];
+        session.OnError((e) => errors.push(e.Message));
+        callbacks!.onclose({ code: 1011, reason: 'server restart' });
+        expect(errors.length).toBe(1);
     });
 });
 

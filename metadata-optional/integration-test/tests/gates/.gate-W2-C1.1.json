@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W2 -> C1.1",
+    "Description": "Gate G0.2 (owner PR 4, phase 0, dataset W2, criterion C1.1): with automated publishing on, at most 6 of 60 builder-agent runs on W2-noise s100–s159 reach Published (statRule noise-publish-60), and every run that publishes has a stored gate outcome 'model' that publish reverification re-derives, 60 of 60 runs consistent. Pending: nothing stores a gate outcome until PR 4, so every published run counts as inconsistent here; PR 4 activates this test.",
+    "Status": "Pending",
+    "Tags": "[\"gate\",\"G0.2\",\"owner:PR4\",\"phase:0\",\"dataset:W2\",\"criterion:C1.1\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 1200000,
+    "ExpectedOutcomes": {
+      "summary": "At most 6 of 60 noise agent runs reach Published; 60 of 60 runs consistent with their stored gate outcome."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w2-c1-1"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "B4168D2A-EAAE-4478-BF07-5CE7804A7339"
+  }
+}

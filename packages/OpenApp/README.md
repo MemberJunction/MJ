@@ -477,6 +477,10 @@ Your server package should:
 - Depend on `@memberjunction/global` (for `RegisterClass`) and any MJ packages it needs
 - Be published to npm (or a private registry specified in `packages.registry`)
 
+### HTTP Routes: the API Path Isn't Always at `/`
+
+MJAPI does not know where it is exposed, so an app never hard-codes its own paths. A server extension's `RootPath` is **relative to `MJAPI_BASE_PATH`**: core composes the real mount path and passes it back as `context.config.RootPath`, so mount on it as-is. `GRAPHQL_ROOT_PATH` is only Apollo's path, never a base for app routes. Build browser, email and webhook URLs from `context.publicUrl` (where the world reaches MJAPI, prefix included) plus a path relative to the base path. Give browser bundles the MJAPI URL explicitly; never let them work it out from `window.location` or by stripping `/graphql`. Never mount at a root-relative literal (`app.use('/forms', …)`); CI fails on it. The full rule is in the [Open App spec](../../plans/open-app-spec.md#http-routes-and-mjapis-base-path).
+
 ---
 
 ## Building Client-Side Packages

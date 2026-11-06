@@ -184,4 +184,36 @@ describe('losses are reported rather than silent', () => {
         expect(saved.Losses).toEqual([]);
         expect(saved.Spec!.Steps![0].StepType).toBe('Action');
     });
+
+    it('round-trips a multi-root task graph with two starting steps feeding a join', () => {
+        const multiRoot = CompileFlowToTaskGraph(
+            [
+                { ID: 'r1', Name: 'Top 5 Customer Organizations', StepType: 'Sub-Agent', StartingStep: true, Status: 'Active', SubAgentID: 'sub-1' },
+                { ID: 'r2', Name: 'Top 5 Products by Revenue', StepType: 'Sub-Agent', StartingStep: true, Status: 'Active', SubAgentID: 'sub-2' },
+                { ID: 'join', Name: 'Revenue Concentration Analysis', StepType: 'Sub-Agent', StartingStep: false, Status: 'Active', SubAgentID: 'sub-3' },
+            ],
+            [
+                { ID: 'p1', OriginStepID: 'r1', DestinationStepID: 'join', Priority: 0 },
+                { ID: 'p2', OriginStepID: 'r2', DestinationStepID: 'join', Priority: 0 },
+            ],
+            options,
+        );
+        expect(multiRoot.Success).toBe(true);
+
+        const saved = ConvertTaskGraphToAgentSpec(multiRoot.Spec!, saveOptions());
+        expect(saved.Success).toBe(true);
+        expect(saved.Spec!.Steps!.filter((s) => s.StartingStep)).toHaveLength(2);
+
+        const reopenInput = asCompilerInput(saved.Spec!);
+        const reopened = CompileFlowToTaskGraph(reopenInput.steps, reopenInput.paths, options);
+        expect(reopened.Success).toBe(true);
+        expect(reopened.Errors).toHaveLength(0);
+        expect(reopened.Spec!.tasks.map((t) => t.name).sort()).toEqual([
+            'Revenue Concentration Analysis',
+            'Top 5 Customer Organizations',
+            'Top 5 Products by Revenue',
+        ]);
+        const joinTask = reopened.Spec!.tasks.find((t) => t.name === 'Revenue Concentration Analysis')!;
+        expect(joinTask.dependsOn).toHaveLength(2);
+    });
 });

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BehaviorSubject, Subject } from 'rxjs';
-import { RunViewParams, UserInfo } from '@memberjunction/core';
+import { EntityInfo, RunViewParams, UserInfo } from '@memberjunction/core';
 import { ConversationEngine } from '@memberjunction/core-entities';
 import { CreateFakeProvider } from '@memberjunction/ng-test-utils';
 import { SearchService } from '../lib/services/search.service';
@@ -239,6 +239,54 @@ describe('SearchService visibility scope', () => {
 
     expect(queriesFor('MJ: Conversation Details')).toHaveLength(0);
     expect(results.messages).toEqual([]);
+  });
+
+  it('searches tasks without a subquery over conversations or their messages', async () => {
+    const entities = {
+      'MJ: Tasks': { Name: 'MJ: Tasks', SchemaName: '__mj', BaseView: 'vwTasks' },
+      'MJ: Conversations': { Name: 'MJ: Conversations', SchemaName: '__mj', BaseView: 'vwConversations' },
+      'MJ: Conversation Details': { Name: 'MJ: Conversation Details', SchemaName: '__mj', BaseView: 'vwConversationDetails' },
+    } as unknown as Record<string, EntityInfo>;
+    rows['MJ: Conversations'] = [{ ID: 'c1' }];
+    rows['MJ: Conversation Details'] = [{ ID: 'd1' }];
+    service.Provider = CreateFakeProvider<object>({
+      runViewResults: (params) => {
+        queries.push(params);
+        return rows[params.EntityName ?? ''] ?? [];
+      },
+      entityByName: (name) => entities[name],
+    });
+    service.SetSearchFilter('tasks');
+
+    await service.Search('plan', 'env-1', USER);
+
+    const allFilters = queries.map((q) => (typeof q.ExtraFilter === 'string' ? q.ExtraFilter : '')).join(' ');
+    expect(allFilters).not.toMatch(/vwConversation/i);
+    const taskFilter = filterFor('MJ: Tasks');
+    expect(taskFilter.startsWith("ParentID IS NULL AND (UserID = 'user-1' OR ConversationDetailID IN ('d1')) AND ")).toBe(true);
+    expect(taskFilter).toContain("LOWER(Name) LIKE '%plan%'");
+  });
+
+  it('reads the message IDs again on every task search', async () => {
+    const entities = { 'MJ: Tasks': { Name: 'MJ: Tasks', SchemaName: '__mj', BaseView: 'vwTasks' } } as unknown as Record<string, EntityInfo>;
+    rows['MJ: Conversations'] = [{ ID: 'c1' }];
+    rows['MJ: Conversation Details'] = [{ ID: 'd1' }];
+    service.Provider = CreateFakeProvider<object>({
+      runViewResults: (params) => {
+        queries.push(params);
+        return rows[params.EntityName ?? ''] ?? [];
+      },
+      entityByName: (name) => entities[name],
+    });
+    service.SetSearchFilter('tasks');
+
+    await service.Search('plan', 'env-1', USER);
+    rows['MJ: Conversation Details'] = [{ ID: 'd1' }, { ID: 'd2' }];
+    await service.Search('plan', 'env-1', USER);
+
+    const taskFilters = queriesFor('MJ: Tasks').map((q) => (typeof q.ExtraFilter === 'string' ? q.ExtraFilter : ''));
+    expect(taskFilters).toHaveLength(2);
+    expect(taskFilters[1]).toContain("ConversationDetailID IN ('d1','d2')");
   });
 
   it('reads the branch and sequence of each message hit', async () => {

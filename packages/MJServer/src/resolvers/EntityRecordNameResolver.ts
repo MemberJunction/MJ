@@ -38,7 +38,8 @@ export class EntityRecordNameResult {
  *
  * Entity-level read permission is checked here ({@link ResolverBase.CheckUserReadPermissions}).
  * Field- and row-level security are applied by the provider's lookup, for the acting user passed
- * to it: when any field the name is built from is withheld, it answers with no name.
+ * to it: when any field the name is built from is withheld, it answers with no name, and it reads
+ * only rows the user's read row filter allows. Without an acting user there is no lookup.
  *
  * A withheld name answers `Success: false` with the same status as a record that does not exist.
  * Callers already treat "no name" as "show the primary key", and the identical answer keeps this
@@ -85,7 +86,7 @@ export class EntityRecordNameResolver extends ResolverBase {
     if (e) {
       const contextUser = userPayload ? this.GetUserFromPayload(userPayload) : undefined;
       // The acting user is what field- and row-level security are applied for.
-      const recordName = await md.GetEntityRecordName(e.Name, pk, contextUser);
+      const recordName = contextUser ? await md.GetEntityRecordName(e.Name, pk, contextUser) : '';
       if (recordName) return { Success: true, Status: 'OK', CompositeKey: pk, RecordName: recordName, EntityName };
       else
         return {

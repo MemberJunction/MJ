@@ -11,10 +11,11 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-// @memberjunction/ai-realtime-client (8 classes)
+// @memberjunction/ai-realtime-client (9 classes)
 import {
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
+    ElevenRealtimeClient,
     GeminiEnterpriseRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
@@ -35,7 +36,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (450 classes)
+// @memberjunction/core-entities (477 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -79,10 +80,12 @@ import {
     MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
+    MJAIAgentSessionRecordingShardEntity,
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
+    MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
     MJAIBridgeAgentIdentityEntity,
     MJAIBridgeProviderChannelEntity,
@@ -160,6 +163,10 @@ import {
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJBrandKitAssetEntity,
+    MJBrandKitEntity,
+    MJCalendarEventLinkEntity,
+    MJCalendarSyncStateEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -175,6 +182,8 @@ import {
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
+    MJCompanyIntegrationObjectEntity,
+    MJCompanyIntegrationObjectFieldEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
@@ -233,6 +242,11 @@ import {
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
+    MJDiagnosticBundleEntity,
+    MJDiagnosticSenderRegistrationEntity,
+    MJDiagnosticSessionChunkEntity,
+    MJDiagnosticSessionEntity,
+    MJDocumentSequenceCounterEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -249,6 +263,7 @@ import {
     MJEntityActionInvocationEntity,
     MJEntityActionInvocationTypeEntity,
     MJEntityActionParamEntity,
+    MJEntityAlternateBaseViewEntity,
     MJEntityCommunicationFieldEntity,
     MJEntityCommunicationMessageTypeEntity,
     MJEntityDocumentEntity,
@@ -280,6 +295,7 @@ import {
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
     MJFeaturePipelineTypeEntity,
+    MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -291,6 +307,15 @@ import {
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJGraphAuthorityTierEntity,
+    MJGraphConceptEntity,
+    MJGraphConceptTypeEntity,
+    MJGraphEdgeEntity,
+    MJGraphEdgeProviderEntity,
+    MJGraphEdgeTypeEndpointEntity,
+    MJGraphEdgeTypeEntity,
+    MJGraphEntity,
+    MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -352,6 +377,7 @@ import {
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
+    MJProjectEntityExtended,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
     MJQueryDependencyEntity,
@@ -451,6 +477,7 @@ import {
     MJTestSuiteTestEntity,
     MJTestTypeEntity,
     MJThemeEntity,
+    MJThemeEntityExtended,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
@@ -475,6 +502,7 @@ import {
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
+    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -529,12 +557,13 @@ import {
     MJEntityCommunicationMessageTypeEntityExtended,
 } from '@memberjunction/entity-communications-base';
 
-// @memberjunction/feature-pipelines (1 classes)
+// @memberjunction/feature-pipelines (2 classes)
 import {
+    MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
 } from '@memberjunction/feature-pipelines';
 
-// @memberjunction/ng-artifacts (14 classes)
+// @memberjunction/ng-artifacts (15 classes)
 import {
     AudioArtifactViewerComponent,
     CodeArtifactViewerComponent,
@@ -549,13 +578,15 @@ import {
     PdfArtifactViewerComponent,
     SvgArtifactViewerComponent,
     VideoArtifactViewerComponent,
+    VideoProductionViewerComponent,
     XlsxArtifactViewerComponent,
 } from '@memberjunction/ng-artifacts';
 
-// @memberjunction/ng-auth-services (6 classes)
+// @memberjunction/ng-auth-services (7 classes)
 import {
     MJAuth0Provider,
     MJCognitoProvider,
+    MJLocalDevProvider,
     MJMSALProvider,
     MJMagicLinkProvider,
     MJOktaProvider,
@@ -584,8 +615,9 @@ import {
     RecordProcessRunnerUXComponent,
 } from '@memberjunction/ng-entity-action-ux';
 
-// @memberjunction/ng-entity-viewer (4 classes)
+// @memberjunction/ng-entity-viewer (5 classes)
 import {
+    CalendarViewType,
     CardsViewType,
     GridViewType,
     MapViewType,
@@ -597,10 +629,12 @@ import {
     ClusterViewType,
 } from '@memberjunction/ng-clustering';
 
-// @memberjunction/ng-dashboard-viewer (8 classes)
+// @memberjunction/ng-dashboard-viewer (10 classes)
 import {
     ArtifactConfigPanelComponent,
     ArtifactPartComponent,
+    ComponentConfigPanelComponent,
+    ComponentPartComponent,
     QueryConfigPanelComponent,
     QueryPartComponent,
     ViewConfigPanelComponent,
@@ -629,13 +663,15 @@ import {
     RubricEngineBase,
 } from '@memberjunction/rubrics-base';
 
-// @memberjunction/ng-core-entity-forms (72 classes)
+// @memberjunction/ng-core-entity-forms (74 classes)
 import {
     AIAgentCategoryHeaderPanel,
     AIAgentCategoryHierarchyPanel,
     AIAgentCategoryOverviewPanel,
     AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,
+    BrandKitAssetsPanelComponent,
+    BrandKitGenerationPolicyPanelComponent,
     CompanyHeaderPanel,
     CompanyOverviewPanel,
     ContentItemHierarchyPanel,
@@ -710,7 +746,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (109 classes)
+// @memberjunction/ng-dashboards (116 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -731,6 +767,9 @@ import {
     ArchiveConfigResourceComponent,
     ArchiveRunsResourceComponent,
     AutotaggingPipelineResourceComponent,
+    ChiefOfStaffApprovalsComponent,
+    ChiefOfStaffGovernanceComponent,
+    ChiefOfStaffOverviewComponent,
     ClassRegistryInspectorComponent,
     ClusterVisualizationResourceComponent,
     CodeManagementComponent,
@@ -773,6 +812,7 @@ import {
     ListsMyListsResource,
     ListsOperationsResource,
     ListsSharedWithMeResource,
+    LoginStudioResourceComponent,
     MCPDashboardComponent,
     MCPResourceComponent,
     MappingWorkspaceComponent,
@@ -816,6 +856,9 @@ import {
     VersionHistoryGraphResourceComponent,
     VersionHistoryLabelsResourceComponent,
     VersionHistoryRestoreResourceComponent,
+    VideoStudioArchetypesResourceComponent,
+    VideoStudioBrandKitsResourceComponent,
+    VideoStudioProductionsResourceComponent,
     VisualizeResourceComponent,
     WorkQueueDashboardComponent,
     WorkflowRunsResourceComponent,
@@ -852,6 +895,7 @@ import {
 const CLASS_REGISTRATIONS_0: any[] = [
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
+    ElevenRealtimeClient,
     GeminiEnterpriseRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
@@ -904,10 +948,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentSessionBridgeParticipantEntity,
     MJAIAgentSessionChannelEntity,
     MJAIAgentSessionEntity,
+    MJAIAgentSessionRecordingShardEntity,
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
+    MJAIAgentUserPolicyEntity,
     MJAIArchitectureEntity,
     MJAIBridgeAgentIdentityEntity,
     MJAIBridgeProviderChannelEntity,
@@ -985,6 +1031,10 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
+    MJBrandKitAssetEntity,
+    MJBrandKitEntity,
+    MJCalendarEventLinkEntity,
+    MJCalendarSyncStateEntity,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -1000,6 +1050,8 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
+    MJCompanyIntegrationObjectEntity,
+    MJCompanyIntegrationObjectFieldEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
@@ -1041,6 +1093,10 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJConversationSkillEntity,
     MJConversationWidgetInstanceEntity,
     MJCountryEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_1: any[] = [
     MJCredentialCategoryEntity,
     MJCredentialEntity,
     MJCredentialTypeEntity,
@@ -1050,10 +1106,6 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDashboardEntity,
     MJDashboardEntityExtended,
     MJDashboardPartTypeEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_1: any[] = [
     MJDashboardPermissionEntity,
     MJDashboardPermissionEntityExtended,
     MJDashboardUserPreferenceEntity,
@@ -1062,6 +1114,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
+    MJDiagnosticBundleEntity,
+    MJDiagnosticSenderRegistrationEntity,
+    MJDiagnosticSessionChunkEntity,
+    MJDiagnosticSessionEntity,
+    MJDocumentSequenceCounterEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -1078,6 +1135,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityActionInvocationEntity,
     MJEntityActionInvocationTypeEntity,
     MJEntityActionParamEntity,
+    MJEntityAlternateBaseViewEntity,
     MJEntityCommunicationFieldEntity,
     MJEntityCommunicationMessageTypeEntity,
     MJEntityDocumentEntity,
@@ -1109,6 +1167,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
     MJFeaturePipelineTypeEntity,
+    MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -1120,6 +1179,15 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJGraphAuthorityTierEntity,
+    MJGraphConceptEntity,
+    MJGraphConceptTypeEntity,
+    MJGraphEdgeEntity,
+    MJGraphEdgeProviderEntity,
+    MJGraphEdgeTypeEndpointEntity,
+    MJGraphEdgeTypeEntity,
+    MJGraphEntity,
+    MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -1181,6 +1249,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
+    MJProjectEntityExtended,
     MJPublicLinkEntity,
     MJQueryCategoryEntity,
     MJQueryDependencyEntity,
@@ -1228,6 +1297,10 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRubricScaleEntity,
     MJRubricScaleLevelEntity,
     MJRubricVersionEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJSQLDialectEntity,
     MJScheduledJobEntity,
     MJScheduledJobRunEntity,
@@ -1254,10 +1327,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSkillEntity,
     MJStateProvinceEntity,
     MJTagAuditLogEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJTagCoOccurrenceEntity,
     MJTagEntity,
     MJTagScopeEntity,
@@ -1284,6 +1353,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJTestSuiteTestEntity,
     MJTestTypeEntity,
     MJThemeEntity,
+    MJThemeEntityExtended,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
@@ -1308,6 +1378,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJVersionLabelEntity,
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
+    MJVideoArchetypeEntity,
     MJViewTypeEntity,
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
@@ -1340,6 +1411,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     TimePerMinutePriceUnitType,
     MJCommunicationProviderEntityExtended,
     MJEntityCommunicationMessageTypeEntityExtended,
+    MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
     AudioArtifactViewerComponent,
     CodeArtifactViewerComponent,
@@ -1354,9 +1426,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     PdfArtifactViewerComponent,
     SvgArtifactViewerComponent,
     VideoArtifactViewerComponent,
+    VideoProductionViewerComponent,
     XlsxArtifactViewerComponent,
     MJAuth0Provider,
     MJCognitoProvider,
+    MJLocalDevProvider,
     MJMSALProvider,
     MJMagicLinkProvider,
     MJOktaProvider,
@@ -1375,6 +1449,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     SkillCommandProvider,
     WhiteboardArtifactViewerComponent,
     RecordProcessRunnerUXComponent,
+    CalendarViewType,
     CardsViewType,
     GridViewType,
     MapViewType,
@@ -1382,6 +1457,8 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ClusterViewType,
     ArtifactConfigPanelComponent,
     ArtifactPartComponent,
+    ComponentConfigPanelComponent,
+    ComponentPartComponent,
     QueryConfigPanelComponent,
     QueryPartComponent,
     ViewConfigPanelComponent,
@@ -1401,6 +1478,8 @@ const CLASS_REGISTRATIONS_2: any[] = [
     AIAgentCategoryOverviewPanel,
     AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,
+    BrandKitAssetsPanelComponent,
+    BrandKitGenerationPolicyPanelComponent,
     CompanyHeaderPanel,
     CompanyOverviewPanel,
     ContentItemHierarchyPanel,
@@ -1422,6 +1501,10 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJActionExecutionLogFormComponentExtended,
     MJActionFormComponentExtended,
     MJEntityActionFormComponentExtended,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     MJEntityFormComponentExtended,
     MJFileFormComponentExtended,
     MJListFormComponentExtended,
@@ -1458,10 +1541,6 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RubricPublishPanel,
     RubricScaleFormPolicy,
     RubricScaleLevelsPanel,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     RubricVersionFormPolicy,
     RubricVersionSummaryPanel,
     RubricVersionsPanel,
@@ -1492,6 +1571,9 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ArchiveConfigResourceComponent,
     ArchiveRunsResourceComponent,
     AutotaggingPipelineResourceComponent,
+    ChiefOfStaffApprovalsComponent,
+    ChiefOfStaffGovernanceComponent,
+    ChiefOfStaffOverviewComponent,
     ClassRegistryInspectorComponent,
     ClusterVisualizationResourceComponent,
     CodeManagementComponent,
@@ -1534,6 +1616,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ListsMyListsResource,
     ListsOperationsResource,
     ListsSharedWithMeResource,
+    LoginStudioResourceComponent,
     MCPDashboardComponent,
     MCPResourceComponent,
     MappingWorkspaceComponent,
@@ -1577,6 +1660,9 @@ const CLASS_REGISTRATIONS_3: any[] = [
     VersionHistoryGraphResourceComponent,
     VersionHistoryLabelsResourceComponent,
     VersionHistoryRestoreResourceComponent,
+    VideoStudioArchetypesResourceComponent,
+    VideoStudioBrandKitsResourceComponent,
+    VideoStudioProductionsResourceComponent,
     VisualizeResourceComponent,
     WorkQueueDashboardComponent,
     WorkflowRunsResourceComponent,
@@ -1610,7 +1696,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 734;
+export const CLASS_REGISTRATIONS_COUNT = 777;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

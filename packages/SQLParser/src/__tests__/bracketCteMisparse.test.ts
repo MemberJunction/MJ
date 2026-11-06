@@ -39,6 +39,21 @@ describe('bracket-quoted CTE names on SQL Server', () => {
         expect(extraction.MainStatement).toMatch(/^SELECT d\.ID FROM \[__cte_Dep_Param_z3svzn\] d ORDER BY d\.ID$/);
     });
 
+    it('reports the bracket identifiers the fallback parse renamed, keyed by the name in the tree', () => {
+        const parsed = new SQLParser(composed, ss);
+        const aliases = parsed.IdentifierAliases;
+
+        expect(aliases).toBeInstanceOf(Map);
+        const [alias, original] = [...aliases!.entries()].find(([, text]) => text === '[__cte_Dep_Param_z3svzn]')!;
+        expect(alias).toMatch(/^\w+$/);
+        expect(JSON.stringify(parsed.AST)).toContain(alias);
+        expect(original).toBe('[__cte_Dep_Param_z3svzn]');
+    });
+
+    it('reports no renamed identifiers when the direct parse succeeds', () => {
+        expect(new SQLParser('SELECT ID FROM [dbo].[t]', ss).IdentifierAliases).toBeNull();
+    });
+
     it('extracts table references, not the assignment variables', () => {
         const tables = SQLParser.ExtractTableRefs(`WITH [x] AS (SELECT a FROM dbo.Real) SELECT a FROM [x]`, ss).map(t => t.TableName);
         expect(tables).toContain('Real');

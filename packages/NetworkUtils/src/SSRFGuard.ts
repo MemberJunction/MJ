@@ -362,6 +362,15 @@ const REDIRECT_STATUS_CODES: ReadonlySet<number> = new Set([301, 302, 303, 307, 
 export type SafeFetchInit = RequestInit & {
     /** Maximum number of redirect hops to follow (each re-validated). Default: 5. */
     MaxRedirects?: number;
+    /**
+     * Drop every caller-supplied header when a redirect leaves the original origin. Default: false.
+     *
+     * Redirects are followed by hand here, so the browser rule that strips `Authorization` on a
+     * cross-origin hop does not apply — the caller's headers go wherever the chain leads. A caller
+     * sending credentials (an API key, a session cookie) sets this so a source that redirects to a
+     * third party cannot collect them.
+     */
+    StripHeadersOnCrossOriginRedirect?: boolean;
 };
 
 /**
@@ -414,7 +423,8 @@ export type SafeFetchInit = RequestInit & {
  */
 export async function SafeFetch(rawUrl: string, init?: SafeFetchInit): Promise<Response> {
     const maxRedirects = init?.MaxRedirects ?? 5;
-    const { MaxRedirects: _ignored, ...fetchInit } = init ?? {};
+    const { MaxRedirects: _ignored, StripHeadersOnCrossOriginRedirect: stripOnCrossOrigin, ...fetchInit } = init ?? {};
+    let originalOrigin: string | null = null;
 
     let currentUrl = rawUrl;
     let redirectCount = 0;
@@ -422,6 +432,10 @@ export async function SafeFetch(rawUrl: string, init?: SafeFetchInit): Promise<R
     // eslint-disable-next-line no-constant-condition
     while (true) {
         const validated = await AssertPublicUrl(currentUrl);
+        originalOrigin ??= validated.origin;
+        if (stripOnCrossOrigin && validated.origin !== originalOrigin) {
+            delete fetchInit.headers;
+        }
         const response = await fetch(validated.href, { ...fetchInit, redirect: "manual" });
 
         if (!REDIRECT_STATUS_CODES.has(response.status)) {

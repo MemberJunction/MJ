@@ -30,12 +30,132 @@
         }
       ]
     },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "agentIds",
+            "Type": "array",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "[\"00000000-0000-0000-0000-000000000000\"]",
+            "Description": "Required list of values for agent Ids",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "AF4459A1-BEDA-4200-A739-4292E90EA6A1"
+          }
+        },
+        {
+          "fields": {
+            "Name": "since",
+            "Type": "date",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "2024-01-01",
+            "Description": "Optional date value for since",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "DF0E9F24-CD92-4C6C-BA18-13B443160DE5"
+          }
+        }
+      ],
+      "Fields": [
+        {
+          "fields": {
+            "Name": "ConversationID",
+            "Description": "Unique identifier for the conversation",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "09F3C6CC-83AA-4458-9D97-71FD51659C13"
+          }
+        },
+        {
+          "fields": {
+            "Name": "UserID",
+            "Description": "Unique identifier of the user who owns the conversation",
+            "IsSummary": false,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "FC47BF02-BE51-4C7C-9132-1C20ADC4FEBD"
+          }
+        },
+        {
+          "fields": {
+            "Name": "AgentRunID",
+            "Description": "Most recent agent run ID for this conversation (for scope inheritance)",
+            "IsSummary": false,
+            "ComputationDescription": "Scalar subquery selecting TOP 1 agent run ID ordered by StartedAt DESC",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "4CAB47E1-C542-4CDD-9BEF-90BFC2786FF0"
+          }
+        },
+        {
+          "fields": {
+            "Name": "MessagesJSON",
+            "Description": "JSON array containing all conversation details with ratings",
+            "IsSummary": false,
+            "ComputationDescription": "FOR JSON PATH subquery aggregating conversation details and ratings",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "CB76A976-AE46-454B-B837-90A78B74ED50"
+          }
+        },
+        {
+          "fields": {
+            "Name": "HasPositiveRating",
+            "Description": "Flag indicating if conversation has any rating >= 8",
+            "IsSummary": false,
+            "ComputationDescription": "CASE expression checking for existence of ratings >= 8",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "ADC80F10-C778-46A7-AB21-1474FF3051BA"
+          }
+        },
+        {
+          "fields": {
+            "Name": "HasNegativeRating",
+            "Description": "Flag indicating if conversation has any rating <= 3",
+            "IsSummary": false,
+            "ComputationDescription": "CASE expression checking for existence of ratings <= 3",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "5A464544-F105-4F17-94F8-A0423F150812"
+          }
+        },
+        {
+          "fields": {
+            "Name": "IsUnrated",
+            "Description": "Flag indicating if conversation has no ratings",
+            "IsSummary": false,
+            "ComputationDescription": "CASE expression checking for absence of any ratings",
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "F11B7F22-EF85-418E-855A-AC0EDBEE014A"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "574FD9D5-AB9E-4FA5-A36C-C25E7D3F63FC"
     },
     "sync": {
-      "lastModified": "2026-07-22T13:40:36.696Z",
-      "checksum": "ff9430fc99d70389e308a373e43644bca4d134f688270ffc412a84c15e82fdcd"
+      "lastModified": "2026-10-28T22:14:02.141Z",
+      "checksum": "455f76d86d1574aa4ae4e44045d6e71283035261295fa8323a8703d70f85d854"
     }
   }
 ]

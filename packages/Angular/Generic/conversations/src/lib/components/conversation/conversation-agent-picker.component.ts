@@ -26,7 +26,7 @@ import { IsAgentAllowed } from '@memberjunction/ai-core-plus';
  * non-mention messages route to it instead of Sage.
  *
  * Eligible agents are top-level, Active, non-Sub-Agent rows from
- * `AIEngineBase.Instance.Agents`. The widget renders as a compact button
+ * `AIEngineBase.Instance.ReadableAgents`. The widget renders as a compact button
  * showing the current pin (or "Auto" when nothing is pinned). Clicking
  * opens an inline list with a "Clear" option to remove the pin.
  *
@@ -164,7 +164,7 @@ export class ConversationAgentPickerComponent implements OnInit {
             // loaded — most app shells warm it up at boot, but the picker
             // could mount before that completes.
             await AIEngineBase.Instance.Config(false);
-            this.catalogAgents = (AIEngineBase.Instance.Agents ?? [])
+            this.catalogAgents = (AIEngineBase.Instance.ReadableAgents ?? [])
                 .filter(a =>
                     !a.ParentID &&
                     a.Status === 'Active' &&
@@ -191,7 +191,7 @@ export class ConversationAgentPickerComponent implements OnInit {
         // sub-agent), still surface its name from the cache so the user can
         // see what was pinned even though they can't re-pin it.
         const fromCache = match
-            ?? (AIEngineBase.Instance.Agents ?? []).find(a => UUIDsEqual(a.ID, id));
+            ?? (AIEngineBase.Instance.ReadableAgents ?? []).find(a => UUIDsEqual(a.ID, id));
         return fromCache?.Name ?? 'Pinned agent';
     }
 

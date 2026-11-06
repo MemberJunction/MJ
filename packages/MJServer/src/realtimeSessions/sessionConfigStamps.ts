@@ -113,7 +113,7 @@ export async function LoadInheritedVerifiedIdentity(
         return undefined;
     }
     const decision = AuthorizeSessionAccess(
-        { SessionUserID: prior.Session.UserID, ConversationExternalID: prior.ConversationExternalID },
+        { SessionUserID: prior.Session.UserID, ConversationExternalID: prior.ConversationExternalID, ConversationReadable: prior.ConversationReadable },
         contextUser,
     );
     if (decision.Allowed === false) {

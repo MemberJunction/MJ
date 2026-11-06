@@ -350,6 +350,7 @@ function stubUserInfo(recentIds: string[], settings: Record<string, string> = {}
     DataChange$: changes.asObservable(),
     UserFavorites: [] as MJUserFavoriteEntity[],
     UserNotifications: [] as MJUserNotificationEntity[],
+    UserNotificationsIfPermitted: [] as MJUserNotificationEntity[],
     GetSetting: (key: string): string | undefined => settings[key],
     SetSetting: vi.fn(async (_key: string, _value: string) => true),
     SetSettingDebounced: vi.fn((_key: string, _value: string) => undefined),

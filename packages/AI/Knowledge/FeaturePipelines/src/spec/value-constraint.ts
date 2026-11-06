@@ -7,8 +7,8 @@
 export type ViolationPolicy = 'fail' | 'null' | 'coerce-to-other';
 
 export type ValueConstraint =
-  | { Type: 'enum'; Values?: string[]; FromFieldMetadata?: boolean; ValueDescriptions?: Record<string, string>; OnViolation: ViolationPolicy }
-  | { Type: 'lookup'; Entity?: string; MatchField?: string; OnViolation: ViolationPolicy }
+  | { Type: 'enum'; Values?: string[]; FromFieldMetadata?: boolean; ValueDescriptions?: Record<string, string>; ItemRef?: string; OnViolation: ViolationPolicy }
+  | { Type: 'lookup'; Entity?: string; MatchField?: string; DisplayFields?: string[]; Filter?: string; ItemRef?: string; OnViolation: ViolationPolicy }
   | { Type: 'numeric'; Min?: number; Max?: number; Integer?: boolean; Levels?: string[]; OnViolation: ViolationPolicy }
   | { Type: 'money'; Min?: number; Max?: number; CurrencyCode?: string; OnViolation: ViolationPolicy }
   | { Type: 'date'; Min?: string; Max?: string; OnViolation: ViolationPolicy }
@@ -32,6 +32,16 @@ export interface ResolvedConstraint {
   MinDate?: string;
   MaxDate?: string;
   MaxLength?: number;
+  /** A lookup's entity: the constraint's `Entity`, else the target field's foreign-key entity. */
   RelatedEntityName?: string;
+  /** A lookup's match column: the constraint's `MatchField`, else the target's `LookupMatchField`, else `Name`. */
   LookupMatchField?: string;
+  /** A lookup's columns shown to the model next to each allowed value. */
+  DisplayFields?: string[];
+  /** A lookup's filter on the rows it allows (a view filter). */
+  Filter?: string;
+  /** Result path checked per item when the output is an array (e.g. "$.JobFunctionID"). */
+  ItemRef?: string;
+  /** Allowed value → the text shown to the model next to it (lookup DisplayFields). */
+  ValueDisplays?: Record<string, string>;
 }

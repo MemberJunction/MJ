@@ -42,7 +42,7 @@ export class InfoResolver {
       Version: packageJson.version,
       IsSystemUser: Boolean(context.userPayload.isSystemUser),
       Platform: os.platform(),
-      Arch: os.platform(),
+      Arch: os.arch(),
       CpuModel: os.cpus()?.[0].model,
       Hostname: os.hostname(),
     };

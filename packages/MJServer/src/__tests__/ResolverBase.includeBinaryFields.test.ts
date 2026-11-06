@@ -158,7 +158,7 @@ describe('IncludeBinaryFields forwarding — batch resolver path', () => {
     it('RunViewsGeneric → RunViewsGenericInternal forwards the per-view flag to provider.RunViews', async () => {
         const { provider, runViewsCalls } = recordingProvider();
         const inputs = [
-            { EntityName: ENTITY_NAME, ExtraFilter: '', OrderBy: '', IncludeBinaryFields: true },
+            { EntityName: ENTITY_NAME, ExtraFilter: '', OrderBy: '', IncludeBinaryFields: true, AlternateBaseView: 'Active Vectors' },
             { EntityName: ENTITY_NAME, ExtraFilter: '', OrderBy: '' },
         ] as (RunViewByNameInput & RunViewByIDInput & RunDynamicViewInput)[];
 
@@ -167,7 +167,77 @@ describe('IncludeBinaryFields forwarding — batch resolver path', () => {
         expect(runViewsCalls).toHaveLength(1);
         expect(runViewsCalls[0]).toHaveLength(2);
         expect(runViewsCalls[0][0].IncludeBinaryFields).toBe(true);
+        expect(runViewsCalls[0][0].AlternateBaseView).toBe('Active Vectors');
         expect(runViewsCalls[0][1].IncludeBinaryFields).toBeUndefined();
+        expect(runViewsCalls[0][1].AlternateBaseView).toBeUndefined();
+    });
+
+    it('RunDynamicViewGeneric, RunViewByNameGeneric, and RunViewByIDGeneric forward AlternateBaseView to provider.RunView', async () => {
+        const { provider, runViewCalls } = recordingProvider();
+        const probe = new Probe();
+
+        await probe.RunDynamicViewGeneric(
+            { EntityName: ENTITY_NAME, ExtraFilter: '', OrderBy: '', AlternateBaseView: 'Active Vectors' } as RunDynamicViewInput,
+            provider, fakePayload(), undefined as never,
+        );
+        await probe.RunViewByNameGeneric(
+            { ViewName: 'Saved View', ExtraFilter: '', OrderBy: '', AlternateBaseView: '' } as RunViewByNameInput,
+            provider, fakePayload(), undefined as never,
+        );
+        await probe.RunViewByIDGeneric(
+            { ViewID: 'view-1', ExtraFilter: '', OrderBy: '', AlternateBaseView: 'Draft Vectors' } as RunViewByIDInput,
+            provider, fakePayload(), undefined as never,
+        );
+
+        expect(runViewCalls.map(c => c.AlternateBaseView)).toEqual(['Active Vectors', '', 'Draft Vectors']);
+    });
+});
+
+describe('SkipTotalRowCount forwarding', () => {
+    it('reaches provider.RunView on the dynamic, by-name and by-ID paths', async () => {
+        const { provider, runViewCalls } = recordingProvider();
+        const probe = new Probe();
+
+        await probe.RunDynamicViewGeneric(
+            { EntityName: ENTITY_NAME, ExtraFilter: '', OrderBy: '', SkipTotalRowCount: true } as RunDynamicViewInput,
+            provider, fakePayload(), undefined as never,
+        );
+        await probe.RunViewByNameGeneric(
+            { ViewName: 'Saved View', ExtraFilter: '', OrderBy: '', SkipTotalRowCount: true } as RunViewByNameInput,
+            provider, fakePayload(), undefined as never,
+        );
+        await probe.RunViewByIDGeneric(
+            { ViewID: 'view-1', ExtraFilter: '', OrderBy: '', SkipTotalRowCount: true } as RunViewByIDInput,
+            provider, fakePayload(), undefined as never,
+        );
+
+        expect(runViewCalls.map(c => c.SkipTotalRowCount)).toEqual([true, true, true]);
+    });
+
+    it('reaches provider.RunViews per view on the batch path', async () => {
+        const { provider, runViewsCalls } = recordingProvider();
+        const inputs = [
+            { EntityName: ENTITY_NAME, ExtraFilter: '', OrderBy: '', SkipTotalRowCount: true },
+            { EntityName: ENTITY_NAME, ExtraFilter: '', OrderBy: '' },
+        ] as (RunViewByNameInput & RunViewByIDInput & RunDynamicViewInput)[];
+
+        await new Probe().RunViewsGeneric(inputs, provider, fakePayload());
+
+        expect(runViewsCalls[0].map(c => c.SkipTotalRowCount)).toEqual([true, undefined]);
+    });
+
+    it('leaves TotalRowCount undefined rather than defaulting it', async () => {
+        const { provider } = recordingProvider();
+        const skipped = provider as unknown as { RunView: (p: RunViewParams) => Promise<RunViewResult> };
+        const original = skipped.RunView;
+        skipped.RunView = async p => ({ ...(await original(p)), TotalRowCount: undefined });
+
+        const result = await new Probe().RunDynamicViewGeneric(
+            { EntityName: ENTITY_NAME, ExtraFilter: '', OrderBy: '', SkipTotalRowCount: true } as RunDynamicViewInput,
+            provider, fakePayload(), undefined as never,
+        );
+
+        expect(result?.TotalRowCount).toBeUndefined();
     });
 });
 
@@ -277,6 +347,18 @@ describe('RunViewResolver.RunViewsWithCacheCheck — IncludeBinaryFields + Buffe
         expect(out.success).toBe(true);
         expect(received).toHaveLength(1);
         expect(received[0].map(p => p.params.IncludeBinaryFields)).toEqual([true, false, undefined]);
+    });
+
+    it('forwards SkipTotalRowCount into the core params', async () => {
+        const { ctx, received } = cacheCheckContext([]);
+        const input = [
+            { params: { EntityName: ENTITY_NAME, SkipTotalRowCount: true } },
+            { params: { EntityName: ENTITY_NAME } },
+        ] as RunViewWithCacheCheckInput[];
+
+        await new RunViewResolver().RunViewsWithCacheCheck(input, ctx);
+
+        expect(received[0].map(p => p.params.SkipTotalRowCount)).toEqual([true, undefined]);
     });
 
     it('serializes Buffers in stale results as base64', async () => {

@@ -537,6 +537,10 @@
     "relatedEntities": {},
     "primaryKey": {
       "ID": "1028EA9C-DCBC-4E43-9ABF-E4B2EC02E4F7"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T18:59:59.930Z",
+      "checksum": "f69f53035b9e8729ef5cd9d9ea1a47ace3961139c50da451bd6358899c19872c"
     }
   },
   {

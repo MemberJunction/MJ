@@ -7,7 +7,7 @@
  * @module @memberjunction/ai-agents
  */
 
-import { BaseSingleton } from '@memberjunction/global';
+import { BaseSingleton, MJLruCache } from '@memberjunction/global';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { ClientToolMetadata, ClientToolResponse } from '@memberjunction/ai-core-plus';
 
@@ -40,8 +40,22 @@ export const CLIENT_TOOL_REQUEST_TOPIC = 'CLIENT_TOOL_REQUEST';
 export class ClientToolRequestManager extends BaseSingleton<ClientToolRequestManager> {
     private pendingRequests = new Map<string, PendingRequest>();
 
-    /** Enriched tool definitions per session (from client decoration) */
-    private sessionTools = new Map<string, ClientToolMetadata[]>();
+    /** Max sessions whose tool definitions are retained (least-recently-used evicted beyond this) */
+    private static readonly MAX_SESSIONS = 1000;
+    /** Idle lifetime of a session's tool definitions; sessions have no production teardown hook yet */
+    private static readonly SESSION_TTL_MS = 6 * 60 * 60 * 1000;
+    /** Max tool definitions accepted per session — a client-supplied array must not be arbitrarily large */
+    public static readonly MAX_TOOLS_PER_SESSION = 200;
+
+    /**
+     * Enriched tool definitions per session (from client decoration). Keyed by a caller-supplied
+     * session ID and written from a GraphQL mutation, so it is bounded by size and age rather than
+     * relying on `ClearSession`.
+     */
+    private sessionTools = new MJLruCache<string, ClientToolMetadata[]>({
+        maxSize: ClientToolRequestManager.MAX_SESSIONS,
+        ttlMs: ClientToolRequestManager.SESSION_TTL_MS,
+    });
 
     /** Optional PubSub publish function — injected by the server at startup */
     private publishFn: ((topic: string, payload: Record<string, unknown>) => void) | null = null;
@@ -131,17 +145,17 @@ export class ClientToolRequestManager extends BaseSingleton<ClientToolRequestMan
 
     /** Store enriched tool definitions for a session */
     public SetSessionTools(sessionID: string, tools: ClientToolMetadata[]): void {
-        this.sessionTools.set(sessionID, tools);
+        this.sessionTools.Set(sessionID, tools.slice(0, ClientToolRequestManager.MAX_TOOLS_PER_SESSION));
     }
 
     /** Get enriched tool definitions for prompt injection */
     public GetSessionTools(sessionID: string): ClientToolMetadata[] {
-        return this.sessionTools.get(sessionID) ?? [];
+        return this.sessionTools.Get(sessionID) ?? [];
     }
 
     /** Clean up when session ends */
     public ClearSession(sessionID: string): void {
-        this.sessionTools.delete(sessionID);
+        this.sessionTools.Delete(sessionID);
     }
 
     /** Get the number of pending requests (useful for testing/monitoring) */

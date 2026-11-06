@@ -36,9 +36,9 @@ export interface MLSidecarOptions {
    */
   url?: string;
   /**
-   * Path to the Python executable used in **managed mode**. Defaults to the
-   * package's bundled venv python (`…/Sidecar/.venv/bin/python`) when present,
-   * otherwise `python3`.
+   * Path to the Python executable used in **managed mode**. Defaults to
+   * `PREDICTIVE_STUDIO_PYTHON` when set, then the package's bundled venv python
+   * (`…/Sidecar/.venv/bin/python`) when present, otherwise `python3`.
    */
   pythonPath?: string;
   /** Startup timeout in ms (default: 30000). */
@@ -135,6 +135,16 @@ export class MLSidecar {
   public static readonly DefaultRequestTimeoutMs = 300_000;
   /** Default startup timeout (ms) for the managed Python process. */
   public static readonly DefaultStartupTimeoutMs = 30_000;
+  /** Env var naming an explicit interpreter for the managed sidecar (and its test runners). */
+  public static readonly PythonEnvVar = 'PREDICTIVE_STUDIO_PYTHON';
+
+  /**
+   * Pick the managed sidecar's interpreter: the explicit `pythonPath` option, then `PREDICTIVE_STUDIO_PYTHON`,
+   * then the package's bundled `.venv`, then `python3`. Blank strings count as absent at every step.
+   */
+  public static ResolvePython(explicit: string | undefined, env: NodeJS.ProcessEnv, bundled: string | null): string {
+    return explicit?.trim() || env[MLSidecar.PythonEnvVar]?.trim() || bundled || 'python3';
+  }
 
   private process: ChildProcess | null = null;
   private host = '127.0.0.1';
@@ -159,7 +169,7 @@ export class MLSidecar {
     const url = options?.url ?? process.env.PREDICTIVE_STUDIO_SIDECAR_URL?.trim();
     this.remoteUrl = url && url.length > 0 ? url.replace(/\/+$/, '') : null;
 
-    this.pythonPath = options?.pythonPath ?? resolveBundledPython() ?? 'python3';
+    this.pythonPath = MLSidecar.ResolvePython(options?.pythonPath, process.env, resolveBundledPython());
     this.serverPath = DEFAULT_SERVER_PATH;
     this.startupTimeoutMs = options?.startupTimeoutMs ?? MLSidecar.DefaultStartupTimeoutMs;
     this.requestTimeoutMs = options?.requestTimeoutMs ?? MLSidecar.DefaultRequestTimeoutMs;

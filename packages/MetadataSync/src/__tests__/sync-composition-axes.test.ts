@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, UserInfo } from '@memberjunction/core';
-import type { FlattenedRecord, RecordData, BatchContext } from '../lib/sync-engine';
+import type { RecordData, BatchContext } from '../lib/sync-engine';
+import type { FlattenedRecord } from '../lib/record-dependency-analyzer';
 import type { PushOptions } from '../services/PushService';
-import type { EntityConfig, EntitySyncConfig } from '../config';
+import type { EntityConfig, EntityConfig as EntitySyncConfig } from '../config';
 import type { ValidationError } from '../types/validation';
 import { METADATA_KEYWORDS } from '../constants/metadata-keywords';
 import { ValidationService } from '../services/ValidationService';
@@ -144,7 +145,7 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
       expect(errors.some((e) => e.message.includes('Did you mean "collections"?'))).toBe(true);
     });
 
-    it('rejects double ownership of the same primary key across different files (§6)', async () => {
+    it('accepts one primary key in two files and rejects a field set to two values (§6)', async () => {
       const entityInfo: EntityInfo = {
         ID: 'ent-1',
         Name: 'Order Lines',
@@ -166,17 +167,28 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
         fields: { ID: 'line-100' },
       };
 
+      const record3: RecordData = {
+        primaryKey: { ID: 'line-100' },
+        fields: { ID: 'line-200' },
+      };
+
       const validateFn = (service as unknown as {
         validateEntityData: (d: unknown, info: EntityInfo, file: string, cfg: EntitySyncConfig) => Promise<void>;
       }).validateEntityData.bind(service);
 
       await validateFn(record1, entityInfo, '/fileA.json', { entity: 'Order Lines', filePattern: '*.json' });
       await validateFn(record2, entityInfo, '/fileB.json', { entity: 'Order Lines', filePattern: '*.json' });
+      expect(getErrors()).toEqual([]);
 
-      const errors = getErrors();
-      const doubleOwnerError = errors.find((e) => e.message.includes('already claimed by "/fileA.json"'));
-      expect(doubleOwnerError).toBeDefined();
-      expect(doubleOwnerError?.message).toContain('Double ownership is not allowed');
+      await validateFn(record3, entityInfo, '/fileC.json', { entity: 'Order Lines', filePattern: '*.json' });
+      const conflicts = getErrors().filter((e) => e.message.startsWith('Conflicting values'));
+      expect(conflicts.map((e) => e.message)).toEqual([
+        'Conflicting values for Order Lines record {"ID":"line-100"}: field "ID" is "line-100" at /fileA.json and "line-200" at /fileC.json. ' +
+          'Make both entries set the same value, or set the field in one entry only.',
+        'Conflicting values for Order Lines record {"ID":"line-100"}: field "ID" is "line-100" at /fileB.json and "line-200" at /fileC.json. ' +
+          'Make both entries set the same value, or set the field in one entry only.',
+      ]);
+      expect(conflicts[0].file).toBe('/fileC.json');
     });
 
     it('rejects parent-owned fields placed in leaf extension.fields (§9)', async () => {
@@ -999,7 +1011,7 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
 
   describe('RecordProcessor — Pull Parity (§4.4)', () => {
     it('emits extension leaf fields in record payload', async () => {
-      const processor = new RecordProcessor();
+      const processor = new RecordProcessor({} as SyncEngine, {} as UserInfo);
       const mockEntity = new MockEntity(
         'Order Lines',
         { ID: 'line-1', OrderID: 'ord-1', Quantity: 2 },
@@ -1052,7 +1064,7 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
         calculateChecksum: vi.fn().mockReturnValue('cs-1'),
         calculateChecksumWithFileContent: vi.fn().mockResolvedValue('cs-1'),
       } as unknown as SyncEngine;
-      const processor = new RecordProcessor(mockSync);
+      const processor = new RecordProcessor(mockSync, {} as UserInfo);
       const mockOwner = new MockEntity('Orders', { ID: 'ord-1' }, ['ID'], ['ID']);
 
       const itemB = new MockEntity('OrderLines', { ID: 'line-b', Name: 'Item B' }, ['ID'], ['ID', 'Name']);
@@ -1068,7 +1080,7 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
       };
 
       mockOwner.collections['OrderLines'] = mockCol as unknown as (typeof mockOwner.collections)[string];
-      mockOwner.EntityInfo.RelatedEntities = [
+      (mockOwner.EntityInfo as { RelatedEntities: EntityRelationshipInfo[] }).RelatedEntities = [
         {
           RelatedEntity: 'OrderLines',
           RelatedEntityJoinField: 'OrderID',
@@ -1103,7 +1115,7 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
     });
 
     it('skips Load: "never" collections on pull without emitting empty array', async () => {
-      const processor = new RecordProcessor();
+      const processor = new RecordProcessor({} as SyncEngine, {} as UserInfo);
       const mockOwner = new MockEntity('Orders', { ID: 'ord-1' }, ['ID'], ['ID']);
 
       const mockNeverCol = {
@@ -1114,7 +1126,7 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
       };
 
       mockOwner.collections['AuditLogs'] = mockNeverCol as unknown as (typeof mockOwner.collections)[string];
-      mockOwner.EntityInfo.RelatedEntities = [
+      (mockOwner.EntityInfo as { RelatedEntities: EntityRelationshipInfo[] }).RelatedEntities = [
         {
           RelatedEntity: 'AuditLogs',
           RelatedEntityJoinField: 'OrderID',

@@ -1,0 +1,114 @@
+@if (Editable) {
+  <div class="lr lr--edit" [class.lr--banner]="IsBanner" [class.lr--center]="Center || !IsBanner"
+       [class.lr--empty]="!Blocks.length"
+       cdkDropList cdkDropListOrientation="mixed" [cdkDropListData]="Region" (cdkDropListDropped)="OnDropped($event)">
+    @for (b of Blocks; track b.ID) {
+      <div class="lr__item" cdkDrag [cdkDragData]="b" [class]="WidthClass(b)"
+           [class.lr__item--selected]="b.ID === SelectedID"
+           [class.lr__item--off]="Stacked && b.HideWhenStacked"
+           tabindex="0" role="group"
+           [attr.aria-label]="Label(b) + (b.ID === SelectedID ? ', selected' : '') + '. Alt+Arrow keys move it.'"
+           (click)="Select(b.ID, $event)" (keydown)="OnKey(b.ID, $event)">
+        @if (Stacked && b.HideWhenStacked) {
+          <!-- Left out on a phone, so it takes no room in the phone preview either: a note to select it by. -->
+          <span class="lr__off-note"><i class="fa-solid fa-eye-slash" aria-hidden="true"></i> {{ Label(b) }}, hidden on small screens</span>
+        } @else {
+          <ng-container [ngTemplateOutlet]="block" [ngTemplateOutletContext]="{ $implicit: b }"></ng-container>
+        }
+        @if (b.ID === SelectedID) {
+          <span class="lr__tools" (click)="$event.stopPropagation()">
+            <span class="lr__tool-name">{{ Label(b) }}</span>
+            <button type="button" mjButton Variant="icon" Size="sm" title="Move up" AriaLabel="Move up" (click)="Emit('up', b.ID, $event)"><i class="fa-solid fa-arrow-up"></i></button>
+            <button type="button" mjButton Variant="icon" Size="sm" title="Move down" AriaLabel="Move down" (click)="Emit('down', b.ID, $event)"><i class="fa-solid fa-arrow-down"></i></button>
+            <button type="button" mjButton Variant="icon" Size="sm" title="Duplicate" AriaLabel="Duplicate" (click)="Emit('duplicate', b.ID, $event)"><i class="fa-regular fa-clone"></i></button>
+            <button type="button" mjButton Variant="icon" Size="sm" title="Delete" AriaLabel="Delete" (click)="Emit('delete', b.ID, $event)"><i class="fa-regular fa-trash-can"></i></button>
+          </span>
+        }
+        <div class="lr__placeholder" [class]="WidthClass(b)" *cdkDragPlaceholder></div>
+      </div>
+    } @empty {
+      <p class="lr__hint"><i class="fa-solid fa-plus" aria-hidden="true"></i> Drop blocks here</p>
+    }
+  </div>
+} @else {
+  <div class="lr lr--live" [class.lr--banner]="IsBanner" [class.lr--center]="Center || !IsBanner">
+    @for (b of Blocks; track b.ID) {
+      <div class="lr__cell" [class]="WidthClass(b)" [class.lr__cell--hide-stacked]="b.HideWhenStacked">
+        <ng-container [ngTemplateOutlet]="block" [ngTemplateOutletContext]="{ $implicit: b }"></ng-container>
+      </div>
+    }
+  </div>
+}
+
+<ng-template #block let-b>
+  @switch (b.Type) {
+    @case ('logo') {
+      @if (LogoURL(b); as url) {
+        <img [class]="'lb-logo lb-logo--' + b.Size" [src]="url" [alt]="(BrandName || 'Organization') + ' logo'" />
+      } @else {
+        <!-- The theme has no artwork for this variant: the stock login logo, from its public token. -->
+        <span [class]="'lb-logo-stock lb-logo-stock--' + b.Size" role="img" [attr.aria-label]="(BrandName || 'Organization') + ' logo'"></span>
+      }
+    }
+    @case ('headline') {
+      @if (IsBanner) {
+        <h1 [class]="'lb-headline lb-headline--' + b.Size">{{ b.Text }}</h1>
+      } @else {
+        <h2 [class]="'lb-headline lb-headline--' + b.Size">{{ b.Text }}</h2>
+      }
+    }
+    @case ('text') {
+      <p class="lb-text" [class.lb-text--muted]="b.Muted">{{ b.Text }}</p>
+    }
+    @case ('card') {
+      @if (SafeHref(b.Href); as href) {
+        <a class="lb-card lb-card--link" [class.lb-card--on-banner]="IsBanner" [href]="href"
+           [attr.target]="b.NewTab ? '_blank' : null" [attr.rel]="b.NewTab ? 'noopener noreferrer' : null"
+           (click)="Editable && $event.preventDefault()">
+          <ng-container [ngTemplateOutlet]="cardBody" [ngTemplateOutletContext]="{ $implicit: b }"></ng-container>
+          @if (b.NewTab) {
+            <span class="lb-sr">(opens in a new tab)</span>
+          }
+          <i class="fa-solid fa-chevron-right lb-card__chevron" aria-hidden="true"></i>
+        </a>
+      } @else {
+        <div class="lb-card" [class.lb-card--on-banner]="IsBanner">
+          <ng-container [ngTemplateOutlet]="cardBody" [ngTemplateOutletContext]="{ $implicit: b }"></ng-container>
+        </div>
+      }
+    }
+    @case ('links') {
+      <nav class="lb-links" aria-label="Links">
+        @for (l of b.Links; track $index) {
+          @if (SafeHref(l.Href); as href) {
+            <a [href]="href" target="_blank" rel="noopener noreferrer" (click)="Editable && $event.preventDefault()">{{ l.Label }}<span class="lb-sr"> (opens in a new tab)</span></a>
+          } @else if (Editable) {
+            <span class="lb-links__draft">{{ l.Label || 'Link' }}</span>
+          }
+        }
+      </nav>
+    }
+    @case ('image') {
+      @if (SafeImage(b.URL); as url) {
+        <img [class]="'lb-image lb-image--' + b.Size" [src]="url" [alt]="b.Alt" loading="lazy" />
+      } @else if (Editable) {
+        <span class="lb-missing"><i class="fa-regular fa-image" aria-hidden="true"></i> Add an image address</span>
+      }
+    }
+    @case ('spacer') {
+      <div [class]="'lb-spacer lb-spacer--' + b.Size" aria-hidden="true"></div>
+    }
+  }
+</ng-template>
+
+<ng-template #cardBody let-b>
+  @if (b.Icon) {
+    <span class="lb-card__icon" aria-hidden="true"><i [class]="b.Icon"></i></span>
+  }
+  <span class="lb-card__body">
+    <span class="lb-card__title">{{ b.Title }}</span>
+    @if (b.Text) {
+      <span class="lb-card__text">{{ b.Text }}</span>
+    }
+  </span>
+</ng-template>

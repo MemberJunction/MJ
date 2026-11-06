@@ -166,9 +166,11 @@ Two consequences:
    fast with an actionable `Error` result telling you to run via the CLI in a dedicated
    process. The Explorer Testing dashboard therefore **browses** integration runs and their
    per-check results, but execution belongs to the CLI / scripts.
-2. **Integration suites run strictly serially.** Bundles share process-global singletons
-   (`LocalCacheManager`, the instrumented counters, `UserCache`, `Metadata.Provider`), so the
-   CLI forces `parallel: false` whenever `MJ_INTEGRATION_TEST=1`, overriding any `--parallel`.
+2. **Within a single process, integration suites run strictly serially.** Bundles share
+   process-global singletons (`LocalCacheManager`, the instrumented counters, `UserCache`,
+   `Metadata.Provider`), so the CLI forces `parallel: false` whenever `MJ_INTEGRATION_TEST=1`,
+   overriding any `--parallel`. Across processes, CI shards the deterministic suite into 4
+   isolated OS workers against 4 database clones (`test_s1..3` + `test`; see §2.7 below).
 
 **PostgreSQL:** `DB_PLATFORM=postgresql` routes the same bootstrap (and the same downstream
 check code) through `@memberjunction/postgresql-dataprovider` (an optional dependency, loaded
@@ -210,13 +212,33 @@ gate is honored identically everywhere. Gating exists at two granularities:
 - **Whole-test**: a metadata Test's `Configuration.tier` (or an explicit `requiresEnv` env-var
   override). When gated off, the driver reports a real **`Skipped`** status with one `gate`
   oracle whose message reads `Skipped: <VAR> not set (tier '<tier>')`. A skipped test is
-  visible in every summary (`X passed / Y failed / Z skipped`) and never counts as passed —
-  but it doesn't fail the suite either.
+  visible in every summary (`X passed / Y failed / Z skipped`) and never counts as passed.
+  A tier gate (`mutation`, `live-model`) is an allowed skip; an explicit `requiresEnv` gate is
+  not, so it fails the suite run (see *Skips fail the run* below).
 - **Per-check**: `RequiresMutation` / `RequiresLiveModel` flags on individual `NamedCheck`s
   inside an otherwise-deterministic bundle (e.g. the save/delete invalidation checks in the
   server-cache bundle). Gated-off checks are recorded as skipped oracle entries (never
   silently dropped). A bundle selector can also opt mutation checks in declaratively via
   `config.runMutationTests: true`, independent of env.
+
+**Skips fail the run.** A skipped check verified nothing, so `mj test suite` exits `1` when an
+integration run has a skip that is not allowed, a bundle whose checks all skipped without an
+allowance, or a registered check of a selected bundle that produced no result. Allowed skips are:
+
+- checks flagged `RequiresMutation` (the PR lane leaves `RUN_MUTATION_TESTS` unset on purpose) and
+  `RequiresLiveModel` (no model credentials on the deterministic lane), and the matching whole-test
+  tier gates — the driver allows these without a list entry;
+- checks on the allowlist in
+  [`integration-test-suite/src/skip-allowlist.ts`](../packages/TestingFramework/integration-test-suite/src/skip-allowlist.ts),
+  each with a gate and a one-line reason: `mutation`, `credentials`, `fixture` (data CI deliberately
+  does not seed), `not-applicable` (nothing on the stock schema or catalog to examine, or a leg for
+  another database platform) or `pending-ruling` (waiting on someone else's decision). A bare
+  bundle name allows a Test parked by `requiresEnv` when every bundle it selects is listed.
+
+A check that cannot run ends with `SkipCheck('<what is missing>')` from
+`@memberjunction/testing-integration`, never with a log line and `return` — a return scores as a
+pass. The run's output lists every allowed skip with its reason under **Skip gate**, then every
+unexpected skip, skipped bundle and missing check that failed it.
 
 Adjacent gates outside the tier enum: the Predictive Studio *flow* rigs
 (`integration-test-suite/rigs/ps-*.ts`) run only under `PS_INTEGRATION=1` (they also need the
@@ -306,15 +328,48 @@ JSON assertion DSL — a Test row picks which registered bundles run (and with w
 assertions live in the bundle code.
 
 **Suite mechanics:** suite membership rows (`MJ: Test Suite Tests`) carry a `Sequence` (tests
-run in order — integration suites are serial) and a `Status` — members marked `Skip` are
-excluded from suite runs (IT03, IT15, and IT23 ship as `Skip` in the deterministic suite; run
-them individually with MJAPI up).
+within a worker run in ascending `Sequence` order, tie-broken deterministically by `Name` and
+`ID`) and a `Status` — members marked `Skip` are excluded from suite runs.
 For suites, the engine also gives drivers **suite-scoped fixtures**: it builds one
 `SuiteFixtureContext` (`{ SuiteRunID, Data, CreatedRecords }`) per suite run, calls each
 distinct driver's `SetupSuite` once before the tests and `TeardownSuite` in a guaranteed
 `finally`, and threads the context into every `Execute` as `context.fixtures`. The
 IntegrationTestDriver uses this to discover the RLS two-user fixture once per suite run; on the
 no-suite `mj test run` path it lazily re-discovers.
+
+**CI parallel sharding & cross-test isolation invariants:** in `.github/workflows/integration.yml`,
+`Integration Tests — Deterministic` runs across **4 concurrent OS processes against 4 isolated
+SQL Server database clones**:
+- `server-1..3`: `--transport=server --shard=1/3..3/3` against `test_s1`, `test_s2`, and `test_s3`,
+  partitioned via Longest Processing Time (LPT) load balancing (`suite-sharding.ts`).
+- `client`: `--transport=client` against `test` (the database served by the live MJAPI on port 4000).
+
+Because of this architecture, every integration test author must follow three rules:
+1. **Never depend on another test's process or database state.** Tests in different shards run in
+   separate Node processes against separate database clones. Furthermore, because LPT assigns
+   tests by descending weight, adding even a single default-weight (`4s`) server test can shift
+   the majority of server tests into different shards. Any hidden dependency on rows or cache
+   state left behind by an earlier test will break on an unrelated PR when shard assignments
+   rebalance.
+2. **Declare MJAPI database affinity or cross-bundle handoffs explicitly.**
+   - A `server`-transport bundle that connects to the live MJAPI instance (port 4000) or seeds
+     database rows for a `client`-transport bundle must set `"requiresSharedServerDatabase": true`
+     in its Test `Configuration` (or be listed in `WIRE_COMPANION_SERVER_BUNDLES` in
+     [`suite-sharding.ts`](../packages/TestingFramework/Engine/src/utils/suite-sharding.ts)) so it
+     is routed to the `client` worker against MJAPI's `test` database and sequenced before the
+     client bundles.
+   - If two bundles hand off in-process or database fixture state (such as `realtime-session-guard`
+     → `realtime-session-verification`), declare `"coLocateWithBundles": ["<companion-bundle>"]` in
+     `Configuration` (or `CO_LOCATED_BUNDLE_PAIRS` in `suite-sharding.ts`) so LPT never splits them
+     across shards.
+3. **Reproducing a CI shard locally:**
+   ```bash
+   # Reproduce server shard k of 3 (k = 1, 2, or 3):
+   mj test suite "Integration Tests — Deterministic" --transport=server --shard=1/3
+
+   # Reproduce the client worker (including wire-companion server prerequisites):
+   mj test suite "Integration Tests — Deterministic" --transport=client
+   ```
 
 **Server registration:** `@memberjunction/testing-integration` is part of the
 [`ServerBootstrap`](../packages/ServerBootstrap/) class-registration manifest, so any process
@@ -349,7 +404,7 @@ strategies together:
 ## 3. Running the tier
 
 Everything runs **from the repo root** (`.env` / `mj.config.cjs` resolution is cwd-relative).
-Exit codes are uniform across every entry point: **`0` passed (or cleanly skipped) · `1`
+Exit codes are uniform across every entry point: **`0` passed (allowed skips only) · `1`
 failures · `2` bootstrap/connectivity error**.
 
 ### 3.1 One-time setup — seed the metadata (load-bearing)
@@ -729,8 +784,9 @@ TypeScript:
   `Integration Tests` parent) with any membership/ordering; `Status: "Skip"` on a membership
   row parks a test without deleting it.
 
-- **Gate specially** with `"requiresEnv": "MY_FLAG"` — the driver then skip-passes unless
-  `MY_FLAG=1`, overriding the tier-derived gate.
+- **Gate specially** with `"requiresEnv": "MY_FLAG"` — the driver then reports `Skipped` unless
+  `MY_FLAG=1`, overriding the tier-derived gate. That skip fails a suite run that includes the
+  test unless every bundle it selects has a bundle-level allowlist entry saying why it is parked.
 
 Push with `pnpm mj sync push --dir=metadata-optional/integration-test` and run via `mj test`.
 
@@ -800,6 +856,9 @@ coverage loss):
 | `ai-skills` | AS1–AS21 (21) | server | 4 skills + grants/junctions | IT12 | Skills gates, resolution, SKILL.md round-trip, activation governance — no LLM |
 | `api-keys` | AK1–AK3 (3) | server | key fixtures | IT13 | API Keys engine `Config` + end-to-end `Authorize` allow/deny |
 | `predictive-studio` | PS1–PS5 (5) | server | Pipeline → Model → Binding chain | IT14 | PS stack seams (entities, work-type registration, Actions) — no sidecar |
+| `feature-pipeline-core` | FP1–FP7 (7) | server | stub driver, pipeline, prompt | IT124 | Feature Value key, Dedup Cache, version gate, dry run and breaker on MJ core tables, no model calls |
+| `fp-live-jobtitle` | L1 (1, live-model) | server | bizapps-common people + pipeline | IT125 | Job-title Feature Pipeline answers identically over three runs; gate suite only |
+| `feature-value-only` | FV1–FV5 (5) | server | stub driver, pipeline, prompt | IT126 | A pipeline whose outputs have no write target stores only its own typed Feature Values; dry-run preview, idempotent rerun, low-confidence withholding, no model calls |
 | `remote-op-wire-progress` | WIRE1 (1) | client | over-the-wire fixtures | IT15 | Remote Operation progress streamed over GraphQL |
 | `prompt-runner` | PR1 (1) | server | lifecycle | IT16 (live-model) | Real prompt run + persisted `MJ: AI Prompt Runs` verification |
 | `agent-runner` | AR1 (1) | server | lifecycle | IT17 (live-model) | Real agent run, deep-verified (steps → prompt runs → action logs → sub-agents) |
@@ -807,7 +866,8 @@ coverage loss):
 | `remote-op-ai-authoring` | RO4-1→RO4-3 (3) | server | AI-generated Remote Operation | IT19 (live-model) | The AI-authored operation loop (save → approve → emit) |
 | `lists` | LS1–LS3 (3) | server | List fixture | IT20 | Lists substrate + the ListSource keyset-pagination change |
 | `open-app-teardown` | OAT1–OAT2 (2) | server | seeded Open-App metadata | IT21 | Open-App metadata teardown seam |
-| `user-routines` | UR1–UR16 (16) | server | routine fixtures | IT22 | User Routines entity servers + dispatcher, end to end |
+| `user-routines` | UR1–UR18 (18) | server | routine fixtures | IT22 | User Routines entity servers + dispatcher, end to end; UR17–UR18 the manual-run path (`RunRoutineNow`) keeps a one-shot's schedule |
+| `chief-of-staff` | COS1–COS8 (8) | server | own policy (skips COS6–COS8 if one exists) + routine fixtures | IT157 | Chief of Staff MJ-core layers, no Open App: policy and request ownership guards, Run User Routine Now, the policy cache following a save, email approval before transport |
 | `metadata-consistency` | 7 | server | — | IT24 | Read-only audit: entity metadata vs the physical DB catalog |
 | `view-execution` | 9 | client | — | IT25 | Viewing-system deterministic tier, over the wire |
 | `app-wiring` | AW1–AW10 (10) | client | — | IT26 | Every shipped app wired correctly (parameterized over all apps) |
@@ -816,6 +876,16 @@ coverage loss):
 | `cache-gauntlet` | 8 | server | — | IT29 | The subset-slot × mutation cell that shipped two production cache bugs |
 | `conversation-compaction` | CC1–CC12 (12) | server | — | IT30 | Compaction assembly layer (graduated from PR #2732) |
 | `self-test` | cache-warm (1) | server | — | smoke script | Proves the instrumented cache observes RunView traffic (lives in the framework package) |
+
+**Predictive Studio gate suite.** `Predictive Studio Gates — Feature Pipelines` holds the four Feature Pipeline gate
+bundles (`fp-gate-*`) and IT125. It needs bizapps-common installed and `RUN_MUTATION_TESTS=1`, and must run where the
+bizapps-common entity classes load: from `packages/MJAPI`, with its own `.env`, and the repo-root `mj.config.cjs`
+naming the host's generated entities package as a local edit (see the [Dynamic Package Loading guide](DYNAMIC_PACKAGE_LOADING_GUIDE.md)):
+
+```bash
+cd packages/MJAPI
+MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm exec mj test suite "Predictive Studio Gates — Feature Pipelines"
+```
 
 There are no script-only suites anymore — the former `lists` / `user-routines` /
 `open-app-teardown` scripts graduated to bundles (IT20–IT22), and the multi-process /

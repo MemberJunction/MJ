@@ -38,7 +38,7 @@ export class GetObjectAction extends BaseFileStorageAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             // Get and initialize storage driver
-            const { driver, error } = await this.getDriverFromParams(params);
+            const { driver, account, error } = await this.getDriverFromParams(params);
             if (error) return error;
 
             // Get identifier (prefer ObjectID if provided for performance)
@@ -51,6 +51,10 @@ export class GetObjectAction extends BaseFileStorageAction {
                     "MISSING_IDENTIFIER"
                 );
             }
+
+            // Tracked-file rule: never return the bytes of an object behind an MJ: Files row the caller cannot read
+            const refused = await this.CheckObjectsReadable(account!, driver!, [objectName, objectId], params.ContextUser);
+            if (refused) return refused;
 
             // Execute the get object operation with new params structure
             const content: Buffer = await driver!.GetObject({

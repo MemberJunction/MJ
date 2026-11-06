@@ -98,20 +98,24 @@ Server extensions are mounted during MJServer bootstrap. They are separated into
 
 ---
 
-## 3. Reserved Roots & Route Safety (G2)
+## 3. MJAPI's Base Path, Reserved Roots & Route Safety (G2)
 
-To prevent extensions from colliding with or shadowing core server routes, `MJServer` enforces a **Reserved Roots Registry** (`serverExtensionReservedRoots.ts`).
+### Every RootPath lives under `MJAPI_BASE_PATH`
 
-### Reserved System Roots
-The following root prefixes cannot be claimed by server extensions:
-- `/graphql` (Core GraphQL API)
-- `/health` (Server health check)
-- `/auth` (Authentication routes)
-- `/media` (Media storage & streaming routes)
-- `/schema` (Schema introspection endpoints)
-- `/mcp` (Model Context Protocol endpoints)
+MJAPI does not know where it is exposed. When a proxy forwards a prefix without stripping it (MJ Central's CloudFront sends `/api/*` to MJAPI), the host sets `MJAPI_BASE_PATH=/api` and every route MJAPI serves moves under it, so the CDN forwards one prefix instead of a patch per route. The default is `/`.
 
-During extension configuration loading, `ServerExtensionLoader` validates all configured `RootPath` values. If an extension attempts to claim a reserved root, initialization fails immediately with a descriptive error.
+- A configured `RootPath` is **relative to the base path**. `prepareServerExtensionConfigs({ apiRootPath })` composes the mount path once, so `context.config.RootPath` is already `/api/telephony/twilio` at `MJAPI_BASE_PATH=/api` (and `/telephony/twilio` at `/`). Mount on it as-is; never add the base path again.
+- `GRAPHQL_ROOT_PATH` is only where Apollo listens. It is not a base for extension routes. Extensions take precedence over GraphQL because Apollo mounts last.
+- `context.publicUrl` is where the world reaches MJAPI (`MJAPI_PUBLIC_URL`, prefix included); `context.apiRootPath` is the base path (`''` at `/`). Build outward URLs as `publicUrl` + a path relative to the base path. Appending the composed `RootPath` to `publicUrl` doubles the prefix.
+- Never mount on the Express app at a root-relative literal (`app.use('/x', …)`). `pnpm run check:api-root` fails CI on it. Core code uses `ApiRoute()` from `@memberjunction/server`.
+
+### Reserved core roots
+
+To stop extensions colliding with or shadowing core routes, `MJServer` keeps a **Reserved Roots Registry** (`serverExtensionReservedRoots.ts`), relative to the base path like every `RootPath`: `/auth`, `/magic-link`, `/widget`, `/healthcheck`, `/esignature`, `/media`, `/oauth`, `/health`, `/realtime`, `/realtime-proxy`, plus the static baseline in `@memberjunction/server-extensions-core` (`/graphql`, …) and the exact root `/`. Matching is case-insensitive and bidirectional (claiming `/telephony` collides with `/telephony/twilio`).
+
+`graphqlRootPath` itself is **no longer reserved** (it was until #5674); an extension may sit beside or under it.
+
+An extension that claims a reserved root is dropped at startup with a descriptive error (fail closed).
 
 ---
 
@@ -185,6 +189,7 @@ export class MyCustomWebhookExtension extends BaseServerExtension {
      */
     async Initialize(context: ServerExtensionInitContext): Promise<ExtensionInitResult> {
         const { app, config, services } = context;
+        // Already composed under MJAPI_BASE_PATH by core — mount on it as-is.
         const rootPath = config.RootPath || '/webhook/custom';
 
         // 1. Initialize internal services
@@ -280,7 +285,7 @@ module.exports = {
             Name: 'AuthenticatedReporting',
             DriverClass: 'ReportingApiExtension',
             PackagePath: '@my-org/reporting-extension',
-            RootPath: '/api/reporting',
+            RootPath: '/reporting',  // relative to MJAPI_BASE_PATH: served at /api/reporting when it is /api
             Phase: 'post-auth',      // Protected by MJ user auth
             Enabled: true,
             Settings: {
@@ -290,6 +295,36 @@ module.exports = {
     ]
 };
 ```
+
+### Owning CORS for Your RootPath (`OwnsCORS`)
+
+MJServer mounts a **global CORS middleware before every extension** (so 401s from the auth middleware carry CORS headers). By default that middleware:
+
+- reflects any allowed origin onto your extension's responses — **including its refusals**, and
+- answers **every preflight** (`OPTIONS`) with `204` itself, so your own `OPTIONS` handler never runs.
+
+That is fine for webhooks, but an extension with **its own origin policy** (a public pre-auth edge whose allowed origins are set per resource, such as a ballot endpoint) cannot enforce it. Set `OwnsCORS: true` and the global middleware **skips every request under your `RootPath`**:
+
+```javascript
+// Open App server package (or the host serverExtensions[] entry — the host overlay can override it)
+export const MJ_SERVER_EXTENSIONS = [
+    {
+        Enabled: true,
+        DriverClass: 'BallotEdgeExtension',
+        RootPath: '/ballot',
+        Phase: 'pre-auth',
+        OwnsCORS: true,          // global CORS skips /ballot/**; this extension answers its own preflights
+        Settings: {},
+    },
+];
+```
+
+With `OwnsCORS: true` your extension is responsible for **all** CORS on its routes: answer `OPTIONS`, and set `Access-Control-Allow-Origin` (plus `Vary: Origin`) only for origins you allow. A route that sets nothing is not readable cross-origin, so a forgotten handler fails closed: MJServer answers a preflight under your root that no extension handled with a bare `404` (no CORS headers) rather than letting it fall through to the GraphQL endpoint's own CORS, which would approve every origin. Matching follows Express mount semantics (case-insensitive, on a segment boundary: `/ballot` owns `/ballot/x`, not `/ballots`). Disabled entries own nothing, and a non-boolean value is ignored with a warning. The unified auth middleware passes `OPTIONS` through, so the flag also works for `post-auth` extensions — their 401 responses then carry no CORS headers unless you add them.
+
+Do **not** reorder Express's `app.router.stack` to get ahead of the global CORS middleware; `OwnsCORS` is the supported mechanism. MJServer also disables Express's `X-Powered-By` header app-wide.
+
+### Overriding a published extension from the host
+A host `mj.config.cjs` `serverExtensions[]` entry whose `DriverClass` an Open App package already publishes is an **overlay**: it needs only `DriverClass` plus the fields it changes, for example `{ DriverClass: 'BallotEdgeExtension', OwnsCORS: false }` or `{ DriverClass: 'BallotEdgeExtension', Settings: { RateLimitMax: 200 } }`. `RootPath`, `Enabled` and `Phase` come from the published entry unless the overlay sets them, and `Settings` are merged key by key. A host-only entry (no package publishes that `DriverClass`) must still give a valid `RootPath`; one without it is reported and not mounted.
 
 ### Disabling Extensions
 To temporarily disable an extension without removing its configuration, set:

@@ -11,6 +11,7 @@
  */
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam } from '@memberjunction/actions-base';
+import { BuildActionOutputObject } from '@memberjunction/ai-core-plus';
 import { LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { TaskActionRunner, TaskActionRunParams, TaskActionRunResult } from '@memberjunction/task-graph';
@@ -35,7 +36,7 @@ export class TaskGraphActionRunner implements TaskActionRunner {
                 Filters: [],
             });
 
-            const output = this.buildOutput(result.Params);
+            const output = this.buildOutput(result.Params, result.Message);
             const unstorable = this.findUnstorableOutput(output);
             if (unstorable) {
                 const message =
@@ -90,16 +91,14 @@ export class TaskGraphActionRunner implements TaskActionRunner {
      * is exactly what the Demo workflow did: step 1 completed with an output payload of `{}` and
      * every downstream branch was skipped, with nothing anywhere reporting a problem.
      *
-     * Only `Output` and `Both` params are included. Echoing the inputs back would let a step's own
-     * parameters masquerade as its results, so an output mapping could "succeed" by reading the
-     * value the step was given rather than the one it produced.
+     * Only `Output` and `Both` params are included (plus any structured JSON object returned in
+     * `resultMessage`, such as `Create Document`'s `{ handle, documentType, fileName }`). Echoing
+     * `Input`-only params back would let a step's own parameters masquerade as its results, so an
+     * output mapping could "succeed" by reading the value the step was given rather than the one it
+     * produced.
      */
-    private buildOutput(actionParams: ActionParam[]): Record<string, unknown> {
-        const output: Record<string, unknown> = {};
-        for (const p of actionParams ?? []) {
-            if (p.Type === 'Output' || p.Type === 'Both') output[p.Name] = p.Value;
-        }
-        return output;
+    private buildOutput(actionParams: ActionParam[], resultMessage?: string | null): Record<string, unknown> {
+        return BuildActionOutputObject(actionParams, resultMessage);
     }
 
     /**

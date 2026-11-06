@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { ActionEngineServer } from "@memberjunction/actions";
+import { RefuseWorkflowInAgentRun } from "./workflow-run-scope";
 
 /**
  * Action that retries failed actions with exponential backoff
@@ -67,6 +68,10 @@ export class RetryAction extends BaseAction {
      * @returns Result of the successful action or final failure
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        const agentRunRefusal = RefuseWorkflowInAgentRun(params, "Retry");
+        if (agentRunRefusal) {
+            return agentRunRefusal;
+        }
         try {
             const action = this.getParamValue(params, 'action');
             const maxRetries = this.getNumericParam(params, 'maxretries', 3);

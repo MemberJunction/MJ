@@ -768,7 +768,7 @@ describe('AgentClientSession — Session Lifecycle', () => {
     describe('RunAgentFromConversationDetail', () => {
         it('should call GraphQLAIClient with correct params', async () => {
             const result = await session.RunAgentFromConversationDetail({
-                ConversationDetailId: 'detail-abc',
+                UserMessageId: 'detail-abc',
                 AgentId: 'agent-456',
                 MaxHistoryMessages: 10,
             });
@@ -777,20 +777,47 @@ describe('AgentClientSession — Session Lifecycle', () => {
             expect(mockRunAIAgentFromConversationDetail).toHaveBeenCalledTimes(1);
 
             const callArgs = mockRunAIAgentFromConversationDetail.mock.calls[0][0];
-            expect(callArgs.conversationDetailId).toBe('detail-abc');
+            expect(callArgs.userMessageId).toBe('detail-abc');
+            expect(callArgs).not.toHaveProperty('conversationDetailId');
             expect(callArgs.agentId).toBe('agent-456');
             expect(callArgs.maxHistoryMessages).toBe(10);
+        });
+
+        it('should pass where the reply sits through to the GraphQL client', async () => {
+            await session.RunAgentFromConversationDetail({
+                UserMessageId: 'user-msg-1',
+                AgentId: 'agent-1',
+                ReplyParentId: 'manager-reply-1',
+                AnnouncedByAgentId: 'manager-1',
+            });
+
+            const callArgs = mockRunAIAgentFromConversationDetail.mock.calls.at(-1)![0];
+            expect(callArgs.replyParentId).toBe('manager-reply-1');
+            expect(callArgs.announcedByAgentId).toBe('manager-1');
+        });
+
+        it("should hand the server's reply row to OnAccepted", async () => {
+            const onAccepted = vi.fn();
+            const reply = { ConversationDetailId: 'reply-1', CreatedAt: new Date('2026-10-12T10:00:00.000Z') };
+            mockRunAIAgentFromConversationDetail.mockImplementationOnce(async (params: Record<string, unknown>) => {
+                (params['onAccepted'] as (r: typeof reply) => void)(reply);
+                return { success: true };
+            });
+
+            await session.RunAgentFromConversationDetail({ UserMessageId: 'user-msg-1', AgentId: 'agent-1', OnAccepted: onAccepted });
+
+            expect(onAccepted).toHaveBeenCalledWith(reply);
         });
 
         it('should forward a history floor, and leave it unset when none is given', async () => {
             const floor = new Date('2026-09-01T12:00:00.000Z');
             await session.RunAgentFromConversationDetail({
-                ConversationDetailId: 'detail-floor',
+                UserMessageId: 'detail-floor',
                 AgentId: 'agent-floor',
                 AgentHistoryFrom: floor,
             });
             await session.RunAgentFromConversationDetail({
-                ConversationDetailId: 'detail-no-floor',
+                UserMessageId: 'detail-no-floor',
                 AgentId: 'agent-floor',
                 AgentHistoryFrom: null,
             });
@@ -807,7 +834,7 @@ describe('AgentClientSession — Session Lifecycle', () => {
             ).mockReturnValue(null);
 
             const result = await session.RunAgentFromConversationDetail({
-                ConversationDetailId: 'detail-xyz',
+                UserMessageId: 'detail-xyz',
                 AgentId: 'agent-nope',
             });
 
@@ -821,7 +848,7 @@ describe('AgentClientSession — Session Lifecycle', () => {
             );
 
             const result = await session.RunAgentFromConversationDetail({
-                ConversationDetailId: 'detail-err',
+                UserMessageId: 'detail-err',
                 AgentId: 'agent-err',
             });
 
@@ -846,7 +873,7 @@ describe('AgentClientSession — Session Lifecycle', () => {
             );
 
             await session.RunAgentFromConversationDetail({
-                ConversationDetailId: 'detail-prog',
+                UserMessageId: 'detail-prog',
                 AgentId: 'agent-prog',
                 OnProgress: onProgress,
             });

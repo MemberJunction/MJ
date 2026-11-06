@@ -71,16 +71,17 @@ export interface AIMediaRunOptions {
    * splits, the bound covers the whole transcription. Unset or not positive means no bound, unless the
    * runner declares a `DefaultPromptTimeoutMS`.
    *
-   * The media drivers take no abort signal, so a request that times out is abandoned, not torn down:
-   * the runner stops waiting for it and ignores its result.
+   * The timeout is composed into the signal the driver is handed as its params' `CancellationToken`,
+   * so a request that times out is torn down by a driver that honors it, not left running.
    */
   TimeoutMS?: number;
 
   /**
    * Cancels the call, as `AIPromptParams.cancellationToken` cancels a chat call. A token already
    * aborted refuses the call before a run row exists. Aborted during the call, it ends the call at
-   * once, before any further failover candidate, and the run row is recorded as `Cancelled`. As with
-   * {@link TimeoutMS}, a request already sent is abandoned rather than torn down.
+   * once, before any further failover candidate, and the run row is recorded as `Cancelled`. The
+   * driver is handed it (composed with {@link TimeoutMS}) as its params' `CancellationToken`, so a
+   * request already sent is torn down by a driver that honors it.
    */
   CancellationToken?: AbortSignal;
 }
@@ -142,9 +143,11 @@ export interface MediaOperation<TParams, TDriver, TOutput extends MediaDriverOut
 
   /**
    * Calls the driver. `apiName` is the candidate's API name at its vendor, or undefined when it has
-   * none, in which case the driver uses its own default model.
+   * none, in which case the driver uses its own default model. `signal` is the call's bound (the
+   * caller's token composed with the timeout), which the operation passes to the driver as its params'
+   * `CancellationToken`; it is undefined when the call is unbounded.
    */
-  Invoke: (driver: TDriver, apiName: string | undefined) => Promise<TOutput>;
+  Invoke: (driver: TDriver, apiName: string | undefined, signal: AbortSignal | undefined) => Promise<TOutput>;
 
   /** The run row's `Messages`: JSON describing what was asked. Never media bytes. */
   DescribeRequest: (params: TParams) => string;

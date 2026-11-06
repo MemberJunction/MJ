@@ -197,12 +197,17 @@ describe('SearchEngine MinScore is a semantic-lane floor applied before fusion',
         engine.InjectProviders([
             makeEntry('Vec', new FixedProvider('vector', [scored('v-high', 'vector', 0.8), scored('v-low', 'vector', 0.2)])),
         ]);
-        const streamed: string[] = [];
+        // A provider event carries only a count (its hits precede the permission pass), so the
+        // floor shows there as the count, and in the final results.
+        const streamedCounts: number[] = [];
+        let final: string[] = [];
         for await (const ev of engine.streamSearch({ Query: 'floor-f', MinScore: 0.5 } as SearchParams, user)) {
             const e = ev as SearchStreamEvent;
-            if (e.phase === 'provider') streamed.push(...e.results.map(r => r.RecordID));
+            if (e.phase === 'provider') streamedCounts.push(e.resultCount);
+            if (e.phase === 'final') final = e.results.map(r => r.RecordID);
         }
-        expect(streamed).toEqual(['v-high']);
+        expect(streamedCounts).toEqual([1]);
+        expect(final).toEqual(['v-high']);
     });
 });
 
@@ -214,17 +219,28 @@ describe('SearchEngine MinScore floor on the scoped path (executeScopeBundle)', 
     let engine: TestSearchEngine;
     let resolveScopesSpy: ReturnType<typeof vi.spyOn>;
     const user = createUser('u-floor-scoped');
+    // A non-global scope reaches only what its rows declare (a scope with no provider rows or lanes returns nothing),
+    // so the scope enables both injected providers and carries one external-index lane, the lane kind a plain
+    // BaseSearchProvider reads.
+    const providerRow = (providerID: string) => ({ ID: `${providerID}-row`, SearchScopeID: 'scope-floor', SearchProviderID: providerID, Enabled: true, MaxResultsOverride: null });
     const bundle = {
         Scope: { ID: 'scope-floor', Name: 'Floor Scope', IsGlobal: false, ScopeConfig: null, SearchContextConfig: null },
-        Providers: [], ExternalIndexes: [], Entities: [], StorageAccounts: [],
+        Providers: [providerRow('prov-Vec'), providerRow('prov-Kw')],
+        ExternalIndexes: [{
+            ID: 'lane-floor', SearchScopeID: 'scope-floor', IndexType: 'Vector', VectorIndexID: 'D6E1A5C2-3F4B-4E8A-9C1D-2B7F0E9A8C11',
+            ExternalIndexName: null, ExternalIndexConfig: null, MetadataFilter: null, RequiredMetadataKeys: null,
+        }],
+        Entities: [], StorageAccounts: [],
     } as unknown as ScopeBundle;
 
     beforeEach(() => {
         engine = new TestSearchEngine();
         mockEntityByName.mockReturnValue({ Name: 'Test', FirstPrimaryKey: { Name: 'ID' } });
         mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
-        resolveScopesSpy = vi.spyOn(engine as unknown as { resolveScopes: (ids?: string[]) => ScopeBundle[] }, 'resolveScopes')
-            .mockReturnValue([bundle]);
+        resolveScopesSpy = vi.spyOn(
+            engine as unknown as { resolveScopes: (ids?: string[]) => { Bundles: ScopeBundle[]; Unresolved: string[] } },
+            'resolveScopes',
+        ).mockReturnValue({ Bundles: [bundle], Unresolved: [] });
     });
 
     it('drops vector hits below MinScore before fusion, and goes through the scoped branch', async () => {
@@ -253,11 +269,16 @@ describe('SearchEngine MinScore floor on the scoped path (executeScopeBundle)', 
         engine.InjectProviders([
             makeEntry('Vec', new FixedProvider('vector', [scored('v-high', 'vector', 0.8), scored('v-low', 'vector', 0.2)])),
         ]);
-        const streamed: string[] = [];
+        // A provider event carries only a count (its hits precede the permission pass): the floor shows there as the
+        // count, and in the final results.
+        const streamedCounts: number[] = [];
+        let final: string[] = [];
         for await (const ev of engine.streamSearch({ Query: 'scoped-c', MinScore: 0.5, ScopeIDs: ['scope-floor'] } as SearchParams, user)) {
             const e = ev as SearchStreamEvent;
-            if (e.phase === 'provider') streamed.push(...e.results.map(r => r.RecordID));
+            if (e.phase === 'provider') streamedCounts.push(e.resultCount);
+            if (e.phase === 'final') final = e.results.map(r => r.RecordID);
         }
-        expect(streamed).toEqual(['v-high']);
+        expect(streamedCounts).toEqual([1]);
+        expect(final).toEqual(['v-high']);
     });
 });

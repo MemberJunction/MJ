@@ -1,17 +1,21 @@
-import { IMetadataProvider, UserInfo, LogError, RunView } from '@memberjunction/core';
+import { IMetadataProvider, UserInfo, LogError, LogStatus, RunView } from '@memberjunction/core';
 import { MJLruCache } from '@memberjunction/global';
 import {
     MJAIAgentSessionEntity,
     MJAIAgentSessionChannelEntity,
     MJConversationEntity,
 } from '@memberjunction/core-entities';
+import { RunWithTrustedSessionConfigWrites } from '@memberjunction/core-entities-server';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { RealtimeClientSessionService, RealtimeChannelServerHost } from '@memberjunction/ai-agents';
 import type { BridgeDisconnectReason } from '@memberjunction/ai-bridge-base';
+import { ParseSessionDeadlineMs, VerifyTimeLimitClaim } from './sessionDeadline.js';
 import { GetHostInstanceID } from './HostInstance.js';
 import { WriteReturningVisitorRecap } from './ReturningVisitorRecap.js';
 import { SessionRunIDVerifier, SessionRunIDs } from './SessionRunIDVerifier.js';
 import { ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
+import { RecordingAssemblyScheduler } from '../realtimeSessions/RecordingAssemblyScheduler.js';
+import { ResolveSessionScopeIdentity } from '../realtimeSessions/sessionAccess.js';
 
 /** Entity names — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
@@ -38,11 +42,14 @@ export interface CreateSessionInput {
 /**
  * Why a session was closed — persisted to `AIAgentSession.CloseReason` alongside the
  * `Status = 'Closed'` transition so the admin dashboards can distinguish a user hanging up
- * (`Explicit`) from janitor reconciliation (`Janitor`), a graceful host drain (`Shutdown`),
- * or a failure-path teardown (`Error`). `NULL` in the column means "legacy/unknown" — rows
- * closed before this column existed.
+ * (`Explicit`) from janitor reconciliation (`Janitor`, an orphan from an earlier boot), a graceful
+ * host drain (`Shutdown`), a failure-path teardown (`Error`), an expired authored deadline
+ * (`TimeLimit`) or a session left quiet past the idle threshold (`Idle`). `NULL` in the column means
+ * "legacy/unknown" — rows closed before this column existed.
+ *
+ * Derived from the generated entity so the column's CHECK constraint stays the single source of truth.
  */
-export type SessionCloseReason = 'Explicit' | 'Janitor' | 'Shutdown' | 'Error';
+export type SessionCloseReason = NonNullable<MJAIAgentSessionEntity['CloseReason']>;
 
 /**
  * The {@link SessionCloseReason} for a session whose bridged agent has left (see
@@ -152,11 +159,13 @@ export class SessionManager {
     /**
      * Authorize and create a new session. Flow:
      * 1. `CanRun` check on the agent — denied → {@link SessionAuthorizationError}, no row written.
-     * 2. Resolve the conversation (use the supplied one, or create+link a fresh Conversation).
+     * 2. Resolve the conversation (use the supplied one, or create+link a fresh Conversation). An anonymous
+     *    caller may only supply a conversation stamped with its own scope identity.
      * 3. Persist the `AIAgentSession` as `Active`, stamped with this host and `LastActiveAt = now`.
      *
      * @returns the saved {@link MJAIAgentSessionEntity}.
-     * @throws {SessionAuthorizationError} when the user may not run the agent.
+     * @throws {SessionAuthorizationError} when the user may not run the agent, or an anonymous caller supplies a
+     *   conversation that is not its own.
      * @throws {Error} when conversation creation or session save fails.
      */
     public async CreateSession(
@@ -165,6 +174,9 @@ export class SessionManager {
         provider: IMetadataProvider,
     ): Promise<MJAIAgentSessionEntity> {
         await this.assertCanRun(input.agentID, contextUser);
+        if (input.conversationID && contextUser.IsMagicLinkAnonymous) {
+            await this.assertAnonymousOwnsConversation(input.conversationID, contextUser, provider);
+        }
 
         const conversationID = input.conversationID
             ?? await this.createConversation(input, contextUser, provider);
@@ -184,6 +196,8 @@ export class SessionManager {
      *   call sites (the user-initiated close mutations) stamp the common case without modification;
      *   background callers (janitor sweeps, shutdown drain, error teardowns) must pass their reason
      *   explicitly. `NULL` rows remain only for legacy data closed before the column existed.
+     *   A `'TimeLimit'` is verified against the session's stored deadline ({@link VerifyTimeLimitClaim}); a claim the
+     *   deadline does not back is recorded as `'Explicit'` and logged, never refused.
      *
      * @remarks P5 adds in-flight-run abort + `ClientToolRequestManager.ClearSession` here.
      */
@@ -208,18 +222,46 @@ export class SessionManager {
             return true;
         }
 
-        const closed = await this.markSessionClosed(session, closeReason);
+        // Verified once: the stamped reason and the plugin notification must agree, so a client's unbacked claim steers neither.
+        const verifiedReason = this.verifiedCloseReason(session, closeReason);
+        const closed = await this.markSessionClosed(session, verifiedReason);
         if (!closed) {
             return false;
         }
+        if (session.RecordingStartedAt) {
+            // A client-direct recording is assembled only after the grace period while its call is open
+            // (a hidden tab must not rewrite recording.wav on every switch; see RealtimeRecordingHandler).
+            // The call has ended now, so assemble it right away. The ledger's claim arbitrates instances,
+            // and a recording with nothing to assemble (none, or server-bridged) is simply not claimable.
+            RecordingAssemblyScheduler.Instance.ScheduleAssembly(agentSessionID, 0, false);
+        }
         await this.disconnectChannels(agentSessionID, contextUser, provider, preloadedChannels);
         await this.finalizeObservabilityRuns(session, contextUser, provider);
-        await this.notifyChannelPluginsSessionClosed(agentSessionID, closeReason);
+        await this.notifyChannelPluginsSessionClosed(agentSessionID, verifiedReason);
         // Returning-visitor recap (RV2): if this session's conversation is returning-visitor-enabled,
         // summarize it into an Active memory note so the visitor's next session opens with prior context.
         // Best-effort + no-op for non-returning-visitor conversations; never blocks teardown.
         await WriteReturningVisitorRecap(session.ConversationID, session.AgentID, contextUser, provider);
         return true;
+    }
+
+    /**
+     * Returns the reason to stamp: a `'TimeLimit'` claim the session's stored deadline does not back becomes
+     * `'Explicit'` (logged with the stored deadline); every other reason passes through.
+     */
+    private verifiedCloseReason(session: MJAIAgentSessionEntity, closeReason: SessionCloseReason): SessionCloseReason {
+        if (closeReason !== 'TimeLimit') {
+            return closeReason;
+        }
+        const verified = VerifyTimeLimitClaim(session, Date.now());
+        if (verified === 'Explicit') {
+            const deadlineMs = ParseSessionDeadlineMs(session.Config_);
+            LogStatus(
+                `SessionManager.CloseSession: TimeLimit claim for session ${session.ID} not backed by its stored deadline ` +
+                    `(${deadlineMs === null ? 'none stored' : new Date(deadlineMs).toISOString()}); closing as Explicit.`,
+            );
+        }
+        return verified;
     }
 
     /**
@@ -440,6 +482,23 @@ export class SessionManager {
 
     // ----- internals -------------------------------------------------------------------------
 
+    /**
+     * Throws {@link SessionAuthorizationError} unless the anonymous caller owns the conversation it wants to bind a
+     * new session to: the conversation, read as the caller, loads, and its `ExternalID` equals the caller's scope
+     * identity ({@link ResolveSessionScopeIdentity}). A caller with no scope identity is refused. Every anonymous
+     * visitor shares one Anonymous user, so row-level security alone may let one visitor read another's
+     * conversation; without this check the new session row and its relays would point into that conversation.
+     */
+    private async assertAnonymousOwnsConversation(conversationID: string, contextUser: UserInfo, provider: IMetadataProvider): Promise<void> {
+        const conversation = await provider.GetEntityObject<MJConversationEntity>(CONVERSATION_ENTITY, contextUser);
+        const loaded = await conversation.Load(conversationID);
+        const scopeIdentity = ResolveSessionScopeIdentity(contextUser);
+        if (!loaded || !scopeIdentity || conversation.ExternalID !== scopeIdentity) {
+            LogError(`SessionManager.CreateSession: refused anonymous user ${contextUser.ID} binding a session to conversation ${conversationID} (${loaded ? 'not its own' : 'not readable'}).`);
+            throw new SessionAuthorizationError('Not authorized to start a session on this conversation.');
+        }
+    }
+
     /** Throws {@link SessionAuthorizationError} unless the user has `CanRun` on the agent. */
     private async assertCanRun(agentID: string, contextUser: UserInfo): Promise<void> {
         const canRun = await AIAgentPermissionHelper.HasPermission(agentID, contextUser, 'run');
@@ -460,13 +519,13 @@ export class SessionManager {
         conversation.NewRecord();
         conversation.UserID = input.userID;
         conversation.Name = 'Agent Session';
-        // For a magic-link-anonymous principal (e.g. a public web-widget voice guest), stamp the
-        // session's conversation with the signed per-session scope so the Widget Guest RLS filters
-        // ({{ScopeResourceID}}) isolate this session — and everything chained to it (AI Agent
-        // Sessions via ConversationID, Session Channels via the session) — from other guests
-        // sharing the Anonymous UserID. No-op for named principals (no scope → default ExternalID).
-        if (contextUser.MagicLinkScope?.ResourceID) {
-            conversation.ExternalID = contextUser.MagicLinkScope.ResourceID;
+        // Stamp the scope identity AuthorizeSessionAccess compares against (one rule, one place:
+        // ResolveSessionScopeIdentity) — the token's resource scope when it has one, else an anonymous
+        // visitor's mj_sid. This isolates anonymous visitors that share the Anonymous UserID, and keeps
+        // the {{ScopeResourceID}} RLS filters matching the visitor's own rows. No-op for unscoped named principals.
+        const scopeIdentity = ResolveSessionScopeIdentity(contextUser);
+        if (scopeIdentity) {
+            conversation.ExternalID = scopeIdentity;
         }
 
         // Returning-visitor memory (RV1/RV2/RV4) for the VOICE path: the widget guest token carries the
@@ -530,7 +589,11 @@ export class SessionManager {
         return session;
     }
 
-    /** Loads a session entity by ID, returning null when it cannot be loaded. */
+    /**
+     * Loads a session entity by ID, returning null when it cannot be loaded. The lifecycle saves that
+     * follow cannot write back the recording ledger's columns: those have `AllowUpdateAPI=0`, so they are
+     * not parameters of `spUpdateAIAgentSession` (#5294, #6010).
+     */
     private async loadSession(
         agentSessionID: string,
         contextUser: UserInfo,
@@ -549,7 +612,9 @@ export class SessionManager {
         session.Status = 'Closed';
         session.ClosedAt = new Date();
         session.CloseReason = closeReason;
-        return this.saveOrLog(session, 'CloseSession');
+        // The session entity refuses a server-only CloseReason from an untrusted save; this is the server's own
+        // (already verified) close, so it saves inside the trusted session-write scope.
+        return RunWithTrustedSessionConfigWrites(() => this.saveOrLog(session, 'CloseSession'));
     }
 
     /** Marks every channel row of the session `Disconnected` (with `DisconnectedAt`), if not already. */

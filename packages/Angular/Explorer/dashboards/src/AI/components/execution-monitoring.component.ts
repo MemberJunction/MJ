@@ -16,6 +16,7 @@ import { HeatmapData } from './charts/performance-heatmap.component';
 import { RunView, CompositeKey } from '@memberjunction/core';
 import { ResourceData } from "@memberjunction/core-entities";
 import { MJAIPromptRunEntityExtended, MJAIAgentRunEntityExtended, MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 
 export interface DrillDownTab {
@@ -2556,27 +2557,32 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
         endTime.setHours(23, 59, 59, 999);
       }
       
-      // Load executions for this time period
-      const [promptResults, agentResults] = await Promise.all([
-        RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJAIPromptRunEntityExtended>({
+      // Load executions for this time period in a single batched RunViews call with lightweight scalar projections
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const [promptResults, agentResults] = await rv.RunViews([
+        {
           EntityName: 'MJ: AI Prompt Runs',
           ExtraFilter: `RunAt >= '${startTime.toISOString()}' AND RunAt <= '${endTime.toISOString()}'`,
           OrderBy: 'RunAt DESC',
-          MaxRows: 500
-        }),
-        RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJAIAgentRunEntityExtended>({
+          MaxRows: 500,
+          Fields: ['ID', 'Prompt', 'Model', 'Success', 'RunAt', 'CompletedAt', 'Cost', 'TokensUsed', 'ErrorMessage'],
+          ResultType: 'simple'
+        },
+        {
           EntityName: 'MJ: AI Agent Runs',
           ExtraFilter: `StartedAt >= '${startTime.toISOString()}' AND StartedAt <= '${endTime.toISOString()}'`,
           OrderBy: 'StartedAt DESC',
-          MaxRows: 500
-        })
+          MaxRows: 500,
+          Fields: ['ID', 'Agent', 'Status', 'StartedAt', 'CompletedAt', 'TotalCost', 'TotalTokensUsed', 'ErrorMessage'],
+          ResultType: 'simple'
+        }
       ]);
       
       // Convert to ExecutionRecord format
       const executions: ExecutionRecord[] = [];
       
       // Add prompt executions
-      for (const run of promptResults.Results) {
+      for (const run of promptResults.Results as MJAIPromptRunEntityExtended[]) {
         const duration = run.CompletedAt ? 
           new Date(run.CompletedAt).getTime() - new Date(run.RunAt).getTime() : 
           Date.now() - new Date(run.RunAt).getTime();
@@ -2597,7 +2603,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       }
       
       // Add agent executions
-      for (const run of agentResults.Results) {
+      for (const run of agentResults.Results as MJAIAgentRunEntityExtended[]) {
         const duration = run.CompletedAt ? 
           new Date(run.CompletedAt).getTime() - new Date(run.StartedAt).getTime() : 
           Date.now() - new Date(run.StartedAt).getTime();
@@ -2637,14 +2643,19 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     this.LoadingDrillDown = true;
     
     try {
-      // Find model by name
-      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const result = await rv.RunView<MJAIModelEntityExtended>({
-        EntityName: 'MJ: AI Models',
-        ExtraFilter: `Name = '${modelName.replace(/'/g, "''")}'` 
-      });
-      
-      const model = result.Results[0];
+      // Consult AIEngineBase in-memory cache first before issuing a network RunView
+      await AIEngineBase.Instance.Config(false);
+      let model: MJAIModelEntityExtended | undefined = AIEngineBase.Instance.Models.find(m => m.Name === modelName);
+      if (!model) {
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const result = await rv.RunView<MJAIModelEntityExtended>({
+          EntityName: 'MJ: AI Models',
+          ExtraFilter: `Name = '${modelName.replace(/'/g, "''")}'`,
+          Fields: ['ID', 'Name', 'Vendor', 'APIName', 'IsActive', 'Description'],
+          ResultType: 'simple'
+        });
+        model = result.Results[0];
+      }
       if (model) {
         tab.data = {
           name: model.Name,

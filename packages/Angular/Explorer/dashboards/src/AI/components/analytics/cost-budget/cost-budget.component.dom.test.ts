@@ -125,8 +125,17 @@ describe('AnalyticsCostBudgetComponent (DOM)', () => {
       if (typeof first === 'string') csv = first;
       return new RealBlob(parts, options);
     });
-    fixture.componentInstance.ExportCSV();
-    spy.mockRestore();
+    const origCreateObjectURL = URL.createObjectURL;
+    const origRevokeObjectURL = URL.revokeObjectURL;
+    if (!URL.createObjectURL) URL.createObjectURL = () => 'blob:mock';
+    if (!URL.revokeObjectURL) URL.revokeObjectURL = () => {};
+    try {
+      fixture.componentInstance.ExportCSV();
+    } finally {
+      spy.mockRestore();
+      URL.createObjectURL = origCreateObjectURL;
+      URL.revokeObjectURL = origRevokeObjectURL;
+    }
     expect(csv.length).toBeGreaterThan(0);
     const lines = csv.split('\n');
     expect(lines[0]).toBe(

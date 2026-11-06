@@ -136,22 +136,36 @@ export function getActiveIntegrationClientBootstrap(): IntegrationClientContext 
  * and the tsx scripts so they preflight identically.
  */
 export async function PreflightMJAPI(url: string, apiKey: string): Promise<void> {
-    let response: Response;
-    try {
-        response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-mj-api-key': apiKey },
-            body: JSON.stringify({ query: '{ __typename }' }),
-            signal: AbortSignal.timeout(5000)
-        });
-    } catch (error) {
-        throw new Error(
-            `MJAPI is not reachable at ${url} (${error instanceof Error ? error.message : String(error)}). ` +
-            `Start it first: cd packages/MJAPI && npm run start`
-        );
-    }
-    if (!response.ok) {
-        throw new Error(`MJAPI at ${url} answered HTTP ${response.status} — check MJ_API_KEY and server logs.`);
+    const deadline = Date.now() + 180_000;
+    for (;;) {
+        let response: Response;
+        try {
+            response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-mj-api-key': apiKey },
+                body: JSON.stringify({ query: '{ __typename }' }),
+                signal: AbortSignal.timeout(15_000)
+            });
+        } catch (error) {
+            const causeCode = (error as { cause?: { code?: string } } | null)?.cause?.code;
+            const message = error instanceof Error ? error.message : String(error);
+            const isConnRefused =
+                causeCode === 'ECONNREFUSED' ||
+                causeCode === 'ENOTFOUND' ||
+                /ECONNREFUSED|ENOTFOUND/.test(message);
+            if (!isConnRefused && Date.now() < deadline) {
+                await new Promise(resolve => setTimeout(resolve, 2_000));
+                continue;
+            }
+            throw new Error(
+                `MJAPI is not reachable at ${url} (${message}). ` +
+                `Start it first: cd packages/MJAPI && npm run start`
+            );
+        }
+        if (!response.ok) {
+            throw new Error(`MJAPI at ${url} answered HTTP ${response.status} — check MJ_API_KEY and server logs.`);
+        }
+        return;
     }
 }
 
@@ -199,7 +213,10 @@ export async function InstallInstrumentedCacheFirst(opts: { VerboseCacheLogging?
         return null;
     }
     const storage = new InstrumentedLocalStorageProvider(new InMemoryLocalStorageProvider());
-    await LocalCacheManager.Instance.Initialize(storage, { verboseLogging: opts.VerboseCacheLogging ?? false });
+    await LocalCacheManager.Instance.Initialize(storage, {
+        verboseLogging: opts.VerboseCacheLogging ?? false,
+        maxSizeBytes: 512 * 1024 * 1024
+    });
     activeStorage = storage;
     return storage;
 }

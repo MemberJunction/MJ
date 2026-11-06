@@ -28,6 +28,7 @@ export interface UserRoutineScheduleFields {
     StartAt: MJUserRoutineEntity['StartAt'];
     EndAt: MJUserRoutineEntity['EndAt'];
     NextRunAt: MJUserRoutineEntity['NextRunAt'];
+    ScheduleMode?: MJUserRoutineEntity['ScheduleMode'];
 }
 
 /**
@@ -43,6 +44,9 @@ export const ROUTINE_DUE_TOLERANCE_MS = 1000;
  * future relative to `fromDate`, the next occurrence is computed from `startAt` instead —
  * an Active routine never gets a NextRunAt before its window opens.
  *
+ * For `OneShot` routines without a `CronExpression`, returns `startAt ?? null`.
+ * For `Adaptive` routines without a `CronExpression`, returns `startAt ?? null`.
+ *
  * @throws when the cron expression or timezone is invalid (callers validate first via
  *         {@link CronExpressionHelper.ValidateExpression} / entity Validate()).
  */
@@ -51,7 +55,35 @@ export function ComputeRoutineNextRunAt(
     timezone: string,
     fromDate: Date,
     startAt?: Date | null
-): Date {
+): Date;
+export function ComputeRoutineNextRunAt(
+    cronExpression: string | null | undefined,
+    timezone: string,
+    fromDate: Date,
+    startAt?: Date | null,
+    scheduleMode?: MJUserRoutineEntity['ScheduleMode']
+): Date | null;
+export function ComputeRoutineNextRunAt(
+    cronExpression: string | null | undefined,
+    timezone: string,
+    fromDate: Date,
+    startAt?: Date | null,
+    scheduleMode: MJUserRoutineEntity['ScheduleMode'] = 'Recurring'
+): Date | null {
+    if (scheduleMode === 'OneShot') {
+        if (startAt != null) {
+            return startAt;
+        }
+        if (!cronExpression || cronExpression.trim().length === 0) {
+            return null;
+        }
+    }
+    if (!cronExpression || cronExpression.trim().length === 0) {
+        if (scheduleMode === 'Adaptive') {
+            return startAt ?? null;
+        }
+        throw new Error('CronExpression is required for Recurring routines');
+    }
     const effectiveFrom = startAt != null && startAt.getTime() > fromDate.getTime() ? startAt : fromDate;
     return CronExpressionHelper.GetNextRunTime(cronExpression, timezone || 'UTC', effectiveFrom);
 }
@@ -100,6 +132,12 @@ export function IsRoutineDue(fields: UserRoutineScheduleFields, now: Date): bool
  * become due on a later sweep once their first cron occurrence passes.
  */
 export function RoutineNeedsSeeding(fields: UserRoutineScheduleFields, now: Date): boolean {
+    if (fields.ScheduleMode === 'OneShot' && !fields.CronExpression && fields.StartAt == null) {
+        return false;
+    }
+    if (fields.ScheduleMode === 'Adaptive' && !fields.CronExpression && fields.StartAt == null) {
+        return false;
+    }
     return fields.Status === 'Active' && fields.NextRunAt == null && IsRoutineWithinActivationWindow(fields, now);
 }
 

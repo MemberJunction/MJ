@@ -76,11 +76,28 @@ describe('each escaper neutralises its own dialect', () => {
         for (const kind of ALL_KINDS) expect(EscapeScopeValueDeep(iso, kind)).toBe(iso);
     });
 
-    it('path: strips traversal and separators, not quotes', () => {
-        expect(EscapePathSegment('../../etc/passwd')).toBe('etcpasswd');
-        expect(EscapePathSegment('a\\b/c')).toBe('abc');
-        // The one escaper that is NOT a no-op on a value containing a separator — by design.
+    it('path: REFUSES traversal and separators instead of stripping them into a wider path', () => {
+        // Stripping turned '..' into '' and '../other' into 'other', so `clients/{{ X }}` named every
+        // client's folder, or another client's. A refused value fails the lane closed instead.
+        expect(() => EscapePathSegment('..')).toThrow(/path traversal/);
+        expect(() => EscapePathSegment('.')).toThrow(/enclosing folder/); // `clients/.` is `clients`: every client
+        expect(() => EscapePathSegment(' .. ')).toThrow(/path traversal/); // the FolderPath guard trims segments too
+        expect(() => EscapePathSegment('.\u0000.')).toThrow(/path traversal/); // judged after control characters go
+        expect(() => EscapePathSegment('../../etc/passwd')).toThrow(/separator/);
+        expect(() => EscapePathSegment('a\\b')).toThrow(/separator/);
+        expect(() => EscapePathSegment('a/b')).toThrow(/separator/);
+        // Legitimate segment values are unchanged; control characters are still removed.
         expect(EscapePathSegment('tenant-a')).toBe('tenant-a');
+        expect(EscapePathSegment('meta.OrgID')).toBe('meta.OrgID');
+        expect(EscapePathSegment('a\nb')).toBe('ab');
+    });
+
+    it('path: a value that only CONTAINS ".." is one ordinary segment — without a separator it cannot climb out', () => {
+        expect(EscapePathSegment('Acme..Inc')).toBe('Acme..Inc');
+        expect(EscapePathSegment('...')).toBe('...');
+        expect(EscapePathSegment('v1..2')).toBe('v1..2');
+        const context: SearchContext = { SecondaryScopes: { Client: 'Acme..Inc' } };
+        expect(RenderScopeTemplate('clients/{{ context.SecondaryScopes.Client }}', context, undefined, 'path')).toBe('clients/Acme..Inc');
     });
 });
 
@@ -150,6 +167,21 @@ describe('the renderer applies it automatically, with a greppable opt-out', () =
         // the one function whose whole purpose is escaping.
         const out = RenderScopeTemplate(`x='{{ evil }}'`, ctx({}), { evil: "a' OR 1=1--" }, 'sql');
         expect(out).toBe(`x='a'' OR 1=1--'`);
+    });
+
+    it('refuses a storage path that interpolates a traversal or separator value', () => {
+        const t = `clients/{{ context.SecondaryScopes.Client }}`;
+        expect(() => RenderScopeTemplate(t, ctx({ Client: '..' }), undefined, 'path')).toThrow(/refused/);
+        expect(() => RenderScopeTemplate(t, ctx({ Client: '.' }), undefined, 'path')).toThrow(/refused/);
+        expect(() => RenderScopeTemplate(t, ctx({ Client: '../other' }), undefined, 'path')).toThrow(/refused/);
+        expect(() => RenderScopeTemplate(t, ctx({ Client: 'a/b' }), undefined, 'path')).toThrow(/refused/);
+    });
+
+    it('refuses a path value only when it reaches the output, so an unused context value cannot fail the lane', () => {
+        const t = `clients/{{ context.SecondaryScopes.Client }}`;
+        expect(RenderScopeTemplate(t, ctx({ Client: 'acme', Unused: '../x' }), undefined, 'path')).toBe('clients/acme');
+        const guarded = `clients/{% if context.SecondaryScopes.Other %}x{% endif %}{{ context.SecondaryScopes.Client }}`;
+        expect(RenderScopeTemplate(guarded, ctx({ Client: 'acme', Other: '..' }), undefined, 'path')).toBe('clients/xacme');
     });
 
     it('exposes contextRaw as the deliberate, greppable opt-out', () => {

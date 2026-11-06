@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 import { HIERARCHY_FORM_PANELS } from './HierarchyPanels/hierarchy-form-panels';
-import { MJButtonDirective, MJAccordionModule, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent, MjSlidePanelComponent, MJEmptyStateComponent, MJAlertComponent, MJTabNavComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJAccordionModule, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent, MjSlidePanelComponent, MJEmptyStateComponent, MJAlertComponent, MJTabNavComponent, MJSectionPickerComponent, MJAccordionSectionsComponent } from '@memberjunction/ng-ui-components';
 import { AngularSplitModule } from 'angular-split';
 import { AgGridModule } from 'ag-grid-angular';
 import { BaseFormsModule, MjFormDialogComponent } from '@memberjunction/ng-base-forms';
@@ -43,6 +43,7 @@ import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.component";
 import { MJAIPromptRunFormComponentExtended } from "./AIPromptRuns/ai-prompt-run-form.component";
 import { ChatMessageViewerComponent } from "./AIPromptRuns/chat-message-viewer.component";
+import { PromptRunDataCaptureNoteComponent } from "./AIPromptRuns/prompt-run-data-capture-note.component";
 import { MJActionFormComponentExtended } from "./Actions/action-form.component";
 import { MJActionExecutionLogFormComponentExtended } from "./Actions/action-execution-log-form.component";
 import { ActionsModule } from "@memberjunction/ng-actions";
@@ -58,6 +59,9 @@ import { ConstellationComponent } from "./ai-agent-run/flow/constellation.compon
 import { FlowchartComponent } from "./ai-agent-run/flow/flowchart.component";
 import { MJQueryFormComponentExtended } from "./Queries/query-form.component";
 import { QueryRunDialogComponent } from "./Queries/query-run-dialog.component";
+import { QueryFieldsGridComponent } from "./Queries/query-fields-grid.component";
+import { QueryParametersGridComponent } from "./Queries/query-parameters-grid.component";
+import { QueryDiagnosticsComponent, QueryRefreshDialogComponent } from "@memberjunction/ng-query-viewer";
 import { FlowAgentFormSectionComponent } from "./AIAgents/FlowAgentType/flow-agent-form-section.component";
 import { FlowEditorModule } from "@memberjunction/ng-flow-editor";
 import { TaskGraphEditorModule } from "@memberjunction/ng-task-graph-editor";
@@ -97,10 +101,14 @@ import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/
 // self-hides unless that entity has an active MJ: ML Model Scoring Binding.
 // Imported here so the @RegisterClassEx decorator runs at module load.
 import { ModelPredictionPanel } from "../panels/model-predictions/model-prediction.panel";
+import { FeatureValuesPanel } from "../panels/feature-values/feature-values.panel";
 // AI Skills sharing/portability panel (Pattern 1 — BaseFormPanel slot): Share
 // dialog + SKILL.md export/import actions, mounted on the generated MJ: AI
 // Skills form. Imported so the @RegisterClassEx decorator runs at module load.
 import { AISkillSharingPanel } from "../panels/ai-skill-sharing/ai-skill-sharing-panel.component";
+// Revoke / Reactivate toolbar actions for MJ: Diagnostic Sender Registrations. The loader call
+// below the imports keeps the file in the bundle so its @RegisterFormToolbarAction decorators run.
+import { LoadDiagnosticSenderRegistrationToolbarActions } from "./DiagnosticSenderRegistrations/sender-registration-toolbar-actions";
 import { EntityFormChromeEditorComponent } from "../panels/form-chrome/entity-form-chrome-editor.component";
 import { EntityRelationshipFormRolePanel } from "../panels/form-chrome/entity-relationship-form-role.panel";
 import { EntityCloneConfigEditorComponent } from "../panels/record-clone/entity-clone-config-editor.component";
@@ -114,6 +122,11 @@ import { MJRubricEvaluationFormComponentExtended, RubricEvaluationComparePanel, 
 import { MJRubricScaleFormComponentExtended, RubricScaleLevelsPanel } from "./Rubrics/scale-form.component";
 import { MJAIAgentRubricFormComponentExtended, MJRubricBandFormComponentExtended, MJRubricCategoryFormComponentExtended, MJRubricCriterionFormComponentExtended, MJRubricEvaluationScoreFormComponentExtended, MJRubricScaleLevelFormComponentExtended, MJRubricVersionFormComponentExtended, RubricVersionSummaryPanel } from "./Rubrics/record-forms.component";
 import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
+import { BrandKitsModule } from "@memberjunction/ng-brand-kits";
+import { BrandKitAssetsPanelComponent } from "../panels/brand-kits/brand-kit-assets.panel";
+import { BrandKitGenerationPolicyPanelComponent } from "../panels/brand-kits/brand-kit-generation-policy.panel";
+
+LoadDiagnosticSenderRegistrationToolbarActions();
 
 @NgModule({
     declarations: [
@@ -136,6 +149,7 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         EntitySelectorDialogComponent,
         MJAIPromptRunFormComponentExtended,
         ChatMessageViewerComponent,
+        PromptRunDataCaptureNoteComponent,
         MJActionFormComponentExtended,
         MJActionExecutionLogFormComponentExtended,
         MJAIAgentRunFormComponentExtended,
@@ -174,6 +188,7 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         WebsiteCrawlerSettingsPanel,
         // Entity-agnostic ('*') Model Predictions panel — mounts on every form, self-hides when N/A.
         ModelPredictionPanel,
+        FeatureValuesPanel,
         AISkillSharingPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,
@@ -189,9 +204,12 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         EntityCloneConfigEditorComponent,
         MJFileFormComponentExtended,
         MLModelFormComponentExtended,
+        BrandKitAssetsPanelComponent,
+        BrandKitGenerationPolicyPanelComponent,
     ],
     imports: [
     ArtifactsModule,
+        BrandKitsModule,
         CommonModule,
         RubricsModule,
         RubricAuthorPanel,
@@ -210,6 +228,8 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         MJEmptyStateComponent,
         MJAlertComponent,
         MJTabNavComponent,
+        MJSectionPickerComponent,
+        MJAccordionSectionsComponent,
         MJButtonDirective,
         MJAccordionModule,
         MJDropdownComponent,
@@ -228,6 +248,10 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         ClonePlanTreeComponent,
         MJTabStripModule,
         CodeEditorModule,
+        QueryFieldsGridComponent,
+        QueryParametersGridComponent,
+        QueryDiagnosticsComponent,
+        QueryRefreshDialogComponent,
         DeepDiffModule,
         AITestHarnessModule,
         ActionGalleryModule,
@@ -263,6 +287,7 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         MJAIAgentFormComponentExtended,
         MJAIPromptRunFormComponentExtended,
         ChatMessageViewerComponent,
+        PromptRunDataCaptureNoteComponent,
         MJActionFormComponentExtended,
         MJActionExecutionLogFormComponentExtended,
         MJAIAgentRunFormComponentExtended,
@@ -282,6 +307,7 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         TagPipelineConfigurationPanel,
         WebsiteCrawlerSettingsPanel,
         ModelPredictionPanel,
+        FeatureValuesPanel,
         AISkillSharingPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,
@@ -294,7 +320,9 @@ import { PSModelDetailComponent } from "./MLModels/ps-model-detail.component";
         ActionsModule,
         RecordProcessFormComponentExtended,
         MLModelFormComponentExtended,
-        PSModelDetailComponent
+        PSModelDetailComponent,
+        BrandKitAssetsPanelComponent,
+        BrandKitGenerationPolicyPanelComponent,
     ],
     providers: [
         NewAgentDialogService,

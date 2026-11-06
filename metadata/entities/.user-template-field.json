@@ -20,6 +20,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Users&Name=IsTemplate"
+          },
+          "sync": {
+            "lastModified": "2026-10-13T19:00:09.204Z",
+            "checksum": "847da4115ffbffe0d73daa5cc7de796908cbd2255cd15b03eed75b10449a8438"
           }
         }
       ]

@@ -445,6 +445,12 @@ export function ComparisonCohortFilter(rubricId: string, major: number, subjectE
     return `RubricID='${quote(rubricId)}' AND RubricMajorVersion=${Number(major)} AND SubjectEntityID='${quote(subjectEntityId)}' AND Status='Submitted'`;
 }
 
+/** The criterion scores of the given evaluations, by ID; empty when there is no evaluation to read. */
+export function ComparisonScoresFilter(evaluationIds: readonly string[]): string {
+    const ids = evaluationIds.filter(id => id.length > 0).map(id => `'${EscapeSQLString(id)}'`);
+    return ids.length === 0 ? '' : `IsComputed=0 AND EvaluationID IN (${ids.join(',')})`;
+}
+
 /** One column per evaluation. Scores join on the evaluation id. */
 export function MatrixColumnsFromRows(evaluations: Record<string, unknown>[], scores: Record<string, unknown>[]): MatrixColumn[] {
     return evaluations.map(row => {

@@ -29,8 +29,8 @@ interface MLLeaderboardEntry {
   // ── Canonical (Core ModelingPlanSpec.Leaderboard entry) ──
   /** The iteration this entry scores (`MJ: Experiment Session Iterations` id). */
   IterationID?: string;
-  /** The normalized leaderboard metric value (the Experiment's TargetMetric). */
-  Metric?: number;
+  /** The normalized leaderboard metric value (the Experiment's TargetMetric); null when the candidate was not measured. */
+  Metric?: number | null;
   /** The trained ML Model record ID for drill-through. */
   ModelID?: string;
 
@@ -42,10 +42,10 @@ interface MLLeaderboardEntry {
   algorithmName?: string;
   /** Feature set label, e.g. "engagement", "full", "interpretable" */
   featureSet?: string;
-  /** Primary normalized leaderboard score (the Experiment's TargetMetric) */
-  score?: number;
-  /** Optional secondary metric (e.g. cross-validation score) */
-  cvScore?: number;
+  /** Primary normalized leaderboard score (the Experiment's TargetMetric); null when not measured */
+  score?: number | null;
+  /** True only for the selected candidate, and only when it was measured. */
+  isWinner?: boolean;
   /** The trained ML Model record ID for drill-through (lowercase fallback) */
   modelId?: string;
   /** Named metric label for the primary score column header */
@@ -148,7 +148,6 @@ interface NormalizedLeaderboardRow {
   algorithm: string;
   featureSet: string;
   score: number | null;
-  cvScore: number | null;
   modelId: string | null;
   isWinner: boolean;
 }
@@ -268,7 +267,7 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
 
   /** The winning row (rank 1) if any. */
   public get WinningRow(): NormalizedLeaderboardRow | null {
-    return this.LeaderboardRows.find(r => r.isWinner) ?? this.LeaderboardRows[0] ?? null;
+    return this.LeaderboardRows.find(r => r.isWinner) ?? this.LeaderboardRows[0] ?? null;  // no winner: the top row, whose score may be null
   }
 
   /** Headline best score (the winning row's primary score), formatted. */
@@ -380,15 +379,16 @@ export class MLExperimentResultsViewerComponent extends BaseArtifactViewerPlugin
       featureSet: e.featureSet ?? '',
       // Canonical: `Metric`; fallback: lowercase `score`.
       score: this.firstDefined(e.Metric ?? e.score),
-      cvScore: this.firstDefined(e.cvScore),
       // Canonical: `ModelID`; fallback: lowercase `modelId`.
       modelId: e.ModelID ?? e.modelId ?? null,
-      isWinner: false
+      isWinner: e.isWinner === true
     }));
 
     // Sort by explicit rank ascending (rank 1 is best).
     rows.sort((a, b) => a.rank - b.rank);
-    if (rows.length > 0) {
+    // Entries that do not say which one won: rank 1 wins, but only when it has a measured score.
+    const winnerStated = entries.some(e => e.isWinner !== undefined);
+    if (!winnerStated && rows.length > 0 && rows[0].score !== null) {
       rows[0].isWinner = true;
     }
     return rows;

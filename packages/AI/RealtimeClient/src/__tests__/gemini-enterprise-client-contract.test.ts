@@ -342,6 +342,15 @@ describe('GeminiEnterpriseRealtimeClient through the relay (web SDK, fake WebSoc
             ]);
         });
 
+        it('fails the connect when the relay closes the socket before Google confirms the setup, instead of hanging', async () => {
+            const connecting = new EnterpriseHarness().Connect(enterprisePact(), new FakeMediaStream([new FakeTrack()]));
+            const socket = await nextSocket(1);
+            socket.Open();
+            await vi.waitFor(() => expect(socket.Sent.length).toBeGreaterThan(0));
+            socket.onclose?.(new CloseEvent('close', { code: 1008, reason: 'model not found', wasClean: false }));
+            await expect(connecting).rejects.toThrow('closed during setup (code 1008: model not found)');
+        });
+
         it('passes what the relay sends back to the session (Google\'s frames, unchanged)', async () => {
             const { Client, Socket } = await connect(enterprisePact());
             const transcripts: RealtimeClientTranscript[] = [];

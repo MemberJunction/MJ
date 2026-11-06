@@ -17,6 +17,7 @@ import {
   PredictiveStudioPromoteModelOperation,
   PredictiveStudioModelTargetStatus,
 } from '@memberjunction/core-entities';
+import { ImportanceDisplay } from '@memberjunction/predictive-studio-core';
 
 import {
   PSFeatureBar,
@@ -26,6 +27,7 @@ import {
   HumanizeFeatureName,
   MaxFeatureImportance,
   MetricsToDisplay,
+  ModelImportanceView,
   OverfitGap,
   ParseFeatureImportance,
   ParseMetrics,
@@ -303,12 +305,28 @@ export class PSModelDetailComponent {
 
   // ── Feature Importance & Leakage Gate ──
 
+  /** Cached parsed and displayed importance bars for the last (Lineage JSON, importance JSON) pair. */
+  private importanceCache: { key: string; allBars: PSFeatureBar[]; displayedBars: PSFeatureBar[] } | null = null;
+
+  private get cachedImportance(): { allBars: PSFeatureBar[]; displayedBars: PSFeatureBar[] } {
+    if (!this.Model) return { allBars: [], displayedBars: [] };
+    const key = `${this.Model.Lineage}\u0000${this.Model.FeatureImportance}`;
+    if (this.importanceCache?.key !== key) {
+      const allBars = ParseFeatureImportance(this.Model.FeatureImportance, 6).map((b) => ({
+        ...b,
+        name: HumanizeFeatureName(b.name),
+      }));
+      const displayedBars = ModelImportanceView.DisplayedFeatureImportance(this.Model.Lineage, this.Model.FeatureImportance, 6).map((b) => ({
+        ...b,
+        name: HumanizeFeatureName(b.name),
+      }));
+      this.importanceCache = { key, allBars, displayedBars };
+    }
+    return this.importanceCache;
+  }
+
   public get Importance(): PSFeatureBar[] {
-    if (!this.Model) return [];
-    return ParseFeatureImportance(this.Model.FeatureImportance, 6).map((b) => ({
-      ...b,
-      name: HumanizeFeatureName(b.name),
-    }));
+    return this.cachedImportance.allBars;
   }
 
   /** @deprecated Use {@link Importance}. */
@@ -316,6 +334,25 @@ export class PSModelDetailComponent {
     return this.Importance;
   }
 
+  /**
+   * The importance bars shown in the Feature Importance card (empty for split / impurity importance). Cached on the
+   * Lineage JSON (which holds the stored importance kind) and the importance JSON, so the parse runs once per model and
+   * again whenever either value changes
+   * (coding standards §7: getters Angular bindings hit).
+   */
+  public get DisplayedImportance(): PSFeatureBar[] {
+    return this.cachedImportance.displayedBars;
+  }
+
+  /** True when the model has importance data that is hidden because of its kind. */
+  public get ImportanceHidden(): boolean {
+    return this.Importance.length > 0 && this.DisplayedImportance.length === 0;
+  }
+
+  /** The note shown in place of hidden importance. */
+  public readonly ImportanceHiddenNote = ImportanceDisplay.HiddenNote;
+
+  /** The Feature Importance card's caption. The template hides it when {@link ImportanceHidden}, along with the bars. */
   public get ImportanceCaption(): string {
     const n = this.Importance.length;
     return n === 0 ? 'no data' : `normalized · top ${n}`;

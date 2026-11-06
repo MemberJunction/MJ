@@ -22,6 +22,8 @@ SELECT
             'ID', ar."ID",
             'AgentID', ar."AgentID",
             'Agent', ar."Agent",
+            'ParentRunID', ar."ParentRunID",
+            'ContinuationDepth', ar."ContinuationDepth",
             'Status', ar."Status",
             '__mj_CreatedAt', ar."__mj_CreatedAt",
             '__mj_UpdatedAt', ar."__mj_UpdatedAt",
@@ -29,7 +31,10 @@ SELECT
             'TotalCompletionTokensUsed', ar."TotalCompletionTokensUsed",
             'TotalCost', ar."TotalCost",
             'ConversationDetailID', ar."ConversationDetailID"
-        ))::text
+        ) ORDER BY
+            CASE WHEN ar."ParentRunID" IS NULL THEN 0 ELSE 1 END ASC,
+            COALESCE(ar."ContinuationDepth", 0) ASC,
+            ar."__mj_CreatedAt" DESC)::text
         FROM __mj."vwAIAgentRuns" ar
         WHERE ar."ConversationDetailID" = cd."ID"
     ) AS "AgentRunsJSON",

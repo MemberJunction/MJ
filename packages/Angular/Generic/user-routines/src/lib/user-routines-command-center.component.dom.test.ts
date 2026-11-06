@@ -12,7 +12,7 @@ import { UserRoutinesCommandCenterComponent } from './user-routines-command-cent
  */
 
 @Component({ standalone: true, selector: 'mj-my-routines-list', template: '<div class="stub-list"></div>' })
-class ListStub { @Input() Provider: unknown; @Input() SearchText = ''; @Input() StatusFilter: unknown; }
+class ListStub { @Input() Provider: unknown; @Input() SearchText = ''; @Input() StatusFilter: unknown; @Input() ShowAgentWakes = false; }
 @Component({ standalone: true, selector: 'mj-new-routine', template: '<div class="stub-new"></div>' })
 class NewStub { @Input() Provider: unknown; @Input() RoutineID: string | null = null; }
 @Component({ standalone: true, selector: 'mj-user-routine-history', template: '<div class="stub-history"></div>' })
@@ -83,5 +83,16 @@ describe('UserRoutinesCommandCenterComponent (DOM)', () => {
 
   it('hides the header entirely when ShowHeader is false', () => {
     expect(query(render({ ShowHeader: false }), '.urcc-header')).toBeNull();
+  });
+
+  it('renders and toggles the Agent Wakes button when AgentWakeCount > 0', () => {
+    const f = render({}, (c) => { c.AgentWakeCount = 2; });
+    const btn = query(f, 'button[title*="agent wakes"]') as HTMLElement;
+    expect(btn).not.toBeNull();
+    expect(btn.textContent).toContain('Agent Wakes (2)');
+    expect(f.componentInstance.ShowAgentWakes).toBe(false);
+    btn.click();
+    f.detectChanges(false);
+    expect(f.componentInstance.ShowAgentWakes).toBe(true);
   });
 });

@@ -136,11 +136,14 @@ export class ConfigurePhase {
 
     if (!overwrite && await this.fileSystem.FileExists(envPath)) {
       const existingRootEnv = await this.fileSystem.ReadText(envPath);
-      const patchedRootEnv = this.ensureEnvVar(
+      let patchedRootEnv = this.ensureEnvVar(
         existingRootEnv,
         'MJ_BASE_ENCRYPTION_KEY',
         config.BaseEncryptionKey ?? ''
       );
+      if (config.AuthProvider === 'local') {
+        patchedRootEnv = this.ensureEnvVar(patchedRootEnv, 'MJ_DEV_AUTH_ENABLED', 'true');
+      }
 
       if (patchedRootEnv !== existingRootEnv) {
         await this.fileSystem.WriteText(envPath, patchedRootEnv);
@@ -166,6 +169,9 @@ export class ConfigurePhase {
           'MJ_BASE_ENCRYPTION_KEY',
           config.BaseEncryptionKey ?? ''
         );
+        if (config.AuthProvider === 'local') {
+          patchedMjapiEnv = this.ensureEnvVar(patchedMjapiEnv, 'MJ_DEV_AUTH_ENABLED', 'true');
+        }
 
         if (patchedMjapiEnv !== existingMjapiEnv) {
           await this.fileSystem.WriteText(mjapiEnvPath, patchedMjapiEnv);
@@ -388,6 +394,7 @@ export class ConfigurePhase {
           'Authentication provider:',
           [
             { Label: 'None (skip auth for now)', Value: 'none' },
+            { Label: 'Local Dev (mock JWT — localhost only, never for production)', Value: 'local' },
             { Label: 'Microsoft Entra (MSAL)', Value: 'entra' },
             { Label: 'Auth0', Value: 'auth0' },
           ],
@@ -562,14 +569,14 @@ MJ_BASE_ENCRYPTION_KEY='${config.BaseEncryptionKey ?? ''}'
 AI_VENDOR_API_KEY__OpenAILLM='${config.OpenAIKey ?? ''}'
 AI_VENDOR_API_KEY__MistralLLM='${config.MistralKey ?? ''}'
 AI_VENDOR_API_KEY__AnthropicLLM='${config.AnthropicKey ?? ''}'
-
+${config.GeminiKey ? `AI_VENDOR_API_KEY__GeminiLLM='${config.GeminiKey}'\n` : ''}
 GRAPHQL_PORT=${config.APIPort}
 
 UPDATE_USER_CACHE_WHEN_NOT_FOUND=1
 UPDATE_USER_CACHE_WHEN_NOT_FOUND_DELAY=5000
 
 # AUTHENTICATION SECTION
-WEB_CLIENT_ID=${clientId}
+${config.AuthProvider === 'local' ? 'MJ_DEV_AUTH_ENABLED=true\n' : ''}WEB_CLIENT_ID=${clientId}
 TENANT_ID=${tenantId}
 
 # Auth0 Section
@@ -604,6 +611,7 @@ ASK_SKIP_ORGANIZATION_ID=1
     FirstName: '${config.CreateNewUser.FirstName}',
     LastName: '${config.CreateNewUser.LastName}',
     Email: '${config.CreateNewUser.Email}',
+    Roles: ['Developer', 'Integration', 'UI'],
   },
 `
       : '';
@@ -654,6 +662,7 @@ ${versionSection}${newUserSection}  output: [],
     FirstName: '${newUser.FirstName}',
     LastName: '${newUser.LastName}',
     Email: '${newUser.Email}',
+    Roles: ['Developer', 'Integration', 'UI'],
   }`;
 
     // Try to replace existing newUserSetup block
@@ -853,6 +862,7 @@ ${versionSection}${newUserSection}  output: [],
     'CODEGEN_DB_USERNAME', 'CODEGEN_DB_PASSWORD',
     'DB_TRUST_SERVER_CERTIFICATE',
     'MJ_CORE_SCHEMA',
+    'MJ_DEV_AUTH_ENABLED',
     // PostgreSQL-preferred env var names — codegen-lib's `DEFAULT_CODEGEN_CONFIG`
     // accepts these when `dbPlatform === 'postgresql'`, so a PG install whose
     // `.env` uses the PG_* names must have those keys synced root → MJAPI too.
@@ -1116,7 +1126,10 @@ ${versionSection}${newUserSection}  output: [],
 
     // Infer AuthProvider from env values if it was defaulted to 'none'
     if (config.AuthProvider === 'none') {
-      if (tenantId && clientId) {
+      const devAuthRaw = (merged['MJ_DEV_AUTH_ENABLED'] || '').trim().toLowerCase();
+      if (devAuthRaw === 'true' || devAuthRaw === '1') {
+        config.AuthProvider = 'local';
+      } else if (tenantId && clientId) {
         config.AuthProvider = 'entra';
       } else if (auth0Domain) {
         config.AuthProvider = 'auth0';
@@ -1196,6 +1209,7 @@ ${versionSection}${newUserSection}  output: [],
       GRAPHQL_URI:    /^https?:\/\/localhost:4000\/?$/,
       GRAPHQL_WS_URI: /^wss?:\/\/localhost:4000\/?$/,
       REDIRECT_URI:   /^https?:\/\/localhost:4200\/?$/,
+      AUTH_TYPE:      /^msal$/i,
     };
 
     for (const [field, value] of Object.entries(patches)) {
@@ -1355,10 +1369,11 @@ ${versionSection}${newUserSection}  output: [],
    * validation error because `AUTH_TYPE='msal'` requires `CLIENT_ID` and
    * `TENANT_ID`. The caller should emit a warning when auth is unconfigured.
    */
-  private mapAuthType(provider: InstallConfig['AuthProvider']): 'msal' | 'auth0' {
+  private mapAuthType(provider: InstallConfig['AuthProvider']): 'msal' | 'auth0' | 'local' {
     switch (provider) {
       case 'entra': return 'msal';
       case 'auth0': return 'auth0';
+      case 'local': return 'local';
       case 'none': return 'msal';
       default: return 'msal';
     }

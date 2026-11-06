@@ -292,6 +292,7 @@ function makeSyncEngine(): SyncEngine {
         setMetadataEngine: vi.fn(),
         getProvider: () => host,
         calculateChecksum: () => 'checksum',
+        CalculateChecksumWithFileContent: async () => 'checksum',
         WarningSink: undefined,
     };
     return stub as unknown as SyncEngine;

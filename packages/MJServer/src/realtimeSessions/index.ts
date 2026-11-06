@@ -14,3 +14,5 @@ export * from './sessionConfigStamps.js';
 export * from './SessionVerificationPortsBase.js';
 export * from './RealtimeSessionVerificationService.js';
 export * from './RealtimeVerifyRouter.js';
+export * from './ownedRealtimeSession.js';
+export * from './RecordingAssemblyScheduler.js';

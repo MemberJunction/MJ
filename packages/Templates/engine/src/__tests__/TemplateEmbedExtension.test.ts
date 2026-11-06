@@ -37,8 +37,9 @@ vi.mock('@memberjunction/core-entities', () => ({
 }));
 
 // Mock the TemplateEngineServer
-const { mockRenderTemplateSimple, mockFindTemplate } = vi.hoisted(() => ({
+const { mockRenderTemplateSimple, mockRenderTemplate, mockFindTemplate } = vi.hoisted(() => ({
     mockRenderTemplateSimple: vi.fn(),
+    mockRenderTemplate: vi.fn(),
     mockFindTemplate: vi.fn(),
 }));
 vi.mock('../TemplateEngine', () => ({
@@ -46,6 +47,7 @@ vi.mock('../TemplateEngine', () => ({
         Instance: {
             FindTemplate: mockFindTemplate,
             RenderTemplateSimple: mockRenderTemplateSimple,
+            RenderTemplate: mockRenderTemplate,
         },
     },
 }));
@@ -172,6 +174,35 @@ describe('TemplateEmbedExtension', () => {
             await new Promise(resolve => setTimeout(resolve, 50));
 
             expect(callback).toHaveBeenCalledWith(null, '<h1>Header</h1>');
+        });
+
+        it('renders the embed raw when the outer render does not escape', async () => {
+            const content = { Type: 'Text', Priority: 1, TemplateText: '{{ title }}' };
+            const targetTemplate = { Name: 'TitleTemplate', Content: [content], GetContentByType: vi.fn().mockReturnValue([content]), GetHighestPriorityContent: vi.fn().mockReturnValue(content) };
+            mockFindTemplate.mockReturnValue(targetTemplate);
+            mockRenderTemplate.mockResolvedValue({ Success: true, Output: 'Affineur & Owner' });
+            const callback = vi.fn();
+
+            extension.run({ ctx: { title: 'Affineur & Owner' }, env: { opts: { autoescape: false } } }, 'TitleTemplate', callback);
+            await new Promise(resolve => setTimeout(resolve, 50));
+
+            expect(mockRenderTemplate).toHaveBeenCalledWith(targetTemplate, content, expect.objectContaining({ title: 'Affineur & Owner' }), true, true, { autoescape: false });
+            expect(mockRenderTemplateSimple).not.toHaveBeenCalled();
+            expect(callback).toHaveBeenCalledWith(null, 'Affineur & Owner');
+        });
+
+        it('keeps the escaping render path when the outer render escapes', async () => {
+            const content = { Type: 'Text', Priority: 1, TemplateText: '{{ title }}' };
+            const targetTemplate = { Name: 'TitleTemplate', Content: [content], GetContentByType: vi.fn().mockReturnValue([content]), GetHighestPriorityContent: vi.fn().mockReturnValue(content) };
+            mockFindTemplate.mockReturnValue(targetTemplate);
+            mockRenderTemplateSimple.mockResolvedValue({ Success: true, Output: 'Affineur &amp; Owner' });
+            const callback = vi.fn();
+
+            extension.run({ ctx: { title: 'Affineur & Owner' }, env: { opts: { autoescape: true } } }, 'TitleTemplate', callback);
+            await new Promise(resolve => setTimeout(resolve, 50));
+
+            expect(mockRenderTemplateSimple).toHaveBeenCalledWith('{{ title }}', expect.objectContaining({ title: 'Affineur & Owner' }));
+            expect(mockRenderTemplate).not.toHaveBeenCalled();
         });
 
         it('should initialize render context if not present', async () => {

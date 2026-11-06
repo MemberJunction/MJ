@@ -43,7 +43,7 @@ const a2aServerInfoSchema = z.object({
   agentName: z.string().optional().default("MemberJunction"),
   agentDescription: z.string().optional().default("MemberJunction A2A Agent"),
   streamingEnabled: z.boolean().optional().default(true),
-  userEmail: z.string().optional().describe("Email address of the user to use for entity operations"),
+  userEmail: z.string().optional().describe("Email address of the service user for work done without a caller, such as building the agent card. Tasks run as their authenticated caller, not as this user."),
 });
 
 const configInfoSchema = z.object({

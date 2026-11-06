@@ -345,6 +345,18 @@ describe('GeminiRealtimeClient', () => {
             expect(client.IsBusy).toBe(true);
         });
 
+        it('RequestSpokenTurn triggers the same realtime-text turn but keeps its reply a NORMAL turn (MJ#4591)', () => {
+            const { transcripts } = collect(client);
+            client.RequestSpokenTurn('Greet the participant and ask the first question.');
+            expect(client.Fake.RealtimeInputs).toEqual([{ text: 'Greet the participant and ask the first question.' }]);
+            expect(client.IsBusy).toBe(true);
+            client.Emit({ serverContent: { outputTranscription: { text: 'Hello, I am Nadia.', finished: true } } } as LiveServerMessage);
+            client.Emit({ serverContent: { turnComplete: true } } as LiveServerMessage);
+            // The delta and the final both carry the kind; neither is narration.
+            expect(transcripts.map((t) => t.Kind)).toEqual(['normal', 'normal']);
+            expect(transcripts.at(-1)).toEqual({ Role: 'Assistant', Text: 'Hello, I am Nadia.', IsFinal: true, Kind: 'normal' });
+        });
+
         it("should tag the triggered turn's transcripts as narration, then reset to normal", () => {
             const { transcripts } = collect(client);
             client.RequestSpokenUpdate('progress update');

@@ -290,7 +290,9 @@ interface RunObservation {
 
 /**
  * Runs `agent` through AgentRunner on the scripted replies, with one opening user message and a payload
- * whose `notes` the script shortens. `data` carries any per-run override and the host's agent list.
+ * whose `notes` the script shortens. `data` carries any per-run override and the host's agent list; the
+ * run trusts it (`TrustReservedRunData`), as it would from the trusted server code this harness stands in for,
+ * so a per-run `__agentTypePromptParams` override is read.
  */
 async function runScripted(ctx: IntegrationCheckContext, agent: MJAIAgentEntityExtended, data?: Record<string, unknown>): Promise<RunObservation> {
     const f = requireFixture();
@@ -301,6 +303,7 @@ async function runScripted(ctx: IntegrationCheckContext, agent: MJAIAgentEntityE
         conversationMessages: UserTurn('Work out 6*7 and then 6*8 for the order totals.'),
         payload: { notes: STARTING_NOTES },
         data: { ...(data ?? {}), ALL_AVAILABLE_AGENTS: hostAgents(f) },
+        TrustReservedRunData: true,
         apiKeys: SCRIPTED_API_KEYS,
     });
     return observeRun(ctx, agent, result, before);
@@ -634,6 +637,7 @@ export const AgentDecisionsSwitchChecks: NamedCheck[] = [
                 conversationMessages: UserTurn('Is the order ready to ship?'),
                 payload: { order: { number: 'IT-DS9', status: 'packed and labelled' } },
                 data: { __agentTypePromptParams: { decisionsEnabled: false } },
+                TrustReservedRunData: true, // the per-run override, as trusted server code sends it
                 agentTypeParams: flowParams,
                 apiKeys: SCRIPTED_API_KEYS,
             });

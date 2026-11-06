@@ -15,7 +15,7 @@ import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { MJExplorerAppComponent } from './explorer-app.component';
 import { MJLoginSlotDirective } from './login-slot.directive';
-import { MJLoginPickerComponent } from '@memberjunction/ng-auth-services';
+import { MJLoginPickerComponent, MJLoginRegionComponent } from '@memberjunction/ng-auth-services';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT, MJ_STARTUP_VALIDATION } from '@memberjunction/ng-bootstrap';
 import { ShellModule, StartupValidationService, SystemValidationBannerComponent, ServerConnectivityBannerComponent, TemplateUserBannerComponent } from '@memberjunction/ng-explorer-core';
 import { ConversationsModule } from '@memberjunction/ng-conversations';
@@ -32,6 +32,7 @@ import { MJServiceWorkerModule, UpdateNotificationComponent } from '@memberjunct
     ShellModule,
     MJLoginPickerComponent,  // Standalone — shared multi-IdP picker on the login surface
     MJLoginSlotDirective,  // Standalone — host templates for the login screen's slots
+    MJLoginRegionComponent,  // Standalone — draws a sign-in page published in Login Studio
     SystemValidationBannerComponent,  // Standalone component
     ServerConnectivityBannerComponent,  // Standalone component
     TemplateUserBannerComponent,  // Standalone component

@@ -389,6 +389,13 @@ describe('CloudflareDecision', () => {
       expect(result.errorInfo?.canFailover).toBe(true);
     });
 
+    it('redacts the API token alone from an error body, not just the whole account:token key', async () => {
+      fakeFetch(() => new Response(`upstream rejected bearer ${API_TOKEN}`, { status: 502 }));
+      const result = await new CloudflareDecision(COMPOUND_KEY).Decide(params());
+
+      expect(result.errorMessage).toBe('Cloudflare Workers AI returned HTTP 502: upstream rejected bearer [redacted]');
+    });
+
     it('fails when fetch throws a network error', async () => {
       globalThis.fetch = vi.fn().mockRejectedValue(new Error('Connection reset by peer'));
       const result = await new CloudflareDecision(COMPOUND_KEY).Decide(params());

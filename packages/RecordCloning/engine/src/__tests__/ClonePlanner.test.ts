@@ -125,6 +125,7 @@ describe('ClonePlanner', () => {
             RelatedEntities: [],
             Fields: [...(parentEntity.Fields ?? []), { Name: 'Salary', IsPrimaryKey: false, Type: 'int', IsSPParameter: () => true } as EntityFieldInfo],
             EnableFieldLevelSecurity: true,
+            FieldLevelSecurityApplies: true,
             GetDeniedReadFields: () => new Set(['salary']),
             GetDeniedCreateFields: () => new Set<string>(),
         } as unknown as EntityInfo;

@@ -303,3 +303,21 @@ describe('TestLLM — ChatParams typing sanity', () => {
     expect(call.enableCaching).toBe(true); // defaulted by the REAL BaseLLM.ChatCompletion
   });
 });
+
+describe('TestLLM — hangUntilAborted', () => {
+  it('waits until the request is aborted, calls onStart when the call begins, and resolves as a cancelled result', async () => {
+    const llm = new TestLLM();
+    const controller = new AbortController();
+    let started = false;
+    llm.Script({ kind: 'hangUntilAborted', onStart: () => { started = true; setTimeout(() => controller.abort('stop'), 5); } });
+    const params = MakeChatParams();
+    params.cancellationToken = controller.signal;
+
+    const result = await llm.ChatCompletion(params);
+
+    expect(started).toBe(true);
+    expect(result.success).toBe(false);
+    expect(result.statusText).toBe('cancelled');
+    expect(result.errorInfo).toMatchObject({ errorType: 'Cancelled', canFailover: false });
+  });
+});

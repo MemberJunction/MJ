@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT137 - Content Pipeline Lifecycle",
+    "Description": "Runs the content pipeline framework's record lifecycle end to end against real rows: discover -> extract -> segment -> embed -> re-extract with fewer segments -> delete -> sync -> access. Only the source (a registered in-memory Discover driver), the vector store (a registered RecordingVectorDB reached through a real MJ: Vector Databases row) and the embedding call stand in; the processor, hydrator, committer, child reconciliation, stages and vector router are the shipped code. CP1 discover creates items and clears ForceDiscovery; CP2 extract + segment produce chunks; CP3 embed writes each chunk's vector under its own id in its source's namespace and records the receipt; CP4 an unchanged re-walk is a no-op; CP5 a changed document re-extracts, saves its new checksum, and re-segmenting supersedes every old chunk; CP6 Delete removes the superseded vectors in the namespace they were written to and purges the unreferenced rows; CP7 a metadata-only refresh updates in place and sends no values; CP8 deleting an item removes its vectors through its chunks; CP9 incremental Discover passes Since (with clock-skew overlap); CP10 unchanged content re-extract is a downstream no-op; CP11 Title and driver Columns changes update vectors in place; CP12 framework-owned columns in driver Columns are refused; CP13 nested archive depth limits fail closed; CP14 Sync orphan removal, empty-walk safeguard, ForceDiscovery preservation, and revival; CP15 Access session reaches Discover and Extract and is stripped on cross-origin requests.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Vectors are written, re-written and removed in the namespace their record routes to, re-segmentation leaves nothing searchable behind, and metadata refreshes never overwrite a stored vector."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "content-pipeline"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "7DDCB7AD-A4AA-47A4-A7CE-88521AD6E442"
+  }
+}

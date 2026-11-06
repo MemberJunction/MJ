@@ -15,7 +15,7 @@
  * | `tools` | as given | as given |
  * | realtimeInputConfig, contextWindowCompression, proactivity, avatarConfig | top level, as given | the same |
  * | `sessionResumption` | top level, `handle` only | top level, as given |
- * | input/output transcription | top level, `{}` | top level, as given |
+ * | input/output transcription | top level, `languageCodes` only | top level, as given |
  * | `safetySettings` | top level, `category` and `threshold` | top level, as given |
  * | `explicitVadSignal` | left out | top level |
  *
@@ -303,7 +303,7 @@ function buildSetupFields(config: LiveConnectConfig, endpoint: GeminiLiveEndpoin
     return fields;
 }
 
-/** The Developer API's forms: no explicit VAD signal, a bare resumption handle, empty transcription configs, plain safety settings. */
+/** The Developer API's forms: no explicit VAD signal, a bare resumption handle, transcription language codes only, plain safety settings. */
 function narrowForDeveloper(fields: SetupFields, leftOut: string[]): void {
     if (fields.explicitVadSignal !== undefined) {
         delete fields.explicitVadSignal;
@@ -313,10 +313,10 @@ function narrowForDeveloper(fields: SetupFields, leftOut: string[]): void {
         fields.sessionResumption = keepFields(fields.sessionResumption, ['handle'], 'sessionResumption', leftOut);
     }
     if (fields.inputAudioTranscription) {
-        fields.inputAudioTranscription = keepFields(fields.inputAudioTranscription, [], 'inputAudioTranscription', leftOut);
+        fields.inputAudioTranscription = keepFields(fields.inputAudioTranscription, ['languageCodes'], 'inputAudioTranscription', leftOut);
     }
     if (fields.outputAudioTranscription) {
-        fields.outputAudioTranscription = keepFields(fields.outputAudioTranscription, [], 'outputAudioTranscription', leftOut);
+        fields.outputAudioTranscription = keepFields(fields.outputAudioTranscription, ['languageCodes'], 'outputAudioTranscription', leftOut);
     }
     if (Array.isArray(fields.safetySettings)) {
         fields.safetySettings = fields.safetySettings.map((setting) => keepFields(setting, ['category', 'threshold'], 'safetySettings', leftOut));

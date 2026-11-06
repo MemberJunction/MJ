@@ -95,7 +95,9 @@ def test_classification_train_predict(algorithm: str) -> None:
     assert "auc" in body["metrics"]
     assert body["metrics"]["auc"] >= 0.7, (algorithm, body["metrics"])
     assert body["holdout_metrics"], "expected locked-holdout metrics"
-    assert body["training_row_count"] == 240
+    # 240 rows minus the 0.2 locked holdout (48): the count is the rows the model was fit on.
+    assert body["training_row_count"] == 192
+    assert body["validation_out_of_sample"] is True
     assert body["fitted_preprocessing"]["output_columns"]
 
     # predict via artifact, then via warm-cache model_id — both must agree

@@ -49,6 +49,7 @@
  *   npx tsx packages/MJServer/integration-test-scripts/ps-live-writeback-demo.ts
  */
 import { LoadEnv, LoadClientConfig } from './lib/harness';
+import { PromoteToPublished } from './lib/ps-promote';
 import { Metadata, RunView, UserInfo, BaseEntity, IMetadataProvider, CompositeKey } from '@memberjunction/core';
 import { GraphQLProviderConfigData, setupGraphQLClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import '@memberjunction/core-entities';
@@ -369,6 +370,8 @@ async function main(): Promise<void> {
     console.log(`  status        = ${out.status}`);
     console.log(`  leakageFlagged= ${out.leakageFlagged}`);
     console.log(`  holdoutMetrics= ${out.holdoutMetrics ?? '(none)'}`);
+    // Scoring refuses a Draft model (MODEL_NOT_SCORABLE), so promote it to Published first.
+    console.log(`  promoted      → ${await PromoteToPublished(route, user, out.modelId, TAG)}`);
 
     // ── 4. Score WITH write-back (NOT dryRun) ────────────────────────────────
     // The OutputMapping maps the prediction payload's `class` / `score` onto the two

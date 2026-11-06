@@ -27,6 +27,8 @@ vi.mock('@memberjunction/ai', () => {
     protected _additionalSettings: Record<string, unknown> = {};
     constructor(_apiKey: string) {}
     get SupportsStreaming() { return false; }
+    // Cancellation itself is covered against the real BaseLLM in BettyBotLLM.cancellation.test.ts.
+    protected IsCancellationError(_error: unknown, signal?: AbortSignal | null): boolean { return signal?.aborted === true; }
   }
   class MockChatResult {
     success: boolean;
@@ -281,21 +283,6 @@ describe('BettyBotLLM', () => {
         .nonStreamingChatCompletion(params);
     };
 
-    it('should return a cancelled result without any HTTP call when already aborted', async () => {
-      const controller = new AbortController();
-      controller.abort();
-
-      const result = await callNonStreaming({
-        messages: [{ role: ChatMessageRole.user, content: 'hi' }],
-        model: 'betty',
-        cancellationToken: controller.signal,
-      });
-
-      expect(mockHttpPost).not.toHaveBeenCalled();
-      expect(result.success).toBe(false);
-      expect(result.statusText).toBe('cancelled');
-    });
-
     it('should forward the token to the HTTP layer on both the settings and response calls', async () => {
       const controller = new AbortController();
       mockHttpPost.mockResolvedValueOnce({
@@ -314,25 +301,6 @@ describe('BettyBotLLM', () => {
       expect(mockHttpPost.mock.calls[0][2]).toEqual({ Signal: controller.signal });
       const responseConfig = mockHttpPost.mock.calls[1][2] as { Signal?: AbortSignal };
       expect(responseConfig.Signal).toBe(controller.signal);
-    });
-
-    it('should report a request cancellation as a cancelled result', async () => {
-      const controller = new AbortController();
-      mockHttpPost.mockResolvedValueOnce({
-        Data: { status: 'SUCCESS', errorMessage: '', enabledFeatures: [], token: 'jwt' },
-      });
-      const canceled = new Error('canceled');
-      mockIsCancellation.mockReturnValueOnce(true);
-      mockHttpPost.mockRejectedValueOnce(canceled);
-
-      const result = await callNonStreaming({
-        messages: [{ role: ChatMessageRole.user, content: 'hi' }],
-        model: 'betty',
-        cancellationToken: controller.signal,
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.statusText).toBe('cancelled');
     });
   });
 

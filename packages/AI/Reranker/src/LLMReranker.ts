@@ -198,6 +198,8 @@ export class LLMReranker extends BasePromptBackedReranker {
         promptParams.prompt = prompt;
         promptParams.contextUser = this._contextUser;
         promptParams.attemptJSONRepair = true;
+        // The caller's signal cancels the chat run, which then stops without failing over.
+        promptParams.cancellationToken = params.CancellationToken;
         if (this.ParentPromptRunID) {
             promptParams.parentPromptRunId = this.ParentPromptRunID;
         }

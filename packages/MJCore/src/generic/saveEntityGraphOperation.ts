@@ -47,6 +47,7 @@ import { BaseRemotableOperation } from './baseRemotableOperation';
 import type { RemoteOpServerContext } from './baseRemotableOperation';
 import { BaseEntity } from './baseEntity';
 import { CompositeKey, KeyValuePair } from './compositeKey';
+import { AssertClientInputWritableForUser } from './entityValueFieldSecurity';
 import type { EntityCompanionPayload } from './entityCompanion';
 import type { IMetadataProvider } from './interfaces';
 import { LogError } from './logging';
@@ -124,6 +125,15 @@ export class SaveEntityGraphOperation extends BaseRemotableOperation<SaveEntityG
      * permissions are enforced inside each node's own `Save()`.
      */
     public override readonly RequiredScope = 'entity:update';
+
+    /**
+     * Generic client entity-graph CRUD MUST NOT grant `ServerOperationOnly` write authority —
+     * otherwise a client could bypass `WriteAuthority: 'ServerOperationOnly'` by sending direct
+     * entity mutations through `MJ.SaveEntityGraph`.
+     */
+    public override get GrantsServerWriteAuthority(): boolean {
+        return false;
+    }
 
     /**
      * Validates the shape of the incoming payload.
@@ -216,6 +226,8 @@ export class SaveEntityGraphOperation extends BaseRemotableOperation<SaveEntityG
             root.NewRecord();
         }
 
+        // Client input: a caller with any field denial may send only fields they can read.
+        AssertClientInputWritableForUser(root.EntityInfo, input.Fields, user);
         root.SetMany(input.Fields, true);
         await root.DeserializeCompanions(input.Companions ?? []);
         return root;

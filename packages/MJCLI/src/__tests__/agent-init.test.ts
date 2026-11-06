@@ -121,7 +121,7 @@ describe('AgentInit Command', () => {
     expect(envLines(target, 'ANTHROPIC_API_KEY')).toEqual(['ANTHROPIC_API_KEY=user-key']);
   });
 
-  it('appends MJ_VERSION to an existing .env that predates it', async () => {
+  it('appends MJ_VERSION and COMPOSE_PROJECT_NAME to an existing .env that predates them', async () => {
     const target = path.join(tempDir, 'legacy-env-workspace');
     await AgentInit.run([target, '--skip-docker-check', '--no-start']);
 
@@ -130,7 +130,9 @@ describe('AgentInit Command', () => {
 
     await AgentInit.run([target, '--skip-docker-check', '--no-start', '--force']);
 
-    expect(readFileSync(envPath, 'utf8')).toBe(`DB_PORT=1433\nMJ_VERSION=${cliVersion}\n`);
+    expect(readFileSync(envPath, 'utf8')).toBe(
+      `DB_PORT=1433\nMJ_VERSION=${cliVersion}\nCOMPOSE_PROJECT_NAME=mj-legacy-env-workspace\n`
+    );
   });
 
   it('--app replaces only the active OPEN_APP_INSTALL_URL, not the commented example', async () => {

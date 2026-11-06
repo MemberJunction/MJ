@@ -429,6 +429,16 @@ describe('HuggingFaceRealtimeClient (extended edge coverage)', () => {
             expect(client.Playback.FlushCount).toBeGreaterThan(0);
         });
 
+        it('invokes the OnUserSpeechStart handler on input_audio_buffer.speech_started', async () => {
+            let count = 0;
+            client.OnUserSpeechStart(() => { count++; });
+            await connect(client);
+            client.Emit({ type: 'input_audio_buffer.speech_started' });
+            expect(count).toBe(1);
+            client.Emit({ type: 'input_audio_buffer.speech_started' });
+            expect(count).toBe(2);
+        });
+
         it('SendText implies barge-in: cancels the active response, injects, and re-triggers', async () => {
             await connect(client);
             client.Emit({ type: 'response.created' });

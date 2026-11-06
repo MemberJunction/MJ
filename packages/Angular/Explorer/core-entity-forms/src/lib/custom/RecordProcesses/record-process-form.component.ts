@@ -91,7 +91,9 @@ export function BuildFeatureOutputViewModels(
         for (const out of spec.Outputs) {
             let targetFieldName = '';
             const targetMode = out.Target?.Mode;
-            if (out.Target?.Mode === 'field') {
+            if (!out.Target) {
+                targetFieldName = 'Feature value only';
+            } else if (out.Target.Mode === 'field') {
                 targetFieldName = out.Target.EntityFieldName;
             } else if (out.Target?.Mode === 'child') {
                 targetFieldName = `Child: ${out.Target.EntityName}`;
@@ -152,7 +154,7 @@ export function BuildFeatureOutputViewModels(
                 FeatureKind: out.FeatureKind || (c?.Type === 'numeric' ? 'numeric' : 'categorical'),
                 TargetField: targetFieldName || '—',
                 TargetFieldExists: isFieldMode ? !!field : true,
-                TargetFieldType: isFieldMode ? (field?.TSType || field?.Type || 'unbound') : (targetMode || 'custom'),
+                TargetFieldType: isFieldMode ? (field?.TSType || field?.Type || 'unbound') : (targetMode || (out.Target ? 'custom' : 'feature value')),
                 ConstraintSummary: constraintText,
                 ViolationPolicy: violationPolicy,
                 ReasoningTarget: spec.CaptureReasoning ? 'Enabled' : 'None',

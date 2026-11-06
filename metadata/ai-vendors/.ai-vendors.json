@@ -521,6 +521,10 @@
     },
     "primaryKey": {
       "ID": "21A966E8-AB6D-42E2-BD56-37584838A5A8"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T18:59:58.322Z",
+      "checksum": "f315e456a2f1b32fb129cc5f48f768ae5f566df4d3dee75e3345d018527af218"
     }
   },
   {
@@ -531,6 +535,10 @@
     },
     "primaryKey": {
       "ID": "1DD8AAAA-E1F3-4FA2-993C-A76AE9153FE3"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T18:59:58.335Z",
+      "checksum": "fecc9f81477a5efa82cf9e322caae1a87bf9e990d6ebfce092b36f20f5ffaeb4"
     }
   },
   {
@@ -541,6 +549,24 @@
     },
     "primaryKey": {
       "ID": "BFD5FBBC-FDDD-4BB0-B6CF-3BE0A48F6F93"
+    },
+    "sync": {
+      "lastModified": "2026-10-13T18:59:58.347Z",
+      "checksum": "3c05dbd9af8571d52e7e426790e4bfab4b41a50c4918a2b271db537d4462cd94"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Subquadratic",
+      "Description": "Subquadratic develops SubQ Snap (subq-snap-preview), a multimodal decision model announced on October 12, 2026 and in public preview, and serves it through its SubQ Decisions API at POST https://api.subq.ai/v1/systemone, authenticated with a SubQ API key (created at console.subq.ai) sent as a bearer token. That API is the model's only host. MJ reaches it through the SubQDecision driver.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "C3DEB4CB-7736-4AE1-BDA9-01364E093473"
+    },
+    "sync": {
+      "lastModified": "2026-10-20T23:18:41.644Z",
+      "checksum": "8af16cd50f884295160f292aef0ae90c7c97d714ff061c65ff31aafb52f7481c"
     }
   }
 ]

@@ -17,6 +17,9 @@ import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 // MJ Artifacts for displaying conversation artifacts
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 
+// MJ React host for Interactive Component parts
+import { MJReactModule } from '@memberjunction/ng-react';
+
 // MJ UI Components for the canonical empty-state placeholder, collapsible config-panel sections,
 // and the dialog and buttons of the part dialog
 import {
@@ -34,6 +37,8 @@ import { DashboardViewerComponent } from './dashboard-viewer/dashboard-viewer.co
 import { DashboardPartDialogComponent } from './dialogs/part-dialog/dashboard-part-dialog.component';
 import { AddPanelDialogComponent } from './dialogs/add-panel-dialog/add-panel-dialog.component';
 import { EditPartDialogComponent } from './dialogs/edit-part-dialog/edit-part-dialog.component';
+import { DashboardPropertiesDialogComponent } from './dialogs/properties-dialog/dashboard-properties-dialog.component';
+import { PropertyDefaultEditorComponent } from './dialogs/property-default-editor/property-default-editor.component';
 
 // Confirm Dialog (generic utility)
 import { ConfirmDialogComponent } from './config-dialogs/confirm-dialog.component';
@@ -43,12 +48,14 @@ import { WebURLConfigPanelComponent } from './config-panels/weburl-config-panel.
 import { ViewConfigPanelComponent } from './config-panels/view-config-panel.component';
 import { QueryConfigPanelComponent } from './config-panels/query-config-panel.component';
 import { ArtifactConfigPanelComponent } from './config-panels/artifact-config-panel.component';
+import { ComponentConfigPanelComponent } from './config-panels/component-config-panel.component';
 
 // Runtime Part Components (pluggable renderers for each part type)
 import { WebURLPartComponent } from './parts/weburl-part.component';
 import { ViewPartComponent } from './parts/view-part.component';
 import { QueryPartComponent } from './parts/query-part.component';
 import { ArtifactPartComponent } from './parts/artifact-part.component';
+import { ComponentPartComponent } from './parts/component-part.component';
 
 // Dashboard Browser Component (generic, no routing dependencies)
 import { DashboardBrowserComponent } from './dashboard-browser/dashboard-browser.component';
@@ -86,6 +93,8 @@ import { DashboardCardComponent } from './dashboard-card/dashboard-card.componen
         AddPanelDialogComponent,
         EditPartDialogComponent,
         ConfirmDialogComponent,
+        DashboardPropertiesDialogComponent,
+        PropertyDefaultEditorComponent,
 
         // Config Panels (pluggable form components)
         // These are registered with @RegisterClass and loaded dynamically via ClassFactory
@@ -93,13 +102,15 @@ import { DashboardCardComponent } from './dashboard-card/dashboard-card.componen
         ViewConfigPanelComponent,
         QueryConfigPanelComponent,
         ArtifactConfigPanelComponent,
+        ComponentConfigPanelComponent,
 
         // Runtime Part Components (pluggable renderers)
         // These are registered with @RegisterClass and loaded dynamically via ClassFactory
         WebURLPartComponent,
         ViewPartComponent,
         QueryPartComponent,
-        ArtifactPartComponent
+        ArtifactPartComponent,
+        ComponentPartComponent
     ],
     imports: [
         CommonModule,
@@ -109,6 +120,7 @@ import { DashboardCardComponent } from './dashboard-card/dashboard-card.componen
         EntityViewerModule,
         QueryViewerModule,
         ArtifactsModule,
+        MJReactModule,
         MJEmptyStateComponent,
         MJAccordionModule,
         MJDialogComponent,
@@ -136,18 +148,22 @@ import { DashboardCardComponent } from './dashboard-card/dashboard-card.componen
         AddPanelDialogComponent,
         EditPartDialogComponent,
         ConfirmDialogComponent,
+        DashboardPropertiesDialogComponent,
+        PropertyDefaultEditorComponent,
 
         // Config Panels - exported for potential direct use
         WebURLConfigPanelComponent,
         ViewConfigPanelComponent,
         QueryConfigPanelComponent,
         ArtifactConfigPanelComponent,
+        ComponentConfigPanelComponent,
 
         // Runtime Part Components - exported for potential direct use
         WebURLPartComponent,
         ViewPartComponent,
         QueryPartComponent,
-        ArtifactPartComponent
+        ArtifactPartComponent,
+        ComponentPartComponent
     ]
 })
 export class DashboardViewerModule { }

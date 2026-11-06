@@ -36,6 +36,9 @@ vi.mock('@memberjunction/global', () => ({
 // on chat.types. The helpers are pure functions, so the real ones are what the driver should
 // be tested against — a mocked copy would be the second implementation the shared module exists to prevent.
 import * as actualToolMapping from '../../../../Core/src/generic/openAICompatibleTools';
+// The cancellation classification is likewise pure and shared, so the stand-in BaseLLM below builds
+// its cancelled results from the real module rather than from a hand-copied shape.
+import * as actualCancellation from '../../../../Core/src/generic/cancellation';
 
 vi.mock('@memberjunction/ai', () => {
     class BaseModel {
@@ -58,6 +61,20 @@ vi.mock('@memberjunction/ai', () => {
             }
             return { content, thinking: undefined };
         }
+        /** Mirrors BaseLLM.IsCancellationError: an aborted signal or an abort-named error. */
+        protected IsCancellationError(error: unknown, signal?: AbortSignal | null): boolean {
+            return signal?.aborted === true || actualCancellation.IsAbortError(error);
+        }
+        /** Mirrors BaseLLM.BuildCancelledChatResult, classifying through the real shared module. */
+        protected BuildCancelledChatResult(startTime: Date, options: { error?: unknown; signal?: AbortSignal | null; message?: string } = {}): ChatResult {
+            const result = new ChatResult(false, startTime, new Date());
+            result.data = { choices: [], usage: new ModelUsage(0, 0) };
+            result.statusText = 'cancelled';
+            result.errorMessage = options.message || actualCancellation.DescribeCancellation(options.signal);
+            result.exception = options.error;
+            result.errorInfo = actualCancellation.BuildCancellationErrorInfo({ error: options.error, signal: options.signal, provider: this.constructor.name });
+            return result;
+        }
     }
     class ModelUsage {
         promptTokens: number;
@@ -77,6 +94,7 @@ vi.mock('@memberjunction/ai', () => {
         statusText: string | null = null;
         errorMessage: string | null = null;
         exception: unknown = null;
+        errorInfo: unknown = null;
         modelSpecificResponseDetails: unknown = null;
         cacheInfo: unknown = null;
         constructor(success: boolean, startTime: Date, endTime: Date) {
@@ -115,6 +133,8 @@ vi.mock('@memberjunction/ai', () => {
         buildOpenAICompatibleToolCalls: actualToolMapping.buildOpenAICompatibleToolCalls,
         buildOpenAICompatibleToolResults: actualToolMapping.buildOpenAICompatibleToolResults,
         extractOpenAICompatibleToolCalls: actualToolMapping.extractOpenAICompatibleToolCalls,
+        ReadOpenAICompatibleToolCalls: actualToolMapping.ReadOpenAICompatibleToolCalls,
+        CHAT_FINISH_REASON_MALFORMED_TOOL_CALL: 'malformed_tool_call',
         BaseLLM,
         ModelUsage,
         ChatResult,
@@ -146,7 +166,6 @@ import { ChatMessageRole, ChatParams, ChatResult } from '@memberjunction/ai';
  */
 type OpenAILLMInternals = {
     buildRequestOptions(params: ChatParams): { signal?: AbortSignal };
-    isCancellationError(error: unknown, cancellationToken?: AbortSignal): boolean;
     nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult>;
     createStreamingRequest(params: ChatParams): Promise<unknown>;
     finalizeStreamingResponse(content: string | null, lastChunk: unknown, usage: unknown): ChatResult;
@@ -490,45 +509,47 @@ describe('OpenAILLM', () => {
             expect(mockCreate).toHaveBeenCalledWith(expect.anything(), { signal: controller.signal });
         });
 
-        it('returns a clean, non-failover-able failure when the non-streaming request is aborted', async () => {
+        it('asks for the trailing usage chunk on the streaming path, so streamed calls record tokens and cache reads', async () => {
+            mockCreate.mockResolvedValueOnce({});
+
+            await internals.createStreamingRequest(buildChatParams());
+
+            expect(mockCreate).toHaveBeenCalledWith(
+                expect.objectContaining({ stream: true, stream_options: { include_usage: true } }),
+                expect.anything()
+            );
+        });
+
+        it('returns a Cancelled, non-failover-able result when the non-streaming request is aborted', async () => {
             const controller = new AbortController();
-            mockCreate.mockRejectedValueOnce(new MockAPIUserAbortError());
+            const abortError = new MockAPIUserAbortError();
+            mockCreate.mockRejectedValueOnce(abortError);
             controller.abort();
 
             const result = await internals.nonStreamingChatCompletion(buildChatParams(controller.signal));
 
             expect(result.success).toBe(false);
             expect(result.statusText).toBe('cancelled');
-            expect(result.errorMessage).toBe('Request was aborted.');
+            expect(result.errorMessage).toMatch(/^Request was cancelled/);
+            expect(result.exception).toBe(abortError);
+            expect(result.errorInfo?.errorType).toBe('Cancelled');
             expect(result.errorInfo?.severity).toBe('Fatal');
             expect(result.errorInfo?.canFailover).toBe(false);
             expect(result.errorInfo?.providerErrorCode).toBe('request_cancelled');
         });
 
+        it('treats an SDK abort error as a cancellation even when the token is not aborted', async () => {
+            mockCreate.mockRejectedValueOnce(new MockAPIUserAbortError());
+
+            const result = await internals.nonStreamingChatCompletion(buildChatParams());
+
+            expect(result.statusText).toBe('cancelled');
+            expect(result.errorInfo?.errorType).toBe('Cancelled');
+        });
+
         it('rethrows non-cancellation errors from the non-streaming path', async () => {
             mockCreate.mockRejectedValueOnce(new Error('boom'));
             await expect(internals.nonStreamingChatCompletion(buildChatParams())).rejects.toThrow('boom');
-        });
-
-        it('identifies SDK abort errors and already-aborted tokens as cancellations', () => {
-            const controller = new AbortController();
-            controller.abort();
-            expect(internals.isCancellationError(new MockAPIUserAbortError())).toBe(true);
-            expect(internals.isCancellationError(new Error('nope'), controller.signal)).toBe(true);
-            expect(internals.isCancellationError(new Error('nope'))).toBe(false);
-        });
-
-        it('finalizes an aborted stream as a cancelled result rather than a truncated success', async () => {
-            const controller = new AbortController();
-            mockCreate.mockResolvedValueOnce({});
-
-            await internals.createStreamingRequest(buildChatParams(controller.signal));
-            controller.abort();
-
-            const result = internals.finalizeStreamingResponse('partial content', null, null);
-            expect(result.success).toBe(false);
-            expect(result.statusText).toBe('cancelled');
-            expect(result.errorInfo?.canFailover).toBe(false);
         });
 
         it('finalizes a normal stream as a success', async () => {
@@ -624,6 +645,91 @@ describe('OpenAILLM — native tool calling', () => {
         });
     });
 
+    describe('a model that accepts function tools only with reasoning off', () => {
+        /** The SDK error OpenAI raises for tools with reasoning on such a model (status 400). */
+        const toolsWithReasoningRejection = (model: string): Error & { status: number } =>
+            Object.assign(new Error(
+                `400 Function tools with reasoning_effort are not supported for ${model} in /v1/chat/completions. ` +
+                `To use function tools, use /v1/responses or set reasoning_effort to 'none'.`
+            ), { status: 400 });
+        const ok = {
+            choices: [{ index: 0, finish_reason: 'tool_calls', message: { role: 'assistant', content: null, tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'get_weather', arguments: '{"city":"NYC"}' } }] } }],
+            usage: { prompt_tokens: 10, completion_tokens: 5 },
+            model: 'm'
+        };
+        const sent = (i: number): Record<string, unknown> => mockCreate.mock.calls[i][0];
+        const user = [{ role: ChatMessageRole.user, content: 'weather?' }];
+
+        it("resends a rejected request once with reasoning_effort 'none', keeping the tools, and returns the tool call", async () => {
+            mockCreate.mockReset();
+            mockCreate.mockRejectedValueOnce(toolsWithReasoningRejection('luna-a')).mockResolvedValueOnce(ok);
+
+            const result = await run({ model: 'luna-a', messages: user, tools: [WEATHER_TOOL] }) as unknown as ChatResult;
+
+            expect(mockCreate).toHaveBeenCalledTimes(2);
+            expect(sent(0).reasoning_effort).toBeUndefined();
+            expect(sent(1).reasoning_effort).toBe('none');
+            expect(sent(1).tools).toHaveLength(1);
+            expect(result.success).toBe(true);
+            expect(result.data.choices[0].message.toolCalls?.[0]).toMatchObject({ name: 'get_weather', arguments: { city: 'NYC' } });
+        });
+
+        it("sends 'none' on the model's later requests with tools without another rejection, and nothing extra without tools", async () => {
+            mockCreate.mockReset();
+            mockCreate.mockRejectedValueOnce(toolsWithReasoningRejection('luna-b')).mockResolvedValue(ok);
+            await run({ model: 'luna-b', messages: user, tools: [WEATHER_TOOL] });
+
+            await run({ model: 'luna-b', messages: user, tools: [WEATHER_TOOL] });
+            await run({ model: 'luna-b', messages: user });
+
+            expect(mockCreate).toHaveBeenCalledTimes(4);
+            expect(sent(2).reasoning_effort).toBe('none');
+            expect(sent(3).reasoning_effort).toBeUndefined();
+            expect(sent(3).tools).toBeUndefined();
+        });
+
+        it('drops a requested effort level with a warning, since the model refuses tools at any level', async () => {
+            mockCreate.mockReset();
+            mockCreate.mockRejectedValueOnce(toolsWithReasoningRejection('luna-c')).mockResolvedValueOnce(ok);
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+            await run({ model: 'luna-c', messages: user, tools: [WEATHER_TOOL], effortLevel: 'high' });
+
+            expect(sent(0).reasoning_effort).toBe('high');
+            expect(sent(1).reasoning_effort).toBe('none');
+            expect(warn).toHaveBeenCalledWith(expect.stringContaining("instead of the requested 'high'"));
+            warn.mockRestore();
+        });
+
+        it('leaves a model that accepts tools with reasoning unchanged', async () => {
+            mockCreate.mockReset();
+            mockCreate.mockResolvedValue(ok);
+
+            await run({ model: 'gpt-reasoner', messages: user, tools: [WEATHER_TOOL] });
+            await run({ model: 'gpt-reasoner', messages: user, tools: [WEATHER_TOOL], effortLevel: 'high' });
+
+            expect(mockCreate).toHaveBeenCalledTimes(2);
+            expect(sent(0).reasoning_effort).toBeUndefined();
+            expect(sent(1).reasoning_effort).toBe('high');
+        });
+
+        it('rethrows the rejection without a resend when the request declared no tools', async () => {
+            mockCreate.mockReset();
+            mockCreate.mockRejectedValueOnce(toolsWithReasoningRejection('luna-d'));
+
+            await expect(run({ model: 'luna-d', messages: user })).rejects.toThrow(/Function tools with reasoning_effort/);
+            expect(mockCreate).toHaveBeenCalledTimes(1);
+        });
+
+        it('rethrows any other 400 without a resend', async () => {
+            mockCreate.mockReset();
+            mockCreate.mockRejectedValueOnce(Object.assign(new Error("400 Invalid schema for function 'get_weather'"), { status: 400 }));
+
+            await expect(run({ model: 'luna-e', messages: user, tools: [WEATHER_TOOL] })).rejects.toThrow(/Invalid schema/);
+            expect(mockCreate).toHaveBeenCalledTimes(1);
+        });
+    });
+
     describe('conversation round-tripping (§5.3)', () => {
         it('replays a prior assistant turn with tool_calls, stringifying the arguments', async () => {
             await run({
@@ -707,7 +813,7 @@ describe('OpenAILLM — native tool calling', () => {
             expect(result.data.choices[0].finish_reason).toBe('tool_calls');
         });
 
-        it('surfaces a call with malformed arguments rather than dropping it', async () => {
+        it('reports a call with malformed arguments as a malformed tool call rather than dropping it or running it with {}', async () => {
             stubResponse({
                 message: {
                     role: 'assistant',
@@ -719,9 +825,9 @@ describe('OpenAILLM — native tool calling', () => {
 
             const result = await run({ messages: [{ role: ChatMessageRole.user, content: 'x' }], tools: [WEATHER_TOOL] });
 
-            expect(result.data.choices[0].message.toolCalls).toEqual([
-                { id: 'call_1', name: 'get_weather', arguments: {} }
-            ]);
+            expect(result.data.choices[0].message.toolCalls).toBeUndefined();
+            expect(result.data.choices[0].finish_reason).toBe('malformed_tool_call');
+            expect(result.data.choices[0].finishMessage).toContain('get_weather');
         });
 
         it('leaves toolCalls undefined and finish_reason untouched on an ordinary turn', async () => {

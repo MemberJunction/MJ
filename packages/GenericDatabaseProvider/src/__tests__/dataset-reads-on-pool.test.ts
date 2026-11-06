@@ -84,8 +84,10 @@ describe('dataset reads and the ambient transaction (MJ#4514)', () => {
     });
 
     it('any other dataset keeps joining the ambient transaction', async () => {
-        await provider.GetDatasetByName('AI_Metadata', undefined, user);
-        await provider.GetDatasetStatusByName('AI_Metadata', undefined, user);
+        // No context user: this covers transaction routing, not per-user scope (dataset-caller-scope.test.ts).
+        await provider.GetDatasetByName('AI_Metadata', undefined, undefined);
+        await provider.GetDatasetStatusByName('AI_Metadata', undefined, undefined);
+        expect(provider.batchOptions).toHaveLength(2);
         expect(provider.sqlOptions.every(o => !o?.ignoreAmbientTransaction)).toBe(true);
         expect(provider.batchOptions.every(o => !o?.ignoreAmbientTransaction)).toBe(true);
     });

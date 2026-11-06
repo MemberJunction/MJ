@@ -128,7 +128,7 @@ describe('TailConversationEvents', () => {
 
             const runCall = mockRunView.mock.calls.find((c) => c[0].EntityName === 'MJ: AI Agent Runs');
             expect(runCall?.[0].ResultType).toBe('simple');
-            expect([...(runCall?.[0].Fields ?? [])].sort()).toEqual(['ID', 'Result', 'Status']);
+            expect([...(runCall?.[0].Fields ?? [])].sort()).toEqual(['FinalPayload', 'ID', 'Result', 'Status']);
         });
 
         it('returns real dates when a plain row carries them as strings', async () => {
@@ -261,20 +261,20 @@ describe('TailConversationEvents', () => {
         it('marks a Running run in flight and withholds the payload', async () => {
             scriptRunView({
                 detail: { ID: DETAIL_ID, Status: 'In-Progress' },
-                run: { ID: RUN_ID, Status: 'Running', Result: '{"partial":true}' },
+                run: { ID: RUN_ID, Status: 'Running', FinalPayload: '{"partial":true}' },
                 steps: [step(1)],
             });
             const out = await resolver.TailConversationEvents(DETAIL_ID, ctxFor(USER), 0);
 
             expect(out.IsInFlight).toBe(true);
-            // A partial Result mid-run could be mistaken for the final answer.
+            // FinalPayload is filled during the run. A partial one could be mistaken for the final answer.
             expect(out.FinalPayload).toBeUndefined();
         });
 
         it('releases the payload once the run is terminal, so one call ends the wait', async () => {
             scriptRunView({
                 detail: { ID: DETAIL_ID, Status: 'Complete' },
-                run: { ID: RUN_ID, Status: 'Completed', Result: '{"answer":"done"}' },
+                run: { ID: RUN_ID, Status: 'Completed', FinalPayload: '{"answer":"done"}', Result: null },
                 steps: [step(1)],
             });
             const out = await resolver.TailConversationEvents(DETAIL_ID, ctxFor(USER), 0);
@@ -302,7 +302,7 @@ describe('TailConversationEvents', () => {
             // Reporting it as terminal would tell a client to complete a message mid-workflow.
             scriptRunView({
                 detail: { ID: DETAIL_ID, Status: 'In-Progress' },
-                run: { ID: RUN_ID, Status: 'Paused', Result: '{"started":"workflow"}' },
+                run: { ID: RUN_ID, Status: 'Paused', FinalPayload: '{"started":"workflow"}' },
                 steps: [step(1)],
             });
             const out = await resolver.TailConversationEvents(DETAIL_ID, ctxFor(USER), 0);
@@ -353,16 +353,19 @@ describe('TailConversationEvents', () => {
 });
 
 /**
- * REGRESSION, found in manual testing. `FinalPayload` read only `AIAgentRun.Result`, which is
- * agent-dependent — null on 16 of 40 completed runs in a real database, including every run of the
- * Loop-type agent used to reproduce #4222. A caller waiting on this field to decide a message was
- * finished would wait forever on those agents.
+ * `FinalPayload` comes from `AIAgentRun.FinalPayload`, then `Result` (some older rows have no
+ * `FinalPayload`), then the conversation detail's message.
+ *
+ * REGRESSION, found in manual testing: the run payload is agent-dependent — null on 16 of 40
+ * completed runs in a real database, including every run of the Loop-type agent used to reproduce
+ * #4222. Without the detail-message fallback, a caller waiting on this field to decide a message
+ * was finished would wait forever on those agents.
  */
 describe('TailConversationEvents FinalPayload sourcing', () => {
-    it('falls back to the conversation detail message when the run has no Result', async () => {
+    it('falls back to the conversation detail message when the run has no payload', async () => {
         scriptRunView({
             detail: { ID: DETAIL_ID, Status: 'Complete', Message: 'the answer text' },
-            run: { ID: RUN_ID, Status: 'Completed', Result: null },
+            run: { ID: RUN_ID, Status: 'Completed', FinalPayload: null, Result: null },
             steps: [],
         });
 
@@ -372,10 +375,34 @@ describe('TailConversationEvents FinalPayload sourcing', () => {
         expect(result.FinalPayload).toBe('the answer text');
     });
 
-    it('prefers the run Result when the agent does write one', async () => {
+    it('prefers the run FinalPayload over the detail message', async () => {
         scriptRunView({
             detail: { ID: DETAIL_ID, Status: 'Complete', Message: 'detail message' },
-            run: { ID: RUN_ID, Status: 'Completed', Result: 'run result' },
+            run: { ID: RUN_ID, Status: 'Completed', FinalPayload: 'run payload', Result: null },
+            steps: [],
+        });
+
+        const result = await new ConversationRunEventsResolver().TailConversationEvents(DETAIL_ID, ctxFor(USER), 0);
+
+        expect(result.FinalPayload).toBe('run payload');
+    });
+
+    it('prefers FinalPayload over Result when a row has both', async () => {
+        scriptRunView({
+            detail: { ID: DETAIL_ID, Status: 'Complete', Message: 'detail message' },
+            run: { ID: RUN_ID, Status: 'Completed', FinalPayload: 'run payload', Result: 'run result' },
+            steps: [],
+        });
+
+        const result = await new ConversationRunEventsResolver().TailConversationEvents(DETAIL_ID, ctxFor(USER), 0);
+
+        expect(result.FinalPayload).toBe('run payload');
+    });
+
+    it('falls back to Result on an older row that has no FinalPayload', async () => {
+        scriptRunView({
+            detail: { ID: DETAIL_ID, Status: 'Complete', Message: 'detail message' },
+            run: { ID: RUN_ID, Status: 'Completed', FinalPayload: null, Result: 'run result' },
             steps: [],
         });
 
@@ -384,10 +411,25 @@ describe('TailConversationEvents FinalPayload sourcing', () => {
         expect(result.FinalPayload).toBe('run result');
     });
 
+    it('returns the partial FinalPayload a Cancelled run saved, with RunStatus telling the caller', async () => {
+        // Cancelling saves the run with no Result, but it keeps the FinalPayload saved during the run.
+        scriptRunView({
+            detail: { ID: DETAIL_ID, Status: 'Error', Message: 'detail message' },
+            run: { ID: RUN_ID, Status: 'Cancelled', FinalPayload: '{"partial":true}', Result: null },
+            steps: [],
+        });
+
+        const result = await new ConversationRunEventsResolver().TailConversationEvents(DETAIL_ID, ctxFor(USER), 0);
+
+        expect(result.IsInFlight).toBe(false);
+        expect(result.RunStatus).toBe('Cancelled');
+        expect(result.FinalPayload).toBe('{"partial":true}');
+    });
+
     it('still withholds the payload while the run is in flight', async () => {
         scriptRunView({
             detail: { ID: DETAIL_ID, Status: 'In-Progress', Message: 'partial text' },
-            run: { ID: RUN_ID, Status: 'Running', Result: null },
+            run: { ID: RUN_ID, Status: 'Running', FinalPayload: '{"partial":true}', Result: null },
             steps: [],
         });
 

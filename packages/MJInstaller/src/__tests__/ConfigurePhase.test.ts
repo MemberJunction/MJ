@@ -1228,5 +1228,24 @@ describe('ConfigurePhase', () => {
       const written = (mockFs.WriteText.mock.calls as [string, string][]).find(([p]) => p.includes('MJAPI') && p.endsWith('.env'))?.[1];
       expect(written).toContain("DB_PLATFORM='postgresql'");
     });
+
+    it('writes MJ_DEV_AUTH_ENABLED=true, AUTH_TYPE=local, and Developer/Integration/UI roles for local auth', async () => {
+      const config = sampleConfig();
+      config.AuthProvider = 'local';
+      config.CreateNewUser = {
+        Username: 'admin@memberjunction.org',
+        Email: 'admin@memberjunction.org',
+        FirstName: 'Admin',
+        LastName: 'User',
+      };
+
+      await phase.Run(makeContext({ Config: config, Yes: true }));
+
+      expect(rootEnv()).toContain('MJ_DEV_AUTH_ENABLED=true');
+      const configCjs = findWrittenContent('mj.config.cjs');
+      expect(configCjs).toContain("Roles: ['Developer', 'Integration', 'UI']");
+      const envTs = findWrittenContent('environment.ts');
+      expect(envTs).toContain("AUTH_TYPE: 'local'");
+    });
   });
 });

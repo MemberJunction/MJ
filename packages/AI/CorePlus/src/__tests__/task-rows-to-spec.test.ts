@@ -113,4 +113,40 @@ describe('ProjectTaskRowsToSpec', () => {
     it('handles an empty graph', () => {
         expect(ProjectTaskRowsToSpec('W', [], []).Spec.tasks).toHaveLength(0);
     });
+
+    it('uses row.Agent / row.Action / row.Prompt (with ID fallback) instead of the step title for target names', () => {
+        const { Spec } = ProjectTaskRowsToSpec('Revenue Analysis', [
+            row({
+                ID: 't1',
+                Name: 'Top 5 Products by Order Revenue',
+                StepType: 'Agent',
+                Agent: 'Query Builder',
+                AgentID: '204FF1D6-A6E9-4B54-B3D8-2B7F82B8D3A2',
+                Configuration: JSON.stringify({ layout: { x: 10, y: 20 } }),
+            }),
+            row({
+                ID: 't2',
+                Name: 'Send Summary Notification',
+                StepType: 'Action',
+                Action: 'Send Email',
+                ActionID: 'act-123',
+            }),
+            row({
+                ID: 't3',
+                Name: 'Draft Executive Brief',
+                StepType: 'Prompt',
+                PromptID: 'prm-456',
+            }),
+        ], []);
+
+        expect(Spec.tasks[0].name).toBe('Top 5 Products by Order Revenue');
+        expect(ConfigOf(Spec.tasks[0], 'Agent')?.agentName).toBe('Query Builder');
+        expect(Spec.tasks[0].layout).toEqual({ x: 10, y: 20 });
+
+        expect(Spec.tasks[1].name).toBe('Send Summary Notification');
+        expect(ConfigOf(Spec.tasks[1], 'Action')?.actionName).toBe('Send Email');
+
+        expect(Spec.tasks[2].name).toBe('Draft Executive Brief');
+        expect(ConfigOf(Spec.tasks[2], 'Prompt')?.promptName).toBe('prm-456');
+    });
 });

@@ -58,6 +58,7 @@ function fakeProvider(executeSQL: (sql: string) => Promise<Record<string, unknow
             return { Success: true, Results: [], RowCount: rows[0].TotalRowCount, TotalRowCount: rows[0].TotalRowCount } as unknown as RunViewResult;
         }),
         RunCoalescedCountBatch: proto.RunCoalescedCountBatch,
+        runBatchedView: proto.runBatchedView,
         isConnectionError: (e: unknown) => (e as { code?: string }).code === 'POOL_CLOSED',
     };
     const internalRunViews = (params: RunViewParams[]) => (proto.InternalRunViews as Function).call(self, params) as Promise<RunViewResult[]>;
@@ -156,6 +157,7 @@ class CountBatchTestProvider extends GenericDatabaseProviderTestBase {
     protected CoerceSaveFieldValue(): SaveCoercedValue { throw new Error('Not supported in this test double'); }
     protected RenderSaveCallBinding(): SaveCallBinding { throw new Error('Not supported in this test double'); }
     protected WrapSaveCallForResult(): SaveSQLFragment { throw new Error('Not supported in this test double'); }
+    protected ProjectSaveCallToDatestamps(): SaveSQLFragment { throw new Error('Not supported in this test double'); }
     protected WrapSaveCallWithRecordChange(): SaveSQLFragment { throw new Error('Not supported in this test double'); }
     async BeginTransaction(): Promise<void> {}
     async CommitTransaction(): Promise<void> {}

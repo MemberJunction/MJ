@@ -51,7 +51,7 @@ export class AITextToSpeechRunner extends BaseMediaRunner<AITextToSpeechRunParam
     const outcome = await this.RunMediaOperation(params, {
       Name: 'CreateSpeech',
       Validate: p => (p.text && p.text.trim().length > 0 ? undefined : 'Text to speak is required (params.text)'),
-      Invoke: (driver, apiName) => driver.CreateSpeech({ ...this.DriverParams<TextToSpeechParams>(params), model_id: apiName }),
+      Invoke: (driver, apiName, signal) => driver.CreateSpeech({ ...this.DriverParams<TextToSpeechParams>(params, signal), model_id: apiName }),
       DescribeRequest: p => this.describeRequest(p),
       DescribeOutput: output => this.describeAudio(output, params),
       CountUsage: p => ModelUsage.ForMedia('Characters', CountCharacters(p.text)),

@@ -14,7 +14,7 @@ vi.mock('groq-sdk', async (importOriginal) => {
     return { ...actual, default: StubGroq, toFile: async (_bytes: Buffer, name: string) => ({ name }) };
 });
 
-import { APIError } from 'groq-sdk';
+import { APIError, APIUserAbortError } from 'groq-sdk';
 import { GroqAudioGenerator } from '../models/groqAudio';
 
 /** The error the SDK throws for an HTTP error response, built the way the SDK builds it. */
@@ -51,5 +51,40 @@ describe('GroqAudioGenerator error classification', () => {
         const result = await transcribeOnce();
 
         expect(result.errorInfo).toMatchObject({ httpStatusCode: status, errorType, canFailover: true });
+    });
+});
+
+describe('GroqAudioGenerator cancellation', () => {
+    it('passes the CancellationToken to the transcription request, and reports its abort as Cancelled', async () => {
+        const controller = new AbortController();
+        transcribe.mockImplementationOnce((_body: object, options?: { signal?: AbortSignal }) => new Promise<never>((_resolve, reject) => {
+            if (options?.signal?.aborted) {
+                reject(new APIUserAbortError());
+                return;
+            }
+            options?.signal?.addEventListener('abort', () => reject(new APIUserAbortError()), { once: true });
+        }));
+
+        const pending = new GroqAudioGenerator('gsk-test-key').SpeechToText({
+            model: 'whisper-large-v3', audioData: Buffer.from('audio'), audioFile: '', CancellationToken: controller.signal,
+        });
+        controller.abort();
+        const result = await pending;
+
+        expect(transcribe.mock.calls[0][1]).toEqual({ signal: controller.signal });
+        expect(result.success).toBe(false);
+        expect(result.errorInfo).toMatchObject({ errorType: 'Cancelled', severity: 'Fatal', canFailover: false });
+    });
+
+    it('sends nothing when the CancellationToken has already aborted', async () => {
+        const controller = new AbortController();
+        controller.abort();
+
+        const result = await new GroqAudioGenerator('gsk-test-key').SpeechToText({
+            model: 'whisper-large-v3', audioData: Buffer.from('audio'), audioFile: '', CancellationToken: controller.signal,
+        });
+
+        expect(transcribe).not.toHaveBeenCalled();
+        expect(result.errorInfo).toMatchObject({ errorType: 'Cancelled', canFailover: false });
     });
 });

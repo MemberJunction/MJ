@@ -8,7 +8,8 @@
  * supplied (clientForRequest builds one whose fetch carries the caller's signal) — every
  * constructed client must share the same scriptable `chat` function.
  */
-import { vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { ChatMessageRole, ChatParams, ChatResult } from '@memberjunction/ai';
 import {
     ExpectedUsageCounts,
     FailureSite,
@@ -80,7 +81,6 @@ RunLLMConformanceSuite({
     ProviderName: 'Ollama',
     SupportsStreaming: true,
     NonStreamingFailureMode: 'failedResult',
-    PreAbortedStreamingBehavior: 'rejectsErrorResult',
     CreateLLM: () => new OllamaLLM('conformance-test-key'),
     ScriptNonStreamingSuccess: (content: string, usage: ExpectedUsageCounts): void => {
         mockChat.mockImplementation(async (request: OllamaChatRequestPayload): Promise<OllamaChatResponsePayload> => {
@@ -151,4 +151,44 @@ RunLLMConformanceSuite({
                 'so retry/failover layers get no structured classification for genuine Ollama failures.'
         }
     ]
+});
+
+describe('Ollama — fetch abort classification', () => {
+    function namedError(name: string, message: string): Error {
+        const error = new Error(message);
+        error.name = name;
+        return error;
+    }
+
+    function chatParams(signal?: AbortSignal): ChatParams {
+        const params = new ChatParams();
+        params.model = 'conformance-test-model';
+        params.messages = [{ role: ChatMessageRole.user, content: 'hello' }];
+        params.cancellationToken = signal;
+        return params;
+    }
+
+    async function completeWith(error: Error, signal?: AbortSignal): Promise<ChatResult> {
+        mockChat.mockRejectedValue(error);
+        return new OllamaLLM('conformance-test-key').ChatCompletion(chatParams(signal));
+    }
+
+    it('reports an AbortError from fetch as Cancelled even before the signal reads aborted', async () => {
+        const abortError = namedError('AbortError', 'The operation was aborted');
+
+        const result = await completeWith(abortError, new AbortController().signal);
+
+        expect(result.success).toBe(false);
+        expect(result.statusText).toBe('cancelled');
+        expect(result.exception).toBe(abortError);
+        expect(result.errorInfo).toMatchObject({ errorType: 'Cancelled', severity: 'Fatal', canFailover: false, providerErrorCode: 'request_cancelled' });
+    });
+
+    it('does not report a TimeoutError as a cancellation', async () => {
+        const result = await completeWith(namedError('TimeoutError', 'The operation timed out'));
+
+        expect(result.success).toBe(false);
+        expect(result.statusText).toBe('Error');
+        expect(result.errorInfo?.errorType).not.toBe('Cancelled');
+    });
 });
