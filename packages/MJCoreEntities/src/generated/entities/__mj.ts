@@ -37422,7 +37422,7 @@ export const MJTaskSchema = z.object({
         * * Field Name: SecurityEnvelope
         * * Display Name: Security Envelope
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON TaskSecurityEnvelope (SchemaVersion 1) holding the submitting run's security constraints: bound action parameters, audience reader user IDs, tenant scope and the taint bit. Written by the server when a task graph is submitted and never changed afterwards; the dispatcher enforces it on every node. NULL means the graph was submitted with no constraints.`),
+        * * Description: JSON TaskSecurityEnvelope (Version 1) holding the submitting run's security constraints: bound action parameters, audience reader user IDs, RunScope, CallerTenantContext and the taint bit. Written by the server when a task graph is submitted and never changed afterwards; the dispatcher enforces it on every node. NULL means the graph was submitted with no constraints.`),
     CompensatesTaskID: z.string().nullable().describe(`
         * * Field Name: CompensatesTaskID
         * * Display Name: Compensates Task ID
@@ -146335,7 +146335,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
     * * Field Name: SecurityEnvelope
     * * Display Name: Security Envelope
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON TaskSecurityEnvelope (SchemaVersion 1) holding the submitting run's security constraints: bound action parameters, audience reader user IDs, tenant scope and the taint bit. Written by the server when a task graph is submitted and never changed afterwards; the dispatcher enforces it on every node. NULL means the graph was submitted with no constraints.
+    * * Description: JSON TaskSecurityEnvelope (Version 1) holding the submitting run's security constraints: bound action parameters, audience reader user IDs, RunScope, CallerTenantContext and the taint bit. Written by the server when a task graph is submitted and never changed afterwards; the dispatcher enforces it on every node. NULL means the graph was submitted with no constraints.
     */
     get SecurityEnvelope(): string | null {
         return this.Get('SecurityEnvelope');

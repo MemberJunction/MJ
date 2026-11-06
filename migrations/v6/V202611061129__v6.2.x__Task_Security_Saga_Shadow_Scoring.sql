@@ -67,7 +67,7 @@ GO
 -- Descriptions
 -- -------------------------------------------------------------------------------------
 EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'JSON TaskSecurityEnvelope (SchemaVersion 1) holding the submitting run''s security constraints: bound action parameters, audience reader user IDs, tenant scope and the taint bit. Written by the server when a task graph is submitted and never changed afterwards; the dispatcher enforces it on every node. NULL means the graph was submitted with no constraints.',
+    @value = N'JSON TaskSecurityEnvelope (Version 1) holding the submitting run''s security constraints: bound action parameters, audience reader user IDs, RunScope, CallerTenantContext and the taint bit. Written by the server when a task graph is submitted and never changed afterwards; the dispatcher enforces it on every node. NULL means the graph was submitted with no constraints.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'Task',
     @level2type = N'COLUMN', @level2name = N'SecurityEnvelope';
 EXEC sp_addextendedproperty @name = N'MS_Description',
@@ -455,7 +455,7 @@ GO
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1'),
             'SecurityEnvelope',
             'Security Envelope',
-            'JSON TaskSecurityEnvelope (SchemaVersion 1) holding the submitting run''s security constraints: bound action parameters, audience reader user IDs, tenant scope and the taint bit. Written by the server when a task graph is submitted and never changed afterwards; the dispatcher enforces it on every node. NULL means the graph was submitted with no constraints.',
+            'JSON TaskSecurityEnvelope (Version 1) holding the submitting run''s security constraints: bound action parameters, audience reader user IDs, RunScope, CallerTenantContext and the taint bit. Written by the server when a task graph is submitted and never changed afterwards; the dispatcher enforces it on every node. NULL means the graph was submitted with no constraints.',
             'nvarchar',
             -1,
             0,
