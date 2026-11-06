@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { RunSchema, CandidateTestSchema, ExecutionResultSchema, CatchSchema, ExecutionFileSchema } from '../schemas';
+import { RunSchema, CandidateTestSchema, ExecutionResultSchema, CatchSchema, ExecutionFileSchema, JitTestPath, MutantEditSchema } from '../schemas';
 
 describe('record schemas', () => {
   it('accepts a complete Run and rejects a bad Trigger', () => {
@@ -26,5 +26,24 @@ describe('record schemas', () => {
   it('Catch keeps Median null until judged', () => {
     const c = { ID: 'c1', RunID: 'r1', CandidateTestID: 't1', Verdict: { Label: 'WeakCatch', Timeout: false, Reason: '' }, DroppedByRule: null, Boosts: [], TPProb: null, JudgeBuckets: [], Median: null, Rank: null, Reported: false, CommentID: null };
     expect(CatchSchema.parse(c).Median).toBeNull();
+  });
+});
+
+describe('path schemas', () => {
+  const uuid = '0b1c2d3e-4f50-4617-8a9b-0c1d2e3f4a5b';
+  it('JitTestPath rejects . and .. segments', () => {
+    expect(JitTestPath.safeParse(`packages/../../etc/src/__tests__/jit/${uuid}.jit.test.ts`).success).toBe(false);
+    expect(JitTestPath.safeParse(`packages/x/./src/__tests__/jit/${uuid}.jit.test.ts`).success).toBe(false);
+  });
+  it('JitTestPath accepts a nested package path', () => {
+    const p = `packages/AI/Providers/Anthropic/src/__tests__/jit/${uuid}.jit.test.ts`;
+    expect(JitTestPath.parse(p)).toBe(p);
+  });
+  it('MutantEditSchema.File rejects .. segments', () => {
+    expect(MutantEditSchema.safeParse({ File: 'packages/x/src/../../../evil.ts', Find: 'a', Replace: 'b' }).success).toBe(false);
+  });
+  it('MutantEditSchema.File accepts a nested package path', () => {
+    const e = { File: 'packages/AI/Providers/Anthropic/src/drivers/x.ts', Find: 'a', Replace: 'b' };
+    expect(MutantEditSchema.parse(e)).toEqual(e);
   });
 });

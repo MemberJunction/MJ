@@ -21,9 +21,9 @@ export const ChangeAnalysisSchema = z.object({
     CommitPrefix: z.string().nullable(), RiskScore: z.number(), Title: z.string(), Body: z.string(),
 });
 
-/** Generated tests may live only under a package's `src/__tests__/jit/` and must use the `.jit.test.ts` suffix. */
-export const JitTestPath = z.string().regex(/^packages\/[^\0]+\/src\/__tests__\/jit\/[0-9a-f-]{36}\.jit\.test\.ts$/);
-export const MutantEditSchema = z.object({ File: z.string().regex(/^packages\/.+\/src\/(?!__tests__\/).+\.ts$/), Find: z.string().min(1), Replace: z.string() });
+/** Generated tests may live only under a package's `src/__tests__/jit/` and must use the `.jit.test.ts` suffix. Every path segment here and in `MutantEditSchema.File` starts with a letter, digit or underscore, so `.` and `..` are never segments. */
+export const JitTestPath = z.string().regex(/^packages\/(?:[A-Za-z0-9_][A-Za-z0-9_.-]*\/)+src\/__tests__\/jit\/[0-9a-f-]{36}\.jit\.test\.ts$/);
+export const MutantEditSchema = z.object({ File: z.string().regex(/^packages\/(?:[A-Za-z0-9_][A-Za-z0-9_.-]*\/)+src\/(?!__tests__\/)(?:[A-Za-z0-9_][A-Za-z0-9_.-]*\/)*[A-Za-z0-9_][A-Za-z0-9_.-]*\.ts$/), Find: z.string().min(1), Replace: z.string() });
 export const MutantSchema = z.object({ Edits: z.array(MutantEditSchema).min(1), Patch: z.string() });
 export const FailureDetailSchema = z.object({ Assertion: z.string().nullable(), Expected: z.string().nullable(), Actual: z.string().nullable(), Message: z.string(), StackExcerpt: z.string().nullable(), ErrorName: z.string().nullable() });
 
