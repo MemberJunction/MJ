@@ -33,8 +33,9 @@ saved before search, a trainer that reports proper scores, baselines and interva
 Predictive Studio decides what a training run ships with a three-outcome gate (the model, a simple baseline, or no
 signal), stores that decision with its reason on the run, and renders the trust verdict from it.
 
-The seeded-random holdout carves by the unit row's group key, so every row of one group lands on the same side of the
-holdout. A stored seeded-random holdout on a unit whose row id is not its lower-cased group key re-carves when retrained.
+The seeded-random holdout hashes the unit row's group key (lower-cased; the entity key when the unit declares no group),
+not its row id, so every row of one group lands on the same side of the holdout. No released version stored a
+seeded-random holdout, so nothing deployed re-carves.
 
 An incumbent-heuristic baseline is refused for multiclass units (the protocol rules and the sidecar both refuse it, and the default protocol leaves it out): it scores one number per row, which a multiclass log loss cannot judge.
 An incumbent rule with no value on a training-snapshot row (a column it reads is missing there) refuses the run before training (`incumbent-score-missing`, naming the count and the first row ids) instead of failing at the holdout stage.
