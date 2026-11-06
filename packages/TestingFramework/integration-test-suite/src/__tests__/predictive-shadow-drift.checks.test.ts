@@ -258,6 +258,6 @@ describe('PredictiveShadowDriftChecks and IT166 metadata (R1, R3, R6)', () => {
             });
 
         await expect(psd2!.Fn(ctx)).resolves.toBeUndefined();
-        expect(runActionSpy).toHaveBeenCalledTimes(2);
+        expect(runActionSpy).toHaveBeenCalledTimes(3);
     });
 });
