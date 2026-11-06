@@ -196,6 +196,20 @@ describe('xAIRealtimeClient', () => {
             expect(states).toEqual(['connecting', 'connected', 'listening']);
         });
 
+        it("should apply the server-minted Grok Voice 3.0 config verbatim (top-level voice and turn_detection)", async () => {
+            const sessionConfig: JSONObject = {
+                type: 'realtime',
+                instructions: 'be the session voice',
+                voice: 'eve',
+                turn_detection: { type: 'server_vad', idle_timeout_ms: 8000, create_response: true, interrupt_response: true },
+                reasoning: { effort: 'none' },
+                audio: { input: { transcription: { model: 'grok-transcribe', language_hint: 'en-US' } }, output: { speed: 1.1 } },
+                tools: [{ type: 'web_search' }],
+            };
+            await connect(client, sessionConfig);
+            expect(client.Fake.SentFrames()[0]).toEqual({ type: 'session.update', session: sessionConfig });
+        });
+
         it("should build the audio plane at the provider's FIXED 24 kHz rate", async () => {
             await connect(client);
             expect(client.PlaybackRate).toBe(XAI_PCM_SAMPLE_RATE);
@@ -280,6 +294,28 @@ describe('xAIRealtimeClient', () => {
             client.Emit({ type: 'input_audio_buffer.speech_started' });
             client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'and Skip?' });
             expect(transcripts.at(-1)).toEqual({ Role: 'User', Text: 'and Skip?', IsFinal: true, Kind: 'normal', ReplacesPrevious: false });
+        });
+
+        it('folds grok-transcribe .updated caption snapshots and the final .completed into ONE bubble', () => {
+            const { transcripts } = collect(client);
+            client.Emit({ type: 'conversation.item.input_audio_transcription.updated', item_id: 'i', transcript: 'book a' });
+            client.Emit({ type: 'conversation.item.input_audio_transcription.updated', item_id: 'i', transcript: 'book a table' });
+            client.Emit({ type: 'conversation.item.input_audio_transcription.completed', transcript: 'Book a table for two.' });
+            expect(transcripts).toEqual([
+                { Role: 'User', Text: 'book a', IsFinal: true, Kind: 'normal', ReplacesPrevious: false },
+                { Role: 'User', Text: 'book a table', IsFinal: true, Kind: 'normal', ReplacesPrevious: true },
+                { Role: 'User', Text: 'Book a table for two.', IsFinal: true, Kind: 'normal', ReplacesPrevious: true },
+            ]);
+        });
+
+        it('treats the idle-timeout notice as diagnostic: no caption, no state change, no error', () => {
+            const { transcripts, states } = collect(client);
+            const errors: unknown[] = [];
+            client.OnError((e) => errors.push(e));
+            client.Emit({ type: 'input_audio_buffer.timeout_triggered', item_id: 'i', audio_start_ms: 0, audio_end_ms: 8000 });
+            expect(transcripts).toEqual([]);
+            expect(states).toEqual([]);
+            expect(errors).toEqual([]);
         });
 
         it('treats a post-pause caption that CONTINUES the utterance as a replacement, not a new bubble (topology parity)', () => {
