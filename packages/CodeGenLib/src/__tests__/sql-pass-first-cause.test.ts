@@ -117,6 +117,9 @@ class TestableSQLCodeGen extends SQLCodeGenBase {
     public RecordObjectFailures(step: string, entities: EntityInfo[]): number {
         return this.RecordSQLObjectFailures(step, entities);
     }
+    public ExecuteFiles(files: string[], entities: EntityInfo[]): Promise<boolean> {
+        return this.ExecuteEntitySQLFiles(files, entities);
+    }
     public SeedFailures(failures: SQLPassFailure[]): void {
         this.sqlPassFailures = [...failures];
     }
@@ -150,6 +153,117 @@ describe('SQLCodeGenBase ties object failures to entities', () => {
         const gen = new TestableSQLCodeGen();
         gen.DBProvider = new SQLServerCodeGenProvider();
         expect(gen.RecordObjectFailures('Executing entity SQL files', [entity('Contracts', 'Contract')])).toBe(0);
+        expect(gen.SQLPassFailures).toEqual([]);
+    });
+});
+
+describe('SQLCodeGenBase ties each generated object name to its entity', () => {
+    const layered = entity('Contracts', 'Contract', {
+        BaseView: 'vwContractsCustom', GeneratedBaseViewName: 'vwContractsGenerated',
+        spCreate: 'spContractInsert', spUpdate: 'spContractSave', spDelete: 'spContractRemove',
+    });
+
+    it.each([
+        'CREATE VIEW [app].[vwContractsCustom]',
+        'CREATE VIEW [app].[vwContractsGenerated]',
+        'CREATE PROCEDURE [app].[spContractInsert]',
+        'CREATE PROCEDURE [app].[spContractSave]',
+        'CREATE PROCEDURE [app].[spContractRemove]',
+    ])('attributes %s to the entity', (object) => {
+        const provider = new SQLServerCodeGenProvider();
+        const gen = new TestableSQLCodeGen();
+        gen.DBProvider = provider;
+        vi.spyOn(provider, 'SQLObjectFailures', 'get').mockReturnValue([{ File: 'f.sql', Object: object, Message: 'failed' }]);
+
+        gen.RecordObjectFailures('Executing entity SQL files', [layered]);
+
+        expect(gen.SQLPassFailures.map((f) => f.EntityName)).toEqual(['Contracts']);
+        vi.restoreAllMocks();
+    });
+
+    it('cuts a recorded message at 400 characters', () => {
+        const provider = new SQLServerCodeGenProvider();
+        const gen = new TestableSQLCodeGen();
+        gen.DBProvider = provider;
+        vi.spyOn(provider, 'SQLObjectFailures', 'get').mockReturnValue([
+            { File: 'f.sql', Object: 'CREATE VIEW [app].[vwContractsCustom]', Message: 'x'.repeat(1000) },
+        ]);
+
+        gen.RecordObjectFailures('Executing entity SQL files', [layered]);
+
+        expect(gen.SQLPassFailures[0].Message).toBe(`CREATE VIEW [app].[vwContractsCustom]: ${'x'.repeat(400)}`);
+        vi.restoreAllMocks();
+    });
+});
+
+describe('SQLCodeGenBase.ExecuteEntitySQLFiles', () => {
+    const contracts = entity('Contracts', 'Contract');
+
+    beforeEach(() => {
+        batchQuery.mockReset();
+        logErrorSpy.mockReset();
+    });
+
+    function sqlFile(name: string, batches: string[]): string {
+        const file = path.join(tempDir(), name);
+        fs.writeFileSync(file, batches.join('\nGO\n'));
+        return file;
+    }
+
+    it('records failures the provider collected while executing through SQLUtilityObject, with default wiring', async () => {
+        // No DBProvider assignment: the generator and its SQLUtilityObject each resolve a provider
+        // from the class factory, and the failures must still reach the SQL pass.
+        batchQuery.mockImplementation(async (sql: string) => {
+            if (sql.includes('CREATE PROCEDURE [app].[spDeleteContract]')) throw new Error("Incorrect syntax near the keyword 'FROM'.");
+        });
+        const gen = new TestableSQLCodeGen();
+        const file = sqlFile('entity.sql', [
+            'CREATE VIEW [app].[vwContracts] AS SELECT 1 AS ID',
+            'CREATE PROCEDURE [app].[spDeleteContract] AS DELETE FROM FROM app.Contract',
+        ]);
+
+        expect(await gen.ExecuteFiles([file], [contracts])).toBe(false);
+
+        expect(gen.SQLUtilityObject.DBProvider).toBe(gen.DBProvider);
+        expect(gen.SQLPassFailures).toEqual([{
+            Step: 'Executing entity SQL files',
+            EntityName: 'Contracts',
+            Message: "CREATE PROCEDURE [app].[spDeleteContract]: Incorrect syntax near the keyword 'FROM'.",
+        }]);
+    });
+
+    it('clears failures an earlier step left on the provider before executing', async () => {
+        batchQuery.mockImplementation(async (sql: string) => {
+            if (sql.includes('before-sql')) throw new Error('Script failed.');
+        });
+        const gen = new TestableSQLCodeGen();
+        // A before-sql script that recreates the entity's view and fails leaves a failure on the provider.
+        await gen.SQLUtilityObject.executeSQLFile(sqlFile('before.sql', ['CREATE VIEW [app].[vwContracts] AS SELECT 1 /* before-sql */']));
+        expect(gen.DBProvider.SQLObjectFailures).toHaveLength(1);
+
+        expect(await gen.ExecuteFiles([sqlFile('entity.sql', ['CREATE VIEW [app].[vwContracts] AS SELECT 1 AS ID'])], [contracts])).toBe(true);
+
+        expect(gen.DBProvider.SQLObjectFailures).toEqual([]);
+        expect(gen.SQLPassFailures).toEqual([]);
+    });
+
+    it('records one step-level failure when the provider gives no object detail', async () => {
+        const gen = new TestableSQLCodeGen();
+        vi.spyOn(gen.DBProvider, 'executeSQLFileViaShell').mockResolvedValue(false);
+
+        expect(await gen.ExecuteFiles(['unused.sql'], [contracts])).toBe(false);
+
+        expect(gen.SQLPassFailures).toEqual([
+            { Step: 'Executing entity SQL files', EntityName: null, Message: 'One or more entity SQL files had failed batches' },
+        ]);
+        vi.restoreAllMocks();
+    });
+
+    it('records nothing when every file succeeds', async () => {
+        batchQuery.mockResolvedValue(undefined);
+        const gen = new TestableSQLCodeGen();
+
+        expect(await gen.ExecuteFiles([sqlFile('ok.sql', ['SELECT 1'])], [contracts])).toBe(true);
         expect(gen.SQLPassFailures).toEqual([]);
     });
 });

@@ -217,6 +217,9 @@ export function EvaluateAlternateBaseViewParityAndSafety(
 export class SQLCodeGenBase {
     protected _sqlUtilityObject: SQLUtilityBase = MJGlobal.Instance.ClassFactory.CreateInstance<SQLUtilityBase>(SQLUtilityBase)!;
     public get SQLUtilityObject(): SQLUtilityBase {
+        // Execute through this generator's provider: the failures it records while executing
+        // files are read back from `_dbProvider` by the SQL pass, so the two must be one instance.
+        this._sqlUtilityObject.DBProvider = this._dbProvider;
         return this._sqlUtilityObject;
     }
 
@@ -346,6 +349,24 @@ export class SQLCodeGenBase {
             });
         }
         return failures.length;
+    }
+
+    /**
+     * Executes the entity SQL files (STEP 2(e)) and, when a batch fails, records the failures for
+     * the SQL pass: one per failed object when the provider collected them, tied to its entity, or
+     * one step-level entry when the provider gave no detail. Object failures left on the provider
+     * by earlier steps (a failed before-sql script) are cleared first, so they are not reported
+     * here or tied to an entity.
+     */
+    protected async ExecuteEntitySQLFiles(files: string[], entities: EntityInfo[]): Promise<boolean> {
+        const step = 'Executing entity SQL files';
+        const utility = this.SQLUtilityObject;
+        this._dbProvider.ClearSQLObjectFailures();
+        const success = await utility.executeSQLFiles(files, configInfo?.verboseOutput ?? false);
+        if (!success && this.RecordSQLObjectFailures(step, entities) === 0) {
+            this.RecordSQLPassStepFailure(step, 'One or more entity SQL files had failed batches');
+        }
+        return success;
     }
 
     public async ManageSQLScriptsAndExecution(pool: CodeGenConnection, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
@@ -563,7 +584,6 @@ export class SQLCodeGenBase {
             // Use temp batch files (which maintain CodeGen log order) if available, otherwise fall back to combined files
             StartSpinner('Executing entity SQL files...');
             const step2eStartTime: Date = new Date();
-            this._dbProvider.ClearSQLObjectFailures();
 
             let executionSuccess = false;
             if (useProviderPhasedExecution) {
@@ -578,14 +598,14 @@ export class SQLCodeGenBase {
                 // Execute temp batch files in dependency order (matches CodeGen run log)
                 const tempFiles = TempBatchFile.getTempFilePaths();
                 LogIf(configInfo?.verboseOutput ?? false, `Executing ${tempFiles.length} temp batch file(s) in dependency order`);
-                executionSuccess = await this.SQLUtilityObject.executeSQLFiles(tempFiles, configInfo?.verboseOutput ?? false);
+                executionSuccess = await this.ExecuteEntitySQLFiles(tempFiles, includedEntities);
 
                 // Clean up temp files after execution
                 TempBatchFile.cleanup();
             } else {
                 // Fall back to combined files (for backward compatibility or if temp files weren't created)
                 LogIf(configInfo?.verboseOutput ?? false, `Executing ${allEntityFiles.length} combined file(s)`);
-                executionSuccess = await this.SQLUtilityObject.executeSQLFiles(allEntityFiles, configInfo?.verboseOutput ?? false);
+                executionSuccess = await this.ExecuteEntitySQLFiles(allEntityFiles, includedEntities);
             }
 
             // Initialize from entityGenSuccess so any per-batch failures from
@@ -593,9 +613,6 @@ export class SQLCodeGenBase {
             let overallSuccess = entityGenSuccess && beforeScriptsSucceeded;
             if (!executionSuccess) {
                 FailSpinner('Failed to execute entity SQL files');
-                if (this.RecordSQLObjectFailures('Executing entity SQL files', includedEntities) === 0) {
-                    this.RecordSQLPassStepFailure('Executing entity SQL files', 'One or more entity SQL files had failed batches');
-                }
                 TempBatchFile.cleanup(); // Cleanup on error
                 overallSuccess = false;
                 // Continue to manage entity fields metadata even after SQL execution failure.
@@ -943,6 +960,8 @@ export class SQLCodeGenBase {
      * Executes each entity's permissions files. An entity with a failure already recorded this pass
      * (its view or a CRUD routine failed to create) is skipped with one warning naming that first
      * failure: its GRANTs would only fail with `Cannot find the object`, burying the real cause.
+     * On SQL Server the entity SQL files already ran each object's GRANT next to its CREATE, so
+     * those GRANTs failed once there; the skip removes the second copy this step would add.
      * The recorded failure already fails the run, so a skip does not fail this step.
      */
     public async ApplyPermissions(pool: CodeGenConnection, directory: string, entities: EntityInfo[], batchSize: number = 5): Promise<boolean> {
