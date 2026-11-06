@@ -138,10 +138,12 @@ Each section answers one question with the command run, the raw numbers, and the
 `plans/catching-jittests-spike/Dockerfile.sandbox`:
 
 ```dockerfile
-# Sandbox for untrusted code: PR builds, generated tests. No network at run time, so
-# everything the build needs is baked in here, on the host, before the container starts.
+# Sandbox for untrusted code: PR builds, generated tests. No network at run time, so everything
+# the build needs is baked in here or mounted from the host before the container starts.
 FROM node:24-bookworm-slim
-RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
+# A global install, not corepack: corepack keeps its cache under /root (unreadable under `--user`) and its shim
+# reads a PR's `packageManager` field before pnpm starts, which would try the network.
+RUN npm install -g pnpm@10.33.0
 # git is needed by turbo for hashing and by pnpm for some workspace operations.
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
 # The runner's uid is passed at `docker run --user`; no user is created here so any uid works.
