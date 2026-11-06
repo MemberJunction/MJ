@@ -11661,11 +11661,11 @@ export const MJBrandKitAssetSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    BrandKit: z.string().describe(`
+    BrandKit: z.string().nullable().describe(`
         * * Field Name: BrandKit
         * * Display Name: Brand Kit
         * * SQL Data Type: nvarchar(255)`),
-    File: z.string().describe(`
+    File: z.string().nullable().describe(`
         * * Field Name: File
         * * Display Name: File
         * * SQL Data Type: nvarchar(500)`),
@@ -18668,7 +18668,7 @@ export const MJDiagnosticSessionChunkSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    DiagnosticSession: z.string().describe(`
+    DiagnosticSession: z.string().nullable().describe(`
         * * Field Name: DiagnosticSession
         * * Display Name: Diagnostic Session
         * * SQL Data Type: nvarchar(255)`),
@@ -18791,7 +18791,7 @@ export const MJDiagnosticSessionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    CreatedByUser: z.string().describe(`
+    CreatedByUser: z.string().nullable().describe(`
         * * Field Name: CreatedByUser
         * * Display Name: Created By User Name
         * * SQL Data Type: nvarchar(100)`),
@@ -24640,7 +24640,7 @@ export const MJGraphConceptSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Graph: z.string().describe(`
+    Graph: z.string().nullable().describe(`
         * * Field Name: Graph
         * * Display Name: Graph
         * * SQL Data Type: nvarchar(255)`),
@@ -24648,7 +24648,7 @@ export const MJGraphConceptSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
-    ConceptType: z.string().describe(`
+    ConceptType: z.string().nullable().describe(`
         * * Field Name: ConceptType
         * * Display Name: Concept Type
         * * SQL Data Type: nvarchar(100)`),
@@ -24716,7 +24716,7 @@ export const MJGraphEdgeProviderSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Graph: z.string().describe(`
+    Graph: z.string().nullable().describe(`
         * * Field Name: Graph
         * * Display Name: Graph
         * * SQL Data Type: nvarchar(255)`),
@@ -24762,11 +24762,11 @@ export const MJGraphEdgeTypeEndpointSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    EdgeType: z.string().describe(`
+    EdgeType: z.string().nullable().describe(`
         * * Field Name: EdgeType
         * * Display Name: Edge Type
         * * SQL Data Type: nvarchar(100)`),
-    Entity: z.string().describe(`
+    Entity: z.string().nullable().describe(`
         * * Field Name: Entity
         * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -24930,19 +24930,19 @@ export const MJGraphEdgeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Graph: z.string().describe(`
+    Graph: z.string().nullable().describe(`
         * * Field Name: Graph
         * * Display Name: Graph
         * * SQL Data Type: nvarchar(255)`),
-    EdgeType: z.string().describe(`
+    EdgeType: z.string().nullable().describe(`
         * * Field Name: EdgeType
         * * Display Name: Edge Type
         * * SQL Data Type: nvarchar(100)`),
-    SourceEntity: z.string().describe(`
+    SourceEntity: z.string().nullable().describe(`
         * * Field Name: SourceEntity
         * * Display Name: Source Entity
         * * SQL Data Type: nvarchar(255)`),
-    TargetEntity: z.string().describe(`
+    TargetEntity: z.string().nullable().describe(`
         * * Field Name: TargetEntity
         * * Display Name: Target Entity
         * * SQL Data Type: nvarchar(255)`),
@@ -25065,7 +25065,7 @@ export const MJGraphSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    GraphType: z.string().describe(`
+    GraphType: z.string().nullable().describe(`
         * * Field Name: GraphType
         * * Display Name: Graph Type
         * * SQL Data Type: nvarchar(100)`),
@@ -76898,7 +76898,7 @@ export class MJBrandKitAssetEntity extends BaseEntity<MJBrandKitAssetEntityType>
     * * Display Name: Brand Kit
     * * SQL Data Type: nvarchar(255)
     */
-    get BrandKit(): string {
+    get BrandKit(): string | null {
         return this.Get('BrandKit');
     }
 
@@ -76907,7 +76907,7 @@ export class MJBrandKitAssetEntity extends BaseEntity<MJBrandKitAssetEntityType>
     * * Display Name: File
     * * SQL Data Type: nvarchar(500)
     */
-    get File(): string {
+    get File(): string | null {
         return this.Get('File');
     }
 }
@@ -95721,7 +95721,7 @@ export class MJDiagnosticSessionChunkEntity extends BaseEntity<MJDiagnosticSessi
     * * Display Name: Diagnostic Session
     * * SQL Data Type: nvarchar(255)
     */
-    get DiagnosticSession(): string {
+    get DiagnosticSession(): string | null {
         return this.Get('DiagnosticSession');
     }
 }
@@ -96059,7 +96059,7 @@ export class MJDiagnosticSessionEntity extends BaseEntity<MJDiagnosticSessionEnt
     * * Display Name: Created By User Name
     * * SQL Data Type: nvarchar(100)
     */
-    get CreatedByUser(): string {
+    get CreatedByUser(): string | null {
         return this.Get('CreatedByUser');
     }
 
@@ -112044,7 +112044,7 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
     * * Display Name: Graph
     * * SQL Data Type: nvarchar(255)
     */
-    get Graph(): string {
+    get Graph(): string | null {
         return this.Get('Graph');
     }
 
@@ -112062,7 +112062,7 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
     * * Display Name: Concept Type
     * * SQL Data Type: nvarchar(100)
     */
-    get ConceptType(): string {
+    get ConceptType(): string | null {
         return this.Get('ConceptType');
     }
 
@@ -112238,7 +112238,7 @@ export class MJGraphEdgeProviderEntity extends BaseEntity<MJGraphEdgeProviderEnt
     * * Display Name: Graph
     * * SQL Data Type: nvarchar(255)
     */
-    get Graph(): string {
+    get Graph(): string | null {
         return this.Get('Graph');
     }
 }
@@ -112355,7 +112355,7 @@ export class MJGraphEdgeTypeEndpointEntity extends BaseEntity<MJGraphEdgeTypeEnd
     * * Display Name: Edge Type
     * * SQL Data Type: nvarchar(100)
     */
-    get EdgeType(): string {
+    get EdgeType(): string | null {
         return this.Get('EdgeType');
     }
 
@@ -112364,7 +112364,7 @@ export class MJGraphEdgeTypeEndpointEntity extends BaseEntity<MJGraphEdgeTypeEnd
     * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get Entity(): string {
+    get Entity(): string | null {
         return this.Get('Entity');
     }
 }
@@ -112774,7 +112774,7 @@ export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
     * * Display Name: Graph
     * * SQL Data Type: nvarchar(255)
     */
-    get Graph(): string {
+    get Graph(): string | null {
         return this.Get('Graph');
     }
 
@@ -112783,7 +112783,7 @@ export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
     * * Display Name: Edge Type
     * * SQL Data Type: nvarchar(100)
     */
-    get EdgeType(): string {
+    get EdgeType(): string | null {
         return this.Get('EdgeType');
     }
 
@@ -112792,7 +112792,7 @@ export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
     * * Display Name: Source Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get SourceEntity(): string {
+    get SourceEntity(): string | null {
         return this.Get('SourceEntity');
     }
 
@@ -112801,7 +112801,7 @@ export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
     * * Display Name: Target Entity
     * * SQL Data Type: nvarchar(255)
     */
-    get TargetEntity(): string {
+    get TargetEntity(): string | null {
         return this.Get('TargetEntity');
     }
 }
@@ -113101,7 +113101,7 @@ export class MJGraphEntity extends BaseEntity<MJGraphEntityType> {
     * * Display Name: Graph Type
     * * SQL Data Type: nvarchar(100)
     */
-    get GraphType(): string {
+    get GraphType(): string | null {
         return this.Get('GraphType');
     }
 }
