@@ -283,4 +283,232 @@ describe('InferProcessor Lifecycle Hooks (P1-6)', () => {
             FeatureValueCacheService.Instance.RecordFeatureValues = origRecordFeatureValues;
         }
     });
+
+    it('passes AbortSignal on AIPromptParams.cancellationToken and aborts it when MaxLatencyMs elapses (R7)', async () => {
+        const origConfig = AIEngine.Instance.Config;
+        const origPromptsDescriptor = Object.getOwnPropertyDescriptor(AIEngine.Instance, 'Prompts') ??
+            Object.getOwnPropertyDescriptor(Object.getPrototypeOf(AIEngine.Instance), 'Prompts');
+        const origPromptModelsDescriptor = Object.getOwnPropertyDescriptor(AIEngine.Instance, 'PromptModels') ??
+            Object.getOwnPropertyDescriptor(Object.getPrototypeOf(AIEngine.Instance), 'PromptModels');
+        const origRecordFeatureValues = FeatureValueCacheService.Instance.RecordFeatureValues;
+
+        const createdChallengerRows: ChallengerFeatureValueDouble[] = [];
+        let observedParams: AIPromptParams | undefined;
+        let observedAbortOnToken = false;
+
+        class SlowAbortAwareInferProcessor extends ShadowTestableInferProcessor {
+            protected override async ExecuteChallengerPrompt(
+                params: AIPromptParams,
+                _signal: AbortSignal,
+            ): Promise<AIPromptRunResult<unknown>> {
+                observedParams = params;
+                return new Promise<AIPromptRunResult<unknown>>((_resolve, reject) => {
+                    const token = params.cancellationToken;
+                    if (!token) {
+                        return;
+                    }
+                    if (token.aborted) {
+                        observedAbortOnToken = true;
+                        reject(new Error('Aborted via params.cancellationToken'));
+                        return;
+                    }
+                    token.addEventListener('abort', () => {
+                        observedAbortOnToken = true;
+                        reject(new Error('Aborted via params.cancellationToken'));
+                    });
+                });
+            }
+        }
+
+        try {
+            AIEngine.Instance.Config = (async () => {}) as typeof AIEngine.Instance.Config;
+            Object.defineProperty(AIEngine.Instance, 'Prompts', {
+                configurable: true,
+                get: () => [{ ID: 'prompt-challenger-slow', Name: 'Slow Challenger Prompt' } as MJAIPromptEntityExtended],
+            });
+            Object.defineProperty(AIEngine.Instance, 'PromptModels', {
+                configurable: true,
+                get: () => [
+                    { PromptID: 'prompt-challenger-slow', ModelID: 'model-challenger-llm', Priority: 1, Status: 'Active' },
+                ],
+            });
+            FeatureValueCacheService.Instance.RecordFeatureValues = async () => ({
+                Upserted: 1,
+                Unchanged: 0,
+                Previous: { StandardTitle: null },
+            });
+
+            const processor = new SlowAbortAwareInferProcessor(
+                'prompt-champion-1',
+                undefined,
+                { Outputs: [{ Name: 'StandardTitle', Ref: '$.StandardTitle', Target: { Mode: 'none' } }] },
+                null,
+            );
+            processor.ChallengerConfig = {
+                Enabled: true,
+                SampleRate: 1.0,
+                WorkType: 'Infer',
+                ChallengerPromptID: 'prompt-challenger-slow',
+                MaxLatencyMs: 25,
+            };
+
+            const provider: Pick<IMetadataProvider, 'EntityByID' | 'GetEntityObject'> = {
+                EntityByID: () => undefined,
+                GetEntityObject: async <T>() => {
+                    const row = new ChallengerFeatureValueDouble();
+                    createdChallengerRows.push(row);
+                    return row as T;
+                },
+            };
+
+            const context: RecordProcessorContext = {
+                ContextUser: { ID: 'user-1' } as UserInfo,
+                Provider: provider as IMetadataProvider,
+                RecordProcessID: 'rp-infer-1',
+                ProcessRunID: 'run-infer-1',
+                EntityID: 'ent-contacts',
+            };
+
+            await processor.InvokeWithFeatureValues({
+                Record: { EntityID: 'ent-contacts', RecordID: 'contact-timeout-1', Record: { ID: 'contact-timeout-1' } },
+                Context: context,
+                Payload: { StandardTitle: 'CHAMPION_ENGINEER' },
+                PromptID: 'prompt-champion-1',
+                ConstraintHash: 'hash-1',
+                InputHash: 'input-1',
+                Pin: {
+                    PromptID: 'prompt-champion-1',
+                    PromptVersionHash: 'pv-1',
+                    AIModelID: 'model-champion-llm',
+                    ParametersHash: 'params-1',
+                    SpecHash: 'spec-1',
+                },
+            });
+
+            await processor.FlushShadowInFlight();
+
+            expect(observedParams).toBeDefined();
+            expect(observedParams?.cancellationToken).toBeDefined();
+            expect(observedParams?.cancellationToken?.aborted).toBe(true);
+            expect(observedAbortOnToken).toBe(true);
+            expect(createdChallengerRows).toHaveLength(1);
+            expect(createdChallengerRows[0].Reasoning).toContain('SHADOW_TIMEOUT');
+        } finally {
+            AIEngine.Instance.Config = origConfig;
+            if (origPromptsDescriptor) {
+                Object.defineProperty(AIEngine.Instance, 'Prompts', origPromptsDescriptor);
+            }
+            if (origPromptModelsDescriptor) {
+                Object.defineProperty(AIEngine.Instance, 'PromptModels', origPromptModelsDescriptor);
+            }
+            FeatureValueCacheService.Instance.RecordFeatureValues = origRecordFeatureValues;
+        }
+    });
+
+    it('skips ChallengerConfigurationObject with WorkType !== "Infer" and logs once at configuration time instead of per record (R7)', async () => {
+        const errorLogs: string[] = [];
+        const origConsoleError = console.error;
+        console.error = (...args: unknown[]) => {
+            errorLogs.push(args.map((a) => String(a)).join(' '));
+        };
+        const origRecordFeatureValues = FeatureValueCacheService.Instance.RecordFeatureValues;
+
+        try {
+            FeatureValueCacheService.Instance.RecordFeatureValues = async () => ({
+                Upserted: 1,
+                Unchanged: 0,
+                Previous: { StandardTitle: null },
+            });
+
+            const mismatchedConfig: MJRecordProcessEntity_IRecordProcessChallengerConfig = {
+                Enabled: true,
+                SampleRate: 1.0,
+                WorkType: 'ML Model',
+                ChallengerModelID: 'model-ml-99',
+                ChallengerPromptID: 'prompt-challenger-ignored',
+            };
+
+            const processor = new ShadowTestableInferProcessor(
+                'prompt-champion-1',
+                undefined,
+                { Outputs: [{ Name: 'StandardTitle', Ref: '$.StandardTitle', Target: { Mode: 'none' } }] },
+                null,
+            );
+            processor.ChallengerConfig = mismatchedConfig;
+
+            expect(processor.ChallengerConfig).toBeNull();
+            expect(processor.ShouldSampleChallenger(mismatchedConfig)).toBe(false);
+            const workTypeErrorsAfterConfig = errorLogs.filter((m) => m.includes('WorkType')).length;
+            expect(workTypeErrorsAfterConfig).toBe(1);
+
+            const provider: Pick<IMetadataProvider, 'EntityByID' | 'GetEntityObject'> = {
+                EntityByID: () => undefined,
+                GetEntityObject: async <T>() => new ChallengerFeatureValueDouble() as T,
+            };
+            const context: RecordProcessorContext = {
+                ContextUser: { ID: 'user-1' } as UserInfo,
+                Provider: provider as IMetadataProvider,
+                RecordProcessID: 'rp-infer-1',
+                ProcessRunID: 'run-infer-1',
+                EntityID: 'ent-contacts',
+            };
+
+            for (const recId of ['rec-1', 'rec-2', 'rec-3']) {
+                await processor.InvokeWithFeatureValues({
+                    Record: { EntityID: 'ent-contacts', RecordID: recId, Record: { ID: recId } },
+                    Context: context,
+                    Payload: { StandardTitle: 'CHAMPION_ENGINEER' },
+                    PromptID: 'prompt-champion-1',
+                    ConstraintHash: 'hash-1',
+                    InputHash: 'input-1',
+                    Pin: {
+                        PromptID: 'prompt-champion-1',
+                        PromptVersionHash: 'pv-1',
+                        AIModelID: 'model-champion-llm',
+                        ParametersHash: 'params-1',
+                        SpecHash: 'spec-1',
+                    },
+                });
+            }
+            await processor.FlushShadowInFlight();
+
+            expect(processor.ChallengerCalls).toHaveLength(0);
+            expect(errorLogs.filter((m) => m.includes('WorkType')).length).toBe(1);
+        } finally {
+            console.error = origConsoleError;
+            FeatureValueCacheService.Instance.RecordFeatureValues = origRecordFeatureValues;
+        }
+    });
+
+    it('reads ChallengerConfigurationObject only in FromRecordProcess and ignores raw ChallengerConfiguration string fallback (R10)', () => {
+        const rpDouble: Pick<
+            MJRecordProcessEntity,
+            | 'ID'
+            | 'Name'
+            | 'PromptID'
+            | 'Configuration'
+            | 'InputMapping'
+            | 'OutputMapping'
+            | 'ChallengerConfiguration'
+            | 'ChallengerConfigurationObject'
+        > = {
+            ID: 'rp-infer-legacy',
+            Name: 'Legacy Raw String Pipeline',
+            PromptID: 'prompt-champion-1',
+            Configuration: null,
+            InputMapping: null,
+            OutputMapping: null,
+            ChallengerConfiguration: JSON.stringify({
+                Enabled: true,
+                SampleRate: 1.0,
+                WorkType: 'Infer',
+                ChallengerPromptID: 'prompt-challenger-legacy',
+            }),
+            ChallengerConfigurationObject: null,
+        };
+
+        const fromRp = InferProcessor.FromRecordProcess(rpDouble as MJRecordProcessEntity);
+        expect(fromRp.ChallengerConfig).toBeNull();
+        expect(fromRp.ShouldSampleChallenger()).toBe(false);
+    });
 });

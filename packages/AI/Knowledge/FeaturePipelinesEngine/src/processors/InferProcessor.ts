@@ -241,8 +241,27 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
     /** Each record's Feature Value writes waiting for its write-back, in order, by record ID (deferred mode only). */
     private pendingFeatureValues = new Map<string, FeatureValueWriteParams[]>();
 
-    /** Optional WS-4.4 shadow challenger configuration read from `RecordProcess.ChallengerConfigurationObject`. */
-    public ChallengerConfig: MJRecordProcessEntity_IRecordProcessChallengerConfig | null = null;
+    private _challengerConfig: MJRecordProcessEntity_IRecordProcessChallengerConfig | null = null;
+
+    /**
+     * Optional WS-4.4 shadow challenger configuration read from `RecordProcess.ChallengerConfigurationObject`.
+     * Only `'Infer'` challenger configurations are accepted on `InferProcessor`; a mismatched `WorkType` is logged
+     * once at configuration time and ignored.
+     */
+    public get ChallengerConfig(): MJRecordProcessEntity_IRecordProcessChallengerConfig | null {
+        return this._challengerConfig;
+    }
+
+    public set ChallengerConfig(value: MJRecordProcessEntity_IRecordProcessChallengerConfig | null) {
+        if (value && value.WorkType !== 'Infer') {
+            LogError(
+                `InferProcessor: skipping ChallengerConfigurationObject with mismatched WorkType '${String(value.WorkType)}' (expected 'Infer').`,
+            );
+            this._challengerConfig = null;
+            return;
+        }
+        this._challengerConfig = value;
+    }
 
     /** Injectable RNG (`[0, 1)`) for deterministic shadow sampling in tests. */
     public ChallengerRng: () => number = () => Math.random();
@@ -313,13 +332,8 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             processor = new InferProcessor(rp.PromptID, inputMapping, spec, rp.OutputMapping || null);
         }
 
-        const challengerConfig =
-            rp.ChallengerConfigurationObject ??
-            (typeof rp.ChallengerConfiguration === 'string' && rp.ChallengerConfiguration.trim().length > 0
-                ? SafeJSONParse<MJRecordProcessEntity_IRecordProcessChallengerConfig>(rp.ChallengerConfiguration)
-                : null);
-        if (challengerConfig) {
-            processor.ChallengerConfig = challengerConfig;
+        if (rp.ChallengerConfigurationObject) {
+            processor.ChallengerConfig = rp.ChallengerConfigurationObject;
         }
         return processor;
     }
@@ -1467,7 +1481,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
     public ShouldSampleChallenger(
         config: MJRecordProcessEntity_IRecordProcessChallengerConfig | null | undefined = this.ChallengerConfig,
     ): boolean {
-        if (!config || config.Enabled !== true) {
+        if (!config || config.Enabled !== true || config.WorkType !== 'Infer') {
             return false;
         }
         if (typeof config.SampleRate !== 'number' || !Number.isFinite(config.SampleRate) || config.SampleRate <= 0) {
@@ -1488,8 +1502,9 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
      */
     protected async ExecuteChallengerPrompt(
         params: AIPromptParams,
-        _signal: AbortSignal,
+        signal: AbortSignal,
     ): Promise<AIPromptRunResult<unknown>> {
+        params.cancellationToken = params.cancellationToken ?? signal;
         return new AIPromptRunner().ExecutePrompt(params);
     }
 
@@ -1577,6 +1592,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                 }
                 params.contextUser = context.ContextUser;
                 params.templateAutoescape = false;
+                params.cancellationToken = abortController.signal;
 
                 const promptResult = await this.ExecuteChallengerPrompt(params, abortController.signal);
                 aiPromptRunID = promptResult.promptRun?.ID ?? null;
@@ -1633,7 +1649,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         const { record, context, challengerPromptID, aiModelID, aiPromptRunID, rawAnswer, timedOut, errorMessage } = options;
         const activeProvider = context.Provider ?? Metadata.Provider; // global-provider-ok: fallback when caller does not supply a per-request provider
         const entityID = context.EntityID || record.EntityID;
-        if (!activeProvider || !entityID || typeof activeProvider.GetEntityObject !== 'function') {
+        if (!activeProvider || !entityID) {
             return;
         }
 
@@ -2473,7 +2489,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             return loaded.EntityInfo;
         }
         const provider = ctx?.Provider ?? Metadata.Provider;
-        return record.EntityID && typeof provider?.EntityByID === 'function' ? provider.EntityByID(record.EntityID) ?? null : null;
+        return record.EntityID ? provider?.EntityByID(record.EntityID) ?? null : null;
     }
 
     /** Extracts a plain field map from the record (BaseEntity → GetAll(), plain object → as-is). */
