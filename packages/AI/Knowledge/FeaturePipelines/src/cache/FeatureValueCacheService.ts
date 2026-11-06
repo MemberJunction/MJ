@@ -72,6 +72,8 @@ export interface FeatureValueOutputItem {
     constraintType?: ValueConstraint['Type'];
     reasoning?: string | null;
     confidence?: number | null;
+    /** Optional explicit text value; stored in ValueText alongside a numeric score for classification models (M3). */
+    valueText?: string | null;
 }
 
 /** Parameters for upserting a record's Feature Values, one row per Feature Value key; every key part is required. */
@@ -92,6 +94,8 @@ export interface RecordFeatureValuesParams {
     pipelineVersion: number | null;
     /** The pin's primary AI model; null when the prompt has no Active model, or for a human value. */
     aiModelID: string | null;
+    /** The ML Model that computed the values for an 'ML Model' process; null for prompt/human values (B1). */
+    mlModelID?: string | null;
     /** The pin's parameters hash; null for a human value. */
     parametersHash: string | null;
     /** SHA-256 of the record's normalised inputs (the cache key hash); null when there is none. */
@@ -369,6 +373,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
                 PipelineVersion: params.pipelineVersion, PromptVersionHash: params.promptVersionHash,
                 AIModelID: params.aiModelID, ParametersHash: params.parametersHash,
                 InputHash: params.inputHash, Source: params.source,
+                MLModelID: params.mlModelID ?? null,
             }),
         })));
         const previous = await this.LoadLatestPipelineValues(params, provider);
@@ -464,6 +469,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         fv.PromptVersionHash = params.promptVersionHash;
         fv.ConstraintHash = params.constraintHash ?? null;
         fv.AIModelID = params.aiModelID;
+        fv.MLModelID = params.mlModelID ?? null;
         fv.ParametersHash = params.parametersHash;
         fv.InputHash = params.inputHash;
         fv.ValueKeyHash = keyHash;
@@ -473,7 +479,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
 
     /** Sets a row's value, reasoning, confidence, run links and ComputedAt. */
     protected AssignValueColumns(fv: MJFeatureValueEntity, params: RecordFeatureValuesParams, out: FeatureValueOutputItem, typed: TypedFeatureValue): void {
-        fv.ValueText = typed.ValueText;
+        fv.ValueText = out.valueText !== undefined ? out.valueText : typed.ValueText;
         fv.ValueNumeric = typed.ValueNumeric;
         fv.ValueBoolean = typed.ValueBoolean;
         fv.ValueDate = typed.ValueDate;
