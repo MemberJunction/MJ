@@ -29,10 +29,11 @@ vi.mock('../Misc/advanced_generation', () => ({
    },
 }));
 
-import { ExistingEntityFieldValueRow, ManageMetadataBase } from '../Database/manage-metadata';
+import { ExistingEntityFieldValueRow, ManageMetadataBase, SoftFieldValueListConfig } from '../Database/manage-metadata';
 import { CodeGenConnection, CodeGenDatabaseProvider, CodeGenQueryResult } from '../Database/codeGenDatabaseProvider';
 import { SQLServerCodeGenProvider } from '../Database/providers/sqlserver/SQLServerCodeGenProvider';
 import { SQLLogging } from '../Misc/sql_logging';
+import { configInfo } from '../Config/config';
 import { ResolveDirtySchemasForEmit } from '../Misc/schema-emit';
 import type { UserInfo } from '@memberjunction/core';
 
@@ -59,10 +60,26 @@ class TestableValueListSync extends ManageMetadataBase {
    public CheckPass(): Promise<boolean> {
       return this.manageEntityFieldValuesAndValidatorFunctions(connection(), [], {} as UserInfo, false);
    }
+   /** Runs the config pass for one table (private, so reached through a cast). */
+   public ConfigPass(fields: SoftFieldValueListConfig[], rows: ExistingEntityFieldValueRow[]): Promise<{ applied: number; skipped: number }> {
+      const self = this as unknown as {
+         applyValueListsForTable(
+            pool: CodeGenConnection,
+            schemaName: string,
+            tableName: string,
+            fields: SoftFieldValueListConfig[],
+            rows: ExistingEntityFieldValueRow[],
+         ): Promise<{ applied: number; skipped: number }>;
+      };
+      return self.applyValueListsForTable(connection(), 'sales', 'Order', fields, rows);
+   }
 }
 
-function connection(): CodeGenConnection {
-   const run = async (): Promise<CodeGenQueryResult> => ({ recordset: [] });
+function connection(executed?: string[]): CodeGenConnection {
+   const run = async (sql: string): Promise<CodeGenQueryResult> => {
+      executed?.push(sql);
+      return { recordset: [] };
+   };
    return {
       Dialect: new SQLServerCodeGenProvider().Dialect,
       query: run,
@@ -77,10 +94,11 @@ function connection(): CodeGenConnection {
 const row = (ID: string, Value: string, Sequence: number): ExistingEntityFieldValueRow => ({ ID, EntityFieldID: 'F1', Value, Sequence, Source: 'Check' });
 
 describe('ManageMetadataBase.AtomicBatchSQL', () => {
-   it('wraps a SQL Server batch in a transaction that rolls back and re-throws on error', () => {
+   it('wraps a SQL Server batch in a transaction that rolls back on error or timeout and re-throws', () => {
       const sql = ManageMetadataBase.AtomicBatchSQL('DELETE FROM t WHERE ID=1;\nINSERT INTO t VALUES (2);', 'sqlserver');
+      // XACT_ABORT rolls back on a client timeout too, which skips the CATCH
       expect(sql).toBe(
-         'BEGIN TRY\nBEGIN TRANSACTION;\nDELETE FROM t WHERE ID=1;\nINSERT INTO t VALUES (2);\nCOMMIT TRANSACTION;\nEND TRY\n' +
+         'SET XACT_ABORT ON;\nBEGIN TRY\nBEGIN TRANSACTION;\nDELETE FROM t WHERE ID=1;\nINSERT INTO t VALUES (2);\nCOMMIT TRANSACTION;\nEND TRY\n' +
             'BEGIN CATCH\nIF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;\nTHROW;\nEND CATCH',
       );
    });
@@ -148,6 +166,36 @@ describe('syncEntityFieldValues: one atomic batch (#6134)', () => {
    });
 });
 
+describe('syncEntityFieldValues: the wrapped batch reaches the connection (#6134)', () => {
+   let savedEnabled: boolean | undefined;
+
+   beforeEach(() => {
+      platform.value = 'sqlserver';
+      // no CodeGen_Run log file is open here, so the real LogSQLAndExecute must not require one
+      savedEnabled = configInfo.SQLOutput?.enabled;
+      if (configInfo.SQLOutput) configInfo.SQLOutput.enabled = false;
+   });
+
+   afterEach(() => {
+      if (configInfo.SQLOutput && savedEnabled !== undefined) configInfo.SQLOutput.enabled = savedEnabled;
+   });
+
+   class RecordingSync extends TestableValueListSync {
+      public Executed: string[] = [];
+      public override Sync(fieldID: string, values: string[], rows: ExistingEntityFieldValueRow[]): Promise<boolean> {
+         return this.syncEntityFieldValues(connection(this.Executed), fieldID, values, rows, 'Check');
+      }
+   }
+
+   it('sends the SQL Server wrapper text, not the plain statements, to query()', async () => {
+      const mm = new RecordingSync(new SQLServerCodeGenProvider());
+      expect(await mm.Sync('F1', ['B', 'C'], [row('V1', 'A', 1), row('V2', 'B', 3)])).toBe(true);
+      expect(mm.Executed).toHaveLength(1);
+      expect(mm.Executed[0]).toMatch(/^SET XACT_ABORT ON;\nBEGIN TRY\nBEGIN TRANSACTION;\nDELETE FROM \[__mj\]\.\[EntityFieldValue\] WHERE ID='V1';/);
+      expect(mm.Executed[0]).toMatch(/COMMIT TRANSACTION;\nEND TRY\nBEGIN CATCH\nIF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;\nTHROW;\nEND CATCH$/);
+   });
+});
+
 describe('a changed CHECK value list marks the entity modified (#6207)', () => {
    let savedModified: string[];
 
@@ -163,7 +211,7 @@ describe('a changed CHECK value list marks the entity modified (#6207)', () => {
       vi.restoreAllMocks();
    });
 
-   function withCheck(values: string[], existing: ExistingEntityFieldValueRow[]): TestableValueListSync {
+   function withCheck(values: string[], existing: ExistingEntityFieldValueRow[], storedType = 'List'): TestableValueListSync {
       const mm = new TestableValueListSync(new SQLServerCodeGenProvider());
       mm.Rows = {
          vwEntityFieldsWithCheckConstraints: [
@@ -176,7 +224,7 @@ describe('a changed CHECK value list marks the entity modified (#6207)', () => {
          ],
          'FROM [__mj].[EntityFieldValue]': existing,
          vwEntityFields: [{ ID: 'F1', EntityID: 'E1', Entity: 'Orders', Name: 'Status', Type: 'nvarchar', IsPrimaryKey: false }],
-         'SELECT ValueListType': [{ ValueListType: 'List' }],
+         'SELECT ValueListType': [{ ValueListType: storedType }],
       };
       return mm;
    }
@@ -189,6 +237,11 @@ describe('a changed CHECK value list marks the entity modified (#6207)', () => {
    it('an unchanged list does not', async () => {
       expect(await withCheck(['Open', 'Closed'], [row('V1', 'Closed', 1), row('V2', 'Open', 2)]).CheckPass()).toBe(true);
       expect(ManageMetadataBase.ModifiedEntityList).toEqual([]);
+   });
+
+   it('an unchanged list whose ValueListType was not List does', async () => {
+      await withCheck(['Open', 'Closed'], [row('V1', 'Closed', 1), row('V2', 'Open', 2)], 'None').CheckPass();
+      expect(ManageMetadataBase.ModifiedEntityList).toEqual(['Orders']);
    });
 
    it('a re-sequenced list does', async () => {
@@ -204,5 +257,55 @@ describe('a changed CHECK value list marks the entity modified (#6207)', () => {
          { Name: 'Invoices', SchemaName: 'billing' },
       ];
       expect(ResolveDirtySchemasForEmit(entities, ManageMetadataBase.ModifiedEntityList, false, true)).toEqual(new Set(['sales']));
+   });
+});
+
+describe('a changed config value list marks the entity modified (#6207)', () => {
+   let savedModified: string[];
+
+   beforeEach(() => {
+      platform.value = 'sqlserver';
+      savedModified = ManageMetadataBase.ModifiedEntityList;
+      ManageMetadataBase.ModifiedEntityList = [];
+      vi.spyOn(SQLLogging, 'LogSQLAndExecute').mockImplementation(async () => []);
+   });
+
+   afterEach(() => {
+      ManageMetadataBase.ModifiedEntityList = savedModified;
+      vi.restoreAllMocks();
+   });
+
+   const configRow = (ID: string, Value: string, Sequence: number): ExistingEntityFieldValueRow => ({ ...row(ID, Value, Sequence), Source: 'Config' });
+   const field = (PossibleValues: string[], ValueListType: SoftFieldValueListConfig['ValueListType'] = 'List'): SoftFieldValueListConfig => ({
+      FieldName: 'Status',
+      ValueListType,
+      PossibleValues,
+   });
+
+   function withConfig(storedType: string): TestableValueListSync {
+      const mm = new TestableValueListSync(new SQLServerCodeGenProvider());
+      mm.Rows = {
+         // keyed on the selected columns: the entity name comes from this lookup
+         "SELECT ID, [Name] FROM [__mj].[Entity] WHERE SchemaName = 'sales' AND BaseTable = 'Order'": [{ ID: 'E1', Name: 'Orders' }],
+         'SELECT ID, ValueListType': [{ ID: 'F1', ValueListType: storedType }],
+      };
+      return mm;
+   }
+
+   it('a widened list puts the entity on the modified list', async () => {
+      const result = await withConfig('List').ConfigPass([field(['Closed', 'Held', 'Open'])], [configRow('V1', 'Closed', 1), configRow('V2', 'Open', 2)]);
+      expect(result).toEqual({ applied: 1, skipped: 0 });
+      expect(ManageMetadataBase.ModifiedEntityList).toEqual(['Orders']);
+   });
+
+   it('a changed ValueListType alone does', async () => {
+      await withConfig('List').ConfigPass([field(['Closed', 'Open'], 'ListOrUserEntry')], [configRow('V1', 'Closed', 1), configRow('V2', 'Open', 2)]);
+      expect(ManageMetadataBase.ModifiedEntityList).toEqual(['Orders']);
+   });
+
+   it('an unchanged list and type do not', async () => {
+      const result = await withConfig('List').ConfigPass([field(['Closed', 'Open'])], [configRow('V1', 'Closed', 1), configRow('V2', 'Open', 2)]);
+      expect(result).toEqual({ applied: 1, skipped: 0 });
+      expect(ManageMetadataBase.ModifiedEntityList).toEqual([]);
    });
 });

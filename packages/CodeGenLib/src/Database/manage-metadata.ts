@@ -11443,9 +11443,12 @@ WHERE
    /**
     * The text that makes a batch of terminated statements apply all or nothing.
     *
-    * - SQL Server: an explicit transaction inside TRY/CATCH. The CATCH rolls back and re-throws, so
-    *   the caller sees the original error and the session is left with no open transaction (which
-    *   `SET XACT_ABORT ON` alone would not guarantee for the pooled connection afterwards).
+    * - SQL Server: `SET XACT_ABORT ON`, then an explicit transaction inside TRY/CATCH. The CATCH rolls
+    *   back and re-throws, so the caller sees the original error. A client-side timeout is an
+    *   attention signal that skips the CATCH; `XACT_ABORT` makes the server roll the transaction back
+    *   then, so the pooled connection is not handed to later writes with the transaction still open
+    *   (those writes would be undone when the connection closes). The option lasts only for this
+    *   call: `query()` runs the text through `sp_executesql`, and a SET there ends with it.
     * - PostgreSQL: the batch unchanged. Several statements sent in one simple query already run as
     *   one implicit transaction that rolls back on any error; an explicit `BEGIN … COMMIT` there would
     *   instead leave the pooled connection in an aborted transaction after a failure.
@@ -11454,6 +11457,6 @@ WHERE
       if (platform === 'postgresql') {
          return batch;
       }
-      return `BEGIN TRY\nBEGIN TRANSACTION;\n${batch}\nCOMMIT TRANSACTION;\nEND TRY\nBEGIN CATCH\nIF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;\nTHROW;\nEND CATCH`;
+      return `SET XACT_ABORT ON;\nBEGIN TRY\nBEGIN TRANSACTION;\n${batch}\nCOMMIT TRANSACTION;\nEND TRY\nBEGIN CATCH\nIF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;\nTHROW;\nEND CATCH`;
    }
 }
