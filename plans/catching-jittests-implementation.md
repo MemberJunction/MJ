@@ -23,7 +23,7 @@ Copied from the spec and the repo rules. Every task's requirements include this 
 - Untrusted code (PR code, its install and build scripts, generated tests) runs only inside the Docker sandbox: own PID namespace, `--network none`, non-root user, no `--privileged`, no Docker socket, empty environment (D28). Keys exist only in the orchestrating process (D22).
 - Generated tests live at `packages/<X>/src/__tests__/jit/<id>.jit.test.ts` (§7). The shared vitest `include` (`src/**/__tests__/**/*.test.ts`) already matches them.
 - Base = `git merge-base origin/next <head>`; head = PR head SHA (§7, D8). Each test runs 3 times per revision with `TZ=UTC` and a fixed `--sequence.seed` (§7).
-- Limits (starting values, all settings, §8.2, §8.3, §13.3): 5 dodgy-diff tests per package; 3 risks per package, 2 tests per risk; at most 3 packages per PR; at most 4 agent sessions in parallel; 30 turns and a token budget per session.
+- Limits (starting values, all settings, §8.2, §8.3, §13.3): 5 dodgy-diff tests per package; 3 risks per package, 2 tests per risk; at most 3 packages per PR; at most 4 agent sessions in parallel; 30 turns, a token budget (host count, cache tokens included) and a dollar cap (`maxBudgetUsd`) per session.
 - Every artifact, store record and comment passes a redaction check before it is written (D32).
 - Git: branch `CB-jit-catching-impl` from `next`; never `git add -A` or `git add .`; stage named files only. Do not push unless the user asks.
 - Changeset: one `.changeset/*.md` with `'@memberjunction/jit-catching': patch` (no migration, no metadata → `patch`).
