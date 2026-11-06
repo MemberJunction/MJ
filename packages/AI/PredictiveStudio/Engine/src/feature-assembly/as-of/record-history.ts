@@ -91,8 +91,19 @@ export class RecordHistory {
   }
 
   /**
+   * The lower-cased keys whose latest change row (ChangedAt order, ties by ID) is a Delete: records the history says
+   * were deleted, so a missing current row is explained rather than a short read.
+   */
+  public static KeysDeletedByHistory(changes: readonly RecordChangeRow[]): ReadonlySet<string> {
+    const deleted = new Set<string>();
+    for (const [k, list] of RecordHistory.indexByKey(changes)) if (list[list.length - 1].Type === 'Delete') deleted.add(k);
+    return deleted;
+  }
+
+  /**
    * Pure: index the change rows, run the continuity check against the current values, and expose replay.
-   * `current` is keyed by the lower-cased record key, as `KeyedReader.ReadByKeys` produces it. The entity's field types
+   * `current` is keyed by the lower-cased record key, as `KeyedReader.ReadPresentByKeys` produces it; a deleted record has
+   * no current row and is skipped by the continuity check. The entity's field types
    * decide how two values of a field compare (see {@link comparable}).
    */
   public static BuildEntityHistory(
@@ -374,11 +385,20 @@ export class RunViewRecordHistoryReader implements IRecordHistoryReader {
 
   constructor(private readonly dataAccess: ICountingDataAccess, private readonly read: ReadPolicy) {}
 
-  /** The entity's replayable history for `keys`; a short read of either source ends the assembly with its refusal. */
+  /**
+   * The entity's replayable history for `keys`. A key with no current row whose change rows end in a Delete is a
+   * deleted record and replays from its history (uncovered from the Delete on); a key with no current row and no such
+   * Delete, or a short read of the change rows, ends the assembly with its refusal.
+   */
   public async Load(entity: AssemblyEntityInfo, keys: readonly string[], fields: readonly string[], policy: ChangeHistoryPolicy, now: Date): Promise<EntityHistory> {
     const changes = await this.changeRowsOf(entity);
-    const current = await KeyedReader.ReadByKeys(this.dataAccess, entity.Name, entity.PrimaryKey, keys, fields);
-    if (current.Status === 'refused') throw new AssemblyRefused(current.Refusal);
+    const current = await KeyedReader.ReadPresentByKeys(this.dataAccess, entity.Name, entity.PrimaryKey, keys, fields);
+    const deleted = RecordHistory.KeysDeletedByHistory(changes);
+    const unexplained = current.MissingKeys.filter((k) => !deleted.has(k));
+    if (unexplained.length > 0) {
+      const rowsExpected = current.Rows.size + current.MissingKeys.length;
+      throw new AssemblyRefused({ kind: 'truncated-read', entity: entity.Name, rowsExpected, rowsRead: current.Rows.size });
+    }
     return RecordHistory.BuildEntityHistory(entity, changes, current.Rows, fields, policy, now);
   }
 

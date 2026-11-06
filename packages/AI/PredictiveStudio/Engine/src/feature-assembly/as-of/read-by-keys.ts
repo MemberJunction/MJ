@@ -1,8 +1,8 @@
 /**
  * @module feature-assembly/as-of/read-by-keys
  *
- * Reads rows of one entity by primary key in batches and refuses when any key is missing, so training and scoring
- * read the same rows the same way.
+ * Reads rows of one entity by primary key in batches, reporting or refusing the keys with no row, so training and
+ * scoring read the same rows the same way.
  */
 import { EscapeSQLString } from '@memberjunction/global';
 import type { AssemblyRefusal } from '@memberjunction/predictive-studio-core';
@@ -13,15 +13,24 @@ export const READ_BY_KEYS_BATCH = 500;
 
 export type ReadByKeysOutcome = { readonly Status: 'read'; readonly Rows: ReadonlyMap<string, SourceRow> } | { readonly Status: 'refused'; readonly Refusal: AssemblyRefusal };
 
+/** The rows a keyed read found, and the requested keys it found no row for. */
+export interface PresentRowsByKey {
+  /** Rows by lower-cased key. */
+  readonly Rows: ReadonlyMap<string, SourceRow>;
+  /** Requested keys with no row, lower-cased, in first-seen order. */
+  readonly MissingKeys: readonly string[];
+}
+
 /** Keyed reads of one entity. */
 export class KeyedReader {
   /**
-   * The rows of `keys` (deduplicated case-insensitively), keyed by lower-cased key. The batches are independent reads and
-   * run in parallel. Keys go into SQL as given (escaped), never in their lower-cased matching form.
+   * The rows of `keys` (deduplicated case-insensitively), keyed by lower-cased key, and the keys no row was found for.
+   * The batches are independent reads and run in parallel. Keys go into SQL as given (escaped), never in their
+   * lower-cased matching form.
    */
-  public static async ReadByKeys(
+  public static async ReadPresentByKeys(
     dataAccess: ICountingDataAccess, entityName: string, keyField: string, keys: readonly string[], fields: readonly string[],
-  ): Promise<ReadByKeysOutcome> {
+  ): Promise<PresentRowsByKey> {
     const unique = new Map<string, string>();   // lower-cased → first original spelling
     for (const k of keys) if (!unique.has(k.toLowerCase())) unique.set(k.toLowerCase(), k);
     const originals = [...unique.values()];
@@ -38,9 +47,18 @@ export class KeyedReader {
       if (!res.Success) throw new Error(`Reading ${entityName} by key failed: ${res.ErrorMessage || 'unknown error'}`);
       for (const row of res.Rows) out.set(String(row[keyField]).toLowerCase(), row);
     }
-    if (out.size !== unique.size) {
-      return { Status: 'refused', Refusal: { kind: 'truncated-read', entity: entityName, rowsExpected: unique.size, rowsRead: out.size } };
+    return { Rows: out, MissingKeys: [...unique.keys()].filter((k) => !out.has(k)) };
+  }
+
+  /** As {@link ReadPresentByKeys}, refusing `truncated-read` when any key has no row. */
+  public static async ReadByKeys(
+    dataAccess: ICountingDataAccess, entityName: string, keyField: string, keys: readonly string[], fields: readonly string[],
+  ): Promise<ReadByKeysOutcome> {
+    const present = await KeyedReader.ReadPresentByKeys(dataAccess, entityName, keyField, keys, fields);
+    if (present.MissingKeys.length > 0) {
+      const rowsExpected = present.Rows.size + present.MissingKeys.length;
+      return { Status: 'refused', Refusal: { kind: 'truncated-read', entity: entityName, rowsExpected, rowsRead: present.Rows.size } };
     }
-    return { Status: 'read', Rows: out };
+    return { Status: 'read', Rows: present.Rows };
   }
 }

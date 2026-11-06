@@ -146,6 +146,27 @@ describe('RunViewRecordHistoryReader', () => {
     expect(status.ValueAt('P1', 'Status', new Date('2022-01-01T00:00:00Z'))).toMatchObject({ Status: 'value', Value: 'Active' });
     expect(tier.ValueAt('P2', 'Tier', new Date('2023-01-01T00:00:00Z'))).toMatchObject({ Status: 'value', Value: 'B' });
   });
+
+  it('replays a parent deleted after the decision date from its history, and marks it uncovered when deleted before', async () => {
+    const data = new CountingTables({
+      People: [{ ID: 'P2', Status: 'Active', Tier: 'B' }],   // P1 is hard-deleted
+      'MJ: Record Changes': [
+        changeRow(rc('c1', 'P1', 'Create', '2021-01-01T00:00:00Z', { Status: 'Active', Tier: 'A' })),
+        changeRow(rc('d1', 'P1', 'Delete', '2024-06-01T00:00:00Z', { Status: 'Active', Tier: 'A' })),
+        changeRow(rc('c3', 'P2', 'Snapshot', '2022-06-01T00:00:00Z', { Status: 'Active', Tier: 'B' })),
+      ],
+    });
+    const reader = new RunViewRecordHistoryReader(data, { mode: 'complete' });
+    const history = await reader.Load(people, ['P1', 'P2'], ['Status'], { onUncoveredRow: 'exclude-and-count', externalSourceRows: 'ineligible' }, new Date('2026-10-12T00:00:00Z'));
+    expect(history.ValueAt('P1', 'Status', new Date('2024-01-01T00:00:00Z'))).toMatchObject({ Status: 'value', Value: 'Active' });
+    expect(history.ValueAt('P1', 'Status', new Date('2025-01-01T00:00:00Z'))).toEqual({ Status: 'uncovered', Reason: 'deleted' });
+  });
+
+  it('still refuses a key with no row and no Delete in its history as a truncated read', async () => {
+    const data = new CountingTables({ People: [], 'MJ: Record Changes': [changeRow(rc('c1', 'P1', 'Create', '2021-01-01T00:00:00Z', { Status: 'Active', Tier: 'A' }))] });
+    await expect(new RunViewRecordHistoryReader(data, { mode: 'complete' }).Load(people, ['P1'], ['Status'], { onUncoveredRow: 'exclude-and-count', externalSourceRows: 'ineligible' }, new Date('2026-10-12T00:00:00Z')))
+      .rejects.toMatchObject({ Refusal: { kind: 'truncated-read', entity: 'People', rowsExpected: 1, rowsRead: 0 } });
+  });
 });
 
 describe('BuildEntityHistory — values shaped like timestamps', () => {

@@ -90,7 +90,9 @@ version 1 of each, and the training path without them is removed.
   time is refused (`time-index-needs-time-holdout`). An advancing fixed decision date mints the next unit version only
   after every pre-run refusal passes, and removes it if the run then fails to bind. A model is scored on the unit path
   only when its own Lineage names a unit. The as-of assembler reads a stored value for a row decided on or after the
-  assembly day only when no change history covers that day. `PredictiveStudio.TrainModel` refuses `asOf` (including
+  assembly day only when no change history covers that day. A replayed record hard-deleted after the decision date
+  replays from its Record Changes (uncovered from its Delete on); a missing record with no Delete still refuses
+  `truncated-read`. `PredictiveStudio.TrainModel` refuses `asOf` (including
   `{ Mode: 'none' }`), `labelEventDates`, `maxRows` and `primaryKeyField` by presence; its output carries the stored
   gate decision, the snapshot and the protocol version, `modelId`/`version` are absent when no model ships (status
   `NoSignal` or `KeptExistingRule`), and an unreadable stored result fails. The Train ML Model Action loses its `MaxRows`

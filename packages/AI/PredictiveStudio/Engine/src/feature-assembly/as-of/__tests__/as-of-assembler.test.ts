@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createHash } from 'node:crypto';
 import type { FeatureColumnSpec, PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
 import { AsOfFeatureAssembler, type AsOfAssemblyInput, type AssemblyRowRef } from '../as-of-assembler';
-import { RecordHistory, type IRecordHistoryReader, type RecordChangeRow } from '../record-history';
+import { RunViewRecordHistoryReader, type IRecordHistoryReader, type RecordChangeRow } from '../record-history';
 import { SeriesFeatures, type SeriesHistory } from '../series-features';
 import type { SourceRow } from '../../data-access';
 import type { AssemblyEntityInfo, AssemblyFieldInfo, IAssemblyMetadata } from '../../assembly-metadata';
@@ -73,16 +73,9 @@ const unit: PredictionUnitSpec = {
   incumbent: { kind: 'none' }, authoredBy: { kind: 'human', userId: 'U' },
 };
 
-/** A history reader over the in-memory tables: the change rows of the entity plus the current rows of the keys. */
-const historyOver = (data: Record<string, SourceRow[]>, rowChanges: Record<string, RecordChangeRow[]>): IRecordHistoryReader => ({
-  Load: async (entity, keys, fields, policy, now) => {
-    const wanted = new Set(keys.map((k) => k.toLowerCase()));
-    const current = new Map((data[entity.Name] || [])
-      .filter((r) => wanted.has(String(r[entity.PrimaryKey]).toLowerCase()))
-      .map((r) => [String(r[entity.PrimaryKey]).toLowerCase(), r] as const));
-    return RecordHistory.BuildEntityHistory(entity, rowChanges[entity.Name] || [], current, fields, policy, now);
-  },
-});
+/** The fixture's change rows as `MJ: Record Changes` rows of the entity they belong to, as the production reader reads them. */
+const recordChangeRows = (rowChanges: Record<string, RecordChangeRow[]>): SourceRow[] =>
+  Object.entries(rowChanges).flatMap(([name, list]) => list.map((c) => ({ ...c, EntityID: entities[name].ID, Status: 'Complete' })));
 
 interface Fixture {
   readonly Rows?: readonly AssemblyRowRef[];
@@ -95,7 +88,7 @@ interface Fixture {
 }
 
 const input = (features: FeatureColumnSpec[], f: Fixture = {}): AsOfAssemblyInput => {
-  const data = f.Tables || tables;
+  const dataAccess = new TableDataAccess({ ...(f.Tables || tables), 'MJ: Record Changes': recordChangeRows(f.Changes || changes) });
   return {
     Context: 'train',
     Unit: f.Unit || unit,
@@ -104,8 +97,8 @@ const input = (features: FeatureColumnSpec[], f: Fixture = {}): AsOfAssemblyInpu
     Features: features,
     SeriesHistory: f.SeriesHistory || null,
     Read: { mode: 'complete' },
-    DataAccess: new TableDataAccess(data),
-    History: historyOver(data, f.Changes || changes),
+    DataAccess: dataAccess,
+    History: new RunViewRecordHistoryReader(dataAccess, { mode: 'complete' }),
     Metadata: metadata,
     AssembledAt: new Date('2026-10-12T00:00:00Z'),
     ...(f.CategoryLevels ? { CategoryLevels: f.CategoryLevels } : {}),
@@ -750,6 +743,18 @@ describe('AsOfFeatureAssembler — a stored value changed after the decision by 
       rc('c2', 'P1', 'Create', '2023-07-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }),
     ] } }));
     expect(out.Status === 'refused' ? out.Refusal.kind : out.Status).toBe('select-changes-after-decision-date');
+  });
+
+  it('assembles a row whose parent was hard-deleted after the decision date, and excludes it under exclude-and-count when deleted before', async () => {
+    const deletedAfter = { People: [rc('c0', 'P1', 'Create', '2021-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' }), rc('d1', 'P1', 'Delete', '2025-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })] };
+    const withoutP1 = { ...data, People: data.People.filter((p) => p.ID !== 'P1') };
+    // The replayed read of the parent's field: the path the history reader serves (a stored read of a gone record has no stored value).
+    const replayed: FeatureColumnSpec = { ...stored, source: { kind: 'record-changes', entity: 'People', field: 'Status', keyField: 'PersonID' } };
+    const out = await new AsOfFeatureAssembler().Assemble(input([replayed], { Rows: one, Tables: withoutP1, Changes: deletedAfter }));
+    expect(out.Status === 'assembled' && out.Rows[0].Values).toEqual(['Lapsed']);
+    const deletedBefore = { People: [deletedAfter.People[0], rc('d1', 'P1', 'Delete', '2022-01-01T00:00:00Z', { ID: 'P1', Status: 'Lapsed' })] };
+    const excluded = await new AsOfFeatureAssembler().Assemble(input([replayed], { Rows: one, Tables: withoutP1, Changes: deletedBefore, Unit: { ...unit, history: { ...unit.history, onUncoveredRow: 'exclude-and-count' } } }));
+    expect(excluded.Status === 'assembled' && excluded.UncoveredRowsExcluded).toEqual([{ entity: 'People', field: 'Status', rows: 1 }]);
   });
 
   it('keeps the stored value when a later Snapshot or Create row carries the same value of the field', async () => {
