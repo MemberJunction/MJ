@@ -2728,8 +2728,8 @@ The `.vite` tmpfs mountpoint creation line is awkward; replace it with a small p
 ### Task 1.16: Prompts and `ClaudeAgentGenerator`
 
 **Files:**
-- Create: `src/generator/prompts.ts`, `src/generator/ClaudeAgentGenerator.ts`
-- Test: `src/__tests__/prompts.test.ts`, `src/__tests__/ClaudeAgentGenerator.test.ts`
+- Create: `src/generator/prompts.ts`, `src/generator/AgentGuards.ts`, `src/generator/ClaudeAgentGenerator.ts`
+- Test: `src/__tests__/prompts.test.ts`, `src/__tests__/AgentGuards.test.ts`, `src/__tests__/ClaudeAgentGenerator.test.ts`
 
 **Interfaces:**
 - Consumes: `RunTestTool`, `Settings`, `GenerationRequest`/`GenerationResult`, the Agent SDK (`query`, `tool`, `createSdkMcpServer`) as verified in Task 0.4.
@@ -2740,7 +2740,13 @@ The `.vite` tmpfs mountpoint creation line is awkward; replace it with a small p
   interface PromptContext { PackageRelDir: string; ExistingTestPaths: string[]; ChangedFilesInPackage: string[]; Diff: string; JitDir: string; TestIDs: string[] }
   type AgentRunner = (prompt: string, system: string, o: AgentRunOptions) => AsyncIterable<AgentMessage>   // injected; default wraps the SDK
   class ClaudeAgentGenerator extends BaseTestGenerator { constructor(o: { Sandbox: Sandbox; ScratchRoot: string; Settings: Settings; PackageMap: PackageMap; TranscriptDir: string; Runner?: AgentRunner }); Generate(req: GenerationRequest): Promise<GenerationResult> }
+  function ResolveNearest(path: string): string                                          // realpath of the path or of its nearest existing parent
+  function IsInside(root: string, target: string): boolean                                // both sides through ResolveNearest
+  function ReadAllowed(tool: string, input: Record<string, unknown>, root: string): boolean // Read / Grep / Glob inside the base worktree only
+  function BuildSdkOptions(o: AgentRunOptions, x: { System: string; McpServer: McpServer; Abort: AbortController; CanUseTool: CanUseTool }): SdkOptions
   ```
+
+SDK option rules (spike §2, design §8.3, D36): `tools: ['Read', 'Grep', 'Glob']` restricts the built-in tools (`allowedTools` does not restrict; it auto-approves). `allowedTools` holds only `mcp__jit__run_test`: a bare name there skips `canUseTool`, so `Read`, `Grep`, `Glob` and `write_test` stay out of it and every call of theirs reaches `canUseTool`. `permissionMode: 'default'` (when omitted the mode can be `auto`, where a classifier decides). `disallowedTools` lists `Bash`, `Write`, `Edit`, `MultiEdit`, `NotebookEdit`, `WebFetch`, `WebSearch`, `Task` and `Agent` as a second layer. After `error_max_turns` the SDK sends the `result` message and then the iterator throws; the runner reads the `result` and catches the throw. `num_turns` in that `result` is `maxTurns + 1`, so turns are the number of distinct assistant message ids the runner counted.
 
 Each generation session gets pre-allocated test IDs (file names) so the pipeline, not the agent, decides what counts as a candidate: after the session, every file `<id>.jit.test.ts` that exists in the jit folder, that the agent ran through `run_test` with `Status: 'Pass'` on base (and, for intent-aware, `Fail` on the mutant), becomes a `CandidateTest`. Files the agent wrote but never proved on base are recorded as `GenerationOutcome: 'Failed'` with the reason.
 
@@ -2770,6 +2776,60 @@ describe('prompts', () => {
   it('intent-aware task names the risk and requires killing a mutant', () => {
     const t = BuildTaskPrompt(req('IntentAware'), ctx);
     expect(t).toContain('cache key ignores the user'); expect(t).toMatch(/mutant/i); expect(t).toContain('"Mutant"');
+  });
+});
+```
+
+`AgentGuards.test.ts`:
+
+```ts
+import { describe, it, expect } from 'vitest';
+import { mkdtempSync, mkdirSync, symlinkSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { IsInside, ReadAllowed } from '../generator/AgentGuards';
+import { BuildSdkOptions } from '../generator/ClaudeAgentGenerator';
+
+function tree() {
+  const root = mkdtempSync(join(tmpdir(), 'jit-guard-')); const outside = mkdtempSync(join(tmpdir(), 'jit-out-'));
+  const jit = join(root, 'packages/X/src/__tests__/jit'); mkdirSync(jit, { recursive: true }); symlinkSync(outside, join(jit, 'out'));
+  return { root, jit };
+}
+
+describe('IsInside', () => {
+  it('follows symlinks for existing paths and for new files under a symlinked folder', () => {
+    const { root, jit } = tree();
+    expect(IsInside(jit, join(jit, 'a.jit.test.ts'))).toBe(true);
+    expect(IsInside(jit, join(jit, 'out', 'a.jit.test.ts'))).toBe(false);
+    expect(IsInside(jit, join(jit, 'out', 'new', 'deep.ts'))).toBe(false);
+    expect(IsInside(jit, join(root, 'packages/X/src/a.ts'))).toBe(false);
+  });
+  it('resolves the allowed root too, so a root given through a symlink still matches its own files', () => {
+    const { root, jit } = tree(); symlinkSync(jit, join(root, 'alias'));
+    expect(IsInside(join(root, 'alias'), join(jit, 'a.jit.test.ts'))).toBe(true);
+  });
+});
+
+describe('ReadAllowed', () => {
+  it('keeps Read, Grep and Glob inside the base worktree and allows nothing else', () => {
+    const { root } = tree();
+    expect(ReadAllowed('Read', { file_path: join(root, 'packages/X/src/a.ts') }, root)).toBe(true);
+    expect(ReadAllowed('Read', { file_path: '/etc/passwd' }, root)).toBe(false);
+    expect(ReadAllowed('Read', { file_path: join(root, 'packages/X/src/__tests__/jit/out/secret') }, root)).toBe(false);
+    expect(ReadAllowed('Grep', { pattern: 'x' }, root)).toBe(true);
+    expect(ReadAllowed('Grep', { pattern: 'x', path: '/home' }, root)).toBe(false);
+    expect(ReadAllowed('Glob', { pattern: '/etc/*' }, root)).toBe(false);
+    expect(ReadAllowed('Glob', { pattern: '../**/*.env' }, root)).toBe(false);
+    expect(ReadAllowed('Bash', { command: 'ls' }, root)).toBe(false);
+  });
+});
+
+describe('BuildSdkOptions', () => {
+  it('restricts built-ins with tools, keeps reads and writes out of allowedTools, and uses the default permission mode', () => {
+    const o = BuildSdkOptions({ Cwd: '/w', Model: 'm', MaxTurns: 30, TokenBudget: 1, Hooks: {} as never }, { System: 's', McpServer: {} as never, Abort: new AbortController(), CanUseTool: async () => ({ behavior: 'deny', message: 'x' }) });
+    expect(o.tools).toEqual(['Read', 'Grep', 'Glob']); expect(o.permissionMode).toBe('default'); expect(o.allowedTools).toEqual(['mcp__jit__run_test']);
+    expect(o.disallowedTools).toEqual(expect.arrayContaining(['Bash', 'Write', 'Edit', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task', 'Agent']));
+    expect(o.settingSources).toEqual([]); expect(o.maxTurns).toBe(30);
   });
 });
 ```
@@ -2884,11 +2944,43 @@ The mutant is a copy of BASE with one deliberate bug that represents the risk; e
 }
 ```
 
-- [ ] **Step 3: ClaudeAgentGenerator.ts**
+- [ ] **Step 3: AgentGuards.ts and ClaudeAgentGenerator.ts**
 
 ```ts
-import { existsSync, readFileSync, readdirSync, realpathSync, writeFileSync, mkdirSync } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
+// AgentGuards.ts
+import { existsSync, realpathSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path';
+
+/** `realpath` of the path, or of its nearest existing parent joined with the rest, so a new file under a symlinked folder resolves to where it would land. */
+export function ResolveNearest(path: string): string {
+    const abs = resolve(path);
+    if (existsSync(abs)) return realpathSync(abs);
+    const parent = dirname(abs);
+    return parent === abs ? abs : join(ResolveNearest(parent), basename(abs));
+}
+
+/** True when `target` lands inside `root`; both sides go through `ResolveNearest`. */
+export function IsInside(root: string, target: string): boolean {
+    const r = ResolveNearest(root); const t = ResolveNearest(target);
+    return t === r || t.startsWith(r.endsWith(sep) ? r : r + sep);
+}
+
+const READ_PATH_KEY: Record<string, string> = { Read: 'file_path', Grep: 'path', Glob: 'path' };
+
+/** Permission check for the read tools: the path (and a Glob pattern) must stay inside `root`. Grep and Glob without a path search `cwd`, the base worktree. */
+export function ReadAllowed(tool: string, input: Record<string, unknown>, root: string): boolean {
+    const key = READ_PATH_KEY[tool]; if (!key) return false;
+    if (tool === 'Glob') { const pattern = input.pattern; if (typeof pattern !== 'string' || isAbsolute(pattern) || pattern.startsWith('~') || pattern.split(/[\\/]/).includes('..')) return false; }
+    const path = input[key];
+    if (path === undefined) return tool !== 'Read';
+    return typeof path === 'string' && IsInside(root, resolve(root, path));
+}
+```
+
+```ts
+// ClaudeAgentGenerator.ts
+import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
+import { basename, join, resolve } from 'node:path';
 import { z } from 'zod';
 import { query, tool, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
 import { BaseTestGenerator } from '../contracts/BaseTestGenerator';
@@ -2899,6 +2991,7 @@ import type { Settings } from '../settings';
 import { NewID } from '../ids';
 import { RunTestTool, type RunTestInput, type RunTestOutput } from './RunTestTool';
 import { BuildSystemPrompt, BuildTaskPrompt, type PromptContext } from './prompts';
+import { IsInside, ReadAllowed } from './AgentGuards';
 
 export type AgentMessage = { Type: 'result'; Usage: { InputTokens: number; OutputTokens: number; CacheReadTokens: number }; CostUSD: number; Turns: number; Subtype: string } | { Type: 'assistant'; Text: string } | { Type: 'tool'; Name: string; Input: unknown; Output: unknown };
 export interface AgentHooks { WriteFile: (repoRelative: string, source: string) => Promise<string>; RunTest: (file: string, mutant?: { Edits: MutantEdit[] }) => Promise<RunTestOutput>; }
@@ -2920,12 +3013,12 @@ export class ClaudeAgentGenerator extends BaseTestGenerator {
         const ctx: PromptContext = { PackageRelDir: pkg.Dir, ExistingTestPaths: existingTests(join(r.BaseRootDir, pkg.Dir, 'src')).map((p) => `${pkg.Dir}/src/${p}`), ChangedFilesInPackage: r.Analysis.ChangedFiles.filter((f) => f.Package === r.Package).map((f) => f.Path), Diff: r.Analysis.ChangedFiles.filter((f) => f.Package === r.Package).flatMap((f) => f.Hunks).map((h) => `--- ${h.Path} @@ -${h.OldStart},${h.OldLines} +${h.NewStart},${h.NewLines} @@\n${h.Lines.join('\n')}`).join('\n'), JitDir: jitDir, TestIDs: this.AllocatedIDs };
         const tool = (this.o.RunTestFactory ?? ((x) => new RunTestTool(x)))({ Sandbox: this.o.Sandbox, BaseRootDir: r.BaseRootDir, PackageRelDir: pkg.Dir, PackageName: r.Package, ScratchRoot: this.o.ScratchRoot, Settings: this.o.Settings });
         const proven = new Map<string, { Base: boolean; Mutant: { Edits: MutantEdit[]; Patch: string; Failure: FailureDetail | null } | null }>();
-        const allowedRoot = resolve(r.BaseRootDir, jitDir) + sep; const transcript: string[] = [];
+        const allowedRoot = join(r.BaseRootDir, jitDir); const transcript: string[] = [];
         const hooks: AgentHooks = {
             WriteFile: async (rel, source) => {
-                const target = resolve(r.BaseRootDir, rel); const real = existsSync(target) ? realpathSync(target) : target;
-                const id = this.AllocatedIDs.find((x) => rel.endsWith(`/${x}.jit.test.ts`));
-                if (!real.startsWith(allowedRoot) || !id) { transcript.push(`DENIED write ${rel}`); return `denied: writes are allowed only to the listed files in ${jitDir}/`; }
+                const target = resolve(r.BaseRootDir, rel);
+                const id = this.AllocatedIDs.find((x) => basename(target) === `${x}.jit.test.ts`);
+                if (!id || !IsInside(allowedRoot, target)) { transcript.push(`DENIED write ${rel}`); return `denied: writes are allowed only to the listed files in ${jitDir}/`; }
                 writeFileSync(target, source); proven.set(id, { Base: false, Mutant: null }); transcript.push(`WRITE ${rel} (${source.length} chars)`); return 'ok';
             },
             RunTest: async (file, mutant) => {
@@ -2957,22 +3050,42 @@ function existingTests(srcDir: string): string[] { if (!existsSync(srcDir)) retu
 
 const RunTestInputSchema = z.object({ File: z.string(), Mutant: z.object({ Edits: z.array(z.object({ File: z.string(), Find: z.string(), Replace: z.string() })).min(1) }).optional() });
 
+type SdkOptions = NonNullable<Parameters<typeof query>[0]['options']>;
+type CanUseTool = NonNullable<SdkOptions['canUseTool']>;
+type McpServer = ReturnType<typeof createSdkMcpServer>;
+
+/** SDK options for one session. `tools` restricts the built-ins; only run_test skips `canUseTool` (spike §2, D36). */
+export function BuildSdkOptions(o: AgentRunOptions, x: { System: string; McpServer: McpServer; Abort: AbortController; CanUseTool: CanUseTool }): SdkOptions {
+    return { cwd: o.Cwd, model: o.Model, maxTurns: o.MaxTurns, systemPrompt: x.System, settingSources: [], permissionMode: 'default',
+        tools: ['Read', 'Grep', 'Glob'], allowedTools: ['mcp__jit__run_test'],
+        disallowedTools: ['Bash', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task', 'Agent'],
+        mcpServers: { jit: x.McpServer }, abortController: x.Abort, canUseTool: x.CanUseTool };
+}
+
 /** The real runner: Claude Agent SDK with read/search tools, writes through the hook, run_test as an MCP tool. Names verified in spike Q2. */
 async function* SdkRunner(prompt: string, system: string, o: AgentRunOptions): AsyncIterable<AgentMessage> {
     const jit = createSdkMcpServer({ name: 'jit', version: '1.0.0', tools: [
         tool('run_test', 'Run one generated vitest file on base, or on base plus a mutant. Returns Status Pass/Fail/Timeout and the failure detail.', RunTestInputSchema.shape, async (input) => ({ content: [{ type: 'text', text: JSON.stringify(await o.Hooks.RunTest(input.File, input.Mutant)) }] })),
         tool('write_test', 'Write the full source of one of the listed test files.', { File: z.string(), Source: z.string() }, async (input) => ({ content: [{ type: 'text', text: await o.Hooks.WriteFile(input.File, input.Source) }] })),
     ] });
-    const abort = new AbortController(); let input = 0, output = 0;
-    for await (const msg of query({ prompt, options: { cwd: o.Cwd, model: o.Model, maxTurns: o.MaxTurns, systemPrompt: system, settingSources: [], allowedTools: ['Read', 'Grep', 'Glob', 'mcp__jit__run_test', 'mcp__jit__write_test'], disallowedTools: ['Bash', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'WebFetch', 'WebSearch', 'Task'], mcpServers: { jit }, abortController: abort,
-        canUseTool: async (name: string, toolInput: Record<string, unknown>) => (['Read', 'Grep', 'Glob', 'mcp__jit__run_test', 'mcp__jit__write_test'].includes(name) ? { behavior: 'allow', updatedInput: toolInput } : { behavior: 'deny', message: `${name} is not available` }) } })) {
-        if (msg.type === 'assistant') { input += msg.message.usage?.input_tokens ?? 0; output += msg.message.usage?.output_tokens ?? 0; if (input + output > o.TokenBudget) abort.abort(); yield { Type: 'assistant', Text: JSON.stringify(msg.message.content).slice(0, 500) }; }
-        if (msg.type === 'result') yield { Type: 'result', Usage: { InputTokens: msg.usage.input_tokens, OutputTokens: msg.usage.output_tokens, CacheReadTokens: msg.usage.cache_read_input_tokens ?? 0 }, CostUSD: msg.total_cost_usd, Turns: msg.num_turns, Subtype: msg.subtype };
+    // write_test checks its own path in the WriteFile hook; reads are checked here.
+    const canUseTool: CanUseTool = async (name, toolInput) => (name === 'mcp__jit__write_test' || ReadAllowed(name, toolInput, o.Cwd)
+        ? { behavior: 'allow', updatedInput: toolInput }
+        : { behavior: 'deny', message: `${name} is not allowed here: reads stay inside the base worktree` });
+    const abort = new AbortController(); const ids = new Set<string>(); let input = 0, output = 0; let sawResult = false;
+    try {
+        for await (const msg of query({ prompt, options: BuildSdkOptions(o, { System: system, McpServer: jit, Abort: abort, CanUseTool: canUseTool }) })) {
+            if (msg.type === 'assistant') { ids.add(msg.message.id); input += msg.message.usage?.input_tokens ?? 0; output += msg.message.usage?.output_tokens ?? 0; if (input + output > o.TokenBudget) abort.abort(); yield { Type: 'assistant', Text: JSON.stringify(msg.message.content).slice(0, 500) }; }
+            if (msg.type === 'result') { sawResult = true; yield { Type: 'result', Usage: { InputTokens: msg.usage.input_tokens, OutputTokens: msg.usage.output_tokens, CacheReadTokens: msg.usage.cache_read_input_tokens ?? 0 }, CostUSD: msg.total_cost_usd, Turns: ids.size, Subtype: msg.subtype }; }
+        }
+    } catch (e) {
+        // After error_max_turns the SDK sends the result message and then throws; that throw ends the session normally.
+        if (!sawResult && !abort.signal.aborted) throw e;
     }
 }
 ```
 
-Writes go through our own `write_test` MCP tool rather than the SDK's `Write` tool, so the path check is ours and the SDK's file tools stay disabled. The SDK is a static import (repo rule: no dynamic `import()`); importing it spawns nothing until `query()` runs, so jobs 2 and 3 pay only the module load. After the build, run `node .github/scripts/check-esm-imports.mjs` to confirm the package's entry point loads under native ESM.
+Writes go through our own `write_test` MCP tool rather than the SDK's `Write` tool, so the path check is ours (`IsInside`, with `realpath` on the nearest existing parent and on the allowed folder) and the SDK's file tools are neither offered (`tools`) nor allowed (`disallowedTools`). Reads reach `canUseTool` because `Read`, `Grep` and `Glob` are not in `allowedTools`, and `ReadAllowed` keeps them inside the base worktree. The SDK is a static import (repo rule: no dynamic `import()`); importing it spawns nothing until `query()` runs, so jobs 2 and 3 pay only the module load. After the build, run `node .github/scripts/check-esm-imports.mjs` to confirm the package's entry point loads under native ESM.
 
 - [ ] **Step 4: Run tests** → PASS. Then one real session (needs `ANTHROPIC_API_KEY`, Docker, a base worktree prepared by Task 1.11's smoke run): generate for `@memberjunction/global` with `claude-haiku-5-5`, `TestsPerPackage: 2`; confirm at least one `Produced` test and that the transcript shows `RUN … → Pass`. Record tokens and wall time.
 

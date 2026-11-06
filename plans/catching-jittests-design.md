@@ -138,6 +138,7 @@ stubs (`DatabaseProviderStub`, `EntitiesOnlyProvider`, `TestLLM`); `@vitest/cove
 | D33 | Gate 1 corpus | ~45 + ~45 PRs; tune on two thirds, decide on a held-out third; base is the landing merge commit's first parent, head is the merge commit | Tuning on the deciding set flatters the winner; `merge-base` returns the head itself for a merged PR |
 | D34 | Gate 2 | Counts label and nightly catches (nightly ones sent to authors directly); reports the answer rate; 8 weeks at most, with a defined outcome if not reached | Label runs alone cannot reach 15 answered catches |
 | D35 | Host fetch | The host fetches head's dependencies with a copy of head's lockfile from which a script removes the `patchedDependencies:` block and every `(patch_hash=…)` segment; the sandbox installs offline with the real lockfile and `patches/` and applies the patches; each run has its own store; a failed host fetch is an infrastructure failure for that PR, never retried with network | With `patches/` present, `pnpm fetch` applies PR-supplied diffs on the host and follows symlinks out of `patches/`; without it, the real lockfile fails (`ERR_PNPM_PATCH_NOT_FOUND`). The stripped copy works and the sandbox applies the patch (spike §8, option (b)). The sandbox writes patched files into the store, so a store is not shared |
+| D36 | Agent tool limits | SDK `tools` lists `Read`, `Grep`, `Glob`; `permissionMode: 'default'`; `disallowedTools` as a second layer; `allowedTools` holds only `run_test`, so reads and writes reach the permission check; read and write paths are checked after `realpath` | In the spike, `allowedTools` auto-approved the plan's `Write` and an outside write went through; a bare name there skips `canUseTool`; an omitted `permissionMode` can be `auto` (spike §2) |
 
 ---
 
@@ -406,14 +407,25 @@ is flagged as matching the risk. The rule filter boosts these (§9.1).
 
 ### 8.3 Agent constraints (Claude Agent SDK)
 
-- **Read**: read and search inside the base worktree.
-- **Write**: only under `packages/<X>/src/__tests__/jit/**`, enforced by a permission check.
+- **Tools offered**: the SDK's `tools` option lists the only built-in tools, `Read`, `Grep` and `Glob`; `allowedTools`
+  does not restrict tools, it approves them without a check. `disallowedTools` lists `Bash`, `Write`, `Edit` and the
+  other built-ins as a second layer. `permissionMode` is `'default'`, so the permission callback (`canUseTool`) decides
+  and no classifier does (D36, spike §2).
+- **Read**: read and search inside the base worktree. `Read`, `Grep` and `Glob` are not in `allowedTools`, so every call
+  reaches `canUseTool`, which allows it only when its path, resolved with `realpath`, is inside the base worktree.
+- **Write**: only under `packages/<X>/src/__tests__/jit/**`, through the tool's own `write_test` tool (the SDK's `Write`
+  and `Edit` are not offered). Its check resolves the nearest existing parent of the target and the allowed folder with
+  `realpath`, so a symlinked folder cannot lead outside. A tool named in `allowedTools` skips `canUseTool`, so only
+  `run_test` is listed there.
 - **Run**: one custom tool, `run_test(file, mutant?)`, which runs vitest on that file on base, or on base + mutant in a
   scratch copy. It runs vitest **in the sandbox** (§5.4): a separate container with its own PID namespace, no network,
   no secrets and no runner credentials. The agent's own process holds the Anthropic key, and the sandbox cannot see it.
   Results return as data.
 - **No general shell, no network** beyond the model API.
-- **Limits per session**: 30 turns and a token budget (starting values; gate 1 tunes them).
+- **Limits per session**: 30 turns and a token budget (starting values; gate 1 tunes them). When the turn limit is
+  reached the SDK sends its `result` message (subtype `error_max_turns`) and then throws; the runner reads the `result`
+  and treats the throw as the end of the session. `num_turns` there is the limit plus one, so the runner counts turns
+  itself as distinct assistant message ids.
 - **Model**: chosen in gate 1 (§13.2).
 
 **Prompt content that prevents false alarms:** the package's existing tests as style examples; the
