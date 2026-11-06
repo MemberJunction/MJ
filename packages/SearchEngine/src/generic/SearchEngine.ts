@@ -563,7 +563,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                     params.Filters,
                     contextUser,
                     isPreview,
-                    undefined,
+                    this.audienceConstraints(params.Audience, contextUser),
                     partialEvents,
                     params.MinScore,
                 );
@@ -585,6 +585,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                         this.principalsFrom(params),
                         partialEvents,
                         params.MinScore,
+                        this.distinctReaders(params.Audience, contextUser),
                     )
                 ));
 
@@ -1038,6 +1039,16 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             readers.push(reader);
         }
         return readers;
+    }
+
+    /**
+     * Constraints for an UNSCOPED search that carry only the audience, so a provider that traverses
+     * (the graph lane) can apply it while it walks; `undefined` — exactly as before — when the audience
+     * adds no reader. Every other field stays `undefined`, which providers read as "unscoped".
+     */
+    private audienceConstraints(audience: SearchAudience | undefined, contextUser: UserInfo): ScopeConstraints | undefined {
+        const readers = this.distinctReaders(audience, contextUser);
+        return readers.length > 0 ? { AudienceReaders: readers } : undefined;
     }
 
     /** The distinct reader IDs, lower-cased and sorted, for the cache key. `undefined` when the audience adds no reader, so it keys like no audience. */
@@ -1784,6 +1795,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         principals: ScopePrincipals,
         onProviderResolved?: OnProviderResolved,
         minScore?: number,
+        /** The run's audience beyond the caller, handed to every provider (`ScopeConstraints.AudienceReaders`). */
+        audienceReaders: UserInfo[] = [],
     ): Promise<{
         scopeID: string;
         fused: SearchResultItem[];
@@ -1856,7 +1869,8 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 // under the provider's SourceType in QueryTransforms so the provider finds it.
                 const perProviderConstraints: ScopeConstraints = {
                     ...constraints,
-                    QueryTransforms: { ...perProviderQueryTransforms }
+                    QueryTransforms: { ...perProviderQueryTransforms },
+                    ...(audienceReaders.length > 0 ? { AudienceReaders: audienceReaders } : {}),
                 };
                 // (Note: actual Nunjucks-rendered `QueryTransformTemplateID` resolution for
                 // stored templates lives in AgentPreExecutionRAG/ScopedSearchAction, not here.

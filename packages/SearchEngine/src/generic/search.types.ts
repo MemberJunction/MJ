@@ -458,6 +458,13 @@ export interface ScopeConstraints {
      * provider-specific knobs (e.g., vector namespace, route key).
      */
     ScopeConfig?: Record<string, unknown>;
+    /**
+     * The search's audience beyond the caller (`SearchParams.Audience`), set by the engine on every
+     * provider call when the audience adds a reader. The engine itself keeps only results every reader
+     * may read; a provider that TRAVERSES (`GraphSearchProvider`) must also apply it while it walks, so
+     * a result reachable only through something a reader cannot see is never produced.
+     */
+    AudienceReaders?: readonly UserInfo[];
 }
 
 /**
