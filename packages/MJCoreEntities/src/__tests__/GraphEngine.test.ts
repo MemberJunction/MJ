@@ -350,7 +350,7 @@ describe('GraphEngine, CanonGraphEngine & 7 Derived Edge Providers (WS-4.2)', ()
             qEngineInternal['FindQueryByName'] = () => ({
                 ID: QUERY_AR_AGING_ID,
                 Name: 'CoPurchasedProducts',
-                UserCanRun: () => allowRun,
+                UserCanRun: () => ({ canRun: allowRun, deniedEntities: [] }),
             });
 
             try {
@@ -554,14 +554,14 @@ describe('GraphEngine, CanonGraphEngine & 7 Derived Edge Providers (WS-4.2)', ()
                         ID: QUERY_AR_AGING_ID,
                         Name: 'AR Aging by Customer',
                         Description: '30/60/90 aging buckets',
-                        UserCanRun: () => true,
+                        UserCanRun: () => ({ canRun: true, deniedEntities: [] }),
                     };
                 }
                 if (id === QUERY_RESTRICTED_ID) {
                     return {
                         ID: QUERY_RESTRICTED_ID,
                         Name: 'Restricted Executive Query',
-                        UserCanRun: () => false,
+                        UserCanRun: () => ({ canRun: false, deniedEntities: ['Invoices'] }),
                     };
                 }
                 return undefined;

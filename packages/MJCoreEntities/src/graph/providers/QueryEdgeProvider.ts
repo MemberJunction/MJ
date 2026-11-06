@@ -45,7 +45,8 @@ export class QueryEdgeProvider extends BaseGraphEdgeProvider<QueryEdgeProviderCo
         }
 
         const cachedQuery = QueryEngine.Instance.FindQueryByName(config.QueryName);
-        if (cachedQuery && typeof cachedQuery.UserCanRun === 'function' && !cachedQuery.UserCanRun(ctx.User)) {
+        // UserCanRun returns { canRun, deniedEntities }; the object itself is always truthy.
+        if (cachedQuery && !cachedQuery.UserCanRun(ctx.User).canRun) {
             return [];
         }
 

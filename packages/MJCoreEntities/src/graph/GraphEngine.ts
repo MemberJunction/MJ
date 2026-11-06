@@ -902,8 +902,8 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
                 if (!query) {
                     continue;
                 }
-                const canRun = typeof query.UserCanRun === 'function' ? query.UserCanRun(user) : true;
-                if (!canRun) {
+                // UserCanRun returns { canRun, deniedEntities }; the object itself is always truthy.
+                if (!query.UserCanRun(user).canRun) {
                     continue;
                 }
                 visible.set(key, {
