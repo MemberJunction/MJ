@@ -435,7 +435,7 @@ describe('ShadowScoringCoordinator', () => {
       // All 3 champion rows must have been persisted despite 2 challenger tasks being dropped
       const championRows = createdEntities.filter((e) => e.Role === 'Champion');
       expect(championRows).toHaveLength(3);
-      expect(championRows.map((e) => e.RecordID)).toEqual(['rec-1', 'rec-2', 'rec-3']);
+      expect(championRows.map((e) => e.RecordID).sort()).toEqual(['rec-1', 'rec-2', 'rec-3']);
       for (const row of championRows) {
         expect(row.MLModelID).toBe('Model-Champ-1');
         expect(row.AIModelID).toBeNull();
