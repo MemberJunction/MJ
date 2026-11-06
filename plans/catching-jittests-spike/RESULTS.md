@@ -8,11 +8,153 @@ Each section answers one question with the command run, the raw numbers, and the
 | 1 | Time and disk of the designed build path (job 1 base with remote cache, job 2 head with no token) | pending | |
 | 2 | Agent SDK: restrict tools, enforce write path, add `run_test`, cap turns and tokens, report usage | pending | |
 | 3 | Sandbox holds on `ubuntu-latest` (key, /proc, network, cache token) | pending | |
-| 4 | Provider classes work with no database (Anthropic, OpenAI with logprobs, Gemini) | pending | |
-| 5 | `INTEGRATION_LIVE_MODEL_KEYS` includes an OpenAI key | pending | |
+| 4 | Provider classes work with no database (Anthropic, OpenAI with logprobs, Gemini) | Partly. All three classes import and construct from a bare key with no database and no warnings. Gemini `gemini-3.5-flash-lite` answered `"Yes"`. Anthropic reached the API but got 401 `invalid x-api-key` on two runs (the same key gets 401 from a direct `curl`, so the key is bad, not MJ); model id `claude-haiku-5-5` not yet confirmed. OpenAI: `gpt-5.1-mini` does not exist (404, and `OpenAILLM` throws instead of returning `success: false`); `gpt-4o-mini` and `gpt-4.1-mini` return 5 `top_logprobs` on the first token; `gpt-5.4-nano` returns only 1 although 5 were asked. Imports resolve only from a scratch package, not from the repo root (§4) | Yes (proposed): the TP Prob judge model must be one that returns 5 `top_logprobs` (`gpt-4o-mini` or `gpt-4.1-mini`), not `gpt-5.1-mini`. Callers must handle both a thrown error (`OpenAILLM`) and `success: false` (`AnthropicLLM`). The real package must declare the provider packages as dependencies. Open: re-run Anthropic with a valid key |
+| 5 | `INTEGRATION_LIVE_MODEL_KEYS` includes an OpenAI key | pending — the secret is not readable from a branch; to be asked by the user at the phase-0 exit (date 2026-11-06). The local developer `.env` had no OpenAI key either (§5) | If no OpenAI key: design Q2 becomes a request for a new `OPENAI_API_KEY` secret |
 | 6 | vitest JSON reporter gives assertion, expected, actual, stack | Partly. vitest 4.0.18 `--reporter=json` gives one string per failure (`failureMessages[0]` = `error.stack`): assertion line and stack yes; no `expected`/`actual` fields and no diff; a timeout reads `Error: STACK_TRACE_ERROR`, not `Test timed out`. The error object in a custom reporter has all of them as fields. See §6 | Yes (proposed): Task 1.10 reads a small custom reporter, not `--reporter=json` (§6) |
 | 7 | File-swap path gives the same verdicts as two worktrees | Same results on 3 one-package PRs where all tests passed (1207/627/1275 tests, 0 differences each); no failing test compared (§7) | No |
 | 8 | Host `pnpm fetch` (lockfile only) + sandbox `pnpm install --offline` + `pnpm rebuild` builds on the real lockfile; copy-import time and disk; install-container fallback if fetch fails; turbo `--cache=local:rw,remote:r` works | pending | |
+
+## 4. Provider classes with no database
+
+Script: [`q4-providers.mjs`](q4-providers.mjs). It builds `AnthropicLLM`, `OpenAILLM` and `GeminiLLM`
+from a bare API key (from the environment) and makes one `ChatCompletion` call each
+(`temperature: 0`, `maxOutputTokens: 5`, prompt `Reply with the single word Yes.`). No database, no
+`mj.config.cjs`, no MJ metadata load. A provider whose key variable is unset is skipped.
+
+**Build.**
+
+```bash
+pnpm install --frozen-lockfile        # Done in 24.1s
+npx turbo run build --filter=@memberjunction/ai-anthropic --filter=@memberjunction/ai-openai --filter=@memberjunction/ai-gemini
+# Tasks: 8 successful, 8 total; Cached: 0 cached; Time: 8.497s
+# (global, ai, sql-dialect, core, unit-testing, ai-anthropic, ai-gemini, ai-openai)
+```
+
+**Import resolution.** Running from the repo root fails: the root `package.json` does not depend on the
+providers, so `node plans/catching-jittests-spike/q4-providers.mjs` gives
+`ERR_MODULE_NOT_FOUND: Cannot find package '@memberjunction/ai-anthropic'`. The `NODE_PATH=...` form
+fails the same way (ESM `import` ignores `NODE_PATH`, and those folders hold only the providers'
+dependencies, not the providers). What worked: a scratch package outside the repo
+(`package.json` with `"type": "module"`, and `node_modules/@memberjunction/ai-{anthropic,openai,gemini}`
+as symlinks to `packages/AI/Providers/{Anthropic,OpenAI,Gemini}`), with the script copied into it and
+run there. Node follows the symlinks to the real package folders, so each provider's own
+dependencies resolve from its `node_modules`.
+
+```bash
+node q4-providers.mjs      # in the scratch package, keys exported in the same shell
+```
+
+**Output** (complete; nothing else was printed to stdout or stderr):
+
+```
+anthropic | model: claude-haiku-5-5 | success: false | text: undefined | usage: ModelUsage {
+  cacheReadTokens: 0, cacheWriteTokens: 0, promptTokens: 0, completionTokens: 0 } | ms: 214
+anthropic | statusText: error | errorMessage: 401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"},...}
+openai | skipped: no OPENAI_API_KEY
+gemini | model: gemini-3.5-flash-lite | success: true | text: "Yes" | usage: ModelUsage {
+  cacheReadTokens: 0, cacheWriteTokens: 0, promptTokens: 8, completionTokens: 1 } | ms: 662
+```
+
+**Resume run (OpenAI key added).** The probe now catches a thrown error and prints it, so one failing
+provider does not stop the others. `Q4_OPENAI_MODEL=<id>` overrides the OpenAI model; the other keys
+were unset for the single-model runs. Output (trimmed: `usage` on one line, request ids removed):
+
+```
+anthropic | model: claude-haiku-5-5 | success: false | text: undefined | usage: ModelUsage {
+  cacheReadTokens: 0, cacheWriteTokens: 0, promptTokens: 0, completionTokens: 0 } | ms: 209
+anthropic | statusText: error | errorMessage: 401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"},...}
+openai | model: gpt-5.1-mini | threw: 404 404 The model `gpt-5.1-mini` does not exist or you do not have access to it. | ms: 179
+gemini | model: gemini-3.5-flash-lite | success: true | text: "Yes." | usage: ModelUsage { ... }
+
+# Q4_OPENAI_MODEL=gpt-5.4-nano
+openai | model: gpt-5.4-nano | success: true | text: "Yes" | usage: ModelUsage {
+  cacheReadTokens: 0, cacheWriteTokens: 0, promptTokens: 13, completionTokens: 4 } | ms: 1211
+openai | first token top_logprobs: [{"token":"Yes","logprob":-0.00002288818359375}]
+
+# Q4_OPENAI_MODEL=gpt-4.1-nano
+openai | model: gpt-4.1-nano | threw: 404 404 The model `gpt-4.1-nano` has been deprecated, learn more here: https://platform.openai.com/docs/deprecations | ms: 453
+
+# Q4_OPENAI_MODEL=gpt-4o-mini
+openai | model: gpt-4o-mini | success: true | text: "Yes." | usage: ModelUsage {
+  cacheReadTokens: 0, cacheWriteTokens: 0, promptTokens: 14, completionTokens: 2 } | ms: 883
+openai | first token top_logprobs: [{"token":"Yes","logprob":0},{"token":" Yes","logprob":-16.625},
+  {"token":"Sure","logprob":-20.75},{"token":"YES","logprob":-20.75},{"token":" yes","logprob":-21.875}]
+
+# Q4_OPENAI_MODEL=gpt-4.1-mini
+openai | model: gpt-4.1-mini | success: true | text: "Yes" | usage: ModelUsage {
+  cacheReadTokens: 0, cacheWriteTokens: 0, promptTokens: 14, completionTokens: 1 } | ms: 661
+openai | first token top_logprobs: [{"token":"Yes","logprob":0},{"token":"Sure","logprob":-20.375},
+  {"token":" Yes","logprob":-23.625},{"token":"YES","logprob":-24.125},{"token":"Certainly","logprob":-24.375}]
+```
+
+(`bytes` arrays removed from the `top_logprobs` entries.)
+
+The script's default OpenAI model changed to `gpt-4.1-mini` after these runs.
+`Q4_OPENAI_MODEL=gpt-5.1-mini` reproduces the recorded 404.
+
+Direct calls (key read from the environment; `<OPENAI_API_KEY>` is a placeholder):
+
+```bash
+curl -s https://api.openai.com/v1/models -H "Authorization: Bearer <OPENAI_API_KEY>" \
+  | python3 -c "import sys,json;d=json.load(sys.stdin);print(sorted(m['id'] for m in d.get('data',[]) if m['id'].startswith(('gpt-','o'))))"
+curl -s https://api.openai.com/v1/chat/completions -H "Authorization: Bearer <OPENAI_API_KEY>" -H "Content-Type: application/json" \
+  -d '{"model":"gpt-5.4-nano","messages":[{"role":"user","content":"Reply with the single word Yes."}],"temperature":0,"max_completion_tokens":5,"logprobs":true,"top_logprobs":5}' \
+  | python3 -c "import sys,json;d=json.load(sys.stdin);c=d['choices'][0]['logprobs']['content'];print('tokens',len(c),'top_logprobs per token',[len(t['top_logprobs']) for t in c])"
+```
+
+Output. Model list, chat-capable `gpt-` and `o` ids only (audio, image, realtime, transcribe, tts,
+moderation and dated ids removed):
+
+```
+gpt-4.1, gpt-4.1-mini, gpt-4o, gpt-4o-mini, gpt-5, gpt-5-mini, gpt-5-nano, gpt-5-pro, gpt-5-search-api,
+gpt-5.1, gpt-5.2, gpt-5.2-pro, gpt-5.3-codex, gpt-5.4, gpt-5.4-mini, gpt-5.4-nano, gpt-5.4-pro, gpt-5.5,
+gpt-5.5-pro, gpt-5.6-luna, gpt-5.6-sol, gpt-5.6-terra, gpt-6-astra, gpt-6-luna, gpt-6-sol, gpt-6.1-sol,
+gpt-6.1-terra, o3, o3-pro
+```
+
+```
+tokens 1 top_logprobs per token [1]
+```
+
+The list has no `gpt-5.1-mini` and no `gpt-4.1-nano`. The direct `gpt-5.4-nano` call also returned 1
+`top_logprobs` entry for its 1 token, so the limit is on the OpenAI side, not in `OpenAILLM`.
+
+**Per provider.**
+
+| Provider | Constructed with no DB | One call worked | Model string | Notes |
+|---|---|---|---|---|
+| Anthropic | Yes | No: HTTP 401 `invalid x-api-key` (214 ms; retry 209 ms, same 401) | `claude-haiku-5-5` sent; not confirmed (auth failed first) | The same key gets HTTP 401 from a direct `curl https://api.anthropic.com/v1/models`. The key has the expected `sk-ant-` prefix and no spaces or quotes. So the key is bad; the MJ class sent the request correctly. |
+| OpenAI | Yes | Yes with `gpt-4o-mini` (`"Yes."`, 14/2 tokens, 883 ms), `gpt-4.1-mini` (`"Yes"`, 14/1 tokens, 661 ms) and `gpt-5.4-nano` (`"Yes"`, 13/4 tokens, 1211 ms). `gpt-5.1-mini`: 404 `model_not_found`; `gpt-4.1-nano`: 404 deprecated | `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-5.4-nano` | `logprobs.content[0].top_logprobs` came back: **yes**, through `OpenAILLM` (it sends `logprobs`/`top_logprobs` and copies `choice.logprobs` into the result, `packages/AI/Providers/OpenAI/src/models/openAI.ts:209-210, 354`). 5 entries for `gpt-4o-mini` and `gpt-4.1-mini`; only 1 for `gpt-5.4-nano`. On a 404, `OpenAILLM.ChatCompletion` **throws** the OpenAI SDK `NotFoundError`; `AnthropicLLM` returns `success: false` instead. Code basis: `BaseLLM.ChatCompletion` rethrows any driver error that is not a cancellation (`packages/AI/Core/src/generic/baseLLM.ts:136-142`); `AnthropicLLM` catches inside its driver and returns `success: false` (`packages/AI/Providers/Anthropic/src/models/anthropic.ts:1001-1012`). |
+| Gemini | Yes | Yes: `"Yes"`, usage 8 prompt / 1 completion tokens, 662 ms | `gemini-3.5-flash-lite` | — |
+
+**Import-time warnings.** None. No `@RegisterClass` or `@memberjunction/global` message was printed when
+the three packages were imported.
+
+**Decision.** For the class shape: no design change. The provider classes need only an API key: no
+database, no metadata, no config. The repo root cannot resolve the providers, so
+`packages/TestingFramework/jit-catching` must declare `@memberjunction/ai-anthropic`,
+`@memberjunction/ai-openai` and `@memberjunction/ai-gemini` at exactly `6.2.0`, plus `@memberjunction/ai`
+if it uses the `ChatParams`/`ChatResult` types; pnpm then resolves them. The scratch-package symlinks
+above were a probe-only workaround: hand symlinks are not an allowed setup in this repo.
+
+Proposed changes (pending phase-0 exit):
+- The TP Prob judge (Task 1.19) uses `gpt-4o-mini` or `gpt-4.1-mini`, not `gpt-5.1-mini` (does not exist)
+  and not `gpt-5.4-nano` (returns 1 `top_logprobs` entry, not 5).
+- Callers wrap `ChatCompletion` in `try`/`catch`: `OpenAILLM` throws on an API error, while
+  `AnthropicLLM` returns `success: false` (code basis in the table above). Code must handle both.
+
+Still open: re-run Anthropic with a valid key to confirm `claude-haiku-5-5`.
+
+## 5. OpenAI key in `INTEGRATION_LIVE_MODEL_KEYS`
+
+**Answer: pending.** The secret is not readable from a branch; to be asked by the user at the phase-0
+exit (date 2026-11-06). Question to ask a repo admin: does `INTEGRATION_LIVE_MODEL_KEYS` carry an
+`AI_VENDOR_API_KEY__OpenAILLM=` line (the dotenv format `integration.yml` documents)?
+
+The local developer `.env` had no OpenAI key either.
+
+If no OpenAI key exists, the design's open question Q2 becomes a request for a new `OPENAI_API_KEY`
+secret; the TP Prob judge (Task 1.19) stays as designed apart from the model change proposed in §4.
 
 ## 6. vitest JSON reporter
 
