@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { IMetadataProvider, UserInfo, LogError, LogStatus, EntityInfo, ExternalDataSourceReadRouter, RunView } from '@memberjunction/core';
 import { MJMaterializedResultEntity, MJQueryEntity } from '@memberjunction/core-entities';
 import { MJGlobal, ResolveSingleEntityResourceTarget, UUIDsEqual } from '@memberjunction/global';
-import { SQLParser } from '@memberjunction/sql-parser';
+import { HoistCTEs, SQLParser, SqlDocument, StripOrderBy } from '@memberjunction/sql-parser';
 import { GetDialect, DatabasePlatform } from '@memberjunction/sql-dialect';
 
 /**
@@ -193,9 +193,10 @@ export class MaterializationRefresher {
         const surrogateExpr = hashKeyColumns && hashKeyColumns.length
             ? MaterializationRefresher.buildHashKeyExpression(hashKeyColumns, false)
             : 'IDENTITY(int, 1, 1)';
+        const source = MaterializationRefresher.SplitSourceForDerivedTable(sourceSelect, false);
         const selectInto = surrogateColumn
-            ? `SELECT ${surrogateExpr} AS [${surrogateColumn}], src.* INTO ${obj(shadow)} FROM (${sourceSelect}) AS src`
-            : `SELECT * INTO ${obj(shadow)} FROM (${sourceSelect}) AS src`;
+            ? `${source.With}SELECT ${surrogateExpr} AS [${surrogateColumn}], src.* INTO ${obj(shadow)} FROM (${source.Query}) AS src`
+            : `${source.With}SELECT * INTO ${obj(shadow)} FROM (${source.Query}) AS src`;
         // The shadow (built by SELECT…INTO) carries no constraints, so restore the surrogate's UNIQUE index
         // the query case relies on: it IS the minted entity's PK and the match key the Incremental MERGE
         // upserts onto. Created INSIDE the swap transaction so no window exposes an un-indexed table.
@@ -288,9 +289,10 @@ export class MaterializationRefresher {
         const surrogateExpr = hashKeyColumns && hashKeyColumns.length
             ? MaterializationRefresher.buildHashKeyExpression(hashKeyColumns, true)
             : 'ROW_NUMBER() OVER ()';
+        const source = MaterializationRefresher.SplitSourceForDerivedTable(sourceSelect, true);
         const createShadow = surrogateColumn
-            ? `CREATE TABLE ${obj(shadow)} AS SELECT ${surrogateExpr} AS "${surrogateColumn}", src.* FROM (${sourceSelect}) AS src`
-            : `CREATE TABLE ${obj(shadow)} AS SELECT * FROM (${sourceSelect}) AS src`;
+            ? `CREATE TABLE ${obj(shadow)} AS ${source.With}SELECT ${surrogateExpr} AS "${surrogateColumn}", src.* FROM (${source.Query}) AS src`
+            : `CREATE TABLE ${obj(shadow)} AS ${source.With}SELECT * FROM (${source.Query}) AS src`;
         // CREATE TABLE AS carries no constraints, so restore the surrogate's UNIQUE index the query case relies
         // on: PG's `INSERT … ON CONFLICT (surrogate)` (the Incremental upsert) REQUIRES a unique index on the
         // conflict target — without it every rebuild would break the next incremental pass. Unnamed → PG
@@ -1041,39 +1043,49 @@ export class MaterializationRefresher {
      * See resolveSourceSelect for why (SQL Server error 1033) and why it's safe (a snapshot is unordered).
      *
      * Two guards keep this from corrupting results:
-     *  - **PostgreSQL is a no-op** — PG permits ORDER BY inside a derived table, so there's nothing to fix and
-     *    we skip the parser round-trip entirely.
+     *  - **PostgreSQL is a no-op** — PG permits ORDER BY inside a derived table, so there's nothing to fix.
      *  - **A query with a row-LIMITING clause (SQL Server TOP or OFFSET/FETCH) is left UNCHANGED** — there the
      *    ORDER BY is both (a) LEGAL in a derived table and (b) SEMANTICALLY REQUIRED: it decides WHICH rows
      *    TOP/FETCH keep, so stripping it would materialize an arbitrary subset (a silent wrong-data bug). Only a
      *    BARE top-level ORDER BY (pure presentation sort, no limiting) is both illegal-in-derived-table and safe
      *    to drop.
      *
-     * Uses the SQL parser; on any parse/shape surprise, or no top-level ORDER BY, returns the SQL unchanged
-     * (an ORDER BY nested inside a subquery is legal and left intact).
+     * The ORDER BY clause's span (and the whitespace before it) is removed from the author's text; everything
+     * else is kept as written, including clauses after it such as `OPTION (…)`. When the SQL cannot be read
+     * completely, or has no top-level ORDER BY, it is returned unchanged (an ORDER BY nested inside a subquery
+     * or CTE is legal and left intact).
      */
     public static StripTopLevelOrderBy(sql: string, isPostgres: boolean): string {
         if (isPostgres) return sql; // PG allows ORDER BY in a derived table → nothing to strip
-        try {
-            const dialect = GetDialect('sqlserver');
-            const parsed = SQLParser.Astify(sql, dialect);
-            if (!parsed.astParsed || parsed.ast == null) return sql;
-            // Walk the AST opaquely (it's a discriminated union of many node shapes) via an unknown-typed
-            // intermediate + guarded property access — the standard generic-AST-walk pattern.
-            const stmtNode: unknown = Array.isArray(parsed.ast) ? (parsed.ast.length === 1 ? parsed.ast[0] : null) : parsed.ast;
-            if (stmtNode == null || typeof stmtNode !== 'object') return sql;
-            const s = stmtNode as Record<string, unknown>;
-            if (s.type !== 'select' || s.orderby == null) return sql; // no top-level ORDER BY → nothing to strip
-            // Keep the ORDER BY when a row-limiting clause is present (legal in a derived table + required to
-            // pick the right rows): SQL Server `TOP` (s.top set) or `OFFSET…/FETCH…` (s.limit.offset/fetch set).
-            const limit = s.limit as { offset?: unknown; fetch?: unknown } | null;
-            const hasRowLimit = s.top != null || (limit != null && (limit.offset != null || limit.fetch != null));
-            if (hasRowLimit) return sql;
-            s.orderby = null;
-            return SQLParser.SqlifyAST(parsed.ast as Parameters<typeof SQLParser.SqlifyAST>[0], dialect);
-        } catch {
-            return sql; // unparseable → leave as-is (no worse than before; a residual ORDER BY still errors → failRefresh)
-        }
+        const doc = SqlDocument.Parse(sql, GetDialect('sqlserver'));
+        const body = doc.IsComplete ? doc.TopLevelQuery() : null;
+        if (body === null || body.Kind === 'Unknown' || body.OrderBy === null) return sql;
+        const hasRowLimit = (body.Kind === 'Select' && body.Top !== null) || body.Offset !== null || body.Fetch !== null || body.Limit !== null;
+        if (hasRowLimit) return sql;
+        const stripped = StripOrderBy(doc);
+        return stripped.Applied ? stripped.Text : sql;
+    }
+
+    /**
+     * Splits a source SELECT for wrapping as a derived table (`… FROM (<query>) AS src`): its leading WITH
+     * clause, which neither SQL Server nor a derived table body accepts inside the parentheses, is returned
+     * separately so the caller can put it in front of the wrapping statement. `With` is the clause as written
+     * plus a line break, or `''` when there is none; `Query` is the rest, without a trailing semicolon.
+     * SQL the parser cannot read completely is returned whole as `Query`, minus trailing semicolons.
+     */
+    public static SplitSourceForDerivedTable(sql: string, isPostgres: boolean): { With: string; Query: string } {
+        const doc = SqlDocument.Parse(sql, GetDialect(isPostgres ? 'postgresql' : 'sqlserver'));
+        const hoisted = HoistCTEs(doc);
+        if (hoisted === null || hoisted.With === null) return { With: '', Query: MaterializationRefresher.trimTrailingSemicolons(sql) };
+        return { With: `${doc.Text(hoisted.With)}\n`, Query: hoisted.Body.trimEnd() };
+    }
+
+    /** `sql` without trailing semicolons and the whitespace around them; unchanged when it does not end in one. */
+    private static trimTrailingSemicolons(sql: string): string {
+        if (!sql.trimEnd().endsWith(';')) return sql;
+        let end = sql.length;
+        while (end > 0 && (sql[end - 1] === ';' || /\s/.test(sql[end - 1]))) end--;
+        return sql.substring(0, end);
     }
 
     /** @deprecated Use {@link StripTopLevelOrderBy}. */
@@ -1494,9 +1506,19 @@ export class MaterializationRefresher {
         return this.CoerceExternalParamValue(value);
     }
 
+    /**
+     * The lower-cased type name without its argument list: `NVARCHAR(255)` → `nvarchar`, `int` → `int`.
+     * Index arithmetic rather than a regex, so a type string full of `(` costs linear time.
+     */
+    public static BaseTypeName(sqlFullType: string): string {
+        const type = sqlFullType.trim().toLowerCase();
+        const open = type.indexOf('(');
+        return open >= 0 && type.endsWith(')') ? type.slice(0, open) : type;
+    }
+
     /** Map a SQL-Server-style `SQLFullType` (e.g. `nvarchar(255)`, `int`, `bit`) to a PostgreSQL column type. */
     public static MapSqlTypeToPostgres(sqlFullType: string): string {
-        const base = sqlFullType.trim().toLowerCase().replace(/\(.*\)$/, '');
+        const base = MaterializationRefresher.BaseTypeName(sqlFullType);
         switch (base) {
             case 'bit': return 'boolean';
             case 'tinyint': case 'smallint': return 'smallint';
@@ -1554,7 +1576,7 @@ export class MaterializationRefresher {
      * type (EntityFieldInfo.SQLFullType); the base type drives the canonical cast.
      */
     public static CanonicalKeyColumnSql(name: string, type: string, isPostgres: boolean): string {
-        const base = type.trim().toLowerCase().replace(/\(.*\)$/, '');
+        const base = MaterializationRefresher.BaseTypeName(type);
         const col = MaterializationRefresher.quoteIdent(name, isPostgres);
         const nullSentinel = isPostgres ? `chr(30) || 'NULL' || chr(30)` : `CHAR(30) + 'NULL' + CHAR(30)`;
         let canonical: string;

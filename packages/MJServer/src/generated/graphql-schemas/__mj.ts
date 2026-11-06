@@ -47938,6 +47938,9 @@ export class MJEntity_ {
     @Field(() => Boolean, {nullable: true, description: "When 1, field-level (column-level) security is enforced for this entity and every enforcement point consults EntityFieldPermission rows. When 0 (the default), field-level security is off entirely and any existing permission rows are retained but inactive. Enabling snapshots the entity's current entity-level permissions into per-field rows, so turning it on changes no behavior until an administrator tightens a field; disabling preserves the rows so re-enabling does not lose the configuration."}) 
     EnableFieldLevelSecurity?: boolean;
         
+    @Field(() => Boolean, {nullable: true, description: "When 1 (the default), CodeGen may auto-update this entity's DisplayName — currently via the optional EntityDisplayNames advanced-generation feature, which asks an LLM to expand opaque table-derived names (ACCT_STAT_CD) into readable ones (Account Status Codes). When 0, the DisplayName is locked and CodeGen will not change it, whatever any generator proposes. Mirrors EntityField.AutoUpdateDisplayName. Note this flag governs only AUTOMATIC updates: a user editing the DisplayName directly is unaffected either way."}) 
+    AutoUpdateDisplayName?: boolean;
+        
     @Field({nullable: true, description: "Schema-based programmatic code name derived from the entity Name. Uses GetClassNameSchemaPrefix(SchemaName) as the prefix, then strips EntityNamePrefix from the Name and removes spaces. For \"__mj\" schema with entity \"MJ: AI Models\", this produces \"MJAIModels\". For entities in other schemas, the sanitized schema name is prepended. Used in GraphQL type generation and internal code references."}) 
     CodeName?: string;
         
@@ -48183,6 +48186,9 @@ export class CreateMJEntityInput {
     @Field(() => Boolean, { nullable: true })
     EnableFieldLevelSecurity?: boolean;
 
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateDisplayName?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -48402,6 +48408,9 @@ export class UpdateMJEntityInput {
 
     @Field(() => Boolean, { nullable: true })
     EnableFieldLevelSecurity?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoUpdateDisplayName?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -73644,6 +73653,17 @@ export class MJQuery_ {
     @MaxLength(100)
     ApprovedFingerprint?: string;
         
+    @Field({nullable: true, description: "Hash of the platform SQL and dialect the query's child rows (fields, parameters, entities, dependencies) were last extracted from. NULL means the query has never been extracted by the current extraction service. A value that differs from the current SQL's hash means the rows may be stale."}) 
+    @MaxLength(64)
+    ExtractedSQLHash?: string;
+        
+    @Field({nullable: true, description: "Outcome of the last extraction run. \"OK\" means all facts were extracted. \"Warning\" means extraction succeeded with findings (see ExtractionMessage). \"Error\" means the database server could not describe the query, so existing rows were kept. \"Skipped\" means the facts could not be checked, for example for queries on an external data source. NULL means never extracted."}) 
+    @MaxLength(20)
+    ExtractionStatus?: string;
+        
+    @Field({nullable: true, description: "Diagnostics from the last extraction run: validation findings, authored parameters no longer present in the SQL, describe errors, and output drift on queries with role-based permissions."}) 
+    ExtractionMessage?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(50)
     Category?: string;
@@ -73764,6 +73784,15 @@ export class CreateMJQueryInput {
     @Field({ nullable: true })
     ApprovedFingerprint: string | null;
 
+    @Field({ nullable: true })
+    ExtractedSQLHash: string | null;
+
+    @Field({ nullable: true })
+    ExtractionStatus: string | null;
+
+    @Field({ nullable: true })
+    ExtractionMessage: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -73863,6 +73892,15 @@ export class UpdateMJQueryInput {
 
     @Field({ nullable: true })
     ApprovedFingerprint?: string | null;
+
+    @Field({ nullable: true })
+    ExtractedSQLHash?: string | null;
+
+    @Field({ nullable: true })
+    ExtractionStatus?: string | null;
+
+    @Field({ nullable: true })
+    ExtractionMessage?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -74414,7 +74452,7 @@ export class MJQueryEntity_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: "Indicates how this entity-query relationship was identified. \"AI\" means the QueryEntityServer used LLM analysis to parse the SQL/template and identify which MemberJunction entities are referenced (by analyzing table names, joins, and query structure). \"Manual\" means a user explicitly marked this entity as being used by the query. AI detection helps maintain accurate metadata automatically as queries evolve."}) 
+    @Field({nullable: true, description: "Who wrote this entity link. \"Parser\" means MJ's structural analysis of the query found a read of the entity's base view, base table or an alternate base view. \"Manual\" means a user authored the link. \"AI\" marks links written by the earlier LLM-based extraction."}) 
     @MaxLength(50)
     DetectionMethod?: string;
         
@@ -74643,12 +74681,23 @@ export class MJQueryField_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true, description: "Indicates how this field was identified in the query output. \"AI\" means the QueryEntityServer used LLM analysis to parse the SELECT clause and determine field names, types, and their source entities/columns. This includes handling aliased columns, computed expressions, aggregations, and CASE statements. \"Manual\" means a user explicitly defined this output field. AI detection ensures the field list stays synchronized with query changes."}) 
+    @Field({nullable: true, description: "Who wrote this field row. \"Database\" means its facts (name, order, types, nullability, source) came from the database server describing the query output. \"Parser\" means they came from MJ's analysis of the query template and structure. \"Manual\" means a user authored the row. \"AI\" means an LLM wrote its description; an LLM never sets types or sources."}) 
     @MaxLength(50)
     DetectionMethod?: string;
         
     @Field(() => Float, {nullable: true, description: "Confidence score (0.00-1.00) indicating how certain the AI was about this field detection. Only populated when DetectionMethod=\"AI\". Factors include: clarity of the SELECT clause, complexity of any expressions or transformations, confidence in type inference, and ability to trace back to source entity/column. Complex computed fields or ambiguous aliases result in lower scores. This helps identify fields that may need manual verification."}) 
     AutoDetectConfidenceScore?: number;
+        
+    @Field({nullable: true, description: "The MJ Entity Field this output column passes through unchanged, resolved by extraction from the source the database server reports for the column (schema, view, column) mapped through entity metadata. NULL when the column is computed, comes from an object that backs no entity, or the link was cleared because the entity field was deleted."}) 
+    @MaxLength(36)
+    SourceEntityFieldID?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: "Whether the database server reports that this output column can be NULL. NULL means unknown, for example on platforms whose describe result does not report nullability."}) 
+    IsNullable?: boolean;
+        
+    @Field({nullable: true, description: "The source of this output column as the database server reported it (schema.object.column), recorded when the source is a table or view that backs no MJ entity. NULL when the column maps to an entity field (see SourceEntityFieldID) or has no direct source."}) 
+    @MaxLength(500)
+    SourceObjectName?: string;
         
     @Field({nullable: true}) 
     @MaxLength(255)
@@ -74657,6 +74706,10 @@ export class MJQueryField_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     SourceEntity?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    SourceEntityField?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -74713,6 +74766,15 @@ export class CreateMJQueryFieldInput {
     @Field(() => Float, { nullable: true })
     AutoDetectConfidenceScore: number | null;
 
+    @Field({ nullable: true })
+    SourceEntityFieldID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsNullable: boolean | null;
+
+    @Field({ nullable: true })
+    SourceObjectName: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -74767,6 +74829,15 @@ export class UpdateMJQueryFieldInput {
 
     @Field(() => Float, { nullable: true })
     AutoDetectConfidenceScore?: number | null;
+
+    @Field({ nullable: true })
+    SourceEntityFieldID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsNullable?: boolean | null;
+
+    @Field({ nullable: true })
+    SourceObjectName?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -74897,7 +74968,7 @@ export class MJQueryParameter_ {
     @Field({nullable: true, description: "JSON array of Nunjucks filter definitions that validate and transform the parameter value. Each filter is an object with \"name\" and optional \"args\" properties. Filters are applied in order and can include: validation (required, email, min, max), transformation (trim, upper, lower), SQL safety (sqlsafe, sqljoin), and type conversion (number, date). Example: [{\"name\":\"required\"},{\"name\":\"email\"},{\"name\":\"sqlsafe\"}]. The filter chain ensures type safety and prevents SQL injection."}) 
     ValidationFilters?: string;
         
-    @Field({nullable: true, description: "Indicates how this parameter was identified and added to the system. \"AI\" means it was automatically detected by LLM analysis of the query template, including extraction of parameter name, type inference from filters, and generation of description. \"Manual\" means it was explicitly defined by a user. This helps track which parameters might need human review and provides transparency about the source of metadata."}) 
+    @Field({nullable: true, description: "Who wrote this parameter row. \"Parser\" means MJ's analysis of the query template found the parameter (its name, inferred type, whether it is required and its default). \"Manual\" means a user authored the row; its type, required flag, default, sample, validation filters and description are never overwritten by extraction, and it is kept (and flagged on the query) when the SQL no longer uses it. \"AI\" marks rows written by the earlier LLM-based extraction."}) 
     @MaxLength(50)
     DetectionMethod?: string;
         

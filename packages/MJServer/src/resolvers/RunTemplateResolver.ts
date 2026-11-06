@@ -1,6 +1,7 @@
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { LogError, LogStatus, Metadata, RunView } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import { MJTemplateContentEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
 import { GetTemplateRunRefusal, TemplateEngineServer } from '@memberjunction/templates';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -87,7 +88,7 @@ export class RunTemplateResolver extends ResolverBase {
             const rv = RunView.FromMetadataProvider(p);
             const templateContentResult = await rv.RunView<MJTemplateContentEntity>({
                 EntityName: 'MJ: Template Contents',
-                ExtraFilter: `TemplateID = '${templateId}'`,
+                ExtraFilter: `TemplateID = '${EscapeSQLString(templateEntity.ID)}'`,
                 OrderBy: 'Priority ASC',
                 MaxRows: 1,
                 ResultType: 'entity_object'

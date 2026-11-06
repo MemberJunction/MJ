@@ -1,0 +1,78 @@
+[
+  {
+    "fields": {
+      "Name": "CodeGen: Entity Display Name Generation",
+      "Description": "Improves an entity's human-readable DisplayName by expanding schema abbreviations that the deterministic name conversion cannot resolve (ACCT_STAT_CD -> Account Status Codes). Presentation-only; never changes Entity.Name.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/codegen/entity-display-names.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "OutputType": "object",
+      "OutputExample": "",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "EffortLevel": 1
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 5
+          },
+          "primaryKey": {
+            "ID": "E68381CB-BE4C-438F-97F8-2A1649CA9DC4"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 4
+          },
+          "primaryKey": {
+            "ID": "245521A3-8FAB-4A0C-A722-8263219E517A"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Haiku 4.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "AACBC24B-A2D4-4A15-8E69-53C18BF2B573"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "397A4001-32D5-4F08-A39E-F9373E571FBC"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "85DB131C-F827-4DCA-A505-CEBE755F34ED"
+    }
+  }
+]

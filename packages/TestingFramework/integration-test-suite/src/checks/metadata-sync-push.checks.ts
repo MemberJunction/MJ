@@ -155,7 +155,7 @@ function queryRecord(id: string, name: string, dialectID: string, marker: string
         fields: {
             Name: name,
             Description: marker,
-            SQL: "SELECT ID, Name FROM __mj.AIVendor WHERE Name = '{{ VendorName }}'",
+            SQL: "SELECT ID, Name FROM __mj.AIVendor WHERE Name = {{ VendorName | sqlString }}",
             Status: 'Approved',
             SQLDialectID: dialectID,
             AuditQueryRuns: false,

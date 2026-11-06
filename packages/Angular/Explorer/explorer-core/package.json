@@ -92,7 +92,8 @@
     "golden-layout": "^2.6.0",
     "rxjs": "^7.8.2",
     "tslib": "^2.8.1",
-    "@memberjunction/ng-react": "6.2.0-edge.6"
+    "@memberjunction/ng-react": "6.2.0-edge.6",
+    "@memberjunction/excel-addin": "6.2.0-edge.6"
   },
   "sideEffects": false,
   "repository": {

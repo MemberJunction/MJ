@@ -1,4 +1,4 @@
-import { SetProvider, Metadata, UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { SetProvider, Metadata, StartupManager, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 // `UserCache` moved to generic-database-provider upstream (dialect-neutral Refresh); the rest of
@@ -253,6 +253,20 @@ async function initializePostgresProvider(cfg: ResolvedDbConfig): Promise<void> 
   pgProvider = provider as unknown as { Close?: () => Promise<void> };
 
   await refreshUserCacheFromPG(provider, coreSchema);
+  await runStartupEngines(provider);
+}
+
+/**
+ * Runs the registered startup engines against the PostgreSQL provider, as `setupSQLServerClient`
+ * does on SQL Server. Engines load once and stay bound to the provider they first load on, so
+ * without this they would first load later, on whatever provider is installed by then (in a
+ * client-transport run, the GraphQL provider), and every engine reload would go through MJAPI
+ * on PostgreSQL while it stays in this process on SQL Server.
+ */
+async function runStartupEngines(provider: IMetadataProvider): Promise<void> {
+  const systemUser = UserCache.Instance.GetSystemUser()
+    ?? UserCache.Instance.Users.find(u => u.IsActive && u.Type?.trim() === 'Owner');
+  await StartupManager.Instance.Startup(false, systemUser, provider);
 }
 
 /**

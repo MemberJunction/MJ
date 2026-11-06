@@ -123,6 +123,7 @@
     "@memberjunction/esignature-docusign": "6.2.0-edge.6",
     "@memberjunction/esignature-dropboxsign": "6.2.0-edge.6",
     "@memberjunction/esignature-pandadoc": "6.2.0-edge.6",
+    "@memberjunction/excel-addin-server": "6.2.0-edge.6",
     "@memberjunction/external-data-source-databricks": "6.2.0-edge.6",
     "@memberjunction/external-data-source-mongodb": "6.2.0-edge.6",
     "@memberjunction/external-data-source-mysql": "6.2.0-edge.6",

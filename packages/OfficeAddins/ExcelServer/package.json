@@ -1,0 +1,41 @@
+{
+  "name": "@memberjunction/excel-addin-server",
+  "version": "6.2.0-edge.6",
+  "description": "MemberJunction: the Excel add-in's server half - a Server Extension that serves the add-in to Excel from each MJ host, the add-in manifest and connected-workbook builders, and the server bodies of the ExcelAddin.* Remote Operations",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "@memberjunction/api-keys": "6.2.0-edge.6",
+    "@memberjunction/api-keys-base": "6.2.0-edge.6",
+    "@memberjunction/core": "6.2.0-edge.6",
+    "@memberjunction/core-entities": "6.2.0-edge.6",
+    "@memberjunction/excel-addin": "6.2.0-edge.6",
+    "@memberjunction/global": "6.2.0-edge.6",
+    "@memberjunction/server-extensions-core": "6.2.0-edge.6",
+    "exceljs": "^4.4.0",
+    "express": "^5.2.1",
+    "jszip": "^3.10.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1",
+    "vite-tsconfig-paths": "^5.1.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

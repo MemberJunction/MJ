@@ -445,6 +445,10 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       }
     }
 
+    if (this._initialized) {
+      this.pushDynamicRendererInputs();
+    }
+
     if (this._initialized && this._entity && !this._records) {
       // Apply view's sort state if available, then defer the reload.
       // Deferring ensures all sibling input bindings (gridState, etc.) are
@@ -453,6 +457,18 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       this.resetPaginationState();
       this.deferReload();
     }
+  }
+
+  /**
+   * ID of the persisted `MJ: User Views` record backing the current view, or `null` for a dynamic /
+   * unsaved view. Pushed to view-type plug-ins so saved-view affordances (e.g. Open in Excel) work.
+   */
+  public get EffectiveSavedViewID(): string | null {
+    const view = this._viewEntity;
+    if (!view || view.IsSaved === false) {
+      return null;
+    }
+    return view.ID?.trim() || null;
   }
 
   /**
@@ -717,6 +733,14 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    * it has been persisted). Notification only.
    */
   @Output() AfterViewTypeChange = new EventEmitter<ViewTypeChangeEventArgs>();
+
+  /**
+   * Emitted whenever the active view type changes — including the initial registry reconciliation
+   * (where {@link AfterViewTypeChange} is intentionally suppressed because the user didn't initiate
+   * a switch). Hosts use this to sync fallback chrome (such as a fallback Export button for view
+   * types whose descriptor does not set `ProvidesOwnExport`).
+   */
+  @Output() ActiveViewTypeResolved = new EventEmitter<void>();
 
   /**
    * Emitted (cancelable) BEFORE a plug-in renderer's configuration change is applied/persisted.
@@ -1712,7 +1736,10 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   public get ActiveViewTypeHasOwnExport(): boolean {
     const opt = this.ActiveDynamicOption;
     if (!opt) {
-      return false;
+      // Before ViewTypeEngine finishes initial resolution, no renderer is mounted yet and Grid is
+      // the default view type; return true so hosts don't flash a duplicate fallback Export button
+      // ahead of ActiveViewTypeResolved.
+      return true;
     }
     // Primary signal: the descriptor's declarative capability flag. Belt-and-suspenders: also match
     // the grid's stable DriverClass key, in case a descriptor was resolved via the hardcoded fallback
@@ -1881,6 +1908,10 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       this._loadAllRecords = false;
       this.resetPaginationState(false);
       this.LoadData();
+    }
+
+    if (typeChanged) {
+      this.ActiveViewTypeResolved.emit();
     }
 
     if (emit) {
@@ -2179,6 +2210,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     this.setDynamicInput(ref, 'pageSize', this.Pagination.pageSize);
     this.setDynamicInput(ref, 'isLoading', this.IsLoading);
     this.setDynamicInput(ref, 'alternateBaseView', this.EffectiveAlternateBaseView);
+    this.setDynamicInput(ref, 'SavedViewID', this.EffectiveSavedViewID);
   }
 
   // ========================================

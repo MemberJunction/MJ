@@ -64,7 +64,10 @@ import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
 import { EntityAIActionParams } from '@memberjunction/aiengine';
 import { QueueManager } from '@memberjunction/queue';
-import { GenericDatabaseProvider, ExecuteSQLBatchOptions, SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext } from '@memberjunction/generic-database-provider';
+import { GenericDatabaseProvider, ExecuteSQLBatchOptions, SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext, IsTypedQueryParameterList, IsNamedQueryParameterList, TypedQueryParameter, DescribeStatementFailure } from '@memberjunction/generic-database-provider';
+import type { DescribeStatementResult } from '@memberjunction/generic-database-provider';
+import { BindTypedParameters } from './typedParameters';
+import { MapSQLServerDescribeRows, SQLSERVER_DESCRIBE_SQL, type SQLServerDescribeRow } from './statementDescription';
 import { MJQueryEntityExtended } from '@memberjunction/core-entities';
 
 import sql from 'mssql';
@@ -129,7 +132,11 @@ function isStaleConnectionError(error: { message?: string; code?: string }): boo
 }
 
 /**
- * Builds a sql.Request, binds parameters, and processes positional placeholders.
+ * Builds a sql.Request and binds `parameters`:
+ * - a SaveParameter list, a TypedQueryParameter list or a NamedQueryParameter list binds each by name;
+ * - a plain object binds each key by name (`{ name: v }` for `@name`);
+ * - a plain array is the LEGACY positional form: `@p0..@pN`, with every `?` in the statement rewritten,
+ *   including one inside a string literal, quoted identifier or comment. Prefer a named form.
  */
 function buildRequest(
   connectionSource: sql.ConnectionPool | sql.Transaction,
@@ -153,11 +160,26 @@ function buildRequest(
     }
     return { request, processedQuery: query };
   }
+  if (IsTypedQueryParameterList(parameters)) {
+    // Named inputs declared with the types of the columns they are compared with (typedParameters.ts).
+    BindTypedParameters(request, parameters);
+    return { request, processedQuery: query };
+  }
+  if (IsNamedQueryParameterList(parameters)) {
+    // Named inputs whose type the driver infers; the statement already references them by name.
+    for (const p of parameters) {
+      request.input(p.Name, p.Value);
+    }
+    return { request, processedQuery: query };
+  }
 
   let processedQuery = query;
   if (parameters) {
     if (Array.isArray(parameters)) {
-      // Handle positional parameters (legacy TypeORM style)
+      // LEGACY positional form: values bind as @p0..@pN and EVERY `?` in the text is rewritten to the
+      // next @pN, a `?` inside a string literal, quoted identifier or comment included. Kept for
+      // existing callers; MJ's own SQL passes named parameters (an object, NamedQueryParameter or
+      // TypedQueryParameter lists), which leave the text alone.
       parameters.forEach((value, index) => {
         request.input(`p${index}`, value);
       });
@@ -2557,7 +2579,10 @@ export class SQLServerDataProvider
    * This method can be used to execute raw SQL statements outside of the MJ infrastructure.
    * *CAUTION* - use this method with great care.
    * @param query
-   * @param parameters
+   * @param parameters - Named parameters: an object (`{ name: value }`, referenced `@name`), or a list of
+   *   `NamedQueryParameter` / `TypedQueryParameter`. A plain array of values is the LEGACY positional form:
+   *   it binds `@p0..@pN` and rewrites every `?` in `query`, a `?` inside a string literal, quoted
+   *   identifier or comment included, so it is only safe for statement text with no other `?`.
    * @returns
    */
   public async ExecuteSQL(
@@ -2590,6 +2615,26 @@ export class SQLServerDataProvider
     } catch (e) {
       // Error already logged by _internalExecuteSQL
       throw e; // force caller to handle
+    }
+  }
+
+  /**
+   * Describes the first result set of `sqlText` with `sys.dm_exec_describe_first_result_set` (mode 2):
+   * names, order, exact types, nullability and the view or table column each pass-through column
+   * comes from. SQL Server compiles the statement without executing it. A statement the server
+   * cannot compile gives a failure carrying the server's message.
+   */
+  public override async DescribeStatement(sqlText: string, contextUser?: UserInfo): Promise<DescribeStatementResult> {
+    try {
+      const rows: SQLServerDescribeRow[] = await this.ExecuteSQL(
+        SQLSERVER_DESCRIBE_SQL,
+        [new TypedQueryParameter('tsql', 'nvarchar(max)', sqlText)],
+        { description: 'DescribeStatement', ignoreLogging: true },
+        contextUser,
+      );
+      return MapSQLServerDescribeRows(rows);
+    } catch (e) {
+      return DescribeStatementFailure(e instanceof Error ? e.message : String(e));
     }
   }
 

@@ -65,6 +65,7 @@ export * from './lib/components/sidebar/conversation-sidebar.component';
 export * from './lib/components/sidebar/routines-section.component';
 export * from './lib/components/conversation/conversation-list.component';
 export * from './lib/components/conversation/conversation-chat-area.component';
+export * from './lib/components/conversation/conversation-remote-browser-controller';
 export * from './lib/components/conversation/conversation-empty-state.component';
 export * from './lib/components/message/message-item.component';
 export * from './lib/components/message/message-list.component';
@@ -173,6 +174,7 @@ export * from './lib/components/realtime/channels/channel-onboarding-panel.compo
 // NOTE: the whiteboard itself (engine, tools, components, export builders) lives in
 // @memberjunction/ng-whiteboard — import board types/components from there directly.
 export * from './lib/components/realtime/whiteboard/whiteboard-channel';
+export * from './lib/components/realtime/whiteboard/whiteboard-channel-config';
 export * from './lib/components/realtime/whiteboard/whiteboard-artifact-viewer.component';
 // Remote Browser channel plugin (client-direct, server-hosted browser) + its live surface + tools.
 export * from './lib/components/realtime/remote-browser/remote-browser-channel';

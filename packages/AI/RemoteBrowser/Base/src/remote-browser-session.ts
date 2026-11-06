@@ -20,25 +20,131 @@ import type { RemoteBrowserControlStrategy } from './control';
 // ──────────────────────────────────────────────────────────────────────────────────────────────────
 
 /**
+ * One selectable `<option>` inside a `<select>` field on an inspected page.
+ */
+export interface RemoteBrowserFieldOption {
+  /** The option's underlying DOM `value`. */
+  Value: string;
+  /** The option's human-readable label text. */
+  Label: string;
+}
+
+/**
+ * Structured metadata for a single form field discovered by a `browser_Inspect` action.
+ */
+export interface RemoteBrowserFieldObservation {
+  /** Stable reference identifier within the current page observation (e.g. `'f1'`). */
+  Ref: string;
+  /** Human-readable label resolved from `<label>`, `aria-label`, `placeholder`, or `name`. */
+  Label: string;
+  /** Underlying DOM `name` or `id` attribute when present. */
+  Name?: string;
+  /** Field control kind (`'text'`, `'email'`, `'tel'`, `'select'`, `'textarea'`, `'checkbox'`, `'radio'`, `'password'`, etc.). */
+  Kind: string;
+  /** Whether the field is marked required. */
+  Required: boolean;
+  /** Whether the agent is permitted to write to this field (`false` for disabled/readonly or protected credential/card/OTP fields). */
+  Writable: boolean;
+  /** Current value of the field (`'[REDACTED]'` when {@link Redacted} is `true`). */
+  Value?: string;
+  /** Checked state for checkboxes and radio inputs. */
+  Checked?: boolean;
+  /** `true` when the field is a sensitive input (password, credit card, CVV, OTP, SSN) that requires human takeover. */
+  Redacted?: boolean;
+  /** Available options when `Kind === 'select'`. */
+  Options?: RemoteBrowserFieldOption[];
+}
+
+/**
+ * Structured metadata for an interactive button or link action discovered by `browser_Inspect`.
+ */
+export interface RemoteBrowserActionObservation {
+  /** Stable reference identifier within the current page observation (e.g. `'a1'`). */
+  Ref: string;
+  /** Visible text or accessible label of the control. */
+  Label: string;
+  /** Control role classification. */
+  Role: 'button' | 'link' | 'submit';
+  /** `true` when the control appears to trigger a final submission, purchase, deletion, or credential sign-in. */
+  Destructive: boolean;
+}
+
+/**
+ * A visible hyperlink discovered on the page.
+ */
+export interface RemoteBrowserLinkObservation {
+  /** Visible anchor text. */
+  Text: string;
+  /** Resolved `href` URL. */
+  Href: string;
+}
+
+/**
+ * Structured DOM and text snapshot of the current page for text-mode LLM perception.
+ */
+export interface RemoteBrowserPageObservation {
+  /** Monotonic identifier for this observation within the session (e.g. `'obs-1'`). */
+  ObservationID: string;
+  /** Current page URL. */
+  Url: string;
+  /** Current document title. */
+  Title: string;
+  /** Trimmed visible text of the page body. */
+  Text: string;
+  /** Discovered form fields in DOM order. */
+  Fields: RemoteBrowserFieldObservation[];
+  /** Discovered interactive buttons/controls in DOM order. */
+  Actions: RemoteBrowserActionObservation[];
+  /** Discovered hyperlinks in DOM order. */
+  Links: RemoteBrowserLinkObservation[];
+}
+
+/**
+ * Input specification for filling a single form field via {@link RemoteBrowserFillAction}.
+ */
+export interface RemoteBrowserFillFieldInput {
+  /** Target field `Ref` (e.g. `'f1'`), `Name`, `id`, or visible `Label`. */
+  Target: string;
+  /** Value to write (`string` for text/select/radio, `boolean` for checkbox). */
+  Value: string | boolean;
+}
+
+/**
+ * Verified outcome for a single field populated by {@link RemoteBrowserFillAction}.
+ */
+export interface RemoteBrowserFilledFieldResult {
+  /** The resolved field `Ref`. */
+  Ref: string;
+  /** The resolved field `Label`. */
+  Label: string;
+  /** The verified post-fill value read back from the live DOM. */
+  Value: string;
+}
+
+/**
  * Navigate the browser to a URL.
  */
 export interface RemoteBrowserNavigateAction {
   Kind: 'navigate';
-  /** The absolute URL to load. */
+  /** The absolute URL (or bare domain) to load. */
   Url: string;
 }
 
 /**
- * Click an element. Identify the target either by CSS `Selector` or by viewport coordinates
- * (`X` / `Y`); a driver prefers `Selector` when both are present.
+ * Click an element. Identify the target by `Ref` (from `inspect`), visible `Text`, CSS `Selector`,
+ * or viewport coordinates (`X` / `Y`).
  */
 export interface RemoteBrowserClickAction {
   Kind: 'click';
   /** Optional CSS selector identifying the element to click. */
   Selector?: string;
-  /** Optional viewport X coordinate (used when no `Selector` is given). */
+  /** Optional element reference ID from the latest `inspect` observation (e.g. `'a1'`, `'f2'`). */
+  Ref?: string;
+  /** Optional visible button or link text to match and click. */
+  Text?: string;
+  /** Optional viewport X coordinate (used when no `Selector`/`Ref`/`Text` is given). */
   X?: number;
-  /** Optional viewport Y coordinate (used when no `Selector` is given). */
+  /** Optional viewport Y coordinate (used when no `Selector`/`Ref`/`Text` is given). */
   Y?: number;
 }
 
@@ -105,9 +211,34 @@ export interface RemoteBrowserWaitAction {
 }
 
 /**
- * The full agent action vocabulary — a discriminated union over the `Kind` field. The realtime agent
- * emits these as tool calls and the channel's session executes them over CDP. Strongly typed with no
- * `any`; narrow on `action.Kind` to access the kind-specific fields.
+ * Inspect the current page to extract visible text, structured form fields, interactive buttons/links
+ * (with stable `Ref` IDs), and navigable links.
+ */
+export interface RemoteBrowserInspectAction {
+  Kind: 'inspect';
+}
+
+/**
+ * Deterministically fill one or more form fields by `Ref`, `Name`, or visible `Label`, verifying the
+ * resulting DOM values and returning a refreshed page observation.
+ */
+export interface RemoteBrowserFillAction {
+  Kind: 'fill';
+  /** The fields and values to populate. */
+  Values: ReadonlyArray<RemoteBrowserFillFieldInput>;
+}
+
+/**
+ * Read the visible text of the current page.
+ */
+export interface RemoteBrowserGetPageTextAction {
+  Kind: 'getPageText';
+}
+
+/**
+ * The full agent action vocabulary — a discriminated union over the `Kind` field. The realtime or
+ * text-mode agent emits these as tool calls and the channel's session executes them over CDP. Strongly
+ * typed with no `any`; narrow on `action.Kind` to access the kind-specific fields.
  */
 export type RemoteBrowserAction =
   | RemoteBrowserNavigateAction
@@ -117,7 +248,10 @@ export type RemoteBrowserAction =
   | RemoteBrowserScrollAction
   | RemoteBrowserBackAction
   | RemoteBrowserForwardAction
-  | RemoteBrowserWaitAction;
+  | RemoteBrowserWaitAction
+  | RemoteBrowserInspectAction
+  | RemoteBrowserFillAction
+  | RemoteBrowserGetPageTextAction;
 
 /**
  * The outcome of executing a {@link RemoteBrowserAction} (or {@link IRemoteBrowserSession.Navigate}).
@@ -129,6 +263,10 @@ export interface RemoteBrowserActionResult {
   CurrentUrl?: string;
   /** Optional human-readable detail (an error message on failure, a note on success). */
   Detail?: string;
+  /** Optional structured page observation (returned by `inspect`, `fill`, and `navigate`). */
+  Observation?: RemoteBrowserPageObservation;
+  /** Optional list of fields verified as filled (returned by `fill`). */
+  Filled?: RemoteBrowserFilledFieldResult[];
 }
 
 /** One progress update from a goal run — emitted per perceive-act step (transport-neutral). */
@@ -458,6 +596,13 @@ export interface IRemoteBrowserSession {
    * @returns A promise that resolves once the session is fully torn down.
    */
   Close(): Promise<void>;
+
+  /**
+   * Stops the browser reaching a loopback, link-local or private-network host (except `allowedHosts`,
+   * as `host` or `host:port`) by any request: navigation, redirect, followed link or subresource. For a
+   * browser that a text conversation's agents drive. Can be called again to replace the list.
+   */
+  RestrictPrivateNetwork?(allowedHosts: string[]): Promise<void>;
 
   // ── Capability-gated (feature-gated; engine checks SupportedFeatures first) ──
 

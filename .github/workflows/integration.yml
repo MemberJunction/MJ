@@ -193,6 +193,12 @@ jobs:
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
       DB_TRUST_SERVER_CERTIFICATE: 'true'
+      # Every query, tag and agent-note save embeds its text with the default local model, which is
+      # otherwise the highest-PowerRank active one (all-mpnet-base-v2, ~3 s per embed on this
+      # runner). The deterministic tier checks the pipelines around embedding, not embedding
+      # quality, so it pins the smallest local model. Read by MJAPI and the `mj` CLI alike, so both
+      # embed with, and judge stored vectors against, the same model.
+      MJ_DEFAULT_LOCAL_EMBEDDING_MODEL: 'all-MiniLM-L6-v2 (Local)'
       # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
       # receive it, so they degrade to a cold local cache rather than failing. Rationale and
       # setup instructions live once, on the build job in test.yml.
@@ -539,6 +545,15 @@ jobs:
           MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
           GRAPHQL_PORT: '4000'
           RUN_MUTATION_TESTS: ${{ github.event_name == 'schedule' && '1' || '' }}
+          # IT145 (the SQL pipeline scenario matrix over GraphQL) saves real queries through MJAPI
+          # for every case, so its cost scales with the case count: on CI runners SPC1 took
+          # 249-684 s and SPC2 97-428 s at full scope (worst 1,112 s against the bundle's 900 s
+          # limit; run 40993440752 timed out in SPC2). Pull requests run the 'pr' subset: all
+          # pairs over the transport dimensions (run path, values, MaxRows, StartRow), every
+          # shape/templating/composition variant on every client run path, ~22% of the points.
+          # The content-only pairs it drops run in full on every PR in the server bundles
+          # IT143/IT146. The nightly cron, merges to next/lts and manual dispatch run 'full'.
+          SQLPIPE_MATRIX_SCOPE: ${{ github.event_name == 'pull_request' && 'pr' || 'full' }}
           # live-model is DEFAULT-ON since 2026-07-20 (tiers.ts: only an explicit '0'
           # disables). This lane has no LLM credentials, so pin it off explicitly —
           # tiers.ts's own doc comment assumes CI does this, and nothing did.

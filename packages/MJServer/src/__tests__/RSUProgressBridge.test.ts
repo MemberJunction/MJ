@@ -44,7 +44,8 @@ describe('RSUProgressBridge', () => {
         ItemCount: 2,
         Descriptions: ['add Orders', 'add OrderItems'],
         AffectedTables: ['Orders', 'OrderItems'],
-        StepTotal: 12,
+        StepTotal: 14,
+        CompanyIntegrationIDs: ['CI-1'],
     };
 
     /** The emitter's writes are chained promises; let them drain before reading from disk. */
@@ -100,7 +101,7 @@ describe('RSUProgressBridge', () => {
         expect(manifest.context).toMatchObject({
             itemCount: 2,
             affectedTables: ['Orders', 'OrderItems'],
-            stepTotal: 12,
+            stepTotal: 14,
         });
 
         const events = readEvents(dir);
@@ -235,6 +236,162 @@ describe('RSUProgressBridge', () => {
 
         const start = readEvents(dir).find(e => e.stage === 'ValidateEnvironment');
         expect(start?.message).toBe('step 0 of 12');
+    });
+
+    // ── Connection identity: what makes an RSU run readable over the API at all ──────────────
+
+    it('stamps the batch connections onto the manifest, which is what the read check tests', async () => {
+        // Before this, an RSU manifest carried no connection, `userCanReadRunArtifact` returned false
+        // on the missing field, and EVERY RSU run answered "not authorized" to IntegrationGetRun and
+        // IntegrationTailRunEvents. The manifest field is the fix.
+        bridge.Observe({ ...RUN_START, CompanyIntegrationIDs: ['CI-1'] });
+        const dir = runDir();
+        await settle();
+
+        const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf-8')) as IntegrationRunManifest;
+        expect(manifest.companyIntegrationIDs).toEqual(['CI-1']);
+        // Singular is set too, so the per-connection list filter and the GQL summary keep working.
+        expect(manifest.companyIntegrationID).toBe('CI-1');
+    });
+
+    it('leaves the SINGULAR connection empty for a batch spanning several, keeping the full set', async () => {
+        // Picking one member of the set to report as "the" connection would be a lie a client could
+        // act on; the AND authorization rule reads the set instead.
+        bridge.Observe({ ...RUN_START, CompanyIntegrationIDs: ['CI-1', 'CI-2'] });
+        const dir = runDir();
+        await settle();
+
+        const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf-8')) as IntegrationRunManifest;
+        expect(manifest.companyIntegrationIDs).toEqual(['CI-1', 'CI-2']);
+        expect(manifest.companyIntegrationID).toBeUndefined();
+    });
+
+    it('records no connection when the batch supplied none, rather than inventing one', async () => {
+        bridge.Observe({ ...RUN_START, CompanyIntegrationIDs: [] });
+        const dir = runDir();
+        await settle();
+
+        const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf-8')) as IntegrationRunManifest;
+        expect(manifest.companyIntegrationIDs).toEqual([]);
+        expect(manifest.companyIntegrationID).toBeUndefined();
+    });
+
+    // ── The restart boundary ─────────────────────────────────────────────────────────────────
+
+    it('closes the RestartMJAPI stage and checkpoints BEFORE the process is killed', async () => {
+        // `step.end` for RestartMJAPI is unreachable — pm2 kills the process inside the step — so
+        // without this the stream ends on an open stage and the run is in-flight forever.
+        bridge.Observe(RUN_START);
+        const dir = runDir();
+        bridge.Observe({ Kind: 'step.start', Name: 'RestartMJAPI', StepIndex: 10, StepTotal: 14 });
+
+        await bridge.Observe({
+            Kind: 'restart.pending',
+            RemainingSteps: ['CreateEntityMaps', 'StartSync'],
+            StepIndex: 10,
+            StepTotal: 14,
+            CompanyIntegrationIDs: ['CI-1'],
+            PendingWorkIDs: ['PW-1'],
+            TotalCount: 2,
+            SuccessCount: 2,
+        });
+
+        const events = readEvents(dir);
+        const done = events.find(e => e.eventType === 'stage.complete' && e.stage === 'RestartMJAPI');
+        const checkpoint = events.find(e => e.eventType === 'checkpoint' && e.stage === 'RestartMJAPI');
+        expect(done).toBeDefined();
+        expect(checkpoint?.resumableState).toMatchObject({
+            remainingSteps: ['CreateEntityMaps', 'StartSync'],
+            stepIndex: 10,
+            stepTotal: 14,
+            companyIntegrationIDs: ['CI-1'],
+            pendingWorkIDs: ['PW-1'],
+        });
+        // Still in flight: the run is finished by the process on the other side of the restart.
+        expect(existsSync(join(dir, 'result.json'))).toBe(false);
+    });
+
+    it('AWAITS the restart checkpoint to disk — an unflushed write would be lost to the kill', async () => {
+        // Deliberately does NOT call settle(): the returned promise must have flushed already.
+        bridge.Observe(RUN_START);
+        const dir = runDir();
+        await bridge.Observe({
+            Kind: 'restart.pending',
+            RemainingSteps: ['CreateEntityMaps', 'StartSync'],
+            CompanyIntegrationIDs: ['CI-1'],
+            PendingWorkIDs: [],
+            TotalCount: 1,
+            SuccessCount: 1,
+        });
+
+        const events = readEvents(dir);
+        expect(events.some(e => e.eventType === 'checkpoint' && e.stage === 'RestartMJAPI')).toBe(true);
+    });
+
+    it('ignores a restart.pending that arrives with no run open', async () => {
+        await expect(bridge.Observe({
+            Kind: 'restart.pending',
+            RemainingSteps: [],
+            CompanyIntegrationIDs: [],
+            PendingWorkIDs: [],
+            TotalCount: 0,
+            SuccessCount: 0,
+        })).resolves.toBeUndefined();
+    });
+
+    // ── Heartbeat staleness ──────────────────────────────────────────────────────────────────
+
+    it('never lets one run heartbeat stamp its stage name onto the NEXT run', async () => {
+        // The timer captures its stage; if it outlives the run it was armed for, it writes that
+        // stale name into whatever emitter the bridge points at next.
+        vi.useFakeTimers();
+        try {
+            bridge.Observe(RUN_START);
+            bridge.Observe({ Kind: 'step.start', Name: 'CompileTypeScript', StepIndex: 8, StepTotal: 14 });
+
+            // A retry starts a brand-new run while the previous step's heartbeat is still armed.
+            bridge.Observe(RUN_START);
+            const secondDir = runDir();
+            vi.advanceTimersByTime(300_000); // ten ticks' worth
+
+            vi.useRealTimers();
+            await settle();
+
+            const beats = readEvents(secondDir).filter(e => e.eventType === 'progress.heartbeat');
+            expect(beats.filter(b => b.stage === 'CompileTypeScript')).toHaveLength(0);
+            expect(beats).toHaveLength(0);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('stops heart-beating once the restart boundary is published', async () => {
+        vi.useFakeTimers();
+        try {
+            bridge.Observe(RUN_START);
+            const dir = runDir();
+            bridge.Observe({ Kind: 'step.start', Name: 'RestartMJAPI', StepIndex: 10, StepTotal: 14 });
+            const pending = bridge.Observe({
+                Kind: 'restart.pending',
+                RemainingSteps: ['CreateEntityMaps', 'StartSync'],
+                CompanyIntegrationIDs: ['CI-1'],
+                PendingWorkIDs: [],
+                TotalCount: 1,
+                SuccessCount: 1,
+            });
+            vi.useRealTimers();
+            await pending;
+
+            vi.useFakeTimers();
+            vi.advanceTimersByTime(300_000);
+            vi.useRealTimers();
+            await settle();
+
+            const beats = readEvents(dir).filter(e => e.eventType === 'progress.heartbeat');
+            expect(beats).toHaveLength(0);
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('ignores step and run.end events that arrive with no run open', async () => {

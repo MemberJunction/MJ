@@ -5056,18 +5056,16 @@ export class EntityInfo extends BaseInfo {
         }
 
         const userRLS = this.GetUserRowLevelSecurityInfo(user, type);
-        if (userRLS && userRLS.length > 0) {
-            // userRLS has all of the objects that apply to this user. The user is NOT exempt from RLS, so we need to OR together all of the RLS object filters
-            let sRLSSQL: string = '';
-            userRLS.forEach((rls) => {
-                if (sRLSSQL.length > 0)
-                sRLSSQL += ' OR ';
-                sRLSSQL += `(${rls.MarkupFilterText(user)})`;
-            });
-            return sRLSSQL.length > 0 ? `${returnPrefix && returnPrefix.length > 0 ? returnPrefix + ' ' : ''}${sRLSSQL}` : '';
-        }
-        else
+        if (!userRLS || userRLS.length === 0) {
             return '';
+        }
+        // The user is NOT exempt, so every filter that applies is OR'd together. Each filter is
+        // parenthesized, and a group of two or more is parenthesized as a whole, so a predicate the
+        // caller ANDs beside the clause (`WHERE ID = @p0 AND <clause>`) applies to every filter rather
+        // than binding to the first one only. A single filter keeps its one pair of parentheses.
+        const terms = userRLS.map((rls) => `(${rls.MarkupFilterText(user)})`);
+        const sRLSSQL = terms.length > 1 ? `(${terms.join(' OR ')})` : terms[0];
+        return `${returnPrefix && returnPrefix.length > 0 ? returnPrefix + ' ' : ''}${sRLSSQL}`;
     }
 
     /**

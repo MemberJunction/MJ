@@ -6300,17 +6300,18 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (!detailInfo?.SchemaName || !detailInfo.BaseTable || !ciId) return;
 
             // Cutoff = StartedAt of the Nth-most-recent run for this CI. If there aren't MORE than
-            // `keep` runs, there's nothing to prune.
+            // `keep` runs, there's nothing to prune. Reads `keep + 1` rows and counts them rather than
+            // reading TotalRowCount, which a `MaxRows: 1` read (keep = 1) no longer fills (#6000).
             const recent = await new RunView().RunView<{ StartedAt: Date | string }>({
                 EntityName: runInfo.Name,
                 ExtraFilter: `CompanyIntegrationID='${String(ciId).replace(/'/g, "''")}'`,
                 OrderBy: 'StartedAt DESC',
                 Fields: ['StartedAt'],
-                MaxRows: keep,
+                MaxRows: keep + 1,
                 ResultType: 'simple',
             }, contextUser);
-            if (!recent.Success || (recent.TotalRowCount ?? 0) <= keep) return;
-            const cutoffRaw = recent.Results?.[recent.Results.length - 1]?.StartedAt;
+            if (!recent.Success || (recent.Results?.length ?? 0) <= keep) return;
+            const cutoffRaw = recent.Results[keep - 1]?.StartedAt;
             if (!cutoffRaw) return;
 
             const provider = md as DatabaseProviderBase;

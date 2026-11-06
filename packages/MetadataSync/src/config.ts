@@ -141,6 +141,13 @@ export interface SyncConfig {
      * - 'include': If ANY pattern matches, the SQL IS logged
      */
     filterType?: 'exclude' | 'include';
+    /**
+     * Whether push also leaves out the create and update calls for run and log records the server
+     * writes during a push: AI prompt runs, AI agent runs, AI agent run steps and action execution
+     * logs. Defaults to true. These patterns are added to `filterPatterns` in exclude mode only;
+     * with `filterType: 'include'` they are never added. Set to false to log those statements.
+     */
+    excludeTransactionalDefaults?: boolean;
     /** Whether to output verbose debug information to console (default: false) */
     verboseOutput?: boolean;
     /**

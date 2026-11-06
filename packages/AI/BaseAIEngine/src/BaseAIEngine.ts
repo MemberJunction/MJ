@@ -549,8 +549,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         // 51 entity configs coalesce into the initial startup RunViews batch instead of
         // waiting for TemplateEngineBase/ArtifactMetadataEngine to finish first.
         const [, , loadResult] = await Promise.all([
-            TemplateEngineBase.Instance.Config(false, contextUser),
-            ArtifactMetadataEngine.Instance.Config(false, contextUser),
+            TemplateEngineBase.Instance.Config(false, contextUser, provider),
+            ArtifactMetadataEngine.Instance.Config(false, contextUser, provider),
             this.Load(params, provider, forceRefresh, contextUser)
         ]);
         return loadResult;

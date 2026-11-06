@@ -369,7 +369,6 @@ const NESTED_SCAN_BASELINE: Record<string, number> = {
     'ConversationsRuntime/src/mentions/MentionAutocomplete.ts': 1,
     'DocUtils/src/Engine.ts': 1,
     'GenericDatabaseProvider/src/GenericDatabaseProvider.ts': 2,
-    'GenericDatabaseProvider/src/queryCompositionEngine.ts': 1,
     'MJCore/src/generic/baseEngine.ts': 1,
     'MJCore/src/generic/entityInfo.ts': 2,
     'MJCore/src/generic/providerBase.ts': 3,

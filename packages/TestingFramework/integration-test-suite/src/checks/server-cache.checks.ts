@@ -18,7 +18,7 @@ import { RunView, BaseEntity, CompositeKey, Metadata, EntityPermissionType } fro
 import type { UserInfo } from '@memberjunction/core';
 import type { MJEntityEntity, MJUserSettingEntity, MJUserViewEntity, MJQueryEntity, MJQueryCategoryEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/generic-database-provider';
-import { Assert, AssertEqual, AssertRowShape, AssertKeysInclude, RowKeys } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, AssertRowShape, AssertKeysInclude, RowKeys, SkipCheck } from '@memberjunction/testing-integration';
 import { UniqueFilter } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -698,8 +698,7 @@ export const ServerCacheChecks: NamedCheck[] = [
             }, ctx.User);
             Assert(capped.Success, `capped-entity discovery failed: ${capped.ErrorMessage}`);
             if (capped.Results.length === 0) {
-                console.warn('  ⚠ S28 SKIPPED — no entity has UserViewMaxRows > 0 on this DB (collision is latent here).');
-                return;
+                SkipCheck('no entity has UserViewMaxRows > 0 on this DB, so the capped/IgnoreMaxRows collision is latent here.');
             }
             // One batch of count_only (BypassCache → true DB counts, no cache interaction).
             const counts = await rv.RunViews(
@@ -708,8 +707,7 @@ export const ServerCacheChecks: NamedCheck[] = [
             );
             const idx = counts.findIndex((c, i) => c.Success && c.TotalRowCount > capped.Results[i].UserViewMaxRows);
             if (idx < 0) {
-                console.warn('  ⚠ S28 SKIPPED — no capped entity exceeds its UserViewMaxRows on this DB (divergence not observable).');
-                return;
+                SkipCheck('no capped entity has more rows than its UserViewMaxRows on this DB, so the IgnoreMaxRows divergence is not observable.');
             }
             const target = capped.Results[idx];
             const cap = target.UserViewMaxRows;
@@ -743,8 +741,7 @@ export const ServerCacheChecks: NamedCheck[] = [
             const all = await rv.RunView({ EntityName: ENTITY, ResultType: 'count_only', BypassCache: true }, ctx.User);
             Assert(matching.Success && all.Success, 'count probes must succeed');
             if (matching.TotalRowCount === 0 || matching.TotalRowCount >= all.TotalRowCount) {
-                console.warn(`  ⚠ S29 SKIPPED — "${filter}" does not discriminate on this DB (${matching.TotalRowCount}/${all.TotalRowCount}).`);
-                return;
+                SkipCheck(`the filter "${filter}" does not discriminate on this DB (${matching.TotalRowCount}/${all.TotalRowCount} rows match), so a filtered view cannot be told apart from the plain query.`);
             }
 
             const entityInfo = md.EntityByName(ENTITY);
@@ -833,8 +830,7 @@ export const ServerCacheChecks: NamedCheck[] = [
                 // This is self-healing: once the fan-out lands, the row will be fresh and the
                 // assertion below runs (and passes), turning the check back on automatically.
                 if (after.Results[0]?.Category !== renamed) {
-                    console.warn('  ⚠ S30 SKIPPED — cross-entity denormalization invalidation is a known, deferred cache limitation (parent rename not reflected in cached child rows). Tracked separately.');
-                    return;
+                    SkipCheck('cross-entity denormalization invalidation is a known, deferred cache limitation: the parent rename is not reflected in cached child rows. Tracked separately; the check re-arms once invalidation fans out to dependent entities.');
                 }
                 AssertEqual(after.Results[0]?.Category, renamed,
                     `cached child row still shows '${after.Results[0]?.Category}' after the parent was renamed to '${renamed}'`);
@@ -871,8 +867,7 @@ export const ServerCacheChecks: NamedCheck[] = [
                 }
             }
             if (candidates.length === 0) {
-                console.warn('  ⚠ S31 SKIPPED — no (A can-read / B cannot-read) pair on a cacheable RLS-free entity on this DB.');
-                return;
+                SkipCheck('no (user A can read / user B cannot read) pair exists on a cacheable, RLS-free entity on this DB; seed a user whose roles lack read on a cacheable entity.');
             }
             // Prefer a row-bearing entity (bounded probe) so the bypass leaks real data.
             let chosen = candidates[0];
@@ -940,8 +935,7 @@ export const ServerCacheChecks: NamedCheck[] = [
                 console.log(`      (S31b discovery skipped ${scanErrors} entit${scanErrors === 1 ? 'y' : 'ies'} whose permission/RLS evaluation threw)`);
             }
             if (!chosen) {
-                console.warn('  ⚠ S31b SKIPPED — no (A can-read / B cannot-read) pair on a cacheable RLS-free entity on this DB.');
-                return;
+                SkipCheck('no (user A can read / user B cannot read) pair exists on a cacheable, RLS-free entity on this DB; seed a user whose roles lack read on a cacheable entity.');
             }
             const { a: A, b: B, e: E } = chosen;
             // Guarded, not `!`-asserted: a non-null assertion here turned any discovery miss into
@@ -950,8 +944,7 @@ export const ServerCacheChecks: NamedCheck[] = [
             // or skip honestly — never crash ambiguously.
             const entityInfo = E ? md.EntityByName(E) : undefined;
             if (!entityInfo) {
-                console.warn(`  ⚠ S31b SKIPPED — discovery produced entity name ${JSON.stringify(E)}, which does not resolve in metadata (users scanned: ${users.length}).`);
-                return;
+                SkipCheck(`discovery produced entity name ${JSON.stringify(E)}, which does not resolve in metadata (users scanned: ${users.length}).`);
             }
 
             // Create a throwaway saved view owned by A on entity E.

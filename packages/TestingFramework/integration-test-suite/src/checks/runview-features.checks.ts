@@ -27,7 +27,7 @@
  */
 import { RunView } from '@memberjunction/core';
 import type { EntityInfo, RunViewResult, AggregateResult } from '@memberjunction/core';
-import { Assert, AssertEqual, AssertRowShape } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, AssertRowShape, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -243,8 +243,7 @@ const RVF5: NamedCheck = {
     Fn: async (ctx: IntegrationCheckContext): Promise<void> => {
         const entity = await discoverEmptyEntity(ctx);
         if (!entity) {
-            console.warn('      ⚠ RVF5 SKIPPED — every readable entity in this deployment has at least one row; the empty-set branch is unreachable here.');
-            return;
+            SkipCheck('every readable entity in this deployment has at least one row; the empty-set branch is unreachable here.');
         }
         const rv = new RunView();
 

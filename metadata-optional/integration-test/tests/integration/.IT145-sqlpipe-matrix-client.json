@@ -1,0 +1,29 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT145 - SQL Pipeline Scenario Matrix over GraphQL",
+    "Description": "The SQL pipeline scenario matrix over GraphQL (client transport, needs MJAPI): SPC1 all pairs over the dimensions that apply over the wire (the core schema only, since the mock schema needs server-side SQL; run paths saved, by name and cached — ad hoc SQL and transient specs need a read-only login the test MJAPI lacks). Every query, its dependencies and its oracle are saved over GraphQL and every run goes through GraphQLDataProvider; the oracle is the same plain SQL as on the server, saved as a plain query (no template, no composition) and run with no paging, the page cut in TypeScript. SPC2 checks every saved query's parameter, dependency, entity and field rows over GraphQL, the fields against those the server extracted for the oracle. The platform comes from DB_PLATFORM. Self-cleaning (per-run zzz-it145 category).",
+    "MaxExecutionTimeMS": 900000,
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Generated scenarios run over GraphQL return the rows their plain-SQL oracle returns."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "sqlpipe-matrix-client"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "54B69823-5E9D-49F1-83A6-C79316ECB1C3"
+  },
+  "sync": {
+    "lastModified": "2026-10-28T22:16:26.250Z",
+    "checksum": "fdad158c11a1dbc5a7e5d1b156fc3142ba7396c62522579004e92bd62e9bc821"
+  }
+}

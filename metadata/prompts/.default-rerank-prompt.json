@@ -25,6 +25,28 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=rerank-v5.0-fast",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 60
+          },
+          "primaryKey": {
+            "ID": "C845094E-2F1F-4995-AD6D-BA407B01C00B"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=rerank-v5.0-pro",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 50
+          },
+          "primaryKey": {
+            "ID": "A2BE7A2A-3549-4E9A-8749-30BFA4E3AB4A"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
             "ModelID": "@lookup:MJ: AI Models.Name=rerank-v4-fast",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
             "Priority": 40
