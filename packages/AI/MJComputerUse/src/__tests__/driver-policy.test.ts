@@ -527,6 +527,14 @@ describe('ResolveRunValidationCriteria', () => {
         expect(ResolveRunValidationCriteria([])).toBeUndefined();
     });
 
+    it('leaves weight-0 criteria out, since they count for nothing in the score', () => {
+        expect(ResolveRunValidationCriteria([
+            { criterion: 'Shows the dashboard', weight: 2 },
+            { criterion: 'Nice to have', weight: 0 },
+            'Lists three items',
+        ])).toEqual(['Shows the dashboard', 'Lists three items']);
+    });
+
     it('rejects an invalid weight with the judge oracles\' message', () => {
         expect(() => ResolveRunValidationCriteria(['Fine', { criterion: 'Heavy', weight: -1 }]))
             .toThrow(/^ExpectedOutcomes\.judgeValidationCriteria: Criterion 2 must be a non-empty string, or an object with a non-empty "criterion"/);

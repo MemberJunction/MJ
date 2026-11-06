@@ -191,10 +191,15 @@ function fieldLines(rows: StoredQueryRows, withIDs = false): string {
     return rows.Fields.map(f => `${f.Name}${withIDs ? `:${NormalizeUUID(f.ID)}` : ''}:${detection(f.DetectionMethod)}`).join(' | ');
 }
 
-/** A field the description pass described keeps the SQL type extraction gave it. */
-function assertDescribedFieldsKeepTypes(rows: StoredQueryRows, label: string): void {
-    const untyped = rows.Fields.filter(f => f.DetectionMethod === 'AI' && !f.SQLFullType).map(f => f.Name);
-    AssertEqual(untyped.join(', '), '', `${label}: fields the description pass described keep their SQL type`);
+/**
+ * Every field that came from extraction (`Database`, or `AI` once the description pass described it)
+ * carries the SQL types the describe gave it. Runs with or without AI keys. The description pass
+ * itself writes only `Description` and `DetectionMethod` (descriptionPass.ts `applyDescriptions`),
+ * so this checks extraction's output rather than the pass.
+ */
+function assertExtractedFieldsTyped(rows: StoredQueryRows, label: string): void {
+    const untyped = rows.Fields.filter(f => detection(f.DetectionMethod) === EXTRACTED && (!f.SQLBaseType || !f.SQLFullType)).map(f => f.Name);
+    AssertEqual(untyped.join(', '), '', `${label}: extracted fields carry their SQL types`);
 }
 
 function assertOneRowPerName(rows: StoredQueryRows, label: string): void {
@@ -259,7 +264,7 @@ async function checkMsq1DeclaredCollections(ctx: IntegrationCheckContext): Promi
         AssertEqual(`${NormalizeUUID(id?.ID ?? '')}:${id?.DetectionMethod}:${id?.Description}`, `${NormalizeUUID(fieldID)}:Manual:The vendor ID (${version}).`, `${label}: the declared field`);
         const undeclared = rows.Fields.find(x => x.Name === 'Name');
         AssertEqual(undeclared ? detection(undeclared.DetectionMethod) : '(missing)', EXTRACTED, `${label}: the undeclared column's row comes from extraction`);
-        assertDescribedFieldsKeepTypes(rows, label);
+        assertExtractedFieldsTyped(rows, label);
         AssertEqual(rows.Entities.map(e => `${NormalizeUUID(e.ID)}:${e.DetectionMethod}`).join(','), `${NormalizeUUID(entityID)}:Manual`, `${label}: the declared entity link`);
         assertOneRowPerName(rows, label);
     }
@@ -292,14 +297,14 @@ async function checkMsq3AutoExtraction(ctx: IntegrationCheckContext): Promise<vo
     await pushQueries(ctx, 'msq3-new', [queryRecord(f, { ID: queryID, Name: 'MSQ3 auto', SQL: vendorSQL(f.Platform) })], queryID);
     const created = await ReadQueryRows(ctx, BUNDLE, queryID);
     AssertEqual(fieldLines(created), `ID:${EXTRACTED} | Name:${EXTRACTED}`, 'MSQ3 (new): fields from the describe');
-    assertDescribedFieldsKeepTypes(created, 'MSQ3 (new)');
+    assertExtractedFieldsTyped(created, 'MSQ3 (new)');
     AssertEqual(created.Parameters.map(p => `${p.Name}:${p.DetectionMethod}:${String(p.IsRequired)}`).join(','), 'VendorName:Parser:true', 'MSQ3 (new): the parameter from the parser');
     AssertEqual(created.Entities.map(e => `${NormalizeUUID(e.EntityID)}:${e.DetectionMethod}`).join(','), `${NormalizeUUID(f.VendorEntityID)}:Parser`, 'MSQ3 (new): the entity link');
 
     await pushQueries(ctx, 'msq3-update', [queryRecord(f, { ID: queryID, Name: 'MSQ3 auto', SQL: vendorSQL(f.Platform, ', v.[Description]', '') })], queryID);
     const updated = await ReadQueryRows(ctx, BUNDLE, queryID);
     AssertEqual(fieldLines(updated), `ID:${EXTRACTED} | Name:${EXTRACTED} | Description:${EXTRACTED}`, 'MSQ3 (update): the new column has a field');
-    assertDescribedFieldsKeepTypes(updated, 'MSQ3 (update)');
+    assertExtractedFieldsTyped(updated, 'MSQ3 (update)');
     AssertEqual(updated.Parameters.length, 0, 'MSQ3 (update): the parameter the SQL dropped is removed');
     const kept = created.Fields.map(x => NormalizeUUID(x.ID)).join(',');
     AssertEqual(updated.Fields.slice(0, 2).map(x => NormalizeUUID(x.ID)).join(','), kept, 'MSQ3 (update): unchanged fields keep their rows');
@@ -436,7 +441,7 @@ async function checkMsq8ComposedInSamePush(ctx: IntegrationCheckContext): Promis
     const rows = await ReadQueryRows(ctx, BUNDLE, composerID);
     AssertEqual(rows.Dependencies.map(d => NormalizeUUID(d.DependsOnQueryID)).join(','), NormalizeUUID(targetID), 'MSQ8: the composing query depends on the query pushed with it');
     AssertEqual(fieldLines(rows), `ID:${EXTRACTED} | Name:${EXTRACTED}`, 'MSQ8: the composing query\'s fields come from describing the composed render');
-    assertDescribedFieldsKeepTypes(rows, 'MSQ8');
+    assertExtractedFieldsTyped(rows, 'MSQ8');
     const stored = await ReloadQuery(ctx, composerID);
     // A Warning can come from the post-commit description pass (no model configured); a composition
     // problem would be an Error or carry an MJQ_COMPOSITION diagnostic.
@@ -545,7 +550,7 @@ async function checkMsq10PullAfterAutoExtraction(ctx: IntegrationCheckContext): 
     await pushQueries(ctx, 'msq10-auto', [queryRecord(f, { ID: queryID, Name: 'MSQ10 pulled', SQL: vendorSQL(f.Platform) })], queryID);
     const stored = await ReadQueryRows(ctx, BUNDLE, queryID);
     AssertEqual(`${fieldLines(stored)} / ${stored.Parameters.length} / ${stored.Entities.length}`, `ID:${EXTRACTED} | Name:${EXTRACTED} / 1 / 1`, 'MSQ10: the pushed query has extracted rows');
-    assertDescribedFieldsKeepTypes(stored, 'MSQ10');
+    assertExtractedFieldsTyped(stored, 'MSQ10');
 
     const dir = writePullTree(path.join(f.Root, 'msq10-pull'));
     await runPull(ctx.User, dir, queryID);

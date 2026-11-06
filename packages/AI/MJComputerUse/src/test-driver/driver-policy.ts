@@ -510,9 +510,11 @@ export function mergeComputerUseConfig(
  *
  * Each entry is a string or `{ criterion, weight }`, read with the same rules the judge oracles use,
  * so a list they would reject fails here with their message. The in-run judge decides Done per
- * criterion and takes no weights; the oracles apply them when they score the run.
+ * criterion and takes no weights; the oracles apply them when they score the run. A weight-0
+ * criterion counts for nothing in the oracles' score, so it is left out here too: otherwise it
+ * could stop the run reaching Done while scoring nothing.
  *
- * @returns The texts in order, or `undefined` when the test sets no criteria
+ * @returns The texts of criteria weighted above 0, in order, or `undefined` when the test sets no criteria
  * @throws Error with the oracles' message when an entry is malformed or every weight is 0
  */
 export function ResolveRunValidationCriteria(criteria: readonly JudgeCriterionInput[] | undefined): string[] | undefined {
@@ -523,5 +525,5 @@ export function ResolveRunValidationCriteria(criteria: readonly JudgeCriterionIn
     if (!read.Success) {
         throw new Error(`ExpectedOutcomes.judgeValidationCriteria: ${read.ErrorMessage}`);
     }
-    return read.Value.map(c => c.Criterion);
+    return read.Value.filter(c => c.Weight > 0).map(c => c.Criterion);
 }
