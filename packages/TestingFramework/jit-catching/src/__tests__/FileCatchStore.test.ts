@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { FileCatchStore } from '../store/FileCatchStore';
@@ -21,7 +21,10 @@ describe('FileCatchStore', () => {
     expect((await s.GetRun(run.ID))?.Status).toBe('Assessed'); expect(await s.ListRuns()).toHaveLength(1);
   });
   it('refuses a record that holds a secret and leaves the file unchanged', async () => {
-    const s = store(); await expect(s.SaveCandidateTests([{ ...test, Source: 'const k = "sk-ant-SECRETSECRETSECRET";' }])).rejects.toThrow(RedactionError);
+    const dir = mkdtempSync(join(tmpdir(), 'jit-store-'));
+    const s = new FileCatchStore(dir, new RedactionCheck(['sk-ant-SECRETSECRETSECRET']));
+    await expect(s.SaveCandidateTests([{ ...test, Source: 'const k = "sk-ant-SECRETSECRETSECRET";' }])).rejects.toThrow(RedactionError);
+    expect(existsSync(join(dir, 'candidate-tests.jsonl'))).toBe(false);
     expect(await s.ListCatches('r')).toEqual([]);
   });
   it('validates with the schema before writing', async () => { await expect(store().SaveCatches([{ ...catchRecord, TPProb: 7 }])).rejects.toThrow(); });
