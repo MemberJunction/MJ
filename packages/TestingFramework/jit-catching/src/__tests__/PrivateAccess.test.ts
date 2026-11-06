@@ -14,6 +14,9 @@ describe('PrivateAccess', () => {
   it('does not fire on a stub cast or on public members', () => {
     expect(rule.Evaluate(ctx(`import { Svc } from '../../svc'; const stub = { Open: () => 3 } as unknown as Svc; expect(stub.Open()).toBe(3); expect(new Svc().Open()).toBe(3);`)).Fired).toBe(false);
   });
+  it('does not fire on a private member of a class the test declares itself', () => {
+    expect(rule.Evaluate(ctx(`class Fake { private n = 1; get() { return this.n; } } expect(new Fake().get()).toBe(1);`)).Fired).toBe(false);
+  });
   it('fires on the two-step cast form and on a write to a private member', () => {
     expect(rule.Evaluate(ctx(`import { Svc } from '../../svc'; const svc = new Svc(); const s = svc as unknown as { secret: number }; expect(s.secret).toBe(1);`)).Fired).toBe(true);
     expect(rule.Evaluate(ctx(`import { Svc } from '../../svc'; const svc = new Svc(); (svc as any).secret = 5; expect(svc.Open()).toBe(3);`)).Fired).toBe(true);

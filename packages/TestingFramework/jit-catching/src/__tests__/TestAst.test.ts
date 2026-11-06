@@ -22,6 +22,12 @@ describe('TestAst.DeclarationVisibility', () => {
     const [a] = ast.MemberAccesses();
     expect(ast.DeclarationVisibility(a.Receiver, a.Name)).toBe('none');
   });
+  it('a member the test file declares itself is not a base member → none', () => {
+    const ast = load(`class Fake { private n = 1; get() { return this.n; } } new Fake().get();`);
+    const n = ast.MemberAccesses().find((m) => m.Name === 'n');
+    expect(n).toBeDefined();
+    expect(ast.DeclarationVisibility(n!.Receiver, n!.Name)).toBe('none');
+  });
   it('follows a variable to its cast initializer (two-step form) and treats a write like a read', () => {
     const ast = load(`import { Svc } from '../../svc'; const svc = new Svc(); const s = svc as unknown as { secret: number }; s.secret = 2; const t = s.secret;`);
     const [w, r] = ast.MemberAccesses();

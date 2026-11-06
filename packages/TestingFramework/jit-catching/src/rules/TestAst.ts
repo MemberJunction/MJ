@@ -70,6 +70,7 @@ export class TestAst {
         const type = this.Checker.getTypeAtLocation(inner);
         const symbol = type.getProperty(name) ?? this.Checker.getApparentType(type).getProperty(name);
         const decl = symbol?.declarations?.[0]; if (!decl) return 'none';
+        if (decl.getSourceFile() === this.SourceFile) return 'none';                  // declared by the test itself, not by base
         if (ts.isObjectLiteralExpression(decl.parent)) return 'none';                 // a member of an inline stub, not of a declared class
         const mods = ts.canHaveModifiers(decl) ? ts.getModifiers(decl) ?? [] : [];
         if (mods.some((m) => m.kind === ts.SyntaxKind.PrivateKeyword) || (ts.isPropertyDeclaration(decl) && ts.isPrivateIdentifier(decl.name))) return 'private';
