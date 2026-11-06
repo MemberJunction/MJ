@@ -246,7 +246,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (477 classes)
+// @memberjunction/core-entities (478 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -691,6 +691,7 @@ import {
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
+    MJUserExternalIdentityEntity,
     MJUserFavoriteEntity,
     MJUserNotificationEntity,
     MJUserNotificationPreferenceEntity,
@@ -2348,6 +2349,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
     MJUserEntity,
+    MJUserExternalIdentityEntity,
     MJUserFavoriteEntity,
     MJUserNotificationEntity,
     MJUserNotificationPreferenceEntity,
@@ -2429,11 +2431,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     CreateBusinessCentralJournalEntryAction,
     CreateJournalEntryAction,
     CreateQuickBooksJournalEntryAction,
-    GetAccountBalancesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    GetAccountBalancesAction,
     GetBusinessCentralAccountBalancesAction,
     GetBusinessCentralCustomersAction,
     GetBusinessCentralDimensionsAction,
@@ -2633,11 +2635,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     ParallelExecutionCoordinator,
     DecisionReranker,
     LLMReranker,
-    AdaptiveBoundarySegmenter,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    AdaptiveBoundarySegmenter,
     FixedWindowSegmenter,
     HtmlContentCleaner,
     PagedContentSegmenter,
@@ -2837,11 +2839,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
     MJEntityFormContributionEntityServer,
-    MJEntityFormOverrideEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJEntityFormOverrideEntityServer,
     MJFileEntityServer,
     MJInteractionEventEntityServer,
     MJListDetailEntityServer,
@@ -3041,11 +3043,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     RetryAction,
     ReverseGeocodeAction,
     RevertInteractiveFormAction,
-    RevokeListInvitationAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
     RunDecisionAction,
@@ -3141,7 +3143,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1278;
+export const CLASS_REGISTRATIONS_COUNT = 1279;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

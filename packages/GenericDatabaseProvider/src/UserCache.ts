@@ -2,7 +2,7 @@ import {
     BaseEntity, CacheCategory, CacheChangedEvent, LocalCacheManager, LogError, LogStatusEx, LogWarning, UserInfo,
     type BaseEntityEvent, type DatabaseProviderBase,
 } from '@memberjunction/core';
-import { BaseSingleton, EscapeSQLString, GroupByUUID, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, EscapeSQLString, GroupByUUID, MJEventType, MJGlobal, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import { IsSystemUser, SystemUserID } from './systemUser.js';
 
 /**
@@ -341,12 +341,17 @@ export class UserCache extends BaseSingleton<UserCache> {
           this.rememberMiss(key);
           return undefined;
         }
-        // Keep the array instance: callers (MJServer auth) hold and push to it.
-        const index = this._users.findIndex(u => UUIDsEqual(u.ID, user.ID));
-        if (index >= 0) {
-          this._users[index] = user;
-        } else {
-          this._users.push(user);
+        // Keep the array instance: callers (MJServer auth) hold and push to it. Cache every row the
+        // query returned, not only the first: an email can match several User records, and the
+        // login path counts the cached matches to refuse an ambiguous login instead of taking one.
+        const positions = new UUIDMap<number>(this._users.map((u, i) => [u.ID, i] as const));
+        for (const row of loaded) {
+          const index = positions.Get(row.ID);
+          if (index !== undefined) {
+            this._users[index] = row;
+          } else {
+            positions.Set(row.ID, this._users.push(row) - 1);
+          }
         }
         LogStatusEx({ message: `UserCache: loaded user ${user.ID} on demand — it was created after this process last refreshed`, verboseOnly: true });
         return user;

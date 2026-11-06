@@ -653,6 +653,18 @@ describe('verifyUserRecord', () => {
         expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('broken-1'));
     });
 
+    it('refuses an email that several User records share instead of picking one, and creates no third', async () => {
+        mockCacheUsers.push(
+            { ID: 'dup-b', Name: 'Dup B', Email: 'dup@example.com', Type: 'User' },
+            { ID: 'dup-a', Name: 'Dup A', Email: 'DUP@example.com ', Type: 'User' },
+        );
+
+        const user = await VerifyUserRecord('dup@example.com', 'Dup', 'User');
+
+        expect(user).toBeUndefined();
+        expect(mockGetEntityObject).not.toHaveBeenCalled();
+    });
+
     describe('autoCreateNewUsers gate', () => {
         it('does NOT create a user when autoCreateNewUsers is false', async () => {
             mockConfig.userHandling.autoCreateNewUsers = false;
