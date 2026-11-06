@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, symlinkSync, lstatSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, symlinkSync, lstatSync, readlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ApplyMutantEdits, ValidateMutantEdits, CopyPackageForMutant } from '../generator/Mutant';
@@ -10,6 +10,9 @@ describe('ValidateMutantEdits', () => {
   it('accepts edits to src files of the package and rejects tests, other packages and traversal', () => {
     expect(ValidateMutantEdits('packages/MJCore', [{ File: 'packages/MJCore/src/a.ts', Find: 'x', Replace: 'y' }])).toBeNull();
     expect(ValidateMutantEdits('packages/MJCore', [{ File: 'packages/MJCore/src/__tests__/a.test.ts', Find: 'x', Replace: 'y' }])).toMatch(/test/);
+    expect(ValidateMutantEdits('packages/MJCore', [{ File: 'packages/MJCore/src/__mocks__/m.ts', Find: 'x', Replace: 'y' }])).toMatch(/test/);
+    expect(ValidateMutantEdits('packages/MJCore', [{ File: 'packages/MJCore/src/test/setup.ts', Find: 'x', Replace: 'y' }])).toMatch(/test/);
+    expect(ValidateMutantEdits('packages/MJCore', [{ File: 'packages/MJCore/src/a.spec.tsx', Find: 'x', Replace: 'y' }])).toMatch(/test/);
     expect(ValidateMutantEdits('packages/MJCore', [{ File: 'packages/Other/src/a.ts', Find: 'x', Replace: 'y' }])).toMatch(/package/);
     expect(ValidateMutantEdits('packages/MJCore', [{ File: 'packages/MJCore/src/../../x.ts', Find: 'x', Replace: 'y' }])).toMatch(/path/);
   });
@@ -41,9 +44,10 @@ describe('ApplyMutantEdits', () => {
 
 describe('CopyPackageForMutant', () => {
   it('copies the package keeping node_modules symlinks as links', () => {
-    const d = pkg(); mkdirSync(join(d, 'node_modules')); symlinkSync('/nonexistent-target', join(d, 'node_modules/dep'));
+    const d = pkg(); mkdirSync(join(d, 'node_modules')); symlinkSync('../../AI/Core', join(d, 'node_modules/dep'));
     const copy = CopyPackageForMutant(d, mkdtempSync(join(tmpdir(), 'jit-scratch-')));
     expect(readFileSync(join(copy, 'src/a.ts'), 'utf8')).toContain('admin');
     expect(lstatSync(join(copy, 'node_modules/dep')).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(join(copy, 'node_modules/dep'))).toBe('../../AI/Core');
   });
 });

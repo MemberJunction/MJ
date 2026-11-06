@@ -1,20 +1,33 @@
 import { cpSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { join, normalize, basename } from 'node:path';
 import type { MutantEdit } from '../types';
+
+const TEST_SEGMENTS = new Set(['__tests__', '__mocks__', '__fixtures__', 'test', 'tests']);
+
+/** True when a path has a test, mock or fixture folder segment, or a basename containing `.test.` or `.spec.`. */
+function IsTestPath(file: string): boolean {
+    const segments = file.split('/');
+    const name = segments[segments.length - 1];
+    return segments.slice(0, -1).some((s) => TEST_SEGMENTS.has(s)) || name.includes('.test.') || name.includes('.spec.');
+}
 
 /** Edits may touch only non-test `src/` files of the package the test lives in (D13). */
 export function ValidateMutantEdits(packageRelDir: string, edits: MutantEdit[]): string | null {
     for (const e of edits) {
         if (e.File !== normalize(e.File) || e.File.includes('..')) return `path not allowed: ${e.File}`;
         if (!e.File.startsWith(`${packageRelDir}/src/`)) return `edit outside the package under test: ${e.File}`;
-        if (/__tests__\/|\.test\.ts$|\.spec\.ts$/.test(e.File)) return `a mutant may not edit test files: ${e.File}`;
+        if (IsTestPath(e.File.slice(packageRelDir.length + 1))) return `a mutant may not edit test files: ${e.File}`;
         if (e.Find.length === 0) return 'Find must not be empty';
     }
     return edits.length > 0 ? null : 'no edits';
 }
 
-/** Copies a package directory (symlinks kept as links, so pnpm's node_modules still resolves). */
+/**
+ * Copies a package directory into a new folder under `scratchRoot`, skipping `dist`, `coverage` and `.turbo`.
+ * Symlinks are copied verbatim, so their relative targets resolve once the copy is mounted at the package's own path inside the sandbox.
+ */
 export function CopyPackageForMutant(packageDir: string, scratchRoot: string): string {
     const dest = join(mkdtempSync(join(scratchRoot, 'mutant-')), basename(packageDir));
     cpSync(packageDir, dest, { recursive: true, verbatimSymlinks: true, filter: (src) => !/[\\/](dist|coverage|\.turbo)$/.test(src) });
@@ -46,8 +59,11 @@ export function ApplyMutantEdits(packageDir: string, edits: MutantEdit[], packag
     }
     let patch = '';
     for (const [abs, original] of originals) {
-        const tmp = `${abs}.orig`; writeFileSync(tmp, original);
-        try { patch += DiffFiles(tmp, abs); } finally { rmSync(tmp, { force: true }); }
+        const origDir = mkdtempSync(join(tmpdir(), 'jit-orig-'));
+        try {
+            const tmp = join(origDir, basename(abs)); writeFileSync(tmp, original);
+            patch += DiffFiles(tmp, abs);
+        } finally { rmSync(origDir, { recursive: true, force: true }); }
     }
     return { Patch: patch, Changed: changed };
 }
