@@ -7,8 +7,11 @@ set -uo pipefail
 ROOT=$(git rev-parse --show-toplevel)
 IMG=jit-sandbox:spike
 WORK=${RUNNER_TEMP:-/tmp}/jit-q8b
-PATCH_LINE=_mjBuildIndexes          # a line the type-graphql patch adds
+PATCH_LINE=_mjBuildIndexes          # a line the type-graphql patch adds (picked by hand from the patch file)
 rm -rf "$WORK"; mkdir -p "$WORK/fetch" "$WORK/store"
+# Removes the temporary worktree and $WORK on any exit.
+cleanup() { git -C "$ROOT" worktree remove --force "$WORK/head" 2>/dev/null; rm -rf "$WORK"; }
+trap cleanup EXIT
 docker image inspect "$IMG" >/dev/null 2>&1 || docker build -t "$IMG" -f "$ROOT/plans/catching-jittests-spike/Dockerfile.sandbox" "$ROOT/plans/catching-jittests-spike"
 SEC=(--user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges -e HOME=/tmp)
 
@@ -60,7 +63,7 @@ done
 echo "store size: $(du -sm "$WORK/store" | cut -f1) MB"
 echo "patch_hash dirs in fetch node_modules: $(ls "$WORK/fetch/node_modules/.pnpm" 2>/dev/null | grep -c patch_hash)"
 ls "$WORK/fetch/node_modules/.pnpm" 2>/dev/null | grep type-graphql
-echo "store files holding '$PATCH_LINE' after host fetch: $(grep -rlF "$PATCH_LINE" "$WORK/store" | wc -l | tr -d ' ')"
+echo "store files holding '$PATCH_LINE' after host fetch:"; grep -rlF "$PATCH_LINE" "$WORK/store"
 
 echo "=== 3. sandbox offline install (--network none, real lockfile + patches/) ==="
 git -C "$ROOT" worktree add --detach "$WORK/head" HEAD >/dev/null 2>&1
@@ -79,7 +82,7 @@ ls "$WORK/head/node_modules/.pnpm" | grep type-graphql
 for d in "$WORK/head"/node_modules/.pnpm/type-graphql@*/node_modules/type-graphql; do
   echo "$d:"; grep -rnF "$PATCH_LINE" "$d/build" | head -n 3 | cut -c1-200
 done
-echo "store files holding '$PATCH_LINE' after sandbox install: $(grep -rlF "$PATCH_LINE" "$WORK/store" | wc -l | tr -d ' ')"
+echo "store files holding '$PATCH_LINE' after sandbox install:"; grep -rlF "$PATCH_LINE" "$WORK/store"
 ls -d "$WORK/store"/v*/index 2>/dev/null; grep -rl 'patch_hash\|type-graphql@2.0.0-beta.3' "$WORK/store"/v*/index 2>/dev/null | head -n 5
 
 echo "=== 5. build smoke (--network none, capped at 20 min) ==="
@@ -95,5 +98,3 @@ echo "build exit=$BUILD_RC time=${BUILD_SECS}s (124 = timeout, not completed)"
 echo "=== 6. timing ==="
 echo "host half (fetch, last variant): ${HOST_SECS}s; sandbox half (install+rebuild): ${SANDBOX_SECS}s; build: ${BUILD_SECS}s"
 
-git -C "$ROOT" worktree remove --force "$WORK/head"
-rm -rf "$WORK"

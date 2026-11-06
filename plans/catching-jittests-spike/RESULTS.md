@@ -755,9 +755,21 @@ REBUILT
 install+rebuild exit=0 time=111s
 ```
 
-During `pnpm rebuild`, the optional native build of `msgpackr-extract` failed (`gyp ERR! find Python`: the image has no Python, and this run was arm64). The failure is not fatal, and `pnpm rebuild` exited 0. It is not related to the patch. The phase 0 runs were on x64 runners.
+During `pnpm rebuild`, the install script of the optional package `msgpackr-extract` failed. The prebuilt-binary loader failed first, then the fallback native build. From the install log, in order:
 
-**Was the patch applied in the sandbox? Yes.** `_mjBuildIndexes` is a line the patch adds.
+```
+.../node_modules/msgpackr-extract install: TypeError [ERR_INVALID_ARG_TYPE]: The "id" argument must be of type string. Received undefined
+.../node_modules/msgpackr-extract install:   code: 'ERR_INVALID_ARG_TYPE'
+.../node_modules/msgpackr-extract install: gyp info using node@24.22.2 | linux | arm64
+.../node_modules/msgpackr-extract install: gyp ERR! find Python
+.../node_modules/msgpackr-extract install: gyp ERR! stack Error: Could not find any Python installation to use
+.../node_modules/msgpackr-extract install: gyp ERR! not ok
+.../node_modules/msgpackr-extract install: Failed
+```
+
+The failure is not fatal: `REBUILT` printed and `pnpm rebuild` exited 0. It is not related to the patch. The likely cause is that the image has no Python and this run was arm64. The log does not show that cause. How this package behaves on the x64 runner was not checked here. The phase 0 runner runs also used `--ignore-scripts` and then `pnpm rebuild`, but I did not check their logs for this package.
+
+**Was the patch applied in the sandbox? Yes.** The check looks for `_mjBuildIndexes` (`PATCH_LINE` in the script), a line the patch adds. I picked it by hand from `patches/type-graphql@2.0.0-beta.3.patch`.
 
 ```
 $ ls $WORK/head/node_modules/.pnpm | grep type-graphql
@@ -770,10 +782,10 @@ build/cjs/metadata/metadata-storage.js:147:    _mjBuildIndexes() {
 store files holding '_mjBuildIndexes' after sandbox install: 2
 ```
 
-The store held no patched file after the host fetch (0 hits). After the sandbox install it held 2 (`store/v10/files/d9/…`, `store/v10/files/c3/…`, the patched esm and cjs `metadata-storage.js`). So pnpm applied the patch inside the sandbox and wrote the patched files back into the mounted store. The store has one index entry for the package: `v10/index/e4/…-type-graphql@2.0.0-beta.3.json`.
+The store held no patched file after the host fetch (0 hits). After the sandbox install it held 2, so pnpm applied the patch inside the sandbox and wrote the patched files back into the mounted store. The script printed only the counts. The paths of the 2 files (`store/v10/files/d9/…` and `store/v10/files/c3/…`) and the single index entry for the package (`v10/index/e4/…-type-graphql@2.0.0-beta.3.json`) come from a manual `grep -rl` / `find` after the run. Since that run, the script prints the matching paths (`grep -rlF "$PATCH_LINE" "$WORK/store"`) and no longer only a count. It also has a `trap` that removes the worktree and `$WORK` on any exit. Both changes came after the recorded run, so the output above comes from the earlier version of the script. This was not checked: whether the original unpatched files stay in the store as separate content-addressed entries, and whether the index entry still points at them.
 
 **Build smoke.** The same sandbox shape, with `-e TURBO_TELEMETRY_DISABLED=1 -e TURBO_CACHE_DIR=/work/.turbo/cache`, ran `timeout 1200 npx turbo run build --filter=@memberjunction/core... --cache=local:rw`. Result: `Tasks: 3 successful, 3 total`, `Cached: 0 cached`, exit 0, 8 s.
 
 **Timing.** Host half (cold fetch, empty store, local network): 153 s. Sandbox half (offline install + rebuild): 111 s, of which the install was 104 s. Phase 0 on the runner measured 9–16 s for a warm-store fetch and 32–57 s for the copy import. The local sandbox time is higher because Docker Desktop bind mounts on macOS are slow, so it is not comparable to the runner.
 
-**Decision:** option (b) works. pnpm accepts a lockfile copy with both the `patchedDependencies:` block and the `(patch_hash=…)` segments removed. The host then fetches only the unpatched originals and reads no patch file. The sandbox's `pnpm install --offline --frozen-lockfile` with the real lockfile and `patches/` succeeds from that store and applies the patch (the evidence is above). We did not test the other two forms (block only, segments only). Removing both is the form to specify. Limits: (1) The sandbox writes the patched files into the store, so a store shared across runs collects PR-patched content. Mount it per run, or test a read-only mount (not tested). (2) A PR that changes a patch file or adds a new patched dependency is still covered: the stripped lockfile names only the base package, which the store gets, and the sandbox applies the new diff offline. Only the "changed patch" case comes from reasoning; it was not run. (3) A patch can only change files of a package the lockfile already has. A patched dependency that is new in the PR needs that package in the head lockfile, which is fetched as usual.
+**Decision:** option (b) works. pnpm accepts a lockfile copy with both the `patchedDependencies:` block and the `(patch_hash=…)` segments removed. The host then fetches only the unpatched originals and reads no patch file. The sandbox's `pnpm install --offline --frozen-lockfile` with the real lockfile and `patches/` succeeds from that store and applies the patch (the evidence is above). We did not test the other two forms (block only, segments only). Removing both is the form to specify. Under option (b), the host never reads a patch file, and the lockfile it strips is HEAD's (the PR's). Limits: (1) The sandbox writes the patched files into the store, so a store shared across runs collects PR-patched content. Mount it per run, or test a read-only mount (not tested). (2) A PR that changes a patch file or adds a new patched dependency is still covered: the stripped lockfile names only the base package, which the store gets, and the sandbox applies the new diff offline. Only the "changed patch" case comes from reasoning; it was not run. (3) A patch can only change files of a package the lockfile already has. A patched dependency that is new in the PR needs that package in the head lockfile, which is fetched as usual. (4) A PR that changes a patch file must also update that patch's `hash:` line in its lockfile (pnpm does this on install). If it does not, `--frozen-lockfile` fails in the sandbox. This is a separate case and was not tested.
