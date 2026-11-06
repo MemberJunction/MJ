@@ -349,6 +349,24 @@
     gap: 16px;
 }
 
+/* Phone: one column, so the longer examples ({% if %} ... {% endif %}) are not clipped.
+   The metadata row's four desktop columns become Content Type on its own line over
+   Priority and Status side by side. */
+@media (max-width: 768px) {
+    .syntax-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .metadata-grid {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 12px;
+    }
+
+    .metadata-grid > .form-group:first-child {
+        grid-column: 1 / -1;
+    }
+}
+
 .syntax-item {
     margin-bottom: 8px;
 }
