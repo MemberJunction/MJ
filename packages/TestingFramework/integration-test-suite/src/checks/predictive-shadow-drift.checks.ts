@@ -5,7 +5,7 @@
  * and `PredictiveStudioEvaluateDriftAction` end-to-end execution over `MJ: Feature Values`.
  */
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import {
     MJFeatureValueEntity,
     MJMLModelEntity,
@@ -13,12 +13,13 @@ import {
     MJRecordProcessEntity,
     MJUserNotificationEntity,
 } from '@memberjunction/core-entities';
-import { ActionEngineServer } from '@memberjunction/actions';
+import { ActionEngineServer, BaseAction } from '@memberjunction/actions';
 import { RunActionParams } from '@memberjunction/actions-base';
 import { FeatureValueCacheService } from '@memberjunction/feature-pipelines';
 import { RecordProcessorRegistry } from '@memberjunction/record-set-processor-base';
 import {
     EVALUATE_DRIFT_DRIVER_CLASS,
+    EvaluateFeatureAndPredictionDriftAction,
     FeatureAssemblyExecutor,
     FeatureValueShadowAuditSink,
     InMemoryArtifactLoader,
@@ -255,21 +256,6 @@ export const PredictiveShadowDriftChecks: NamedCheck[] = [
                 );
 
                 const testRecordId = `psd1-rec-${Date.now()}`;
-                await FeatureValueCacheService.Instance.RecordFeatureValues({
-                    recordProcessID: recordProcess.ID,
-                    entityID: targetEntityId!,
-                    recordID: testRecordId,
-                    outputs: [{ featureName: 'RenewalScore', value: 0.35, confidence: 0.88 }],
-                    promptVersionHash: null,
-                    pipelineVersion: 1,
-                    aiModelID: null,
-                    parametersHash: null,
-                    inputHash: 'input-hash-psd1',
-                    source: 'Pipeline',
-                    contextUser: user,
-                    provider: md,
-                });
-
                 const procResult = await processor.ProcessRecord(
                     {
                         EntityID: targetEntityId!,
@@ -346,7 +332,7 @@ export const PredictiveShadowDriftChecks: NamedCheck[] = [
     },
     {
         Id: 'predictive-shadow-drift.PSD2',
-        Name: 'PSD2: PredictiveStudioEvaluateDriftAction loads baseline and evaluation windows from MJ: Feature Values, detects Critical PSI drift, and emits an alert record',
+        Name: 'PSD2: PredictiveStudioEvaluateDriftAction loads baseline and evaluation windows from MJ: Feature Values, enforces MinSampleSize=100 InsufficientData gating, detects Critical PSI drift, and emits an alert record',
         Fn: async (ctx: IntegrationCheckContext) => {
             const md = ctx.Provider;
             const user = ctx.User;
@@ -376,7 +362,10 @@ export const PredictiveShadowDriftChecks: NamedCheck[] = [
                     `Failed to save PSD2 RecordProcess: ${recordProcess.LatestResult?.CompleteMessage}`,
                 );
 
-                // Seed 12 baseline Champion rows spread across [0.1 .. 0.9] and 12 evaluation Champion rows shifted to 0.99
+                // Seed 12 baseline Champion rows inside the 28-day baseline window (14 days ago)
+                // and 12 evaluation Champion rows inside the 7-day evaluation window (1 day ago).
+                const DAY_MS = 86_400_000;
+                const nowMs = Date.now();
                 for (let i = 0; i < 12; i++) {
                     const baseRow = await md.GetEntityObject<MJFeatureValueEntity>(
                         'MJ: Feature Values',
@@ -391,7 +380,7 @@ export const PredictiveShadowDriftChecks: NamedCheck[] = [
                     baseRow.Source = 'Pipeline';
                     baseRow.ValueNumeric = (i + 1) / 15;
                     baseRow.Confidence = 0.9;
-                    baseRow.ComputedAt = new Date(Date.UTC(2026, 0, 1, 0, i));
+                    baseRow.ComputedAt = new Date(nowMs - 14 * DAY_MS + i * 60_000);
                     Assert(
                         await baseRow.Save(),
                         `Failed to save baseline Feature Value: ${baseRow.LatestResult?.CompleteMessage}`,
@@ -413,7 +402,7 @@ export const PredictiveShadowDriftChecks: NamedCheck[] = [
                     evalRow.Source = 'Pipeline';
                     evalRow.ValueNumeric = 0.99;
                     evalRow.Confidence = 0.45;
-                    evalRow.ComputedAt = new Date(Date.UTC(2026, 0, 2, 0, i));
+                    evalRow.ComputedAt = new Date(nowMs - 1 * DAY_MS + i * 60_000);
                     Assert(
                         await evalRow.Save(),
                         `Failed to save evaluation Feature Value: ${evalRow.LatestResult?.CompleteMessage}`,
@@ -422,20 +411,55 @@ export const PredictiveShadowDriftChecks: NamedCheck[] = [
                 }
 
                 await ActionEngineServer.Instance.Config(false, user);
-                const driftAction =
-                    ActionEngineServer.Instance.Actions.find(
-                        (a) => a.DriverClass === EVALUATE_DRIFT_DRIVER_CLASS,
-                    ) ??
-                    ({
-                        ID: '6A2D5E81-3C49-4F8B-91B2-0D8E4F7C1A00',
-                        Name: 'Evaluate Feature and Prediction Drift',
-                        DriverClass: EVALUATE_DRIFT_DRIVER_CLASS,
-                        Type: 'Custom',
-                        Status: 'Active',
-                    } as RunActionParams['Action']);
+                const driftAction = ActionEngineServer.Instance.Actions.find(
+                    (a) => a.DriverClass === EVALUATE_DRIFT_DRIVER_CLASS,
+                );
+                Assert(
+                    !!driftAction,
+                    `Expected MJ: Actions row with DriverClass='${EVALUATE_DRIFT_DRIVER_CLASS}' in ActionEngineServer.Instance.Actions`,
+                );
+                const resolvedInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(
+                    BaseAction,
+                    driftAction!.DriverClass,
+                );
+                Assert(
+                    resolvedInstance instanceof EvaluateFeatureAndPredictionDriftAction,
+                    `Expected ClassFactory to resolve EvaluateFeatureAndPredictionDriftAction for '${driftAction!.DriverClass}'`,
+                );
 
+                // 1. Default MinSampleSize=100 guard: 12 samples per window < 100 -> InsufficientData=true, OverallSeverity='None'
+                const insufficientParams = new RunActionParams();
+                insufficientParams.Action = driftAction!;
+                insufficientParams.ContextUser = user;
+                insufficientParams.Provider = md;
+                insufficientParams.SkipActionLog = true;
+                insufficientParams.Params = [
+                    { Name: 'RecordProcessID', Type: 'Input', Value: recordProcess.ID },
+                    { Name: 'MinSampleSize', Type: 'Input', Value: 100 },
+                    { Name: 'EmitAlertOnDrift', Type: 'Input', Value: true },
+                ];
+
+                const insufficientResult = await ActionEngineServer.Instance.RunAction(insufficientParams);
+                Assert(
+                    insufficientResult.Success,
+                    `Evaluate Feature and Prediction Drift (MinSampleSize=100) failed: ${insufficientResult.Message}`,
+                );
+                const insufficientFlag = insufficientParams.Params.find(
+                    (p) => p.Name === 'InsufficientData' && p.Type === 'Output',
+                )?.Value;
+                const insufficientSeverity = insufficientParams.Params.find(
+                    (p) => p.Name === 'OverallSeverity' && p.Type === 'Output',
+                )?.Value;
+                const insufficientAlert = insufficientParams.Params.find(
+                    (p) => p.Name === 'AlertEmitted' && p.Type === 'Output',
+                )?.Value;
+                AssertEqual(insufficientFlag, true, 'Expected InsufficientData=true at MinSampleSize=100');
+                AssertEqual(insufficientSeverity, 'None', 'Expected OverallSeverity=None at MinSampleSize=100');
+                AssertEqual(insufficientAlert, false, 'Expected AlertEmitted=false at MinSampleSize=100');
+
+                // 2. MinSampleSize=10: 12 samples per window >= 10 -> OverallSeverity='Critical', AlertEmitted=true
                 const runParams = new RunActionParams();
-                runParams.Action = driftAction;
+                runParams.Action = driftAction!;
                 runParams.ContextUser = user;
                 runParams.Provider = md;
                 runParams.SkipActionLog = true;
